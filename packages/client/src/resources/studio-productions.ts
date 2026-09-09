@@ -1,4 +1,5 @@
 import type { NodaroClient } from "../client.js"
+import { StudioPreviewAppliedError, StudioPreviewUnavailable } from "../errors.js"
 
 /**
  * Studio productions — `/v1/studio/productions`.
@@ -168,6 +169,36 @@ export interface StudioOpsResponse {
    * nothing, a rename that rewrote four prompts. A warning never rejects a
    * batch; a refusal does.
    */
+  warnings: string[]
+}
+
+/**
+ * One line of what an operation WOULD do, for a person deciding whether to let
+ * it. Everything {@link StudioOpsReceipt} says, in the conditional, plus what
+ * the decision turns on: how big the change is, which kind of change it is, and
+ * whether it can be taken back.
+ */
+export interface StudioOpsDryRunReceipt extends StudioOpsReceipt {
+  /** How much would change, in the words a person counts in: `3 takes`. */
+  impact?: string
+  /** The kind of change, in the route's own vocabulary. */
+  class: string
+  /** True when the change could be undone afterwards — a bin, not a shredder. */
+  restorable?: boolean
+}
+
+/**
+ * What a batch WOULD do. Nothing was written: there is no production here and
+ * no new version, because none was produced.
+ */
+export interface StudioOpsDryRunResponse {
+  /** Always present, and the marker the two-request protocol reads. */
+  dryRun: true
+  /** The version the preview was computed against. */
+  version: number
+  /** One per operation, in order. */
+  receipts: StudioOpsDryRunReceipt[]
+  /** The same things an apply would have said. */
   warnings: string[]
 }
 
@@ -482,14 +513,72 @@ export class StudioProductionsResource {
    * batch with a `StudioOpError` naming its index, and nothing is written. On
    * success adopt `production` wholesale and carry `version` forward as the
    * next `baseVersion`.
+   *
+   * `dryRun: true` — the LITERAL, which is what selects the preview reply —
+   * asks what the batch would do, so a person can approve an assistant's edits
+   * before they land. Spell it in THIS call's own object literal: a flag passed
+   * through a variable widens `true` to `boolean`, which selects the apply
+   * overload while the runtime still takes the preview path.
+   *
+   * A preview is TWO requests, deliberately. The route's body is parsed in
+   * strip mode, so a deployment that predates the preview drops the flag and
+   * APPLIES the batch: a caller that sent its batch and read the answer
+   * afterwards would already have written it. So the flag is proved on an EMPTY
+   * batch first and the real batch goes only when that answer carries the
+   * marker. An older deployment either answers the apply shape — this throws
+   * `StudioPreviewUnavailable`, and the batch never leaves — or refuses the
+   * empty batch with its own error, which is passed through as it stands.
+   *
+   * The ping proves the deployment that answered IT, and a fleet mid-rollout
+   * can serve the second request from another one. So the second answer is
+   * checked too: when the batch came back APPLIED, this throws
+   * `StudioPreviewAppliedError`, which carries that write. The SDK cannot
+   * un-send a request; what it can do is refuse to call the result a preview.
+   *
+   * An apply stays exactly one request.
    */
-  async ops(productionId: string, input: StudioOpsRequest): Promise<StudioOpsResponse> {
-    const res = await this.client.request<{ data: StudioOpsResponse }>(
+  ops(
+    productionId: string,
+    input: StudioOpsRequest & { dryRun: true },
+  ): Promise<StudioOpsDryRunResponse>
+  ops(productionId: string, input: StudioOpsRequest): Promise<StudioOpsResponse>
+  async ops(
+    productionId: string,
+    input: StudioOpsRequest & { dryRun?: true },
+  ): Promise<StudioOpsResponse | StudioOpsDryRunResponse> {
+    if (input.dryRun !== true) {
+      const res = await this.client.request<{ data: StudioOpsResponse }>(
+        "POST",
+        this.path(productionId, "/ops"),
+        { body: input },
+      )
+      return res.data
+    }
+
+    // The ping carries nothing of the caller's batch, because an old deployment
+    // takes whatever it is sent at face value; an empty batch with no
+    // `clientRequestId` spends neither the caller's operations nor the retry
+    // token that would make a real batch unrepeatable.
+    const ping = await this.client.request<{ data?: { dryRun?: unknown } } | undefined>(
       "POST",
       this.path(productionId, "/ops"),
-      { body: input },
+      { body: { ops: [], dryRun: true } },
     )
-    return res.data
+    // Read through: an older deployment can answer no envelope at all, or a 204
+    // that `request` reads as `undefined`. Absent is a "no" like any other, and
+    // the caller who catches `NodaroError` should not get a `TypeError`.
+    if (ping?.data?.dryRun !== true) throw new StudioPreviewUnavailable()
+
+    const res = await this.client.request<
+      { data?: StudioOpsDryRunResponse | StudioOpsResponse } | undefined
+    >("POST", this.path(productionId, "/ops"), { body: input })
+    // The answer that matters most: this request may have landed on a different
+    // deployment from the ping, and an applied batch is not a preview.
+    const data = res?.data
+    if ((data as { dryRun?: unknown } | undefined)?.dryRun !== true) {
+      throw new StudioPreviewAppliedError(data as StudioOpsResponse)
+    }
+    return data as StudioOpsDryRunResponse
   }
 
   /**

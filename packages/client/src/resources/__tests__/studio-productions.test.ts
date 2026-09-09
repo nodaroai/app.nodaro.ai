@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, expectTypeOf, it, vi } from "vitest"
 
 import {
   createClient,
@@ -7,9 +7,16 @@ import {
   InsufficientCreditsError,
   isStudioGenerateEstimate,
   StudioOpError,
+  StudioPreviewAppliedError,
+  StudioPreviewUnavailable,
   WorkflowConflictError,
 } from "../../index.js"
-import type { WorkflowConflictCode } from "../../index.js"
+import type {
+  StudioOpsDryRunResponse,
+  StudioOpsRequest,
+  StudioOpsResponse,
+  WorkflowConflictCode,
+} from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -603,5 +610,255 @@ describe("studio error mapping", () => {
     expect(err).toBeInstanceOf(NodaroError)
     expect(err).not.toBeInstanceOf(StudioOpError)
     expect(err.code).toBe("validation_error")
+  })
+})
+
+describe("client.studio.productions — previewing a batch", () => {
+  /** What a deployment that serves the preview answers an empty batch with. */
+  const ping = { dryRun: true, version: 7, receipts: [], warnings: [] }
+
+  /** What the SAME deployment answers the real batch with. */
+  const preview = {
+    dryRun: true,
+    version: 7,
+    receipts: [
+      {
+        op: "example_op",
+        summary: "Would delete take 2 of Shot 1.",
+        ids: ["take-2"],
+        impact: "1 take",
+        class: "destructive",
+        restorable: true,
+      },
+    ],
+    warnings: ["Shot 1 would be left with one take."],
+  }
+
+  it("asks with an EMPTY batch first, and only then sends the real one", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ data: ping }))
+      .mockReturnValueOnce(mockOk({ data: preview }))
+    const client = make(fetchMock)
+
+    const answer = await client.studio.productions.ops(view.id, {
+      ops: [{ op: "example_op", id: "take-2" }],
+      baseVersion: 7,
+      clientRequestId: "req-2",
+      dryRun: true,
+    })
+
+    expect(answer).toEqual(preview)
+    // The overload narrows the reply; the receipt's own vocabulary is typed.
+    expect(answer.receipts[0].class).toBe("destructive")
+    expect(answer.receipts[0].restorable).toBe(true)
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    // The ping carries NOTHING of the caller's batch — not the base version and
+    // above all not the retry token, which a no-op would otherwise burn.
+    expect(call(fetchMock, 0)).toEqual({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/ops`,
+      method: "POST",
+      body: { ops: [], dryRun: true },
+    })
+    expect(call(fetchMock, 1)).toEqual({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/ops`,
+      method: "POST",
+      body: {
+        ops: [{ op: "example_op", id: "take-2" }],
+        baseVersion: 7,
+        clientRequestId: "req-2",
+        dryRun: true,
+      },
+    })
+  })
+
+  it("refuses — and sends NOTHING — when the ping answer lacks the marker", async () => {
+    // A deployment that predates the preview parses the body in strip mode: the
+    // flag is dropped and the empty batch is APPLIED, so it answers the ordinary
+    // apply shape. That answer is the whole signal, and it is why the batch goes
+    // second: a caller that sent it first would already have written it.
+    const applied = { production: view, version: 7, rebased: false, receipts: [], warnings: [] }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: applied }))
+    const client = make(fetchMock)
+
+    const err = await client.studio.productions
+      .ops(view.id, { ops: [{ op: "example_op", id: "take-2" }], dryRun: true })
+      .catch((e: unknown) => e)
+
+    expect(err).toBeInstanceOf(StudioPreviewUnavailable)
+    expect(err).toBeInstanceOf(NodaroError)
+    // Exactly one request, and it was the empty ping.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(call(fetchMock, 0).body).toEqual({ ops: [], dryRun: true })
+  })
+
+  it("an apply is still exactly ONE request, with no flag added to it", async () => {
+    const payload = { production: view, version: 8, rebased: false, receipts: [], warnings: [] }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(
+      client.studio.productions.ops(view.id, { ops: [{ op: "example_op" }] }),
+    ).resolves.toEqual(payload)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(call(fetchMock, 0).body).toEqual({ ops: [{ op: "example_op" }] })
+  })
+
+  it("a deployment that does not serve productions at all refuses generically", async () => {
+    // The route's own 400. It arrives on the PING, which is the arm where a
+    // careless read would swallow it into the refusal above and lose the
+    // route's message.
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(400, {
+        code: "production_capability_required",
+        message: "This production needs a capability this deployment does not serve.",
+      }),
+    )
+    const client = make(fetchMock)
+
+    const err = (await client.studio.productions
+      .ops(view.id, { ops: [{ op: "example_op" }], dryRun: true })
+      .catch((e: unknown) => e)) as NodaroError
+
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err).not.toBeInstanceOf(StudioOpError)
+    expect(err).not.toBeInstanceOf(StudioPreviewUnavailable)
+    expect(err.code).toBe("production_capability_required")
+    expect(err.status).toBe(400)
+    expect(err.message).toBe(
+      "This production needs a capability this deployment does not serve.",
+    )
+  })
+
+  it("the preview is spelled with the LITERAL, and only the literal", () => {
+    // Type-level only: nothing here runs, and no CI step typechecks this
+    // package today — a manual `npx tsc -p packages/client` is what walks
+    // this body and turns the spellings below into errors.
+    const spellings = async (client: ReturnType<typeof make>, flag: boolean) => {
+      expectTypeOf(
+        await client.studio.productions.ops(view.id, { ops: [], dryRun: true }),
+      ).toEqualTypeOf<StudioOpsDryRunResponse>()
+
+      const request: StudioOpsRequest = { ops: [] }
+      expectTypeOf(
+        await client.studio.productions.ops(view.id, request),
+      ).toEqualTypeOf<StudioOpsResponse>()
+
+      // @ts-expect-error — a runtime boolean cannot ask for a preview: it would
+      // type as an apply and arrive as one shape or the other at the server's
+      // discretion. The literal is the only spelling.
+      await client.studio.productions.ops(view.id, { ops: [], dryRun: flag })
+    }
+    expect(typeof spellings).toBe("function")
+  })
+
+  it("the refusal is reachable from the package root and reads as a NodaroError", () => {
+    const refusal = new StudioPreviewUnavailable()
+    expect(refusal).toBeInstanceOf(NodaroError)
+    expect(refusal.name).toBe("StudioPreviewUnavailable")
+    expect(refusal.code).toBe("studio_preview_unavailable")
+    // Not an HTTP failure — the request succeeded; the ANSWER was the old one.
+    expect(refusal.status).toBe(0)
+  })
+  it("refuses to call an APPLIED batch a preview when the second answer is an apply", async () => {
+    // The ping proves the deployment that answered THAT request and nothing
+    // about where the next one lands: mid-rollout the batch can reach a pod
+    // that predates the preview, parse in strip mode, drop the flag and WRITE.
+    // That request is already gone by then — what the SDK still owes the caller
+    // is not to hand back what HAPPENED as what WOULD happen.
+    const applied = { production: view, version: 8, rebased: false, receipts: [], warnings: [] }
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ data: ping }))
+      .mockReturnValueOnce(mockOk({ data: applied }))
+    const client = make(fetchMock)
+
+    const err = (await client.studio.productions
+      .ops(view.id, { ops: [{ op: "example_op", id: "take-2" }], dryRun: true })
+      .catch((e: unknown) => e)) as StudioPreviewAppliedError
+
+    expect(err).toBeInstanceOf(StudioPreviewAppliedError)
+    expect(err).toBeInstanceOf(NodaroError)
+    // NOT the "nothing was sent" refusal — something was sent, and it landed.
+    expect(err).not.toBeInstanceOf(StudioPreviewUnavailable)
+    expect(err.code).toBe("studio_preview_applied")
+    // The truth the caller now needs is carried, not thrown away with the lie.
+    expect(err.applied).toEqual(applied)
+    expect(err.applied.version).toBe(8)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("does not claim a write it cannot see when the second answer carries no body", async () => {
+    // The same rollout window, but the old pod answers 204. There is nothing to
+    // read: the SDK cannot say the batch was applied and cannot say it was not.
+    // Saying "the change is written — see `applied`" would be a claim about a
+    // body that does not exist, and a caller reaching for `applied.version`
+    // would get a TypeError instead of an answer. The refusal still fires — a
+    // non-preview answer is never handed back as a preview — but it says only
+    // what is known, and `applied` is absent rather than a lie shaped like data.
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ data: ping }))
+      .mockReturnValueOnce(
+        Promise.resolve({ ok: true, status: 204, json: async () => undefined } as unknown as Response),
+      )
+    const client = make(fetchMock)
+
+    const err = (await client.studio.productions
+      .ops(view.id, { ops: [{ op: "example_op", id: "take-2" }], dryRun: true })
+      .catch((e: unknown) => e)) as StudioPreviewAppliedError
+
+    expect(err).toBeInstanceOf(StudioPreviewAppliedError)
+    expect(err.code).toBe("studio_preview_applied")
+    expect(err.applied).toBeUndefined()
+    // The message must not promise a field that is not there.
+    expect(err.message).not.toContain("see `applied`")
+    expect(err.message).toContain("re-read the production")
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  /** Answers that carry no `data.dryRun` to read, envelope and all. */
+  const bodilessPings: Array<[string, () => Promise<Response>]> = [
+    ["no envelope at all", () => mockOk(null)],
+    ["an envelope with no data", () => mockOk({})],
+    ["a data of null", () => mockOk({ data: null })],
+    [
+      "204 No Content, which `request` reads as undefined",
+      () =>
+        Promise.resolve({
+          ok: true,
+          status: 204,
+          json: async () => undefined,
+        } as unknown as Response),
+    ],
+  ]
+
+  for (const [label, answer] of bodilessPings) {
+    it(`refuses in the SDK's own vocabulary when the ping answers ${label}`, async () => {
+      const fetchMock = vi.fn().mockReturnValueOnce(answer())
+      const client = make(fetchMock)
+
+      const err = await client.studio.productions
+        .ops(view.id, { ops: [{ op: "example_op" }], dryRun: true })
+        .catch((e: unknown) => e)
+
+      // A caller catching `NodaroError` must not be handed a raw TypeError.
+      expect(err).toBeInstanceOf(StudioPreviewUnavailable)
+      expect(err).not.toBeInstanceOf(TypeError)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+  }
+
+  it("the applied-instead refusal reads as a NodaroError and carries the write", () => {
+    const applied = { production: view, version: 8, rebased: false, receipts: [], warnings: [] }
+    const refusal = new StudioPreviewAppliedError(applied)
+    expect(refusal).toBeInstanceOf(NodaroError)
+    expect(refusal.name).toBe("StudioPreviewAppliedError")
+    expect(refusal.code).toBe("studio_preview_applied")
+    // Not an HTTP failure — the request succeeded; it did the wrong thing.
+    expect(refusal.status).toBe(0)
+    expect(refusal.applied).toBe(applied)
   })
 })
