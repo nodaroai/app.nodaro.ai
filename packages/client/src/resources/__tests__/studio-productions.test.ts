@@ -790,6 +790,35 @@ describe("client.studio.productions — previewing a batch", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it("does not claim a write it cannot see when the second answer carries no body", async () => {
+    // The same rollout window, but the old pod answers 204. There is nothing to
+    // read: the SDK cannot say the batch was applied and cannot say it was not.
+    // Saying "the change is written — see `applied`" would be a claim about a
+    // body that does not exist, and a caller reaching for `applied.version`
+    // would get a TypeError instead of an answer. The refusal still fires — a
+    // non-preview answer is never handed back as a preview — but it says only
+    // what is known, and `applied` is absent rather than a lie shaped like data.
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ data: ping }))
+      .mockReturnValueOnce(
+        Promise.resolve({ ok: true, status: 204, json: async () => undefined } as unknown as Response),
+      )
+    const client = make(fetchMock)
+
+    const err = (await client.studio.productions
+      .ops(view.id, { ops: [{ op: "example_op", id: "take-2" }], dryRun: true })
+      .catch((e: unknown) => e)) as StudioPreviewAppliedError
+
+    expect(err).toBeInstanceOf(StudioPreviewAppliedError)
+    expect(err.code).toBe("studio_preview_applied")
+    expect(err.applied).toBeUndefined()
+    // The message must not promise a field that is not there.
+    expect(err.message).not.toContain("see `applied`")
+    expect(err.message).toContain("re-read the production")
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   /** Answers that carry no `data.dryRun` to read, envelope and all. */
   const bodilessPings: Array<[string, () => Promise<Response>]> = [
     ["no envelope at all", () => mockOk(null)],

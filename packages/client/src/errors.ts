@@ -237,9 +237,17 @@ export class StudioPreviewAppliedError extends NodaroError {
      * The apply reply the route sent back, as it sent it. An answer this
      * package does not recognise arrives here unchanged rather than being
      * dressed up: it is what the deployment said about a batch it took.
+     *
+     * `undefined` when the answer carried no body at all — a 204, an empty
+     * envelope. The refusal still fires, because a non-preview answer is never
+     * handed back as a preview, but there is nothing to report and the SDK will
+     * not invent it: whether the batch was applied is unknown from here, and
+     * the caller settles it by re-reading the production.
      */
-    public readonly applied: StudioOpsResponse,
-    message = "Asked for a preview and this deployment APPLIED the batch; the change is written — see `applied`",
+    public readonly applied: StudioOpsResponse | undefined,
+    message = applied
+      ? "Asked for a preview and this deployment APPLIED the batch; the change is written — see `applied`"
+      : "Asked for a preview and this deployment answered with neither one nor a body to read; the batch may have been applied — re-read the production before deciding anything",
   ) {
     super(message, "studio_preview_applied", 0)
     this.name = "StudioPreviewAppliedError"
