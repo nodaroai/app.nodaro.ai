@@ -123,6 +123,42 @@ A copilot message is billed for the assistant's actual model usage. The panel sh
 
 Runs the copilot proposes are charged the same way any run is — per node, when you start them.
 
+## Studio surface
+
+The same assistant also runs inside the studio editor, where the subject is a
+**production** — its shots, takes, cast, planned frames, cuts and soundtrack —
+rather than a canvas of nodes. It is one assistant with two surfaces, not two
+assistants: the same conversation loop, the same per-message budget, the same
+standing preferences, the same Stop, the same billing. What differs is a small
+bundle resolved for each message — which tools it may see, what it is told
+about its subject, and what happens when it calls one.
+
+**It writes nothing and spends nothing on its own.** On the canvas the copilot
+edits the workflow as you watch. In the studio it does not: every change to the
+production, every generation, every export, share, import or copy comes back as
+a **card**, and the message ends there. You press Apply, and your editor makes
+the change through the same path a button in the editor uses — so your own
+unsaved edits are never overwritten and never lost. One card per message: if it
+wanted to do two things, it proposes the first and tells you the second.
+
+Because of that, a change is **previewed before it is offered**. The card shows
+one line per operation, what class it is, and whether a delete can be taken back
+— read off the preview itself, never asserted in prose.
+
+Other differences worth knowing:
+
+- **A conversation is one production.** It is attached to the production you had
+  open, the way a canvas conversation is attached to one workflow.
+- **Ask only.** The studio surface has no Auto mode: there is nothing for it to
+  run without asking, so the switch is refused rather than shown.
+- **It reads without disturbing you.** Each message begins with a summary of the
+  production as it stands, your selected shot and your balance. The read does
+  not land finished jobs — your editor is open and lands its own.
+- **It talks in names and positions,** not ids, and never quotes a price: the
+  card carries the quote where there is one.
+- **If the studio service is not available on a deployment,** the assistant says
+  so before the message runs, and nothing is charged.
+
 ## Good to know
 
 - **Save first.** The panel saves your canvas before it sends a message, so you and the copilot are working on the same graph. If it cannot save, it refuses to send rather than risk your edits.

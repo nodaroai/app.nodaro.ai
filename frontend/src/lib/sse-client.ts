@@ -27,6 +27,10 @@ export type StreamEvent =
   | { type: "tool_call"; data: { id: string; name: string; label: string; status: "started" | "finished" | "failed"; summary?: string } }
   | { type: "workflow_updated"; data: Record<string, unknown> }
   | { type: "run_proposed"; data: Record<string, unknown> }
+  // The studio surface's proposal: one card the person confirms in the
+  // editor. Its own member rather than a variant of `run_proposed` —
+  // a client that knows only runs must not render an edit as one.
+  | { type: "action_proposed"; data: Record<string, unknown> }
   | { type: "usage"; data: Record<string, unknown> }
 
 /**

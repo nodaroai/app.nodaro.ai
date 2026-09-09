@@ -83,6 +83,12 @@ const messageBody = z.object({
    * `model_tier` column is not on the shared database yet.
    */
   tier: z.enum(["economy", "standard", "premium"]).optional(),
+  /**
+   * What the person has selected in the editor. It reaches the turn's context
+   * so the assistant can answer "make this one longer" without being told
+   * which one — and nothing else: it addresses no write and pins no argument.
+   */
+  focus: z.object({ shotId: z.string().optional() }).optional(),
 })
 
 const patchThreadBody = z.object({
@@ -480,20 +486,12 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
       if (threadAtTurnCap(thread)) {
         return reply.status(409).send({ error: { code: "thread_cap_reached", message: "This conversation reached its length limit. Start a new one." } })
       }
-      // A conversation belonging to another assistant, whose own message
-      // handler is not deployed here yet. It sits after the answers that are
-      // true whatever is deployed — a closed conversation is closed, a full
-      // one is full — and before everything that COSTS something: the workflow
-      // read, the stale-turn heal, the job row, the reservation and the turn
-      // row. So the window between this change and that one cannot leave a
-      // half-run turn or held credits behind. Read through the helper: a row
-      // older than the column carries no surface at all, and every one of
-      // those is the canvas.
-      if (threadSurface(thread) !== DEFAULT_THREAD_SURFACE) {
-        return reply.status(503).send({
-          error: { code: "surface_unavailable", message: "This assistant is not available on this deployment yet." },
-        })
-      }
+      // Which assistant this conversation belongs to. Read through the helper:
+      // a row older than the column carries no surface at all, and every one
+      // of those is the canvas. It reaches the turn, which resolves the one
+      // bundle that differs — the tools, the doctrine, the pinned id and the
+      // dispatch — and shares everything else.
+      const surface = threadSurface(thread)
 
       const workflow = await loadOwnedWorkflow(thread.workflow_id, userId)
       if (!workflow) return reply.status(404).send({ error: { code: "not_found", message: "Workflow not found" } })
@@ -587,6 +585,10 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
           baseVersion: workflow.version,
           runMode: thread.run_mode,
           autoRunLimitCredits: thread.auto_run_limit_credits,
+          // The stream's own answer to "which assistant is this": the client
+          // reads it here, and a frame that does not name the surface it asked
+          // for is a deployment that cannot serve it.
+          surface,
           // A second tab that changed this is otherwise showing a permission
           // the user already withdrew. It cannot ACT on the stale value — the
           // server reads the row on every turn — but a checkbox that lies
@@ -610,6 +612,8 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
           nodes: workflow.nodes,
           edges: workflow.edges,
           message: parsed.data.message,
+          surface,
+          focus: parsed.data.focus ?? null,
           tier,
           caps: effectiveCaps,
           usageLogId: reservation?.usageLogId ?? null,
@@ -626,6 +630,13 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
           signal: abort.signal,
         })
 
+        // The turn's one card, before its usage and its close: the person sees
+        // what is being proposed as the last thing the assistant said, and the
+        // decision arrives as their next message. A turn that proposed nothing
+        // emits nothing.
+        if (outcome.proposal) {
+          sse.sendEvent({ type: "action_proposed", data: { ...outcome.proposal } })
+        }
         sse.sendEvent({
           type: "usage",
           data: {

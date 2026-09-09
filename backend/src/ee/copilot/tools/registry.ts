@@ -13,27 +13,35 @@
  * ride on `workflows:execute`), and a hallucinated `generate_image` call must
  * not spend the user's credits.
  */
-import type { McpInvoker, McpToolDef } from "../../../lib/mcp/invoke.js"
-import { CREATES_PER_TURN, FORCED_MCP_ARGS, MCP_TOOL_ALLOWLIST, NATIVE_TOOLS } from "../constants.js"
+import type { McpInvoker } from "../../../lib/mcp/invoke.js"
+import { CREATES_PER_TURN, NATIVE_TOOLS } from "../constants.js"
+import {
+  copilotSurface,
+  renderSurfaceTools,
+  type CopilotSurfaceProfile,
+  type SurfaceTools,
+  type ToolDefinition,
+} from "../surfaces.js"
 import { runCreateWorkflow, runGetWorkflowGraph, type CreateWorkflowArgs, type GetWorkflowGraphArgs } from "./workflow-crud.js"
 import { EditRejected, runEditWorkflow, type EditWorkflowArgs, type WiredAsset } from "./edit-workflow.js"
 import { runGetGraph, type GetGraphArgs } from "./get-graph.js"
 import { runRemember, type RememberArgs } from "./remember.js"
 import { proposeRun, runGetExecution, type GetExecutionArgs, type RunWorkflowArgs } from "./run-and-execution.js"
-import type { CopilotToolContext, RunProposal } from "./types.js"
+import { dispatchStudioTool } from "./studio-dispatch.js"
+import type { ActionProposal, CopilotToolContext, RunProposal, StudioTurnState } from "./types.js"
 
-export interface ToolDefinition {
-  name: string
-  description: string
-  input_schema: Record<string, unknown>
-}
+export type { ToolDefinition, SurfaceTools }
 
 export interface ToolOutcome {
   /** Text handed back to the model (wrapped as untrusted by the caller). */
   text: string
   isError: boolean
-  /** Set by run_workflow: the loop must stop and let the user decide. */
-  proposal?: RunProposal
+  /**
+   * Set when the turn must stop and let the person decide: the canvas's run
+   * proposal, or one of the studio surface's action proposals. The loop keeps
+   * it and ends the message either way.
+   */
+  proposal?: RunProposal | ActionProposal
   /** Short human label detail for the activity row. */
   summary?: string
 }
@@ -205,26 +213,37 @@ const NATIVE_DEFINITIONS: ToolDefinition[] = [
   },
 ]
 
-function toDefinition(tool: McpToolDef): ToolDefinition {
-  const schema = { ...(tool.inputSchema ?? {}) } as Record<string, unknown>
-  delete schema.$schema
-  if (schema.type !== "object") schema.type = "object"
+/**
+ * The tool surface for a turn: what the model sees, plus the two things a
+ * dispatcher needs and cannot recover once `_meta` is dropped — which tools
+ * carry a confirmation class, and which of those can be priced without
+ * spending.
+ *
+ * Sorted by name so the cached prompt prefix (tools precede system) is
+ * byte-stable across turns and replicas. Natives come from this file; a
+ * surface may add its own.
+ */
+export async function buildToolSurface(
+  invoker: McpInvoker,
+  profile: CopilotSurfaceProfile = copilotSurface("workflow"),
+): Promise<SurfaceTools> {
+  const rendered = renderSurfaceTools(profile, await invoker.listTools())
+  const natives = [
+    ...NATIVE_DEFINITIONS.filter((definition) => profile.nativeTools.has(definition.name)),
+    ...profile.nativeDefinitions,
+  ]
   return {
-    name: tool.name,
-    description: tool.description ?? tool.name,
-    input_schema: schema,
+    ...rendered,
+    definitions: [...natives, ...rendered.definitions].sort((a, b) => a.name.localeCompare(b.name)),
   }
 }
 
-/**
- * The tool list for a turn. Sorted by name so the cached prompt prefix (tools
- * precede system) is byte-stable across turns and replicas.
- */
-export async function buildToolDefinitions(invoker: McpInvoker): Promise<ToolDefinition[]> {
-  const mcpTools = (await invoker.listTools())
-    .filter((t) => MCP_TOOL_ALLOWLIST.has(t.name))
-    .map(toDefinition)
-  return [...NATIVE_DEFINITIONS, ...mcpTools].sort((a, b) => a.name.localeCompare(b.name))
+/** The tool list alone, for a caller that needs nothing else. */
+export async function buildToolDefinitions(
+  invoker: McpInvoker,
+  profile?: CopilotSurfaceProfile,
+): Promise<ToolDefinition[]> {
+  return (await buildToolSurface(invoker, profile)).definitions
 }
 
 export interface DispatchDeps {
@@ -236,108 +255,142 @@ export interface DispatchDeps {
   readonly wiredAssets: WiredAsset[]
   /** Workflows created this turn — the bound lives here, not in the model. */
   readonly created: { count: number }
+  /**
+   * The surface this turn runs on. Absent means the canvas — the surface the
+   * copilot had when there was only one.
+   */
+  readonly surface?: CopilotSurfaceProfile
+  /**
+   * The studio surface's own per-turn state: what list time learned about the
+   * tools, whether this message has proposed already, and whether previewing a
+   * change turned out to be unavailable. Absent on the canvas.
+   */
+  readonly studio?: StudioTurnState
 }
 
 /** Execute one tool call. Never throws for a model-visible problem — it returns an error result the model can act on. */
 export async function dispatchTool(deps: DispatchDeps, name: string, rawArgs: unknown): Promise<ToolOutcome> {
   const args = (rawArgs ?? {}) as Record<string, unknown>
+  const profile = deps.surface ?? copilotSurface("workflow")
   try {
-    switch (name) {
-      case NATIVE_TOOLS.getGraph:
-        return { text: await runGetGraph(deps.ctx, args as GetGraphArgs), isError: false }
+    // The studio surface answers FIRST, because on it a tool call is usually
+    // not a tool call: everything that would change the person's production,
+    // publish it, copy it, import into it, export it or spend a credit comes
+    // back as a proposal they confirm in the editor. It returns null for
+    // everything it does not own — the canvas, a free read, the shared memory
+    // tool, a name that is on no surface — so every path below is untouched.
+    const proposed = await dispatchStudioTool(deps, name, rawArgs)
+    if (proposed) return proposed
 
-      case NATIVE_TOOLS.getWorkflowGraph:
-        return {
-          text: await runGetWorkflowGraph(deps.ctx, args as GetWorkflowGraphArgs),
-          isError: false,
-        }
+    // A native reaches its case only when its own surface declares it: a
+    // canvas native named on another surface falls through to the same
+    // refusal a hallucinated tool gets, without anything being called.
+    if (profile.nativeTools.has(name)) {
+      switch (name) {
+        case NATIVE_TOOLS.getGraph:
+          return { text: await runGetGraph(deps.ctx, args as GetGraphArgs), isError: false }
 
-      case NATIVE_TOOLS.createWorkflow: {
-        if (deps.created.count >= CREATES_PER_TURN) {
+        case NATIVE_TOOLS.getWorkflowGraph:
           return {
-            text: `Only ${CREATES_PER_TURN} workflow can be created per message. Tell the user what you would build and let them ask again.`,
-            isError: true,
+            text: await runGetWorkflowGraph(deps.ctx, args as GetWorkflowGraphArgs),
+            isError: false,
+          }
+
+        case NATIVE_TOOLS.createWorkflow: {
+          if (deps.created.count >= CREATES_PER_TURN) {
+            return {
+              text: `Only ${CREATES_PER_TURN} workflow can be created per message. Tell the user what you would build and let them ask again.`,
+              isError: true,
+            }
+          }
+          // Counted BEFORE the await: two `create_workflow` blocks in one
+          // assistant message are dispatched a microtask apart, and a count
+          // written after the insert would let both through.
+          deps.created.count += 1
+          const result = await runCreateWorkflow(deps.ctx, args as CreateWorkflowArgs)
+          // Deliberately NOT folded into `deps.addedNodeTypes` / `wiredAssets`:
+          // those feed the Run card for the workflow on SCREEN, and listing
+          // nodes that went into a different workflow would tell the user they
+          // are about to spend credits on something they never gained.
+          return {
+            text: JSON.stringify(
+              {
+                workflowId: result.workflowId,
+                name: result.name,
+                nodeCount: result.edit.nodeCount,
+                edgeCount: result.edit.edgeCount,
+                note: "Created. This conversation stays attached to the workflow already open — run_workflow still proposes that one.",
+              },
+              null,
+              2,
+            ),
+            isError: false,
+            summary: `created ${result.name}`,
           }
         }
-        // Counted BEFORE the await: two `create_workflow` blocks in one
-        // assistant message are dispatched a microtask apart, and a count
-        // written after the insert would let both through.
-        deps.created.count += 1
-        const result = await runCreateWorkflow(deps.ctx, args as CreateWorkflowArgs)
-        // Deliberately NOT folded into `deps.addedNodeTypes` / `wiredAssets`:
-        // those feed the Run card for the workflow on SCREEN, and listing
-        // nodes that went into a different workflow would tell the user they
-        // are about to spend credits on something they never gained.
-        return {
-          text: JSON.stringify(
-            {
-              workflowId: result.workflowId,
-              name: result.name,
-              nodeCount: result.edit.nodeCount,
-              edgeCount: result.edit.edgeCount,
-              note: "Created. This conversation stays attached to the workflow already open — run_workflow still proposes that one.",
-            },
-            null,
-            2,
-          ),
-          isError: false,
-          summary: `created ${result.name}`,
-        }
-      }
 
-      case NATIVE_TOOLS.editWorkflow: {
-        const result = await runEditWorkflow(deps.ctx, args as unknown as EditWorkflowArgs)
-        for (const type of result.addedNodeTypes) deps.addedNodeTypes.add(type)
-        for (const asset of result.wiredAssets) {
-          if (!deps.wiredAssets.some((a) => a.id === asset.id && a.nodeId === asset.nodeId)) {
-            deps.wiredAssets.push(asset)
+        case NATIVE_TOOLS.editWorkflow: {
+          const result = await runEditWorkflow(deps.ctx, args as unknown as EditWorkflowArgs)
+          for (const type of result.addedNodeTypes) deps.addedNodeTypes.add(type)
+          for (const asset of result.wiredAssets) {
+            if (!deps.wiredAssets.some((a) => a.id === asset.id && a.nodeId === asset.nodeId)) {
+              deps.wiredAssets.push(asset)
+            }
           }
+          const summary = [
+            result.addedNodeIds.length ? `added ${result.addedNodeIds.length}` : "",
+            result.updatedNodeIds.length ? `updated ${result.updatedNodeIds.length}` : "",
+            result.removedNodeIds.length ? `removed ${result.removedNodeIds.length}` : "",
+          ]
+            .filter(Boolean)
+            .join(", ")
+          return { text: JSON.stringify(result, null, 2), isError: false, summary: summary || "no change" }
         }
-        const summary = [
-          result.addedNodeIds.length ? `added ${result.addedNodeIds.length}` : "",
-          result.updatedNodeIds.length ? `updated ${result.updatedNodeIds.length}` : "",
-          result.removedNodeIds.length ? `removed ${result.removedNodeIds.length}` : "",
-        ]
-          .filter(Boolean)
-          .join(", ")
-        return { text: JSON.stringify(result, null, 2), isError: false, summary: summary || "no change" }
-      }
 
-      case NATIVE_TOOLS.runWorkflow: {
-        const { proposal, message } = await proposeRun(
-          deps.ctx,
-          args as RunWorkflowArgs,
-          [...deps.addedNodeTypes],
-          deps.wiredAssets,
-        )
-        return { text: message, isError: false, proposal }
-      }
-
-      case NATIVE_TOOLS.getExecution:
-        return { text: await runGetExecution(deps.ctx, args as GetExecutionArgs), isError: false }
-
-      case NATIVE_TOOLS.remember:
-        return await runRemember(deps.ctx, args as RememberArgs)
-
-      default: {
-        if (!MCP_TOOL_ALLOWLIST.has(name)) {
-          return { text: `Tool "${name}" is not available in this conversation.`, isError: true }
+        case NATIVE_TOOLS.runWorkflow: {
+          const { proposal, message } = await proposeRun(
+            deps.ctx,
+            args as RunWorkflowArgs,
+            [...deps.addedNodeTypes],
+            deps.wiredAssets,
+          )
+          return { text: message, isError: false, proposal }
         }
-        // Order is the enforcement: the model's own args go in first, then
-        // whatever this tool pins, then the workflow id. A model-supplied
-        // `scope: "public"` or `workflow_id` loses to the value after it.
-        const result = await deps.invoker.callTool(name, {
-          ...args,
-          ...(FORCED_MCP_ARGS[name] ?? {}),
-          workflow_id: deps.ctx.workflowId,
-        })
-        const text = result.content
-          .map((block) => (typeof block.text === "string" ? block.text : ""))
-          .filter(Boolean)
-          .join("\n")
-        return { text: text || "(no output)", isError: Boolean(result.isError) }
+
+        case NATIVE_TOOLS.getExecution:
+          return { text: await runGetExecution(deps.ctx, args as GetExecutionArgs), isError: false }
+
+        case NATIVE_TOOLS.remember:
+          return await runRemember(deps.ctx, args as RememberArgs)
       }
     }
+
+    if (!profile.mcpAllowlist.has(name)) {
+      return { text: `Tool "${name}" is not available in this conversation.`, isError: true }
+    }
+    // Everything this path may call is free. A surface whose tools change the
+    // document, publish, copy or spend proposes those instead — and a name
+    // that arrives here without having been proposed is refused before the
+    // invoker is touched, whatever the reason it arrived.
+    if (!profile.freeTools.has(name)) {
+      return {
+        text: `"${name}" changes the person's work, so it cannot be called directly here — it has to be proposed and confirmed.`,
+        isError: true,
+      }
+    }
+    // Order is the enforcement: the model's own args go in first, then
+    // whatever this tool pins, then the id this surface addresses. A
+    // model-supplied `scope: "public"` or id loses to the value after it.
+    const result = await deps.invoker.callTool(name, {
+      ...args,
+      ...(profile.forcedArgs[name] ?? {}),
+      ...profile.forcedIdArg(deps.ctx.workflowId),
+    })
+    const text = result.content
+      .map((block) => (typeof block.text === "string" ? block.text : ""))
+      .filter(Boolean)
+      .join("\n")
+    return { text: text || "(no output)", isError: Boolean(result.isError) }
   } catch (err) {
     if (err instanceof EditRejected) return { text: err.message, isError: true }
     const message = err instanceof Error ? err.message : String(err)
