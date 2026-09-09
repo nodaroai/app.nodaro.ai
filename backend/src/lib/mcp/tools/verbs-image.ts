@@ -24,6 +24,7 @@ import { getUserMcpPreferences } from "../user-preferences.js"
 import { normalizeImageInput } from "../normalize.js"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { OVERLAY_MAX_LAYERS } from "../../../providers/image/overlay-contract.js"
+import type { SuggestedPlacement } from "../../../routes/image-overlay-placement.js"
 import { OVERLAY_LAYER_KINDS, overlayTextStyleSchema, overlayQrStyleSchema, overlayShapeStyleSchema, overlayImageEffectsSchema, OVERLAY_PLATFORM_IDS, OVERLAY_MAX_VARIANTS } from "@nodaro/shared"
 
 // Used only as `description` hints in the schema below — the actual model
@@ -997,6 +998,68 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         widgetKind: "image",
         widgetData: { prompt: `Overlay of ${layers.length} layer(s)`, model: "image-overlay" },
       })
+    },
+  )
+
+  // ── suggest_overlay_placement ──
+  server.registerTool(
+    "suggest_overlay_placement",
+    {
+      title: "Suggest Overlay Placement",
+      description:
+        "Ask a vision model where ONE overlay layer should sit on a base image — it avoids faces, the subject and busy texture. " +
+        "Answers anchor + x/y + width in the same PERCENT units image_overlay takes, plus a one-line reason; apply it by passing those values as a layer to image_overlay. " +
+        "Nothing is composited here. Costs one image-to-text call.",
+      inputSchema: {
+        image_url: z.string().url().optional().describe("Base image URL."),
+        image_asset_id: z.string().optional().describe("Base image as a Nodaro image job id."),
+        intent: z.string().max(300).optional().describe("What the layer is, in words — a logo, a headline, a price badge, a QR code. Default a logo."),
+        layer_aspect: z.number().min(0.05).max(20).optional().describe("The layer's width / height (1 = square, the default) so the proposed box stays in proportion."),
+        safe_area: z
+          .object({
+            x: z.number().min(0).max(1),
+            y: z.number().min(0).max(1),
+            w: z.number().min(0).max(1),
+            h: z.number().min(0).max(1),
+          })
+          .optional()
+          .describe("Always-visible region as fractions of the canvas (a platform preset's safe area); the layer is kept inside it."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) => {
+      const imageUrl =
+        args.image_url ??
+        (args.image_asset_id
+          ? await resolveAssetId({ assetId: args.image_asset_id, userId: session.userId, expectedKind: "image" })
+          : null)
+      if (!imageUrl) {
+        return { content: [{ type: "text" as const, text: "Provide the base image as image_url or image_asset_id." }], isError: true }
+      }
+      const res = await mcpInject(fastify, session, {
+        method: "POST",
+        url: "/v1/image-overlay/suggest-placement",
+        payload: {
+          imageUrl,
+          ...(args.intent ? { intent: args.intent } : {}),
+          ...(args.layer_aspect !== undefined ? { layerAspect: args.layer_aspect } : {}),
+          ...(args.safe_area ? { safeArea: args.safe_area } : {}),
+          mcp_client: session.clientName,
+          userId: session.userId,
+        },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const { placement } = JSON.parse(res.body) as { placement: SuggestedPlacement }
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text:
+              `anchor ${placement.anchor}, x ${placement.x}%, y ${placement.y}%, width ${placement.width}% — ${placement.reason}\n` +
+              `Pass those four values on the layer you give image_overlay.`,
+          },
+        ],
+      }
     },
   )
 

@@ -16,6 +16,16 @@
  */
 import { z } from "zod"
 
+/** The nine points a layer attaches to on the base image. THE definition —
+ *  the route's Zod, the compositor, the canvas, the SDK and the CLI all read
+ *  this one (it used to be spelled out separately in each). */
+export const OVERLAY_ANCHORS = [
+  "top-left", "top", "top-right",
+  "left", "center", "right",
+  "bottom-left", "bottom", "bottom-right",
+] as const
+export type OverlayAnchor = (typeof OVERLAY_ANCHORS)[number]
+
 export const OVERLAY_LAYER_KINDS = ["image", "text", "qr", "shape"] as const
 export type OverlayLayerKind = (typeof OVERLAY_LAYER_KINDS)[number]
 

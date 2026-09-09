@@ -1,4 +1,4 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
@@ -1016,6 +1016,10 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     { key: "canvas", type: "json" },
     { key: "baseFit", type: "select", options: ["contain", "cover"] },
     { key: "outputFormat", type: "select", options: ["png", "jpg", "webp"] },
+    { key: "variants", type: "string-array", options: [...OVERLAY_PLATFORM_IDS] },
+    { key: "qrText", type: "text" },
+    { key: "maskMode", type: "select", options: ["none", "layers", "around", "outside"] },
+    { key: "maskSpread", type: "number" },
   ] } },
   { type: "merge-video-audio", label: "Merge Video + Audio", category: "processing", description: "Mux a video and an audio track.", outputType: "video" },
   { type: "still-to-video", label: "Still to Video", category: "processing", description: "Turn one still image + one audio track into an MP4 with an optional motion effect (zoom / pan / Ken Burns). Local FFmpeg — no provider, no GPU, zero credits. The output duration is the audio's duration (no duration field).", outputType: "video", creditCost: 0, inputSchema: { fields: [

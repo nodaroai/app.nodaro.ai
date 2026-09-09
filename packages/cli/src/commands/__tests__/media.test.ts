@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { Command } from "commander"
+import { writeFileSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { mediaCommand } from "../media.js"
 import { warn, success, emit } from "../../output.js"
 
@@ -13,6 +16,8 @@ const mocks = {
   slideshow: vi.fn(),
   videoMetadata: vi.fn(),
   imageCollage: vi.fn(),
+  imageOverlay: vi.fn(),
+  suggestOverlayPlacement: vi.fn(),
   jobsGet: vi.fn(),
 }
 
@@ -28,6 +33,8 @@ vi.mock("../../client.js", () => ({
       trimAudio: mocks.trimAudio,
       videoMetadata: mocks.videoMetadata,
       imageCollage: mocks.imageCollage,
+      imageOverlay: mocks.imageOverlay,
+      suggestOverlayPlacement: mocks.suggestOverlayPlacement,
     },
     jobs: { get: mocks.jobsGet },
   }),
@@ -353,5 +360,104 @@ describe("media collage --badge-position", () => {
       runCmd("media", "collage", "https://x/a.png", "https://x/b.png", "--badge-position", "bottom-left"),
     ).rejects.toThrow("process.exit(1)")
     expect(mocks.imageCollage).not.toHaveBeenCalled()
+  })
+})
+
+describe("media overlay command", () => {
+  it("makes each positional URL an image layer sharing the flag placement", async () => {
+    mocks.imageOverlay.mockResolvedValueOnce({ jobId: "j-ov" })
+    await runCmd(
+      "media", "overlay", "https://x/base.png", "https://x/logo.svg",
+      "--anchor", "bottom-right", "--x", "-4", "--y", "-6", "--width", "12", "--opacity", "0.95", "--json",
+    )
+    expect(mocks.imageOverlay).toHaveBeenCalledWith({
+      imageUrl: "https://x/base.png",
+      layers: [{ imageUrl: "https://x/logo.svg", anchor: "bottom-right", x: -4, y: -6, width: 12, opacity: 0.95 }],
+    })
+  })
+
+  it("maps --platform, the mask controls and --canvas into the request", async () => {
+    mocks.imageOverlay.mockResolvedValueOnce({ jobId: "j-ov2" })
+    await runCmd(
+      "media", "overlay", "https://x/base.png", "https://x/logo.png",
+      "--platform", "youtube-thumbnail", "--platform", "x-header",
+      "--mask-mode", "around", "--mask-spread", "64",
+      "--canvas", "1920x1080", "--base-fit", "cover", "--background-color", "#000000",
+      "--output-format", "webp", "--qr-text", "https://nodaro.ai", "--json",
+    )
+    expect(mocks.imageOverlay).toHaveBeenCalledWith({
+      imageUrl: "https://x/base.png",
+      layers: [{ imageUrl: "https://x/logo.png" }],
+      canvas: { width: 1920, height: 1080, backgroundColor: "#000000" },
+      baseFit: "cover",
+      outputFormat: "webp",
+      variants: ["youtube-thumbnail", "x-header"],
+      qrText: "https://nodaro.ai",
+      maskMode: "around",
+      maskSpread: 64,
+    })
+  })
+
+  it("reads the full layers array from --layers-file (text / QR / shape kinds)", async () => {
+    const file = join(tmpdir(), `overlay-layers-${Date.now()}.json`)
+    const layers = [
+      { kind: "text", text: { content: "50% OFF", fontId: "anton" }, anchor: "top-left", x: 5, y: 5 },
+      { kind: "qr", qr: { text: "https://nodaro.ai" }, anchor: "bottom-right", x: -4, y: -4, width: 14 },
+    ]
+    writeFileSync(file, JSON.stringify(layers))
+    mocks.imageOverlay.mockResolvedValueOnce({ jobId: "j-ov3" })
+    try {
+      await runCmd("media", "overlay", "https://x/base.png", "--layers-file", file, "--json")
+    } finally {
+      rmSync(file, { force: true })
+    }
+    expect(mocks.imageOverlay).toHaveBeenCalledWith({ imageUrl: "https://x/base.png", layers })
+  })
+
+  it("refuses positional layers together with --layers-file, and no layers at all", async () => {
+    await expect(
+      runCmd("media", "overlay", "https://x/base.png", "https://x/logo.png", "--layers-file", "layers.json"),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("not both"))
+    await expect(runCmd("media", "overlay", "https://x/base.png")).rejects.toThrow("process.exit(1)")
+    expect(mocks.imageOverlay).not.toHaveBeenCalled()
+  })
+
+  it("errors on an unknown --anchor and an unknown --platform", async () => {
+    await expect(
+      runCmd("media", "overlay", "https://x/base.png", "https://x/l.png", "--anchor", "middle"),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--anchor"))
+    await expect(
+      runCmd("media", "overlay", "https://x/base.png", "https://x/l.png", "--platform", "myspace-banner"),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("Unknown --platform"))
+    expect(mocks.imageOverlay).not.toHaveBeenCalled()
+  })
+})
+
+describe("media overlay-placement command", () => {
+  it("asks for a placement and prints it (no job to poll)", async () => {
+    const placement = { anchor: "bottom-right", x: -4, y: -6, width: 12, reason: "Calm sky in the corner." }
+    mocks.suggestOverlayPlacement.mockResolvedValueOnce({ jobId: "j-place", placement })
+    await runCmd(
+      "media", "overlay-placement", "https://x/base.png",
+      "--intent", "a logo", "--aspect", "2.5", "--safe-area", "0.05,0.05,0.9,0.9", "--json",
+    )
+    expect(mocks.suggestOverlayPlacement).toHaveBeenCalledWith({
+      imageUrl: "https://x/base.png",
+      intent: "a logo",
+      layerAspect: 2.5,
+      safeArea: { x: 0.05, y: 0.05, w: 0.9, h: 0.9 },
+    })
+    expect(vi.mocked(emit)).toHaveBeenCalledWith(placement, expect.anything())
+  })
+
+  it("errors on a malformed --safe-area", async () => {
+    await expect(
+      runCmd("media", "overlay-placement", "https://x/base.png", "--safe-area", "0.1,0.1,2"),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--safe-area"))
+    expect(mocks.suggestOverlayPlacement).not.toHaveBeenCalled()
   })
 })
