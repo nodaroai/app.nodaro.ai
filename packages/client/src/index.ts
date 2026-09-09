@@ -23,6 +23,8 @@ export {
   JobAbortedError,
   JobHeldError,
   StudioOpError,
+  StudioPreviewAppliedError,
+  StudioPreviewUnavailable,
   throwFromResponse,
 } from "./errors.js"
 export type { WorkflowConflictCode } from "./errors.js"
@@ -126,6 +128,8 @@ export {
   type StudioOpsRequest,
   type StudioOpsReceipt,
   type StudioOpsResponse,
+  type StudioOpsDryRunReceipt,
+  type StudioOpsDryRunResponse,
   type StudioReconcileResponse,
   type StudioDescribeRequest,
   type StudioGenerateRequest,
