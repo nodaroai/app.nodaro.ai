@@ -42,7 +42,17 @@ export async function writeScene3DJson(
   return writeScene3DBytes(toolkit, { ...input, bytes }, options)
 }
 
-/** Trusted renderer PNG output; bounded bytes still pass the host's receipt validator. */
+/**
+ * Trusted renderer PNG output; bounded bytes still pass the host's receipt
+ * validator.
+ *
+ * The 8 MiB byte cap was re-checked against the widened dimension bound rather
+ * than assumed: a still at the worst frame the contract admits (2560x2560 — the
+ * cap applies to both axes) renders to ~2.3 MiB, so the byte cap stays a
+ * backstop and not a second ceiling. Re-check it if `maxDimensionPx` moves
+ * again; raw RGBA at 2560x2560 is already 26 MiB, so the margin is compression,
+ * not headroom.
+ */
 export async function writeScene3DPng(
   toolkit: Pick<PluginSceneArtifactToolkit, "grant" | "receive">,
   input: PluginSceneArtifactUpload & { bytes: Uint8Array },
