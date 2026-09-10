@@ -33,6 +33,15 @@
  *   Sampling itself lives with the renderer (`packages/remotion`) — this file
  *   only guarantees the data it samples is well-formed.
  *
+ * Camera and object RIGS are deliberately absent, and their absence is a
+ * decision rather than an unfinished TODO: spline rails, follow-path and
+ * track-to constraints, and procedural noise modifiers are authored UPSTREAM
+ * (in Blender) and reach this contract already BAKED — v1 as keyframes on the
+ * tracks above, v2 as one camera sample per frame. The format carries no
+ * constraint or noise vocabulary ON PURPOSE, because evaluating a rig in two
+ * different renderers cannot be guaranteed to agree frame for frame, and that
+ * agreement is the promise everything else here rests on.
+ *
  * ## Revisions
  *
  * A plan is IMMUTABLE. Every accepted edit produces a NEW `revisionId` and
