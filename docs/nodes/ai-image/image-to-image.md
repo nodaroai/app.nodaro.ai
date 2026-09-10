@@ -45,6 +45,8 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | flux-pro-i2i | Flux-2 Pro | Premium quality image transforms | Resolution options (1K/2K) |
 | gpt-image-i2i | GPT Image | Text rendering, complex compositions | Quality options (medium/high) |
 | gpt-image-2-i2i | GPT Image 2 | Higher resolution GPT Image; 1K/2K/4K | Resolution options |
+| gpt-image-2-5-flare-i2i | GPT Image 2.5 Flare | Fast GPT Image 2.5 edits, up to 16 source images — the default while iterating; 1K/2K/4K at **15 / 25 / 40 credits** | Resolution options |
+| gpt-image-2-5-sunburst-i2i | GPT Image 2.5 Sunburst | Precision GPT Image 2.5 edits, up to 16 source images — tightest control for demanding retouches, slower; same **15 / 25 / 40 credits** | Resolution options |
 | ideogram-edit | Ideogram Edit | AI-guided image editing | Mask-based inpainting |
 | ideogram-remix | Ideogram Remix | Restyle with character consistency | Character-consistent restyling |
 | ideogram-reframe | Ideogram Reframe | Change aspect ratio intelligently | Aspect ratio adjustment |

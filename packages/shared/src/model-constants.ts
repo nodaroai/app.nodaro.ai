@@ -44,6 +44,9 @@ export const IMAGE_ASPECT_RATIO_VALUES = [
   // Ultra-wide / ultra-tall banner ratios: Wan 2.7 + Wan 2.7 Pro (8:1, 1:8)
   // and Nano Banana 2 Lite (4:1, 1:4, 8:1, 1:8).
   "4:1", "1:4", "8:1", "1:8",
+  // GPT Image 2.5 (Flare + Sunburst) additions: near-square and ultra-wide/tall
+  // cinema ratios (docs.kie.ai/market/gpt/gpt-image-2-5-*).
+  "27:16", "16:27", "9:8", "8:9",
 ] as const
 
 /** A ratio string the image routes accept (pre-snap vocabulary, not a per-model guarantee). */
@@ -76,6 +79,11 @@ export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   "nano-banana-2-lite": 20000, // docs.kie.ai/market/google/nano-banana-2-lite
   "nano-banana-pro": 20000,    // docs.kie.ai/market/google/pro-image-to-image
   "gpt-image-2-i2i": 20000,    // docs.kie.ai/market/gpt/gpt-image-2-image-to-image
+  // GPT Image 2.5 — all four lanes document a 20000-char prompt ceiling.
+  "gpt-image-2-5-flare": 20000,          // docs.kie.ai/market/gpt/gpt-image-2-5-flare-text-to-image
+  "gpt-image-2-5-flare-i2i": 20000,      // docs.kie.ai/market/gpt/gpt-image-2-5-flare-image-to-image
+  "gpt-image-2-5-sunburst": 20000,       // docs.kie.ai/market/gpt/gpt-image-2-5-sunburst-text-to-image
+  "gpt-image-2-5-sunburst-i2i": 20000,   // docs.kie.ai/market/gpt/gpt-image-2-5-sunburst-image-to-image
   // ── lower than the 5000 default (over-send risk if left at default) ──
   "seedream": 3000,            // docs.kie.ai/market/seedream/4-5-text-to-image
   "seedream-edit": 3000,       // docs.kie.ai/market/seedream/4-5-edit
@@ -475,6 +483,8 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   // T2I providers that auto-route to their i2i sibling when refs are attached
   "gpt-image",
   "gpt-image-2",
+  "gpt-image-2-5-flare",
+  "gpt-image-2-5-sunburst",
   "grok",
   "grok-2",
   "qwen",
@@ -487,6 +497,8 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "nano-banana-edit",
   "gpt-image-i2i",
   "gpt-image-2-i2i",
+  "gpt-image-2-5-flare-i2i",
+  "gpt-image-2-5-sunburst-i2i",
   "grok-2-i2i",
   "flux-i2i",
   "flux-pro-i2i",
@@ -525,6 +537,8 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
 export const T2I_TO_I2I_VARIANT: Record<string, string> = {
   "gpt-image": "gpt-image-i2i",
   "gpt-image-2": "gpt-image-2-i2i",
+  "gpt-image-2-5-flare": "gpt-image-2-5-flare-i2i",
+  "gpt-image-2-5-sunburst": "gpt-image-2-5-sunburst-i2i",
   "grok": "grok-i2i",
   // grok-2's t2i takes NO image input; its "i2i" is the segment-map(image_url)
   // → image-edit(task_id) chain in the KIE provider (single reference).
@@ -560,6 +574,8 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "nano-banana-edit": 8,
   "gpt-image-i2i": 16,
   "gpt-image-2-i2i": 16,
+  "gpt-image-2-5-flare-i2i": 16,
+  "gpt-image-2-5-sunburst-i2i": 16,
   "flux-i2i": 4,
   "flux-pro-i2i": 4,
   "seedream-edit": 16,
@@ -625,6 +641,10 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | 
   "gpt-image-i2i": "quality",
   "gpt-image-2": "resolution",
   "gpt-image-2-i2i": "resolution",
+  "gpt-image-2-5-flare": "resolution",
+  "gpt-image-2-5-flare-i2i": "resolution",
+  "gpt-image-2-5-sunburst": "resolution",
+  "gpt-image-2-5-sunburst-i2i": "resolution",
   "nano-banana-pro": "resolution",
   "nano-banana-2": "resolution",
   "flux": "resolution",
@@ -658,6 +678,10 @@ export const RESOLUTION_2K_4K_TIERED_PROVIDERS = new Set([
   "nano-banana-2",
   "gpt-image-2",
   "gpt-image-2-i2i",
+  "gpt-image-2-5-flare",
+  "gpt-image-2-5-flare-i2i",
+  "gpt-image-2-5-sunburst",
+  "gpt-image-2-5-sunburst-i2i",
   "wan-2.7",
   "wan-2.7-pro",
 ])
@@ -680,6 +704,8 @@ export const IMAGE_GEN_PROVIDERS = [
   "grok-2",
   "gpt-image",
   "gpt-image-2",
+  "gpt-image-2-5-flare",
+  "gpt-image-2-5-sunburst",
   "imagen4",
   "imagen4-fast",
   "imagen4-ultra",
@@ -711,6 +737,8 @@ export const IMAGE_I2I_PROVIDERS = [
   "flux-pro-i2i",
   "gpt-image-i2i",
   "gpt-image-2-i2i",
+  "gpt-image-2-5-flare-i2i",
+  "gpt-image-2-5-sunburst-i2i",
   "grok-2-i2i",
   "ideogram-edit",
   "ideogram-remix",
@@ -1250,6 +1278,8 @@ export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
   "nano-banana-2-lite": "prompt",
   "gpt-image": "prompt",
   "gpt-image-2": "prompt",
+  "gpt-image-2-5-flare": "prompt",
+  "gpt-image-2-5-sunburst": "prompt",
   "seedream": "prompt",
   "seedream-5-lite": "prompt",
   "seedream-5-pro": "prompt",

@@ -88,6 +88,15 @@ const SUGGEST_PLACEMENT_TOOL_BYTES = 1_520
 // none of the seven is near the per-tool budget (the largest in the list is
 // `animate_image` at 8_122 B).
 const LANDING_CONTRACT_BYTES = 582
+//
+// RAISED 2026-09-10 by the four GPT Image 2.5 models (Flare + Sunburst, each
+// t2i and i2i) and nothing else — they widen the model enums and capability
+// text that `generate_image` / `modify_image` already carry; no tool was added,
+// so the fixture does NOT move. MEASURED by this suite, on top of the
+// landing-contract raise above: 348_038 total − 347_887 = 151 B. Neither tool moves near the per-tool budget (`generate_image`
+// is 8_095 B against the 8_192 B cap — the tightest in the list, and the reason
+// the 2.5 descriptions are kept to one clause each rather than a paragraph).
+const GPT_IMAGE_2_5_MODELS_BYTES = 151
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -95,7 +104,8 @@ export const TOOL_WIRE_BUDGET = {
     IMAGE_OVERLAY_TOOL_BYTES +
     STUDIO_PREVIEW_ARGS_BYTES +
     SUGGEST_PLACEMENT_TOOL_BYTES +
-    LANDING_CONTRACT_BYTES,
+    LANDING_CONTRACT_BYTES +
+    GPT_IMAGE_2_5_MODELS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

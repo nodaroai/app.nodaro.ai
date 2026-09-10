@@ -267,6 +267,44 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
 
+  // GPT Image 2.5 — Flare + Sunburst. Same resolution-based pricing shape as
+  // GPT Image 2 but CHEAPER at 2K/4K, and a wider 13-ratio set (adds 3:2/2:3,
+  // 21:9, 27:16, 16:27, 9:8, 8:9). Unlike GPT Image 2, the 2.5 docs state NO
+  // aspect_ratio x resolution restriction.
+  // See: docs.kie.ai/market/gpt/gpt-image-2-5-{flare,sunburst}-{text,image}-to-image.md
+  "gpt-image-2-5-flare": {
+    model: "gpt-image-2-5-flare-text-to-image",
+    credits: 6,
+    cost: 0.03,  // 1K. KIE: 6 cr @1K / 10 cr @2K / 16 cr @4K (docs.kie.ai)
+    // NOTE: 2K, 4K — composite identifiers "gpt-image-2-5-flare:2K" and "gpt-image-2-5-flare:4K"
+    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
+  },
+  "gpt-image-2-5-flare-i2i": {
+    model: "gpt-image-2-5-flare-image-to-image",
+    credits: 6,
+    cost: 0.03,  // 1K. KIE: 6 cr @1K / 10 cr @2K / 16 cr @4K (docs.kie.ai)
+    // NOTE: 2K, 4K — composite identifiers "gpt-image-2-5-flare-i2i:2K" and "gpt-image-2-5-flare-i2i:4K"
+    inputType: "image-to-image",
+    imageParam: "input_urls",  // Array, max 16
+    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
+  },
+  "gpt-image-2-5-sunburst": {
+    model: "gpt-image-2-5-sunburst-text-to-image",
+    credits: 6,
+    cost: 0.03,  // 1K. KIE: 6 cr @1K / 10 cr @2K / 16 cr @4K (docs.kie.ai)
+    // NOTE: 2K, 4K — composite identifiers "gpt-image-2-5-sunburst:2K" and "gpt-image-2-5-sunburst:4K"
+    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
+  },
+  "gpt-image-2-5-sunburst-i2i": {
+    model: "gpt-image-2-5-sunburst-image-to-image",
+    credits: 6,
+    cost: 0.03,  // 1K. KIE: 6 cr @1K / 10 cr @2K / 16 cr @4K (docs.kie.ai)
+    // NOTE: 2K, 4K — composite identifiers "gpt-image-2-5-sunburst-i2i:2K" and "gpt-image-2-5-sunburst-i2i:4K"
+    inputType: "image-to-image",
+    imageParam: "input_urls",  // Array, max 16
+    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
+  },
+
   // Google Imagen4 family
   // See: docs.kie.ai/market/google/imagen4.md
   "imagen4": {

@@ -76,6 +76,38 @@ describe("normalizeModelInput", () => {
     expect(normalizeModelInput("gpt-image-2", { aspectRatio: "1:1", resolution: "4K" }).resolution).toBe("2K")
   })
 
+  // GPT Image 2.5 is NOT GPT Image 2. Its KIE docs
+  // (docs.kie.ai/market/gpt/gpt-image-2-5-*) state no aspect_ratio x resolution
+  // restriction, so the cross-field block above must NOT be widened to these
+  // ids "for consistency" — doing so would silently downgrade a paid 4K render
+  // to 1K. If GPT Image 2.5 ever documents such a limit, add it deliberately
+  // and change this test in the same commit.
+  it.each([
+    "gpt-image-2-5-flare",
+    "gpt-image-2-5-flare-i2i",
+    "gpt-image-2-5-sunburst",
+    "gpt-image-2-5-sunburst-i2i",
+  ])("%s has NO cross-field aspect-ratio x resolution rule", (modelId) => {
+    const auto4k = normalizeModelInput(modelId, { aspectRatio: "auto", resolution: "4K" })
+    expect(auto4k.resolution).toBe("4K")
+    expect(auto4k.adjustments).toEqual([])
+
+    const square4k = normalizeModelInput(modelId, { aspectRatio: "1:1", resolution: "4K" })
+    expect(square4k.resolution).toBe("4K")
+    expect(square4k.adjustments).toEqual([])
+  })
+
+  // The four ratios 2.5 introduced are new to the platform vocabulary; the snap
+  // must accept them rather than rewrite them to a neighbour.
+  it.each(["27:16", "16:27", "9:8", "8:9", "21:9", "3:2"])(
+    "gpt-image-2.5 keeps the newly-added ratio %s",
+    (ratio) => {
+      const out = normalizeModelInput("gpt-image-2-5-flare", { aspectRatio: ratio })
+      expect(out.aspectRatio).toBe(ratio)
+      expect(out.adjustments).toEqual([])
+    },
+  )
+
   it("passes unknown model ids through untouched (the Zod enum owns those)", () => {
     const out = normalizeModelInput("totally-fake-model", { aspectRatio: "21:9" })
     expect(out.aspectRatio).toBe("21:9")

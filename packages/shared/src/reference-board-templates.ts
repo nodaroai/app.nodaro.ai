@@ -1,6 +1,11 @@
 /** Gen providers for the board: strict subset of IMAGE_GEN_PROVIDERS that
  *  renders legible in-image text + accepts reference conditioning. */
-export const REFERENCE_BOARD_PROVIDERS = ["nano-banana-pro", "gpt-image-2"] as const
+export const REFERENCE_BOARD_PROVIDERS = [
+  "nano-banana-pro",
+  "gpt-image-2",
+  "gpt-image-2-5-flare",
+  "gpt-image-2-5-sunburst",
+] as const
 export type ReferenceBoardProvider = (typeof REFERENCE_BOARD_PROVIDERS)[number]
 
 export type BoardEntityKind = "character" | "location" | "object"

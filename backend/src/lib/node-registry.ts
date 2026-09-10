@@ -502,7 +502,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
       "Generate a dense reference board (hero + metadata + panels + 6-HEX palette) in one AI pass from reference image(s); refine globally, with a mask, or re-roll. Output is one cohesive board image for downstream consistency.",
     outputType: "image",
     creditCost: 6,
-    providers: ["nano-banana-pro", "gpt-image-2"],
+    providers: ["nano-banana-pro", "gpt-image-2", "gpt-image-2-5-flare", "gpt-image-2-5-sunburst"],
     inputSchema: { fields: [
       { key: "referenceImageUrls", type: "image-url" },
       { key: "boardTemplate", type: "text", required: true },

@@ -26,6 +26,8 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "flux-kontext-max", label: "Flux Kontext Max", desc: "Highest quality Kontext generation" },
   { value: "gpt-image", label: "GPT Image", desc: "Text rendering, complex compositions" },
   { value: "gpt-image-2", label: "GPT Image 2", desc: "Latest GPT Image, sharper text + photorealism, up to 4K" },
+  { value: "gpt-image-2-5-flare", label: "GPT Image 2.5 Flare", desc: "Fast everyday GPT Image 2.5 — ~2x quicker, great for iteration" },
+  { value: "gpt-image-2-5-sunburst", label: "GPT Image 2.5 Sunburst", desc: "Precision GPT Image 2.5 — slower, best for final/brand work" },
   { value: "grok", label: "Grok", desc: "Creative and stylized imagery" },
   { value: "grok-2", label: "Grok Imagine 2", desc: "Latest Grok — expressive, high-contrast imagery" },
   { value: "ideogram-v3", label: "Ideogram V3", desc: "Fast text-to-image, affordable" },
@@ -57,6 +59,8 @@ export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string
   { value: "flux-kontext-max", label: "Flux Kontext Max", desc: "Highest quality Kontext editing" },
   { value: "gpt-image-i2i", label: "GPT Image", desc: "Text rendering, complex compositions" },
   { value: "gpt-image-2-i2i", label: "GPT Image 2", desc: "Latest GPT Image, sharper text + photorealism, up to 4K" },
+  { value: "gpt-image-2-5-flare-i2i", label: "GPT Image 2.5 Flare", desc: "Fast GPT Image 2.5 edits — up to 16 sources, best for iteration" },
+  { value: "gpt-image-2-5-sunburst-i2i", label: "GPT Image 2.5 Sunburst", desc: "Precision GPT Image 2.5 edits — tightest control, slower" },
   { value: "grok-i2i", label: "Grok", desc: "Creative and stylized imagery" },
   { value: "ideogram-edit", label: "Ideogram Edit", desc: "AI-guided image editing" },
   { value: "ideogram-reframe", label: "Ideogram Reframe", desc: "Change aspect ratio intelligently" },
@@ -711,6 +715,8 @@ export const CINEMATIC_RESOLUTION_OPTIONS: ReadonlyArray<{ value: string; label:
 export const REFERENCE_BOARD_PROVIDER_OPTIONS: ReadonlyArray<{ value: string; label: string; desc: string }> = [
   { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production-ready images" },
   { value: "gpt-image-2",     label: "GPT Image 2",     desc: "Sharper text + photorealism, up to 4K" },
+  { value: "gpt-image-2-5-flare",    label: "GPT Image 2.5 Flare",    desc: "Fast board drafts, up to 4K" },
+  { value: "gpt-image-2-5-sunburst", label: "GPT Image 2.5 Sunburst", desc: "Precision board layout + labels, up to 4K" },
 ]
 
 /** Flat lookup of model ID to description, built from all model arrays */
