@@ -68,3 +68,6 @@ a2-sheet.json
 *.key
 *.pem
 *credentials*.json
+
+# graphify skill scratch output (local absolute paths; never commit)
+graphify-out/
