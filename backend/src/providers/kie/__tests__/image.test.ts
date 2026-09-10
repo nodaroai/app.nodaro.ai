@@ -34,6 +34,9 @@ vi.mock("../models.js", async (importOriginal) => ({
     // GPT Image 2 — same quirk; resolution-based pricing instead of quality.
     "gpt-image-2": { model: "gpt-image-2-text-to-image", cost: 0.02, extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
     "gpt-image-2-i2i": { model: "gpt-image-2-image-to-image", cost: 0.02, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
+    // GPT Image 2.5 Flare — same family quirk; widest ratio set, no cross-field limit.
+    "gpt-image-2-5-flare": { model: "gpt-image-2-5-flare-text-to-image", cost: 0.03, extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
+    "gpt-image-2-5-flare-i2i": { model: "gpt-image-2-5-flare-image-to-image", cost: 0.03, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
     "grok-i2i": { model: "grok-imagine/image-to-image", cost: 0.04, inputType: "image-to-image", imageParam: "image_urls", extraParams: {} },
     "recraft-upscale": { model: "recraft/crisp-upscale", cost: 0.04, inputType: "image-to-image", imageParam: "image", extraParams: {} },
     "recraft-remove-bg": { model: "recraft/remove-background", cost: 0.03, inputType: "image-to-image", imageParam: "image", extraParams: {} },
@@ -174,6 +177,48 @@ describe("KieImageProvider.generateImage — GPT Image t2i → i2i anchor routin
     const [modelId, body] = mocks.mockRunKieTask.mock.calls[0]
     expect(modelId).toBe("gpt-image/1.5-text-to-image")
     expect(body).not.toHaveProperty("input_urls")
+  })
+
+  it("gpt-image-2.5 + anchor routes to the flare i2i endpoint via input_urls", async () => {
+    await provider.generateImage("front 3/4 view", ["https://anchor.png"], "gpt-image-2-5-flare")
+    const [modelId, body] = mocks.mockRunKieTask.mock.calls[0]
+    expect(modelId).toBe("gpt-image-2-5-flare-image-to-image")
+    expect(body).toMatchObject({ input_urls: ["https://anchor.png"] })
+    expect(body).not.toHaveProperty("image_input")
+  })
+
+  it("gpt-image-2.5 WITHOUT an anchor stays on the flare t2i endpoint", async () => {
+    await provider.generateImage("a stone castle", undefined, "gpt-image-2-5-flare")
+    const [modelId, body] = mocks.mockRunKieTask.mock.calls[0]
+    expect(modelId).toBe("gpt-image-2-5-flare-text-to-image")
+    expect(body).not.toHaveProperty("input_urls")
+  })
+
+  // The four ratios GPT Image 2.5 adds (27:16, 16:27, 9:8, 8:9) are novel to the
+  // whole platform. Assert they reach KIE VERBATIM as `aspect_ratio` — the named
+  // image_size rewrite (RATIO_TO_NAMED_SIZE) must NOT apply to this family, and
+  // `resolution` must survive because 2.5 prices on it.
+  it.each(["27:16", "16:27", "9:8", "8:9", "21:9", "3:2"])(
+    "gpt-image-2.5 passes the novel ratio %s through verbatim with resolution intact",
+    async (ratio) => {
+      await provider.generateImage("wide vista", undefined, "gpt-image-2-5-flare", {
+        aspect_ratio: ratio,
+        resolution: "2K",
+      })
+      const [modelId, body] = mocks.mockRunKieTask.mock.calls[0]
+      expect(modelId).toBe("gpt-image-2-5-flare-text-to-image")
+      expect(body).toMatchObject({ aspect_ratio: ratio, resolution: "2K" })
+      expect(body).not.toHaveProperty("image_size")
+    },
+  )
+
+  it("gpt-image-2.5 i2i carries the documented 16-image input_urls maximum", async () => {
+    const urls = Array.from({ length: 16 }, (_, i) => `https://ref${i}.png`)
+    await provider.generateImage("restyle", urls, "gpt-image-2-5-flare", { resolution: "4K" })
+    const [modelId, body] = mocks.mockRunKieTask.mock.calls[0]
+    expect(modelId).toBe("gpt-image-2-5-flare-image-to-image")
+    expect(body).toMatchObject({ input_urls: urls, resolution: "4K" })
+    expect((body as { input_urls: string[] }).input_urls).toHaveLength(16)
   })
 })
 

@@ -14,7 +14,7 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 | Style | select | `""` | One of 16 presets (Photorealistic, Cinematic, Anime, Digital Art, Oil Painting, Watercolor, Children's Book, Comic Book, Pixel Art, 3D Render, Pencil Sketch, Pop Art, Minimalist, Retro/Vintage, Fantasy, Noir) or "Custom..." free text. Style text is appended to the prompt at execution time. |
 | Negative Prompt | text | `""` | Elements to exclude. Sent natively for imagen4, ideogram, qwen; appended as "Avoid:..." for other providers. |
 | Aspect Ratio | select | `"16:9"` | Provider-specific ratio sets (see table below) |
-| Resolution | select | varies | Available for nano-banana-pro, nano-banana-2, flux, flux-flex only: 1K, 2K, 4K |
+| Resolution | select | varies | Available for nano-banana-pro, nano-banana-2, flux, flux-flex, gpt-image-2 and the GPT Image 2.5 models: 1K, 2K, 4K |
 | Quality | select | varies | Available for gpt-image (medium/high), seedream/seedream-5-lite (basic 2K / high 4K), and seedream-5-pro (basic 1K / high 2K) |
 | Rendering Speed | select | -- | Available for ideogram-v3: turbo, balanced, quality |
 | Seed | number | -- | Reproducibility seed (supported by select providers) |
@@ -80,6 +80,8 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | flux-kontext-max | Flux Kontext Max | Highest quality Kontext generation | Same as Flux Kontext |
 | gpt-image | GPT Image | Text rendering, complex compositions | 1:1, 3:2, 2:3 |
 | gpt-image-2 | GPT Image 2 | Higher resolution GPT Image; supports 1K/2K/4K | 1:1, 16:9, 9:16, 4:3, 3:4 |
+| gpt-image-2-5-flare | GPT Image 2.5 Flare | **The fast one — start here.** Higher quality than GPT Image 2 at roughly half the latency. Best for iteration, social/creator content, campaign variants, thumbnails and high-volume work. Resolution-tiered pricing: **15 credits** at 1K / **25 credits** at 2K / **40 credits** at 4K — same as GPT Image 2 at 1K and cheaper above it. | auto, 1:1, 3:2, 2:3, 4:3, 3:4, 16:9, 9:16, 21:9, 27:16, 16:27, 9:8, 8:9 |
+| gpt-image-2-5-sunburst | GPT Image 2.5 Sunburst | **The precise one.** Trades generation time for tighter control and detail fidelity — brand-sensitive and production work: packaging, diagrams, ecommerce retouching, polished campaign creative. Same price as Flare; expect a longer run. | Same as GPT Image 2.5 Flare |
 | imagen4 | Imagen 4 | Google's latest, strong prompt adherence | 1:1, 16:9, 9:16, 4:3, 3:4 |
 | imagen4-fast | Imagen 4 Fast | Fast Imagen, lower latency | Same as Imagen 4 |
 | imagen4-ultra | Imagen 4 Ultra | Highest quality Google image gen | Same as Imagen 4 |
@@ -95,6 +97,18 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — `safety_tolerance` pinned to 5 (max for Pro). Resolution 0.5 / 1 / 2 / 4 MP (**default 2 MP**). Per-megapixel pricing: **23 credits at 2 MP** (0 refs). | Same as Flux |
 | flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images. Resolution 0.5 / 1 / 2 / 4 MP (**default 2 MP**). **Per-megapixel pricing**: **70 credits at 2 MP** (0 refs), **140 credits at 4 MP** (0 refs), scaling with resolution and refs. | Same as Flux |
 
+### Choosing between GPT Image 2.5 Flare and Sunburst
+
+They are siblings split by workload, not by generation — same price, same
+thirteen aspect ratios, same 1K/2K/4K tiers, same 16-image edit cap.
+
+- **Flare** is the default. Higher quality than GPT Image 2 at about half the
+  latency. Reach for it when you are iterating or generating at volume.
+- **Sunburst** spends longer per image to buy extra precision and detail
+  fidelity on edits. Reach for it for the final, brand-sensitive render.
+
+If you are unsure, draft on Flare and finish on Sunburst.
+
 ## Inpainting & Refine
 
 Once a Generate Image node has a result, you can edit it **in place** — re-render a painted region (inpaint) or refine the whole image (image-to-image) — without adding a separate Edit Image / Modify Image node.
@@ -108,7 +122,7 @@ When the node has a current result, open its config panel and scroll to the **In
 
 This works on **every image provider**, not just one model. A server-side **composite floor** restricts the change to the masked region (`out = base·(1−mask) + result·mask`), so even providers that have no native mask parameter produce a clean, localized edit.
 
-**Strong instruction-following editors** (`gpt-image`, `gpt-image-2`, `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-lite`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `qwen`, `flux-kontext`, `flux-kontext-max`) additionally get a natural-language **region hint** injected into the prompt (e.g. "Apply the following change only to the upper-left region…") for better in-region results. This is automatic — no user action required. Other providers rely on the composite floor alone, which still keeps the edit localized.
+**Strong instruction-following editors** (`gpt-image`, `gpt-image-2`, `gpt-image-2-5-flare`, `gpt-image-2-5-sunburst`, `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-lite`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `qwen`, `flux-kontext`, `flux-kontext-max`) additionally get a natural-language **region hint** injected into the prompt (e.g. "Apply the following change only to the upper-left region…") for better in-region results. This is automatic — no user action required. Other providers rely on the composite floor alone, which still keeps the edit localized.
 
 The mask comes from either:
 
@@ -137,7 +151,7 @@ An inpaint or refine edit is **one generation at the provider's normal cost** �
 
 ## When the provider's safety filter blocks a request
 
-A provider's safety filter can occasionally block a benign prompt. For models the catalog flags as having a non-deterministic filter (currently **gpt-image-2**), Nodaro automatically retries the identical request once, at no extra cost, before giving up. A model without that flag — and every model on a second block — fails after a single attempt.
+A provider's safety filter can occasionally block a benign prompt. For models the catalog flags as having a non-deterministic filter (currently **gpt-image-2**, **gpt-image-2-5-flare** and **gpt-image-2-5-sunburst**), Nodaro automatically retries the identical request once, at no extra cost, before giving up. A model without that flag — and every model on a second block — fails after a single attempt.
 
 - **Fallback offer.** When the catalog declares a fallback for the model that failed, the node shows the block in amber with a one-click **"Try on Nano Banana Pro"** button — it switches the node's provider and re-runs the request. Nodaro never switches models on its own; you always click through.
 - **Copyright and likeness blocks are never retried.** A match against protected IP or a real person's likeness doesn't change on a second try, so the job fails after one attempt with the provider's own rejection reason.

@@ -76,6 +76,8 @@ export function deriveReferences(
 /** Human labels for the model ids the graph stores. Unknown ids pass through. */
 const MODEL_LABELS: Record<string, string> = {
   "gpt-image-2": "GPT Image 2",
+  "gpt-image-2-5-flare": "GPT Image 2.5 Flare",
+  "gpt-image-2-5-sunburst": "GPT Image 2.5 Sunburst",
   "gpt-image": "GPT Image",
   "nano-banana": "Nano Banana",
   "nano-banana-pro": "Nano Banana Pro",

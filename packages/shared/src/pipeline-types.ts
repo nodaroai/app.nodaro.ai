@@ -54,6 +54,8 @@ export const PIPELINE_PINNABLE_IMAGE_MODELS = [
   "flux",
   "gpt-image",
   "gpt-image-2",
+  "gpt-image-2-5-flare",
+  "gpt-image-2-5-sunburst",
 ] as const
 export type PipelinePinnableImageModel = (typeof PIPELINE_PINNABLE_IMAGE_MODELS)[number]
 

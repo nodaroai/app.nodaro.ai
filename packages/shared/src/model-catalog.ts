@@ -233,6 +233,15 @@ const KONTEXT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9"] as const
 const GROK_RATIOS = ["1:1", "16:9", "9:16", "3:2", "2:3"] as const
 const GPT_IMAGE_RATIOS = ["1:1", "3:2", "2:3"] as const
 const GPT_IMAGE_2_RATIOS = ["auto", "1:1", "16:9", "9:16", "4:3", "3:4"] as const
+// GPT Image 2.5 (Flare + Sunburst) widen the set to thirteen — the GPT Image 2
+// six plus 3:2/2:3, ultra-wide 21:9/27:16, ultra-tall 16:27 and near-square
+// 9:8/8:9 (docs.kie.ai/market/gpt/gpt-image-2-5-*). Unlike GPT Image 2, the 2.5
+// docs state NO aspect-ratio x resolution restriction, so no cross-field
+// constraint is registered for these ids in normalizeModelInput below.
+const GPT_IMAGE_2_5_RATIOS = [
+  "auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16",
+  "21:9", "27:16", "16:27", "9:8", "8:9",
+] as const
 const IMAGEN4_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 const IDEOGRAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 const SEEDREAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"] as const
@@ -589,6 +598,103 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "gpt-image-2-i2i:2K", credits: 30, note: "2K" },
       { identifier: "gpt-image-2-i2i:4K", credits: 60, note: "4K" },
     ],
+  },
+
+  "gpt-image-2-5-flare": {
+    id: "gpt-image-2-5-flare",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "OpenAI",
+    label: "GPT Image 2.5 Flare",
+    series: "GPT Image",
+    description: "Fast everyday GPT Image 2.5 - higher quality than GPT Image 2 at about half the latency. The default of the pair: social and creator content, campaign variants, thumbnails, rapid iteration, high-volume work.",
+    useCases: ["typography", "high-res", "general", "draft"],
+    features: ["reference-image"],
+    aspectRatios: GPT_IMAGE_2_5_RATIOS,
+    resolutions: ["1K", "2K", "4K"],
+    pricing: [
+      { identifier: "gpt-image-2-5-flare", credits: 15, note: "1K default" },
+      { identifier: "gpt-image-2-5-flare:2K", credits: 25, note: "2K" },
+      { identifier: "gpt-image-2-5-flare:4K", credits: 40, note: "4K" },
+    ],
+    valueLabels: {
+      "3:2": "3:2 (Landscape)", "2:3": "2:3 (Portrait)",
+      "27:16": "27:16 (Ultra-wide)", "16:27": "16:27 (Ultra-tall)",
+      "9:8": "9:8 (Near-square)", "8:9": "8:9 (Near-square)",
+    },
+    safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
+  },
+  "gpt-image-2-5-flare-i2i": {
+    id: "gpt-image-2-5-flare-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "OpenAI",
+    label: "GPT Image 2.5 Flare (I2I)",
+    series: "GPT Image",
+    description: "Fast GPT Image 2.5 edits (up to 16 source images) - the default when you are iterating rather than finishing.",
+    useCases: ["edit", "high-res"],
+    features: ["reference-image"],
+    aspectRatios: GPT_IMAGE_2_5_RATIOS,
+    resolutions: ["1K", "2K", "4K"],
+    pricing: [
+      { identifier: "gpt-image-2-5-flare-i2i", credits: 15, note: "1K default" },
+      { identifier: "gpt-image-2-5-flare-i2i:2K", credits: 25, note: "2K" },
+      { identifier: "gpt-image-2-5-flare-i2i:4K", credits: 40, note: "4K" },
+    ],
+    valueLabels: {
+      "3:2": "3:2 (Landscape)", "2:3": "2:3 (Portrait)",
+      "27:16": "27:16 (Ultra-wide)", "16:27": "16:27 (Ultra-tall)",
+      "9:8": "9:8 (Near-square)", "8:9": "8:9 (Near-square)",
+    },
+    safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
+  },
+  "gpt-image-2-5-sunburst": {
+    id: "gpt-image-2-5-sunburst",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "OpenAI",
+    label: "GPT Image 2.5 Sunburst",
+    series: "GPT Image",
+    description: "Precision GPT Image 2.5 - trades generation time for tighter control and detail fidelity. Pick it for brand-sensitive and production work: packaging, diagrams, ecommerce retouching, polished campaign creative.",
+    useCases: ["typography", "high-res", "general"],
+    features: ["reference-image"],
+    aspectRatios: GPT_IMAGE_2_5_RATIOS,
+    resolutions: ["1K", "2K", "4K"],
+    pricing: [
+      { identifier: "gpt-image-2-5-sunburst", credits: 15, note: "1K default" },
+      { identifier: "gpt-image-2-5-sunburst:2K", credits: 25, note: "2K" },
+      { identifier: "gpt-image-2-5-sunburst:4K", credits: 40, note: "4K" },
+    ],
+    valueLabels: {
+      "3:2": "3:2 (Landscape)", "2:3": "2:3 (Portrait)",
+      "27:16": "27:16 (Ultra-wide)", "16:27": "16:27 (Ultra-tall)",
+      "9:8": "9:8 (Near-square)", "8:9": "8:9 (Near-square)",
+    },
+    safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
+  },
+  "gpt-image-2-5-sunburst-i2i": {
+    id: "gpt-image-2-5-sunburst-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "OpenAI",
+    label: "GPT Image 2.5 Sunburst (I2I)",
+    series: "GPT Image",
+    description: "Precision GPT Image 2.5 edits (up to 16 source images) - the most controlled edit in the GPT family, at the cost of a longer run.",
+    useCases: ["edit", "high-res"],
+    features: ["reference-image"],
+    aspectRatios: GPT_IMAGE_2_5_RATIOS,
+    resolutions: ["1K", "2K", "4K"],
+    pricing: [
+      { identifier: "gpt-image-2-5-sunburst-i2i", credits: 15, note: "1K default" },
+      { identifier: "gpt-image-2-5-sunburst-i2i:2K", credits: 25, note: "2K" },
+      { identifier: "gpt-image-2-5-sunburst-i2i:4K", credits: 40, note: "4K" },
+    ],
+    valueLabels: {
+      "3:2": "3:2 (Landscape)", "2:3": "2:3 (Portrait)",
+      "27:16": "27:16 (Ultra-wide)", "16:27": "16:27 (Ultra-tall)",
+      "9:8": "9:8 (Near-square)", "8:9": "8:9 (Near-square)",
+    },
+    safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
   },
 
   // ── Ideogram ──

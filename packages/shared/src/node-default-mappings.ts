@@ -167,6 +167,10 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   "flux-pro-i2i":        { field: "resolution", values: { low: "1K", mid: "2K", high: "2K" } },
   "gpt-image-2":         { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
   "gpt-image-2-i2i":     { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "gpt-image-2-5-flare": { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "gpt-image-2-5-flare-i2i": { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "gpt-image-2-5-sunburst": { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "gpt-image-2-5-sunburst-i2i": { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
   // Image gen — quality-style (medium/high or basic/high)
   "gpt-image":           { field: "quality",    values: { low: "medium", mid: "medium", high: "high" } },
   "gpt-image-i2i":       { field: "quality",    values: { low: "medium", mid: "medium", high: "high" } },

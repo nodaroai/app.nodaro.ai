@@ -89,6 +89,8 @@ function withIdeogramEditHint(provider: string, err: unknown): unknown {
 // provider id — this swap only affects the actual KIE call.
 const GPT_IMAGE_T2I_TO_I2I: Record<string, string> = {
   "gpt-image-2": "gpt-image-2-i2i",
+  "gpt-image-2-5-flare": "gpt-image-2-5-flare-i2i",
+  "gpt-image-2-5-sunburst": "gpt-image-2-5-sunburst-i2i",
   "gpt-image": "gpt-image-i2i",
 }
 

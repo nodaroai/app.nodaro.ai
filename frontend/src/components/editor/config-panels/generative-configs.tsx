@@ -76,6 +76,8 @@ function IMAGE_MODEL_LABELS(): Record<string, string> {
     flux: "Flux Pro",
     "gpt-image": "GPT Image",
     "gpt-image-2": "GPT Image 2",
+    "gpt-image-2-5-flare": "GPT Image 2.5 Flare",
+    "gpt-image-2-5-sunburst": "GPT Image 2.5 Sunburst",
   }
 }
 

@@ -315,6 +315,13 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "gpt-image-2": 15,              // (1K default; estimated, recalibrate from anomalies)
   "gpt-image-2:2K": 30,           // (estimated)
   "gpt-image-2:4K": 60,           // (estimated)
+  // GPT Image 2.5 (Flare + Sunburst) — KIE 6/10/16 cr at 1K/2K/4K.
+  "gpt-image-2-5-flare": 15,            // 1K default
+  "gpt-image-2-5-flare:2K": 25,
+  "gpt-image-2-5-flare:4K": 40,
+  "gpt-image-2-5-sunburst": 15,            // 1K default
+  "gpt-image-2-5-sunburst:2K": 25,
+  "gpt-image-2-5-sunburst:4K": 40,
   "reference-sheet:assembly": 40, // Flat sheet-assembly fee; per-panel gen priced separately (bare provider key)
   "reference-sheet:assembly-motion": 60, // Flat FFmpeg-assembly fee for motion sheets; motion clips priced separately by the motion routes
   "imagen4": 20,
@@ -404,6 +411,13 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "gpt-image-2-i2i": 15,          // (1K default; estimated)
   "gpt-image-2-i2i:2K": 30,       // (estimated)
   "gpt-image-2-i2i:4K": 60,       // (estimated)
+  // GPT Image 2.5 i2i — same ladder as the t2i siblings.
+  "gpt-image-2-5-flare-i2i": 15,             // 1K default
+  "gpt-image-2-5-flare-i2i:2K": 25,
+  "gpt-image-2-5-flare-i2i:4K": 40,
+  "gpt-image-2-5-sunburst-i2i": 15,             // 1K default
+  "gpt-image-2-5-sunburst-i2i:2K": 25,
+  "gpt-image-2-5-sunburst-i2i:4K": 40,
   "ideogram-edit": 45,            // (BALANCED default)
   "ideogram-edit:TURBO": 30,
   "ideogram-edit:QUALITY": 60,
