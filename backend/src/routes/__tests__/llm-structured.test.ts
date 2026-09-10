@@ -121,6 +121,14 @@ describe("POST /v1/llm/structured — refusals that cost nothing", () => {
     expect(mocks.reserveCreditsForJob).not.toHaveBeenCalled()
   })
 
+  it("400s a schema carrying anyOf/oneOf/allOf at the top level, before reserving credits", async () => {
+    const res = await post({ ...VALID, jsonSchema: { ...VALID.jsonSchema, anyOf: [{ required: ["title"] }] } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(res.json().error.message).toContain("top level")
+    expect(mocks.reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
   it("400s a maxTokens above the chosen model's own output limit", async () => {
     // deriveParams floors the cap UP for reasoning but never clamps it down,
     // so an over-cap value would otherwise reach the vendor after the reserve.

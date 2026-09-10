@@ -33,7 +33,9 @@ export const JSON_SCHEMA_MAX_BYTES = 64 * 1024
  * nests ~10,000 deep, and both `z.fromJSONSchema` and the depth walk itself
  * recurse. 20 stops that while leaving real headroom: the deepest REAL schema
  * we know of is Nodaro Studio's production format, whose rendered document
- * measures 11 (and a studio-shaped fixture in the schema tests, 13).
+ * measures 11 at v1, 13 for the studio-shaped fixture in the schema tests, and
+ * 18 at plan version 3 (the dependency vocabulary under
+ * `sequenceRecommendations`) — two levels of headroom, pinned on the studio side.
  */
 export const JSON_SCHEMA_MAX_DEPTH = 20
 
@@ -54,6 +56,22 @@ export const STRUCTURED_LLM_TIMEOUT_MS = 240_000
 
 /** How much of an oversized text field the job row keeps verbatim. */
 const TEXT_HEAD_CHARS = 500
+
+/**
+ * Combinators the caller's schema may not carry at its ROOT.
+ *
+ * Two independent reasons, either one sufficient. The Anthropic tool lane
+ * refuses them outright — `input_schema does not support oneOf, allOf, or
+ * anyOf at the top level` (measured 2026-09-10 against `claude-fable-5`). And
+ * the conversion below turns a root combinator into a Zod intersection that
+ * `llmCompleteStructured` renders back as a type-less `allOf`, which every
+ * lane then rejects (`tools.0.custom.input_schema.type: Field required`).
+ * Before this check such a schema cleared the `type: "object"` refinement,
+ * reserved credits, 400'd on the direct lane, fell back to KIE and burned
+ * three attempts on whatever came back — the 2026-09-10 Studio Director
+ * outage. Below the root the same keywords convert and serve fine.
+ */
+export const ROOT_COMBINATORS = ["anyOf", "oneOf", "allOf"] as const
 
 /**
  * Nesting depth of a parsed JSON value — a scalar is 0, `{}` / `[]` is 1.
@@ -127,6 +145,9 @@ export const llmStructuredBody = z.object({
     .refine((schema) => schema.type === "object", {
       message: 'jsonSchema must declare type "object"',
     })
+    .refine((schema) => !ROOT_COMBINATORS.some((keyword) => keyword in schema), {
+      message: `jsonSchema must not carry ${ROOT_COMBINATORS.join(", ")} at the top level (a forced-tool schema root must be a plain object; nest the alternative under a property instead)`,
+    })
     .refine((schema) => Buffer.byteLength(JSON.stringify(schema), "utf8") <= JSON_SCHEMA_MAX_BYTES, {
       message: `jsonSchema must serialize to at most ${JSON_SCHEMA_MAX_BYTES} bytes`,
     })
@@ -185,12 +206,39 @@ export function prepareStructuredRequest(body: LlmStructuredBody): PreparedStruc
   if ("error" in converted) {
     return { ok: false, status: 400, error: { code: "validation_error", message: converted.error } }
   }
+  // The OUTPUT invariant, checked where the sync route, the jobs route and the
+  // worker meet: what `llmCompleteStructured` renders for the provider must
+  // still be an object schema. The body refinement above names the three root
+  // keywords for a clear message; this catches every spelling of the same
+  // thing (a root `$ref` into a `$defs` combinator, a future zod rendering) and
+  // it is the check the worker runs for a job enqueued before the body rule
+  // existed — so such a job fails with THIS sentence, not after three paid
+  // attempts on a provider 400.
+  if (renderProviderSchema(converted.schema).type !== "object") {
+    return {
+      ok: false,
+      status: 400,
+      error: {
+        code: "validation_error",
+        message: "jsonSchema must convert to an object schema — a root anyOf/oneOf/allOf (even through $ref) renders without its type and no provider lane can take it; nest the alternatives under a property",
+      },
+    }
+  }
   return {
     ok: true,
     model,
     schema: converted.schema,
     modelIdentifier: buildLlmCreditIdentifier("llm-structured", llmModelId, body.reasoningEffort, body.advancedMode),
   }
+}
+
+/** The provider-facing render of a converted schema — the exact call
+ *  `llmCompleteStructured` makes (llm-client.ts), so the pre-flight judges the
+ *  bytes the provider will see, not the caller's spelling of them. */
+export function renderProviderSchema(schema: ZodType): Record<string, unknown> {
+  const rendered = z.toJSONSchema(schema, { target: "draft-7", unrepresentable: "any", io: "input" }) as Record<string, unknown>
+  delete rendered.$schema
+  return rendered
 }
 
 export type StructuredCompletionBody = Pick<
