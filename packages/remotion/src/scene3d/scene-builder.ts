@@ -11,6 +11,7 @@ import * as THREE from "three"
 import type { Scene3DObject, Scene3DPlanV1, Vec3 } from "./types"
 import type { Scene3DRenderHandle } from "./handle"
 import { sampleScene3DFrame, type Scene3DFrameSample } from "./sampler"
+import { createClayShadows } from "./clay-shadows"
 
 export interface Scene3DSceneHandle extends Scene3DRenderHandle {
   scene: THREE.Scene
@@ -120,6 +121,13 @@ export function buildScene3DScene(plan: Scene3DPlanV1): Scene3DSceneHandle {
   keyLight.position.set(keyPos[0] ?? 5, keyPos[1] ?? 8, keyPos[2] ?? 6)
   scene.add(keyLight)
 
+  // v1 has no lighting-preset field to switch on, so the clay shadow map is
+  // always on — the same `createClayShadows` v2 uses for `clay-studio-v2`.
+  // Deterministic by construction: the shadow camera is fitted from the frame's
+  // own world-space bounds, so preview and export derive identical matrices.
+  const shadows = createClayShadows(keyLight)
+  scene.add(keyLight.target)
+
   const objects = new Map<string, THREE.Object3D>()
   const meshes = new Map<string, THREE.Mesh>()
   const geometries: THREE.BufferGeometry[] = []
@@ -134,6 +142,7 @@ export function buildScene3DScene(plan: Scene3DPlanV1): Scene3DSceneHandle {
     if (geometry) {
       const material = materialFor(obj)
       const mesh = new THREE.Mesh(geometry, material)
+      mesh.castShadow = mesh.receiveShadow = true
       geometries.push(geometry)
       materials.push(material)
       meshes.set(obj.id, mesh)
@@ -181,6 +190,8 @@ export function buildScene3DScene(plan: Scene3DPlanV1): Scene3DSceneHandle {
     camera.updateProjectionMatrix()
 
     scene.updateMatrixWorld(true)
+    // After `updateMatrixWorld` on purpose — the fit reads `mesh.matrixWorld`.
+    shadows.update(meshes.values())
     return sample
   }
 
@@ -199,6 +210,7 @@ export function buildScene3DScene(plan: Scene3DPlanV1): Scene3DSceneHandle {
   }
 
   const dispose = (): void => {
+    shadows.dispose()
     for (const g of geometries) g.dispose()
     for (const m of materials) m.dispose()
     geometries.length = 0
@@ -216,6 +228,12 @@ export function buildScene3DScene(plan: Scene3DPlanV1): Scene3DSceneHandle {
     objects,
     meshes,
     raycastTargets: [...meshes.values()],
+    shadowMapEnabled: true,
+    // Clay previz under `NoToneMapping` clipped every lit highlight to flat
+    // white and read over-saturated. ACES rolls the highlights off; the
+    // exposure lifts the midtones back to where the untonemapped look sat.
+    toneMapping: THREE.ACESFilmicToneMapping,
+    toneMappingExposure: 1.15,
     ambientLight,
     keyLight,
     applyFrame,

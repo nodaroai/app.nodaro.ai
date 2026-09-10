@@ -1,4 +1,13 @@
-/** Deterministic, bounded shadow mapping for the clay-studio-v2 preset. */
+/**
+ * Deterministic, bounded shadow mapping for the clay look.
+ *
+ * Shared by BOTH scene builders — v1 (`../scene-builder.ts`, unconditionally)
+ * and v2 (`v2/scene-builder-v2.ts`, under the `clay-studio-v2` preset) — which
+ * is why it sits beside them rather than under `v2/`. One implementation is the
+ * point: the shadow camera is fitted from the frame's own world-space bounds
+ * and nothing else, so the browser preview and the Remotion export derive the
+ * identical matrices from the identical frame. No wall-clock input, no RNG.
+ */
 import * as THREE from "three"
 
 const MAP_SIZE = 2048
