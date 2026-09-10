@@ -55,6 +55,30 @@ describe("prepareStructuredRequest", () => {
   })
 })
 
+describe("llmStructuredBody — a root combinator is refused before anything is spent", () => {
+  /**
+   * A top-level `anyOf` / `oneOf` / `allOf` cannot be served: the Anthropic
+   * tool lane refuses it outright (`input_schema does not support oneOf, allOf,
+   * or anyOf at the top level`, measured 2026-09-10), and the route's own Zod
+   * round trip renders it back as a type-less `allOf` that every lane rejects
+   * (`tools.0.custom.input_schema.type: Field required`). Until 2026-09-10 such
+   * a schema passed the `type: "object"` check, reserved credits, 400'd on the
+   * direct lane, fell back to KIE and burned three attempts on garbage — the
+   * Studio Director outage. Refuse it here, where nothing has been spent.
+   */
+  it.each(["anyOf", "oneOf", "allOf"])("400s a schema carrying %s at the top level", (keyword) => {
+    const schema = { ...SCHEMA, [keyword]: [{ required: ["title"] }] }
+    const parsed = llmStructuredBody.safeParse({ system: "s", input: "i", jsonSchema: schema })
+    expect(parsed.success).toBe(false)
+    if (parsed.success) return
+    expect(parsed.error.issues.map((i) => i.message).join(" ")).toContain("top level")
+  })
+  it("still accepts the same combinators BELOW the root", () => {
+    const schema = { ...SCHEMA, properties: { title: { anyOf: [{ type: "string" }, { type: "number" }] } } }
+    expect(llmStructuredBody.safeParse({ system: "s", input: "i", jsonSchema: schema }).success).toBe(true)
+  })
+})
+
 describe("runStructuredCompletion", () => {
   it("runs the exact call the sync route ran: model id, system, one user turn, timeout, retries, schemaName, caller maxTokens outside Advanced mode", async () => {
     mocks.llmCompleteStructured.mockResolvedValue({ output: { title: "Rain" }, inputTokens: 10, outputTokens: 5 })

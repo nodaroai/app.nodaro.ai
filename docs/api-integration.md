@@ -1757,7 +1757,9 @@ form), `items`, `string` / `number` / `integer` / `boolean`, `enum`, `const`,
 `anyOf` of concrete types, `minimum` / `maximum` / `minItems` / `maxItems` /
 `minLength` / `maxLength`, `multipleOf`, `exclusiveMinimum` and `description`.
 `not`, `if` / `then` / `else`, `dependent*` and external `$ref` are refused
-with 400. One caveat worth reading twice: an `anyOf` of bare `required`
+with 400, and so is `anyOf` / `oneOf` / `allOf` **at the top level** — the
+root must be a plain object (that is what a forced-tool schema is to the
+provider); put the alternatives under a property. One caveat worth reading twice: an `anyOf` of bare `required`
 branches — the usual "at least one of these fields" idiom — is **accepted and
 not enforced**. Express cross-field rules in your own validator.
 
