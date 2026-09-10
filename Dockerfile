@@ -511,6 +511,13 @@ COPY frontend/Caddyfile /etc/caddy/Caddyfile
 #     A testable module rather than an inline heredoc; see start.sh below.
 COPY --chown=node:node tools/build-runtime-config.mjs ./tools/build-runtime-config.mjs
 
+# 7c. Operator tools run INSIDE a deployed service (`railway ssh -- node …`),
+#     where the Supabase service-role env already exists and no key has to
+#     leave the platform. Nothing starts these; they are on-demand only.
+#     Not under backend/dist on purpose — they are repo tools, dependency-free
+#     at import time, and must stay runnable straight from a checkout too.
+COPY --chown=node:node tools/scene3d-cleanup-probe-owner.mjs ./tools/scene3d-cleanup-probe-owner.mjs
+
 # Startup script: run backend + worker + Caddy
 COPY <<'EOF' /app/start.sh
 #!/bin/sh
