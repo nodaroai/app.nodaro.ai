@@ -461,6 +461,7 @@ frame, duration ceiling). A plan that fails is refused whole.
 | `changeSummary` and `context.prompt` length | 2000 | `SCENE3D_LIMITS.maxChangeSummaryLength` |
 | `createdAt` length | 64 | embed protocol |
 | `parentOrigin` length | 255 | embed protocol |
+| Frame width and height | 100–2560 px, each axis | `SCENE3D_LIMITS.minDimensionPx` / `.maxDimensionPx` |
 | Objects per scene | 100 | `SCENE3D_LIMITS.maxObjects` |
 | Keyframes per object / camera track | 240 | `SCENE3D_LIMITS.maxKeyframes` |
 | Entities in a v2 scene | 100 | `SCENE3D_V2_LIMITS.maxEntities` |

@@ -108,7 +108,10 @@ describe("scene3d v2 — v1 is untouched", () => {
     expect(SCENE3D_LIMITS.maxObjects).toBe(100)
     expect(SCENE3D_LIMITS.maxKeyframes).toBe(240)
     expect(SCENE3D_LIMITS.maxHierarchyDepth).toBe(8)
-    expect(SCENE3D_LIMITS.maxDimensionPx).toBe(1920)
+    // Widened from 1920 deliberately (measured, both versions together) —
+    // every other v1 bound above is still frozen.
+    expect(SCENE3D_LIMITS.maxDimensionPx).toBe(2560)
+    expect(SCENE3D_V2_LIMITS.maxDimensionPx).toBe(SCENE3D_LIMITS.maxDimensionPx)
     expect(SCENE3D_LIMITS.maxReferences).toBe(8)
   })
 

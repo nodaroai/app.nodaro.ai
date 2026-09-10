@@ -68,7 +68,15 @@ export const SCENE3D_DEFAULT_DURATION_SECONDS = 4
  */
 export const SCENE3D_LIMITS = {
   minDimensionPx: 100,
-  maxDimensionPx: 1920,
+  /** Applies to BOTH axes, so the worst admissible frame is square. Raised
+   *  from 1920 once the render cost of a wider frame was measured rather than
+   *  assumed: on the software GL path the worker actually uses in a container,
+   *  a 2560x2560 frame costs ~146 ms/frame against ~58 ms at 1920x1080, so the
+   *  contract's own 3600-frame ceiling still lands around 9 min against the
+   *  render worker's 25-minute budget. Peak memory is the real price — ~3.0 GB
+   *  across the browser process tree versus ~1.6 GB — and is what to re-measure
+   *  before widening this again. */
+  maxDimensionPx: 2560,
   minFps: 15,
   maxFps: 60,
   minDurationInFrames: 1,
