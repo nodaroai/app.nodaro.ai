@@ -106,6 +106,16 @@ describe("refusals that cost nothing", () => {
     expect(res.statusCode).toBe(400)
     expect(mocks.insertJob).not.toHaveBeenCalled()
   })
+
+  it("400 on a root anyOf/oneOf/allOf before any row exists — the schema no provider lane can take", async () => {
+    // This is the route the Studio Director uses (`llm.structuredJob`); the
+    // 2026-09-10 outage was exactly this shape reaching a provider.
+    const res = await post({ ...VALID, jsonSchema: { ...VALID.jsonSchema, anyOf: [{ required: ["title"] }] } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(res.json().error.message).toContain("top level")
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+  })
 })
 
 describe("a story run", () => {

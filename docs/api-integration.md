@@ -1754,14 +1754,17 @@ Schema **object** (`type: "object"`, at most 64 KB serialized and 20 levels of
 nesting) written in the keyword subset the server can convert:
 `properties` / `required` / `additionalProperties` (including the record
 form), `items`, `string` / `number` / `integer` / `boolean`, `enum`, `const`,
-`anyOf` of concrete types, `minimum` / `maximum` / `minItems` / `maxItems` /
+`anyOf` / `oneOf` of concrete types (both convert to a union, below the root
+only), `minimum` / `maximum` / `minItems` / `maxItems` /
 `minLength` / `maxLength`, `multipleOf`, `exclusiveMinimum` and `description`.
 `not`, `if` / `then` / `else`, `dependent*` and external `$ref` are refused
 with 400, and so is `anyOf` / `oneOf` / `allOf` **at the top level** — the
 root must be a plain object (that is what a forced-tool schema is to the
-provider); put the alternatives under a property. One caveat worth reading twice: an `anyOf` of bare `required`
-branches — the usual "at least one of these fields" idiom — is **accepted and
-not enforced**. Express cross-field rules in your own validator.
+provider); put the alternatives under a property. One caveat worth reading twice:
+**below the root**, an `anyOf` of bare `required` branches — the usual "at
+least one of these fields" idiom — is **accepted and not enforced** (at the
+root it is refused like any other combinator). Express cross-field rules in
+your own validator.
 
 Returns `{ jobId, output, usage: { inputTokens, outputTokens } }`, where
 `output` has your schema's shape. `maxRetries` (0–3, default 2) is how many
