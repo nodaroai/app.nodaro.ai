@@ -105,6 +105,45 @@ The completed job's `output_data` carries:
 | `renderer` | Renderer identity/version the export was produced with. |
 | `metadata` | `{ width, height, fps, frames, duration }` — check these against a downstream model's video-reference limits before wiring the MP4 in. |
 
+## Using the result as a video reference
+
+The exported MP4 is a **layout reference**: it carries where the subjects
+are, what is in front of what, the framing, the camera move and the timing.
+It also carries a look — untextured grey clay — and a video model copies that
+look unless it is told not to. Two rules, both measured on a real scene, keep
+the layout and drop the clay:
+
+**1. Never attach the clay render without a scoping line.** One sentence per
+reference, naming what it is *for* and what to *ignore*. Wire the `video`
+output into a video node's **Video references** input and a **workflow run**
+adds the line for that reference itself (the video node's own Run button does
+not add it yet — type it into the prompt there); through the API, pass it as
+the reference's caption — `referenceVideoCaptions[N]` for the clip on
+`referenceVideoUrls[N]`. The line the platform sends for a clip is:
+
+> LAYOUT reference only — match its subject positions and blocking, its foreground occlusion, its framing, its camera angle, its camera motion and its timing. Ignore its untextured grey clay placeholder look, its flat placeholder colours, its materials, its lighting and its empty background; none of that is the target look. Take the look from the prompt and from the other references
+
+The model reads it as `@video_1: <that line>.` — the same seat every video
+caption renders to. A composition with several shots adds their cut points to
+the "match" clause; a frame extracted from the render and wired as an image
+reference gets the same line without the motion and timing clauses. A prompt
+that already carries a scoping line for that reference is left alone, so
+re-running never doubles it.
+
+**2. Every figure that must look real needs its own character reference.**
+Photoreal treatment is granted per referenced subject, not globally: with one
+layout reference and one Character, only that character converts and every
+other figure reverts to a clay proxy. With one Character per figure, every
+figure converts and every identity holds. Keep two reference slots free for a
+location or style plate. A workflow run whose composition has more `person`
+entities than character references still runs — you may want clay figures —
+and records a `scene3d_unreferenced_figures` warning on the job
+(`input_data.warnings`, `{ code, message }`) saying how many figures are
+uncovered and whether one-per-figure fits the model's reference budget.
+
+Wire the render into the **reference** input, never the start-frame slot: a
+start frame is a look anchor that no scoping line reaches.
+
 ## Quote, then run
 
 Two endpoints, one paid job.

@@ -30,6 +30,13 @@ import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
+import {
+  appendScene3DStillScopingLines,
+  collectScene3DLayoutReferences,
+  scene3DLayoutVideoCaptions,
+  scene3DUnreferencedFiguresWarning,
+  type Scene3DLayoutReference,
+} from "./scene3d-reference-scoping.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
 import { OVERLAY_MAX_LAYERS } from "../../providers/image/overlay-contract.js"
 
@@ -1325,6 +1332,13 @@ function resolveVideoPromptMentions(
      * callers; non-ref providers leave it false (no entity refs, legacy behaviour).
      */
     includeWiredEntities?: boolean
+    /**
+     * Captions for the video rail, INDEX-ALIGNED with `referenceVideoUrls` and
+     * rendered by the core as `@video_N: <caption>.` — the seat an API caller
+     * fills through `referenceVideoCaptions`. The DAG fills it for a Scene3D
+     * clay render (`scene3DLayoutVideoCaptions`); pure pass-through otherwise.
+     */
+    videoCaptions?: readonly string[]
   },
 ): { prompt: string | undefined; additionalUrls: string[] } {
   // ── BE-only expansion: wire upstream Character nodes → ConnectedReference[].
@@ -1402,6 +1416,7 @@ function resolveVideoPromptMentions(
     imageRefCount: opts?.imageRefCount,
     videoRefCount: opts?.videoRefCount,
     audioRefCount: opts?.audioRefCount,
+    videoCaptions: opts?.videoCaptions,
     // BE gate: same env determination as the image side (see reference-format.ts).
     // default false = legacy block (dark in prod); flips in lockstep with image.
     hybridRoles: backendHybridRoles(),
@@ -2113,6 +2128,33 @@ function composeVideoPrompt(args: {
   // undefined — no policy on nothing. No policy registered = identity.
   if (p === undefined) return p
   return applyPromptPolicies({ prompt: p, negativePrompt: "", kind: "video" }).prompt
+}
+
+/**
+ * Rule 2 of the Scene3D layout-reference doctrine as a PAYLOAD field: the
+ * `scene3d_unreferenced_figures` warning, spread into the worker payload so
+ * node-executor's `input_data` stamp carries it to the job row — where the
+ * owner reads it back on `GET /v1/jobs/:id` — in the `{ code, message }`
+ * vocabulary `/v1/generate-video` already answers with. A warning, never a
+ * refusal: the run goes out. Absent (not an empty array) when there is
+ * nothing to say, so an unaffected payload is byte-identical.
+ */
+function scene3DWarningsField(args: {
+  references: readonly Scene3DLayoutReference[]
+  node: SimpleNode
+  buildCtx: PayloadBuildContext | undefined
+  data: Record<string, unknown>
+  provider: string | undefined
+}): { warnings?: readonly { code: string; message: string }[] } {
+  if (args.references.length === 0) return {}
+  const warning = scene3DUnreferencedFiguresWarning({
+    references: args.references,
+    node: args.node,
+    graph: args.buildCtx,
+    extraRefs: readExtraRefs(args.data),
+    provider: args.provider,
+  })
+  return warning ? { warnings: [warning] } : {}
 }
 
 /**
@@ -3213,8 +3255,13 @@ export function buildPayload(
         (e) => referenceModalityForHandle(e.targetHandle) === "image",
       )
       const i2vBaseRefs = i2vOrderedRefs ?? resolvedInputs.referenceImageUrls
+      // Scene3D layout references (a clay render on a reference rail): a scoping
+      // caption per clip seat, a scoping line per still seat, and the rule-2
+      // figure warning — see scene3d-reference-scoping.ts.
+      const i2vScene3D = collectScene3DLayoutReferences(node, resolvedInputs, buildCtx, i2vBaseRefs)
       const i2vMention = resolveVideoPromptMentions(i2vPrompt, node.id, buildCtx, readExtraRefs(data), {
         referenceOrder: readStringArray(data.referenceOrder),
+        videoCaptions: scene3DLayoutVideoCaptions(i2vScene3D, i2vPrompt),
         suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
         // Ref-capable: assets number AFTER the leading image-refs (ordinalOffset =
         // EDGE count, for FE↔BE parity) + entities attach. Non-ref: legacy
@@ -3225,7 +3272,7 @@ export function buildPayload(
         videoRefCount: i2vSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
         audioRefCount: i2vSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
       })
-      i2vPrompt = i2vMention.prompt
+      i2vPrompt = appendScene3DStillScopingLines(i2vMention.prompt, i2vScene3D)
       let i2vImageUrl = i2vBaseImage
       let i2vReferenceImageUrls = i2vBaseRefs
       if (i2vMention.additionalUrls.length > 0) {
@@ -3339,6 +3386,7 @@ export function buildPayload(
           // path sees it migrated by the frontend already (use-workflow-store).
           loopTrim: data.loopTrim,
           enableTranslation: data.enableTranslation,
+          ...scene3DWarningsField({ references: i2vScene3D, node, buildCtx, data, provider }),
           usageLogId,
         },
       }
@@ -3366,8 +3414,11 @@ export function buildPayload(
         (_e, src) => VIDEO_REF_IMAGE_SOURCE_TYPES.has(src.type),
       )
       const t2vLeadingRefs = t2vOrderedRefs ?? resolvedInputs.referenceImageUrls
+      // Scene3D layout references — see the i2v case.
+      const t2vScene3D = collectScene3DLayoutReferences(node, resolvedInputs, buildCtx, t2vLeadingRefs)
       const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx, readExtraRefs(data), {
         referenceOrder: readStringArray(data.referenceOrder),
+        videoCaptions: scene3DLayoutVideoCaptions(t2vScene3D, t2vPrompt),
         suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
         // Ref-capable: asset directives number AFTER the leading image-refs
         // (ordinalOffset = the EDGE count, for FE↔BE parity — the FE preview has no
@@ -3379,7 +3430,7 @@ export function buildPayload(
         videoRefCount: t2vSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
         audioRefCount: t2vSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
       })
-      t2vPrompt = t2vMention.prompt
+      t2vPrompt = appendScene3DStillScopingLines(t2vMention.prompt, t2vScene3D)
       // image-refs-first (D5): leading plain refs, then the asset URLs (deduped).
       let t2vReferenceImageUrls = t2vLeadingRefs
       if (t2vMention.additionalUrls.length > 0) {
@@ -3440,6 +3491,7 @@ export function buildPayload(
           webSearch: data.webSearch,
           nsfwChecker: data.nsfwChecker,
           enableTranslation: data.enableTranslation,
+          ...scene3DWarningsField({ references: t2vScene3D, node, buildCtx, data, provider }),
           usageLogId,
         },
       }
@@ -3647,6 +3699,9 @@ export function buildPayload(
       )
       let referenceImageUrls = orderedRefs ?? resolvedInputs.referenceImageUrls
       let imageUrl = startFrameUrl
+      // Scene3D layout references — see the i2v case. The leading image list
+      // is the one `@image_N` numbers from, so a still seat indexes into it.
+      const gvScene3D = collectScene3DLayoutReferences(node, resolvedInputs, buildCtx, referenceImageUrls)
       const mentionResult = resolveVideoPromptMentions(
         composedPrompt,
         node.id,
@@ -3654,6 +3709,7 @@ export function buildPayload(
         readExtraRefs(data),
         {
           referenceOrder: readStringArray(data.referenceImageOrder),
+          videoCaptions: scene3DLayoutVideoCaptions(gvScene3D, composedPrompt),
           suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
           // Ref-capable: assets number AFTER the leading image-refs (ordinalOffset =
           // EDGE count, for FE↔BE parity) + entities attach. Non-ref: legacy
@@ -3665,7 +3721,7 @@ export function buildPayload(
           audioRefCount: gvSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
         },
       )
-      composedPrompt = mentionResult.prompt
+      composedPrompt = appendScene3DStillScopingLines(mentionResult.prompt, gvScene3D)
       if (mentionResult.additionalUrls.length > 0) {
         let remaining = mentionResult.additionalUrls
         // Seedance 2 frame-numbering guard (shared helper — see
@@ -3748,6 +3804,7 @@ export function buildPayload(
           videoTrimEnd: data.videoTrimEnd,
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
           audioUrl: resolvedInputs.audioUrl,
+          ...scene3DWarningsField({ references: gvScene3D, node, buildCtx, data, provider: resolvedProvider }),
           duration: gvNorm.duration ?? data.duration,
           mode: data.mode ?? data.kling3Mode,
           sound: data.sound ?? data.kling3Sound,
