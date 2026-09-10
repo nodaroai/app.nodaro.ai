@@ -25,8 +25,10 @@ vi.mock("@/lib/supabase", () => ({
   createClient: () => ({ auth: { signOut: mockSignOut } }),
 }))
 
+const mockAppInfo = vi.fn()
+
 vi.mock("@/lib/api", () => ({
-  getOAuthAppInfo: () => Promise.resolve({ name: "Nodaro instance (localhost:3000)", kind: "user" }),
+  getOAuthAppInfo: (...args: unknown[]) => mockAppInfo(...args),
   oauthAuthorize: vi.fn(),
 }))
 
@@ -38,8 +40,11 @@ import OAuthAuthorizePage from "../page"
 const AUTHORIZE_PATH =
   "/oauth/authorize?client_id=cid-123&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fv1%2Fnodaro-connect%2Fcallback&scope=jobs%3Aread&response_type=code"
 
+const REDIRECT_URI = "http://localhost:3000/v1/nodaro-connect/callback"
+
 beforeEach(() => {
   vi.clearAllMocks()
+  mockAppInfo.mockResolvedValue({ name: "Nodaro instance (localhost:3000)", kind: "user", redirectUriRegistered: true })
   window.history.replaceState({}, "", AUTHORIZE_PATH)
 })
 
@@ -95,5 +100,44 @@ describe("OAuth consent screen — which account is granting", () => {
         `/login?return_to=${encodeURIComponent(AUTHORIZE_PATH)}`,
       ),
     )
+  })
+})
+
+/**
+ * The Cancel button sends the browser to redirect_uri without ever reaching
+ * POST /v1/oauth/authorize, which is where the Allow path checks the URI
+ * against the registered list. Cancel used to trust the query string
+ * verbatim: an open redirect from a Nodaro URL, and possibly worse. Now the
+ * page asks the server up front and refuses to render, or navigate, for an
+ * unregistered URI.
+ */
+describe("OAuth consent screen — redirect_uri must be registered", () => {
+  it("asks the server about the exact redirect_uri from the query string", async () => {
+    render(<OAuthAuthorizePage />)
+    await screen.findByRole("button", { name: /allow/i })
+    expect(mockAppInfo).toHaveBeenCalledWith("cid-123", REDIRECT_URI)
+  })
+
+  it("renders an error and no Allow/Cancel when the redirect_uri is not registered", async () => {
+    mockAppInfo.mockResolvedValue({ name: "Nodaro instance (localhost:3000)", kind: "user", redirectUriRegistered: false })
+    render(<OAuthAuthorizePage />)
+    expect(await screen.findByText(/not registered for this app/i)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /allow/i })).toBeNull()
+    expect(screen.queryByRole("button", { name: /cancel/i })).toBeNull()
+  })
+
+  it("offers no redirect at all when the app could not be loaded (unknown or suspended client_id)", async () => {
+    mockAppInfo.mockRejectedValue(new Error("Unknown client_id or app suspended"))
+    render(<OAuthAuthorizePage />)
+    expect(await screen.findByText(/unknown client_id/i)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /cancel/i })).toBeNull()
+    expect(screen.queryByRole("button", { name: /allow/i })).toBeNull()
+  })
+
+  it("keeps working against a server that does not answer the question (older backend)", async () => {
+    mockAppInfo.mockResolvedValue({ name: "Nodaro instance (localhost:3000)", kind: "user" })
+    render(<OAuthAuthorizePage />)
+    expect(await screen.findByRole("button", { name: /allow/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument()
   })
 })

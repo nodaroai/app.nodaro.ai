@@ -279,13 +279,18 @@ describe("v2 readiness gating", () => {
 })
 
 describe("v1 plans still take the synchronous path", () => {
-  it("turns off shadow mapping when a shadowed v2 scene is replaced by Basic", async () => {
+  it("re-reads shadow mapping from each handle instead of latching it", async () => {
     const { plan, resolver } = makeLoadableScene({ glb: CAR, objects: [CAR_ENTITY] })
     const shadowed = { ...plan, lighting: { ...plan.lighting, preset: "clay-studio-v2" as const } }
+    const legacy = { ...plan, lighting: { ...plan.lighting, preset: "clay-studio-v1" as const } }
     const { rerender } = render(<Scene3DCanvas plan={shadowed} frame={0} assetResolver={resolver} />)
     await until(() => expect(state.draw).toHaveBeenLastCalledWith(true))
+    // The legacy v2 preset asks for no shadow map — the canvas must turn it off.
+    rerender(<Scene3DCanvas plan={legacy} frame={0} assetResolver={resolver} />)
+    await until(() => expect(state.draw).toHaveBeenLastCalledWith(false))
+    // v1 has no preset field to switch on and is always shadowed.
     rerender(<Scene3DCanvas plan={makePlan()} frame={0} />)
-    expect(state.draw).toHaveBeenLastCalledWith(false)
+    expect(state.draw).toHaveBeenLastCalledWith(true)
   })
 
   it("draws immediately with no resolver and no awaiting", () => {

@@ -1904,6 +1904,7 @@ export const en = {
   // ── OAuth consent screen ──
   "oauth.invalidRequestTitle": "Invalid OAuth request",
   "oauth.missingParam": "Missing or invalid parameter:",
+  "oauth.redirectNotRegistered": "The redirect_uri in this request is not registered for this app. Nothing was sent to it. If a link brought you here, close this tab.",
   "oauth.loadFailedTitle": "Couldn't load app info",
   "oauth.failedLoadAppInfo": "Failed to load app info",
   "oauth.authorizationFailed": "Authorization failed",

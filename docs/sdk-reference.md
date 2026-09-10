@@ -3250,6 +3250,11 @@ list(): Promise<{ data: DeveloperApp[] }>
 const { data } = await client.developerApps.list()
 ```
 
+Each entry carries `kind`: `"user"` is an app you registered yourself; the
+other values (`"dynamic_mcp"`, `"first_party_mcp"`, `"community_instance"`)
+are clients that registered themselves. Only `"user"` entries count toward
+the five-apps-per-user cap; `create()` answers `400 limit_reached` past it.
+
 #### `get(id)`
 
 ```ts
@@ -3362,10 +3367,10 @@ tokens — the spec forbids leaking validity.
 await client.oauth.revoke(accessToken)
 ```
 
-#### `getAppInfo(clientId)`
+#### `getAppInfo(clientId, redirectUri?)`
 
 ```ts
-getAppInfo(clientId: string): Promise<OAuthAppInfo>
+getAppInfo(clientId: string, redirectUri?: string): Promise<OAuthAppInfo>
 ```
 
 Fetches public metadata about a developer app for rendering a consent screen.
@@ -3373,7 +3378,10 @@ Public route — no auth needed.
 
 ```ts
 const info = await client.oauth.getAppInfo("app_1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d")
-// { name, description, logoUrl, homepageUrl, scopesRequested }
+// { name, description, logoUrl, homepageUrl, scopesRequested, kind, redirectUriRegistered: null }
+
+const checked = await client.oauth.getAppInfo(clientId, "https://yourapp.com/oauth/callback")
+// checked.redirectUriRegistered is true only for an exactly registered URI
 ```
 
 ### `client.voices`

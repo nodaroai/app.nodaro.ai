@@ -33,6 +33,15 @@
  *   Sampling itself lives with the renderer (`packages/remotion`) — this file
  *   only guarantees the data it samples is well-formed.
  *
+ * Camera and object RIGS are deliberately absent, and their absence is a
+ * decision rather than an unfinished TODO: spline rails, follow-path and
+ * track-to constraints, and procedural noise modifiers are authored UPSTREAM
+ * (in Blender) and reach this contract already BAKED — v1 as keyframes on the
+ * tracks above, v2 as one camera sample per frame. The format carries no
+ * constraint or noise vocabulary ON PURPOSE, because evaluating a rig in two
+ * different renderers cannot be guaranteed to agree frame for frame, and that
+ * agreement is the promise everything else here rests on.
+ *
  * ## Revisions
  *
  * A plan is IMMUTABLE. Every accepted edit produces a NEW `revisionId` and
@@ -59,7 +68,16 @@ export const SCENE3D_DEFAULT_DURATION_SECONDS = 4
  */
 export const SCENE3D_LIMITS = {
   minDimensionPx: 100,
-  maxDimensionPx: 1920,
+  /** Applies to BOTH axes, so the worst admissible frame is SQUARE, not merely
+   *  wider — 2560x2560 is 3.2x the pixels of 1920x1080, and that is the frame
+   *  this bound was measured at. Raised from 1920 once that cost was measured
+   *  rather than assumed: on the software GL path a container actually uses,
+   *  an animated 2560x2560 frame costs ~154 ms/frame against ~65 ms at
+   *  1920x1080, so even `maxDurationInFrames` (3600) lands near 9 min against
+   *  the render worker's 25-minute budget. Peak memory is the real price —
+   *  ~3.1 GB across the browser process tree versus ~1.6 GB — and is the number
+   *  to re-measure before widening this again. */
+  maxDimensionPx: 2560,
   minFps: 15,
   maxFps: 60,
   minDurationInFrames: 1,

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 import { describe, expect, it, vi } from "vitest"
 import { writeScene3DJson, writeScene3DPng, receiveScene3DPngIfPresent } from "../scene3d-write-json.js"
 import { Scene3DArtifactError } from "../../../services/scene3d-artifacts/types.js"
+import { SCENE3D_LIMITS } from "@nodaro/shared"
 import type { PluginSceneArtifactToolkit } from "../scene3d-artifact-contract.js"
 
 function fixture(status = 200) {
@@ -82,7 +83,9 @@ describe("owned scene still writes", () => {
   })
   it("rejects invalid headers, oversize images and wrong kinds before granting", async () => {
     const f = fixture()
-    const wide = Buffer.from(png); wide.writeUInt32BE(1921, 16)
+    // One past the CONTRACT's ceiling, not a literal — this guard exists to
+    // track `SCENE3D_LIMITS.maxDimensionPx`, so the test must move with it.
+    const wide = Buffer.from(png); wide.writeUInt32BE(SCENE3D_LIMITS.maxDimensionPx + 1, 16)
     for (const bytes of [Buffer.from("not a png"), wide, Buffer.alloc(8 * 1024 * 1024 + 1)]) {
       await expect(writeScene3DPng(f.toolkit, { ...f.input, kind: "poster", bytes }, { fetch: f.fetch })).rejects.toThrow("bounded PNG")
     }

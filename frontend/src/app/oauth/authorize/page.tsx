@@ -77,21 +77,36 @@ export default function OAuthAuthorizePage() {
   useEffect(() => {
     if (missingParam) return
     let cancelled = false
-    getOAuthAppInfo(clientId)
+    getOAuthAppInfo(clientId, redirectUri)
       .then((info) => { if (!cancelled) setAppInfo(info) })
       // tx() (not the `t` hook) so the error message is localized without adding
       // `t` to the deps — which would re-fetch the app info on every locale switch.
       .catch((err) => { if (!cancelled) setLoadError(err instanceof Error ? err.message : tx("oauth.failedLoadAppInfo")) })
     return () => { cancelled = true }
-  }, [clientId, missingParam])
+  }, [clientId, redirectUri, missingParam])
+
+  // The server compares redirect_uri with the app's registered list (exact
+  // match, same rule the Allow path enforces in POST /v1/oauth/authorize).
+  // Cancel never reaches that endpoint, so this is the only check it gets:
+  // an unregistered URI renders an error and the browser goes nowhere
+  // (RFC 6749 §3.1.2.4). The gate is POSITIVE: the browser may leave only once
+  // the server has answered about this app — so an unknown client_id, a
+  // suspended app or a failed fetch (appInfo still null) never earn a
+  // redirect either. An older server that omits the field (undefined, or null
+  // when a proxy dropped the param) is treated as registered so the Allow
+  // path, which the server still guards, keeps working across a deploy.
+  const redirectUriRejected = appInfo?.redirectUriRegistered === false
+  const redirectUriAllowed = appInfo !== null && !redirectUriRejected
 
   // Redirect to login if not authenticated, preserving return URL
   useEffect(() => {
     if (authLoading) return
-    if (!user && !missingParam) {
+    // A rejected redirect_uri renders an error whoever is signed in, so an
+    // attacker link must not push an anonymous visitor through login first.
+    if (!user && !missingParam && !redirectUriRejected) {
       navigate(`/login?return_to=${encodeURIComponent(consentReturnTo())}`)
     }
-  }, [user, authLoading, navigate, missingParam])
+  }, [user, authLoading, navigate, missingParam, redirectUriRejected])
 
   function buildErrorRedirect(error: string, description?: string) {
     const url = new URL(redirectUri)
@@ -102,7 +117,7 @@ export default function OAuthAuthorizePage() {
   }
 
   function handleCancel() {
-    if (!redirectUri) return
+    if (!redirectUri || !redirectUriAllowed) return
     window.location.href = buildErrorRedirect("access_denied", "User cancelled")
   }
 
@@ -148,7 +163,7 @@ export default function OAuthAuthorizePage() {
   }
 
   async function handleAllow() {
-    if (!appInfo) return
+    if (!appInfo || !redirectUriAllowed) return
     setSubmitting(true)
     try {
       const requestedScopes = scopeStr.split(/[\s+]/).filter(Boolean)
@@ -187,6 +202,20 @@ export default function OAuthAuthorizePage() {
     )
   }
 
+  if (redirectUriRejected) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="max-w-md w-full p-6 rounded-lg border bg-card text-card-foreground shadow">
+          <div className="flex items-center gap-2 mb-4 text-destructive">
+            <AlertTriangle className="h-5 w-5" />
+            <h1 className="text-lg font-semibold">{t("oauth.invalidRequestTitle")}</h1>
+          </div>
+          <p className="text-sm text-muted-foreground">{t("oauth.redirectNotRegistered")}</p>
+        </div>
+      </div>
+    )
+  }
+
   if (authLoading || (!user && !missingParam)) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>
   }
@@ -200,7 +229,9 @@ export default function OAuthAuthorizePage() {
             <h1 className="text-lg font-semibold">{t("oauth.loadFailedTitle")}</h1>
           </div>
           <p className="text-sm text-muted-foreground">{loadError}</p>
-          <Button variant="outline" className="mt-4" onClick={handleCancel}>{t("common.cancel")}</Button>
+          {/* Nothing is known about this app, so there is no redirect_uri we
+              can vouch for — the way out is local, never the query string. */}
+          <Button variant="outline" className="mt-4" onClick={() => navigate("/")}>{t("common.close")}</Button>
         </div>
       </div>
     )

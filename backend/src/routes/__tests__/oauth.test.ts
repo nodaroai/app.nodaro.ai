@@ -193,6 +193,47 @@ describe("oauth routes", () => {
     expect(res.json().kind).toBe("user")
   })
 
+  // The consent screen sends the browser to redirect_uri on Cancel without ever
+  // reaching POST /v1/oauth/authorize, so it asks here whether the URI is
+  // registered. Exact match, same rule as the authorize endpoint; the list
+  // itself is never returned.
+  describe("GET /v1/oauth/app-info redirect_uri check", () => {
+    const registered = "https://example.com/cb"
+    function anApp() {
+      vi.mocked(findAppByClientId).mockResolvedValueOnce({
+        id: "app_1", owner_user_id: "user-1", client_id: "app_1", client_secret_hash: "hash",
+        redirect_uris: [registered], allowed_origins: [], scopes_requested: ["workflows:read"],
+        status: "active", name: "App", description: null, logo_url: null, homepage_url: null, kind: "user",
+      } as unknown as Awaited<ReturnType<typeof findAppByClientId>>)
+    }
+
+    it("answers null when no redirect_uri was asked about", async () => {
+      anApp()
+      const res = await app.inject({ method: "GET", url: "/v1/oauth/app-info?client_id=app_1" })
+      expect(res.statusCode).toBe(200)
+      expect(res.json().redirectUriRegistered).toBeNull()
+      expect(res.json()).not.toHaveProperty("redirectUris")
+    })
+
+    it("answers true for an exactly registered URI", async () => {
+      anApp()
+      const res = await app.inject({ method: "GET", url: "/v1/oauth/app-info?client_id=app_1&redirect_uri=" + encodeURIComponent(registered) })
+      expect(res.json().redirectUriRegistered).toBe(true)
+    })
+
+    it.each([
+      "https://evil.example/cb",
+      "https://example.com/cb/",
+      "https://example.com/cb?x=1",
+      "javascript:alert(1)",
+    ])("answers false for %s", async (uri) => {
+      anApp()
+      const res = await app.inject({ method: "GET", url: "/v1/oauth/app-info?client_id=app_1&redirect_uri=" + encodeURIComponent(uri) })
+      expect(res.statusCode).toBe(200)
+      expect(res.json().redirectUriRegistered).toBe(false)
+    })
+  })
+
   // Consent claims the DCR row for MCP clients AND community instances. The
   // registration cap in oauth-register.ts reads owner_user_id as "consumed":
   // community instances were never claimed, so every connection they ever

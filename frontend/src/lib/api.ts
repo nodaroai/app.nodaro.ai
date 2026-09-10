@@ -7267,10 +7267,13 @@ export async function deleteApiToken(id: string): Promise<{ success: boolean }> 
 // Developer Apps (OAuth) — delegates to @nodaro/sdk SDK
 // ---------------------------------------------------------------------------
 
+import type { DeveloperAppKind } from "@nodaro/sdk"
+
 export type {
   DeveloperApp,
   DeveloperAppStatus,
   DeveloperAppScope,
+  DeveloperAppKind,
   CreateDeveloperAppInput,
   UpdateDeveloperAppInput,
   CreateDeveloperAppResult,
@@ -7322,19 +7325,24 @@ export interface OAuthAppInfo {
    * `& {}` on the fallback string preserves autocomplete for known kinds while
    * allowing forward-compat with future values.
    */
-  kind?: "user" | "dynamic_mcp" | "first_party_mcp" | (string & {})
+  kind?: DeveloperAppKind | (string & {})
+  /**
+   * Whether the `redirectUri` passed to `getOAuthAppInfo` is registered for
+   * this app (exact match). `null` when none was passed; missing on servers
+   * that predate the check. The consent screen refuses to send the browser to
+   * an unregistered URI, on Cancel as much as on Allow.
+   */
+  redirectUriRegistered?: boolean | null
 }
 
 /**
  * Fetch public app metadata for the OAuth consent screen.
  * No auth required — client_id is public by OAuth design.
  */
-export async function getOAuthAppInfo(clientId: string): Promise<OAuthAppInfo> {
-  return apiRequest(
-    `/v1/oauth/app-info?client_id=${encodeURIComponent(clientId)}`,
-    "Failed to load app info",
-    { skipAuth: true },
-  )
+export async function getOAuthAppInfo(clientId: string, redirectUri?: string): Promise<OAuthAppInfo> {
+  const query = new URLSearchParams({ client_id: clientId })
+  if (redirectUri) query.set("redirect_uri", redirectUri)
+  return apiRequest(`/v1/oauth/app-info?${query.toString()}`, "Failed to load app info", { skipAuth: true })
 }
 
 export interface OAuthAuthorizeInput {

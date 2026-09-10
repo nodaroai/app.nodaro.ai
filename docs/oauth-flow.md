@@ -117,7 +117,10 @@ new secret. **The old secret is invalidated immediately**, so any
 running services need their config updated before existing tokens
 expire (or refresh, if you mint new ones).
 
-You can register up to **5 apps per user**.
+You can register up to **5 apps per user**. Only apps you registered by
+hand count (`kind: "user"` in the list response); MCP clients that
+registered themselves (see the next section) appear in the same list but
+do not use up the cap. Admin accounts are not capped.
 
 ## Discovery & Dynamic Client Registration (MCP clients)
 
@@ -267,6 +270,11 @@ res.redirect(url.toString())
 If the user cancels (clicks "Cancel" on the consent screen), Nodaro
 redirects to `redirect_uri?error=access_denied&error_description=User+cancelled&state=<your_state>`
 — treat this as a non-error UX outcome, not a server fault.
+
+The consent screen checks `redirect_uri` against the registered list before
+it renders (`GET /v1/oauth/app-info?client_id=&redirect_uri=`). An
+unregistered URI gets an error page and no redirect at all, on Cancel as
+much as on Allow (RFC 6749 §3.1.2.4).
 
 ## 6. Step 3: Exchange code for token
 
