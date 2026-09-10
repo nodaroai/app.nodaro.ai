@@ -8189,7 +8189,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "render-video",
     label: "Render Video",
     category: "processing",
-    creditCost: 3,
+    // The base render. A 3D scene plan past 1920 px on its longest side is
+    // priced at 1.5x or 2.5x this (`renderVideoCreditId`); the live per-plan
+    // figure comes from the model-cost API, which the node badge reads.
+    creditCost: 50,
     inputs: ["in"],
     outputs: ["video"],
     defaultData: {

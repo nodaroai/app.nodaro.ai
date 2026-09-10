@@ -2,6 +2,7 @@ import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
 import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, isKineticCaptionStyle, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, sunoCreditType, resolveTopazUpscale } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
+import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import type { LlmFeature } from "@nodaro/shared"
 /** Every node type whose output is prose/text. Used to build the compatible
  *  source list for any text-shaped field so the MappableField dropdown is
@@ -286,9 +287,23 @@ const LLM_NODE_FEATURE_MAP: Record<string, LlmFeature> = {
  * whose credit FAMILY is chosen by whether an analysis is wired). Every caller
  * that has the edge list should pass it — without it those types fall back to
  * their never-under-quoting default family.
+ *
+ * `nodes` is the same idea one hop further out, for a price that lives in
+ * another node's data: render-video is priced by the FRAME SIZE of the plan an
+ * upstream composer holds. A caller that omits it quotes the flat render price
+ * — right for every canvas-authored scene (whose aspects all cap at 1920 px)
+ * and an under-quote only for an imported or MCP-written 2560 px plan.
  */
-export function getModelIdentifier(node: WorkflowNode, edges?: ReadonlyArray<WorkflowEdge>): string {
+export function getModelIdentifier(
+  node: WorkflowNode,
+  edges?: ReadonlyArray<WorkflowEdge>,
+  nodes?: ReadonlyArray<WorkflowNode>,
+): string {
   const data = node.data as Record<string, unknown>
+
+  // Render Video: the frame-size tier of the plan it will actually send, from
+  // the SAME resolver the orchestrator uses to pick the row it charges.
+  if (node.type === "render-video") return renderVideoCreditIdForNode(node, nodes, edges)
 
   // Component nodes: return empty string so the fallback estimateNodeCredits is used
   // (component cost depends on estimatedCredits from the published metadata, not a model lookup)

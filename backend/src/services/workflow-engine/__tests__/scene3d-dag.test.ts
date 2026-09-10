@@ -13,7 +13,7 @@
  * worker.
  */
 import { describe, it, expect } from "vitest"
-import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, type Scene3DPlan } from "@nodaro/shared"
+import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, renderVideoCreditId, type Scene3DPlan } from "@nodaro/shared"
 import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode } from "../types.js"
 
@@ -290,3 +290,52 @@ describe("edit-3d-scene", () => {
    })
    expect(result.payload).toMatchObject({ replaceReferences: true, references: [{ id: "new" }] })
  })
+
+/**
+ * The render node's price on the ORCHESTRATED path.
+ *
+ * The HTTP route reads the plan out of the request body; the orchestrator
+ * resolves it from an upstream composer node moments before enqueueing. Both
+ * must reach the same identifier for the same scene, or a canvas run and a
+ * workflow run of the same graph settle at different prices — the DAG-parity
+ * bug class this file exists for.
+ */
+describe("render-video frame-size pricing on the DAG", () => {
+  const renderNode = { id: "r1", type: "render-video", data: {} } as unknown as SimpleNode
+  const sceneNode = (plan: Scene3DPlan) =>
+    ({ id: "s1", type: "generate-3d-scene", data: { scenePlan: plan } }) as unknown as SimpleNode
+  const ctx = (plan: Scene3DPlan) => ({
+    edges: [{ source: "s1", target: "r1" }],
+    nodes: [sceneNode(plan), renderNode],
+    nodeStates: {},
+  })
+
+  const buildRender = (plan: Scene3DPlan) =>
+    buildPayload(renderNode, "job-r", {} as never, "usage-1", ctx(plan) as never)
+
+  it("keeps the flat identifier for a scene that fit under the old cap", () => {
+    const result = buildRender(PLAN)
+    expect(result.payload.planType).toBe(SCENE3D_PLAN_TYPE)
+    expect(result.modelIdentifier).toBe("render-video")
+  })
+
+  it("names the tier for a scene the 2560 px cap made possible", () => {
+    expect(buildRender({ ...PLAN, width: 2560, height: 1440 }).modelIdentifier).toBe("render-video:3d-large")
+    expect(buildRender({ ...PLAN, width: 2560, height: 2560 }).modelIdentifier).toBe("render-video:3d-xlarge")
+  })
+
+  it("agrees with the identifier the HTTP route resolves for the same plan", () => {
+    for (const [width, height] of [[1920, 1080], [2560, 1440], [2048, 2560], [2560, 2560]] as const) {
+      const plan = { ...PLAN, width, height }
+      expect(buildRender(plan).modelIdentifier).toBe(
+        renderVideoCreditId({ planType: SCENE3D_PLAN_TYPE, plan }),
+      )
+    }
+  })
+
+  it("reads the plan a node carries directly, not only an upstream one", () => {
+    const direct = { id: "r2", type: "render-video", data: { planType: SCENE3D_PLAN_TYPE, plan: { ...PLAN, width: 2560, height: 2560 } } } as unknown as SimpleNode
+    const result = buildPayload(direct, "job-r2", {} as never, "usage-1", undefined as never)
+    expect(result.modelIdentifier).toBe("render-video:3d-xlarge")
+  })
+})

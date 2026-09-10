@@ -4,6 +4,7 @@ import { insertJob } from "../lib/insert-job.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { z } from "zod"
+import { renderVideoCreditId } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { renderQueue } from "../lib/render-queue.js"
@@ -156,7 +157,7 @@ const renderPlanBody = z.object({
 
 export async function renderVideoRoutes(app: FastifyInstance) {
   // Legacy template-based render
-  app.post("/v1/render-video", { preHandler: [renderRateLimit, creditGuard(() => "render-video")] }, async (req, reply) => {
+  app.post("/v1/render-video", { preHandler: [renderRateLimit, creditGuard((req) => renderVideoCreditId(req.body))] }, async (req, reply) => {
     // Generic SDK node execution uses the node slug. Both plan endpoints use
     // the same handler, after one rate-limit/credit guard invocation.
     if (req.body && typeof req.body === "object" && "planType" in req.body) {
@@ -330,7 +331,10 @@ export async function renderVideoRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to render video")
     }
 
-    const reservation = await reserveCreditsForJob(req, reply, job.id, "render-video")
+    // The SAME id the guard checked. `reserveCredits` re-reads the identifier
+    // rather than trusting the preHandler's number, so a bare "render-video"
+    // here would check the tiered price and then debit the base one.
+    const reservation = await reserveCreditsForJob(req, reply, job.id, renderVideoCreditId(parsed.data))
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
@@ -350,5 +354,5 @@ export async function renderVideoRoutes(app: FastifyInstance) {
 
     return { jobId: job.id }
   }
-  app.post("/v1/render-video/plan", { preHandler: [renderRateLimit, creditGuard(() => "render-video")] }, renderPlan)
+  app.post("/v1/render-video/plan", { preHandler: [renderRateLimit, creditGuard((req) => renderVideoCreditId(req.body))] }, renderPlan)
 }

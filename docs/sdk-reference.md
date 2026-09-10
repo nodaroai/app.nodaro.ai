@@ -5106,6 +5106,13 @@ const clip = await client.nodes.runAndWait("render-video", {
 
 Scene authoring uses `/v1/3d-scene/generate` and `/v1/3d-scene/edit`. Typed composition rendering uses `/v1/render-video/plan`; legacy template renders retain `/v1/render-video`. For image/video conditioning, pass `references` with explicit appearance/layout/motion roles. See [Generate 3D Scene](nodes/composition/generate-3d-scene.md).
 
+A 3D scene render is priced by the plan's own `width`/`height`: **50 credits**
+up to 1920 px on the longest side, **75** above that up to 5.12 megapixels, and
+**125** for a larger frame (identifiers `render-video`,
+`render-video:3d-large`, `render-video:3d-xlarge` — read the instance's current
+numbers from the model-cost API). See
+[what a 3D scene render costs](nodes/composition/render-video.md#what-a-3d-scene-render-costs).
+
 SDK versions with the generic `nodes.run(type, params)` overload can use the same node names without typed Scene3D overloads. The server accepts their node-slug generate/edit paths and dispatches `render-video` requests carrying `planType` to the composition renderer. For an interactive preview, check the generate node's `scene3d-embed-v1` capability and use the [3D preview embed](scene3d-embed.md); it does not require a copy of the renderer or any authentication tokens in its messages.
 
 ### 3D Render Pro

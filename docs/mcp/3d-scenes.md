@@ -32,6 +32,13 @@ inputs and accepts `replace_references` to replace its image/video list.
 
 `render_3d_scene` is an MCP convenience tool for the existing `render-video` node, not a separate canvas node. It does not call an LLM. Editing operations avoid an LLM call as well. The initial version supports primitive geometry and deterministic keyframed animation; reference reconstruction is approximate.
 
+A render is priced by the frame size in the plan you pass: **50 credits** for a
+scene up to 1920 px on its longest side, **75** above that up to 5.12
+megapixels, and **125** for a larger frame. Set `width` and `height` on the
+scene plan deliberately — a 2560x2560 scene costs 2.5x a 1920x1080 one, and a
+1920x1920 scene costs the same as 1920x1080. Full table and worked examples:
+[what a 3D scene render costs](../nodes/composition/render-video.md#what-a-3d-scene-render-costs).
+
 ## 3D Render Pro
 
 `pro_3d_render` is a different operation, not a flag on `generate_3d_scene`: one

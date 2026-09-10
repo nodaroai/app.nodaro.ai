@@ -14,7 +14,7 @@ import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { PIPELINE_PINNABLE_SCRIPT_LLMS, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveEffectiveTier, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits } from "@nodaro/shared"
+import { PIPELINE_PINNABLE_SCRIPT_LLMS, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveEffectiveTier, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits } from "@nodaro/shared"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
@@ -292,6 +292,19 @@ export class PriceNotConfiguredError extends Error {
 // ============================================================
 // Fallback Static Credit Costs (used when model_pricing table doesn't exist)
 // ============================================================
+
+/**
+ * The base Remotion render, and the ladder above it.
+ *
+ * A 3D scene render is priced by FRAME SIZE (`@nodaro/shared`
+ * `scene3d-render-pricing`): every frame that fit under the old 1920 px cap
+ * keeps this flat price on the bare `render-video` id, and the two composites
+ * below only ever describe frames the 2560 px cap newly made renderable. They
+ * are DERIVED, never typed twice — repricing the base render moves the whole
+ * ladder, which is the property a hand-written pair of numbers loses the first
+ * time somebody edits one of them.
+ */
+const RENDER_VIDEO_BASE_CREDITS = 50
 
 export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Credits = ceil(kieCredits / 4) at 0% markup.
@@ -1255,7 +1268,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // ── Processing ──
   "topaz": 120,                     // processing
   "ffmpeg": 10,
-  "render-video": 50,            // Remotion compute
+  "render-video": RENDER_VIDEO_BASE_CREDITS,            // Remotion compute
+  // 3D scene renders past 1920 px on the longest side — 1.5x for a
+  // 2560x1440-class frame, 2.5x for a square 2560x2560 one.
+  "render-video:3d-large": scene3DRenderTierCredits(RENDER_VIDEO_BASE_CREDITS, "large"),
+  "render-video:3d-xlarge": scene3DRenderTierCredits(RENDER_VIDEO_BASE_CREDITS, "xlarge"),
   // Replicate disabled
   // "runway": 20, // Replicate, typical
   // "pika": 20, // Replicate, typical
@@ -1651,6 +1668,15 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // (__probedFrameCount) + maxResolution, same logic the creditGuard preHandler
   // uses at request time.
   "switchx": (data) => resolveSwitchXCreditId(data),
+
+  // Render Video: a 3D scene render is priced by FRAME SIZE, so the id depends
+  // on the plan the node carries. Same `renderVideoCreditId` the route guard
+  // and the orchestrator's payload builder call, so an estimate and the charge
+  // can only ever name the same row. A node whose plan arrives from an
+  // upstream composer has none in `data` and resolves to the flat id — the
+  // honest answer for an estimate, and never the charge (the route re-resolves
+  // from the request body it is actually about to run).
+  "render-video": (data) => renderVideoCreditId(data),
 }
 
 // Tier order for restriction checks. payg ranks above free and below basic:

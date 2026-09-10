@@ -53,6 +53,6 @@ LLM edits are model-priced on Cloud; use the model-cost API for current pricing.
 
 ## Credits
 
-Deterministic operations and local property edits cost **0 credits**. Instruction edits use the same LLM authoring tiers as Generate 3D Scene: **10 / 30 / 40 credits** for economy / standard / premium, plus optional video analysis. Rendering an edited revision costs **15 credits** separately. Instance prices come from the model-cost API.
+Deterministic operations and local property edits cost **0 credits**. Instruction edits use the same LLM authoring tiers as Generate 3D Scene: **10 / 30 / 40 credits** for economy / standard / premium, plus optional video analysis. Rendering an edited revision is charged separately, by frame size: **50 credits** up to 1920 px on the longest side, **75** above that up to 5.12 megapixels, **125** for a larger frame — see [what a 3D scene render costs](render-video.md#what-a-3d-scene-render-costs). Instance prices come from the model-cost API.
 
 Both nodes support [prompt pre/post text](../../prompt-pre-post-text.md). The canvas applies those affixes when it submits the instruction.

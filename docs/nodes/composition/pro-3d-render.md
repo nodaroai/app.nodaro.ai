@@ -262,6 +262,18 @@ quote endpoint is the authority for any given request, and an install with no
 configured price refuses before reserving anything. Quote first and show
 `maxCredits` — a ceiling, not a charge.
 
+The render stage is priced **per output frame**, so a longer scene and a higher
+frame rate both cost more, in proportion to the frames they produce. The
+per-frame rate is tiered by frame size on the same ladder as
+[Render Video](render-video.md#what-a-3d-scene-render-costs): frames up to
+1920 px on the longest side at the base rate, **1.5x** above that up to 5.12
+megapixels, **2.5x** for a larger frame. A frame at or under 1920 px on its
+longest side is always base-rate, whatever its shape.
+
+That tier reaches your quote only once the deployment's render engine reports
+it in `breakdown` — read the quote you were given rather than computing one, in
+every case.
+
 Re-rendering a stored `scenePlan` — through [Render Video](render-video.md), or
 through a `{kind:"scene"}` source here — is billed as an ordinary render. You do
 not pay to author it again.

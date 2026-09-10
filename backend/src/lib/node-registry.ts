@@ -10,6 +10,12 @@ const scene3DAuthoringCosts = ["3d-scene:economy", "3d-scene", "3d-scene:premium
 const scene3DMinCost = Math.min(...scene3DAuthoringCosts)
 const scene3DMaxCost = Math.max(...scene3DAuthoringCosts)
 
+/** Render Video spans a frame-size ladder for 3D scene plans — advertise the
+ *  whole range rather than one end of it. Read from the price table so a
+ *  reprice cannot leave the discovery API quoting a number nobody charges. */
+const renderVideoBaseCost = STATIC_CREDIT_COSTS["render-video"]
+const renderVideoMaxCost = STATIC_CREDIT_COSTS["render-video:3d-xlarge"]
+
 export type NodeCategory =
   | "input"
   | "parameter"
@@ -1084,7 +1090,11 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
 
-  { type: "render-video", label: "Render Video", category: "composition", description: "Render a Remotion composition to MP4.", outputType: "video", creditCost: 15 },
+  {
+    type: "render-video", label: "Render Video", category: "composition",
+    description: "Render a Remotion composition to MP4. A 3D scene plan is priced by frame size: the flat price up to 1920 px on the longest side, 1.5x above that, 2.5x for a large square frame.",
+    outputType: "video", creditCost: `${renderVideoBaseCost}-${renderVideoMaxCost}`,
+  },
   { type: "after-effects", label: "After Effects", category: "composition", description: "AI-generated post-processing layer.", outputType: "video", creditCost: 2 },
   { type: "motion-graphics", label: "Motion Graphics", category: "composition", description: "AI-generated 2D motion graphics (classic elements or AI-authored Lottie).", outputType: "video", creditCost: "1-8" },
   {

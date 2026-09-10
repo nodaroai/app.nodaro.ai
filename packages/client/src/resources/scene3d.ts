@@ -140,7 +140,11 @@ export class Scene3DResource {
     })
   }
 
-  /** Uses the supplied immutable revision; never starts authoring or a rebuild. */
+  /**
+   * Uses the supplied immutable revision; never starts authoring or a rebuild.
+   *
+   * Priced by the plan's frame size — see {@link RenderScene3DParams}.
+   */
   render(params: RenderScene3DParams): Promise<RunNodeResult> {
     return this.client.nodes.run("render-video", params)
   }
