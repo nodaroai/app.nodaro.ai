@@ -5,7 +5,24 @@ import { isPromptBlocked } from "../config/content-filter.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { formatZodError } from "../lib/zod-error.js"
 
-// Gallery only shows AI-generated creative content — NOT processing/application results
+// Gallery only shows AI-generated creative content — NOT processing/application
+// results.
+//
+// VOCABULARY (load-bearing): every name below is a BULLMQ QUEUE NAME, i.e. the
+// `job.name` the video worker ran the job under — NOT a canvas node type. The
+// filter is `.in("job_type", …)` against the `jobs` column, and that column is
+// OVERWRITTEN with the queue name by the pickup CAS in
+// `workers/video-worker.ts` (`job_type: job.name` — unconditional, not a
+// backfill). Orchestrated DAG rows are inserted with `job_type = node.type`
+// (`services/workflow-engine/node-executor.ts`), so `modify-image`,
+// `upscale-image` and `generate-video` would match NOTHING here; they reach the
+// gallery only because pickup rewrote them to `image-to-image` / `edit-image` /
+// `image-to-video`. Add a NODE type to these sets and it will never match a
+// row; add the QUEUE name and it matches both the direct route and the DAG.
+// `routes/__tests__/gallery.test.ts` pins the three renames.
+//
+// `lib/mcp/tools/gallery.ts` keeps a second copy of these sets for the MCP
+// `browse_gallery` verb — change one, change both.
 const IMAGE_JOBS = new Set([
   "generate-image", "edit-image", "image-to-image",
   "generate-character", "generate-character-asset",

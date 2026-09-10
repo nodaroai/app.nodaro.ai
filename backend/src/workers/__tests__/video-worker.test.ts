@@ -242,6 +242,68 @@ describe("video worker processor", () => {
     expect(mocks.mockHandler).toHaveBeenCalledWith(job, expect.objectContaining({ jobId: "job-1" }))
   })
 
+  // -------------------------------------------------------------------------
+  // INVARIANT — the pickup CAS OVERWRITES `jobs.job_type` with the BullMQ job
+  // name. This is a guard, not a description: two systems outside this file
+  // are built on the rewrite, and both fail SILENTLY when it stops happening.
+  //
+  //  1. THE GALLERY. `routes/gallery.ts` (+ its MCP twin
+  //     `lib/mcp/tools/gallery.ts`) allowlists rows with
+  //     `.in("job_type", [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS])`, and
+  //     those sets are spelled in QUEUE-NAME vocabulary. Orchestrated DAG rows
+  //     are inserted with `job_type = node.type` — `generate-video`,
+  //     `modify-image`, `upscale-image` are in no allowlist — so they appear in
+  //     the gallery only because this UPDATE rewrites them to the name
+  //     payload-builder dispatched under. A production sample had 225 of 400
+  //     completed DAG rows depending on it. Weaken the write to
+  //     `job_type: row.job_type ?? job.name` and that history vanishes from
+  //     every gallery surface with no error anywhere.
+  //     (`routes/__tests__/gallery.test.ts` pins the three renames.)
+  //  2. THE PLUGIN CONTRACT. `@nodaroai/cloud-plugins` reads the row back
+  //     through `tk.jobs.readJob(...).job_type` and sometimes guards on it
+  //     (`row.job_type !== "generate-video-pro"`). Such a guard is correct only
+  //     because that lane inserts and enqueues the SAME string; a lane that
+  //     admits X and enqueues Y must accept BOTH. Trusting the old "backfill"
+  //     wording is what left the Scene3D advanced preview lane dark for a day
+  //     (private plugins PR #467).
+  //
+  // The fixture pairs a row that ALREADY carries a different `job_type` with a
+  // differently-named BullMQ job — that pairing is the discriminator. A row
+  // with a null `job_type` would pass under `?? job.name` too and prove nothing.
+  // -------------------------------------------------------------------------
+  it("pickup OVERWRITES job_type with the BullMQ job name (gallery + plugin invariant)", async () => {
+    // Exactly how the orchestrator inserts a unified generate-video node:
+    // `job_type = node.type` = "generate-video", enqueued as "image-to-video".
+    mocks.mockSingle.mockResolvedValue({
+      data: mockJobRecord({ job_type: "generate-video" }),
+      error: null,
+    })
+
+    await processor(makeBullJob("image-to-video"))
+
+    const pickup = mocks.mockUpdate.mock.calls.find(
+      ([fields]) => (fields as Record<string, unknown> | undefined)?.status === "processing",
+    )
+    expect(
+      pickup,
+      "The pickup CAS (`.update({status:\"processing\", …})` in video-worker.ts) did not run — the assertions below cannot judge the job_type invariant.",
+    ).toBeDefined()
+
+    const fields = pickup![0] as Record<string, unknown>
+    expect(
+      fields.job_type,
+      "INVARIANT BROKEN: the pickup CAS must set `job_type: job.name` UNCONDITIONALLY. " +
+        "The row here already carried job_type=\"generate-video\" (how node-executor.ts inserts a DAG row) " +
+        "and was picked up as \"image-to-video\", so a `?? job.name` / `if (!row.job_type)` backfill leaves " +
+        "\"generate-video\" on the row. Consequence 1 (gallery): routes/gallery.ts and lib/mcp/tools/gallery.ts " +
+        "filter `.in(\"job_type\", …)` with QUEUE names, so the row silently disappears from every gallery surface " +
+        "(a prod sample: 225 of 400 completed DAG rows depend on this rewrite). Consequence 2 (plugins): " +
+        "@nodaroai/cloud-plugins reads the row via tk.jobs.readJob().job_type and guards on it — the contract is " +
+        "that a plugin lane accepts BOTH the type its route admitted and the queue name it enqueued under " +
+        "(see lib/private-plugins/types.ts::readJob). Change this only with both consumers changed first.",
+    ).toBe("image-to-video")
+  })
+
   // Phase 4: BullMQ stall-retry guard + inline recovery (Layer 1).
   it("stall-retry: skips handler AND dispatches to tryInlineReconcile when provider_task_id is set", async () => {
     mocks.mockSingle.mockResolvedValueOnce({

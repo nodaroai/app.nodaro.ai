@@ -430,3 +430,92 @@ describe("DELETE /v1/gallery/:jobId", () => {
     expect(body.error.code).toBe("unauthorized")
   })
 })
+
+// ---------------------------------------------------------------------------
+// The pickup-overwrite dependency, asserted from the gallery's own side.
+//
+// `jobs.job_type` is OVERWRITTEN with the BullMQ job name by the pickup CAS in
+// `workers/video-worker.ts` (`job_type: job.name` — unconditional, not a
+// backfill of a null column; `video-worker.test.ts` guards that write). This
+// suite is the other half of the contract: it proves the gallery's allowlist is
+// spelled in QUEUE-NAME vocabulary, so a DAG row inserted with
+// `job_type = node.type` (`services/workflow-engine/node-executor.ts`) is
+// reachable ONLY after that rewrite.
+//
+// If someone "fixes" the worker to preserve the inserted value, these three
+// pairs are what breaks — silently, since a row that matches no allowlist entry
+// is simply absent rather than an error. A production sample had 225 of 400
+// completed DAG rows depending on the rewrite.
+// ---------------------------------------------------------------------------
+
+describe("GET /v1/gallery — job_type allowlist is QUEUE-NAME vocabulary", () => {
+  /**
+   * What `node-executor.ts` INSERTS vs what the worker picks the row up as.
+   * The queue name is whatever `payload-builder.ts` dispatched under:
+   *   modify-image   → image-to-image (and → edit-image on the gpt-image lane;
+   *                    payload-builder has both branches and BOTH names are in
+   *                    IMAGE_JOBS, so either pickup lands in the gallery)
+   *   upscale-image  → edit-image
+   *   generate-video → image-to-video (start frame wired) / text-to-video
+   */
+  const RENAMES = [
+    { nodeType: "modify-image", queueName: "image-to-image" },
+    { nodeType: "upscale-image", queueName: "edit-image" },
+    { nodeType: "generate-video", queueName: "image-to-video" },
+  ] as const
+
+  /** Every `.in("job_type", […])` the route applied for this request — the
+   *  count query and the page query each contribute one. */
+  async function jobTypeAllowlists(url: string): Promise<string[][]> {
+    const { proxy, calls } = createRecordingChainMock({ data: [], error: null })
+    vi.mocked(supabase.from).mockReturnValue(proxy as never)
+
+    const res = await app.inject({ method: "GET", url })
+    expect(res.statusCode).toBe(200)
+
+    const lists = calls
+      .filter((c) => c.method === "in" && c.args[0] === "job_type")
+      .map((c) => c.args[1] as string[])
+    expect(
+      lists.length,
+      `GET ${url} applied no job_type allowlist at all — the gallery no longer filters on the column, so this suite can no longer protect the pickup-overwrite dependency. Re-point it at whatever replaced the filter.`,
+    ).toBeGreaterThan(0)
+    return lists
+  }
+
+  it("admits the PICKED-UP queue name and never the inserted DAG node type", async () => {
+    const lists = await jobTypeAllowlists("/v1/gallery")
+
+    for (const list of lists) {
+      for (const { nodeType, queueName } of RENAMES) {
+        expect(
+          list,
+          `The gallery allowlist is missing the queue name "${queueName}". DAG rows for the "${nodeType}" node are inserted with job_type="${nodeType}" and reach the gallery only because the pickup CAS in workers/video-worker.ts rewrites job_type to the BullMQ name "${queueName}". Drop "${queueName}" here and that output silently disappears from the gallery.`,
+        ).toContain(queueName)
+        expect(
+          list,
+          `The gallery allowlist contains the NODE type "${nodeType}". That string never survives on a completed jobs row: the pickup CAS in workers/video-worker.ts overwrites job_type with the BullMQ job name ("${queueName}"), so this entry matches nothing and reads as coverage the gallery does not have. Allowlist the QUEUE name instead.`,
+        ).not.toContain(nodeType)
+      }
+    }
+  })
+
+  it("keeps the same vocabulary under ?type=image", async () => {
+    const lists = await jobTypeAllowlists("/v1/gallery?type=image")
+    for (const list of lists) {
+      expect(list).toContain("image-to-image")
+      expect(list).toContain("edit-image")
+      expect(list).not.toContain("modify-image")
+      expect(list).not.toContain("upscale-image")
+    }
+  })
+
+  it("keeps the same vocabulary under ?type=video", async () => {
+    const lists = await jobTypeAllowlists("/v1/gallery?type=video")
+    for (const list of lists) {
+      expect(list).toContain("image-to-video")
+      expect(list).toContain("text-to-video")
+      expect(list).not.toContain("generate-video")
+    }
+  })
+})

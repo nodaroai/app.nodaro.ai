@@ -8,16 +8,19 @@
  * succeeded — the 2026-08-31 `[job-finalize] generate-character` row.
  *
  * Source 1 (derived): the nine STATICALLY-EXPORTED handler maps.
- * `video-worker.ts:210` stamps `job_type: job.name` at pickup, so every
- * handler key is a producible type. We import the maps directly rather than
+ * The pickup CAS in `video-worker.ts` OVERWRITES `job_type` with `job.name`
+ * (unconditionally — not a backfill; see that comment for the gallery
+ * dependency), so every handler key is a producible type. We import the maps directly rather than
  * `allHandlers` — that is a module-local const in video-worker.ts finished by
  * top-level awaits, and importing video-worker.ts boots a BullMQ Worker.
  * Out of reach by construction, and deliberately so: the relay handlers
  * (community-only dynamic import), createSurroundHandlers(engines.surround),
  * and the @nodaroai/cloud-plugins handlers all arrive at runtime.
- * Source 2 (pinned, NOT derivable): DAG-origin types. `node-executor.ts:1290`
- * inserts `job_type: node.type`, but the node-type -> jobName mapping lives
- * only as switch cases inside buildPayload, so there is nothing to import.
+ * Source 2 (pinned, NOT derivable): DAG-origin types. `node-executor.ts`
+ * INSERTS `job_type: node.type` (and the pickup overwrite above then replaces
+ * it, so these values are only ever read pre-pickup), but the node-type ->
+ * jobName mapping lives only as switch cases inside buildPayload, so there is
+ * nothing to import.
  * The length assertion is the ratchet: add a DAG node type, decide its set.
  */
 import { describe, it, expect } from "vitest"

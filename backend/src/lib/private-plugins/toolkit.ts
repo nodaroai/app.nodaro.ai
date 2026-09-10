@@ -778,6 +778,20 @@ async function clearReconcileSentinel(jobId: string): Promise<void> {
  * route validates the parent's type and rebuilds the run payload from its
  * input — additive-optional in the contract mirror, so a plugin built
  * against the widened surface runtime-guards their presence.
+ *
+ * WHAT `job_type` ACTUALLY CONTAINS (read this before writing a guard on it):
+ * for anything the video worker has picked up, the BULLMQ QUEUE NAME — the
+ * pickup CAS in `workers/video-worker.ts` OVERWRITES the column with
+ * `job.name` unconditionally (it is not a backfill of a null column; the
+ * gallery allowlists depend on the rewrite). So `row.job_type !== "<the type
+ * my route admitted>"` is correct ONLY for a lane that inserts and enqueues
+ * under the SAME string — which is exactly what generate-video-pro does on
+ * purpose. A lane that admits X and enqueues Y must accept BOTH spellings, or
+ * its own parent-validation will 400 every real job once a worker touches it.
+ * That is the failure that left the Scene3D advanced preview lane dark for a
+ * day (private plugins PR #467). Before pickup the column still holds what the
+ * inserter wrote, so a guard that accepts only the queue name is wrong in the
+ * other direction — accept the pair.
  */
 async function readJob(jobId: string): Promise<{
   id: string

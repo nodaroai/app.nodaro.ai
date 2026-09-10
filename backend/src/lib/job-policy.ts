@@ -43,9 +43,16 @@ export type JobPolicyHookPoint = "request" | "result"
 export type JobSource = string
 
 export interface JobRequestContext {
-  /** `row.job_type ?? input_data.type ?? null`. NOT always present: the video
-   *  worker stamps `job_type` only at PICKUP and routes like generate-image
-   *  insert none at all. Policies must tolerate null. */
+  /** `row.job_type ?? input_data.type ?? null`. NOT always present, and NOT
+   *  stable across the two hook points: routes like generate-image insert no
+   *  `job_type` at all, and the video worker OVERWRITES the column with the
+   *  BullMQ queue name when it picks the row up (the `job_type: job.name` line
+   *  in `workers/video-worker.ts` — an unconditional overwrite, not a backfill
+   *  of a null column; the gallery allowlists depend on it, see that comment).
+   *  So at THIS request hook the value is the ADMITTED type — `node.type` for a
+   *  DAG row, the route's own type otherwise — or null; the RESULT hook runs
+   *  after pickup and sees the QUEUE NAME for the same job. Policies must
+   *  tolerate null and must not assume the two hooks agree on the spelling. */
   readonly jobType: string | null
   readonly userId: string | null
   /** Post-provenance — i.e. the value that will land on the row. */
@@ -86,6 +93,10 @@ export interface JobOutputRef {
 
 export interface JobResultContext {
   readonly jobId: string
+  /** `row.job_type` as it stands AFTER pickup — i.e. the BullMQ queue name for
+   *  anything the video worker ran, which is not necessarily the type the
+   *  request gate saw (see `JobRequestContext.jobType`). A policy that keys off
+   *  both hooks must map the pair itself. */
   readonly jobType: string | null
   readonly mediaKind: "image" | "video" | "audio" | "other"
   readonly userId: string | null

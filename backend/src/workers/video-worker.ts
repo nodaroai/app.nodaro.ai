@@ -226,6 +226,39 @@ export function createVideoWorker() {
             provider_call_started_at: nowIso,
             provider_kind: "pre-task",
             is_public: isPublicOutput,
+            // INVARIANT — `job_type` is UNCONDITIONALLY OVERWRITTEN with the
+            // BullMQ queue name at pickup. Not `?? job.name`, not a backfill of
+            // a null column: whatever the inserter wrote is REPLACED. Scoped to
+            // this (video) queue — `render-worker.ts`'s pickup UPDATE writes
+            // status/started_at only and leaves `job_type` alone.
+            //
+            // WHY IT IS LOAD-BEARING — the gallery. `routes/gallery.ts` and its
+            // MCP twin `lib/mcp/tools/gallery.ts` allowlist rows with
+            // `.in("job_type", [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS])`,
+            // and those sets are spelled in QUEUE-NAME vocabulary. Orchestrated
+            // DAG rows are inserted with `job_type = node.type` (the
+            // `insertInternalJob("orchestrator", …)` call in
+            // `services/workflow-engine/node-executor.ts`) — NODE-TYPE
+            // vocabulary, and `modify-image` / `upscale-image` /
+            // `generate-video` are in no allowlist. Those rows reach the
+            // gallery ONLY because this line rewrites them to the name
+            // payload-builder dispatched under: modify-image → image-to-image
+            // (or edit-image on the gpt-image lane), upscale-image →
+            // edit-image, generate-video → image-to-video / text-to-video. A
+            // production sample had 225 of 400 completed DAG rows depending on
+            // it. Delete this line and that history silently disappears from
+            // every gallery surface. Guarded by `video-worker.test.ts`
+            // ("pickup OVERWRITES …") + `routes/__tests__/gallery.test.ts`.
+            //
+            // PLUGIN CONTRACT — a `@nodaroai/cloud-plugins` route or handler
+            // that reads the row back (`tk.jobs.readJob(…).job_type`) sees the
+            // QUEUE NAME, never the type its own route admitted. A
+            // `row.job_type !== "<admitted>"` guard is correct only when the
+            // lane inserts and enqueues under the SAME string (what
+            // generate-video-pro does deliberately). A lane that admits X and
+            // enqueues Y must accept BOTH spellings — trusting the "backfill"
+            // framing this rewrite used to be documented under is what left the
+            // Scene3D advanced preview lane dark for a day (plugins PR #467).
             job_type: job.name,
           })
           .eq("id", jobId)
