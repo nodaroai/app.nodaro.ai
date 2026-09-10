@@ -7,8 +7,8 @@
  * the private engine's business. Keeping this file content-free is what lets
  * the store live in the public app while the authoring engine stays private.
  *
- * The kinds and usages below mirror the CHECK constraints in migrations 389 and 401
- * exactly. They are duplicated on purpose: the database refuses a bad row and
+ * The kinds and usages below mirror the CHECK constraints in migrations 389,
+ * 401 and 417 exactly. They are duplicated on purpose: the database refuses a bad row and
  * TypeScript refuses a bad call, and the pair of them means a typo cannot
  * reach either side alone. `scene3d-artifacts.behavior.sql` pins the SQL half.
  */
@@ -24,6 +24,9 @@ export const SCENE3D_ARTIFACT_KINDS = [
   "source-json",
   "build-manifest",
   "input-glb",
+  // One PNG per shot of an exported composition, pinned by a DELIVERY (never
+  // by a revision): a render's shot-by-shot contact sheet.
+  "shot-still",
 ] as const
 export type Scene3DArtifactKind = (typeof SCENE3D_ARTIFACT_KINDS)[number]
 
@@ -34,6 +37,7 @@ export const SCENE3D_ARTIFACT_USAGES = [
   "validation",
   "source",
   "checkpoint",
+  "shot-still",
 ] as const
 export type Scene3DArtifactUsage = (typeof SCENE3D_ARTIFACT_USAGES)[number]
 
@@ -55,6 +59,7 @@ export const SCENE3D_ARTIFACT_KIND_USAGE: Readonly<Record<Scene3DArtifactKind, S
   "source-json": "checkpoint",
   "build-manifest": "checkpoint",
   "input-glb": "checkpoint",
+  "shot-still": "shot-still",
 }
 
 /**
@@ -97,6 +102,7 @@ export const SCENE3D_ARTIFACT_CONTENT_TYPES: Readonly<Record<Scene3DArtifactKind
   "source-json": "application/json",
   "build-manifest": "application/json",
   "input-glb": "model/gltf-binary",
+  "shot-still": "image/png",
 }
 
 /** A stored artifact, as the store hands it around. Never serialized to a

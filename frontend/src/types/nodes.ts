@@ -58,6 +58,12 @@ export interface GeneratedResult {
   // resolve these from the ACTIVE result; the suno-generate node displays them.
   readonly sunoTaskId?: string
   readonly sunoTrackId?: string
+  // 3D Render Pro: one still per shot of the composition this result was
+  // rendered from, ordered by shot. Per-RESULT and not per-node because
+  // switching the active result switches the composition it shows — a
+  // node-level copy would be a second source of truth that drifts the moment
+  // a second run lands.
+  readonly shotStills?: readonly import("@nodaro/shared").Pro3DRenderShotStill[]
   // KIE task id of the generation that produced this result (merged per-result
   // via poll-job extraFields, like sunoTaskId). Grok task-chained ops
   // (grok-2-segment / grok-2-edit / grok-upscale) key off the ACTIVE result's
@@ -8111,10 +8117,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // `scene` carries an existing revision to export or revise; `references`
     // carries the images/video a new scene is authored from.
     inputs: ["scene", "references"],
-    // BOTH halves of one operation: the composition it authored and the MP4 it
-    // exported. `composition` feeds a render-only re-run; `video` feeds any
-    // downstream video consumer.
-    outputs: ["composition", "video"],
+    // All THREE halves of one operation: the composition it authored, the MP4
+    // it exported, and one still per shot of that composition. `composition`
+    // feeds a render-only re-run; `video` feeds any downstream video consumer;
+    // `stills` feeds image consumers with the whole ordered contact sheet.
+    outputs: ["composition", "stills", "video"],
     // Published apps and the fullscreen result view enumerate media outputs
     // from here. The MP4 is what an app viewer sees; the composition is an
     // editor-side artifact, not something an app can display.

@@ -2828,8 +2828,10 @@ retained v1 scene still renders for a v1-only client.
 
 The completed job's `output_data` carries `videoUrl` (the standard resolved
 video field), `scenePlan`, `sceneRevisionId`, `posterAssetId`, an optional
-`sourceArtifactId`, `validation` (`{status, reportAssetId, warnings[]}`),
-`renderer` and `metadata` (`{width, height, fps, frames, duration}`).
+`shotStills` (one still per shot — `{shotIndex, frame, assetId, url}`, ordered
+by `shotIndex`, at no extra credit cost), an optional `sourceArtifactId`,
+`validation` (`{status, reportAssetId, warnings[]}`), `renderer` and `metadata`
+(`{width, height, fps, frames, duration}`).
 
 Availability is per deployment. `GET /v1/3d-scene/capabilities` reports a `pro`
 block with `available` plus the engines, quality profiles, styles, aspect ratios

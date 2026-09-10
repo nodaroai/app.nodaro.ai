@@ -94,8 +94,8 @@ export function assertScene3DArtifactMagic(
     }
     return
   }
-  if (kind === "poster") {
-    if (!head.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC)) fail("poster is not a PNG image")
+  if (kind === "poster" || kind === "shot-still") {
+    if (!head.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC)) fail(`${kind} is not a PNG image`)
     return
   }
   if (kind === "blend-source") {

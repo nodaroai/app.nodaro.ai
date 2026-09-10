@@ -147,6 +147,17 @@ export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "image-collage",
   // image-overlay places layers on a base → ONE image (generatedImageUrl).
   "image-overlay",
+  // 3D Render Pro's `stills` handle carries one PNG per shot of the exported
+  // composition (the input resolvers spread them into referenceImageUrls,
+  // exactly like reference-sheet `panels`). Membership is what lets the canvas
+  // accept stills → any image input; the validator only ever sees the source
+  // NODE type, so this also makes its `video` pip droppable on an image input
+  // — the same handle-blind trade `reference-sheet` and `split-media` already
+  // document. Edge colors stay handle-correct via HANDLE_OUTPUT_TYPES, and the
+  // input resolvers route by handle, so only `stills` becomes an image at
+  // runtime. Deliberately NOT added to IMAGE_SOURCE_TYPES on either engine:
+  // that set types the node's PRIMARY asset, and 3D Render Pro's is the MP4.
+  "pro-3d-render",
 ])
 
 /** Identity-locking source node types that feed Subjects. */

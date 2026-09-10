@@ -14,7 +14,8 @@ import {
   AUDIO_SOURCE_TYPES,
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
-import { COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle } from "@nodaro/shared"
+import {
+  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle } from "@nodaro/shared"
 import type { SceneData } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/prompts"
 export { extractVideoDurationFromNode } from "@nodaro/shared"
@@ -198,6 +199,11 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   // handle; panelUrls (this key) is spread into downstream referenceImageUrls by
   // routeOutput when wired via the `panels` handle.
   "panelUrls",
+  // pro-3d-render emits { videoUrl, scenePlan, shotStills[] }. shotStills is
+  // spread into downstream referenceImageUrls by the input resolver when the
+  // edge leaves the `stills` handle; without this key the live DAG path drops
+  // it and the handle resolves to nothing.
+  "shotStills",
 ]
 
 // Job output_data keys that all map to NodeOutput.plan — derived from COMPOSER_PLAN_MAP + generic "plan"
@@ -584,8 +590,12 @@ export function getPrimaryOutput(
   // otherwise answer "plan-ready" on the video handle too and hand a downstream
   // video consumer a marker instead of a URL. Mirrors the frontend
   // execution-graph.ts branch of the same name.
-  if (sourceType === "pro-3d-render" && sourceHandle === "video") {
-    return output.videoUrl
+  if (sourceType === "pro-3d-render") {
+    if (sourceHandle === "video") return output.videoUrl
+    // `stills` → the FIRST still, so the edge carries a real image URL; the
+    // whole ordered set is spread into referenceImageUrls by the input
+    // resolver. Mirrors the frontend execution-graph.ts branch.
+    if (sourceHandle === "stills") return output.shotStills?.[0]?.url
   }
 
   // Plan nodes return a marker
@@ -1407,8 +1417,13 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     // paints from, so the scene a resume hands downstream is the exact one on
     // screen, not an archived history entry.
     const plan = data.scenePlan as Record<string, unknown> | undefined
+    // The ACTIVE result's stills — the same result the video came from, so the
+    // two halves of one run stay together across a resume.
+    const results = (data.generatedResults as Array<Record<string, unknown>> | undefined) ?? []
+    const stills = pro3DRenderShotStills(results[(data.activeResultIndex as number | undefined) ?? 0])
     if (videoUrl) out.videoUrl = videoUrl
     if (plan) out.plan = plan
+    if (stills.length > 0) out.shotStills = stills
     return out.videoUrl || out.plan ? out : undefined
   }
 

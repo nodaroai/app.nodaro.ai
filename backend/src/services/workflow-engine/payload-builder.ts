@@ -1,4 +1,5 @@
-import { assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle } from "@nodaro/shared"
+import {
+  pro3DRenderShotStills, assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 /**
@@ -6509,7 +6510,15 @@ function scene3DGraphReferences(
     const url = output ? getPrimaryOutput(output, source.type, edge.sourceHandle) : undefined
     if (!url || !/^https?:\/\//.test(url)) continue
     seen.add(source.id)
-    const kind = output?.videoUrl === url || inputs.referenceVideoUrls?.includes(url) || VIDEO_SOURCE_TYPES.has(source.type) ? "video" : "image"
+    // A shot still is an IMAGE even though the node that produced it is a video
+    // producer — the type-only fallback below would otherwise file a still as a
+    // MOTION reference, which is the opposite of what it shows. Decided from
+    // the output's own data rather than from the handle id, so it stays right
+    // wherever a still URL arrives from.
+    const isShotStill = pro3DRenderShotStills(output).some((still) => still.url === url)
+    const kind = !isShotStill
+      && (output?.videoUrl === url || inputs.referenceVideoUrls?.includes(url) || VIDEO_SOURCE_TYPES.has(source.type))
+      ? "video" : "image"
     const role = roles[source.id] ?? (kind === "video" ? "motion" : "appearance")
     references.push({ id: source.id, url, kind, role: role as Scene3DReference["role"],
       ...(objectIds[source.id] ? { objectId: objectIds[source.id] } : {}) })

@@ -62,7 +62,7 @@ describe("engine readiness gates the picker entry", () => {
   })
 })
 
-describe("one node, two outputs", () => {
+describe("one node, three outputs", () => {
   it("resolves the selected render from history before the legacy video field", () => {
     const node = {
       id: "pro", type: "pro-3d-render", data: {
@@ -85,8 +85,10 @@ describe("one node, two outputs", () => {
     expect(extractNodeOutput(withScene)).toBe("plan-ready")
   })
 
-  it("declares both handle types so wires are coloured, not neutral", () => {
-    expect(HANDLE_OUTPUT_TYPES["pro-3d-render"]).toEqual({ composition: "control", video: "video" })
+  it("declares every handle type so wires are coloured, not neutral", () => {
+    expect(HANDLE_OUTPUT_TYPES["pro-3d-render"]).toEqual({
+      composition: "control", stills: "image", video: "video",
+    })
   })
 
   it("is a video producer, so its video output can connect downstream", () => {

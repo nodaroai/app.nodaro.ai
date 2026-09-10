@@ -4498,6 +4498,7 @@ export const he: ChromeDict = {
   "pro3d.renderOnly": "רינדור סצנה קיימת",
   "pro3d.noPrompt": "לא הוגדר תיאור",
   "pro3d.ceiling": "עד {credits} קרדיטים",
+  "pro3d.shotStill": "שוט {shot} · פריים {frame}",
   "pro3dcfg.source": "מקור הסצנה",
   "pro3dcfg.sourcePrompt": "סצנה חדשה מתיאור",
   "pro3dcfg.sourceScene": "סצנה קיימת",

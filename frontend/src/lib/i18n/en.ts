@@ -4540,6 +4540,7 @@ export const en = {
   "pro3d.renderOnly": "Render existing scene",
   "pro3d.noPrompt": "No prompt set",
   "pro3d.ceiling": "Up to {credits} credits",
+  "pro3d.shotStill": "Shot {shot} · frame {frame}",
   "pro3dcfg.source": "Scene source",
   "pro3dcfg.sourcePrompt": "New scene from a brief",
   "pro3dcfg.sourceScene": "Existing scene",

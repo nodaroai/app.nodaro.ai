@@ -106,7 +106,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "pose": { inputs: ["in"], outputs: ["out"] },
   "post-process-effects": { inputs: ["in"], outputs: ["out"] },
   "preview": { inputs: ["in"], outputs: ["out"] },
-  "pro-3d-render": { inputs: ["scene", "references"], outputs: ["composition", "video"] },
+  "pro-3d-render": { inputs: ["scene", "references"], outputs: ["composition", "stills", "video"] },
   "provider": { inputs: ["in"], outputs: ["provider"] },
   "publish-social": { inputs: ["in"], outputs: [] },
   "qa-check": { inputs: ["in"], outputs: ["approved", "rejected"] },

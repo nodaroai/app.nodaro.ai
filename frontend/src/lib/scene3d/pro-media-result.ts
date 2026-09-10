@@ -1,4 +1,19 @@
+import { pro3DRenderShotStills, type Pro3DRenderShotStill } from "@nodaro/shared"
 import type { GeneratedResult } from "@/types/nodes"
+
+/**
+ * The ACTIVE result's shot stills, in shot order.
+ *
+ * Read from the result and not from the node, because the stills belong to the
+ * composition THAT result was rendered from: switching results switches the
+ * shots. Returns `[]` for a result that carries none, which is the honest
+ * answer for a run that predates them.
+ */
+export function proShotStills(data: Record<string, unknown>): Pro3DRenderShotStill[] {
+  const results = (data.generatedResults as readonly GeneratedResult[] | undefined) ?? []
+  const active = results[(data.activeResultIndex as number | undefined) ?? 0]
+  return active ? pro3DRenderShotStills(active) : []
+}
 
 /** Append to completion-time history; a replay selects the existing result. */
 export function proMediaCompletionPatch(
@@ -17,7 +32,15 @@ export function proMediaCompletionPatch(
       activeResultIndex: existingIndex,
     }
   }
-  const result: GeneratedResult = { url, jobId: context.jobId, timestamp }
+  // The stills settle WITH the video, on the same result: a later reader can
+  // then line each still up against the exact MP4 it was rendered beside.
+  const stills = pro3DRenderShotStills(output)
+  const result: GeneratedResult = {
+    url,
+    jobId: context.jobId,
+    timestamp,
+    ...(stills.length > 0 ? { shotStills: stills } : {}),
+  }
   return {
     generatedVideoUrl: url,
     generatedResults: [...previous, result],

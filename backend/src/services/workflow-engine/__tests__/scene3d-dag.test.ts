@@ -91,6 +91,47 @@ describe("generate-3d-scene", () => {
     ])
   })
 
+  it("files a 3D Render Pro shot still as an APPEARANCE image, not a motion reference", () => {
+    // The producer is a video node, so the type-only fallback would have called
+    // a still "video" + role "motion" — the opposite of what a still shows, and
+    // exactly the wire the greybox-to-video-model doctrine asks for.
+    const still = "https://api.example/v1/3d-scene/deliveries/j/assets/a"
+    const result = build(
+      "generate-3d-scene",
+      { scenePrompt: "x" },
+      { referenceImageUrls: [still] },
+      {
+        nodes: [{ id: "pro", type: "pro-3d-render", data: {} }],
+        edges: [{ id: "e1", source: "pro", target: "n1", sourceHandle: "stills", targetHandle: "references" }],
+        nodeStates: { pro: { output: {
+          videoUrl: "https://cdn.example/pro.mp4",
+          shotStills: [{ shotIndex: 0, frame: 0, assetId: "a", url: still }],
+        } } },
+      },
+    )
+    expect(result.payload.references).toEqual([
+      { id: "pro", url: still, kind: "image", role: "appearance" },
+    ])
+  })
+
+  it("still files the MP4 from the same node as a motion reference", () => {
+    const video = "https://cdn.example/pro.mp4"
+    const result = build(
+      "generate-3d-scene",
+      { scenePrompt: "x" },
+      {},
+      {
+        nodes: [{ id: "pro", type: "pro-3d-render", data: {} }],
+        edges: [{ id: "e1", source: "pro", target: "n1", sourceHandle: "video", targetHandle: "references" }],
+        nodeStates: { pro: { output: {
+          videoUrl: video,
+          shotStills: [{ shotIndex: 0, frame: 0, assetId: "a", url: "https://api.example/v1/3d-scene/deliveries/j/assets/a" }],
+        } } },
+      },
+    )
+    expect(result.payload.references).toEqual([{ id: "pro", url: video, kind: "video", role: "motion" }])
+  })
+
   it("keeps authored references and does not duplicate a wired URL", () => {
     const result = build(
       "generate-3d-scene",

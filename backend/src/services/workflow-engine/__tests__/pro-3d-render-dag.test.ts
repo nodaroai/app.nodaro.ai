@@ -197,8 +197,13 @@ describe("an in-graph run is the same transport as a direct call", () => {
   })
 })
 
-describe("one job, two outputs", () => {
-  const output = buildNodeOutputFromJobData({ scenePlan: plan, videoUrl: VIDEO_URL }, "pro-3d-render")
+describe("one job, three outputs", () => {
+  const stills = [
+    { shotIndex: 0, frame: 0, assetId: "a", url: "https://r2.example/renders/shot-0.png" },
+    { shotIndex: 1, frame: 48, assetId: "b", url: "https://r2.example/renders/shot-1.png" },
+  ]
+  const output = buildNodeOutputFromJobData(
+    { scenePlan: plan, videoUrl: VIDEO_URL, shotStills: stills }, "pro-3d-render")
 
   it("routes the video handle to the MP4", () => {
     expect(getPrimaryOutput(output, "pro-3d-render", "video")).toBe(VIDEO_URL)
@@ -208,5 +213,19 @@ describe("one job, two outputs", () => {
     expect(getPrimaryOutput(output, "pro-3d-render", "composition")).toBe("plan-ready")
     expect(getPrimaryOutput(output, "pro-3d-render", undefined)).toBe("plan-ready")
     expect(output.plan).toEqual(plan)
+  })
+
+  it("carries the stills through, and routes their handle to the first one", () => {
+    // Without the passthrough key the DAG drops the list and the handle is dark.
+    expect(output.shotStills).toEqual(stills)
+    expect(getPrimaryOutput(output, "pro-3d-render", "stills")).toBe(stills[0].url)
+  })
+
+  it("answers nothing on the stills handle when the run rendered none", () => {
+    const bare = buildNodeOutputFromJobData({ scenePlan: plan, videoUrl: VIDEO_URL }, "pro-3d-render")
+    expect(getPrimaryOutput(bare, "pro-3d-render", "stills")).toBeUndefined()
+    // …and the other two handles are unaffected by the new one.
+    expect(getPrimaryOutput(bare, "pro-3d-render", "video")).toBe(VIDEO_URL)
+    expect(getPrimaryOutput(bare, "pro-3d-render", "composition")).toBe("plan-ready")
   })
 })

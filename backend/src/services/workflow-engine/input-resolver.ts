@@ -11,7 +11,8 @@ import type {
   ResolvedInputs,
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, ANALYSIS_PRODUCER_TYPES } from "./output-extractor.js"
-import { extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
+import {
+  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
 import { buildNodeRefMap } from "./payload-builder.js"
@@ -1273,6 +1274,26 @@ function routeOutput(
       routeAudioOutput(inputs, output, targetType, src.id)
     } else {
       inputs.prompt = output
+    }
+    return
+  }
+
+  // --- 3D Render Pro `stills` → the WHOLE ordered contact sheet, spread into
+  // referenceImageUrls. One still per shot is a set, not a pick: handing a
+  // downstream model only the first would silently drop the rest of the
+  // composition. Prefers the live job output over the saved snapshot, and
+  // MUST precede targetHandle routing for the same reason as reference-sheet.
+  // Mirrors the frontend node-input-resolver.ts branch of the same name. ---
+  if (srcType === "pro-3d-render" && edge.sourceHandle === "stills") {
+    // The settled job's own output. There is no node-data fallback here on
+    // purpose: `routeOutput` is only reached once `getNodeOutput` produced a
+    // value, and 3D Render Pro is an EXECUTED node, so on this engine that
+    // value always came from its execution state (a resumed run is seeded
+    // from its persisted job row). The `video` handle has exactly the same
+    // reachability.
+    const stills = pro3DRenderShotStills(nodeStates[src.id]?.output)
+    if (stills.length > 0) {
+      inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), ...stills.map((still) => still.url)]
     }
     return
   }

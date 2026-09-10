@@ -87,10 +87,17 @@ applied.
 | Handle | Value |
 |---|---|
 | `composition` | The scene revision this run produced — the same kind of plan the Basic 3D nodes emit. Connect it to [Render Video](render-video.md), or to another 3D node's Scene input, to re-export without paying to author again. |
+| `stills` | One still image per shot of the composition, in shot order — each is the frame that shot opens on. Connect it to any node that consumes images; the whole set travels down the wire, not just the first. |
 | `video` | The exported MP4, the platform's standard video result. Connect it to any node that consumes a video. |
 
 Wire a downstream video consumer from **`video`**, not from `composition`: the
 composition handle carries a plan, not a URL.
+
+**The stills are a contact sheet, not a second render.** They come out of the
+same run at no extra credit cost, and a v1 (single-shot) scene produces exactly
+one, at frame 0. Use them to feed a shot's opening frame into an image or video
+model as a reference, or to review the blocking shot by shot without scrubbing
+the MP4. A result produced before this existed simply has none.
 
 The completed job's `output_data` carries:
 
@@ -100,6 +107,7 @@ The completed job's `output_data` carries:
 | `scenePlan` | The exact composition it was rendered from. |
 | `sceneRevisionId` | That revision's id, for a later render-only re-run. |
 | `posterAssetId` | Preview poster for the result. |
+| `shotStills` | One entry per shot, ordered by `shotIndex`: `{ shotIndex, frame, assetId, url }`. `shotIndex` is 0-based in the composition's shot order and `frame` is the shot's own first frame in the composition's frame space, so a still lines up against the MP4 without re-deriving shot boundaries. Each `url` is an authenticated delivery endpoint, not a public link — the editor reads it with your session. Absent on a result that rendered none. |
 | `sourceArtifactId` | Present when an editable native source was retained. |
 | `validation` | `{ status, reportAssetId, warnings[] }` — each warning has a `code`, a `message` and an optional `shotId`. |
 | `renderer` | Renderer identity/version the export was produced with. |

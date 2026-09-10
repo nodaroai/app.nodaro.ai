@@ -7,7 +7,7 @@ These tools expose the same scene authoring and rendering operations as the canv
 | `generate_3d_scene` | Prompt and optional image/video references → editable scene job |
 | `edit_3d_scene` | Scene plan, expected revision and instruction/operations → new revision job |
 | `render_3d_scene` | Exact scene revision → MP4 through the existing Render Video engine |
-| `pro_3d_render` | A `source` (new brief, existing revision, or desktop export) → ONE job returning both the composition and the MP4 (listed only where the deployment can serve it) |
+| `pro_3d_render` | A `source` (new brief, existing revision, or desktop export) → ONE job returning the composition, the MP4 and one still per shot (listed only where the deployment can serve it) |
 
 Each returns a job ID. Use `get_job` or `wait_for_job` to retrieve the completed result. Generation/edit jobs return `output_data.scenePlan`; rendering returns a video URL.
 
@@ -38,6 +38,20 @@ inputs and accepts `replace_references` to replace its image/video list.
 job produces a finished shot, and its completed `output_data` carries BOTH
 `scenePlan` and `videoUrl` (plus the revision, poster, validation and renderer
 metadata).
+
+It also carries `shotStills`: one still image per shot of the composition,
+ordered by `shotIndex`, as `{shotIndex, frame, assetId, url}`. `shotIndex` is
+0-based in the composition's shot order and `frame` is that shot's own first
+frame, so a still lines up against the MP4 without re-deriving shot boundaries.
+A v1 single-shot scene yields exactly one, at frame 0. They come out of the same
+run at no extra credit cost — read them from `get_job` / `wait_for_job` and use
+a shot's still as the image reference when generating that shot with a video
+model. The field is absent on a result that rendered none.
+
+Each `url` is an authenticated endpoint on the install
+(`GET /v1/3d-scene/deliveries/{jobId}/assets/{assetId}`), because delivery
+artifacts stay in the private scene bucket. Fetch it with the caller's own
+credentials; it is not a public link to paste somewhere else.
 
 Its `source` argument is exactly one of:
 

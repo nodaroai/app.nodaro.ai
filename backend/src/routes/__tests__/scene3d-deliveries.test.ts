@@ -8,6 +8,7 @@ vi.mock("@/lib/workflow-access.js", async (original) => ({
 }))
 import { workflowAccess } from "../../lib/workflow-access.js"
 import { scene3DArtifactRoutes } from "../scene3d-artifacts.js"
+import { scene3DArtifactObjectKey } from "../../services/scene3d-artifacts/object-keys.js"
 import { deliveryFixture, OWNER, OTHER, JOB, REV, WF, SOURCE_WF, POSTER, REPORT } from "../../services/scene3d-artifacts/__tests__/delivery-fixture.js"
 
 let fixture: ReturnType<typeof deliveryFixture>
@@ -73,6 +74,35 @@ describe("retained delivery reads", () => {
     expect(res.headers["cache-control"]).toBe("no-store, private")
     expect(res.rawPayload).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
   })
+  it("reports a shot still's own identity, ordered by shot, and serves its bytes", async () => {
+    // The still an agent or the canvas addresses by the URL the producer
+    // published: same route, same private authentication, plus the shot
+    // identity a reader needs to line it up against the MP4.
+    const STILL = "00000000-0000-4000-8000-0000000000c1"
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16)])
+    const objectKey = scene3DArtifactObjectKey(OWNER, REV, STILL, "shot-still")
+    fixture.objects.set(objectKey, png)
+    fixture.db.tables.scene3d_artifacts.push({ id: STILL, user_id: OWNER, kind: "shot-still",
+      sha256: "d".repeat(64), byte_length: png.length, bucket: "private-scenes", object_key: objectKey,
+      etag: "tag", created_at: "2026-09-08T00:00:00Z", expires_at: null })
+    fixture.db.tables.scene3d_delivery_artifacts.push({ job_id: JOB, artifact_id: STILL,
+      artifact_owner_id: OWNER, usage: "shot-still", via_revision_id: null,
+      shot_index: 0, frame: 0, width: 640, height: 360 })
+
+    const res = await get()
+    expect(res.statusCode).toBe(200)
+    const still = res.json().assets.find((a: { assetId: string }) => a.assetId === STILL)
+    expect(still).toMatchObject({ kind: "shot-still", usage: "shot-still", shotIndex: 0, frame: 0, width: 640, height: 360 })
+    // The poster and report carry no shot identity at all — not `null`.
+    const poster = res.json().assets.find((a: { assetId: string }) => a.assetId === POSTER)
+    expect(poster).not.toHaveProperty("shotIndex")
+
+    const bytes = await get(`/assets/${STILL}`)
+    expect(bytes.statusCode).toBe(200)
+    expect(bytes.headers["content-type"]).toBe("image/png")
+    expect(bytes.headers["cache-control"]).toBe("no-store, private")
+  })
+
   it("refuses unpinned assets and private source kinds even if mispinned", async () => {
     fixture.db.tables.scene3d_delivery_artifacts.pop()
     expect((await get(`/assets/${REPORT}`)).statusCode).toBe(404)
