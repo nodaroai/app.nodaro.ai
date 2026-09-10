@@ -556,6 +556,14 @@ export class StructuredLlmError extends Error {
   }
 }
 
+/** A terminal provider response must not be retried or lose its reported usage. */
+class LlmStreamResponseError extends Error {
+  constructor(message: string, readonly usage: StructuredLlmError["usage"]) {
+    super(message)
+    this.name = "LlmStreamResponseError"
+  }
+}
+
 /**
  * Schema-constrained completion with validation + retry — the reliable entry
  * point for "the LLM must return JSON shaped like X".
@@ -601,9 +609,13 @@ export async function llmCompleteStructured<T>(
         retryStreamOnError: retries === 0 ? false : req.retryStreamOnError,
         jsonSchema: { name: schemaName, schema: jsonSchema } })
     } catch (error) {
+      const terminalUsage = error instanceof LlmStreamResponseError ? error.usage : undefined
       throw new StructuredLlmError(error instanceof Error ? error.message : "Structured completion failed", {
-        inputTokens: inTokens, outputTokens: outTokens,
-        providerCost: costSeen ? cost : undefined, complete: false,
+        inputTokens: inTokens + (terminalUsage?.inputTokens ?? 0),
+        outputTokens: outTokens + (terminalUsage?.outputTokens ?? 0),
+        providerCost: costSeen || terminalUsage?.providerCost !== undefined
+          ? cost + (terminalUsage?.providerCost ?? 0) : undefined,
+        complete: usageComplete && terminalUsage?.complete === true,
       }, { cause: error })
     }
     usageComplete = usageComplete && resp.usage !== undefined && resp.providerCost !== undefined
@@ -1402,7 +1414,7 @@ async function callKieResponsesCollapsed(model: LlmModelDef, req: LlmRequest): P
   try {
     res = await once()
   } catch (err) {
-    if (req.retryStreamOnError === false || signal.aborted) throw err
+    if (err instanceof LlmStreamResponseError || req.retryStreamOnError === false || signal.aborted) throw err
     // 1 of the 6 streaming probes produced no `response.completed` (a silent
     // failure / error frame) after 35 s, which a retry clears — both shapes now
     // arrive here as a throw (the error frame from parseSseStream, the silent
@@ -1544,7 +1556,7 @@ async function parseSseStream(
   let firstChunk = true
 
   try {
-    while (true) {
+    readEvents: while (true) {
       const { done, value } = await reader.read()
       if (done) break
 
@@ -1642,12 +1654,23 @@ async function parseSseStream(
               onToken(text)
             }
           }
-          if (eventType === "response.completed") {
+          if (eventType === "response.completed" || eventType === "response.incomplete" || eventType === "response.failed") {
             const resp = parsed.response as Record<string, unknown> | undefined
             const u = resp?.usage as Record<string, number> | undefined
             if (u) {
               usage = { inputTokens: u.input_tokens ?? 0, outputTokens: u.output_tokens ?? 0 }
             }
+            actualUsd = extractActualUsd(resp ?? {}) ?? actualUsd
+            if (eventType !== "response.completed") {
+              const providerCost = actualUsd ?? (usage ? calculateLlmCost(modelId, usage) : undefined)
+              throw new LlmStreamResponseError(`KIE.ai responses stream ${modelId} ended with ${eventType}`, {
+                inputTokens: usage?.inputTokens ?? 0, outputTokens: usage?.outputTokens ?? 0,
+                providerCost, complete: usage !== undefined && providerCost !== undefined,
+              })
+            }
+            // This event completes the response even if the HTTP connection stays
+            // open. Preserve its usage, then release the reader in finally.
+            break readEvents
           }
         }
       }
