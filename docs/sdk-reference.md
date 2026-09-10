@@ -3250,6 +3250,11 @@ list(): Promise<{ data: DeveloperApp[] }>
 const { data } = await client.developerApps.list()
 ```
 
+Each entry carries `kind`: `"user"` is an app you registered yourself; the
+other values (`"dynamic_mcp"`, `"first_party_mcp"`, `"community_instance"`)
+are clients that registered themselves. Only `"user"` entries count toward
+the five-apps-per-user cap; `create()` answers `400 limit_reached` past it.
+
 #### `get(id)`
 
 ```ts

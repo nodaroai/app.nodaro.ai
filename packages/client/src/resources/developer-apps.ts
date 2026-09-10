@@ -19,6 +19,14 @@ export type DeveloperAppScope =
 
 export type DeveloperAppStatus = "active" | "suspended" | "pending_review"
 
+/**
+ * How the app came to exist. `user` is an app someone registered by hand in
+ * the dashboard; the others register themselves (MCP clients via Dynamic
+ * Client Registration, first-party MCP, a connected community instance).
+ * Only `user` apps count toward the per-user registration cap.
+ */
+export type DeveloperAppKind = "user" | "dynamic_mcp" | "first_party_mcp" | "community_instance"
+
 export interface DeveloperApp {
   id: string
   name: string
@@ -30,6 +38,8 @@ export interface DeveloperApp {
   scopesRequested: DeveloperAppScope[]
   clientId: string
   status: DeveloperAppStatus
+  /** Absent from servers older than this field; treat missing as `"user"`. */
+  kind?: DeveloperAppKind | (string & {})
   createdAt: string
   updatedAt: string
 }

@@ -10,6 +10,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { bareOriginSchema } from "../lib/url-validator.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
+import { checkIsAdmin } from "../lib/admin-check.js"
 
 const httpsUrl = z.string().url().refine((v) => v.startsWith("https://") || v.startsWith("http://localhost"), {
   message: "Must be https:// or http://localhost",
@@ -55,19 +56,29 @@ function formatApp(row: Record<string, unknown>) {
     scopesRequested: row.scopes_requested ?? [],
     clientId: row.client_id,
     status: row.status,
+    kind: row.kind ?? CAPPED_APP_KIND,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
 }
 
+// The cap counts only apps a person registered by hand (kind = "user"). MCP
+// clients that register themselves (dynamic_mcp) also land in developer_apps
+// under the same owner, and for a while they were counted too — five Claude
+// connections filled the cap and the owner could not register anything.
+// Admins are not capped at all; the check reads the profile role (cached, and
+// warmed by the auth hook) so it holds for API tokens as well as the dashboard.
 const MAX_APPS_PER_USER = 5
+const CAPPED_APP_KIND = "user"
 
 // First-party / SDK only — reject OAuth app tokens (no scope authorizes managing
 // developer apps, so a third-party app must not create/rotate/delete the owner's).
 const DEV_APPS_NO_OAUTH_MSG = "Developer-app management is not available to OAuth apps."
 
 export async function developerAppRoutes(app: FastifyInstance) {
-  app.post("/v1/developer-apps", async (req, reply) => {
+  // Opt-in rate limit: with admins uncapped, this is the only bound on the
+  // route, and each call runs a bcrypt hash and flushes the CORS origin cache.
+  app.post("/v1/developer-apps", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
@@ -78,12 +89,18 @@ export async function developerAppRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }
 
-    const { count } = await supabase
-      .from("developer_apps")
-      .select("id", { count: "exact", head: true })
-      .eq("owner_user_id", req.userId)
-    if ((count ?? 0) >= MAX_APPS_PER_USER) {
-      return reply.status(400).send({ error: { code: "limit_reached", message: `Maximum ${MAX_APPS_PER_USER} apps per user` } })
+    if (!(await checkIsAdmin(req.userId))) {
+      const { count, error: countError } = await supabase
+        .from("developer_apps")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_user_id", req.userId)
+        .eq("kind", CAPPED_APP_KIND)
+      if (countError) {
+        return sendInternalError(reply, req, countError, "Failed to check the app limit")
+      }
+      if ((count ?? 0) >= MAX_APPS_PER_USER) {
+        return reply.status(400).send({ error: { code: "limit_reached", message: `Maximum ${MAX_APPS_PER_USER} apps per user` } })
+      }
     }
 
     const clientId = generateClientId()

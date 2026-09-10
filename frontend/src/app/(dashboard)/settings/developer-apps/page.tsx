@@ -36,6 +36,7 @@ import {
 import type { DeveloperApp, DeveloperAppStatus } from "@/lib/api"
 import { useT } from "@/lib/i18n"
 import { ALL_SCOPES, type Scope, SCOPE_DESCRIPTIONS } from "@/lib/dev-app-scopes"
+import { isCapReached } from "@/lib/dev-app-cap"
 
 function StatusBadge({ status }: { status: DeveloperAppStatus }) {
   const t = useT()
@@ -75,8 +76,12 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 
 export default function DeveloperAppsPage() {
   const t = useT()
-  const { loading: authLoading } = useAuth()
+  const { loading: authLoading, isAdmin } = useAuth()
   const { data: apps, isLoading } = useDeveloperApps()
+  // Mirrors the server: only hand-registered apps count toward the cap, and
+  // admins are not capped. Self-registered MCP clients live in the same list
+  // but must never block the owner from registering a real app.
+  const capReached = isCapReached(apps ?? [], { isAdmin })
   const createMutation = useCreateDeveloperAppMutation()
   const deleteMutation = useDeleteDeveloperAppMutation()
 
@@ -303,13 +308,13 @@ export default function DeveloperAppsPage() {
       {/* Create button */}
       <Button
         onClick={() => setShowCreate(true)}
-        disabled={(apps ?? []).length >= 5}
+        disabled={capReached}
         className="bg-[#ff0073] hover:bg-[#e00067] text-white"
       >
         <Plus className="h-4 w-4 mr-2" />
         {t("devApps.createApp")}
       </Button>
-      {(apps ?? []).length >= 5 && (
+      {capReached && (
         <p className="text-xs text-muted-foreground mt-2">{t("devApps.maxReached")}</p>
       )}
 

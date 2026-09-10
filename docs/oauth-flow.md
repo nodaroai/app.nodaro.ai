@@ -117,7 +117,10 @@ new secret. **The old secret is invalidated immediately**, so any
 running services need their config updated before existing tokens
 expire (or refresh, if you mint new ones).
 
-You can register up to **5 apps per user**.
+You can register up to **5 apps per user**. Only apps you registered by
+hand count (`kind: "user"` in the list response); MCP clients that
+registered themselves (see the next section) appear in the same list but
+do not use up the cap. Admin accounts are not capped.
 
 ## Discovery & Dynamic Client Registration (MCP clients)
 

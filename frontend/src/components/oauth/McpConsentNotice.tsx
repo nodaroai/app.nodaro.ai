@@ -1,6 +1,7 @@
 import type { FC } from "react"
+import type { DeveloperAppKind } from "@nodaro/sdk"
 
-export type DeveloperAppKind = "user" | "dynamic_mcp" | "first_party_mcp"
+export type { DeveloperAppKind }
 
 export interface McpConsentNoticeProps {
   // `& {}` keeps autocomplete for known kinds while allowing forward-compat string values.

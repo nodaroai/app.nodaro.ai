@@ -7267,10 +7267,13 @@ export async function deleteApiToken(id: string): Promise<{ success: boolean }> 
 // Developer Apps (OAuth) — delegates to @nodaro/sdk SDK
 // ---------------------------------------------------------------------------
 
+import type { DeveloperAppKind } from "@nodaro/sdk"
+
 export type {
   DeveloperApp,
   DeveloperAppStatus,
   DeveloperAppScope,
+  DeveloperAppKind,
   CreateDeveloperAppInput,
   UpdateDeveloperAppInput,
   CreateDeveloperAppResult,
@@ -7322,7 +7325,7 @@ export interface OAuthAppInfo {
    * `& {}` on the fallback string preserves autocomplete for known kinds while
    * allowing forward-compat with future values.
    */
-  kind?: "user" | "dynamic_mcp" | "first_party_mcp" | (string & {})
+  kind?: DeveloperAppKind | (string & {})
 }
 
 /**

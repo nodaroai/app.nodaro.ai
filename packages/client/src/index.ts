@@ -218,6 +218,7 @@ export type {
   DeveloperApp,
   DeveloperAppScope,
   DeveloperAppStatus,
+  DeveloperAppKind,
   CreateDeveloperAppInput,
   UpdateDeveloperAppInput,
   CreateDeveloperAppResult,
