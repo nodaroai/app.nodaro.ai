@@ -91,7 +91,9 @@ export const SCENE3D_V2_LIMITS = {
   defaultFps: 24,
   /** Even integers only — an odd axis breaks H.264 chroma subsampling. */
   minDimensionPx: 100,
-  maxDimensionPx: 1920,
+  /** Deliberately kept equal to v1's `SCENE3D_LIMITS.maxDimensionPx`: one
+   *  renderer draws both versions, so one measured ceiling bounds both. */
+  maxDimensionPx: SCENE3D_LIMITS.maxDimensionPx,
   minEntities: 1,
   /** SEMANTIC entities, not exported mesh nodes. */
   maxEntities: 100,

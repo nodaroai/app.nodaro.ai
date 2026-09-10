@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest"
 import * as THREE from "three"
-import { createClayShadows } from "../clay-shadows"
+import { createClayShadows } from "../../clay-shadows"
 import { buildScene3DV2Scene } from "../scene-builder-v2"
 import { loadScene3DV2 } from "../load"
 import { makeLoadableScene, primitiveEntity } from "./v2-fixtures"

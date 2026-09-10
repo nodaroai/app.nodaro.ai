@@ -257,6 +257,11 @@ export function Scene3DCanvas({
       handle.applyFrame(frame)
       renderer.shadowMap.enabled = handle.shadowMapEnabled ?? false
       renderer.shadowMap.type = THREE.PCFSoftShadowMap
+      // Named by the BUILDER, not by the canvas: the canvas must not know which
+      // schema version it is drawing, and a builder that names nothing keeps
+      // three's default so an existing look cannot shift under it.
+      renderer.toneMapping = handle.toneMapping ?? THREE.NoToneMapping
+      renderer.toneMappingExposure = handle.toneMappingExposure ?? 1
       renderer.render(handle.scene, handle.camera)
     } catch (err) {
       fail(`Failed to draw the 3D scene: ${describeError(err)}`)

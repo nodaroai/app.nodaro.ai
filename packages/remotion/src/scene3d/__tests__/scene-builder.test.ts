@@ -160,7 +160,35 @@ describe("buildScene3DScene", () => {
     const handle = buildScene3DScene(plan)
     expect(handle.ambientLight.intensity).toBe(0.25)
     expect(handle.keyLight.intensity).toBe(2)
-    expect(handle.keyLight.position.toArray()).toEqual([1, 2, 3])
+    // The clay shadow fit slides the key light along its own axis so the shadow
+    // camera can bound the scene. Only the DIRECTION is the plan's to state,
+    // and that is preserved exactly.
+    const direction = handle.keyLight.position.clone().sub(handle.keyLight.target.position).normalize()
+    expect(direction.distanceTo(new THREE.Vector3(1, 2, 3).normalize())).toBeLessThan(1e-12)
+    handle.dispose()
+  })
+
+  it("renders shadowed and ACES-tonemapped, deterministically", () => {
+    const plan = makePlan({ objects: [makeObject({ id: "a" }), makeObject({ id: "b" })] })
+    const handle = buildScene3DScene(plan)
+    expect(handle.shadowMapEnabled).toBe(true)
+    expect(handle.toneMapping).toBe(THREE.ACESFilmicToneMapping)
+    expect(handle.toneMappingExposure).toBe(1.15)
+    expect(handle.keyLight.castShadow).toBe(true)
+    for (const mesh of handle.meshes.values()) {
+      expect(mesh.castShadow).toBe(true)
+      expect(mesh.receiveShadow).toBe(true)
+    }
+    // Same frame, same matrices: no wall-clock or RNG input anywhere in the fit.
+    const snapshot = () => [
+      ...handle.keyLight.shadow.camera.projectionMatrix.elements,
+      ...handle.keyLight.shadow.camera.matrixWorld.elements,
+    ]
+    handle.applyFrame(7)
+    const first = snapshot()
+    handle.applyFrame(30)
+    handle.applyFrame(7)
+    expect(snapshot()).toEqual(first)
     handle.dispose()
   })
 

@@ -53,7 +53,7 @@ import {
 } from "./overlays"
 import type { Scene3DAssetAnimation, Scene3DEntityV2 } from "./plan-shape"
 import { sampleBakedCamera, type Scene3DCameraSample } from "./camera-track"
-import { createClayShadows } from "./clay-shadows"
+import { createClayShadows } from "../clay-shadows"
 
 /** Pinned clay look — the same numbers the v1 builder uses, on purpose. */
 const CLAY_ROUGHNESS = 0.78
