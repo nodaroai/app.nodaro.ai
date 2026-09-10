@@ -156,13 +156,23 @@ const RAW_ERROR_MARKERS = [
   "[object Object]",
 ]
 
-function assertActionable(message, label) {
+/**
+ * The half of the contract EVERY refusal owes the reader, whatever caused it:
+ * something rendered, nothing leaked. A refusal that is not about a missing
+ * credential — an engine this deployment does not have, say — has no key to
+ * point at, so it is held to this and not to the vocabulary below.
+ */
+function assertRenderable(message, label) {
   assert(typeof message === "string" && message.trim().length > 0, `${label}: empty message`)
   const noise = RAW_ERROR_MARKERS.find((m) => message.includes(m))
   assert(!noise, `${label}: leaks raw vendor/runtime detail (${JSON.stringify(noise)}) — "${message}"`)
   // The same string renders inside a node card and a toast; past regressions
   // were "correct but 230 chars", truncated to uselessness in both.
   assert(message.length <= 200, `${label}: ${message.length} chars, too long to render — "${message}"`)
+}
+
+function assertActionable(message, label) {
+  assertRenderable(message, label)
   const actionable = /nodaro\.ai|API key|api key|_API_KEY|_API_TOKEN|provider|Integrations/.test(message)
   assert(actionable, `${label}: says nothing the user can act on — "${message}"`)
 }
@@ -652,6 +662,140 @@ function readCloudOnlyNodeTypes() {
     return null
   }
 }
+
+// ---------------------------------------------------------------------------
+// Scene3D: Basic stays, Pro is absent — and every surface says so identically
+//
+// Community has no credit system and no private engine, so the host predicate
+// `scene3DProAvailable()` is false here by construction. Discovery, the
+// per-type descriptor, the capabilities document and the run route all read
+// THAT predicate, which is exactly why they can be asserted together: a
+// deployment where they disagree is one where an agent finds the node, builds a
+// call from its descriptor, and learns the truth only after a paid run has been
+// attempted.
+//
+// The failure this section exists to make impossible is the tempting one — a
+// Pro request quietly served by the cheap Basic lane. That would look like a
+// success to every caller while billing an operation nobody asked for, so the
+// refusal is asserted as an EXACT status and an EXACT code, with no job handle
+// and no quote attached.
+// ---------------------------------------------------------------------------
+
+/** The engine-gated node, and the Basic lane community keeps. */
+const PRO_3D_NODE_TYPE = "pro-3d-render"
+const BASIC_3D_NODE_TYPES = ["generate-3d-scene", "edit-3d-scene"]
+
+/** Well-formed on purpose: a body the schema would reject could be refused for
+ *  the wrong reason and the check would still look green. */
+const PRO_3D_SOURCE = { kind: "prompt", prompt: "community smoke: a red suitcase on a wooden table" }
+
+async function nodeTypes() {
+  const { status, json } = await api("/v1/nodes")
+  assert(status === 200, `GET /v1/nodes expected 200, got ${status}`)
+  const types = new Set((json?.data ?? []).map((n) => n?.type))
+  assert(types.size > 0, "/v1/nodes returned an empty catalog")
+  return types
+}
+
+await check("discovery omits 3D Render Pro where no engine can run it", async () => {
+  const types = await nodeTypes()
+  assert(
+    !types.has(PRO_3D_NODE_TYPE),
+    `/v1/nodes advertises ${PRO_3D_NODE_TYPE} on an install with no engine that implements it — docs/nodes/composition/pro-3d-render.md promises the type is omitted entirely`,
+  )
+  // Not describable either. An agent that hardcodes the type (or reads a
+  // workflow that already contains it) must get a flat 404 rather than a
+  // descriptor complete with the input schema it would build a call from.
+  const describe = await api(`/v1/nodes/${PRO_3D_NODE_TYPE}`, { token: ctx.token })
+  assert(describe.status === 404, `GET /v1/nodes/${PRO_3D_NODE_TYPE} expected 404, got ${describe.status}`)
+  assert(
+    describe.json?.error?.code === "not_found",
+    `expected error.code "not_found", got ${JSON.stringify(describe.json?.error?.code)}`,
+  )
+  return `${PRO_3D_NODE_TYPE} absent from the catalog and 404 on describe`
+})
+
+await check("the Basic 3D scene nodes stay available on community", async () => {
+  // Basic is NOT engine-gated: it is LLM authoring plus the platform's own
+  // Three.js renderer, so a keyless install still lists it and refuses it later
+  // for the missing LLM key, like every other node. Dropping it alongside Pro
+  // would be the over-correction.
+  const types = await nodeTypes()
+  const missing = BASIC_3D_NODE_TYPES.filter((t) => !types.has(t))
+  assert(missing.length === 0, `community keeps the Basic 3D lane, but /v1/nodes omits: ${missing.join(", ")}`)
+  const describe = await api(`/v1/nodes/${BASIC_3D_NODE_TYPES[0]}`, { token: ctx.token })
+  assert(describe.status === 200, `GET /v1/nodes/${BASIC_3D_NODE_TYPES[0]} expected 200, got ${describe.status}`)
+  assert(
+    describe.json?.data?.type === BASIC_3D_NODE_TYPES[0],
+    `descriptor is not ${BASIC_3D_NODE_TYPES[0]}: ${JSON.stringify(describe.json?.data?.type)}`,
+  )
+  return `${BASIC_3D_NODE_TYPES.join(" + ")} listed and describable`
+})
+
+await check("a 3D Render Pro run is refused 503 SCENE_CAPABILITY_UNAVAILABLE, never a Basic fallback", async () => {
+  const run = await api("/v1/pro-3d-render", {
+    method: "POST",
+    token: ctx.token,
+    headers: { "idempotency-key": `community-smoke-${Date.now()}` },
+    body: { source: PRO_3D_SOURCE, quoteId: "community-smoke-quote" },
+  })
+  assert(run.status === 503, `POST /v1/pro-3d-render expected 503, got ${run.status}: ${run.text.slice(0, 300)}`)
+  assert(
+    run.json?.error?.code === "SCENE_CAPABILITY_UNAVAILABLE",
+    `expected error.code "SCENE_CAPABILITY_UNAVAILABLE", got ${JSON.stringify(run.json?.error?.code)}: ${run.text.slice(0, 300)}`,
+  )
+  // The fallback tell. Basic answers a `jobId` when it accepts and
+  // `provider_unavailable` when it cannot — either one HERE would mean the Pro
+  // request had become a different, cheaper operation.
+  assert(
+    run.json?.jobId === undefined && run.json?.id === undefined,
+    `the refusal carried a job handle — the Pro request was served by another lane: ${run.text.slice(0, 200)}`,
+  )
+  assertRenderable(run.json?.error?.message, "pro-3d-render refusal")
+
+  // The quote endpoint is the only thing that can mint the `quoteId` a run
+  // requires, so it has to refuse too: a client holding a price here would be
+  // holding a ticket for an operation this install can never perform.
+  const quote = await api("/v1/pro-3d-render/quote", {
+    method: "POST",
+    token: ctx.token,
+    body: { source: PRO_3D_SOURCE },
+  })
+  assert(
+    quote.status === 503,
+    `POST /v1/pro-3d-render/quote expected 503, got ${quote.status}: ${quote.text.slice(0, 300)}`,
+  )
+  assert(
+    quote.json?.error?.code === "SCENE_CAPABILITY_UNAVAILABLE",
+    `expected error.code "SCENE_CAPABILITY_UNAVAILABLE", got ${JSON.stringify(quote.json?.error?.code)}: ${quote.text.slice(0, 300)}`,
+  )
+  assert(quote.json?.quoteId === undefined, `the quote refusal minted a quote: ${quote.text.slice(0, 200)}`)
+  return "run and quote both 503 SCENE_CAPABILITY_UNAVAILABLE — no job, no quote"
+})
+
+await check("the 3D capabilities document reports Pro unavailable and no authoring engine", async () => {
+  const { status, json } = await api("/v1/3d-scene/capabilities", { token: ctx.token })
+  assert(status === 200, `GET /v1/3d-scene/capabilities expected 200, got ${status}`)
+  assert(
+    json?.basic?.available === true,
+    `basic.available must stay true on community, got ${JSON.stringify(json?.basic?.available)}`,
+  )
+  // `advanced` IS the installed-authoring-engine document. `null` is the honest
+  // "there is no blender-cloud engine here"; an object would mean a community
+  // build had loaded a private engine.
+  assert(json?.advanced === null, `expected advanced=null on community, got ${JSON.stringify(json?.advanced)}`)
+  assert(json?.pro?.available === false, `expected pro.available=false, got ${JSON.stringify(json?.pro?.available)}`)
+  // `pro.engines` is the control VOCABULARY a client may render, not a claim
+  // that anything is installed — `available` is the gate, and the two are read
+  // together. What must never appear in it is blender-local: that one needs
+  // SCENE3D_LOCAL_ENABLED, which community does not set.
+  const engines = Array.isArray(json?.pro?.engines) ? json.pro.engines : []
+  assert(
+    !engines.includes("blender-local"),
+    `pro.engines offers blender-local without SCENE3D_LOCAL_ENABLED: ${JSON.stringify(engines)}`,
+  )
+  return "basic available, advanced null, pro.available false, no blender-local"
+})
 
 // ---------------------------------------------------------------------------
 
