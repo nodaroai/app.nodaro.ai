@@ -10,6 +10,8 @@ CLAUDE.md
 /ARCHITECTURE.md
 architecture-graph.html
 node_modules/
+# also ignore node_modules SYMLINKS (a symlink is not a directory, so the slash form misses it — two were committed by #1341)
+node_modules
 # This repo uses npm (single root package-lock.json). A stray pnpm-lock.yaml
 # or bun.lock only creates a second, drifting dependency graph that security
 # scanners flag for CVEs the npm build never installs (e.g. a phantom Next.js
