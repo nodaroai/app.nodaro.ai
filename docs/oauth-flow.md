@@ -390,6 +390,69 @@ the only supported method** — `plain` is rejected with HTTP 400
 send both — the server verifies whichever is present (and both, if both
 are supplied).
 
+### Plugin connect handshake (Figma)
+
+A plugin that runs inside another app — the Nodaro plugin for Figma — cannot
+take the redirect above: its UI is an iframe with no address of its own, so
+`?code=` has nowhere to land. Nodaro offers a second shape for exactly that
+case, the one a TV uses to sign into a streaming service. The plugin opens a
+short-lived session, sends the user to the ordinary consent screen, and polls
+the session until the user has allowed access. Nothing is pasted, and no token
+ever travels through a URL.
+
+```text
+POST /v1/oauth/plugin/session          { "client": "figma" }
+  -> { sessionId, pollKey, userCode, authorizeUrl, expiresIn }
+
+GET  /v1/oauth/plugin/callback?code=…&state=…    (the consent screen's redirect)
+  -> a page asking the user to type the plugin's code
+
+POST /v1/oauth/plugin/confirm          state=…&code=…   (that page's form)
+  -> "Connected", or the form again, or "cancelled" after five wrong codes
+
+GET  /v1/oauth/plugin/session/:id      header: X-Plugin-Poll-Key: <pollKey>
+  -> { status: "pending" } | { status: "denied" }
+  -> { status: "granted", token, tokenType, scope, expiresIn }   (once)
+```
+
+1. The plugin calls `POST /v1/oauth/plugin/session`. It gets three things:
+   `sessionId`, which doubles as the OAuth `state` and is treated as public;
+   `pollKey`, which stays in the plugin and is what authorises a read; and
+   `userCode`, an eight-character code the plugin shows the user.
+2. The plugin opens `authorizeUrl` in the user's browser — the normal
+   `/oauth/authorize` consent screen, already carrying the plugin's
+   `client_id`, `redirect_uri`, `scope` and the session as `state`.
+3. The user allows or declines. The consent screen redirects the browser to
+   `/v1/oauth/plugin/callback`. On a decline the session is settled and the
+   page says so. On an allow, the code is redeemed and the consent held —
+   only for a live session, only if the code was issued to the plugin's own
+   app, only with exactly the plugin's scopes, and never with a PKCE
+   challenge this flow did not set — and the page asks for the code the
+   plugin is showing.
+4. The user types the code (`POST /v1/oauth/plugin/confirm`). This is what
+   ties the person who pressed Allow to the plugin that asked: a connect link
+   forwarded to someone else dead-ends, because that someone never sees the
+   sender's code. Five wrong codes settle the session as denied.
+5. The plugin polls with the poll key. `pending` until the code is confirmed;
+   `granted` exactly once, carrying an `ndr_app_…` access token minted at that
+   read — the session is claimed atomically and deleted in the same call, so
+   Redis never holds a bearer token and two overlapping polls cannot both be
+   minted one. A wrong poll key answers `404`, the same as an unknown session.
+   Sessions live ten minutes.
+
+The token is an ordinary developer-app token (§7), granted the scopes
+`jobs:read`, `assets:read`, `assets:write` and `credits:read`, and revocable
+like any other (§9).
+
+**Operator setup.** The plugin connects through a developer app the operator
+registers once — in the dashboard or with `POST /v1/developer-apps` — whose
+redirect URIs include this deployment's `<PUBLIC_URL>/v1/oauth/plugin/callback`
+and whose requested scopes include the four above. Its `client_id` goes into
+`FIGMA_PLUGIN_OAUTH_CLIENT_ID` (see [deployment](./deployment.md)). Unset,
+every plugin connect route answers `503 plugin_connect_not_configured`; a
+registration that is missing the callback or a scope answers
+`503 plugin_connect_misconfigured` and names what is missing in the server log.
+
 ## 7. Step 4: Use the token
 
 Configure a per-user client with the access token:

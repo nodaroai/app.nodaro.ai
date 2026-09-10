@@ -341,6 +341,14 @@ export const envSchema = z.object({
   MCP_DYNAMIC_REGISTRATION: z.enum(["allowlist", "open", "off"]).default("allowlist"),
   /** Comma-separated allowlist of MCP client_name values that may register dynamically. Only used when MCP_DYNAMIC_REGISTRATION="allowlist". */
   MCP_DCR_ALLOWLIST: z.string().default("Claude,Claude Code,Cursor,Cline,Continue,Goose,ChatGPT,OpenAI,Lovable,Gemini,Gemini CLI,Codex,MCP Inspector,mcp-inspector"),
+  /**
+   * client_id of the developer app the Figma plugin connects through (see
+   * `routes/oauth-plugin-connect.ts`). The operator registers the app once with
+   * this deployment's `/v1/oauth/plugin/callback` in its redirect_uris and the
+   * plugin scopes in scopes_requested, then names it here. Empty = the plugin
+   * connect routes answer 503 and nothing else changes.
+   */
+  FIGMA_PLUGIN_OAUTH_CLIENT_ID: z.string().default(""),
 })
 
 export type Edition = "community" | "business" | "cloud"

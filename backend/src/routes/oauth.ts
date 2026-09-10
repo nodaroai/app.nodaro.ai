@@ -1,16 +1,15 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { openApiRegistry } from "../lib/openapi-registry.js"
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto"
+import { createHash, timingSafeEqual } from "node:crypto"
 import { supabase } from "../lib/supabase.js"
 import { appBaseUrl } from "../lib/deployment-urls.js"
 import { findAppByClientId, verifyClientSecret } from "./developer-apps.js"
 import { issueCode, redeemCode } from "../lib/oauth-codes.js"
-import { ALL_SCOPES, formatScopeString } from "../lib/scopes.js"
+import { hashToken, mintAppAccessToken } from "../lib/oauth-tokens.js"
+import { ALL_SCOPES } from "../lib/scopes.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { formatZodError } from "../lib/zod-error.js"
-
-const ACCESS_TOKEN_TTL_DAYS = 90
 
 const authorizeBody = z.object({
   clientId: z.string().min(1),
@@ -37,10 +36,6 @@ const tokenBody = z.object({
 const revokeBody = z.object({
   token: z.string().min(1),
 })
-
-function hashToken(plaintext: string): string {
-  return createHash("sha256").update(plaintext).digest("hex")
-}
 
 /**
  * RFC 7636 PKCE verification: SHA256(code_verifier) base64url-encoded must equal code_challenge.
@@ -248,42 +243,17 @@ export async function oauthRoutes(app: FastifyInstance) {
       }
     }
 
-    const { data: auth, error: authErr } = await supabase
-      .from("developer_app_authorizations")
-      .upsert({
-        app_id: grant.appId,
-        user_id: grant.userId,
-        scopes_granted: grant.scopes,
-        revoked_at: null,
-      }, { onConflict: "app_id,user_id" })
-      .select("id")
-      .single()
-    if (authErr || !auth) {
-      return reply.status(500).send({ error: "server_error", error_description: "Failed to create authorization" })
-    }
-
-    const plaintext = `ndr_app_${randomBytes(32).toString("hex")}`
-    const tokenHash = hashToken(plaintext)
-    const tokenPrefix = `${plaintext.slice(0, 12)}...`
-    const expiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString()
-
-    const { error: tokErr } = await supabase
-      .from("developer_app_tokens")
-      .insert({
-        authorization_id: auth.id,
-        token_hash: tokenHash,
-        token_prefix: tokenPrefix,
-        expires_at: expiresAt,
-      })
-    if (tokErr) {
-      return reply.status(500).send({ error: "server_error", error_description: "Failed to mint token" })
+    const minted = await mintAppAccessToken({ appId: grant.appId, userId: grant.userId, scopes: grant.scopes })
+    if (!minted.ok) {
+      const description = minted.failed === "authorization" ? "Failed to create authorization" : "Failed to mint token"
+      return reply.status(500).send({ error: "server_error", error_description: description })
     }
 
     return reply.send({
-      access_token: plaintext,
-      token_type: "Bearer",
-      scope: formatScopeString(grant.scopes),
-      expires_in: ACCESS_TOKEN_TTL_DAYS * 24 * 60 * 60,
+      access_token: minted.accessToken,
+      token_type: minted.tokenType,
+      scope: minted.scope,
+      expires_in: minted.expiresIn,
     })
   })
 
