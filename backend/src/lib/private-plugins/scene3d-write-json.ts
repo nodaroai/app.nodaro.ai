@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { SCENE3D_LIMITS } from "@nodaro/shared"
 import type { PluginSceneArtifactToolkit, PluginSceneArtifactUpload } from "./scene3d-artifact-contract.js"
 import { Scene3DArtifactError } from "../../services/scene3d-artifacts/types.js"
 import { assertScene3DArtifactMagic } from "../../services/scene3d-artifacts/receipt.js"
@@ -51,8 +52,14 @@ export async function writeScene3DPng(
   const bytes = Buffer.from(input.bytes)
   if (input.kind !== "poster" || bytes.length < 33 || bytes.length > 8 * 1024 * 1024 ||
       !bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) ||
-      bytes.toString("ascii",12,16) !== "IHDR" || bytes.readUInt32BE(16) < 1 || bytes.readUInt32BE(16) > 1920 ||
-      bytes.readUInt32BE(20) < 1 || bytes.readUInt32BE(20) > 1920) throw new Error("Scene still is not a bounded PNG")
+      bytes.toString("ascii",12,16) !== "IHDR" ||
+      bytes.readUInt32BE(16) < 1 || bytes.readUInt32BE(16) > SCENE3D_LIMITS.maxDimensionPx ||
+      bytes.readUInt32BE(20) < 1 || bytes.readUInt32BE(20) > SCENE3D_LIMITS.maxDimensionPx) {
+    // Quoted from the contract, never restated: a still is rendered at the
+    // plan's own width/height, so a hardcoded ceiling here silently fails every
+    // render above it the moment `maxDimensionPx` moves.
+    throw new Error("Scene still is not a bounded PNG")
+  }
   return writeScene3DBytes(toolkit, { ...input, bytes }, options)
 }
 
