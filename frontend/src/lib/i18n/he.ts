@@ -1885,6 +1885,7 @@ export const he: ChromeDict = {
   // ── OAuth consent screen ──
   "oauth.invalidRequestTitle": "בקשת הרשאה שגויה",
   "oauth.missingParam": "פרמטר חסר או שגוי:",
+  "oauth.redirectNotRegistered": "כתובת החזרה בבקשה הזו לא רשומה ליישום. לא נשלח אליה דבר. אם הגעת לכאן מקישור, סגור את הלשונית.",
   "oauth.loadFailedTitle": "טעינת פרטי היישום נכשלה",
   "oauth.failedLoadAppInfo": "טעינת פרטי היישום נכשלה",
   "oauth.authorizationFailed": "ההרשאה נכשלה",

@@ -36,6 +36,12 @@ export interface OAuthAppInfo {
   logoUrl: string | null
   homepageUrl: string | null
   scopesRequested: DeveloperAppScope[]
+  /**
+   * Present when `getAppInfo` was given a `redirectUri`: whether that exact
+   * URI is registered for the app. `null` when none was given. Lets a consent
+   * screen refuse to redirect anywhere unregistered without exposing the list.
+   */
+  redirectUriRegistered?: boolean | null
 }
 
 export class OAuthResource {
@@ -65,9 +71,9 @@ export class OAuthResource {
    * Get public app metadata for a consent screen.
    * `GET /v1/oauth/app-info?client_id=<id>`. Public route — no auth needed.
    */
-  getAppInfo(clientId: string): Promise<OAuthAppInfo> {
+  getAppInfo(clientId: string, redirectUri?: string): Promise<OAuthAppInfo> {
     return this.client.request("GET", "/v1/oauth/app-info", {
-      query: { client_id: clientId },
+      query: redirectUri ? { client_id: clientId, redirect_uri: redirectUri } : { client_id: clientId },
     })
   }
 }

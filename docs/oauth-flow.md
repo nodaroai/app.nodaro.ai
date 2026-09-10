@@ -271,6 +271,11 @@ If the user cancels (clicks "Cancel" on the consent screen), Nodaro
 redirects to `redirect_uri?error=access_denied&error_description=User+cancelled&state=<your_state>`
 — treat this as a non-error UX outcome, not a server fault.
 
+The consent screen checks `redirect_uri` against the registered list before
+it renders (`GET /v1/oauth/app-info?client_id=&redirect_uri=`). An
+unregistered URI gets an error page and no redirect at all, on Cancel as
+much as on Allow (RFC 6749 §3.1.2.4).
+
 ## 6. Step 3: Exchange code for token
 
 After the user clicks **Allow**, Nodaro redirects the browser to:

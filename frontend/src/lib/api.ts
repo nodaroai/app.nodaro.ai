@@ -7326,18 +7326,23 @@ export interface OAuthAppInfo {
    * allowing forward-compat with future values.
    */
   kind?: DeveloperAppKind | (string & {})
+  /**
+   * Whether the `redirectUri` passed to `getOAuthAppInfo` is registered for
+   * this app (exact match). `null` when none was passed; missing on servers
+   * that predate the check. The consent screen refuses to send the browser to
+   * an unregistered URI, on Cancel as much as on Allow.
+   */
+  redirectUriRegistered?: boolean | null
 }
 
 /**
  * Fetch public app metadata for the OAuth consent screen.
  * No auth required — client_id is public by OAuth design.
  */
-export async function getOAuthAppInfo(clientId: string): Promise<OAuthAppInfo> {
-  return apiRequest(
-    `/v1/oauth/app-info?client_id=${encodeURIComponent(clientId)}`,
-    "Failed to load app info",
-    { skipAuth: true },
-  )
+export async function getOAuthAppInfo(clientId: string, redirectUri?: string): Promise<OAuthAppInfo> {
+  const query = new URLSearchParams({ client_id: clientId })
+  if (redirectUri) query.set("redirect_uri", redirectUri)
+  return apiRequest(`/v1/oauth/app-info?${query.toString()}`, "Failed to load app info", { skipAuth: true })
 }
 
 export interface OAuthAuthorizeInput {

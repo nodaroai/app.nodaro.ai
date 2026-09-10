@@ -67,23 +67,40 @@ openApiRegistry.registerPath({
 openApiRegistry.registerPath({
   method: "get", path: "/v1/oauth/app-info",
   description: "Public app metadata for consent screens.",
-  request: { query: z.object({ client_id: z.string() }) },
+  request: { query: z.object({ client_id: z.string(), redirect_uri: z.string().optional() }) },
   responses: { 200: { description: "App info" }, 404: { description: "Unknown client_id" } },
 })
 
+const appInfoQuery = z.object({
+  client_id: z.string().min(1),
+  redirect_uri: z.string().optional(),
+})
+
 export async function oauthRoutes(app: FastifyInstance) {
-  // GET /v1/oauth/app-info?client_id=<id> — public, returns app metadata for consent screens
-  app.get("/v1/oauth/app-info", async (req, reply) => {
-    const clientId = (req.query as Record<string, string>)?.client_id
-    if (!clientId || typeof clientId !== "string") {
-      return reply.status(400).send({ error: { code: "validation_error", message: "client_id query param required" } })
+  // GET /v1/oauth/app-info?client_id=<id>[&redirect_uri=<uri>] — public, returns
+  // app metadata for consent screens. With `redirect_uri` the answer also says
+  // whether that exact URI is registered, so the consent screen can refuse to
+  // send the browser anywhere else — the Cancel path never reaches
+  // POST /v1/oauth/authorize (which checks the same thing) and used to trust
+  // the query string verbatim (RFC 6749 §3.1.2.4: on an invalid redirect_uri,
+  // inform the user, do not redirect).
+  // Public and unauthenticated; the redirect_uri answer is a (low-value)
+  // oracle, so the route carries the opt-in limiter like the other public ones.
+  app.get("/v1/oauth/app-info", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const parsed = appInfoQuery.safeParse(req.query)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }
+    const { client_id: clientId, redirect_uri: redirectUri } = parsed.data
     const dApp = await findAppByClientId(clientId)
     if (!dApp) {
       return reply.status(404).send({ error: { code: "not_found", message: "Unknown client_id or app suspended" } })
     }
     // Return only public-safe fields — no secret, no full origin list, no owner_user_id.
     // `kind` lets the consent UI warn for self-claimed dynamic_mcp clients (RFC 7591 DCR).
+    // The registered list itself is never returned; only a yes/no about the one asked.
+    const redirectUriRegistered =
+      redirectUri === undefined ? null : (dApp.redirect_uris as string[]).includes(redirectUri)
     return reply.send({
       name: dApp.name ?? "Unnamed App",
       description: dApp.description ?? null,
@@ -91,6 +108,7 @@ export async function oauthRoutes(app: FastifyInstance) {
       homepageUrl: dApp.homepage_url ?? null,
       scopesRequested: dApp.scopes_requested,
       kind: dApp.kind ?? "user",
+      redirectUriRegistered,
     })
   })
 
