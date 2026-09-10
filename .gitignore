@@ -73,3 +73,12 @@ a2-sheet.json
 
 # graphify skill scratch output (local absolute paths; never commit)
 graphify-out/
+
+# Scene3D acceptance harness working files.
+#
+# The FIXTURES are acceptance inputs owned by the private planning repository
+# (the exact table prompt, the frozen A/B brief); they are fetched into place,
+# never committed here — this repository is publicly mirrored. The RECEIPTS are
+# the output of paid runs and belong beside those documents, not here.
+tools/scene3d-acceptance/fixtures/
+scene3d-receipts/
