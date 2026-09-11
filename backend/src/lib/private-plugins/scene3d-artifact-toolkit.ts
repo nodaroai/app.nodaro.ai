@@ -67,6 +67,9 @@ export function createScene3DArtifactToolkit(): PluginSceneArtifactToolkit | und
     publishDelivery: async (input) =>
       (await import("../../services/scene3d-artifacts/delivery-publish.js"))
         .publishScene3DDelivery(input, { store, authorizeJob: authorizeScene3DJob }),
+    publishRefusedDelivery: async (input) =>
+      (await import("../../services/scene3d-artifacts/delivery-publish.js"))
+        .publishScene3DRefusedDelivery(input, { store, authorizeJob: authorizeScene3DJob }),
     writeJson: (input, options) => writeScene3DJson(toolkit, input, options),
     // Loaded on use: reading a published revision needs the revision
     // authorizer, whose module graph reaches `workflow-access` — which reaches

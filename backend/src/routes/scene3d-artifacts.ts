@@ -294,8 +294,14 @@ export async function scene3DArtifactRoutes(
       const currentAuth = await authorizeScene3DDelivery(req.userId, params.data.jobId)
       if (!currentAuth.ok) return notFound(reply)
       const delivery = currentAuth.delivery
+      // A `refused-authoring` delivery has no scene behind it — the compiler never produced a
+      // plan, so no revision was published. Reporting its attempt identity as
+      // `sceneRevisionId` would hand the caller a pointer that resolves to 404 on every
+      // revision route; `null` plus the source kind says what actually happened.
+      const refused = delivery.sourceKind === "refused-authoring"
       return reply.header("Cache-Control", "no-store, private").send({
-        deliveryId: delivery.jobId, sceneRevisionId: delivery.sourceRevisionId,
+        deliveryId: delivery.jobId, sceneRevisionId: refused ? null : delivery.sourceRevisionId,
+        sourceKind: delivery.sourceKind,
         sourcePlanSha256: delivery.sourcePlanSha256, sourceContentHash: delivery.sourceContentHash,
         sourceJobId: delivery.sourceJobId, workflowId: delivery.workflowId,
         mode: delivery.mode, createdAt: delivery.createdAt, access: currentAuth.access, assets,

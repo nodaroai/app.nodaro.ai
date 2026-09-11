@@ -312,9 +312,24 @@ on the job, and the report says `failed` too.
   instruction to pay for another authoring pass from the draft's own recipe.
 
 Retaining costs nothing: no extra render, no extra provider call, and the
-settlement is the same one the run would have had. A job that failed *before*
-building anything — a planner refusal, a build the compiler never accepted —
-has no draft to keep, and its `output_data` carries none of the fields above.
+settlement is the same one the run would have had.
+
+**When nothing could be built at all.** If the compiler refused the recipe on
+every pass, there is no scene to keep: no revision, no poster, and no
+`sceneRevisionId` — a composition needs geometry and shots, and none was ever
+produced. What the run *does* have is the planner's final recipe and the
+compiler's reasons for refusing it, and those are kept. `deliveryId` still
+resolves: `GET /v1/3d-scene/deliveries/{jobId}` answers for the owner with
+`sourceKind: "refused-authoring"` and `sceneRevisionId: null`, and
+`output_data.validation` is `{ status: "failed", scope: "authored", phase,
+reportAssetId, passes, warnings[] }`, where `phase` says which stage kept
+refusing — `build` when the compiler would not build the recipe, `planning`
+when its grammar would not admit one. Each warning is one refusal, naming the
+path in the recipe it pointed at where it gave one. The
+report artifact holds the full set, refusal by refusal. The recipe is retained
+for re-authoring rather than offered as a download. A job that failed before
+any of that — the planner itself refused, or was never reached — has nothing
+to keep, and its `output_data` carries none of these fields.
 
 The scene instruction supports [prompt pre/post text](../../prompt-pre-post-text.md), applied by the canvas when it submits the instruction.
 

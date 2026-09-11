@@ -51,7 +51,24 @@ export async function loadScene3DDeliveryArtifacts(jobId: string): Promise<Scene
 }
 
 export async function callScene3DPublishDelivery(payload: Record<string, unknown>): Promise<"created" | "unchanged"> {
-  const { data, error } = await supabase.rpc("scene3d_publish_delivery", { payload })
+  return callDeliveryRpc("scene3d_publish_delivery", payload)
+}
+
+/**
+ * The refused lane has its OWN function, deliberately.
+ *
+ * `scene3d_publish_delivery` settles deliveries that follow a paid render, and its
+ * plan/poster/revision rules are what keep that honest. Widening them with a branch would
+ * relax them for every caller; a separate function repeats only the structural guards — the
+ * parent row lock, the owner match, the active-job requirement and the exact-replay
+ * comparison — and shares none of the evidence rules.
+ */
+export async function callScene3DPublishRefusedDelivery(payload: Record<string, unknown>): Promise<"created" | "unchanged"> {
+  return callDeliveryRpc("scene3d_publish_refused_delivery", payload)
+}
+
+async function callDeliveryRpc(fn: string, payload: Record<string, unknown>): Promise<"created" | "unchanged"> {
+  const { data, error } = await supabase.rpc(fn, { payload })
   if (error) throw error
   if (data !== "created" && data !== "unchanged") {
     throw new Scene3DArtifactError("SCENE_STORAGE_FAILED", "Scene delivery publication returned no result")

@@ -9,7 +9,7 @@ vi.mock("@/lib/workflow-access.js", async (original) => ({
 import { workflowAccess } from "../../lib/workflow-access.js"
 import { scene3DArtifactRoutes } from "../scene3d-artifacts.js"
 import { scene3DArtifactObjectKey } from "../../services/scene3d-artifacts/object-keys.js"
-import { deliveryFixture, OWNER, OTHER, JOB, REV, WF, SOURCE_WF, POSTER, REPORT } from "../../services/scene3d-artifacts/__tests__/delivery-fixture.js"
+import { deliveryFixture, refusedDeliveryFixture, OWNER, OTHER, JOB, REV, WF, SOURCE_WF, POSTER, REPORT, SOURCE_JSON } from "../../services/scene3d-artifacts/__tests__/delivery-fixture.js"
 
 let fixture: ReturnType<typeof deliveryFixture>
 let app: FastifyInstance
@@ -144,5 +144,59 @@ describe("retained delivery reads", () => {
   it("fails rather than returning a partial metadata list on storage errors", async () => {
     fixture.db.failTable("scene3d_delivery_artifacts", "connection dropped")
     expect((await get()).statusCode).toBe(502)
+  })
+})
+
+/**
+ * A Pro run whose recipe never compiled retains a delivery with no scene behind it.
+ *
+ * The route has to be honest about that in both directions: it must SERVE the refusal report
+ * to the people the parent job belongs to (the whole point — before this, `GET
+ * /v1/3d-scene/deliveries/{jobId}` answered 404 and the compiler's reasons were unreachable),
+ * and it must not hand back a `sceneRevisionId` pointing at a revision that was never
+ * published, nor expose the private recipe it pins only so retention keeps it.
+ */
+describe("refused authoring delivery reads", () => {
+  let refused: ReturnType<typeof refusedDeliveryFixture>
+  let refusedApp: FastifyInstance
+  beforeEach(async () => {
+    refused = refusedDeliveryFixture(); refused.published(); fake.current = refused.db
+    refusedApp = Fastify({ logger: false })
+    refusedApp.addHook("preHandler", async (req) => {
+      if (typeof req.headers["x-user-id"] === "string") req.userId = req.headers["x-user-id"]
+    })
+    await refusedApp.register(async (instance) => scene3DArtifactRoutes(instance, { store: refused.store }))
+    await refusedApp.ready()
+  })
+  afterEach(async () => { await refusedApp.close() })
+  const read = (suffix = "", userId: string | null = OWNER) => refusedApp.inject({
+    method: "GET", url: `/v1/3d-scene/deliveries/${JOB}${suffix}`,
+    headers: { ...(userId ? { "x-user-id": userId } : {}) },
+  })
+
+  it("serves the refusal evidence to the owner, naming no scene it never built", async () => {
+    vi.mocked(workflowAccess).mockResolvedValue("own")
+    const res = await read()
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body).toMatchObject({ deliveryId: JOB, sceneRevisionId: null,
+      sourceKind: "refused-authoring", sourcePlanSha256: null, mode: "authored" })
+    // The report is the evidence; the recipe is retained, not published.
+    expect(body.assets).toHaveLength(1)
+    expect(body.assets[0]).toMatchObject({ assetId: REPORT, kind: "validation-report", usage: "validation" })
+    expect(JSON.stringify(body)).not.toContain(SOURCE_JSON)
+  })
+
+  it("serves the report's bytes to the owner and never the retained recipe's", async () => {
+    vi.mocked(workflowAccess).mockResolvedValue("own")
+    expect((await read(`/assets/${REPORT}`)).statusCode).toBe(200)
+    expect((await read(`/assets/${SOURCE_JSON}`)).statusCode).toBe(404)
+  })
+
+  it("is invisible to anyone else", async () => {
+    vi.mocked(workflowAccess).mockResolvedValue("none")
+    expect((await read("", OTHER)).statusCode).toBe(404)
+    expect((await read(`/assets/${REPORT}`, OTHER)).statusCode).toBe(404)
+    expect((await read("", null)).statusCode).toBe(401)
   })
 })

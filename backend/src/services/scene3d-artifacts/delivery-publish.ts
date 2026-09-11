@@ -1,9 +1,9 @@
 import { scene3DAnyPlanSchema } from "@nodaro/shared"
 import { isScene3DId, assertScene3DArtifactObjectKey } from "./object-keys.js"
 import { SCENE3D_ARTIFACT_KIND_USAGE, Scene3DArtifactError } from "./types.js"
-import { SCENE3D_DELIVERY_KINDS, type Scene3DDeliveryPublishInput, type Scene3DDeliveryPublishResult } from "./delivery-types.js"
+import { SCENE3D_DELIVERY_KINDS, type Scene3DDeliveryPublishInput, type Scene3DDeliveryPublishResult, type Scene3DRefusedDeliveryPublishInput } from "./delivery-types.js"
 import { authorizeScene3DDelivery } from "./delivery-authorize.js"
-import { callScene3DPublishDelivery, loadScene3DDelivery, loadScene3DDeliveryArtifacts } from "./delivery-db.js"
+import { callScene3DPublishDelivery, callScene3DPublishRefusedDelivery, loadScene3DDelivery, loadScene3DDeliveryArtifacts } from "./delivery-db.js"
 import { loadScene3DPinnedArtifact, loadScene3DUploadIntent } from "./db.js"
 import { resolveScene3DDeliverySource } from "./delivery-source.js"
 import { assertScene3DShotStillClaims, scene3DShotStillDimensions } from "./shot-stills.js"
@@ -159,4 +159,101 @@ export async function publishScene3DDelivery(
   } catch (error) {
     throw translateScene3DSqlError(error, "Could not publish scene delivery")
   }
+}
+
+/**
+ * The delivery a Pro run publishes when its recipe never compiled.
+ *
+ * Everything the paid lane verifies about EVIDENCE is absent here because the evidence
+ * itself is: no plan (the compiler never produced one), no poster (nothing was rendered),
+ * no revision (a v2 manifest needs assets and shots). What remains is the planner's final
+ * recipe and the compiler's reasons, and the point of this function is that those reach
+ * their owner rather than expiring unpinned in the bucket.
+ *
+ * Everything the paid lane verifies about AUTHORITY is kept, and kept the same way: the
+ * artifacts must be this parent's own reservations at this attempt identity, their bytes are
+ * read back and digest-checked before the write, and the RPC takes the parent row lock, then
+ * refuses a delivery for a job that is no longer running. That last check is why a late
+ * worker — one that lost its lease and finished after the verdict settled — cannot publish
+ * over a settled row, and why a replay adopts the identical delivery instead of duplicating it.
+ *
+ * The recipe is pinned but NOT readable: `source-json` is a `checkpoint` artifact, absent
+ * from `SCENE3D_DELIVERY_KINDS` and from both user-visible read lanes, so the delivery routes
+ * neither list it nor serve its bytes. Pinning it is retention (the GC sweep spares what a
+ * delivery pins), not publication.
+ */
+export async function publishScene3DRefusedDelivery(
+  input: Scene3DRefusedDeliveryPublishInput,
+  deps: { store: Scene3DObjectStore; authorizeJob: (scope: { jobId: string; userId: string }) => Promise<{ workflowId: string | null }> },
+): Promise<Scene3DDeliveryPublishResult> {
+  if (![input.jobId, input.userId, input.revisionId].every(isScene3DId)) invalid("Scene delivery IDs must be UUIDs")
+  if (input.source?.kind !== "refused-authoring" || input.mode !== "authored") invalid("Unknown scene delivery source or mode")
+  if (!Array.isArray(input.artifacts) || input.artifacts.length < 1 || input.artifacts.length > 2
+    || new Set(input.artifacts.map((a) => a.artifactId)).size !== input.artifacts.length
+    || input.artifacts.filter((a) => a.kind === "validation-report").length !== 1
+    || input.artifacts.some((a) => a.kind !== "validation-report" && a.kind !== "source-json")) {
+    invalid("A refused scene delivery requires its validation report")
+  }
+  for (const entry of input.artifacts) {
+    if (!isScene3DId(entry.artifactId) || !/^[a-f0-9]{64}$/.test(entry.sha256)
+      || !Number.isSafeInteger(entry.byteLength) || entry.byteLength <= 0) {
+      invalid("Invalid scene delivery artifact descriptor")
+    }
+  }
+  const existing = await replayRefused(input)
+  if (existing) return existing
+  await deps.authorizeJob(input)
+  const rows: Record<string, unknown>[] = []
+  for (const entry of input.artifacts) {
+    const objectKey = assertScene3DArtifactObjectKey(entry.objectKey, input.userId, input.revisionId, entry.artifactId, entry.kind)
+    const intent = await loadScene3DUploadIntent(entry.artifactId, input.userId)
+    if (!intent) {
+      const concurrentPublication = await replayRefused(input)
+      if (concurrentPublication) return concurrentPublication
+    }
+    if (!intent || intent.jobId !== input.jobId || intent.revisionId !== input.revisionId
+      || intent.kind !== entry.kind || intent.bucket !== deps.store.bucket || intent.objectKey !== objectKey) {
+      throw new Scene3DArtifactError("SCENE_ASSET_MISSING", "Scene delivery artifact is not reserved by this parent")
+    }
+    const receipt = await verifyScene3DArtifactBytes(deps.store, objectKey, entry)
+    if (intent.receipt && (intent.receipt.sha256 !== entry.sha256 || intent.receipt.byteLength !== entry.byteLength
+      || intent.receipt.etag !== receipt.etag)) conflict("Scene delivery artifact differs from its receipt")
+    rows.push({ artifact_id: entry.artifactId, artifact_owner_id: input.userId, kind: entry.kind,
+      usage: SCENE3D_ARTIFACT_KIND_USAGE[entry.kind], sha256: entry.sha256, byte_length: entry.byteLength,
+      bucket: deps.store.bucket, object_key: objectKey, etag: receipt.etag })
+  }
+  // Transfers may take time. Ask the parent's authority again before the atomic write.
+  await deps.authorizeJob(input)
+  try {
+    const status = await callScene3DPublishRefusedDelivery({ job_id: input.jobId, user_id: input.userId,
+      source_revision_id: input.revisionId, artifacts: rows })
+    return { deliveryId: input.jobId, revisionId: input.revisionId, status, artifactIds: input.artifacts.map((a) => a.artifactId) }
+  } catch (error) {
+    throw translateScene3DSqlError(error, "Could not publish scene delivery")
+  }
+}
+
+/** Same rule as the paid lane: an identical republication adopts, anything else conflicts. */
+async function replayRefused(input: Scene3DRefusedDeliveryPublishInput): Promise<Scene3DDeliveryPublishResult | null> {
+  const existing = await loadScene3DDelivery(input.jobId)
+  if (!existing) return null
+  const auth = await authorizeScene3DDelivery(input.userId, input.jobId)
+  if (!auth.ok || existing.userId !== input.userId) {
+    throw new Scene3DArtifactError("SCENE_ASSET_MISSING", "Scene delivery is unavailable")
+  }
+  if (existing.sourceKind !== "refused-authoring" || existing.sourceRevisionId !== input.revisionId
+    || existing.sourcePlanSha256 !== null || existing.mode !== "authored") {
+    conflict("Scene delivery already exists with different content")
+  }
+  const artifacts = await loadScene3DDeliveryArtifacts(input.jobId)
+  if (artifacts.length !== input.artifacts.length) conflict("Scene delivery already exists with different artifacts")
+  for (const entry of input.artifacts) {
+    const artifact = artifacts.find((a) => a.artifactId === entry.artifactId)
+    if (!artifact || artifact.kind !== entry.kind || artifact.sha256 !== entry.sha256
+      || artifact.byteLength !== entry.byteLength || artifact.viaRevisionId !== null
+      || (entry.objectKey !== undefined && entry.objectKey !== artifact.objectKey)) {
+      conflict("Scene delivery already exists with different artifacts")
+    }
+  }
+  return { deliveryId: input.jobId, revisionId: input.revisionId, status: "unchanged", artifactIds: input.artifacts.map((a) => a.artifactId) }
 }
