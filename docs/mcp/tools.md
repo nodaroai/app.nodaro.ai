@@ -726,7 +726,7 @@ hand-maintained; if the two ever disagree, the tool description is right.
 
 | Tool | Description |
 |------|-------------|
-| `generate_music` | Text-to-music generation (Suno v4/v5 via KIE). Accepts `prompt`, `genre`, `mood`, `duration`, `model`. Also accepts `presetId` (from `list_node_presets { nodeType: "generate-music" }`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
+| `generate_music` | Text-to-music generation (Suno via KIE). Accepts `prompt`, `genre`, `mood`, `duration`, `model` — `suno-v6` (default; greater musical expression, more natural vocals, richer details), `suno-v6_wild` (bolder, more distinctive, less predictable), `suno-v6_mini` (lightweight and fast), `suno-v5_5` (alias `suno-v5-5`), `suno-v5`, `suno`; `minimax` for short instrumental loops. Also accepts `presetId` (from `list_node_presets { nodeType: "generate-music" }`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
 | `generate_speech` | Text-to-speech. Accepts `text`, `voice_id`, `model`. Supports ElevenLabs v3 (default), turbo, and multilingual v2. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-speech" }`) to apply a built-in delivery preset (speed/stability/style) server-side; explicit fields override it, and `text` is always required (presets tune delivery; a preset's `promptPrefix` / `promptSuffix` wrap your `text`). |
 | `generate_dialogue` | Multi-speaker dialogue as ONE audio file (ElevenLabs Dialogue v3, direct API). Accepts `dialogue` — an ordered array of `{ text, voice_id }` lines (premade names or cloned/library UUIDs, mixed casts fine; `[audio tags]` allowed in line text) — plus optional `stability` (0 / 0.5 / 1), `language_code`, `seed`, `apply_text_normalization`. Limits: 5,000 chars total across lines, 10 unique voices. Use it instead of stitching per-line `generate_speech` calls. |
 | `text_to_audio` | Text-to-sound-effect (ElevenLabs SFX). Accepts `prompt` and optional `duration`. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-audio" }`) to apply a built-in or saved preset's config server-side; any explicit field overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
@@ -754,7 +754,7 @@ All Suno tools require `workflows:execute`.
 
 | Tool | Description |
 |------|-------------|
-| `suno_generate` | Generate a new song from a prompt or lyrics using Suno v4/v5. |
+| `suno_generate` | Generate a new song from a prompt or lyrics using Suno (`model`: `V6` default, `V6_WILD`, `V6_MINI`, `V5_5`, `V5`, `V4_5PLUS`, `V4_5ALL`, `V4_5`, `V4`). |
 | `suno_lyrics` | Generate song lyrics from a prompt. |
 | `suno_extend` | Extend an existing Suno song clip. |
 | `suno_cover` | Generate a cover version of a song. |

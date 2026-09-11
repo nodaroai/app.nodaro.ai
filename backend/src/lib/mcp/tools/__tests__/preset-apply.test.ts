@@ -357,12 +357,12 @@ describe("generate_music preset application", () => {
   // `suno-v5-5` → suno dispatch path, serialized as `model: "V5_5"` in the body.
   // Drop the `?? "suno-v5-5"` fallback and `effective.model` is undefined →
   // `modelId` undefined → isSuno false → this would route to minimax instead.
-  it("dispatches the in-handler default model (suno-v5-5 → suno path, body model V5_5) with no preset and no model", async () => {
+  it("dispatches the in-handler default model (suno-v6 → suno path, body model V6) with no preset and no model", async () => {
     const { result, sunoBody, minimaxBody } = await runGenerateMusic({ prompt: "x" })
 
     expect(result.isError).toBeUndefined()
     // The default routes to the SUNO path with the serialized version id.
-    expect(sunoBody?.model).toBe("V5_5")
+    expect(sunoBody?.model).toBe("V6")
     expect(sunoBody?.prompt).toBe("x")
     // The non-default (minimax) route must NOT have been used.
     expect(minimaxBody).toBeUndefined()

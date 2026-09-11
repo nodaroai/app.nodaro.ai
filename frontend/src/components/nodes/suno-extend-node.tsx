@@ -4,7 +4,7 @@ import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { FastForward, Loader2, AlertCircle, Volume2, LayoutGrid, Type, Mic } from "lucide-react"
-import { sunoCreditType } from "@nodaro/shared"
+import { sunoCreditType, DEFAULT_SUNO_MODEL } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -149,7 +149,7 @@ function SunoExtendNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="flex justify-between text-muted-foreground">
-          <span className="text-xs">Extend · {nodeData.model ?? "V5"}</span>
+          <span className="text-xs">Extend · {nodeData.model ?? DEFAULT_SUNO_MODEL}</span>
           {nodeData.title && <span className="text-xs truncate max-w-[120px]">{nodeData.title}</span>}
         </div>
       </div>

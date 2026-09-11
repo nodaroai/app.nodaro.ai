@@ -10,6 +10,9 @@ describe("modelToNodeTarget", () => {
     expect(modelToNodeTarget("suno")).toEqual({ nodeType: "suno-generate", field: "model", value: "V4" })
     expect(modelToNodeTarget("suno-v5")).toEqual({ nodeType: "suno-generate", field: "model", value: "V5" })
     expect(modelToNodeTarget("suno-v5_5")).toEqual({ nodeType: "suno-generate", field: "model", value: "V5_5" })
+    expect(modelToNodeTarget("suno-v6")).toEqual({ nodeType: "suno-generate", field: "model", value: "V6" })
+    expect(modelToNodeTarget("suno-v6_wild")).toEqual({ nodeType: "suno-generate", field: "model", value: "V6_WILD" })
+    expect(modelToNodeTarget("suno-v6_mini")).toEqual({ nodeType: "suno-generate", field: "model", value: "V6_MINI" })
   })
   // `elevenlabs-dubbing` is a single-provider utility whose id is NOT in any
   // provider-enum array, so it exercises the modes fallback → bare node, no preset.

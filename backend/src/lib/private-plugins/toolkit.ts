@@ -97,7 +97,7 @@ import { extractTailToFile } from "../../providers/video/extract-tail.js"
 import { llmCompleteStructured } from "../llm-client.js"
 import type { FastifyInstance } from "fastify"
 import type { LlmReasoningEffort } from "@nodaro/shared"
-import { ENTITY_TABLE, WORKSPACE_HEADER_LOWER } from "@nodaro/shared"
+import { ENTITY_TABLE, WORKSPACE_HEADER_LOWER, DEFAULT_SUNO_MODEL } from "@nodaro/shared"
 import type { EntityNodeKind } from "@nodaro/shared"
 import { WORKFLOW_ACCESS_COLS, loadWorkflowFor, loadStudioEditableCopySource } from "../workflow-route-access.js"
 import { writeCompatible } from "../compatible-workflow-writes.js"
@@ -258,7 +258,7 @@ async function pluginGenerateImage(
   return { url: result.url, taskId: result.kieTaskId }
 }
 
-/** Suno's documented ceilings for the model this wrapper pins (V5_5, custom
+/** Suno's documented ceilings for the model this wrapper pins (DEFAULT_SUNO_MODEL = V6, custom
  *  mode): style 1000, title 80, lyrics/prompt 5000, duration 10–360s
  *  (docs.kie.ai/suno-api/generate-music). Trimmed rather than rejected — the
  *  caller is a render pipeline mid-flight, and a track trimmed by a character
@@ -282,7 +282,7 @@ const SUNO_DURATION_MAX = 360
  * DESCRIPTION mode: `prompt` is a brief, the model invents the song, and the
  * provider ignores `duration`. With a `title` AND `style` it is CUSTOM mode,
  * where `prompt` is the EXACT LYRICS, `style` is the musical description, and
- * `duration` is honoured (V5_5 only, per the send-gate in sunoGenerate).
+ * `duration` is honoured (V6 family only, per the send-gate in sunoGenerate).
  *
  * WHY IT MATTERS: description mode with `instrumental: false` makes Suno
  * invent lyrics ABOUT the brief — a scat-ensemble recast briefed with
@@ -305,7 +305,7 @@ async function pluginGenerateMusic(
   const result = await sunoGenerate(
     {
       prompt: custom ? prompt.slice(0, SUNO_CUSTOM_LYRICS_MAX) : prompt,
-      model: "V5_5",
+      model: DEFAULT_SUNO_MODEL,
       customMode: custom,
       instrumental: options?.instrumental !== false,
       ...(style ? { style: custom ? style.slice(0, SUNO_CUSTOM_STYLE_MAX) : style } : {}),
@@ -315,8 +315,8 @@ async function pluginGenerateMusic(
         : {}),
     },
     // Thread OUR Nodaro key so the egress seam attributes this billed create
-    // (model is pinned V5_5 → "suno-v5_5"); spread keeps any onTaskCreated.
-    { ...toReconcileOpts(options), modelKey: sunoCreditType("V5_5", "suno-generate") },
+    // (model is pinned to DEFAULT_SUNO_MODEL → its version key); spread keeps any onTaskCreated.
+    { ...toReconcileOpts(options), modelKey: sunoCreditType(DEFAULT_SUNO_MODEL, "suno-generate") },
   )
   const track = result.tracks[0]
   if (!track?.audioUrl) {

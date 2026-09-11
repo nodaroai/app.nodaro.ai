@@ -1,7 +1,7 @@
 import type { Node, Edge } from "@xyflow/react"
 import { MODIFY_IMAGE_PROVIDERS, OVERLAY_ANCHORS } from "@nodaro/shared"
 import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
-import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference, OverlayLayerKind, OverlayTextStyle, OverlayQrStyle, OverlayShapeStyle, OverlayImageEffects, OverlayAnchor } from "@nodaro/shared"
+import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, SunoAddTrackModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference, OverlayLayerKind, OverlayTextStyle, OverlayQrStyle, OverlayShapeStyle, OverlayImageEffects, OverlayAnchor } from "@nodaro/shared"
 import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, PersonValue, PickerApplyMode, PickerGaps, DirectionFields, StructuredPromptFields } from "@nodaro/prompts"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
@@ -2851,7 +2851,8 @@ export type SunoGenerateData = PromptAffixFields & {
   customMode?: boolean
   advancedOpen?: boolean
   instrumental?: boolean
-  /** Song length in seconds (10-360). KIE honors it only in custom mode on V5_5. */
+  /** Song length in seconds (10-360). KIE honors it only in custom mode on the
+   *  V6 family (V6 / V6_WILD / V6_MINI) — see sunoModelHonoursDuration(). */
   duration?: number
   personaId?: string
   personaModel?: SunoPersonaModel
@@ -3047,7 +3048,7 @@ export type SunoStyleBoostData = PromptAffixFields & {
 export type SunoAddInstrumentalData = {
   [key: string]: unknown
   label: string
-  model: "V4_5PLUS" | "V5" | "V5_5"
+  model: SunoAddTrackModel
   /** Manual Suno task ID (auto-filled from a connected Suno node when wired) */
   taskId?: string
   /** Manual Suno audio/track ID (auto-filled from a connected Suno node when wired) */
@@ -3065,7 +3066,7 @@ export type SunoAddInstrumentalData = {
 export type SunoAddVocalsData = {
   [key: string]: unknown
   label: string
-  model: "V4_5PLUS" | "V5" | "V5_5"
+  model: SunoAddTrackModel
   /** Manual Suno task ID (auto-filled from a connected Suno node when wired) */
   taskId?: string
   /** Manual Suno audio/track ID (auto-filled from a connected Suno node when wired) */
@@ -7404,6 +7405,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       status: "idle",
     } as SunoVoiceData,
   },
+  // Suno defaults use the literal "V6" (== DEFAULT_SUNO_MODEL): backend/scripts/gen-skills parses
+  // NODE_DEFINITIONS textually and cannot resolve identifiers. Guarded by suno-model-picker.test.tsx.
   {
     type: "suno-generate",
     label: "Suno Generate",
@@ -7411,7 +7414,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["prompt", "audio-style", "voice", "field-style", "field-lyrics", "field-title", "field-negativeStyle"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Generate", prompt: "", model: "V5_5", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoGenerateData,
+    defaultData: { label: "Suno Generate", prompt: "", model: "V6", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoGenerateData,
   },
   {
     type: "suno-cover",
@@ -7420,7 +7423,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["audio", "prompt", "voice"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Cover", prompt: "", model: "V5_5", uploadUrl: "", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoCoverData,
+    defaultData: { label: "Suno Cover", prompt: "", model: "V6", uploadUrl: "", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoCoverData,
   },
   {
     type: "suno-extend",
@@ -7429,7 +7432,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["audio", "prompt", "voice"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Extend", audioId: "", defaultParamFlag: true, prompt: "", model: "V5_5", style: "", title: "", continueAt: 0, negativeStyle: "", fieldMappings: {} } as SunoExtendData,
+    defaultData: { label: "Suno Extend", audioId: "", defaultParamFlag: true, prompt: "", model: "V6", style: "", title: "", continueAt: 0, negativeStyle: "", fieldMappings: {} } as SunoExtendData,
   },
   {
     type: "suno-lyrics",
@@ -7465,7 +7468,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 4,
     inputs: ["audio1", "audio2"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Mashup", model: "V5_5", customMode: false, style: "", title: "", negativeStyle: "", vocalGender: "", fieldMappings: {} } as SunoMashupData,
+    defaultData: { label: "Suno Mashup", model: "V6", customMode: false, style: "", title: "", negativeStyle: "", vocalGender: "", fieldMappings: {} } as SunoMashupData,
   },
   {
     type: "suno-replace-section",
@@ -7492,7 +7495,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 4,
     inputs: ["audio"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Add Instrumental", model: "V5_5", fieldMappings: {} } as SunoAddInstrumentalData,
+    defaultData: { label: "Suno Add Instrumental", model: "V6", fieldMappings: {} } as SunoAddInstrumentalData,
   },
   {
     type: "suno-add-vocals",
@@ -7501,7 +7504,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 4,
     inputs: ["audio"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Add Vocals", model: "V5_5", fieldMappings: {} } as SunoAddVocalsData,
+    defaultData: { label: "Suno Add Vocals", model: "V6", fieldMappings: {} } as SunoAddVocalsData,
   },
   {
     type: "suno-convert-wav",
@@ -7519,7 +7522,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 4,
     inputs: ["audio", "prompt"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Upload Extend", prompt: "", model: "V5_5", style: "", title: "", negativeStyle: "", vocalGender: "", continueAt: 0, defaultParamFlag: true, fieldMappings: {} } as SunoUploadExtendData,
+    defaultData: { label: "Suno Upload Extend", prompt: "", model: "V6", style: "", title: "", negativeStyle: "", vocalGender: "", continueAt: 0, defaultParamFlag: true, fieldMappings: {} } as SunoUploadExtendData,
   },
   {
     type: "transcribe",

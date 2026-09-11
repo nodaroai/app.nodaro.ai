@@ -63,7 +63,7 @@ Credits are reserved on `POST /v1/suno/voice/generate` and committed by the poll
 
 ## Limitations
 
-- KIE's voice/* API is **available on Suno V3 and newer** (V3, V4, V4.5, V5, V5.5). The Suno music nodes default to V5_5 — keep the model at V5/V5.5 for best persona quality.
+- KIE's voice/* API is **available on Suno V3 and newer** (V3, V4, V4.5, V5, V5.5, V6 / V6_WILD / V6_MINI). The Suno music nodes default to `V6`.
 - Voice generation is **asynchronous** — typical end-to-end completion is 30–90 seconds. The modal polls for up to ~4 minutes before timing out.
 - A voice persona is bound to your KIE.ai account. We do not expose any cross-account sharing primitive.
 - The validation phrase is generated per submission and **must be read verbatim** — the verify step does an acoustic match. Mumbling, skipping words, or adding extra speech will fail Step 3.

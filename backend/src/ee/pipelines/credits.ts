@@ -6,7 +6,7 @@ import { mapReserveError, type MappedReserveError } from "../../lib/reserve-erro
 import { allowanceEnforcementActive, deploymentPayerActive } from "../../lib/deployment-payer.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { attemptAutoRecharge } from "../billing/auto-recharge.js"
-import { CHAT_STAGES, CHAT_TURN_CAPS, TIER_MAX_PIPELINE_COST_CREDITS, ShowrunnerPlanSchema, buildVideoCreditModelIdentifier, creditsToUsd, usdToCredits, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode } from "@nodaro/shared"
+import { CHAT_STAGES, CHAT_TURN_CAPS, TIER_MAX_PIPELINE_COST_CREDITS, ShowrunnerPlanSchema, buildVideoCreditModelIdentifier, creditsToUsd, usdToCredits, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode, DEFAULT_SUNO_MODEL, sunoCreditType } from "@nodaro/shared"
 // ee-to-ee static import — allowed (only core/backend/src/lib/** is barred from
 // statically importing ee/**). Direct precedent: scene-helper-credits.ts
 // (same directory) statically imports this same module for the same reason —
@@ -390,13 +390,13 @@ const DIALOGUE_TTS_CREDIT_IDENTIFIER = "elevenlabs-turbo"
 /**
  * Pipeline-level music credit identifier. `runMusicTimeline` (music-timeline.ts)
  * always calls `pipelineGenerateMusic({ provider: "suno" })` without a
- * `modelVersion`, which defaults to Suno V5.5 → credit id "suno-v5_5"
+ * `modelVersion`, which defaults to DEFAULT_SUNO_MODEL (Suno V6 → credit id "suno-v6")
  * (services/pipeline-generate-music.ts). `config.music_model` is accepted by
  * `PipelineConfigSchema` but isn't wired into that call path today — honoring
  * it here would overstate precision the runtime doesn't have, so this
  * constant matches what actually gets reserved.
  */
-const PIPELINE_MUSIC_CREDIT_IDENTIFIER = "suno-v5_5"
+const PIPELINE_MUSIC_CREDIT_IDENTIFIER = sunoCreditType(DEFAULT_SUNO_MODEL, "suno-generate")
 
 /**
  * One scene's contribution to the `animation` breakdown line: one video-gen
@@ -464,7 +464,7 @@ export async function estimateSceneAnimationCredits(
  *     (services/pipeline-animate-shot.ts).
  *   - `speech` — one TTS credit (`elevenlabs-turbo`) per planned dialogue
  *     line (`plan.scenes[].dialogue.length` summed).
- *   - `music` — one Suno credit (`suno-v5_5`) when `config.music_enabled` is
+ *   - `music` — one Suno credit (the default version's key) when `config.music_enabled` is
  *     not `false`, else 0.
  *
  * Every per-item cost is resolved via `getModelCreditCostFromDB` — the SAME

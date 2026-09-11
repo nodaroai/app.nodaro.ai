@@ -20,7 +20,7 @@ const MOCK_CREDIT_COSTS: Record<string, number> = {
   "kling-turbo:5s": 11, // default video model, snapped to the 5s tier
   "kling-turbo:10s": 21, // same model, snapped to the 10s tier
   "elevenlabs-turbo": 2, // fixed TTS identifier (no config override exists)
-  "suno-v5_5": 3, // pipeline-level Suno identifier runMusicTimeline reserves
+  "suno-v6": 3, // pipeline-level Suno identifier runMusicTimeline reserves (DEFAULT_SUNO_MODEL)
 }
 
 beforeEach(() => {
@@ -137,7 +137,7 @@ describe("estimateSeededPipelineCredits", () => {
     })
 
     expect(result.breakdown.music).toBe(0)
-    expect(getModelCreditCostFromDB).not.toHaveBeenCalledWith("suno-v5_5")
+    expect(getModelCreditCostFromDB).not.toHaveBeenCalledWith("suno-v6")
     // Same as above minus the 40cr music allocation: 610 - 40 = 570
     expect(result.breakdown.pipelineUpfront).toBe(570)
     expect(result.totalCredits).toBe(570 + 6 + 66 + 8 + 0)

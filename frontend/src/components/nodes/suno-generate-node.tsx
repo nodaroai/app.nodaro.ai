@@ -4,7 +4,7 @@ import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Music, Loader2, AlertCircle, Volume2, Type, LayoutGrid, Sparkles, Mic, Copy, Check } from "lucide-react"
-import { SUNO_FIELD_HANDLE_FIELDS, sunoCreditType } from "@nodaro/shared"
+import { SUNO_FIELD_HANDLE_FIELDS, sunoCreditType, DEFAULT_SUNO_MODEL } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -253,7 +253,7 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="flex justify-between text-muted-foreground">
-          <span className="text-xs">Suno {nodeData.model ?? "V5"}</span>
+          <span className="text-xs">Suno {nodeData.model ?? DEFAULT_SUNO_MODEL}</span>
           {nodeData.title && <span className="text-xs truncate max-w-[120px]">{nodeData.title}</span>}
         </div>
 

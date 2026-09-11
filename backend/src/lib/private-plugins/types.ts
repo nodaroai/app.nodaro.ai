@@ -186,7 +186,7 @@ export interface PluginImageGenResult {
  *
  * CUSTOM MODE (a `title` is supplied) changes what the fields MEAN: `prompt`
  * becomes the EXACT LYRICS, `style` carries the musical description, and
- * `duration` is honoured (V5_5). Measured on a scat-ensemble recast: in
+ * `duration` is honoured (V6 family). Measured on a scat-ensemble recast: in
  * description mode with `instrumental: false`, Suno reads our prose as the
  * song's SUBJECT — a brief describing "singers swaying and tapping feet" came
  * back singing "step-step sway on through … feet go tap" in English. A source
@@ -197,11 +197,11 @@ export interface PluginImageGenResult {
 export interface PluginMusicGenOptions {
   /** Style tags riding alongside the brief ("cinematic orchestral, 120 BPM").
    *  In custom mode this is Suno's `style` — the musical description, ≤1000
-   *  chars on V4_5+/V5/V5_5 (the wrapper trims). */
+   *  chars on V6 / V4_5+ / V5 / V5_5 (the wrapper trims). */
   style?: string
   /** Default TRUE — scores ride instrumental; voices live in the video. */
   instrumental?: boolean
-  /** Advisory target seconds — EXCEPT in custom mode on V5_5, where it is the
+  /** Advisory target seconds — EXCEPT in custom mode on the V6 family, where it is the
    *  provider's own `duration` (clamped to the documented 10–360s) and the
    *  track is actually generated that long. */
   durationSec?: number

@@ -119,10 +119,10 @@ export const VIDEO_PROMPT_MAX = 8000
 
 /**
  * Suno prompt / lyrics / content ceiling — the LARGEST any Suno version accepts
- * in custom mode (V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5 = 5000). NOT the route
+ * in custom mode (V6 family and V4.5+ / V5 / V5.5 = 5000). NOT the route
  * Zod bound — the routes bind at {@link SUNO_HARD_CEILING} and clamp to the
  * per-version cap via {@link getMaxSunoPromptChars} (3000 non-custom for every
- * version; in custom mode 3000 for V4/V3.5, 5000 for V4.5+/V5) before the job
+ * version; in custom mode 3000 for V4/V3.5, 5000 for V4.5+/V5/V6) before the job
  * is built. This constant is shared with the editor `maxLength` / counter
  * (warn-don't-block at the per-version cap). `style` and `title` have their
  * own caps ({@link getMaxSunoStyleChars} / {@link SUNO_TITLE_MAX}).
@@ -310,9 +310,11 @@ export function getMaxTtsChars(provider: string | undefined): number {
  * SUNO_TEXT_MAX} is 5000 today — the largest per-version prompt cap; the
  * route Zod bound is {@link SUNO_HARD_CEILING}.)
  *   - prompt / lyrics: 3000 in non-custom mode (all versions); in custom mode
- *     3000 for V4/V3.5 and 5000 for V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5.
- *   - style: 200 for V4/V3.5, 1000 for V4.5+.
- *   - title: 80 (all versions).
+ *     3000 for V4/V3.5 and 5000 for V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5 and
+ *     the whole V6 family (V6 / V6_WILD / V6_MINI).
+ *   - style: 200 for V4/V3.5, 1000 for V4.5+ and V6.
+ *   - title: 80 (all versions; the extend docs quote 100 for V6 — we keep the
+ *     stricter generate cap so one value is right everywhere).
  */
 export const SUNO_TITLE_MAX = 80
 
@@ -1229,19 +1231,72 @@ export const QA_CHECK_PROVIDERS = [
 ] as const
 export type QaCheckProvider = typeof QA_CHECK_PROVIDERS[number]
 
-/** Suno model versions */
-export const SUNO_MODELS = [
-  "V4",
-  "V4_5",
+/**
+ * The current Suno generation (docs.kie.ai/suno-api/generate-music, 2026-09:
+ * the V6 family), listed first in every picker; V6 is the default.
+ *
+ *   - V6      — flagship: greater musical expression, more natural vocals, richer details.
+ *   - V6_WILD — bolder, more distinctive, less predictable output for exploration.
+ *   - V6_MINI — lightweight and fast; quality/speed balance.
+ *
+ * This is also the set that honours `duration` ({@link SUNO_DURATION_MODELS}).
+ */
+export const SUNO_ACTIVE_MODELS = ["V6", "V6_WILD", "V6_MINI"] as const
+export type SunoActiveModel = typeof SUNO_ACTIVE_MODELS[number]
+
+/**
+ * The earlier Suno generations. Still offered in every picker as ordinary
+ * choices (users report each has its own character), still accepted by every
+ * route, and confirmed generating on 2026-09-11. KIE's docs tag them
+ * "Discontinued"; if KIE ever stops serving one, coerce it to
+ * {@link DEFAULT_SUNO_MODEL} at the provider send seam — never remove it from
+ * {@link SUNO_MODELS}, which would 400 every saved music workflow.
+ */
+export const SUNO_LEGACY_MODELS = [
+  "V5_5",
+  "V5",
   "V4_5PLUS",
   "V4_5ALL",
-  "V5",
-  "V5_5",
+  "V4_5",
+  "V4",
 ] as const
+export type SunoLegacyModel = typeof SUNO_LEGACY_MODELS[number]
+
+/**
+ * Every Suno model version — the picker order, the route / MCP Zod enum and
+ * the `data.model` type on Suno nodes. Current generation first (V6 = default),
+ * then the earlier generations newest-first.
+ */
+export const SUNO_MODELS = [...SUNO_ACTIVE_MODELS, ...SUNO_LEGACY_MODELS] as const
 export type SunoModel = typeof SUNO_MODELS[number]
 
-/** Suno models that support add-instrumental / add-vocals operations */
-export const SUNO_ADD_TRACK_MODELS = ["V4_5PLUS", "V5", "V5_5"] as const
+/** The Suno version used when a caller omits `model` — KIE's own default. */
+export const DEFAULT_SUNO_MODEL = "V6" satisfies SunoActiveModel
+
+export function isLegacySunoModel(model: string | undefined): model is SunoLegacyModel {
+  return (SUNO_LEGACY_MODELS as readonly string[]).includes(model ?? "")
+}
+
+/**
+ * Suno versions that HONOUR `duration` (custom mode only). Per the generate /
+ * extend docs the field "will only take effect when the model is V6, V6_MINI,
+ * or V6_WILD" — V5_5 was struck from that sentence when V6 shipped. The
+ * provider client's send-gate (`sunoGenerate` in suno-client.ts) is the single
+ * chokepoint that consults this set; the editor uses it only to decide whether
+ * to SHOW the duration field.
+ */
+export const SUNO_DURATION_MODELS: ReadonlySet<string> = new Set<SunoModel>(SUNO_ACTIVE_MODELS)
+
+export function sunoModelHonoursDuration(model: string | undefined): boolean {
+  return SUNO_DURATION_MODELS.has(model ?? "")
+}
+
+/**
+ * Suno models accepted by add-instrumental / add-vocals (docs enum: the V6
+ * family plus V4_5PLUS / V5 / V5_5). Same current-then-earlier order as
+ * {@link SUNO_MODELS}.
+ */
+export const SUNO_ADD_TRACK_MODELS = [...SUNO_ACTIVE_MODELS, "V4_5PLUS", "V5", "V5_5"] as const
 export type SunoAddTrackModel = typeof SUNO_ADD_TRACK_MODELS[number]
 
 /** Voice design models */

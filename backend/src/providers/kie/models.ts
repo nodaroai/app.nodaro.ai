@@ -1538,6 +1538,23 @@ export const KIE_MUSIC_MODELS: Record<string, KieModelConfig> = {
     credits: 12,
     cost: 0.06,  // (per generation)
   },
+  // V6 family (2026-09): 12 KIE credits per generate request, same as every
+  // prior version (kie.ai/suno-api "Generate Music costs 12 credits per request").
+  "suno-v6": {
+    model: "suno/v6",
+    credits: 12,
+    cost: 0.06,  // (per generation)
+  },
+  "suno-v6_wild": {
+    model: "suno/v6_wild",
+    credits: 12,
+    cost: 0.06,  // (per generation)
+  },
+  "suno-v6_mini": {
+    model: "suno/v6_mini",
+    credits: 12,
+    cost: 0.06,  // (per generation)
+  },
 }
 
 // =============================================================================

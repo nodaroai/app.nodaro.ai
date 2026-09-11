@@ -15,7 +15,7 @@ import { KIE_API_BASE, createSanitizedError, createUpstreamFailureError, sleep, 
 import { providerFetch, type EgressMeta } from "../egress.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
-import type { SunoModel, SunoAddTrackModel } from "@nodaro/shared"
+import { DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, type SunoModel, type SunoAddTrackModel } from "@nodaro/shared"
 
 export type { SunoModel, SunoAddTrackModel }
 
@@ -76,7 +76,7 @@ export interface SunoGenerateParams {
   instrumental?: boolean
   /**
    * Requested song length in seconds (KIE: 10–360, default 20). KIE only
-   * honors it when customMode is true AND model is V5_5; sunoGenerate gates
+   * honors it when customMode is true AND the model is in the V6 family; sunoGenerate gates
    * the send on exactly those conditions so other models never see it.
    */
   duration?: number
@@ -245,7 +245,7 @@ export interface SunoAddInstrumentalParams {
   taskId: string
   /** Suno audio ID of the track */
   audioId: string
-  /** Model version (V4_5PLUS or V5 only) */
+  /** Model version — SUNO_ADD_TRACK_MODELS (V6 family; legacy V4_5PLUS / V5 / V5_5 still accepted) */
   model?: SunoAddTrackModel
 }
 
@@ -254,7 +254,7 @@ export interface SunoAddVocalsParams {
   taskId: string
   /** Suno audio ID of the track */
   audioId: string
-  /** Model version (V4_5PLUS or V5 only) */
+  /** Model version — SUNO_ADD_TRACK_MODELS (V6 family; legacy V4_5PLUS / V5 / V5_5 still accepted) */
   model?: SunoAddTrackModel
 }
 
@@ -549,7 +549,7 @@ export async function sunoGenerate(
   params: SunoGenerateParams,
   reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
-  const model = params.model ?? "V5_5"
+  const model = params.model ?? DEFAULT_SUNO_MODEL
   const customMode = params.customMode ?? false
   const instrumental = params.instrumental ?? false
 
@@ -581,10 +581,12 @@ export async function sunoGenerate(
   if (params.styleWeight != null) body.style_weight = params.styleWeight
   if (params.weirdnessConstraint != null) body.weirdness_constraint = params.weirdnessConstraint
   if (params.audioWeight != null) body.audio_weight = params.audioWeight
-  // Per docs.kie.ai/suno-api/generate-music: "only effective when custom_mode
-  // is true and model is V5_5" — this send-gate is the single chokepoint, so a
-  // stale duration on a node switched to another model can never leak through.
-  if (params.duration != null && (params.customMode ?? false) && model === "V5_5") {
+  // Per docs.kie.ai/suno-api/generate-music: `duration` "will only take effect
+  // when the model is V6, V6_MINI, or V6_WILD" (custom mode) — V5_5 was struck
+  // from that sentence when V6 shipped. SUNO_DURATION_MODELS (@nodaro/shared)
+  // is the one list; this send-gate is the single chokepoint, so a stale
+  // duration on a node switched to a legacy model can never leak through.
+  if (params.duration != null && (params.customMode ?? false) && sunoModelHonoursDuration(model)) {
     body.duration = params.duration
   }
   if (params.personaId) {
@@ -615,7 +617,7 @@ export async function sunoCover(
   params: SunoCoverParams,
   reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
-  const model = params.model ?? "V5_5"
+  const model = params.model ?? DEFAULT_SUNO_MODEL
 
   const body: Record<string, unknown> = {
     prompt: params.prompt,
@@ -662,7 +664,7 @@ export async function sunoExtend(
   params: SunoExtendParams,
   reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
-  const model = params.model ?? "V5_5"
+  const model = params.model ?? DEFAULT_SUNO_MODEL
 
   // KIE requires `continueAt` whenever `defaultParamFlag` is true, with a value
   // range of "greater than 0" — and rejects the whole request otherwise
@@ -1124,7 +1126,7 @@ export async function sunoMashup(
   params: SunoMashupParams,
   reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
-  const model = params.model ?? "V5_5"
+  const model = params.model ?? DEFAULT_SUNO_MODEL
 
   const body: Record<string, unknown> = {
     upload_url_list: params.uploadUrlList,
@@ -1303,7 +1305,7 @@ export async function sunoAddInstrumental(
   params: SunoAddInstrumentalParams,
   reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
-  const model = params.model ?? "V5_5"
+  const model = params.model ?? DEFAULT_SUNO_MODEL
 
   const body: Record<string, unknown> = {
     taskId: params.taskId,
@@ -1339,7 +1341,7 @@ export async function sunoAddVocals(
   params: SunoAddVocalsParams,
   reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
-  const model = params.model ?? "V5_5"
+  const model = params.model ?? DEFAULT_SUNO_MODEL
 
   const body: Record<string, unknown> = {
     taskId: params.taskId,
@@ -1489,7 +1491,7 @@ export async function sunoUploadExtend(
   params: SunoUploadExtendParams,
   reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
-  const model = params.model ?? "V5_5"
+  const model = params.model ?? DEFAULT_SUNO_MODEL
 
   // Same KIE rule as sunoExtend — see the note there. This endpoint's own
   // defaultParamFlag default is false, but the node data and payload-builder

@@ -848,6 +848,12 @@ describe("CreditsService", () => {
       ])).toBe(30) // suno-v5_5
     })
 
+    it.each(["V6", "V6_WILD", "V6_MINI"])("resolves suno-generate %s to its own version key (30)", (model) => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "suno-generate", data: { model } },
+      ])).toBe(30)
+    })
+
     // The flat-priced Suno operations charge a per-operation key no matter
     // which version the node carries (routes/suno.ts:648, :710, :771, :852,
     // :907, :1016) — and the four with a model select all default to V5_5

@@ -1211,7 +1211,7 @@ describe("suno_cover verb", () => {
     expect(result.isError).toBeUndefined()
     expect(received.body?.prompt).toBe("lo-fi jazz cover")
     expect(received.body?.uploadUrl).toBe("https://a/song.mp3")
-    expect(received.body?.model).toBe("V5")
+    expect(received.body?.model).toBe("V6")
   })
 })
 

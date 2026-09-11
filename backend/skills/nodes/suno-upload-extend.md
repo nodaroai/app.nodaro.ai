@@ -1,7 +1,7 @@
 ---
 node_type: suno-upload-extend
-generated_at: 2026-08-29T19:02:38.766Z
-generated_from: 7dbf4818b
+generated_at: 2026-09-10T23:12:24.907Z
+generated_from: 15c8b1229
 ---
 
 # Suno Upload Extend
@@ -41,7 +41,7 @@ generated_from: 7dbf4818b
 {
   "label": "Suno Upload Extend",
   "prompt": "",
-  "model": "V5_5",
+  "model": "V6",
   "style": "",
   "title": "",
   "negativeStyle": "",
@@ -89,7 +89,7 @@ generated_from: 7dbf4818b
   "data": {
     "label": "Suno Upload Extend",
     "prompt": "",
-    "model": "V5_5",
+    "model": "V6",
     "style": "",
     "title": "",
     "negativeStyle": "",

@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase"
-import { WORKSPACE_HEADER } from "@nodaro/shared"
+import { WORKSPACE_HEADER, DEFAULT_SUNO_MODEL } from "@nodaro/shared"
 import { clearActiveWorkspaceAfterRefusal, getActiveWorkspaceId } from "@/lib/workspace-context"
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
@@ -4285,7 +4285,7 @@ export async function sunoExtendApi(params: {
   const body: Record<string, unknown> = {
     audioId: params.audioId,
     defaultParamFlag: params.defaultParamFlag ?? true,
-    model: params.model || "V5",
+    model: params.model || DEFAULT_SUNO_MODEL,
   }
   if (params.prompt) body.prompt = params.prompt
   if (params.style) body.style = params.style
@@ -4492,7 +4492,7 @@ export async function sunoUploadExtendApi(params: {
     uploadUrl: params.uploadUrl,
     continueAt: params.continueAt,
     defaultParamFlag: params.defaultParamFlag ?? true,
-    model: params.model || "V5",
+    model: params.model || DEFAULT_SUNO_MODEL,
   }
   if (params.prompt) body.prompt = params.prompt
   if (params.style) body.style = params.style

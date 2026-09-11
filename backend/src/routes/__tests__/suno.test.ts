@@ -187,7 +187,7 @@ describe("POST /v1/suno/generate", () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it("returns jobId on success (default model V5_5)", async () => {
+  it("returns jobId on success (default model V6)", async () => {
     const res = await authedPost("/v1/suno/generate", { prompt: "A happy song" })
     expect(res.statusCode).toBe(200)
     expect(res.json().jobId).toBe(TEST_JOB_ID)
@@ -196,7 +196,7 @@ describe("POST /v1/suno/generate", () => {
       expect.objectContaining({
         jobId: TEST_JOB_ID,
         prompt: "A happy song",
-        model: "V5_5",
+        model: "V6",
       }),
     )
   })
@@ -235,7 +235,7 @@ describe("POST /v1/suno/generate", () => {
     )
   })
 
-  it("passes duration to the queue (V5_5 custom mode)", async () => {
+  it("passes duration to the queue (V6 custom mode)", async () => {
     const res = await authedPost("/v1/suno/generate", {
       prompt: "A pop song",
       customMode: true,
@@ -646,12 +646,12 @@ describe("POST /v1/suno/add-instrumental", () => {
       expect.objectContaining({
         taskId: "task-1",
         audioId: "audio-1",
-        model: "V5_5",
+        model: "V6",
       }),
     )
   })
 
-  it("validates model is V4_5PLUS, V5, or V5_5 only", async () => {
+  it("validates model is one of SUNO_ADD_TRACK_MODELS (V4 rejected)", async () => {
     const res = await authedPost("/v1/suno/add-instrumental", {
       taskId: "task-1",
       audioId: "audio-1",

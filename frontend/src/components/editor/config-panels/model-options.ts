@@ -3,7 +3,7 @@ import { creditUnits, creditUnitLabel, formatCreditUnits } from "@/lib/credit-un
 import { isModelUnavailable } from "@/lib/surface-availability"
 import { aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, durationsByMode, creditRangesAll, modelsWithFeature, isFlux2Model, isGvpSupportedProvider, isSeedance2Provider, GVP_SUPPORTED_PROVIDERS, VIDEO_GEN_COLLAPSED_T2V_IDS, type LabeledOption } from "@nodaro/shared"
 import { STYLES, curateEntries } from "@nodaro/prompts"
-import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, TextToVideoProvider, VideoGenProvider, VideoToVideoProvider } from "@nodaro/shared"
+import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, SunoModel, TextToVideoProvider, VideoGenProvider, VideoToVideoProvider } from "@nodaro/shared"
 export { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, NATIVE_NEGATIVE_PROMPT_MODELS, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, IMAGE_MASK_MODE, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "@nodaro/shared"
 export type { ImageMaskMode } from "@nodaro/shared"
 
@@ -616,13 +616,25 @@ export const TTS_MODELS: readonly { value: string; label: string; desc: string }
   { value: "elevenlabs-multilingual", label: "ElevenLabs Multilingual v2", desc: "29 languages, natural delivery" },
 ]
 
-export const SUNO_MODELS: readonly { value: string; label: string; desc: string }[] = [
-  { value: "V4", label: "Suno V4", desc: "Stable, proven music generation" },
-  { value: "V4_5", label: "Suno V4.5", desc: "Improved quality and coherence" },
-  { value: "V4_5ALL", label: "Suno V4.5 All", desc: "Full instrument + vocal generation" },
-  { value: "V4_5PLUS", label: "Suno V4.5 Plus", desc: "Extended duration support" },
-  { value: "V5", label: "Suno V5", desc: "Superior musical expression, faster generation" },
+export type SunoModelOption = { value: SunoModel; label: string; desc: string }
+
+/**
+ * Every Suno version a picker OFFERS, in the order `SUNO_MODELS` (@nodaro/shared)
+ * declares it: the active V6 family first (V6 is `DEFAULT_SUNO_MODEL`), then the
+ * earlier versions, which are still fully selectable. That shared constant is the
+ * source of truth for BOTH membership and order — the table here is display copy
+ * for it, and `__tests__/model-options.test.ts` fails if the two drift.
+ */
+export const SUNO_MODELS: readonly SunoModelOption[] = [
+  { value: "V6", label: "Suno V6", desc: "Greater musical expression with more natural vocals and richer details." },
+  { value: "V6_WILD", label: "Suno V6 Wild", desc: "Pushes creative boundaries for bolder, more distinctive musical expression." },
+  { value: "V6_MINI", label: "Suno V6 Mini", desc: "Lightweight and fast, balancing quality and speed for effortless creation." },
   { value: "V5_5", label: "Suno V5.5", desc: "Custom models tailored to unique taste" },
+  { value: "V5", label: "Suno V5", desc: "Superior musical expression, faster generation" },
+  { value: "V4_5PLUS", label: "Suno V4.5 Plus", desc: "Extended duration support" },
+  { value: "V4_5ALL", label: "Suno V4.5 All", desc: "Full instrument + vocal generation" },
+  { value: "V4_5", label: "Suno V4.5", desc: "Improved quality and coherence" },
+  { value: "V4", label: "Suno V4", desc: "Stable, proven music generation" },
 ]
 
 export const MOTION_TRANSFER_MODELS: readonly { value: MotionTransferProviderType; label: string; desc: string }[] = [

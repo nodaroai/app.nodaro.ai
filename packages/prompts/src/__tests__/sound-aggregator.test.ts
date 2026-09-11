@@ -60,7 +60,7 @@ describe("composeSoundHintFromConnections — Suno Generate", () => {
     expect(out.warnings).toEqual([])
   })
 
-  it("accepts voice-character nodes (Suno V5 supports vocal description)", () => {
+  it("accepts voice-character nodes (Suno V6 supports vocal description)", () => {
     const out = composeSoundHintFromConnections(
       sunoConsumer({ customMode: true }),
       "suno-generate",

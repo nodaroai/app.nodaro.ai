@@ -598,14 +598,29 @@ export const SUNO_SELECT_OPERATIONS = [
  * node badges. It is a billing key — NEVER a KIE provider id — which is what
  * satisfies the B3 egress invariant.
  *
- * V5_5 → "suno-v5_5", V5 → "suno-v5", any other version → the operation key.
- * A non-version-priced operation is returned unchanged.
+ * The version → key map is {@link SUNO_VERSION_CREDIT_KEYS}; a version with no
+ * entry (V4 / V4_5 / V4_5ALL / V4_5PLUS) falls back to the operation key, and a
+ * non-version-priced operation is returned unchanged.
  */
 export function sunoCreditType(model: string | undefined, operation: string): string {
   if (!(SUNO_VERSION_PRICED_OPERATIONS as readonly string[]).includes(operation)) {
     return operation
   }
-  if (model === "V5_5") return "suno-v5_5"
-  if (model === "V5") return "suno-v5"
-  return operation
+  return (model && SUNO_VERSION_CREDIT_KEYS[model]) || operation
+}
+
+/**
+ * Suno version → Nodaro credit key for the version-priced operations. One row
+ * per version that has its own `model_pricing` row / `STATIC_CREDIT_COSTS`
+ * entry / `MODEL_CATALOG` pricing row, so an admin can reprice one version
+ * without touching code. Every ACTIVE version MUST have a row here — guarded
+ * by `__tests__/suno-credit-type.test.ts` (a new active version with no key
+ * would silently bill at the operation key).
+ */
+export const SUNO_VERSION_CREDIT_KEYS: Readonly<Record<string, string>> = {
+  V6: "suno-v6",
+  V6_WILD: "suno-v6_wild",
+  V6_MINI: "suno-v6_mini",
+  V5_5: "suno-v5_5",
+  V5: "suno-v5",
 }

@@ -60,7 +60,7 @@ vi.mock("@/providers/kie/suno-client.js", () => ({
   // Real (pure) impl — the handler uses it to derive the version-aware egress
   // modelKey; mocking it away would make the B3 assertions meaningless.
   sunoCreditType: (model: string | undefined, fallback: string) =>
-    model === "V5_5" ? "suno-v5_5" : model === "V5" ? "suno-v5" : fallback,
+    ({ V6: "suno-v6", V6_WILD: "suno-v6_wild", V6_MINI: "suno-v6_mini", V5_5: "suno-v5_5", V5: "suno-v5" } as Record<string, string>)[model ?? ""] ?? fallback,
 }))
 vi.mock("../../shared.js", () => ({
   commitJobCredits: mocks.mockCommitJobCredits,
@@ -657,6 +657,9 @@ describe("B3 egress: handlers thread OUR modelKey into the create funnel", () =>
 
   // [jobType, jobData, expectedModelKey]
   const cases: Array<[string, Record<string, unknown>, string]> = [
+    ["suno-generate", { prompt: "p", model: "V6" }, "suno-v6"],
+    ["suno-generate", { prompt: "p", model: "V6_WILD" }, "suno-v6_wild"],
+    ["suno-generate", { prompt: "p", model: "V6_MINI" }, "suno-v6_mini"],
     ["suno-generate", { prompt: "p", model: "V5_5" }, "suno-v5_5"],
     ["suno-generate", { prompt: "p", model: "V5" }, "suno-v5"],
     ["suno-generate", { prompt: "p" }, "suno-generate"], // no model → op fallback (mirrors route)

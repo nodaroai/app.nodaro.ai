@@ -7,7 +7,9 @@ import { describe, it, expect, vi } from "vitest"
 const editionMock = vi.hoisted(() => ({ hasCredits: vi.fn(() => true) }))
 vi.mock("@/lib/edition", () => editionMock)
 
+import { SUNO_MODELS as SUNO_MODELS_SHARED } from "@nodaro/shared"
 import {
+  SUNO_MODELS,
   IMAGE_GEN_MODELS,
   IMAGE_I2I_MODELS,
   VIDEO_I2V_MODELS,
@@ -179,5 +181,24 @@ describe("PROVIDERS_WITH_END_FRAME", () => {
 
   it("has no duplicates", () => {
     expect(new Set(PROVIDERS_WITH_END_FRAME).size).toBe(PROVIDERS_WITH_END_FRAME.length)
+  })
+})
+
+/**
+ * Suno: @nodaro/shared owns which versions exist and the order they are offered
+ * in. The dropdown table here is display copy for that list — never a second
+ * source of truth — so both membership and order are pinned to it. Adding or
+ * retiring a version in the shared constant fails this until the picker follows.
+ */
+describe("SUNO_MODELS mirrors the shared list", () => {
+  it("offers exactly SUNO_MODELS from @nodaro/shared, in order", () => {
+    expect(SUNO_MODELS.map((m) => m.value)).toEqual([...SUNO_MODELS_SHARED])
+  })
+
+  it("every row has a label and a desc", () => {
+    for (const m of SUNO_MODELS) {
+      expect(m.label).toBeTruthy()
+      expect(m.desc).toBeTruthy()
+    }
   })
 })

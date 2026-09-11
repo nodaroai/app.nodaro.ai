@@ -735,6 +735,21 @@ describe("buildPayload", () => {
       expect(result.modelIdentifier).toBe("suno-v5")
     })
 
+    // The orchestrator path used to hand-roll `model === "V5" ? "suno-v5" : …`,
+    // which mispriced V5_5 (and would have missed every V6 key). It now goes
+    // through sunoCreditType — the same contract as the route + worker.
+    it.each([
+      ["V6", "suno-v6"],
+      ["V6_WILD", "suno-v6_wild"],
+      ["V6_MINI", "suno-v6_mini"],
+      ["V5_5", "suno-v5_5"],
+    ])("suno-generate %s model → %s via sunoCreditType", (model, key) => {
+      const n = node("n1", "suno-generate", { prompt: "pop", model })
+      expect(buildPayload(n, jobId, {}).modelIdentifier).toBe(key)
+      const c = node("n2", "suno-cover", { prompt: "pop", uploadUrl: "https://x/a.mp3", model })
+      expect(buildPayload(c, jobId, {}).modelIdentifier).toBe(key)
+    })
+
     it("suno-cover", () => {
       const n = node("n1", "suno-cover", {})
       const inputs: ResolvedInputs = { audioUrl: "https://cover.mp3" }

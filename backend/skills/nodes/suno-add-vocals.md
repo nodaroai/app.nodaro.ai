@@ -1,7 +1,7 @@
 ---
 node_type: suno-add-vocals
-generated_at: 2026-08-15T21:55:07.101Z
-generated_from: 150c80ac9
+generated_at: 2026-09-10T23:12:24.889Z
+generated_from: 15c8b1229
 ---
 
 # Suno Add Vocals
@@ -15,7 +15,7 @@ generated_from: 150c80ac9
 
 **Required data fields:**
 - `label: string`
-- `model: "V4_5PLUS" | "V5" | "V5_5"`
+- `model: SunoAddTrackModel`
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
@@ -33,7 +33,7 @@ generated_from: 150c80ac9
 ```json
 {
   "label": "Suno Add Vocals",
-  "model": "V5_5",
+  "model": "V6",
   "fieldMappings": {}
 }
 ```
@@ -68,7 +68,7 @@ generated_from: 150c80ac9
   },
   "data": {
     "label": "Suno Add Vocals",
-    "model": "V5_5",
+    "model": "V6",
     "fieldMappings": {}
   }
 }

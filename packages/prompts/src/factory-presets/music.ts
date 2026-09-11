@@ -401,7 +401,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Mellow focus beat.",
     group: "By Use-Case",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "lo-fi hip-hop, chill and mellow, jazzy Rhodes chords, vinyl crackle, soft boom-bap drums, Andante 80 BPM, instrumental",
     },
@@ -412,7 +412,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Short confident opener.",
     group: "By Use-Case",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "modern podcast intro, upbeat and confident, catchy synth hook, punchy beat, Allegro, instrumental",
     },
@@ -423,7 +423,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Epic orchestral build.",
     group: "By Use-Case",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "epic cinematic trailer, dramatic and intense, full orchestra, taiko drums, brass swells, crescendo into a powerful hit, instrumental",
     },
@@ -434,7 +434,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Bright, motivational.",
     group: "By Use-Case",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "upbeat corporate, optimistic and motivational, bright piano, claps, clean electronic beat, Allegro 120 BPM, instrumental",
     },
@@ -445,7 +445,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Feel-good acoustic bed.",
     group: "By Use-Case",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "feel-good vlog background, light and breezy, acoustic guitar, claps, warm and unobtrusive, Andante, instrumental",
     },
@@ -456,7 +456,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Calm meditative pads.",
     group: "By Use-Case",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "ambient soundscape, calm and meditative, soft evolving synth pads, gentle textures, reverb-heavy, Adagio, instrumental",
     },
@@ -467,7 +467,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Festival build and drop.",
     group: "By Use-Case",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "festival EDM, euphoric and energetic, big supersaw leads, sidechain bass, build-up and powerful drop, Allegro 128 BPM, instrumental",
     },
@@ -478,7 +478,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Playful 8-bit loop.",
     group: "By Use-Case",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "video game chiptune, playful and adventurous, 8-bit synths, catchy melody, energetic, instrumental",
     },
@@ -491,7 +491,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Dusty laid-back groove.",
     group: "By Genre",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "lo-fi hip-hop, jazzy and mellow, dusty Rhodes chords, vinyl warmth, laid-back boom-bap groove, instrumental",
     },
@@ -502,7 +502,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Club-energy four-on-the-floor.",
     group: "By Genre",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "house EDM, energetic and euphoric, four-on-the-floor beat, catchy plucky synths, club energy, Allegro 124 BPM, instrumental",
     },
@@ -513,7 +513,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Driving anthemic guitars.",
     group: "By Genre",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "rock anthem, energetic and driving, distorted electric guitars, pounding drums, anthemic, instrumental",
     },
@@ -524,7 +524,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Late-night sophistication.",
     group: "By Genre",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "smooth jazz, relaxed and sophisticated, warm saxophone, brushed drums, walking bass, late-night, instrumental",
     },
@@ -535,7 +535,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Spacious and serene.",
     group: "By Genre",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "ambient, serene and spacious, lush synth pads, field-recording textures, slow and meditative, instrumental",
     },
@@ -546,7 +546,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Grand cinematic ensemble.",
     group: "By Genre",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "epic orchestral, grand and cinematic, sweeping strings, brass, woodwinds, timpani, dramatic, instrumental",
     },
@@ -557,7 +557,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "80s neon nostalgia.",
     group: "By Genre",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "80s synthwave, nostalgic and cool, retro analog synths, pulsing bass, gated drums, neon, Andante 110 BPM, instrumental",
     },
@@ -568,7 +568,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Groovy and danceable.",
     group: "By Genre",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: true,
       style: "funk and soul, groovy and fun, slap bass, wah guitar, tight horn section, danceable, instrumental",
     },
@@ -581,7 +581,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Catchy vocal pop — add lyrics.",
     group: "Vocals & Songs",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: false,
       style: "upbeat pop, catchy and bright, shimmering synths, four-on-the-floor, female vocals, Allegro 120 BPM, verse-chorus-verse with bridge",
     },
@@ -592,7 +592,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Hard-hitting verses — add bars.",
     group: "Vocals & Songs",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: false,
       style: "modern hip-hop, confident, hard-hitting 808s, trap hi-hats, male rap vocals, verse-hook-verse",
     },
@@ -603,7 +603,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Heartfelt vocals — add lyrics.",
     group: "Vocals & Songs",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: false,
       style: "emotional ballad, tender and heartfelt, piano and strings, soulful vocals, Adagio, verse-chorus with a big bridge",
     },
@@ -614,7 +614,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Soaring chorus — add lyrics.",
     group: "Vocals & Songs",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: false,
       style: "anthemic rock, powerful, driving guitars, big drums, male vocals, soaring chorus, verse-pre-chorus-chorus",
     },
@@ -625,7 +625,7 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     description: "Warm and intimate — add lyrics.",
     group: "Vocals & Songs",
     data: {
-      model: "V5_5",
+      model: "V6",
       instrumental: false,
       style: "acoustic singer-songwriter, warm and intimate, fingerpicked guitar, soft vocals, Andante, verse-chorus",
     },
@@ -636,42 +636,42 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     name: "Trailer Riser / Braam",
     description: "Pure rising tension hit.",
     group: "By Use-Case",
-    data: { model: "V5_5", instrumental: true, style: "cinematic trailer riser and braam, tense and building, rising whoosh into a deep brass impact, no melody, instrumental" },
+    data: { model: "V6", instrumental: true, style: "cinematic trailer riser and braam, tense and building, rising whoosh into a deep brass impact, no melody, instrumental" },
   },
   {
     id: "suno-generate/calm-corporate",
     name: "Calm Corporate / Tech",
     description: "Soft, professional bed.",
     group: "By Use-Case",
-    data: { model: "V5_5", instrumental: true, style: "calm corporate tech, professional and clean, soft synth pads, gentle pulse, Andante, instrumental" },
+    data: { model: "V6", instrumental: true, style: "calm corporate tech, professional and clean, soft synth pads, gentle pulse, Andante, instrumental" },
   },
   {
     id: "suno-generate/holiday",
     name: "Holiday / Festive",
     description: "Warm seasonal cheer.",
     group: "By Use-Case",
-    data: { model: "V5_5", instrumental: true, style: "festive holiday music, warm and cheerful, sleigh bells, warm orchestration, cozy, instrumental" },
+    data: { model: "V6", instrumental: true, style: "festive holiday music, warm and cheerful, sleigh bells, warm orchestration, cozy, instrumental" },
   },
   {
     id: "suno-generate/kids",
     name: "Kids / Children's",
     description: "Playful and simple.",
     group: "By Use-Case",
-    data: { model: "V5_5", instrumental: true, style: "children's music, playful and happy, simple cheerful melody, xylophone and ukulele, bouncy, instrumental" },
+    data: { model: "V6", instrumental: true, style: "children's music, playful and happy, simple cheerful melody, xylophone and ukulele, bouncy, instrumental" },
   },
   {
     id: "suno-generate/meditation-spa",
     name: "Meditation / Spa",
     description: "Healing singing bowls.",
     group: "By Use-Case",
-    data: { model: "V5_5", instrumental: true, style: "meditation and spa, serene and healing, singing bowls, soft drones, Adagio, reverb-heavy, instrumental" },
+    data: { model: "V6", instrumental: true, style: "meditation and spa, serene and healing, singing bowls, soft drones, Adagio, reverb-heavy, instrumental" },
   },
   {
     id: "suno-generate/workout",
     name: "Workout / Gym",
     description: "High-energy motivation.",
     group: "By Use-Case",
-    data: { model: "V5_5", instrumental: true, style: "high-energy workout, motivational and driving, pumping electronic beat, big synths, Allegro 140 BPM, instrumental" },
+    data: { model: "V6", instrumental: true, style: "high-energy workout, motivational and driving, pumping electronic beat, big synths, Allegro 140 BPM, instrumental" },
   },
   // ── More By Genre ────────────────────────────────────────────────────────
   {
@@ -679,42 +679,42 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     name: "Trap Beat",
     description: "Booming 808s, dark.",
     group: "By Genre",
-    data: { model: "V5_5", instrumental: true, style: "trap beat, dark and hard, booming 808s, crisp rapid hi-hats, moody, instrumental" },
+    data: { model: "V6", instrumental: true, style: "trap beat, dark and hard, booming 808s, crisp rapid hi-hats, moody, instrumental" },
   },
   {
     id: "suno-generate/dnb",
     name: "Drum & Bass",
     description: "Fast breakbeats, deep bass.",
     group: "By Genre",
-    data: { model: "V5_5", instrumental: true, style: "drum and bass, fast and energetic, breakbeats, deep rolling bassline, Presto 174 BPM, instrumental" },
+    data: { model: "V6", instrumental: true, style: "drum and bass, fast and energetic, breakbeats, deep rolling bassline, Presto 174 BPM, instrumental" },
   },
   {
     id: "suno-generate/afrobeats",
     name: "Afrobeats",
     description: "Warm syncopated groove.",
     group: "By Genre",
-    data: { model: "V5_5", instrumental: true, style: "afrobeats, groovy and warm, syncopated percussion, warm bass, bright melodies, danceable, instrumental" },
+    data: { model: "V6", instrumental: true, style: "afrobeats, groovy and warm, syncopated percussion, warm bass, bright melodies, danceable, instrumental" },
   },
   {
     id: "suno-generate/country",
     name: "Country / Americana",
     description: "Acoustic, heartfelt.",
     group: "By Genre",
-    data: { model: "V5_5", instrumental: true, style: "country americana, warm and heartfelt, acoustic and slide guitar, storytelling feel, instrumental" },
+    data: { model: "V6", instrumental: true, style: "country americana, warm and heartfelt, acoustic and slide guitar, storytelling feel, instrumental" },
   },
   {
     id: "suno-generate/phonk",
     name: "Phonk",
     description: "Dark drift-phonk for reels.",
     group: "By Genre",
-    data: { model: "V5_5", instrumental: true, style: "drift phonk, dark and aggressive, distorted 808 cowbell, menacing beat, lo-fi grit, instrumental" },
+    data: { model: "V6", instrumental: true, style: "drift phonk, dark and aggressive, distorted 808 cowbell, menacing beat, lo-fi grit, instrumental" },
   },
   {
     id: "suno-generate/reggae",
     name: "Reggae / Dub",
     description: "Laid-back island groove.",
     group: "By Genre",
-    data: { model: "V5_5", instrumental: true, style: "reggae dub, laid-back and sunny, off-beat skank guitar, deep dub bassline, relaxed island groove, instrumental" },
+    data: { model: "V6", instrumental: true, style: "reggae dub, laid-back and sunny, off-beat skank guitar, deep dub bassline, relaxed island groove, instrumental" },
   },
   // ── More Vocals & Songs ──────────────────────────────────────────────────
   {
@@ -722,13 +722,13 @@ export const SUNO_GENERATE_PRESETS: readonly FactoryPreset[] = [
     name: "R&B / Soul (vocal)",
     description: "Smooth soulful vocals — add lyrics.",
     group: "Vocals & Songs",
-    data: { model: "V5_5", instrumental: false, style: "smooth R&B soul, sensual and warm, lush chords, soft drums, soulful vocals, Andante, verse-chorus with ad-libs" },
+    data: { model: "V6", instrumental: false, style: "smooth R&B soul, sensual and warm, lush chords, soft drums, soulful vocals, Andante, verse-chorus with ad-libs" },
   },
   {
     id: "suno-generate/song-kpop",
     name: "K-Pop (vocal)",
     description: "Polished hook — add lyrics.",
     group: "Vocals & Songs",
-    data: { model: "V5_5", instrumental: false, style: "K-pop, polished and energetic, bright synths, punchy drums, layered vocals, Allegro 120 BPM, verse-pre-chorus-chorus" },
+    data: { model: "V6", instrumental: false, style: "K-pop, polished and energetic, bright synths, punchy drums, layered vocals, Allegro 120 BPM, verse-pre-chorus-chorus" },
   },
 ]

@@ -147,14 +147,14 @@ describe("pipelineGenerateMusic", () => {
 
     expect(result.assetUrl).toBe("https://r2/suno.mp3")
     expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
-      "u1", "music-job-1", "suno-v5_5", 0, 0, { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
+      "u1", "music-job-1", "suno-v6", 0, 0, { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
     )
     expect(videoQueue.add).toHaveBeenCalledWith(
       "suno-generate",
       expect.objectContaining({
         jobId: "music-job-1",
         prompt: "cinematic instrumental score",
-        model: "V5_5",
+        model: "V6",
         instrumental: true,
         customMode: false,
       }),

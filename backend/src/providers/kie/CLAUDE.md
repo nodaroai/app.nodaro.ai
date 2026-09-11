@@ -133,6 +133,8 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `omnihuman-1-5` | `omnihuman-1-5` | [omnihuman 1.5](https://kie.ai/model/omnihuman-1-5.md) |
 | `suno` (music) | `suno/v4` | [suno generate](https://docs.kie.ai/suno-api/generate-music.md) |
 | `suno-v5` (music) | `suno/v5` | [suno generate](https://docs.kie.ai/suno-api/generate-music.md) |
+| `suno-v5_5` (music) | `suno/v5_5` | [suno generate](https://docs.kie.ai/suno-api/generate-music.md) |
+| `suno-v6` / `suno-v6_wild` / `suno-v6_mini` (music — current family, V6 = default; the earlier versions stay offered and KIE still serves them even though its docs tag them "Discontinued") | `suno/v6` / `suno/v6_wild` / `suno/v6_mini` | [suno generate](https://docs.kie.ai/suno-api/generate-music.md) |
 | `elevenlabs-turbo` | `elevenlabs/text-to-speech-turbo-2-5` | [11labs turbo](https://docs.kie.ai/market/elevenlabs/text-to-speech-turbo-2-5.md) |
 | `elevenlabs-multilingual` | `elevenlabs/text-to-speech-multilingual-v2` | [11labs multilingual](https://docs.kie.ai/market/elevenlabs/text-to-speech-multilingual-v2.md) |
 | `elevenlabs-sfx` | `elevenlabs/sound-effect-v2` | [11labs sfx](https://docs.kie.ai/market/elevenlabs/sound-effect-v2.md) |
