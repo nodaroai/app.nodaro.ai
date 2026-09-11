@@ -9,12 +9,12 @@ Suno Cover takes a source audio track and generates a new cover version of it. Y
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Prompt | string | `""` | Description of how the cover should differ from the original. Max length is per-version: **5000** for V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5, **3000** for V4; **3000** in non-custom mode. Over-long input is truncated to the model's limit — the editor warns first. |
+| Prompt | string | `""` | Description of how the cover should differ from the original. Max length is per-version: **5000** for the V6 family (V6 / V6_WILD / V6_MINI) and V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5, **3000** for V4; **3000** in non-custom mode on every version. Over-long input is truncated to the model's limit — the editor warns first. |
 | Source Audio URL | URL | `""` | URL of the source audio to cover. Can be connected from an upstream node. |
-| Model | enum | `"V5"` | Suno model version: `V5`, `V4_5ALL`, `V4_5PLUS`, `V4_5`, `V4`. |
+| Model | enum | `"V6"` | Suno model version: `V6` (greater musical expression, more natural vocals, richer details), `V6_WILD` (bolder, more distinctive, less predictable), `V6_MINI` (lightweight and fast), `V5_5`, `V5`, `V4_5PLUS`, `V4_5ALL`, `V4_5`, `V4`. |
 | Title | string (max 80) | `""` | Title for the cover version. |
 | Lyrics | string | `""` | Custom lyrics for the cover. Supports Suno metatags. Same per-version max as Prompt. |
-| Style | string (max 1000) | `""` | Genre and style tags for the cover. Max **1000** for V4.5+/V5, **200** for V4. |
+| Style | string (max 1000) | `""` | Genre and style tags for the cover. Max **1000** for V6 / V4.5+ / V5, **200** for V4. |
 | Negative Style | string (max 500) | `""` | Styles to avoid in the cover. |
 | Vocal Gender | enum | auto | `"male"`, `"female"`, or unset for automatic selection. |
 | Custom Mode | boolean | `false` | Enables advanced parameter control. |
@@ -31,7 +31,7 @@ Suno Cover takes a source audio track and generates a new cover version of it. Y
 - Use the Instrumental toggle to create karaoke-style versions of songs.
 - Supply custom lyrics if you want to change the words, not just the musical style.
 - Pair with Suno Separate first to isolate vocals or instrumentals from the source before covering.
-- Test with V4 models first before committing to V5 for final output.
+- Iterate quickly on `V6_MINI`, then re-run the version you like on `V6` for the final output.
 
 ## Common Use Cases
 

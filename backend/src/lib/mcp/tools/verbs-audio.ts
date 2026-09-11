@@ -14,7 +14,32 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes, MODEL_CATALOG } from "@nodaro/shared"
+
+/**
+ * Suno versions as the MCP verbs describe them — one string, reused by every
+ * verb with a model arg (the enum itself carries the full list).
+ */
+const SUNO_MODEL_HELP =
+  `Default ${DEFAULT_SUNO_MODEL}; V6_WILD bolder, V6_MINI faster; ${SUNO_LEGACY_MODELS[0]} and earlier too.`
+
+/**
+ * Suno catalog ids (`suno`, `suno-v5`, `suno-v5_5`, `suno-v6`, …) and the
+ * `data.model` version each one stands for — derived from MODEL_CATALOG so a
+ * new Suno version is exposed to `generate_music` the moment its catalog entry
+ * lands (no hand-written id list to forget).
+ */
+const SUNO_CATALOG = Object.values(MODEL_CATALOG).filter((m) => m.family === "Suno" && typeof m.dataValue === "string")
+const SUNO_CATALOG_IDS = SUNO_CATALOG.map((m) => m.id)
+/** `generate_music` model ids: every Suno catalog id, the `suno-v5-5` alias, and minimax. */
+const MUSIC_MODEL_IDS: string[] = [...SUNO_CATALOG_IDS, "suno-v5-5", "minimax"]
+const SUNO_VERSION_BY_CATALOG_ID = new Map(SUNO_CATALOG.map((m) => [m.id, m.dataValue as string]))
+const SUNO_CATALOG_ID_BY_VERSION = new Map(SUNO_CATALOG.map((m) => [m.dataValue as string, m.id]))
+/** The catalog id `generate_music` uses when the caller omits `model`. */
+const DEFAULT_SUNO_CATALOG_ID = SUNO_CATALOG_ID_BY_VERSION.get(DEFAULT_SUNO_MODEL) ?? "suno-v6"
+/** Widget/model id for a Suno version — the catalog id, `suno` if unknown. */
+const sunoWidgetModel = (version: string | undefined): string => SUNO_CATALOG_ID_BY_VERSION.get(version ?? DEFAULT_SUNO_MODEL) ?? "suno"
+
 import { applyPromptAffixes } from "@nodaro/prompts"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
@@ -67,9 +92,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       title: "Generate Music",
       description:
         "Generate a music track from a text prompt. Returns a job_id.\n\n" +
-        "**Picking a model**: Default `suno-v5-5` is the latest — best vocal " +
-        "quality, full songs with lyrics. `suno-v5` is the prior V5 generation. " +
-        "`suno` is the v4 alias. `minimax` is an alternative for short instrumental loops. " +
+        "**Picking a model**: Default `suno-v6` (flagship: richer detail, natural vocals). " +
+        "`suno-v6_wild` is bolder and less predictable; `suno-v6_mini` is faster. " +
+        "`suno-v5_5` / `suno-v5` / `suno` are earlier generations. `minimax` for short instrumental loops. " +
         "For instrumental tracks set `instrumental: true`; for songs with vocals " +
         "provide `lyrics`.\n\n" +
         "**Presets/templates**: call list_node_presets { nodeType: \"generate-music\" } " +
@@ -94,17 +119,19 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "wrap your prompt.",
           ),
         model: z
-          // `suno-v5_5` (underscore) is the catalog id list_models advertises;
-          // accept it as an alias for `suno-v5-5` so a copied id doesn't reject.
+          // Suno ids come from MODEL_CATALOG (the ids list_models advertises);
+          // `suno-v5-5` (hyphen) is the historical alias of `suno-v5_5` and stays
+          // accepted so a copied id doesn't reject.
           // `.optional()` (NOT `.default()`): the in-handler default below keeps
-          // suno-v5-5 as the fallback, while leaving `args.model === undefined`
-          // when the caller didn't pass it — so a defaulted model can't clobber
-          // a preset's provider (the override rule, mirroring generate_image).
-          .enum(["suno-v5-5", "suno-v5_5", "suno-v5", "suno", "minimax"])
+          // the catalog default as the fallback, while leaving `args.model ===
+          // undefined` when the caller didn't pass it — so a defaulted model
+          // can't clobber a preset's provider (the override rule, mirroring
+          // generate_image).
+          .enum(MUSIC_MODEL_IDS as [string, ...string[]])
           .optional()
           .describe(
-            "Music model. suno-v5-5 (default) is latest with best quality; " +
-            "suno-v5 is prior V5; suno is v4; minimax for short instrumental loops.",
+            `Music model. Default ${DEFAULT_SUNO_CATALOG_ID}; suno-v6_wild bolder, suno-v6_mini faster; ` +
+            "suno-v5_5 / suno-v5 / suno earlier; minimax for short instrumental loops.",
           ),
         duration: z.number().min(1).max(30).optional(),
         instrumental: z.boolean().optional(),
@@ -213,16 +240,16 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       const lyrics = effective.lyrics as string | undefined
       const genre = effective.genre as string | undefined
       const mood = effective.mood as string | undefined
-      // `.optional()` model → default suno-v5-5 in-handler (so an unspecified
-      // model can't clobber a preset); normalize the `suno-v5_5` alias too.
-      const rawModel = (effective.model as string | undefined) ?? "suno-v5-5"
-      const modelId = rawModel === "suno-v5_5" ? "suno-v5-5" : rawModel
+      // `.optional()` model → default catalog id in-handler (so an unspecified
+      // model can't clobber a preset); fold the `suno-v5-5` alias too.
+      const rawModel = (effective.model as string | undefined) ?? DEFAULT_SUNO_CATALOG_ID
+      const modelId = rawModel === "suno-v5-5" ? "suno-v5_5" : rawModel
       // Suno and MiniMax live behind different backend routes — Suno has
       // its own /v1/suno/generate (with internal version select) while
-      // MiniMax goes through /v1/generate-music. Dispatch by model id.
-      const isSuno = modelId === "suno" || modelId === "suno-v5" || modelId === "suno-v5-5"
+      // MiniMax goes through /v1/generate-music. Dispatch by catalog id.
+      const sunoVersion = SUNO_VERSION_BY_CATALOG_ID.get(modelId)
+      const isSuno = sunoVersion !== undefined
       const url = isSuno ? "/v1/suno/generate" : "/v1/generate-music"
-      const sunoVersion = modelId === "suno-v5-5" ? "V5_5" : modelId === "suno-v5" ? "V5" : "V4"
       // Fold mcp's generic `genre` + `mood` into suno's `style` (same intent)
       // — previously `mood` was silently dropped on the suno path. In custom
       // mode `style` is REQUIRED, so the prompt itself stands in when the
@@ -230,7 +257,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       const sunoStyle = [genre, mood].filter(Boolean).join(", ") || undefined
       const callerTitle = (effective.title as string | undefined)?.trim()
       // CUSTOM MODE — the only mode where lyrics are sung as written, `style`
-      // is a field of its own, and `duration` is honoured (V5_5). Two ways in,
+      // is a field of its own, and `duration` is honoured (V6 family). Two ways in,
       // and the asymmetry is deliberate:
       //   - WITH VOCALS, only actual lyrics qualify. In custom mode the prompt
       //     IS what gets sung, so switching a lyric-less request would have
@@ -259,7 +286,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
                   ...(instrumental === true ? {} : { lyrics }),
                   title: callerTitle || "Untitled",
                   style: sunoStyle ?? prompt,
-                  // Honoured only in custom mode on V5_5 — and the route's
+                  // Honoured only in custom mode on the V6 family — and the route's
                   // floor is 10s, so a shorter ask is raised rather than
                   // rejected.
                   ...(duration ? { duration: Math.max(10, Math.round(duration)) } : {}),
@@ -1643,7 +1670,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .min(0)
           .optional()
           .describe("Timestamp (seconds) in the source where the extension picks up. Omit for default."),
-        model: z.enum(["V4", "V5"]).optional().describe("Suno version. Default V5 (latest)."),
+        model: z.enum(SUNO_MODELS).optional().describe(`Suno version. ${SUNO_MODEL_HELP}`),
         vocal_gender: z.enum(["male", "female"]).optional(),
       },
       outputSchema: {
@@ -1690,7 +1717,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         style: args.style,
         title: args.title,
         continueAt: args.continue_at,
-        model: args.model ?? "V5",
+        model: args.model ?? DEFAULT_SUNO_MODEL,
         vocalGender: args.vocal_gender,
         mcp_client: session.clientName,
         userId: session.userId,
@@ -1700,7 +1727,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         payload,
         label: "Suno extend",
         widgetKind: "audio",
-        widgetData: { prompt: args.prompt ?? "(extend)", model: args.model === "V4" ? "suno" : "suno-v5" },
+        widgetData: { prompt: args.prompt ?? "(extend)", model: sunoWidgetModel(args.model) },
       })
     },
   )
@@ -1728,7 +1755,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         instrumental: z.boolean().optional(),
         custom_mode: z.boolean().optional(),
         vocal_gender: z.enum(["male", "female"]).optional(),
-        model: z.enum(["V4", "V5"]).optional().describe("Suno version. Default V5."),
+        model: z.enum(SUNO_MODELS).optional().describe(`Suno version. ${SUNO_MODEL_HELP}`),
       },
       outputSchema: {
         jobId: z.string(),
@@ -1770,7 +1797,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       const payload = {
         prompt: args.prompt,
         uploadUrl: audioUrl,
-        model: args.model ?? "V5",
+        model: args.model ?? DEFAULT_SUNO_MODEL,
         lyrics: args.lyrics,
         style: args.style,
         title: args.title,
@@ -1785,7 +1812,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         payload,
         label: "Suno cover",
         widgetKind: "audio",
-        widgetData: { prompt: args.prompt, model: args.model === "V4" ? "suno" : "suno-v5" },
+        widgetData: { prompt: args.prompt, model: sunoWidgetModel(args.model) },
       })
     },
   )
@@ -2235,7 +2262,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "**Custom mode** (`custom_mode: true`): supply `lyrics` and `style` " +
         "explicitly — Suno uses them verbatim instead of generating them from " +
         "the prompt.\n\n" +
-        `Models: ${SUNO_MODELS.join(", ")}. Default V5_5.`,
+        `Models — ${SUNO_MODEL_HELP}`,
       // Caps track SUNO_TEXT_MAX — the largest value getMaxSunoPromptChars can
       // return. The route clamps to the SELECTED version's cap, so a longer
       // value is trimmed there rather than round-tripped as a tool error.
@@ -2243,7 +2270,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       // tighter of its two downstream routes.)
       inputSchema: {
         prompt: z.string().min(1).max(SUNO_TEXT_MAX).describe("Song description or inspiration prompt."),
-        model: z.enum(SUNO_MODELS).optional().describe(`Suno model. Default V5_5. Options: ${SUNO_MODELS.join(", ")}.`),
+        model: z.enum(SUNO_MODELS).optional().describe(`Suno model. ${SUNO_MODEL_HELP}`),
         style: z.string().max(500).optional().describe("Musical style tags (e.g. 'lo-fi hip-hop, melancholy, piano')."),
         title: z.string().max(SUNO_TITLE_MAX).optional(),
         lyrics: z.string().max(SUNO_TEXT_MAX).optional().describe("Full lyrics (only used when custom_mode=true)."),
@@ -2254,7 +2281,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         style_weight: z.number().min(0).max(1).optional(),
         weirdness: z.number().min(0).max(1).optional(),
         audio_weight: z.number().min(0).max(1).optional(),
-        duration: z.number().min(10).max(360).optional().describe("Song length in seconds (10-360). Only honored when custom_mode=true and model=V5_5; ignored otherwise."),
+        duration: z.number().min(10).max(360).optional().describe("Song length in seconds (10-360). Only honored when custom_mode=true on a V6-family model; ignored otherwise."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -2266,7 +2293,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     async (args) => {
       const payload: Record<string, unknown> = {
         prompt: args.prompt,
-        model: args.model ?? "V5_5",
+        model: args.model ?? DEFAULT_SUNO_MODEL,
         ...(args.style ? { style: args.style } : {}),
         ...(args.title ? { title: args.title } : {}),
         ...(args.lyrics ? { lyrics: args.lyrics } : {}),
@@ -2281,7 +2308,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      return dispatchJob(fastify, session, { url: "/v1/suno/generate", payload, label: "Suno generate", widgetKind: "audio", widgetData: { prompt: args.prompt.slice(0, 80), model: args.model ?? "V5_5" } })
+      return dispatchJob(fastify, session, { url: "/v1/suno/generate", payload, label: "Suno generate", widgetKind: "audio", widgetData: { prompt: args.prompt.slice(0, 80), model: args.model ?? DEFAULT_SUNO_MODEL } })
     },
   )
 
@@ -2430,7 +2457,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "Pass the Nodaro audio_asset_id of a Suno generation.",
       inputSchema: {
         audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track."),
-        model: z.enum(SUNO_ADD_TRACK_MODELS).optional().describe(`Suno model for the new layer. Options: ${SUNO_ADD_TRACK_MODELS.join(", ")}. Default V5_5.`),
+        model: z.enum(SUNO_ADD_TRACK_MODELS).optional().describe(`Suno model for the new layer. Options: ${SUNO_ADD_TRACK_MODELS.join(", ")}. Default ${DEFAULT_SUNO_MODEL}.`),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -2442,7 +2469,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     async (args) => {
       const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
       if (!ids) return { content: [{ type: "text" as const, text: `No Suno ids found for asset ${args.audio_asset_id}.` }], isError: true }
-      return dispatchJob(fastify, session, { url: "/v1/suno/add-instrumental", payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, model: args.model ?? "V5_5", mcp_client: session.clientName, userId: session.userId }, label: "Suno add instrumental", widgetKind: "audio", widgetData: { prompt: "(add instrumental)", model: args.model ?? "V5_5" } })
+      return dispatchJob(fastify, session, { url: "/v1/suno/add-instrumental", payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, model: args.model ?? DEFAULT_SUNO_MODEL, mcp_client: session.clientName, userId: session.userId }, label: "Suno add instrumental", widgetKind: "audio", widgetData: { prompt: "(add instrumental)", model: args.model ?? DEFAULT_SUNO_MODEL } })
     },
   )
 
@@ -2456,7 +2483,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "Pass the Nodaro audio_asset_id of a Suno generation.",
       inputSchema: {
         audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track."),
-        model: z.enum(SUNO_ADD_TRACK_MODELS).optional().describe(`Suno model for the vocals. Options: ${SUNO_ADD_TRACK_MODELS.join(", ")}. Default V5_5.`),
+        model: z.enum(SUNO_ADD_TRACK_MODELS).optional().describe(`Suno model for the vocals. Options: ${SUNO_ADD_TRACK_MODELS.join(", ")}. Default ${DEFAULT_SUNO_MODEL}.`),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -2468,7 +2495,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     async (args) => {
       const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
       if (!ids) return { content: [{ type: "text" as const, text: `No Suno ids found for asset ${args.audio_asset_id}.` }], isError: true }
-      return dispatchJob(fastify, session, { url: "/v1/suno/add-vocals", payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, model: args.model ?? "V5_5", mcp_client: session.clientName, userId: session.userId }, label: "Suno add vocals", widgetKind: "audio", widgetData: { prompt: "(add vocals)", model: args.model ?? "V5_5" } })
+      return dispatchJob(fastify, session, { url: "/v1/suno/add-vocals", payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, model: args.model ?? DEFAULT_SUNO_MODEL, mcp_client: session.clientName, userId: session.userId }, label: "Suno add vocals", widgetKind: "audio", widgetData: { prompt: "(add vocals)", model: args.model ?? DEFAULT_SUNO_MODEL } })
     },
   )
 
@@ -2509,7 +2536,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       inputSchema: {
         audio_url: z.string().url().describe("Public URL of the audio file to extend."),
         continue_at: z.number().min(0).describe("Timestamp (seconds) from which Suno continues generating."),
-        model: z.enum(SUNO_MODELS).optional().describe(`Suno model. Default V5_5. Options: ${SUNO_MODELS.join(", ")}.`),
+        model: z.enum(SUNO_MODELS).optional().describe(`Suno model. ${SUNO_MODEL_HELP}`),
         style: z.string().max(500).optional(),
         title: z.string().max(SUNO_TITLE_MAX).optional(),
         negative_style: z.string().max(500).optional(),
@@ -2527,7 +2554,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       const payload: Record<string, unknown> = {
         uploadUrl: args.audio_url,
         continueAt: args.continue_at,
-        model: args.model ?? "V5_5",
+        model: args.model ?? DEFAULT_SUNO_MODEL,
         defaultParamFlag: args.use_default_params ?? false,
         ...(args.style ? { style: args.style } : {}),
         ...(args.title ? { title: args.title } : {}),
@@ -2536,7 +2563,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      return dispatchJob(fastify, session, { url: "/v1/suno/upload-extend", payload, label: "Suno upload extend", widgetKind: "audio", widgetData: { prompt: "(upload extend)", model: args.model ?? "V5_5" } })
+      return dispatchJob(fastify, session, { url: "/v1/suno/upload-extend", payload, label: "Suno upload extend", widgetKind: "audio", widgetData: { prompt: "(upload extend)", model: args.model ?? DEFAULT_SUNO_MODEL } })
     },
   )
 }

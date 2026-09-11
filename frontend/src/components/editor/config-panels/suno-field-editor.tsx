@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input"
 import { TagTextarea, type SuggestionItem } from "./tag-textarea"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import { SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
-import { getMaxSunoStyleChars, getMaxSunoPromptChars, SUNO_TEXT_MAX } from "@nodaro/shared"
+import { getMaxSunoStyleChars, getMaxSunoPromptChars, SUNO_TEXT_MAX, DEFAULT_SUNO_MODEL } from "@nodaro/shared"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import type { SunoGenerateData } from "@/types/nodes"
 
@@ -66,10 +66,10 @@ export function SunoFieldEditor({
         tagMode="suno" customTags={meta.customTags ?? []} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap}
       />
       {meta.counter === "style" && (
-        <PromptLengthCounter value={value} max={getMaxSunoStyleChars(data.model)} modelLabel={data.model ?? "V5_5"} noun="style" />
+        <PromptLengthCounter value={value} max={getMaxSunoStyleChars(data.model)} modelLabel={data.model ?? DEFAULT_SUNO_MODEL} noun="style" />
       )}
       {meta.counter === "prompt" && (
-        <PromptLengthCounter value={value} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun="lyrics" />
+        <PromptLengthCounter value={value} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? DEFAULT_SUNO_MODEL} noun="lyrics" />
       )}
     </>
   )

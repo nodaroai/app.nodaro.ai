@@ -121,6 +121,17 @@ const GPT_IMAGE_2_5_MODELS_BYTES = 151
 // methodology, so the honest fix is to stop shouting rather than to except the
 // file or loosen the pattern.
 const VIDEO_REFERENCE_CAPTIONS_BYTES = 422
+//
+// RAISED 2026-09-11 by the Suno V6 family and nothing else. Every Suno verb
+// with a `model` arg now carries the full SUNO_MODELS enum (V6 / V6_WILD /
+// V6_MINI ahead of the six earlier versions — `suno_extend` and `suno_cover`
+// used to list only V4 / V5), `generate_music` lists three more catalog ids,
+// and each model arg gains a one-clause "default V6" note. No tool was added,
+// so the fixture does NOT move. Measured by this suite, on top of the raises
+// above: 499 B. The descriptions were trimmed to one clause each before
+// measuring; the remainder is the enum widening, which is the contract, not
+// prose.
+const SUNO_V6_FAMILY_BYTES = 499
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -130,7 +141,8 @@ export const TOOL_WIRE_BUDGET = {
     SUGGEST_PLACEMENT_TOOL_BYTES +
     LANDING_CONTRACT_BYTES +
     GPT_IMAGE_2_5_MODELS_BYTES +
-    VIDEO_REFERENCE_CAPTIONS_BYTES,
+    VIDEO_REFERENCE_CAPTIONS_BYTES +
+    SUNO_V6_FAMILY_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

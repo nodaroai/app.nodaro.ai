@@ -1216,10 +1216,13 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-sfx": 3,           // 0.24 cr/sec * ~5s
   // Replicate disabled
   // "tangoflux": 4, // Replicate SFX, estimated
-  "suno": 30,                     // (V4 default) — base
+  "suno": 30,                     // (V4) — base
   "suno-v5": 30,                  // (V5)
   "suno-v5_5": 30,                // (V5.5)
-  "suno-generate": 30,            // (V4 default)
+  "suno-v6": 30,                  // (V6 — the default; 12 KIE credits, same as every prior version)
+  "suno-v6_wild": 30,             // (V6 Wild)
+  "suno-v6_mini": 30,             // (V6 Mini)
+  "suno-generate": 30,            // (fallback key for a version with no row in SUNO_VERSION_CREDIT_KEYS)
   "suno-cover": 30,
   "suno-extend": 30,
   "suno-lyrics": 10,

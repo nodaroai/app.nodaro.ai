@@ -385,6 +385,7 @@ describe("coerceQuickConfigValue", () => {
   })
 })
 
+import { SUNO_MODELS as SUNO_MODELS_SHARED } from "@nodaro/shared"
 import { NODE_QUICK_CONFIGS } from "../node-quick-configs"
 
 describe("suno-generate quick configs", () => {
@@ -407,6 +408,16 @@ describe("suno-generate quick configs", () => {
   })
   it("other suno-* nodes keep just the model control", () => {
     expect(NODE_QUICK_CONFIGS()["suno-cover"].map((c) => c.field)).toEqual(["model"])
+  })
+
+  // The strip offers every Suno version, in the shared order (V6 first). Static
+  // on purpose — no per-node filtering, so the generic fail-safe snap can never
+  // rewrite a saved node's version.
+  it("Model: offers all nine Suno versions, V6 first", () => {
+    const model = controls.find((c) => c.field === "model")!
+    const opts = model.options as unknown as { value: string }[]
+    expect(opts).toHaveLength(9)
+    expect(opts.map((o) => o.value)).toEqual([...SUNO_MODELS_SHARED])
   })
 })
 

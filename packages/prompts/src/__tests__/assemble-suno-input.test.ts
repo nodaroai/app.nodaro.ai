@@ -182,16 +182,29 @@ describe("assembleSunoInput — persona spread", () => {
 describe("assembleSunoInput — duration pass-through", () => {
   it("carries data.duration onto the result verbatim (the provider client gates the send)", () => {
     const r = assembleSunoInput({
-      node: node({ customMode: true, style: "pop", model: "V5_5", duration: 120 }),
+      node: node({ customMode: true, style: "pop", model: "V6", duration: 120 }),
       graph: emptyGraph,
       userPrompt: "song",
     })
     expect(r.duration).toBe(120)
   })
 
+  // The assembler is a FIELD CARRIER, not the duration gate: only the provider
+  // client consults `sunoModelHonoursDuration` (V6 family), so a legacy model
+  // still carries `duration` through this layer unchanged.
+  it("carries data.duration for a LEGACY model too — the gate lives in the provider client", () => {
+    const r = assembleSunoInput({
+      node: node({ customMode: true, style: "pop", model: "V5_5", duration: 120 }),
+      graph: emptyGraph,
+      userPrompt: "song",
+    })
+    expect(r.duration).toBe(120)
+    expect(r.model).toBe("V5_5")
+  })
+
   it("no data.duration → undefined", () => {
     const r = assembleSunoInput({
-      node: node({ model: "V5_5" }),
+      node: node({ model: "V6" }),
       graph: emptyGraph,
       userPrompt: "song",
     })

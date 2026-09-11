@@ -9,11 +9,11 @@ Suno Generate creates complete songs from text prompts. It supports multiple Sun
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Prompt | string | `""` | Main text prompt describing the song (in custom mode, the lyrics). Supports Suno metatag autocomplete. Max length is per-version: **5000** for V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5, **3000** for V4; **3000** in non-custom (inspiration) mode. Over-long input is truncated to the model's limit — the editor warns first so you can switch model or shorten. |
-| Model | enum | `"V5_5"` | Suno model version: `V5_5`, `V5`, `V4_5PLUS`, `V4_5ALL`, `V4_5`, `V4`. |
+| Prompt | string | `""` | Main text prompt describing the song (in custom mode, the lyrics). Supports Suno metatag autocomplete. Max length is per-version: **5000** for the V6 family (V6 / V6_WILD / V6_MINI) and V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5, **3000** for V4; **3000** in non-custom (inspiration) mode on every version. Over-long input is truncated to the model's limit — the editor warns first so you can switch model or shorten. |
+| Model | enum | `"V6"` | Suno model version: `V6` (greater musical expression, more natural vocals, richer details), `V6_WILD` (bolder, more distinctive, less predictable), `V6_MINI` (lightweight and fast), `V5_5`, `V5`, `V4_5PLUS`, `V4_5ALL`, `V4_5`, `V4`. |
 | Title | string (max 80) | `""` | Title for the generated song (Suno caps titles at 80 characters). |
-| Lyrics | string | `""` | Song lyrics with metatag support (`[Verse]`, `[Chorus]`, `[Bridge]`, etc.). Same per-version max as Prompt (5000 for V4.5+/V5, 3000 for V4). |
-| Style | string (max 1000) | `""` | Genre and style tags (e.g., "pop rock, upbeat, energetic"). Max **1000** for V4.5+/V5, **200** for V4. |
+| Lyrics | string | `""` | Song lyrics with metatag support (`[Verse]`, `[Chorus]`, `[Bridge]`, etc.). Same per-version max as Prompt (5000 for V6 / V4.5+ / V5, 3000 for V4). |
+| Style | string (max 1000) | `""` | Genre and style tags (e.g., "pop rock, upbeat, energetic"). Max **1000** for V6 / V4.5+ / V5, **200** for V4. |
 | Negative Style | string (max 500) | `""` | Styles to avoid in generation. |
 | Vocal Gender | enum | auto | `"male"`, `"female"`, or unset for automatic selection. |
 | Style Weight | number | `0.5` | Influence of style tags on output (0.0 to 1.0). |
@@ -21,7 +21,7 @@ Suno Generate creates complete songs from text prompts. It supports multiple Sun
 | Audio Weight | number | `0.5` | Balance between prompt and audio characteristics (0.0 to 1.0). |
 | Custom Mode | boolean | `false` | Enables advanced parameter control. |
 | Instrumental | boolean | `false` | When true, generates instrumental-only (no vocals). |
-| Duration | number (10–360) | auto | Requested song length in seconds. **V5.5 + custom mode only** — with any other model, or outside custom mode, Suno ignores it and picks the length itself. Leave empty for automatic. |
+| Duration | number (10–360) | auto | Requested song length in seconds. **V6 family (V6 / V6_WILD / V6_MINI) + custom mode only** — with any other model, or outside custom mode, Suno ignores it and picks the length itself. Leave empty for automatic. |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
@@ -85,7 +85,7 @@ Each button is hidden when its field is wired from another node. (Title has no A
 - Keep Style Weight around 0.5 for balanced results; push toward 1.0 only when you need strict genre adherence.
 - Set Weirdness to 0.0 for predictable output; increase gradually for more experimental results.
 - Use Negative Style to explicitly exclude unwanted genres (e.g., "metal, screaming") rather than relying on the prompt alone.
-- V5 produces higher quality output than V4 models.
+- `V6` is the flagship and the best default. Pick `V6_WILD` when you want bolder, less predictable results, and `V6_MINI` when turnaround matters more than the last bit of detail.
 
 ## Common Use Cases
 

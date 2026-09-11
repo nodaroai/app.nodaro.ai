@@ -307,7 +307,13 @@ describe("getModelIdentifier", () => {
   // Suno: the live-cost path must quote the key routes/suno.ts actually
   // reserves. generate/cover/extend are version-priced; every other Suno
   // operation charges a flat per-operation key regardless of the version the
-  // node carries (all four flat-priced Suno nodes default to model V5_5).
+  // node carries (every Suno node now defaults to DEFAULT_SUNO_MODEL = V6;
+  // the older versions below are still offered and still price per version).
+  it("suno-generate V6 (the default) returns the V6 version key", () => {
+    const node = makeNode({ type: "suno-generate", data: { label: "Suno", model: "V6" } as any })
+    expect(getModelIdentifier(node)).toBe("suno-v6")
+  })
+
   it("suno-generate V5_5 returns the version key", () => {
     const node = makeNode({ type: "suno-generate", data: { label: "Suno", model: "V5_5" } as any })
     expect(getModelIdentifier(node)).toBe("suno-v5_5")

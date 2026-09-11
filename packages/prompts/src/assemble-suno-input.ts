@@ -87,8 +87,9 @@ export interface AssembleSunoResult {
   /**
    * Requested song length in seconds (KIE: 10–360). Passed through from
    * `data.duration` unconditionally — the provider client is the single
-   * gate that only sends it when customMode && model V5_5 (KIE ignores it
-   * elsewhere), so the assembler stays a faithful field carrier.
+   * gate that only sends it when `customMode && sunoModelHonoursDuration(model)`
+   * (the V6 family — V6 / V6_MINI / V6_WILD; KIE ignores it on every earlier
+   * version), so the assembler stays a faithful field carrier.
    */
   duration?: number
   personaId?: string

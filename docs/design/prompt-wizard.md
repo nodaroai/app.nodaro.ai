@@ -118,7 +118,7 @@ Single endpoint, two actions. Credits charged per action (2 total for full wizar
   jobId: string,
   prompt: string,               // final generated prompt
   recommendedModel?: {
-    provider: string,           // "flux" (or Suno model version e.g. "V5")
+    provider: string,           // "flux" (or Suno model version e.g. "V6")
     field: string,              // "provider" (default) or "model" (for Suno)
     label: string,              // "Flux 1.1 Pro"
     reason: string,             // "Best for photorealistic images with fine detail"
@@ -367,11 +367,15 @@ Lives in `packages/shared/src/prompt-wizard-categories.ts`. AI uses these descri
 
 | Model | Capability Description |
 |-------|----------------------|
-| `V4` | Standard Suno generation |
-| `V4_5` | Improved quality and coherence |
+| `V6` | Flagship — greater musical expression, more natural vocals, richer details (default) |
+| `V6_WILD` | Bolder, more distinctive, less predictable results for exploration |
+| `V6_MINI` | Lightweight and fast — quality/speed balance |
+| `V5_5` | Custom-model tuning with strong vocal quality |
+| `V5` | Superior musical expression, faster generation |
 | `V4_5PLUS` | Enhanced V4.5 with better production |
 | `V4_5ALL` | Full-featured V4.5 |
-| `V5` | Latest Suno with highest quality |
+| `V4_5` | Improved quality and coherence |
+| `V4` | Standard Suno generation |
 
 ### text-to-audio
 

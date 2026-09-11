@@ -8,7 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars } from "@nodaro/shared"
 import {
   sunoStyleBoost,
   sunoVoiceValidate,
@@ -48,8 +48,22 @@ async function userOwnsVoiceTask(
   return Boolean(data?.length)
 }
 
-const sunoModelEnum = z.enum(SUNO_MODELS).optional().default("V5_5")
-const sunoAddTrackModelEnum = z.enum(SUNO_ADD_TRACK_MODELS).optional().default("V5_5")
+// SUNO_MODELS = the V6 family first, then every earlier version (all offered,
+// all accepted — see @nodaro/shared). The default is KIE's own (V6).
+const sunoModelEnum = z.enum(SUNO_MODELS).optional().default(DEFAULT_SUNO_MODEL)
+const sunoAddTrackModelEnum = z.enum(SUNO_ADD_TRACK_MODELS).optional().default(DEFAULT_SUNO_MODEL)
+
+/**
+ * The credit key the guard RESERVES under must be the key the worker later
+ * egresses under (`sunoCreditType(parsed.model, op)`). The guard runs on the
+ * RAW body, before Zod applies the model default, so it has to apply the same
+ * default itself — otherwise an omitted model reserves under the operation
+ * key and egresses under the version key.
+ */
+export function guardSunoCreditType(body: unknown, operation: string): string {
+  const model = (body as Record<string, unknown> | undefined)?.model
+  return sunoCreditType(typeof model === "string" ? model : DEFAULT_SUNO_MODEL, operation)
+}
 
 const personaModelEnum = z.enum(["voice_persona", "style_persona"])
 
@@ -73,8 +87,8 @@ const sunoGenerateBody = z.object({
   audioWeight: z.number().min(0).max(1).optional(),
   customMode: z.boolean().optional().default(false),
   instrumental: z.boolean().optional().default(false),
-  // Song length in seconds — KIE honors it only in custom mode on V5_5
-  // (the provider client gates the send; other models silently ignore it).
+  // Song length in seconds — KIE honors it only in custom mode on the V6
+  // family (the provider client gates the send; earlier models ignore it).
   duration: z.number().min(10).max(360).optional(),
   personaId: z.string().min(1).max(200).optional(),
   personaModel: personaModelEnum.optional(),
@@ -290,10 +304,7 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/generate",
     {
-      preHandler: creditGuard((req) => {
-        const body = req.body as Record<string, unknown>
-        return sunoCreditType(body?.model as string, "suno-generate")
-      }),
+      preHandler: creditGuard((req) => guardSunoCreditType(req.body, "suno-generate")),
     },
     async (req, reply) => {
       const parsed = sunoGenerateBody.safeParse(req.body)
@@ -368,10 +379,7 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/cover",
     {
-      preHandler: creditGuard((req) => {
-        const body = req.body as Record<string, unknown>
-        return sunoCreditType(body?.model as string, "suno-cover")
-      }),
+      preHandler: creditGuard((req) => guardSunoCreditType(req.body, "suno-cover")),
     },
     async (req, reply) => {
       const parsed = sunoCoverBody.safeParse(req.body)
@@ -442,10 +450,7 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/extend",
     {
-      preHandler: creditGuard((req) => {
-        const body = req.body as Record<string, unknown>
-        return sunoCreditType(body?.model as string, "suno-extend")
-      }),
+      preHandler: creditGuard((req) => guardSunoCreditType(req.body, "suno-extend")),
     },
     async (req, reply) => {
       const parsed = sunoExtendBody.safeParse(req.body)

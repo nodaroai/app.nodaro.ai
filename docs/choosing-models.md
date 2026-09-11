@@ -32,7 +32,7 @@ Don't know where to start? Find your goal here, then jump to the model in the ta
 | best cinematic video | VEO 3.1 Quality, Kling 3.0, Seedance 2 | VEO 3.1 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency. |
 | cheap batch video clips | VEO 3.1 Fast, Wan 2.2 Turbo, Bytedance Lite I2V | VEO 3.1 Fast is the best price/quality balance with native audio. |
 | video with start + end frame | VEO 3.1 Quality, VEO 3.1 Fast, Kling 2.5 Turbo Pro, Hailuo 02 I2V Pro, Hailuo 02 Standard, Seedance 2 | All listed support an end frame; VEO uses imageUrls[start, end]. |
-| music / song generation | Suno v5, Suno v4 | Suno v5 has better vocal quality at the same price. |
+| music / song generation | Suno V6, Suno V6 Wild, Suno V6 Mini, Suno v5.5 | V6 is the default flagship; V6 Wild for bolder, less predictable results; V6 Mini when speed matters; v5.5 / v5 / v4 keep their own character. Same price. |
 | voice over / narration | ElevenLabs v3, ElevenLabs Turbo v2.5 | v3 supports [audio tags] for emotion; Turbo is cheaper for plain narration. |
 | lip-sync a portrait to audio | Kling Avatar Pro, Kling Avatar Standard, InfiniTalk | Pro for best mouth shape; InfiniTalk for resolution control. |
 | transcription / captions | ElevenLabs STT | Word-level timestamps available. |
@@ -181,8 +181,11 @@ Text-to-speech, voice cloning/design/changing, dubbing, sound effects, transcrip
 | ElevenLabs Multilingual v2 | ElevenLabs | Premium | 30 | tts | Multi-language ElevenLabs TTS via the direct ElevenLabs API. |
 | ⭐ ElevenLabs v3 | ElevenLabs | Premium | 30 | tts | Latest ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API. |
 | Suno v4 | Suno | Premium | 30 | music | Suno v4 music generation — full songs with vocals, multiple genres. |
-| Suno v5 | Suno | Premium | 30 | music | Newer Suno v5 — better vocal quality, more genres. Same price as v4. |
-| ⭐ Suno v5.5 | Suno | Premium | 30 | music | Suno v5.5 — latest model with improved audio quality and expressiveness. |
+| Suno v5 | Suno | Premium | 30 | music | Suno v5 — better vocal quality than v4, more genres. Same price. |
+| Suno v5.5 | Suno | Premium | 30 | music | Suno v5.5 — improved audio quality and expressiveness over v5. |
+| ⭐ Suno V6 | Suno | Premium | 30 | music | Suno V6 — greater musical expression with more natural vocals and richer details. The flagship and the default. |
+| Suno V6 Mini | Suno | Premium | 30 | music | Suno V6 Mini — lightweight and fast, balancing quality and speed for effortless creation. |
+| Suno V6 Wild | Suno | Premium | 30 | music | Suno V6 Wild — pushes creative boundaries for bolder, more distinctive musical expression; more varied, less predictable results. |
 | ElevenLabs Dubbing | ElevenLabs | Premium | 40 | dubbing | Translate + dub audio or a whole video into a new language — video in, dubbed video out. Async. |
 | ElevenLabs Voice Changer | ElevenLabs | Premium | 40 | voice-changer | Speech-to-speech: convert one voice to another while preserving prosody. |
 | ElevenLabs Voice Design | ElevenLabs | Premium | 50 | voice-design | Design a synthetic voice from a description (no reference clip needed). |

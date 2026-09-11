@@ -1,7 +1,7 @@
 ---
 node_type: suno-mashup
-generated_at: 2026-08-15T21:55:07.016Z
-generated_from: 150c80ac9
+generated_at: 2026-09-10T23:12:24.853Z
+generated_from: 15c8b1229
 ---
 
 # Suno Mashup
@@ -36,7 +36,7 @@ generated_from: 150c80ac9
 ```json
 {
   "label": "Suno Mashup",
-  "model": "V5_5",
+  "model": "V6",
   "customMode": false,
   "style": "",
   "title": "",
@@ -83,7 +83,7 @@ generated_from: 150c80ac9
   },
   "data": {
     "label": "Suno Mashup",
-    "model": "V5_5",
+    "model": "V6",
     "customMode": false,
     "style": "",
     "title": "",

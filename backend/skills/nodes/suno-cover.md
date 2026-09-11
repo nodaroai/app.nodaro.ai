@@ -1,7 +1,7 @@
 ---
 node_type: suno-cover
-generated_at: 2026-08-29T19:02:38.660Z
-generated_from: 7dbf4818b
+generated_at: 2026-09-10T23:12:24.812Z
+generated_from: 15c8b1229
 ---
 
 # Suno Cover
@@ -44,7 +44,7 @@ generated_from: 7dbf4818b
 {
   "label": "Suno Cover",
   "prompt": "",
-  "model": "V5_5",
+  "model": "V6",
   "uploadUrl": "",
   "lyrics": "",
   "style": "",
@@ -93,7 +93,7 @@ generated_from: 7dbf4818b
   "data": {
     "label": "Suno Cover",
     "prompt": "",
-    "model": "V5_5",
+    "model": "V6",
     "uploadUrl": "",
     "lyrics": "",
     "style": "",

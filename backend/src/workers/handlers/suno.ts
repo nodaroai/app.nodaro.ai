@@ -1,4 +1,4 @@
-import { variantJobId } from "@nodaro/shared"
+import { DEFAULT_SUNO_MODEL, variantJobId } from "@nodaro/shared"
 import { config } from "../../lib/config.js"
 import type { Job } from "bullmq"
 import { uploadToR2 } from "../../lib/storage.js"
@@ -210,7 +210,7 @@ const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx
     customMode?: boolean; instrumental?: boolean; duration?: number
     personaId?: string; personaModel?: "voice_persona" | "style_persona"
   }
-  console.log(`[worker] suno-generate ${ctx.jobId} (model: ${model ?? "V5"}, customMode: ${customMode}, instrumental: ${instrumental}${duration != null ? `, duration: ${duration}s` : ""}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
+  console.log(`[worker] suno-generate ${ctx.jobId} (model: ${model ?? DEFAULT_SUNO_MODEL}, customMode: ${customMode}, instrumental: ${instrumental}${duration != null ? `, duration: ${duration}s` : ""}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
   if (await maybeRunSunoOnCloud(job, ctx, "suno-generate", "Suno returned no tracks")) return
 
   // B4b: audio PromptPolicy — modesty clause on prompt/negativeStyle and any
@@ -236,7 +236,7 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
     negativeStyle?: string; vocalGender?: string; customMode?: boolean; instrumental?: boolean
     personaId?: string; personaModel?: "voice_persona" | "style_persona"
   }
-  console.log(`[worker] suno-cover ${ctx.jobId} (model: ${model ?? "V5"}, customMode: ${customMode}, instrumental: ${instrumental}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
+  console.log(`[worker] suno-cover ${ctx.jobId} (model: ${model ?? DEFAULT_SUNO_MODEL}, customMode: ${customMode}, instrumental: ${instrumental}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
   // BEFORE the social-URL download below: the cloud's own handler performs the
   // same download, and the local copy's URL is on a private host it could not
   // fetch anyway — downloading here first would cost bandwidth for a file we
@@ -270,7 +270,7 @@ const handleSunoExtend: HandlerFn = async function handleSunoExtend(job, ctx) {
     continueAt?: number; negativeStyle?: string; vocalGender?: string; styleWeight?: number; weirdnessConstraint?: number; audioWeight?: number
     personaId?: string; personaModel?: "voice_persona" | "style_persona"
   }
-  console.log(`[worker] suno-extend ${ctx.jobId} (model: ${model ?? "V5"}, audioId: ${audioId}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
+  console.log(`[worker] suno-extend ${ctx.jobId} (model: ${model ?? DEFAULT_SUNO_MODEL}, audioId: ${audioId}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
   if (await maybeRunSunoOnCloud(job, ctx, "suno-extend", "Suno extend returned no tracks")) return
 
   // B4b: audio PromptPolicy — extend's prompt is optional; feed "" into the
@@ -450,7 +450,7 @@ const handleSunoMashup: HandlerFn = async function handleSunoMashup(job, ctx) {
     jobId: string; uploadUrlList: [string, string]; model?: SunoModel; customMode?: boolean; style?: string; title?: string
     negativeStyle?: string; vocalGender?: string
   }
-  console.log(`[worker] suno-mashup ${ctx.jobId} (model: ${model ?? "V5"})`)
+  console.log(`[worker] suno-mashup ${ctx.jobId} (model: ${model ?? DEFAULT_SUNO_MODEL})`)
   if (await maybeRunSunoOnCloud(job, ctx, "suno-mashup", "Suno mashup returned no tracks")) return
 
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
@@ -485,7 +485,7 @@ const handleSunoAddInstrumental: HandlerFn = async function handleSunoAddInstrum
   const { taskId: sunoTaskId, audioId, model } = job.data as {
     jobId: string; taskId: string; audioId: string; model?: SunoAddTrackModel
   }
-  console.log(`[worker] suno-add-instrumental ${ctx.jobId} (model: ${model ?? "V5"}, audioId: ${audioId})`)
+  console.log(`[worker] suno-add-instrumental ${ctx.jobId} (model: ${model ?? DEFAULT_SUNO_MODEL}, audioId: ${audioId})`)
   if (await maybeRunSunoOnCloud(job, ctx, "suno-add-instrumental", "Suno add-instrumental returned no tracks")) return
 
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
@@ -502,7 +502,7 @@ const handleSunoAddVocals: HandlerFn = async function handleSunoAddVocals(job, c
   const { taskId: sunoTaskId, audioId, model } = job.data as {
     jobId: string; taskId: string; audioId: string; model?: SunoAddTrackModel
   }
-  console.log(`[worker] suno-add-vocals ${ctx.jobId} (model: ${model ?? "V5"}, audioId: ${audioId})`)
+  console.log(`[worker] suno-add-vocals ${ctx.jobId} (model: ${model ?? DEFAULT_SUNO_MODEL}, audioId: ${audioId})`)
   if (await maybeRunSunoOnCloud(job, ctx, "suno-add-vocals", "Suno add-vocals returned no tracks")) return
 
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
@@ -554,7 +554,7 @@ const handleSunoUploadExtend: HandlerFn = async function handleSunoUploadExtend(
     jobId: string; uploadUrl: string; continueAt: number; defaultParamFlag?: boolean; instrumental?: boolean; model?: SunoModel; style?: string; title?: string
     negativeStyle?: string; vocalGender?: string
   }
-  console.log(`[worker] suno-upload-extend ${ctx.jobId} (model: ${model ?? "V5"}, continueAt: ${continueAt}s)`)
+  console.log(`[worker] suno-upload-extend ${ctx.jobId} (model: ${model ?? DEFAULT_SUNO_MODEL}, continueAt: ${continueAt}s)`)
   // BEFORE the social-URL download below: the cloud's own handler performs the
   // same download, and the local copy's URL is on a private host it could not
   // fetch anyway — downloading here first would cost bandwidth for a file we

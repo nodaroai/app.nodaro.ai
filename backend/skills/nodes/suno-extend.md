@@ -1,7 +1,7 @@
 ---
 node_type: suno-extend
-generated_at: 2026-08-29T19:02:38.670Z
-generated_from: 7dbf4818b
+generated_at: 2026-09-10T23:12:24.819Z
+generated_from: 15c8b1229
 ---
 
 # Suno Extend
@@ -50,7 +50,7 @@ generated_from: 7dbf4818b
   "audioId": "",
   "defaultParamFlag": true,
   "prompt": "",
-  "model": "V5_5",
+  "model": "V6",
   "style": "",
   "title": "",
   "continueAt": 0,
@@ -97,7 +97,7 @@ generated_from: 7dbf4818b
     "audioId": "",
     "defaultParamFlag": true,
     "prompt": "",
-    "model": "V5_5",
+    "model": "V6",
     "style": "",
     "title": "",
     "continueAt": 0,

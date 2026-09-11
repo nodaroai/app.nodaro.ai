@@ -22,7 +22,7 @@
       "id": "suno-generate-1778418551551-uwym4p0l6",
       "data": {
         "label": "Suno Generate",
-        "model": "V5",
+        "model": "V6",
         "style": "",
         "title": "",
         "lyrics": "",
@@ -273,7 +273,7 @@
       "id": "suno-generate-1778418551551-r65lfwqqc",
       "data": {
         "label": "Suno Generate",
-        "model": "V5",
+        "model": "V6",
         "style": "",
         "title": "",
         "lyrics": "",
@@ -314,7 +314,7 @@
       "id": "suno-generate-1778418551551-m6kronudj",
       "data": {
         "label": "Suno Generate",
-        "model": "V5",
+        "model": "V6",
         "style": "",
         "title": "",
         "lyrics": "",
@@ -355,7 +355,7 @@
       "id": "suno-generate-1778418551551-7zc5y07la",
       "data": {
         "label": "Suno Generate",
-        "model": "V5",
+        "model": "V6",
         "style": "",
         "title": "",
         "lyrics": "",
@@ -707,7 +707,7 @@
       "id": "suno-generate-1778418551551-iw3pjedtd",
       "data": {
         "label": "Suno Generate",
-        "model": "V5",
+        "model": "V6",
         "style": "",
         "title": "",
         "lyrics": "",
@@ -836,7 +836,7 @@
       "id": "suno-generate-1778418551551-wuk144qs3",
       "data": {
         "label": "Suno Generate",
-        "model": "V5",
+        "model": "V6",
         "style": "",
         "title": "",
         "lyrics": "",
@@ -1000,7 +1000,7 @@
       "id": "suno-generate-1778418551552-v7yhugq29",
       "data": {
         "label": "Suno Generate",
-        "model": "V5",
+        "model": "V6",
         "style": "",
         "title": "",
         "lyrics": "",
@@ -1257,7 +1257,7 @@
       "id": "node_8",
       "data": {
         "label": "Suno Generate",
-        "model": "V5",
+        "model": "V6",
         "style": "",
         "title": "",
         "lyrics": "",

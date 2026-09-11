@@ -703,8 +703,8 @@ ${uiProtocolShim()}
       if (!leftEl) return;
       while (leftEl.firstChild) leftEl.removeChild(leftEl.firstChild);
       var model = state.model || '';
-      // Suno (V4 / V5) — full music follow-up suite.
-      if (model === 'suno' || model === 'suno-v5') {
+      // Suno (any version: suno, suno-v5, suno-v5_5, suno-v6*) — full music follow-up suite.
+      if (model.indexOf('suno') === 0) {
         leftEl.appendChild(makeAudioBtn('Stems', 'Separate vocal + instrumental stems', function() {
           pushAudioFollowup('separate stems from this Suno track', 'suno_separate_stem');
         }));

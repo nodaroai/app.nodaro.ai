@@ -118,6 +118,9 @@ export function buildModelMap(): Map<string, ModelMapping[]> {
   addAlias("chirp-auk", "suno", "music")           // V4.5
   addAlias("chirp-bluejay", "suno", "music")        // V4.5+
   addAlias("chirp-crow", "suno-v5", "music")        // V5
+  addAlias("chirp-hawk", "suno-v6", "music")        // V6 (KIE reports the same backend for V5.5 and every legacy alias, 2026-09-11 probe)
+  addAlias("chirp-hawk-wild", "suno-v6_wild", "music") // V6_WILD
+  addAlias("chirp-goose", "suno-v6_mini", "music")     // V6_MINI
 
   // Suno ops endpoints return sourceLabel as model key (no model field in records)
   addAlias("suno-lyrics", "suno-lyrics", "music")

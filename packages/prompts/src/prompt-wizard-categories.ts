@@ -333,11 +333,17 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "minimax": "General music generation, multiple genres",
   },
   "suno-generate": {
-    "V4": "Standard Suno generation",
-    "V4_5": "Improved quality and coherence",
+    // Current generation first (V6 = default), then the earlier ones — all
+    // offered in the picker; mirrors SUNO_MODELS order in @nodaro/shared.
+    "V6": "Flagship — greater musical expression, more natural vocals, richer details",
+    "V6_WILD": "Bolder, more distinctive, less predictable results for exploration",
+    "V6_MINI": "Lightweight and fast — quality/speed balance",
+    "V5_5": "Custom-model tuning with strong vocal quality",
+    "V5": "Superior musical expression, faster generation",
     "V4_5PLUS": "Enhanced V4.5 with better production",
     "V4_5ALL": "Full-featured V4.5",
-    "V5": "Latest Suno with highest quality",
+    "V4_5": "Improved quality and coherence",
+    "V4": "Standard Suno generation",
   },
   "text-to-audio": {
     "elevenlabs-sfx": "High quality sound effects and ambient audio",

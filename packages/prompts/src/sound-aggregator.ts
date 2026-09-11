@@ -96,7 +96,7 @@ export function composeSoundHintFromConnections(
   // Music consumers (suno-generate, generate-music) accept BOTH music nodes
   // AND voice nodes — voice description (gender, age, accent, language,
   // timbre, delivery archetype) is valid input for music with vocals. Suno
-  // V5 in particular benefits from rich voice description; the typed
+  // V6 in particular benefits from rich voice description; the typed
   // `vocalGender` field on Suno is also extracted below from voice-character.
   //
   // Voice Design rejects music nodes (different domain). Text-to-Audio

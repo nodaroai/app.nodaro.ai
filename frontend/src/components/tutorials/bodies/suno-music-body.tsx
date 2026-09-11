@@ -9,6 +9,7 @@
 import { useMemo, useState } from "react"
 import { TutorialAudio } from "../tutorial-audio"
 import type { TutorialBodyProps } from "../tutorial-registry"
+import { DEFAULT_SUNO_MODEL } from "@nodaro/shared"
 import { deriveSunoRuns, describeChange, INPUT_ORDER } from "./suno-runs"
 import "./suno-music.css"
 
@@ -193,7 +194,7 @@ export default function SunoMusicBody({ nodes, edges, onRunNode }: TutorialBodyP
                     than leaving the previous one playing under a new title. */}
                 <TutorialAudio key={run.id} src={run.audioUrl} label={`track ${index + 1}`} />
                 <div className="sm-caption">
-                  Generated with Suno {run.model ?? "V5"}
+                  Generated with Suno {run.model ?? DEFAULT_SUNO_MODEL}
                 </div>
               </div>
             ) : (

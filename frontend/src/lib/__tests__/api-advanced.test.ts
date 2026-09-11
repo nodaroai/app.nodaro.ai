@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { DEFAULT_SUNO_MODEL } from "@nodaro/shared"
 
 const mockGetSession = vi.fn()
 
@@ -204,7 +205,7 @@ describe("sunoCoverApi", () => {
 /*  5. sunoExtendApi                                                   */
 /* ------------------------------------------------------------------ */
 describe("sunoExtendApi", () => {
-  it("defaults defaultParamFlag to true and model to V5", async () => {
+  it("defaults defaultParamFlag to true and model to the default Suno version (V6)", async () => {
     sessionWith("tok-ext")
     const fetch = mockFetchJson({ jobId: "j-extend-1" })
     vi.stubGlobal("fetch", fetch)
@@ -215,7 +216,8 @@ describe("sunoExtendApi", () => {
     const body = JSON.parse(fetch.mock.calls[0][1].body)
     expect(body.audioId).toBe("audio-123")
     expect(body.defaultParamFlag).toBe(true)
-    expect(body.model).toBe("V5")
+    expect(body.model).toBe(DEFAULT_SUNO_MODEL)
+    expect(DEFAULT_SUNO_MODEL).toBe("V6")
   })
 
   it("allows overriding model and defaultParamFlag", async () => {

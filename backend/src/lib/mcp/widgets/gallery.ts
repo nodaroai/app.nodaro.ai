@@ -1106,7 +1106,7 @@ ${uiProtocolShim()}
         }));
       } else if (item.kind === 'audio') {
         var model = item.model || '';
-        if (model === 'suno' || model === 'suno-v5') {
+        if (model.indexOf('suno') === 0) {
           actionsLeft.appendChild(makeTextBtn('Stems', null, function() {
             pushFollowup('separate stems from this Suno track', 'suno_separate_stem');
           }));

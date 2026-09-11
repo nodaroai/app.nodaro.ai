@@ -1,7 +1,7 @@
 ---
 node_type: suno-generate
-generated_at: 2026-08-29T19:02:38.651Z
-generated_from: 7dbf4818b
+generated_at: 2026-09-10T23:12:24.802Z
+generated_from: 15c8b1229
 ---
 
 # Suno Generate
@@ -48,7 +48,7 @@ generated_from: 7dbf4818b
 {
   "label": "Suno Generate",
   "prompt": "",
-  "model": "V5_5",
+  "model": "V6",
   "lyrics": "",
   "style": "",
   "title": "",
@@ -99,7 +99,7 @@ generated_from: 7dbf4818b
   "data": {
     "label": "Suno Generate",
     "prompt": "",
-    "model": "V5_5",
+    "model": "V6",
     "lyrics": "",
     "style": "",
     "title": "",

@@ -6,7 +6,7 @@
  * duration hint is custom-mode-gated upstream so it is never sent), and with
  * a title AND style it is CUSTOM mode (2026-08-19) — `prompt` becomes the
  * exact LYRICS, `style` the musical description, and `duration` is honoured
- * on V5_5. Instrumental defaults ON either way; the first track wins.
+ * on the V6 family. Instrumental defaults ON either way; the first track wins.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
@@ -15,7 +15,7 @@ vi.mock("../../../providers/kie/suno-client.js", () => ({
   sunoGenerate: mockSunoGenerate,
   // Real (pure) impl — the toolkit uses it to derive the egress modelKey.
   sunoCreditType: (model: string | undefined, fallback: string) =>
-    model === "V5_5" ? "suno-v5_5" : model === "V5" ? "suno-v5" : fallback,
+    ({ V6: "suno-v6", V5_5: "suno-v5_5", V5: "suno-v5" } as Record<string, string>)[model ?? ""] ?? fallback,
 }))
 
 import { buildToolkit } from "../toolkit.js"
@@ -29,7 +29,7 @@ describe("tk.providers.generateMusic", () => {
     id: "t1", audioUrl: "https://suno/track-1.mp3", duration: 187.4, ...over,
   })
 
-  it("without a title: description mode + V5_5, instrumental ON, style forwarded, and NO duration hint", async () => {
+  it("without a title: description mode + V6, instrumental ON, style forwarded, and NO duration hint", async () => {
     mockSunoGenerate.mockResolvedValue({ taskId: "suno-task-1", tracks: [track()] })
     const tk = buildToolkit()
     const res = await tk.providers.generateMusic!("tense cinematic chase score", {
@@ -40,15 +40,15 @@ describe("tk.providers.generateMusic", () => {
     const [params, reconcile] = mockSunoGenerate.mock.calls[0]!
     expect(params).toEqual({
       prompt: "tense cinematic chase score",
-      model: "V5_5",
+      model: "V6",
       customMode: false,
       instrumental: true,
       style: "orchestral hybrid, 140 BPM",
     })
     expect(params.duration).toBeUndefined()
     // B3 egress: even with no onTaskCreated, OUR modelKey rides the reconcileOpts
-    // (model is pinned V5_5 → "suno-v5_5") so the seam attributes this billed create.
-    expect(reconcile).toEqual({ modelKey: "suno-v5_5" })
+    // (model is pinned V6 → "suno-v6") so the seam attributes this billed create.
+    expect(reconcile).toEqual({ modelKey: "suno-v6" })
     expect(res).toEqual({ url: "https://suno/track-1.mp3", durationSec: 187.4, taskId: "suno-task-1" })
   })
 
@@ -70,7 +70,7 @@ describe("tk.providers.generateMusic", () => {
     })
     expect(mockSunoGenerate.mock.calls[0]![0]).toEqual({
       prompt: "[Intro]\nPa ra pa pa pri pa\n\n[Verse]\nto pe pe pari pore",
-      model: "V5_5",
+      model: "V6",
       customMode: true,
       instrumental: false,
       style: "acoustic world-jazz, ~100 bpm feel, upright bass and hand percussion",
@@ -145,7 +145,7 @@ describe("tk.providers.generateMusic", () => {
     const [, reconcile] = mockSunoGenerate.mock.calls[0]!
     expect(typeof reconcile?.onTaskCreated).toBe("function")
     // The onTaskCreated adapter and OUR modelKey coexist on the reconcileOpts.
-    expect(reconcile.modelKey).toBe("suno-v5_5")
+    expect(reconcile.modelKey).toBe("suno-v6")
     await reconcile.onTaskCreated("task-xyz")
     expect(seen).toEqual(["task-xyz"])
   })

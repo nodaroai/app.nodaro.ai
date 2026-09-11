@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { sunoCreditType } from "@nodaro/shared"
+import { sunoCreditType, DEFAULT_SUNO_MODEL } from "@nodaro/shared"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
 export interface PipelineGenerateMusicArgs {
@@ -76,7 +76,7 @@ export async function pipelineGenerateMusic(
   // drift from what routes/suno.ts charges. Instrumental score unless lyrics
   // are supplied.
   if (provider === "suno") {
-    const sunoModel = modelVersion ?? "V5_5"
+    const sunoModel = modelVersion ?? DEFAULT_SUNO_MODEL
     const sunoCreditId = sunoCreditType(sunoModel, "suno-generate")
     return runPipelineWorkerJob({
       supabase,

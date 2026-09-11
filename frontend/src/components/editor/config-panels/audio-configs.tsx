@@ -55,7 +55,7 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType } from "@nodaro/shared"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType } from "@nodaro/shared"
 import type { AudioFxPreset } from "@nodaro/shared"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import { MappableField } from "./mappable-field"
@@ -89,6 +89,9 @@ import type { ConfigProps } from "./types"
 // Hoisted to avoid creating a fresh empty array on every render — preserves
 // referential equality so memoised children don't re-run.
 const EMPTY_EDGES: ReadonlyArray<WorkflowEdge> = []
+// Add-instrumental / add-vocals accept a NARROWER version set than the other
+// Suno routes (SUNO_ADD_TRACK_MODELS), so their dropdown is the shared table
+// filtered by it — a version those routes would reject is never offered.
 const SUNO_ADD_TRACK_MODEL_OPTIONS = SUNO_MODELS.filter(m => (SUNO_ADD_TRACK_MODELS as readonly string[]).includes(m.value))
 
 // i18n key maps that PARALLEL the English constant tables (AUDIO_FX_PRESET_LABELS
@@ -501,12 +504,12 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
               refMap={refMap}
               snippets={promptSnippets}
             />
-            <PromptLengthCounter value={data.prompt} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.promptLyrics")} />
+            <PromptLengthCounter value={data.prompt} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? DEFAULT_SUNO_MODEL} noun={t("audiocfg.promptLyrics")} />
           </>
         )}
       </SunoField>
       <MappableField field="model" label={t("field.model")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoGenerateData["model"] })}>
+        <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoGenerateData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
@@ -516,7 +519,9 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
         </Select>
       </MappableField>
       <ModelDescriptionHint modelId={data.model} />
-      {(data.model || "V5_5") === "V5_5" && (
+      {/* KIE honours `duration` in custom mode on the V6 family only — the
+          shared predicate is the single source of truth for that. */}
+      {sunoModelHonoursDuration(data.model ?? DEFAULT_SUNO_MODEL) && (
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.durationSecondsOptional")}</label>
           <Input
@@ -526,8 +531,8 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
             placeholder={t("audiocfg.phAuto")}
           />
           <p className="text-[10px] text-muted-foreground">
-            {t("audiocfg.hintV55Duration")}
-            {getEffectiveSunoCustomMode(data) ? "." : t("audiocfg.hintV55DurationInactive")}
+            {t("audiocfg.hintV6Duration")}
+            {getEffectiveSunoCustomMode(data) ? "." : t("audiocfg.hintV6DurationInactive")}
           </p>
         </div>
       )}
@@ -628,7 +633,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
               refMap={refMap}
               snippets={promptSnippets}
             />
-            <PromptLengthCounter value={data.prompt} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.promptLyrics")} />
+            <PromptLengthCounter value={data.prompt} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? DEFAULT_SUNO_MODEL} noun={t("audiocfg.promptLyrics")} />
           </>
         )}
       </MappableField>
@@ -636,7 +641,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
         <Input value={data.uploadUrl ?? ""} onChange={(e) => onUpdate({ uploadUrl: e.target.value })} placeholder={t("audiocfg.phCoverUrl")} />
       </MappableField>
       <MappableField field="model" label={t("field.model")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoCoverData["model"] })}>
+        <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoCoverData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
@@ -663,7 +668,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
             displayMode={variableDisplayMode}
             refMap={refMap}
           />
-          <PromptLengthCounter value={data.lyrics ?? ""} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.lyrics")} />
+          <PromptLengthCounter value={data.lyrics ?? ""} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? DEFAULT_SUNO_MODEL} noun={t("audiocfg.lyrics")} />
         </>
       </MappableField>
       <MappableField field="style" label={t("audiocfg.styleOptional")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -680,7 +685,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
             displayMode={variableDisplayMode}
             refMap={refMap}
           />
-          <PromptLengthCounter value={data.style ?? ""} max={getMaxSunoStyleChars(data.model)} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.style")} />
+          <PromptLengthCounter value={data.style ?? ""} max={getMaxSunoStyleChars(data.model)} modelLabel={data.model ?? DEFAULT_SUNO_MODEL} noun={t("audiocfg.style")} />
         </>
       </MappableField>
       <MappableField field="negativeStyle" label={t("audiocfg.negativeStyleOptional")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -765,12 +770,12 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
               refMap={refMap}
               snippets={promptSnippets}
             />
-            <PromptLengthCounter value={data.prompt ?? ""} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.promptLyrics")} />
+            <PromptLengthCounter value={data.prompt ?? ""} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? DEFAULT_SUNO_MODEL} noun={t("audiocfg.promptLyrics")} />
           </>
         )}
       </MappableField>
       <MappableField field="model" label={t("field.model")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoExtendData["model"] })}>
+        <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoExtendData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
@@ -797,7 +802,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
             displayMode={variableDisplayMode}
             refMap={refMap}
           />
-          <PromptLengthCounter value={data.style ?? ""} max={getMaxSunoStyleChars(data.model)} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.style")} />
+          <PromptLengthCounter value={data.style ?? ""} max={getMaxSunoStyleChars(data.model)} modelLabel={data.model ?? DEFAULT_SUNO_MODEL} noun={t("audiocfg.style")} />
         </>
       </MappableField>
       <div className="flex items-center gap-2">
@@ -1085,7 +1090,7 @@ export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMap
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">{t("audiocfg.hintMashup")}</p>
       <MappableField field="model" label={t("field.model")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoMashupData["model"] })}>
+        <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoMashupData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
@@ -1255,7 +1260,7 @@ export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappin
       <p className="text-xs text-muted-foreground">{t("audiocfg.hintAddInstrumental")}</p>
       <SunoIdFields taskId={data.taskId} audioId={data.audioId} inherited={inherited} onUpdate={onUpdate} />
       <MappableField field="model" label={t("field.model")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoAddInstrumentalData["model"] })}>
+        <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoAddInstrumentalData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_ADD_TRACK_MODEL_OPTIONS.map((m) => (
@@ -1280,7 +1285,7 @@ export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, on
       <p className="text-xs text-muted-foreground">{t("audiocfg.hintAddVocals")}</p>
       <SunoIdFields taskId={data.taskId} audioId={data.audioId} inherited={inherited} onUpdate={onUpdate} />
       <MappableField field="model" label={t("field.model")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoAddVocalsData["model"] })}>
+        <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoAddVocalsData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_ADD_TRACK_MODEL_OPTIONS.map((m) => (
@@ -1324,7 +1329,7 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">{t("audiocfg.hintExtendUploaded")}</p>
       <MappableField field="model" label={t("field.model")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoUploadExtendData["model"] })}>
+        <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoUploadExtendData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
@@ -1352,7 +1357,7 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
                 literally rather than getEffectiveSunoCustomMode(data) (whose
                 style/title heuristic would disagree with the route here). */}
             <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= SUNO_HARD_CEILING) onUpdate({ prompt: v }) }} placeholder={t("audiocfg.phDescribeExtension")} maxLength={SUNO_HARD_CEILING} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} snippets={promptSnippets} />
-            <PromptLengthCounter value={data.prompt ?? ""} max={getMaxSunoPromptChars(data.model, false)} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.prompt")} />
+            <PromptLengthCounter value={data.prompt ?? ""} max={getMaxSunoPromptChars(data.model, false)} modelLabel={data.model ?? DEFAULT_SUNO_MODEL} noun={t("audiocfg.prompt")} />
           </>
         )}
       </MappableField>
