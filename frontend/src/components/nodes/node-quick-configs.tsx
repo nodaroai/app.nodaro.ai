@@ -31,6 +31,7 @@ import {
   CINEMATIC_ASPECT_RATIO_OPTIONS,
   CINEMATIC_RESOLUTION_OPTIONS,
   COLLAGE_ASPECT_RATIOS,
+  COMPOSITION_RATIOS,
   IMAGE_GEN_MODELS,
   getAspectRatiosForModel,
   IMAGE_RESOLUTION_OPTIONS,
@@ -42,7 +43,7 @@ import {
   getDurationsForVideoModel,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { availableReasoningEfforts, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared"
+import { availableReasoningEfforts, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS } from "@nodaro/shared"
 import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 
@@ -356,6 +357,31 @@ const cinematicDurationControl: QuickConfigControl = {
 }
 
 /** generate-mask segmentation threshold (numeric — Grounded SAM confidence). */
+/** generate-3d-scene aspect — the SAME COMPOSITION_RATIOS list the config
+ *  panel renders (and the `/v1/3d-scene/generate` Zod enum accepts), labels
+ *  compacted to the bare ratio for the pill. Deliberately NOT
+ *  PRO3D_ASPECT_RATIOS: 21:9 is a 3D Render Pro capability this route refuses. */
+const scene3dAspectControl: QuickConfigControl = {
+  field: "aspectRatio",
+  ariaLabel: "Aspect",
+  icon: Ratio,
+  options: COMPOSITION_RATIOS.map((r) => ({ value: r.value, label: r.value })),
+}
+
+/** generate-3d-scene length — writes `durationSeconds` (the node's own field,
+ *  not the video strip's `duration`). Presets cover the previz sweet spot and
+ *  include the node default (4s); "Custom…" opens the slider/number popover
+ *  for ANY value inside the route's SCENE3D_LIMITS bounds, so the strip can
+ *  never offer a length the route rejects. */
+const scene3dDurationControl: QuickConfigControl = {
+  field: "durationSeconds",
+  ariaLabel: "Duration",
+  icon: Clock,
+  numeric: true,
+  options: [2, 4, 6, 8, 10, 15, 20, 30].map((v) => ({ value: String(v), label: `${v}s` })),
+  customRange: { min: SCENE3D_LIMITS.minDurationSeconds, max: SCENE3D_LIMITS.maxDurationSeconds, unit: "s" },
+}
+
 const maskThresholdControl: QuickConfigControl = {
   field: "threshold", ariaLabel: "Threshold", icon: Sparkles, numeric: true,
   options: [
@@ -687,7 +713,9 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   // model dropdown here wrote a field the node never reads.
   "motion-graphics": [llmModelControl, reasoningEffortControl],
   "3d-title": [llmModelControl, reasoningEffortControl],
-  "generate-3d-scene": [llmModelControl, reasoningEffortControl],
+  // Length + aspect sit on the strip like generate-image / generate-video —
+  // they are the generation parameters a user reaches for on every run.
+  "generate-3d-scene": [llmModelControl, reasoningEffortControl, scene3dAspectControl, scene3dDurationControl],
   "edit-3d-scene": [llmModelControl, reasoningEffortControl],
   // ── Audio / voice (inline-mirrored lists) ──
   "transcribe": [sttProviderControl],

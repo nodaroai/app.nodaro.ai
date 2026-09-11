@@ -1,9 +1,9 @@
 import type { FastifyInstance, FastifyRequest, LightMyRequestResponse } from "fastify"
 import { z } from "zod"
-import { resolveLlmCreditId, WORKSPACE_HEADER_LOWER } from "@nodaro/shared"
+import { resolveLlmCreditId, videoAnalysisResultSchema, WORKSPACE_HEADER_LOWER } from "@nodaro/shared"
 import { shouldProxyLlmToCloud } from "../lib/cloud-llm-proxy.js"
 import { insertJob } from "../lib/insert-job.js"
-import { stampAnalysisChild, discardUnstartedJob } from "../lib/llm-structured-job-row.js"
+import { stampAnalysisChild, discardUnstartedJob, readOwnAnalysisChild } from "../lib/llm-structured-job-row.js"
 import { config } from "../lib/config.js"
 import { videoQueue } from "../lib/queue.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
@@ -39,6 +39,17 @@ import type { LlmStructuredJobPayload } from "../workers/handlers/llm-structured
  * so a refused child has one thing to undo and an unreserved parent never
  * spawns a paid analysis.
  *
+ * With `analysisJobId` the run drafts FROM A FINISHED ANALYSIS the caller
+ * already owns — a retry after a failed draft, another model, a re-run with
+ * different notes — and buys no second one (the Director spec's §13 / P3).
+ * The child is admitted BEFORE any row exists (the recast create route's
+ * precheck, every refusal a 422: missing and foreign are the same
+ * `analysis_not_found`, a failed or still-running analysis, an unreadable
+ * result — never a 404, which a client reads as "no such route") and stamped on the parent
+ * as reused, so the worker's wait returns at once and the row's price is
+ * the plan's alone. `videoUrl` may ride beside it as the record of what was
+ * analyzed; nothing is fetched from it.
+ *
  * Keyless installs that proxy their LLM calls to nodaro.ai get 503 (spec
  * D17): the sync proxy forwards before any local row; an async parent is
  * reserved locally at create, so mirroring a cloud job into it would
@@ -62,9 +73,17 @@ export const llmStructuredJobBody = llmStructuredBody
       })
       .strict()
       .optional(),
+    /** Draft from THIS finished `video-analysis` job of the caller's instead
+     *  of analyzing `videoUrl` again — no child is created, nothing more is
+     *  reserved for analysis. */
+    analysisJobId: z.uuid().optional(),
   })
   .refine((b) => !b.videoAnalysis || Boolean(b.videoUrl), {
     message: "videoAnalysis requires videoUrl",
+    path: ["videoAnalysis"],
+  })
+  .refine((b) => !(b.videoAnalysis && b.analysisJobId), {
+    message: "videoAnalysis has no effect with analysisJobId — the analysis already ran",
     path: ["videoAnalysis"],
   })
 
@@ -110,10 +129,45 @@ async function createAnalysisChild(app: FastifyInstance, req: FastifyRequest, bo
   return { ok: true, jobId }
 }
 
+type ReuseResult = { ok: true; credits: number | null } | { ok: false; status: number; body: unknown }
+
+/**
+ * Admit a CLIENT-SUPPLIED analysis (the recast create route's precheck, on
+ * the caller's own rows): missing and foreign answer the SAME 422 (no
+ * ownership oracle — and deliberately NOT a 404: a 404 from this route is
+ * what a client reads as "the route does not exist on this platform", the
+ * Studio Director's session-wide feature-detect), a job of another type or a
+ * terminal failure is a 422, a still-running one is a 422 the caller retries
+ * later, and the result is parsed against the shared schema so the worker
+ * cannot fail on it after the reservation. Runs BEFORE any row exists — a
+ * refusal here costs nothing.
+ */
+async function precheckReusedAnalysis(analysisJobId: string, userId: string): Promise<ReuseResult> {
+  const row = await readOwnAnalysisChild(analysisJobId, userId)
+  const refuse = (status: number, code: string, message: string): ReuseResult => ({
+    ok: false,
+    status,
+    body: { error: { code, message } },
+  })
+  if (!row) return refuse(422, "analysis_not_found", "That analysis isn't available to draft from.")
+  if (row.job_type !== "video-analysis") return refuse(422, "not_analysis", "That job isn't a video analysis.")
+  if (row.status === "failed" || row.status === "cancelled") {
+    return refuse(422, "analysis_failed", "The source analysis failed.")
+  }
+  if (row.status !== "completed") {
+    return refuse(422, "analysis_not_ready", "The source analysis is still processing. Retry once it completes.")
+  }
+  const json = (row.output_data as Record<string, unknown> | null)?.json
+  if (!videoAnalysisResultSchema.safeParse(json).success) {
+    return refuse(422, "invalid_analysis", "The source analysis output is invalid.")
+  }
+  return { ok: true, credits: row.credits }
+}
+
 /** The enqueue payload: the body the worker needs, minus the create-time-only
- *  fields (the child is already made; the label lives on the row). */
-function workerPayload(body: LlmStructuredJobBody): Omit<LlmStructuredJobPayload, "jobId" | "usageLogId" | "analysisJobId"> {
-  const { videoUrl: _videoUrl, videoAnalysis: _videoAnalysis, label: _label, ...rest } = body
+ *  fields (the child is already made — or admitted; the label lives on the row). */
+function workerPayload(body: LlmStructuredJobBody): Omit<LlmStructuredJobPayload, "jobId" | "usageLogId" | "analysisJobId" | "analysisReused"> {
+  const { videoUrl: _videoUrl, videoAnalysis: _videoAnalysis, label: _label, analysisJobId: _analysisJobId, ...rest } = body
   return rest
 }
 
@@ -144,6 +198,13 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
       const prepared = prepareStructuredRequest(parsed.data)
       if (!prepared.ok) return reply.status(prepared.status).send({ error: prepared.error })
 
+      // A reused analysis is admitted BEFORE the row exists: a refusal here
+      // is one more that costs nothing.
+      if (parsed.data.analysisJobId) {
+        const admitted = await precheckReusedAnalysis(parsed.data.analysisJobId, userId)
+        if (!admitted.ok) return reply.status(admitted.status).send(admitted.body)
+      }
+
       // Derived ONCE: the row's projection and the analysis stamp below are
       // the same object, so the two cannot drift.
       const inputData = structuredJobInputData(parsed.data, LLM_STRUCTURED_JOB_TYPE)
@@ -163,7 +224,12 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
       if (reply.sent) return
 
       let analysisJobId: string | undefined
-      if (parsed.data.videoUrl) {
+      const analysisReused = Boolean(parsed.data.analysisJobId)
+      if (parsed.data.analysisJobId) {
+        // Admitted above; it costs this run nothing, so no price is stamped.
+        analysisJobId = parsed.data.analysisJobId
+        await stampAnalysisChild(job.id, userId, inputData, { analysisJobId, reused: true })
+      } else if (parsed.data.videoUrl) {
         const child = await createAnalysisChild(app, req, parsed.data)
         if (!child.ok) {
           // The analysis route refused: nothing has run, so the parent goes
@@ -172,7 +238,10 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
           return reply.status(child.status).send(child.body)
         }
         analysisJobId = child.jobId
-        await stampAnalysisChild(job.id, userId, inputData, analysisJobId)
+        // The child's price is on its row from its own reservation; stamped
+        // now so a run list shows the whole cost from the first read.
+        const analysisCredits = (await readOwnAnalysisChild(analysisJobId, userId))?.credits ?? null
+        await stampAnalysisChild(job.id, userId, inputData, { analysisJobId, analysisCredits })
       }
 
       // attempts: 1 — the LLM call is the paid step; a BullMQ re-run after a
@@ -183,6 +252,7 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
         usageLogId: reservation?.usageLogId,
         ...workerPayload(parsed.data),
         ...(analysisJobId ? { analysisJobId } : {}),
+        ...(analysisReused ? { analysisReused: true } : {}),
       }
       // A tighter fail window than the shared queue's 5000: the full system
       // prompt (≤ 100k chars) + jsonSchema (≤ 64 KB) ride job.data into Redis.
