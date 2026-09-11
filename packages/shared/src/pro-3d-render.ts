@@ -271,6 +271,23 @@ export interface Pro3DRenderValidationWarning {
   shotId?: string
 }
 
+/**
+ * One still per shot of the exported composition.
+ *
+ * A render's contact sheet: the frame a shot OPENS on, which is the frame that
+ * says what the shot is of. `shotIndex` is the 0-based position in the v2
+ * composition's `shots` array — a v1 (single-shot) scene has exactly one still,
+ * index 0 at frame 0 — and `frame` is that shot's own first frame in the
+ * composition's frame space, so a caller can line a still up against the MP4
+ * without re-deriving shot boundaries.
+ */
+export interface Pro3DRenderShotStill {
+  shotIndex: number
+  frame: number
+  assetId: string
+  url: string
+}
+
 export interface Pro3DRenderResultMetadata {
   width: number
   height: number
@@ -299,6 +316,12 @@ export interface Pro3DRenderJobOutput {
   scenePlan: Scene3DPlan
   sceneRevisionId: string
   posterAssetId: string
+  /**
+   * One still per shot, ordered by `shotIndex`. Optional and additive: a
+   * runtime that does not render stills yet returns a complete result without
+   * them, and a result that HAS them has one for every shot.
+   */
+  shotStills?: Pro3DRenderShotStill[]
   /** Present when an editable native source was retained for this revision. */
   sourceArtifactId?: string
   validation: {
@@ -324,12 +347,22 @@ export interface Pro3DRenderJobOutput {
  * them to satisfy the schema; a runtime that has not produced them yet simply
  * does not parse as complete, which is the honest answer.
  */
+export const pro3DRenderShotStillSchema = z
+  .object({
+    shotIndex: z.number().int().min(0),
+    frame: z.number().int().min(0),
+    assetId: z.string().min(1),
+    url: z.string().min(1),
+  })
+  .passthrough()
+
 export const pro3DRenderJobOutputSchema = z
   .object({
     videoUrl: z.string().min(1),
     scenePlan: scene3DAnyPlanSchema,
     sceneRevisionId: z.string().min(1),
     posterAssetId: z.string().min(1),
+    shotStills: z.array(pro3DRenderShotStillSchema).optional(),
     sourceArtifactId: z.string().min(1).optional(),
     validation: z
       .object({
@@ -362,6 +395,28 @@ export const pro3DRenderJobOutputSchema = z
 
 export function isPro3DRenderJobOutput(value: unknown): value is Pro3DRenderJobOutput {
   return pro3DRenderJobOutputSchema.safeParse(value).success
+}
+
+/**
+ * The stills on a result, in shot order — the ONE reader every surface uses.
+ *
+ * Tolerant on purpose: this runs on canvas node data, on a job row read back
+ * from the database and on an MCP result envelope, and in every one of those a
+ * missing or malformed list means "this result has no stills", never "refuse
+ * the whole result". Sorting here is what lets `shotStills[i]` mean shot `i`
+ * at every call site without each one remembering to sort.
+ */
+export function pro3DRenderShotStills(output: unknown): Pro3DRenderShotStill[] {
+  const list = (output as { shotStills?: unknown } | null | undefined)?.shotStills
+  if (!Array.isArray(list)) return []
+  const parsed = list.flatMap((entry) => {
+    const result = pro3DRenderShotStillSchema.safeParse(entry)
+    return result.success
+      ? [{ shotIndex: result.data.shotIndex, frame: result.data.frame,
+          assetId: result.data.assetId, url: result.data.url }]
+      : []
+  })
+  return parsed.sort((a, b) => a.shotIndex - b.shotIndex)
 }
 
 /**

@@ -12,6 +12,8 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
+import { NODE_CREDIT_COSTS } from "@/components/editor/workflow-editor/types"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
@@ -21,7 +23,14 @@ import type { RenderVideoData } from "@/types/nodes"
 function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as RenderVideoData
-  const credits = useModelCredits("render-video", 15)
+  // A 3D scene render is priced by FRAME SIZE, and the frame lives in the plan
+  // an upstream composer holds — so the badge asks for the row the run will
+  // actually be charged against, not the flat one. Every aspect the canvas can
+  // author caps at 1920 px, so this only ever differs for an imported or
+  // MCP-written 2560 px scene; that is exactly the case a flat badge would
+  // under-quote by up to 2.5x.
+  const creditId = useWorkflowStore((s) => renderVideoCreditIdForNode({ id, type: "render-video", data: data as Record<string, unknown> }, s.nodes, s.edges))
+  const credits = useModelCredits(creditId, NODE_CREDIT_COSTS["render-video"])
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)

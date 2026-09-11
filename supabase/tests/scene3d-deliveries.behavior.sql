@@ -206,3 +206,108 @@ DO $$ BEGIN
  RAISE NOTICE 'ALL BEHAVIOR ASSERTIONS PASSED';
 END $$;
 ROLLBACK;
+
+-- One still per shot, pinned alongside the poster and the report.
+BEGIN;
+INSERT INTO auth.users(id, email) VALUES
+ ('00000000-0000-4000-8000-00000000dc01', 'stills-owner@example.test');
+INSERT INTO public.projects(id, user_id, name) VALUES
+ ('00000000-0000-4000-8000-00000000dc02', '00000000-0000-4000-8000-00000000dc01', 'Stills proof');
+INSERT INTO public.workflows(id, user_id, project_id, name) VALUES
+ ('00000000-0000-4000-8000-00000000dc03', '00000000-0000-4000-8000-00000000dc01',
+  '00000000-0000-4000-8000-00000000dc02', 'Stills anchor');
+INSERT INTO public.jobs(id, user_id, workflow_id, status) VALUES
+ ('00000000-0000-4000-8000-00000000dc04', '00000000-0000-4000-8000-00000000dc01',
+  '00000000-0000-4000-8000-00000000dc03', 'processing');
+INSERT INTO public.scene3d_revisions(id, user_id, workflow_id, plan, plan_sha256) VALUES
+ ('00000000-0000-4000-8000-00000000dc05', '00000000-0000-4000-8000-00000000dc01',
+  '00000000-0000-4000-8000-00000000dc03',
+  '{"planType":"3d-scene","schemaVersion":2,"revisionId":"00000000-0000-4000-8000-00000000dc05"}', repeat('a',64));
+INSERT INTO public.scene3d_upload_intents(artifact_id, user_id, job_id, revision_id, kind, bucket, object_key, expires_at, collect_after)
+VALUES
+ ('00000000-0000-4000-8000-00000000dc06', '00000000-0000-4000-8000-00000000dc01',
+  '00000000-0000-4000-8000-00000000dc04', '00000000-0000-4000-8000-00000000dc05', 'poster', 'private-scenes',
+  'stills-poster.png', now() + interval '1 hour', now() + interval '2 hours'),
+ ('00000000-0000-4000-8000-00000000dc07', '00000000-0000-4000-8000-00000000dc01',
+  '00000000-0000-4000-8000-00000000dc04', '00000000-0000-4000-8000-00000000dc05', 'validation-report', 'private-scenes',
+  'stills-report.json', now() + interval '1 hour', now() + interval '2 hours'),
+ ('00000000-0000-4000-8000-00000000dc08', '00000000-0000-4000-8000-00000000dc01',
+  '00000000-0000-4000-8000-00000000dc04', '00000000-0000-4000-8000-00000000dc05', 'shot-still', 'private-scenes',
+  'shot-0.png', now() + interval '1 hour', now() + interval '2 hours'),
+ ('00000000-0000-4000-8000-00000000dc09', '00000000-0000-4000-8000-00000000dc01',
+  '00000000-0000-4000-8000-00000000dc04', '00000000-0000-4000-8000-00000000dc05', 'shot-still', 'private-scenes',
+  'shot-1.png', now() + interval '1 hour', now() + interval '2 hours');
+
+CREATE FUNCTION pg_temp.stills_payload() RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_build_object(
+  'job_id','00000000-0000-4000-8000-00000000dc04','user_id','00000000-0000-4000-8000-00000000dc01',
+  'source_kind','retained-revision','source_revision_id','00000000-0000-4000-8000-00000000dc05',
+  'source_owner_id','00000000-0000-4000-8000-00000000dc01','source_workflow_id','00000000-0000-4000-8000-00000000dc03',
+  'source_plan_sha256',repeat('a',64),'mode','render-only',
+  'artifacts', jsonb_build_array(
+   jsonb_build_object('artifact_id','00000000-0000-4000-8000-00000000dc06',
+     'artifact_owner_id','00000000-0000-4000-8000-00000000dc01','usage','poster','kind','poster',
+     'sha256',repeat('c',64),'byte_length',64,'bucket','private-scenes','object_key','stills-poster.png','etag','poster-tag'),
+   jsonb_build_object('artifact_id','00000000-0000-4000-8000-00000000dc07',
+     'artifact_owner_id','00000000-0000-4000-8000-00000000dc01','usage','validation','kind','validation-report',
+     'sha256',repeat('b',64),'byte_length',32,'bucket','private-scenes','object_key','stills-report.json','etag','report-tag'),
+   jsonb_build_object('artifact_id','00000000-0000-4000-8000-00000000dc08',
+     'artifact_owner_id','00000000-0000-4000-8000-00000000dc01','usage','shot-still','kind','shot-still',
+     'shot_index',0,'frame',0,'width',1280,'height',720,
+     'sha256',repeat('d',64),'byte_length',48,'bucket','private-scenes','object_key','shot-0.png','etag','shot-0-tag'),
+   jsonb_build_object('artifact_id','00000000-0000-4000-8000-00000000dc09',
+     'artifact_owner_id','00000000-0000-4000-8000-00000000dc01','usage','shot-still','kind','shot-still',
+     'shot_index',1,'frame',96,'width',1280,'height',720,
+     'sha256',repeat('e',64),'byte_length',48,'bucket','private-scenes','object_key','shot-1.png','etag','shot-1-tag')))
+$$;
+
+SET LOCAL ROLE service_role;
+DO $$ BEGIN
+ PERFORM public.scene3d_publish_delivery(jsonb_set(pg_temp.stills_payload(), '{artifacts,3,shot_index}', '0'));
+ RAISE EXCEPTION 'ASSERT FAIL: two stills claimed one shot';
+EXCEPTION WHEN SQLSTATE '55015' THEN RAISE NOTICE 'ok a shot owns at most one still'; END $$;
+DO $$ BEGIN
+ PERFORM public.scene3d_publish_delivery(jsonb_set(pg_temp.stills_payload(), '{artifacts,3,frame}', '0'));
+ RAISE EXCEPTION 'ASSERT FAIL: two stills claimed one frame';
+EXCEPTION WHEN SQLSTATE '55015' THEN RAISE NOTICE 'ok a frame owns at most one still'; END $$;
+DO $$ BEGIN
+ PERFORM public.scene3d_publish_delivery(pg_temp.stills_payload() #- '{artifacts,2,frame}');
+ RAISE EXCEPTION 'ASSERT FAIL: a still published without its frame';
+EXCEPTION WHEN SQLSTATE '55015' THEN RAISE NOTICE 'ok a still must name its own frame'; END $$;
+DO $$ BEGIN
+ PERFORM public.scene3d_publish_delivery(jsonb_set(pg_temp.stills_payload(), '{artifacts,0,shot_index}', '0'));
+ RAISE EXCEPTION 'ASSERT FAIL: a poster carried a shot identity';
+EXCEPTION WHEN SQLSTATE '55015' THEN RAISE NOTICE 'ok only a still carries a shot identity'; END $$;
+DO $$ BEGIN
+ PERFORM public.scene3d_publish_delivery(jsonb_set(pg_temp.stills_payload(), '{artifacts,2,via_revision_id}',
+   '"00000000-0000-4000-8000-00000000dc05"'));
+ RAISE EXCEPTION 'ASSERT FAIL: a still was reused from a revision';
+EXCEPTION WHEN SQLSTATE '55013' THEN RAISE NOTICE 'ok a revision never pins a still to reuse'; END $$;
+DO $$ BEGIN
+ ASSERT NOT EXISTS (SELECT FROM public.scene3d_deliveries), 'ASSERT FAIL: a refused publication left a delivery';
+ ASSERT public.scene3d_publish_delivery(pg_temp.stills_payload())='created', 'ASSERT FAIL: stills publication failed';
+ ASSERT (SELECT count(*) FROM public.scene3d_delivery_artifacts WHERE usage='shot-still')=2,
+   'ASSERT FAIL: the delivery did not pin both stills';
+ ASSERT (SELECT array_agg(artifact_id ORDER BY shot_index) FROM public.scene3d_delivery_artifacts WHERE usage='shot-still')
+   = ARRAY['00000000-0000-4000-8000-00000000dc08','00000000-0000-4000-8000-00000000dc09']::uuid[],
+   'ASSERT FAIL: stills are not ordered by shot';
+ ASSERT (SELECT frame FROM public.scene3d_delivery_artifacts WHERE artifact_id='00000000-0000-4000-8000-00000000dc09')=96,
+   'ASSERT FAIL: a still lost its frame';
+ RAISE NOTICE 'ok a delivery pins one still per shot beside its poster and report';
+END $$;
+DO $$ BEGIN
+ ASSERT public.scene3d_publish_delivery(pg_temp.stills_payload())='unchanged', 'ASSERT FAIL: exact replay failed';
+ RAISE NOTICE 'ok an exact replay of a stills delivery is unchanged';
+END $$;
+DO $$ BEGIN
+ PERFORM public.scene3d_publish_delivery(jsonb_set(pg_temp.stills_payload(), '{artifacts,3,frame}', '97'));
+ RAISE EXCEPTION 'ASSERT FAIL: replay moved a still to another frame';
+EXCEPTION WHEN SQLSTATE '55010' THEN RAISE NOTICE 'ok a replay refuses a different shot identity'; END $$;
+DELETE FROM public.jobs WHERE id='00000000-0000-4000-8000-00000000dc04';
+DO $$ BEGIN
+ ASSERT NOT EXISTS (SELECT FROM public.scene3d_delivery_artifacts WHERE usage='shot-still'),
+   'ASSERT FAIL: deleting the parent left still pins';
+ RAISE NOTICE 'ok deleting the parent removes its still pins';
+ RAISE NOTICE 'ALL BEHAVIOR ASSERTIONS PASSED';
+END $$;
+ROLLBACK;

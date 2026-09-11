@@ -33,6 +33,7 @@ export const SCENE3D_HANDLE_LABELS: Record<string, string> = {
   references: "References",
   scene: "Scene",
   composition: "Composition",
+  stills: "Shot stills",
 }
 
 /**

@@ -1,0 +1,29 @@
+{
+  "platform": "darwin",
+  "arch": "arm64",
+  "gl": "swangle",
+  "browser": "Google Chrome 152.0.7977.83",
+  "remotion": "4.0.486",
+  "recordedAt": "2026-09-10",
+  "planRevisionId": "3d5c0a11-0000-4000-8000-00000000a11c",
+  "width": 320,
+  "height": 180,
+  "measured": {
+    "recorder-clay-vs-live-clay": {
+      "max": 0,
+      "mean": 0
+    },
+    "frame0-vs-frame-mid": {
+      "max": 230,
+      "mean": 32.06914351851851
+    },
+    "clay-vs-flat": {
+      "max": 132.63500000000002,
+      "mean": 12.415150462962961
+    },
+    "clay-vs-no-shadows": {
+      "max": 151,
+      "mean": 7.309565972222218
+    }
+  }
+}

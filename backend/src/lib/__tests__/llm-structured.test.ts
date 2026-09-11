@@ -65,6 +65,107 @@ describe("llmCompleteStructured", () => {
     },
   )
 
+  it("finishes a completed Astra response without waiting for the socket to close", async () => {
+    const { llmCompleteStructured } = await import("../llm-client.js")
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    const cancel = vi.fn()
+    const stream = new ReadableStream<Uint8Array>({
+      start(value) {
+        controller = value
+        const events = [
+          { type: "response.output_text.delta", delta: '{"prompt":"scene"}' },
+          { type: "response.completed", response: { usage: { input_tokens: 10, output_tokens: 5 } } },
+        ]
+        value.enqueue(new TextEncoder().encode(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join("")))
+        // The provider has finished its response but leaves the transport open.
+      },
+      cancel,
+    })
+    fetchMock.mockResolvedValue(new Response(stream, { headers: { "Content-Type": "text/event-stream" } }))
+    let settled = false
+    const pending = llmCompleteStructured(
+      { modelId: "gpt-6-astra", system: "", messages: [{ role: "user", content: "scene" }] },
+      schema, { maxRetries: 0 },
+    ).then(result => { settled = true; return result })
+    try {
+      await vi.waitFor(() => expect(settled).toBe(true), { timeout: 500, interval: 10 })
+    } finally {
+      if (!cancel.mock.calls.length) controller.close()
+    }
+    const result = await pending
+    expect(result.output).toEqual({ prompt: "scene" })
+    expect(result).toMatchObject({ inputTokens: 10, outputTokens: 5, usageComplete: true })
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(["response.incomplete", "response.failed"])(
+    "preserves reported usage and does not retry a terminal %s response", async (type) => {
+      const { llmCompleteStructured, StructuredLlmError } = await import("../llm-client.js")
+      fetchMock.mockImplementation(() => Promise.resolve(streamResponse([
+        `data: ${JSON.stringify({ type, response: {
+          usage: { input_tokens: 123, output_tokens: 456 }, credits_consumed: 2,
+          incomplete_details: { reason: "max_output_tokens" },
+        } })}\n\n`,
+      ])))
+      const result = llmCompleteStructured(
+        { modelId: "gpt-6-astra", system: "", messages: [{ role: "user", content: "scene" }] },
+        schema, { maxRetries: 2 },
+      )
+      await expect(result).rejects.toBeInstanceOf(StructuredLlmError)
+      await expect(result).rejects.toMatchObject({ usage: {
+        inputTokens: 123, outputTokens: 456, complete: true, providerCost: 0.01,
+      } })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  it.each([
+    ["response.incomplete", { incomplete_details: { reason: "max_output_tokens" } }, "max_output_tokens"],
+    ["response.failed", { error: { code: "server_error", message: "upstream refused" } }, "server_error upstream refused"],
+    ["response.failed", {}, undefined],
+  ])("names the provider's own reason for a terminal %s and logs it once", async (type, extra, reason) => {
+    const { llmCompleteStructured } = await import("../llm-client.js")
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    fetchMock.mockImplementation(() => Promise.resolve(streamResponse([
+      `data: ${JSON.stringify({ type, response: { usage: { input_tokens: 123, output_tokens: 456 }, ...extra } })}\n\n`,
+    ])))
+    try {
+      // The event NAME alone cannot tell "raise the output budget" from "the endpoint is
+      // failing", and before this the throw carried neither the reason nor a log line — so a
+      // caller that rewrote the message left no record at all (the Scene3D planner did).
+      const expected = new RegExp(`ended with ${type.replace(".", "\\.")}${reason ? `: ${reason}` : ""}`)
+      await expect(llmCompleteStructured(
+        { modelId: "gpt-6-astra", system: "", messages: [{ role: "user", content: "scene" }] },
+        schema, { maxRetries: 0 },
+      )).rejects.toMatchObject({ message: expect.stringMatching(expected) })
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(warn.mock.calls[0]![0]).toContain("[llm-kie-stream-terminal]")
+      // The usage is in the sentence too: a reader should not need the row to size the answer.
+      expect(warn.mock.calls[0]![0]).toContain("in 123 / out 456 tokens")
+    } finally { warn.mockRestore() }
+  })
+
+  it.each([true, false])("keeps earlier repair usage when a terminal response reports usage=%s", async (reported) => {
+    const { llmCompleteStructured } = await import("../llm-client.js")
+    fetchMock.mockResolvedValueOnce(streamResponse([
+      'data: {"type":"response.output_text.delta","delta":"{}"}\n\n',
+      'data: {"type":"response.completed","response":{"usage":{"input_tokens":10,"output_tokens":5},"credits_consumed":1}}\n\n',
+    ])).mockResolvedValueOnce(streamResponse([
+      `data: ${JSON.stringify({ type: "response.incomplete", response: reported
+        ? { usage: { input_tokens: 20, output_tokens: 10 }, credits_consumed: 2 } : {} })}\n\n`,
+    ]))
+    const result = llmCompleteStructured(
+      { modelId: "gpt-6-astra", system: "", messages: [{ role: "user", content: "scene" }] },
+      schema, { maxRetries: 2 },
+    )
+    await expect(result).rejects.toMatchObject({ usage: {
+      inputTokens: reported ? 30 : 10, outputTokens: reported ? 15 : 5,
+      providerCost: reported ? 0.015 : 0.005, complete: reported,
+    } })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it("returns validated output on the first valid response (Gemini path)", async () => {
     const { llmCompleteStructured } = await import("../llm-client.js")
     fetchMock.mockResolvedValue(geminiContent(JSON.stringify({ prompt: "a sunset", mood: "calm" })))

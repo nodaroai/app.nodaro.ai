@@ -1,4 +1,5 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle } from "@nodaro/shared";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
@@ -789,6 +790,13 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   // output-extractor.ts branch of the same name — answering "plan-ready" on
   // the video handle would hand a downstream video consumer a marker.
   if (type === "pro-3d-render") {
+    // `stills` carries the ACTIVE result's shot stills. The primary output is
+    // the first one so the edge is a real image URL; the whole ordered set is
+    // spread into referenceImageUrls by the input resolvers, exactly like
+    // reference-sheet `panels`.
+    if (sourceHandle === "stills") {
+      return proShotStills(data)[0]?.url;
+    }
     if (sourceHandle === "video") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? [];
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;

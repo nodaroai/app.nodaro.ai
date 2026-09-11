@@ -15,6 +15,7 @@ import {
   jsonSchemaDepth,
   llmStructuredBody,
 } from "../llm-structured.js"
+import { renderProviderSchema } from "../../lib/llm-structured-request.js"
 
 /** A concrete `id | id[]` union — the picks/look value shape studio emits. */
 const ID_OR_IDS = {
@@ -240,5 +241,27 @@ describe("convertJsonSchema", () => {
     expect("schema" in converted).toBe(true)
     if (!("schema" in converted)) return
     expect(converted.schema.safeParse({}).success).toBe(true)
+  })
+
+  it("PINNED: a root combinator converts, then renders for the provider WITHOUT its type — why the route refuses it", () => {
+    // zod 4.4.3 turns `{type:"object", …, anyOf:[…]}` into a ZodIntersection and
+    // renders it back as `{allOf:[…]}` with no root `type`; Anthropic answers
+    // "tools.0.custom.input_schema.type: Field required" (the 2026-09-10 Studio
+    // Director outage) and refuses a top-level combinator even when the type is
+    // present. `renderProviderSchema` is the call `llmCompleteStructured` makes.
+    const converted = convertJsonSchema({
+      type: "object",
+      properties: { scenes: { type: "array", items: { type: "object" } }, keyframes: { type: "array", items: { type: "object" } } },
+      anyOf: [
+        { type: "object", properties: { scenes: { type: "array", minItems: 1 } } },
+        { type: "object", properties: { keyframes: { type: "array", minItems: 1 } } },
+      ],
+      additionalProperties: false,
+    })
+    expect("schema" in converted).toBe(true)
+    if (!("schema" in converted)) return
+    const rendered = renderProviderSchema(converted.schema)
+    expect(rendered.type).toBeUndefined()
+    expect(Array.isArray(rendered.allOf)).toBe(true)
   })
 })

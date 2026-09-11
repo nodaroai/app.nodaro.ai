@@ -1,7 +1,7 @@
 ---
 node_type: pro-3d-render
-generated_at: 2026-09-08T02:03:29.214Z
-generated_from: 90fdec2b4
+generated_at: 2026-09-10T20:56:41.899Z
+generated_from: b8aa8d86e
 ---
 
 # 3D Render Pro
@@ -11,7 +11,7 @@ generated_from: 90fdec2b4
 **Category:** ai
 **Credit cost:** 0
 **Inputs (target handles):** `scene`, `references`
-**Outputs (source handles):** `composition`, `video`
+**Outputs (source handles):** `composition`, `stills`, `video`
 
 **Default data:**
 ```json

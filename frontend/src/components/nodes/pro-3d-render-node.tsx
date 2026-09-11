@@ -19,14 +19,16 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { planObjects, planRevisionId } from "@/lib/scene3d/plan-view"
-import { isValidScene3DConnection } from "@/lib/scene3d-handles"
+import { proShotStills } from "@/lib/scene3d/pro-media-result"
+import { useAuthedMediaUrls } from "@/lib/scene3d/authed-image"
+import { isValidScene3DConnection, SCENE3D_HANDLE_LABELS } from "@/lib/scene3d-handles"
 import type { Pro3DRenderData } from "@/types/nodes"
 
 const ACCEPTS_REFERENCE = (t: string) => isValidScene3DConnection("references", t)
 const ACCEPTS_SCENE = (t: string) => isValidScene3DConnection("scene", t)
 
 /**
- * 3D Render Pro — one operation, two outputs.
+ * 3D Render Pro — one operation, three outputs.
  *
  * The card is a VIDEO card (it sizes through the shared media helper like every
  * other video node, and the finished MP4 fills it), with the composition
@@ -56,6 +58,12 @@ function Pro3DRenderNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [videoError, setVideoError] = useState(false)
+  const [stillPreview, setStillPreview] = useState<number | null>(null)
+  // The ACTIVE result's contact sheet: one still per shot, in shot order.
+  const shotStills = proShotStills(nodeData as unknown as Record<string, unknown>)
+  // Delivery artifacts are private: an `<img src>` alone would 401. These are
+  // object URLs, alive only while this node is mounted.
+  const stillSrcs = useAuthedMediaUrls(shotStills.map((still) => still.url))
 
   const hasResult = !isRunning && !!activeUrl && !videoError
   // What this node will DO on Run, said plainly: an existing scene with no
@@ -97,6 +105,7 @@ function Pro3DRenderNodeComponent({ id, data, selected }: NodeProps) {
           { id: "scene",       type: "target", position: Position.Left,  customStyle: { top: "24px", left: "-29px" }, external: true },
           { id: "references",  type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 24px)", left: "-29px" }, external: true },
           { id: "composition", type: "source", position: Position.Right, customStyle: { top: "24px", right: "-29px" }, external: true },
+          { id: "stills",      type: "source", position: Position.Right, customStyle: { top: "50%", right: "-29px" }, external: true },
           { id: "video",       type: "source", position: Position.Right, customStyle: { top: "calc(100% - 24px)", right: "-29px" }, external: true },
         ]}
       >
@@ -214,7 +223,51 @@ function Pro3DRenderNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="pro-3d-render" handleId="scene"       type="target" position={Position.Left}  label="Scene"       color={HANDLE_COLORS.control}   icon={<Boxes />}  side="left"  top="24px" accepts={ACCEPTS_SCENE} />
       <HandleWithPopover nodeId={id} nodeType="pro-3d-render" handleId="references"  type="target" position={Position.Left}  label="References"  color={HANDLE_COLORS.reference} icon={<Images />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_REFERENCE} />
       <HandleWithPopover nodeId={id} nodeType="pro-3d-render" handleId="composition" type="source" position={Position.Right} label="Composition" color={HANDLE_COLORS.control}   icon={<Boxes />}  side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="pro-3d-render" handleId="stills"      type="source" position={Position.Right} label={SCENE3D_HANDLE_LABELS.stills} color={HANDLE_COLORS.image} icon={<Images />} side="right" top="50%" />
       <HandleWithPopover nodeId={id} nodeType="pro-3d-render" handleId="video"       type="source" position={Position.Right} label="Video"       color={HANDLE_COLORS.video}     icon={<Film />}   side="right" top="calc(100% - 24px)" />
+      {/* The contact sheet, one thumbnail per shot in shot order. Below the
+          card rather than inside it: the card is the VIDEO, and the run's
+          other half must not shrink or reflow it. */}
+      {shotStills.length > 0 && (
+        <div className="absolute left-0 right-0 top-full mt-1 flex gap-1 overflow-x-auto nodrag">
+          {shotStills.map((still, index) => (
+            <button
+              key={still.assetId}
+              type="button"
+              title={t("pro3d.shotStill", { shot: String(still.shotIndex + 1), frame: String(still.frame) })}
+              aria-label={t("pro3d.shotStill", { shot: String(still.shotIndex + 1), frame: String(still.frame) })}
+              className="relative shrink-0 rounded overflow-hidden border border-border/60 hover:border-primary transition-colors"
+              disabled={!stillSrcs[index]}
+              onClick={(e) => { e.stopPropagation(); setStillPreview(index) }}
+            >
+              {stillSrcs[index] ? (
+                <img src={stillSrcs[index]!} alt="" className="w-10 h-10 object-cover" />
+              ) : (
+                <span className="flex w-10 h-10 items-center justify-center bg-muted/40">
+                  <Images className="w-3 h-3 text-muted-foreground/50" />
+                </span>
+              )}
+              <span className="absolute bottom-0 right-0 px-0.5 text-[8px] leading-none bg-black/60 text-white">
+                {still.shotIndex + 1}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {stillPreview !== null && (
+        <MediaPreviewModal
+          isOpen
+          onClose={() => setStillPreview(null)}
+          type="image"
+          url={stillSrcs[stillPreview] ?? shotStills[stillPreview].url}
+          results={shotStills.map((still, index) => ({
+            url: stillSrcs[index] ?? still.url,
+            jobId: activeResult?.jobId ?? id,
+            timestamp: activeResult?.timestamp ?? "",
+          }))}
+          initialIndex={stillPreview}
+        />
+      )}
       {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} results={results} initialIndex={activeIndex} />}
       <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>

@@ -5106,6 +5106,13 @@ const clip = await client.nodes.runAndWait("render-video", {
 
 Scene authoring uses `/v1/3d-scene/generate` and `/v1/3d-scene/edit`. Typed composition rendering uses `/v1/render-video/plan`; legacy template renders retain `/v1/render-video`. For image/video conditioning, pass `references` with explicit appearance/layout/motion roles. See [Generate 3D Scene](nodes/composition/generate-3d-scene.md).
 
+A 3D scene render is priced by the plan's own `width`/`height`: **50 credits**
+up to 1920 px on the longest side, **75** above that up to 5.12 megapixels, and
+**125** for a larger frame (identifiers `render-video`,
+`render-video:3d-large`, `render-video:3d-xlarge` — read the instance's current
+numbers from the model-cost API). See
+[what a 3D scene render costs](nodes/composition/render-video.md#what-a-3d-scene-render-costs).
+
 SDK versions with the generic `nodes.run(type, params)` overload can use the same node names without typed Scene3D overloads. The server accepts their node-slug generate/edit paths and dispatches `render-video` requests carrying `planType` to the composition renderer. For an interactive preview, check the generate node's `scene3d-embed-v1` capability and use the [3D preview embed](scene3d-embed.md); it does not require a copy of the renderer or any authentication tokens in its messages.
 
 ### 3D Render Pro
@@ -5114,7 +5121,7 @@ SDK versions with the generic `nodes.run(type, params)` overload can use the sam
 `client.scene3d.renderProAndWait(params, options?)` drive the one-operation
 node: a `source` goes in, and a single job settles with BOTH `scenePlan` (the
 exact composition) and `videoUrl` (the exported MP4), plus the revision, poster,
-validation and renderer metadata. `nodes.run("pro-3d-render", …)` and
+`shotStills`, validation and renderer metadata. `nodes.run("pro-3d-render", …)` and
 `nodes.runAndWait("pro-3d-render", …)` reach the same routes with the same
 typed `Pro3DRenderRunParams` / `Pro3DRenderJobOutput`.
 
@@ -5139,8 +5146,32 @@ if (caps.pro?.available) {
   });
   shot.videoUrl;        // the MP4
   shot.sceneRevisionId; // re-export it later, render-only, for no authoring charge
+  shot.shotStills;      // one still per shot, ordered by shotIndex — see below
 }
 ```
+
+`shotStills` is `{ shotIndex, frame, assetId, url }[]`, ordered by `shotIndex`
+and produced by the same run at no extra credit cost: one still per shot of the
+composition, each at the frame that shot opens on (`shotIndex` is 0-based in the
+composition's shot order; `frame` is zero-based in the composition's frame
+space). A v1 single-shot scene yields exactly one, at frame 0. The field is
+optional — a result rendered before it existed simply has none, so read it as
+`shot.shotStills ?? []` rather than assuming it is there:
+
+```typescript
+for (const still of shot.shotStills ?? []) {
+  const bytes = await fetch(still.url, { headers: { Authorization: `Bearer ${token}` } });
+  // …then use the bytes, or re-host them somewhere your own pipeline can read.
+}
+```
+
+Each `url` is an **authenticated** endpoint on this install
+(`GET /v1/3d-scene/deliveries/{jobId}/assets/{assetId}`), not a public CDN
+link: a delivery's artifacts stay in the private scene bucket, and reads are
+re-authorized against the delivery's workflow on every request. Fetch it with
+the same credentials you used to run the job — dropping the URL into a plain
+`<img>` tag, or handing it to a third-party service to fetch, gets a `401`.
+
 
 `renderProAndWait` quotes the identical body first when `params` carries no
 `quoteId`, so the run is admitted against a hash of exactly what was priced.

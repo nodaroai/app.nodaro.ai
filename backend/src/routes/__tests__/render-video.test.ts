@@ -36,8 +36,20 @@ vi.mock("@/lib/render-queue.js", () => ({
   },
 }))
 
+/**
+ * The guard's resolved identifier, recorded per request.
+ *
+ * A real `creditGuard` CHECKS one identifier and `reserveCreditsForJob` then
+ * DEBITS whatever identifier the route hands it — two separate lookups. A mock
+ * that swallows the resolver hides the one failure mode that matters here
+ * (checking the tiered price and debiting the flat one), so this one runs it.
+ */
+const guardState = vi.hoisted(() => ({ identifiers: [] as string[] }))
+
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: () => async () => {},
+  creditGuard: (resolver: (req: unknown) => string) => async (req: unknown) => {
+    guardState.identifiers.push(resolver(req))
+  },
   reserveCreditsForJob: vi.fn().mockResolvedValue({
     usageLogId: "usage-1",
     creditsReserved: 1,
@@ -110,6 +122,7 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  guardState.identifiers.length = 0
 
   app = Fastify({ logger: false })
 
@@ -410,6 +423,67 @@ describe("POST /v1/render-video/plan", () => {
     // them from the Remotion inputProps, not the route.
     const queued = vi.mocked(renderQueue.add).mock.calls[0][1] as { plan: { references?: unknown[] } }
     expect(queued.plan.references).toHaveLength(1)
+  })
+
+  // ── Frame-size pricing ────────────────────────────────────────────────
+  // The 2560 px cap made frames renderable that cost up to 2.5x a 1920x1080
+  // one, so a 3D scene render settles under a tiered identifier. Two things
+  // must hold on every one of these requests: the tier is read from the plan
+  // the route is ABOUT to run, and the identifier the guard checked is the
+  // identifier the reservation debits.
+
+  it.each([
+    { label: "1920x1080 (the pre-cap frame)", width: 1920, height: 1080, id: "render-video" },
+    { label: "1920x1920 (square, still under the gate)", width: 1920, height: 1920, id: "render-video" },
+    { label: "2560x1440 (16:9 at the cap)", width: 2560, height: 1440, id: "render-video:3d-large" },
+    { label: "1440x2560 (9:16 at the cap)", width: 1440, height: 2560, id: "render-video:3d-large" },
+    { label: "2048x2560 (4:5 at the cap)", width: 2048, height: 2560, id: "render-video:3d-xlarge" },
+    { label: "2560x2560 (the square worst case)", width: 2560, height: 2560, id: "render-video:3d-xlarge" },
+  ])("checks and debits $id for a $label scene", async ({ width, height, id }) => {
+    mockJobInsert("job-tier")
+    vi.mocked(validatePlanByType).mockImplementation(((_type: string, plan: unknown) => plan) as never)
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/render-video/plan",
+      payload: { planType: "3d-scene", plan: validScene3DPlan({ width, height }), userId: TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(guardState.identifiers).toEqual([id])
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), "job-tier", id,
+    )
+  })
+
+  it("tiers a 3d-scene plan sent to the legacy /v1/render-video entry point too", async () => {
+    mockJobInsert("job-tier-legacy")
+    vi.mocked(validatePlanByType).mockImplementation(((_type: string, plan: unknown) => plan) as never)
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/render-video",
+      payload: { planType: "3d-scene", plan: validScene3DPlan({ width: 2560, height: 2560 }), userId: TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(guardState.identifiers).toEqual(["render-video:3d-xlarge"])
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), "job-tier-legacy", "render-video:3d-xlarge",
+    )
+  })
+
+  it("leaves every non-3D render on the flat identifier", async () => {
+    // A scene-graph render admits frames up to 3840 px at the flat price
+    // today; tiering it would raise the price of work people already run.
+    mockJobInsert("job-flat")
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/render-video/scene-graph",
+      payload: { sceneGraph: { ...validSceneGraph(), width: 3840, height: 2160 }, userId: TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(guardState.identifiers).toEqual(["render-video"])
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), "job-flat", "render-video",
+    )
   })
 
   it("fails and refunds a reserved plan job when enqueueing fails", async () => {

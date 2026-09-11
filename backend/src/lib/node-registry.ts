@@ -10,6 +10,12 @@ const scene3DAuthoringCosts = ["3d-scene:economy", "3d-scene", "3d-scene:premium
 const scene3DMinCost = Math.min(...scene3DAuthoringCosts)
 const scene3DMaxCost = Math.max(...scene3DAuthoringCosts)
 
+/** Render Video spans a frame-size ladder for 3D scene plans — advertise the
+ *  whole range rather than one end of it. Read from the price table so a
+ *  reprice cannot leave the discovery API quoting a number nobody charges. */
+const renderVideoBaseCost = STATIC_CREDIT_COSTS["render-video"]
+const renderVideoMaxCost = STATIC_CREDIT_COSTS["render-video:3d-xlarge"]
+
 export type NodeCategory =
   | "input"
   | "parameter"
@@ -1084,7 +1090,11 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
 
-  { type: "render-video", label: "Render Video", category: "composition", description: "Render a Remotion composition to MP4.", outputType: "video", creditCost: 15 },
+  {
+    type: "render-video", label: "Render Video", category: "composition",
+    description: "Render a Remotion composition to MP4. A 3D scene plan is priced by frame size: the flat price up to 1920 px on the longest side, 1.5x above that, 2.5x for a large square frame.",
+    outputType: "video", creditCost: `${renderVideoBaseCost}-${renderVideoMaxCost}`,
+  },
   { type: "after-effects", label: "After Effects", category: "composition", description: "AI-generated post-processing layer.", outputType: "video", creditCost: 2 },
   { type: "motion-graphics", label: "Motion Graphics", category: "composition", description: "AI-generated 2D motion graphics (classic elements or AI-authored Lottie).", outputType: "video", creditCost: "1-8" },
   {
@@ -1117,7 +1127,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   },
   {
     type: "pro-3d-render", label: "3D Render Pro", category: "composition",
-    description: "ONE durable operation producing both a 3D scene composition and its rendered MP4. `source` is exactly one of: {kind:'prompt'} to author a new scene from a brief plus optional references; {kind:'scene', revisionId, sourceJobId} to use an existing revision — with no editPrompt this is a render-only export that costs no authoring, with one it revises the scene first; or {kind:'local-export'} where a paired desktop Blender is available. Quote it first at POST /v1/pro-3d-render/quote and submit the returned quoteId.",
+    description: "ONE durable operation producing both a 3D scene composition and its rendered MP4. `source` is exactly one of: {kind:'prompt'} to author a new scene from a brief plus optional references; {kind:'scene', revisionId, sourceJobId} to use an existing revision — with no editPrompt this is a render-only export that costs no authoring, with one it revises the scene first; or {kind:'local-export'} where a paired desktop Blender is available. Quote it first at POST /v1/pro-3d-render/quote and submit the returned quoteId. The result carries the MP4, the scene revision, and `shotStills` — one still per shot of the composition, ordered by shotIndex — on the `stills` output handle.",
     // NO number, and no STATIC_CREDIT_COSTS entry to enrich from either: this
     // aggregates several paid stages and its price is deployment
     // configuration. Discovery therefore reports no cost rather than a wrong

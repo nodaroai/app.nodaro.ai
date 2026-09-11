@@ -176,10 +176,18 @@ export function isFinalizeJobType(v: string | null | undefined): v is FinalizeJo
  *    `setCharacterPortrait` / `attachAssetToCharacter` / `autoAttach*Asset`.
  *    Generic finalize writes `buildImageOutputData` + `createAssetFromJob` and
  *    NONE of the entity-row writes — the Studio would never see the result.
- *  - DAG rows carry `job_type = node.type` (`node-executor.ts:1290`),
- *    while payload-builder dispatches under a different `jobName`
+ *  - DAG rows are INSERTED with `job_type = node.type` (the
+ *    `insertInternalJob("orchestrator", …)` call in `node-executor.ts`), while
+ *    payload-builder dispatches under a different `jobName`
  *    (`scene`→generate-image, `upscale-image`→edit-image, …). The node type is
- *    what a reconcile tick reads, and it is not a finalize type.
+ *    what a reconcile tick reads on a row the video worker has not picked up
+ *    yet, and it is not a finalize type. NB the node type is only the row's
+ *    value UNTIL pickup: the `job_type: job.name` line in `video-worker.ts`
+ *    OVERWRITES it with the queue name (unconditionally — that overwrite is
+ *    what puts DAG output in the gallery). These entries therefore guard the
+ *    pre-pickup window only; they stay listed because that window is real (a
+ *    row can be swept before any worker touches it) and removing them would
+ *    hand such a row to a generic finalize that throws.
  *  - COMPOSITE writers shape their own `output_data`: generate-mask
  *    `{imageUrl, maskUrl}` (the repo says so at `video-ai.ts:1438-1440`),
  *    transcribe `{text, language, segments}` (`audio-ai.ts:279-280`), and
@@ -210,7 +218,9 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = new Set<string>([
   "generate-script",
   "generate-character-motion", "generate-location-motion",
   "generate-object-motion", "generate-creature-motion",
-  // DAG node types (node-executor.ts:1290 writes job_type = node.type)
+  // DAG node types (node-executor.ts inserts job_type = node.type; the
+  // video-worker pickup CAS overwrites it with the queue name, so these are
+  // reachable only before a worker picks the row up — see the doc comment)
   "character", "face", "object", "creature", "location", "scene",
   "modify-image", "upscale-image", "remove-background", "motion-graphics",
   // Composite / non-media completion writers

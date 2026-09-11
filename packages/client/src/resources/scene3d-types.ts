@@ -153,7 +153,15 @@ export interface Pro3DRenderRunOptions {
   idempotencyKey?: string
 }
 
-/** Render the exact scene revision through the existing render-video node. */
+/**
+ * Render the exact scene revision through the existing render-video node.
+ *
+ * The price follows the plan's OWN `width`/`height`, not any node setting: a
+ * frame up to 1920 px on its longest side settles under `render-video`, a
+ * larger one under `render-video:3d-large` (1.5x) or, above 5.12 megapixels,
+ * `render-video:3d-xlarge` (2.5x). Read the current numbers from the
+ * model-cost API for those three identifiers.
+ */
 export interface RenderScene3DParams extends Record<string, unknown> {
   planType: "3d-scene"
   plan: Scene3DPlan

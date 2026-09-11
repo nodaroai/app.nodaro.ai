@@ -1014,6 +1014,16 @@ export interface PluginJobsToolkit {
    * plugin built against the new surface still typechecks against an older
    * app — call sites MUST runtime-guard (`undefined` → the app predates the
    * widened select → respond 503 "backend update required").
+   *
+   * `job_type` IS THE QUEUE NAME AFTER PICKUP, not the type the plugin's own
+   * route admitted: the app's video worker OVERWRITES `jobs.job_type` with the
+   * BullMQ `job.name` in the CAS that picks a row up (the app's
+   * `workers/video-worker.ts`) — an unconditional overwrite the gallery
+   * allowlists depend on, not a backfill. A `row.job_type !== "<admitted type>"` guard is
+   * therefore safe only when the lane inserts and enqueues under the SAME
+   * string (generate-video-pro's deliberate lockstep). A lane that admits X and
+   * enqueues Y must accept BOTH — assuming otherwise is what left the Scene3D
+   * advanced preview lane dark for a day (plugins PR #467).
    */
   readJob(jobId: string): Promise<{
     id: string

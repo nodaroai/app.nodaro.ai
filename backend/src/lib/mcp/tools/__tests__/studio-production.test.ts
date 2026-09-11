@@ -69,7 +69,8 @@ const PLAN = { format: "nodaro-studio-production", version: 2, scenes: [] }
  * `{ output, inputTokens, outputTokens }`.
  *
  * The `job_type` COLUMN is deliberately absent from every fixture here. It is
- * written by the queue worker at pickup (`workers/video-worker.ts`), which is
+ * written — OVERWRITTEN, whatever the inserter put there — by the queue worker
+ * at pickup with the BullMQ queue name (`workers/video-worker.ts`), which is
  * why `GET /v1/jobs` filters `input_data->>type` instead — and this reader
  * follows that same precedent.
  */

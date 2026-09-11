@@ -122,6 +122,8 @@ export interface NodeOutput {
    *  is the multi-image reference set spread into a downstream node's
    *  `referenceImageUrls`. */
   panelUrls?: readonly string[]
+  /** 3D Render Pro: one still per shot of the exported composition, in shot order. */
+  shotStills?: ReadonlyArray<{ shotIndex: number; frame: number; assetId: string; url: string }>
 }
 
 export type NodeExecutionStatus =

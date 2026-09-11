@@ -184,6 +184,21 @@ AUDIOMASS_URL=https://audiomass.example.internal
 Restart the stack and the editor follows — no rebuild. `AUDIOMASS_URL=off`
 behaves the same as leaving it unset.
 
+## 3D scenes
+
+The Basic 3D lane works here: **Generate 3D Scene** and **Edit 3D Scene** author
+an editable clay scene with your LLM key, and [Render Video](nodes/composition/render-video.md)
+exports it with the renderer that ships in this image. No Blender, no private
+plugin, nothing extra to install.
+
+[3D Render Pro](nodes/composition/pro-3d-render.md) is the other node, and it is
+**not part of this edition** — it runs on a hosted build service. This install
+says so consistently rather than letting you find out mid-run: `GET /v1/nodes`
+omits the type, `GET /v1/3d-scene/capabilities` reports `pro.available: false`
+with `advanced: null`, and a hand-written `POST /v1/pro-3d-render` is refused
+with `503 SCENE_CAPABILITY_UNAVAILABLE`. It never silently falls back to the
+Basic lane.
+
 ## Before exposing the stack to a network
 
 The compose defaults are designed for local play and are public knowledge.

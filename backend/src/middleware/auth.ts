@@ -245,6 +245,15 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   // OAuth-spec-compliant clients (Claude.ai etc) hit this without a Bearer
   // token, so the route must be public.
   { method: "GET", path: "/v1/oauth/authorize" },
+  // Plugin connect handshake (routes/oauth-plugin-connect.ts): the plugin has
+  // no session yet when it opens or polls, and the callback is a browser
+  // landing from the consent screen. The poll route is a prefix because the
+  // session id is a path segment — trailing slash deliberate, so
+  // "/v1/oauth/plugin/session" (POST, exact) and lookalikes stay out.
+  { method: "POST", path: "/v1/oauth/plugin/session" },
+  { method: "GET", path: "/v1/oauth/plugin/session/", prefix: true },
+  { method: "GET", path: "/v1/oauth/plugin/callback" },
+  { method: "POST", path: "/v1/oauth/plugin/confirm" },
   { method: "GET", path: "/.well-known/oauth-authorization-server" },
   { method: "GET", path: "/.well-known/oauth-protected-resource" },
   // RFC 9728 §3.1 resource-specific variants. Cursor probes these FIRST

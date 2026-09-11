@@ -87,10 +87,17 @@ applied.
 | Handle | Value |
 |---|---|
 | `composition` | The scene revision this run produced — the same kind of plan the Basic 3D nodes emit. Connect it to [Render Video](render-video.md), or to another 3D node's Scene input, to re-export without paying to author again. |
+| `stills` | One still image per shot of the composition, in shot order — each is the frame that shot opens on. Connect it to any node that consumes images; the whole set travels down the wire, not just the first. |
 | `video` | The exported MP4, the platform's standard video result. Connect it to any node that consumes a video. |
 
 Wire a downstream video consumer from **`video`**, not from `composition`: the
 composition handle carries a plan, not a URL.
+
+**The stills are a contact sheet, not a second render.** They come out of the
+same run at no extra credit cost, and a v1 (single-shot) scene produces exactly
+one, at frame 0. Use them to feed a shot's opening frame into an image or video
+model as a reference, or to review the blocking shot by shot without scrubbing
+the MP4. A result produced before this existed simply has none.
 
 The completed job's `output_data` carries:
 
@@ -100,10 +107,50 @@ The completed job's `output_data` carries:
 | `scenePlan` | The exact composition it was rendered from. |
 | `sceneRevisionId` | That revision's id, for a later render-only re-run. |
 | `posterAssetId` | Preview poster for the result. |
+| `shotStills` | One entry per shot, ordered by `shotIndex`: `{ shotIndex, frame, assetId, url }`. `shotIndex` is 0-based in the composition's shot order and `frame` is the shot's own first frame in the composition's frame space, so a still lines up against the MP4 without re-deriving shot boundaries. Each `url` is an authenticated delivery endpoint, not a public link — the editor reads it with your session. Absent on a result that rendered none. |
 | `sourceArtifactId` | Present when an editable native source was retained. |
 | `validation` | `{ status, reportAssetId, warnings[] }` — each warning has a `code`, a `message` and an optional `shotId`. |
 | `renderer` | Renderer identity/version the export was produced with. |
 | `metadata` | `{ width, height, fps, frames, duration }` — check these against a downstream model's video-reference limits before wiring the MP4 in. |
+
+## Using the result as a video reference
+
+The exported MP4 is a **layout reference**: it carries where the subjects
+are, what is in front of what, the framing, the camera move and the timing.
+It also carries a look — untextured grey clay — and a video model copies that
+look unless it is told not to. Two rules, both measured on a real scene, keep
+the layout and drop the clay:
+
+**1. Never attach the clay render without a scoping line.** One sentence per
+reference, naming what it is *for* and what to *ignore*. Wire the `video`
+output into a video node's **Video references** input and a **workflow run**
+adds the line for that reference itself (the video node's own Run button does
+not add it yet — type it into the prompt there); through the API, pass it as
+the reference's caption — `referenceVideoCaptions[N]` for the clip on
+`referenceVideoUrls[N]`. The line the platform sends for a clip is:
+
+> LAYOUT reference only — match its subject positions and blocking, its foreground occlusion, its framing, its camera angle, its camera motion and its timing. Ignore its untextured grey clay placeholder look, its flat placeholder colours, its materials, its lighting and its empty background; none of that is the target look. Take the look from the prompt and from the other references
+
+The model reads it as `@video_1: <that line>.` — the same seat every video
+caption renders to. A composition with several shots adds their cut points to
+the "match" clause; a frame extracted from the render and wired as an image
+reference gets the same line without the motion and timing clauses. A prompt
+that already carries a scoping line for that reference is left alone, so
+re-running never doubles it.
+
+**2. Every figure that must look real needs its own character reference.**
+Photoreal treatment is granted per referenced subject, not globally: with one
+layout reference and one Character, only that character converts and every
+other figure reverts to a clay proxy. With one Character per figure, every
+figure converts and every identity holds. Keep two reference slots free for a
+location or style plate. A workflow run whose composition has more `person`
+entities than character references still runs — you may want clay figures —
+and records a `scene3d_unreferenced_figures` warning on the job
+(`input_data.warnings`, `{ code, message }`) saying how many figures are
+uncovered and whether one-per-figure fits the model's reference budget.
+
+Wire the render into the **reference** input, never the start-frame slot: a
+start frame is a look anchor that no scoping line reaches.
 
 ## Quote, then run
 
@@ -214,6 +261,18 @@ Its price is **deployment configuration**: there is no built-in default, so the
 quote endpoint is the authority for any given request, and an install with no
 configured price refuses before reserving anything. Quote first and show
 `maxCredits` — a ceiling, not a charge.
+
+The render stage is priced **per output frame**, so a longer scene and a higher
+frame rate both cost more, in proportion to the frames they produce. The
+per-frame rate is tiered by frame size on the same ladder as
+[Render Video](render-video.md#what-a-3d-scene-render-costs): frames up to
+1920 px on the longest side at the base rate, **1.5x** above that up to 5.12
+megapixels, **2.5x** for a larger frame. A frame at or under 1920 px on its
+longest side is always base-rate, whatever its shape.
+
+That tier reaches your quote only once the deployment's render engine reports
+it in `breakdown` — read the quote you were given rather than computing one, in
+every case.
 
 Re-rendering a stored `scenePlan` — through [Render Video](render-video.md), or
 through a `{kind:"scene"}` source here — is billed as an ordinary render. You do

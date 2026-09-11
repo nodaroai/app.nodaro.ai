@@ -505,9 +505,13 @@ export async function jobRoutes(app: FastifyInstance) {
     // Client-app run lists (Nodaro Studio's Director): every row carries
     // `input_data.type` (buildJobInputData stamps it on insert) and, when a
     // client app created it, `input_data.origin`. Deliberately NOT the
-    // `job_type` column — that is written by queue workers at pickup and is
-    // NULL on every row a synchronous route inserted, so a column filter
-    // would hide exactly the history a run list exists to show.
+    // `job_type` column — that column is NULL on every row a synchronous route
+    // inserted, and on the rows that DO have one the video worker OVERWRITES it
+    // with the BullMQ queue name at pickup (the `job_type: job.name` line in
+    // `workers/video-worker.ts`), so a `job_type` filter would both hide the
+    // synchronous history this list exists to show and answer in a different
+    // vocabulary than the caller asked in. `input_data.type` is written once,
+    // at insert, and never rewritten — that is why it is the filter here.
     if (type) {
       query = query.filter("input_data->>type", "eq", type)
     }

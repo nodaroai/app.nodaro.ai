@@ -1066,6 +1066,9 @@ export * from "./scene3d-v2-resources.js"
 export * from "./scene3d-camera-track.js"
 // --- 3D Render Pro: one durable operation, scene + video in one result ---
 export * from "./pro-3d-render.js"
+// --- Scene3D render pricing: which frame-size tier a render settles at.
+//     The SHAPE of the price (tier, multiplier, identifier); never a rate. ---
+export * from "./scene3d-render-pricing.js"
 
 // --- transient studio keys — the public share read strips them ---
 export {

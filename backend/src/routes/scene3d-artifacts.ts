@@ -275,7 +275,13 @@ export async function scene3DArtifactRoutes(
       const assets = (await loadScene3DDeliveryArtifacts(auth.delivery.jobId))
         .filter(scene3DDeliveryArtifactReadable)
         .map((asset) => ({ assetId: asset.artifactId, kind: asset.kind, usage: asset.usage,
-          byteLength: asset.byteLength, sha256: asset.sha256, viaRevisionId: asset.viaRevisionId }))
+          byteLength: asset.byteLength, sha256: asset.sha256, viaRevisionId: asset.viaRevisionId,
+          // Only a shot still has a shot identity; the keys stay absent on the
+          // rest rather than being reported as null.
+          ...(asset.kind === "shot-still"
+            ? { shotIndex: asset.shotIndex, frame: asset.frame, width: asset.width, height: asset.height }
+            : {}) }))
+        .sort((a, b) => (a.shotIndex ?? -1) - (b.shotIndex ?? -1))
       const currentAuth = await authorizeScene3DDelivery(req.userId, params.data.jobId)
       if (!currentAuth.ok) return notFound(reply)
       const delivery = currentAuth.delivery

@@ -19,7 +19,7 @@ export function estimateRunCredits(
   cachedCost: (modelId: string) => number | undefined,
 ): number {
   return executable.reduce((sum, node) => {
-    const cached = cachedCost(getModelIdentifier(node, edges))
+    const cached = cachedCost(getModelIdentifier(node, edges, allNodes))
     const cost = cached !== undefined ? cached : (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1)
     return sum + cost * getFanOutMultiplier(node, allNodes, edges)
   }, 0)

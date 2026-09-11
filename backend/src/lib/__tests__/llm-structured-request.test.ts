@@ -14,8 +14,10 @@ vi.mock("../llm-client.js", () => ({ llmCompleteStructured: mocks.llmCompleteStr
 
 import { LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared"
 import {
+  convertJsonSchema,
   llmStructuredBody,
   prepareStructuredRequest,
+  renderProviderSchema,
   runStructuredCompletion,
   structuredJobInputData,
   STRUCTURED_LLM_TIMEOUT_MS,
@@ -52,6 +54,54 @@ describe("prepareStructuredRequest", () => {
 
     const bad = prepareStructuredRequest(body({ jsonSchema: { type: "object", properties: { a: { not: { type: "string" } } } } }))
     expect(bad).toMatchObject({ ok: false, status: 400, error: { code: "validation_error" } })
+  })
+})
+
+describe("llmStructuredBody — a root combinator is refused before anything is spent", () => {
+  /**
+   * A top-level `anyOf` / `oneOf` / `allOf` cannot be served: the Anthropic
+   * tool lane refuses it outright (`input_schema does not support oneOf, allOf,
+   * or anyOf at the top level`, measured 2026-09-10), and the route's own Zod
+   * round trip renders it back as a type-less `allOf` that every lane rejects
+   * (`tools.0.custom.input_schema.type: Field required`). Until 2026-09-10 such
+   * a schema passed the `type: "object"` check, reserved credits, 400'd on the
+   * direct lane, fell back to KIE and burned three attempts on garbage — the
+   * Studio Director outage. Refuse it here, where nothing has been spent.
+   */
+  it.each(["anyOf", "oneOf", "allOf"])("400s a schema carrying %s at the top level", (keyword) => {
+    const schema = { ...SCHEMA, [keyword]: [{ required: ["title"] }] }
+    const parsed = llmStructuredBody.safeParse({ system: "s", input: "i", jsonSchema: schema })
+    expect(parsed.success).toBe(false)
+    if (parsed.success) return
+    expect(parsed.error.issues.map((i) => i.message).join(" ")).toContain("top level")
+  })
+  it("prepareStructuredRequest refuses the same thing spelled through a root $ref — the check the worker re-runs", () => {
+    // The body rule reads root keys; a `$ref` into a `$defs` combinator has none
+    // of them and converts fine, yet renders for the provider without a `type`.
+    // `prepareStructuredRequest` judges the RENDERED schema, and the worker
+    // re-runs it, so a job enqueued before the body rule fails with this sentence.
+    const viaRef = { type: "object", $ref: "#/$defs/doc", $defs: { doc: { anyOf: [{ ...SCHEMA, properties: { title: { type: "string" } } }, { ...SCHEMA, properties: { name: { type: "string" } } }] } } }
+    const parsed = llmStructuredBody.safeParse({ system: "s", input: "i", jsonSchema: viaRef })
+    if (parsed.success) {
+      const out = prepareStructuredRequest(parsed.data)
+      expect(out).toMatchObject({ ok: false, status: 400, error: { code: "validation_error" } })
+      if (!out.ok) expect(out.error.message).toContain("object schema")
+    } else {
+      // zod refused the spelling at the body already — also a refusal before spend.
+      expect(parsed.success).toBe(false)
+    }
+  })
+  it("renderProviderSchema is the provider's view: a root combinator renders type-less, a plain root stays an object", () => {
+    const plain = convertJsonSchema(SCHEMA)
+    expect("schema" in plain).toBe(true)
+    if ("schema" in plain) expect(renderProviderSchema(plain.schema).type).toBe("object")
+    const combinator = convertJsonSchema({ ...SCHEMA, anyOf: [{ required: ["title"] }, { required: ["title"] }] })
+    expect("schema" in combinator).toBe(true)
+    if ("schema" in combinator) expect(renderProviderSchema(combinator.schema).type).toBeUndefined()
+  })
+  it("still accepts the same combinators BELOW the root", () => {
+    const schema = { ...SCHEMA, properties: { title: { anyOf: [{ type: "string" }, { type: "number" }] } } }
+    expect(llmStructuredBody.safeParse({ system: "s", input: "i", jsonSchema: schema }).success).toBe(true)
   })
 })
 

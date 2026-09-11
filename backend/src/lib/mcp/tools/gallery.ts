@@ -32,6 +32,11 @@ interface GalleryRow {
   provider: string | null
 }
 
+/** MCP twin of `routes/gallery.ts`'s allowlists — same BULLMQ QUEUE NAME
+ *  vocabulary, same reason: `jobs.job_type` is overwritten with `job.name` by
+ *  the pickup CAS in `workers/video-worker.ts`, which is what lets DAG rows
+ *  (inserted as `job_type = node.type`) match at all. Keep in lockstep with
+ *  `routes/gallery.ts`; a node type listed here matches no row. */
 const IMAGE_JOBS = new Set([
   "generate-image",
   "edit-image",

@@ -1,4 +1,4 @@
-import Fastify from "fastify"
+import Fastify, { type FastifyRequest } from "fastify"
 import { requestLogSerializer } from "./lib/log-redaction.js"
 import { createHash } from "node:crypto"
 import cors from "@fastify/cors"
@@ -25,18 +25,31 @@ import { WORKSPACE_HEADER } from "@nodaro/shared"
  * adding it here is a fleet-wide outage.
  */
 export function buildCorsOptions(mcpIframeRe: RegExp) {
-  return {
-    // Same-origin / curl requests have no Origin header — allow them.
-    // Use the async-promise form (NOT callback form) — @fastify/cors invokes
-    // both the cb and resolves the promise if you return one, double-firing.
-    origin: async (origin: string | undefined) => {
-      if (!origin) return true
-      if (mcpIframeRe.test(origin)) return true
-      return isOriginAllowedDynamic(origin)
-    },
+  const base = {
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", CLIENT_HEADER, WORKSPACE_HEADER],
+    allowedHeaders: ["Content-Type", "Authorization", CLIENT_HEADER, WORKSPACE_HEADER, POLL_KEY_HEADER],
     credentials: true,
+  }
+  return {
+    // Per-request options. The one-argument form is the promise delegator —
+    // @fastify/cors treats a two-argument function as callback-style and
+    // would double-fire if it also returned a promise.
+    delegator: async (req: FastifyRequest) => {
+      const origin = req.headers.origin
+
+      // An opaque origin, serialised as the literal "null": what a sandboxed
+      // iframe sends, and the Figma plugin UI is exactly that. The only thing
+      // that makes an allowed "null" dangerous is pairing it with credentials,
+      // so this branch reflects the origin WITHOUT them. Nothing here rides on
+      // ambient credentials anyway — auth is a Bearer header the browser never
+      // attaches on its own — so an opaque page gets no more than curl does.
+      if (origin === "null") return { ...base, origin: true, credentials: false }
+
+      // Same-origin / curl requests have no Origin header — allow them.
+      if (!origin) return { ...base, origin: true }
+      if (mcpIframeRe.test(origin)) return { ...base, origin: true }
+      return { ...base, origin: await isOriginAllowedDynamic(origin) }
+    },
   }
 }
 import { loadPrivatePlugins } from "./lib/private-plugins/load.js"
@@ -261,6 +274,7 @@ import { pickerCatalogsRoutes } from "./routes/picker-catalogs.js"
 import { catalogsRoutes } from "./routes/catalogs.js"
 import { oauthRoutes } from "./routes/oauth.js"
 import { registerOauthRegister } from "./routes/oauth-register.js"
+import { oauthPluginConnectRoutes, POLL_KEY_HEADER } from "./routes/oauth-plugin-connect.js"
 import { ssoRoutes } from "./routes/sso.js"
 import { registerWellKnown } from "./routes/well-known.js"
 import { registerMcpRoute } from "./routes/mcp.js"
@@ -712,6 +726,7 @@ export async function buildApp() {
   await app.register(catalogsRoutes)
   await app.register(oauthRoutes)
   await registerOauthRegister(app)
+  await app.register(oauthPluginConnectRoutes)
   await app.register(ssoRoutes)
   await registerWellKnown(app)
   await registerMcpRoute(app)

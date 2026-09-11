@@ -125,7 +125,7 @@ export function registerScene3DVerbs({ server, session, fastify }: RegisterOpts)
     server.registerTool("pro_3d_render", {
       title: "3D Render Pro",
       description: "ONE operation that produces a finished 3D shot: a source goes in, and the settled job carries BOTH " +
-        "scenePlan (the exact composition) and videoUrl (the MP4). " +
+        "scenePlan (the exact composition), videoUrl (the MP4) and shotStills (one still per shot, in shot order). " +
         "source.kind='prompt' authors a new scene from a brief plus optional references. " +
         "source.kind='scene' names an existing revision by revision_id (source_job_id is needed for Basic job-only scenes): WITHOUT edit_prompt this is a " +
         "render-only export that costs no authoring, WITH edit_prompt it revises the scene first. " +

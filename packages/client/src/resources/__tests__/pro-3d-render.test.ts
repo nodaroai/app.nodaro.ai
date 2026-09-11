@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest"
 import { createClient, StaticTokenAuth } from "../../index.js"
-import type { Scene3DPlan } from "@nodaro/shared"
+import type { Pro3DRenderShotStill, Scene3DPlan } from "@nodaro/shared"
 
 /**
  * The SDK surface for 3D Render Pro.
@@ -28,6 +28,10 @@ const OUTPUT = {
   scenePlan: scene,
   sceneRevisionId: scene.revisionId,
   posterAssetId: "poster-1",
+  shotStills: [
+    { shotIndex: 0, frame: 0, assetId: "still-0", url: "https://cdn.example/still-0.png" },
+    { shotIndex: 1, frame: 360, assetId: "still-1", url: "https://cdn.example/still-1.png" },
+  ],
   validation: { status: "passed", reportAssetId: "report-1", warnings: [] },
   renderer: "three-remotion@1",
   metadata: { width: 1680, height: 720, fps: 24, frames: 720, duration: 30 },
@@ -150,6 +154,9 @@ describe("3D Render Pro transport", () => {
     expect(result.scenePlan).toEqual(scene)
     expect(result.sceneRevisionId).toBe(scene.revisionId)
     expect(result.posterAssetId).toBe("poster-1")
+    // One still per shot, in shot order, with the frame each shot opens on.
+    expect(result.shotStills).toEqual(OUTPUT.shotStills)
+    expectTypeOf(result.shotStills).toEqualTypeOf<Pro3DRenderShotStill[] | undefined>()
     expect(result.validation.status).toBe("passed")
     expect(result.metadata).toEqual({ width: 1680, height: 720, fps: 24, frames: 720, duration: 30 })
     expectTypeOf(result.videoUrl).toEqualTypeOf<string>()

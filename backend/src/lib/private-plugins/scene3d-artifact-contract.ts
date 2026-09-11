@@ -1,5 +1,5 @@
 /** Opaque owned artifacts. No authoring recipe or service protocol crosses this boundary. */
-export type PluginSceneArtifactKind = "glb" | "camera-track-json" | "poster" | "validation-report" | "blend-source" | "source-json" | "build-manifest" | "input-glb"
+export type PluginSceneArtifactKind = "glb" | "camera-track-json" | "poster" | "validation-report" | "blend-source" | "source-json" | "build-manifest" | "input-glb" | "shot-still"
 export interface PluginSceneArtifactScope { jobId: string; userId: string; revisionId: string }
 export interface PluginSceneArtifactUpload extends PluginSceneArtifactScope {
   artifactId: string
@@ -58,13 +58,31 @@ export interface PluginSceneJobEditRequest {
   operations: readonly unknown[]
   lockedObjectIds?: readonly string[]
 }
+/**
+ * What a finished export retains.
+ *
+ * `shot-still` entries are OPTIONAL and additive — zero of them is a complete
+ * delivery — but when any are present they must be the composition's WHOLE
+ * shot set: `shotIndex` is the 0-based position in the v2 `shots` array (a v1
+ * scene is one shot, index 0) and `frame` is that shot's own first frame. The
+ * platform re-derives both from the manifest and refuses a set that disagrees,
+ * so a producer cannot publish a contact sheet that mislabels a shot.
+ *
+ * `width`/`height` may be omitted: the composition's frame size is then
+ * recorded, which is what the render was asked to produce.
+ */
 export interface PluginSceneDeliveryPublish extends PluginSceneArtifactScope {
   source: { kind: "retained-revision" | "job-output"; jobId?: string }
   mode: "authored" | "render-only"
   plan: unknown
   artifacts: Array<{
-    artifactId: string; kind: "poster" | "validation-report"; sha256: string; byteLength: number
+    artifactId: string; kind: "poster" | "validation-report" | "shot-still"; sha256: string; byteLength: number
     reuseFromRevisionId?: string
+    /** Required on `shot-still`, refused on every other kind. */
+    shotIndex?: number
+    frame?: number
+    width?: number
+    height?: number
   }>
 }
 export interface PluginSceneArtifactToolkit {

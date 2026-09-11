@@ -1,4 +1,5 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
@@ -1490,6 +1491,22 @@ export function resolveNodeInputs(
     //   • `sheet` → single composited image; route like an image source
     //     (image-targets → referenceImageUrls, everything else → imageUrl).
     // Mirrors the backend input-resolver.ts reference-sheet block.
+    // 3D Render Pro `stills` → the WHOLE ordered contact sheet, spread into
+    // referenceImageUrls. One still per shot is a set, not a pick: handing a
+    // downstream model only the first would silently drop the rest of the
+    // composition. Mirrors the backend input-resolver.ts branch of the same
+    // name, and the reference-sheet `panels` block below.
+    if (src.type === "pro-3d-render" && resolvedSourceHandle === "stills") {
+      // The live store node, so a just-settled run's stills are visible before
+      // its snapshot persists (same reason as reference-sheet `panels`).
+      const liveProNode = useWorkflowStore.getState().nodes.find((n) => n.id === src!.id);
+      const stills = proShotStills((liveProNode?.data ?? src.data) as Record<string, unknown>);
+      if (stills.length > 0) {
+        inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), ...stills.map((s) => s.url)];
+      }
+      continue;
+    }
+
     if (src.type === "reference-sheet") {
       if (resolvedSourceHandle === "panels") {
         const liveNode = useWorkflowStore.getState().nodes.find((n) => n.id === src!.id);
