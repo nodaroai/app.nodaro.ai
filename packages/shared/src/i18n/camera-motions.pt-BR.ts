@@ -27,8 +27,8 @@ const map: LocaleCatalogMap = {
   "dolly-in": { description: "Empurra a câmera em direção ao sujeito (com paralaxe)" },
   "dolly-out": { description: "Afasta a câmera (com paralaxe)" },
   "dolly-zoom": { description: "Efeito vertigo: dolly oposto ao zoom" },
-  "push-in": { description: "Empurro lento e sutil em direção ao sujeito" },
-  "pull-out": { description: "Afastamento lento e sutil do sujeito" },
+  "push-in": { description: "Empurro rápido e enérgico em direção ao sujeito" },
+  "pull-out": { description: "Afastamento rápido e enérgico do sujeito" },
   "breathing": { label: "Câmera Respirante", description: "Oscilação contínua e sutil de empurro e afastamento, sensação orgânica de câmera na mão" },
   "push-pull": { label: "Push-Pull / Vai-e-Vem", description: "A câmera se move em direção ao sujeito e depois se afasta, aproximação e retirada oscilantes" },
   "creep-in": { label: "Aproximação Imperceptível", description: "Empurro extremamente lento e imperceptível que constrói pavor ou tensão" },
@@ -48,8 +48,8 @@ const map: LocaleCatalogMap = {
   "dutch-angle": { description: "Quadro estático inclinado para criar tensão" },
 
   // Orbit / Arc
-  "orbit-left": { description: "Volta completa em torno do sujeito para a esquerda" },
-  "orbit-right": { description: "Volta completa em torno do sujeito para a direita" },
+  "orbit-left": { description: "Órbita parcial ampla em torno do sujeito para a esquerda" },
+  "orbit-right": { description: "Órbita parcial ampla em torno do sujeito para a direita" },
   "spin-360": { label: "Giro Completo 360°", description: "A câmera gira 360 graus completos sobre seu próprio eixo" },
   "orbit-360": { label: "Órbita Completa 360°", description: "A câmera descreve um arco completo de 360 graus em torno do sujeito" },
   "arc-left": { description: "Arco parcial em torno do sujeito pela esquerda" },
@@ -88,7 +88,7 @@ const map: LocaleCatalogMap = {
   "handheld-vlog": { description: "Câmera na mão estilo vlog descontraído" },
   "pov-walk": { description: "POV de caminhada em primeira pessoa" },
   "velocity-edit": { description: "Pacing com speed-ramp estilo TikTok" },
-  "match-cut-zoom": { description: "Zoom no tempo de batida para corte" },
+  "match-cut-zoom": { description: "Zoom rápido com corte seco para uma forma correspondente" },
   "screen-tap": { description: "Transição com toque na tela" },
   "phone-flip": { description: "Troca entre câmera frontal e traseira" },
   // Location-studio extension (PR #2505 follow-up)

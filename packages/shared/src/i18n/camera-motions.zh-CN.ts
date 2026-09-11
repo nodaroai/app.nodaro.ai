@@ -27,8 +27,8 @@ const map: LocaleCatalogMap = {
   "dolly-in":   { label: "推轨",     description: "推动机位靠近被摄对象(带视差)" },
   "dolly-out":  { label: "拉轨",     description: "拉远机位远离被摄对象(带视差)" },
   "dolly-zoom": { label: "滑动变焦", description: "眩晕效果:推轨与变焦反向" },
-  "push-in":    { label: "缓推",     description: "缓慢轻柔地推向被摄对象" },
-  "pull-out":   { label: "缓拉",     description: "缓慢轻柔地拉远被摄对象" },
+  "push-in":    { label: "急推",     description: "快速有力地推向被摄对象" },
+  "pull-out":   { label: "急拉",     description: "快速有力地拉远被摄对象" },
   "breathing":  { label: "呼吸式镜头", description: "细微而连续的推拉震荡,有机的手持质感" },
   "push-pull":  { label: "推拉/摇摆",  description: "镜头先靠近主体再后退,摆动式的接近与撤离" },
   "creep-in":   { label: "渐近推近",   description: "几乎察觉不到的极慢推近,营造恐惧或紧张感" },
@@ -48,8 +48,8 @@ const map: LocaleCatalogMap = {
   "dutch-angle": { label: "荷兰角",   description: "营造紧张感的固定倾斜画面" },
 
   // Orbit / Arc
-  "orbit-left":  { label: "向左环绕",   description: "镜头绕被摄对象向左完整环绕" },
-  "orbit-right": { label: "向右环绕",   description: "镜头绕被摄对象向右完整环绕" },
+  "orbit-left":  { label: "向左环绕",   description: "镜头绕被摄对象向左大幅部分环绕" },
+  "orbit-right": { label: "向右环绕",   description: "镜头绕被摄对象向右大幅部分环绕" },
   "spin-360":    { label: "360°整圈自转", description: "镜头围绕自身轴心整圈360度旋转" },
   "orbit-360":   { label: "360°整圈环绕", description: "镜头围绕主体整圈360度环行" },
   "arc-left":    { label: "左弧形运镜", description: "围绕被摄对象向左做局部弧线" },
@@ -88,7 +88,7 @@ const map: LocaleCatalogMap = {
   "handheld-vlog":  { label: "手持 Vlog",       description: "随性的 Vlog 风格手持" },
   "pov-walk":       { label: "主观行走",         description: "第一人称行走主观镜头" },
   "velocity-edit":  { label: "速度剪辑",         description: "TikTok 节奏的速率变化" },
-  "match-cut-zoom": { label: "节拍变焦",         description: "卡点变焦用于剪辑" },
+  "match-cut-zoom": { label: "节拍变焦",         description: "快速变焦后硬切到相同形状" },
   "screen-tap":     { label: "点屏切换",         description: "屏幕上手指点击触发的转场" },
   "phone-flip":     { label: "翻面切换",         description: "前后摄像头翻转切换" },
   // Location-studio extension (PR #2505 follow-up)

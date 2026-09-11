@@ -381,7 +381,7 @@
         }
       },
       "ctx": null,
-      "expected": "camera arcs to the left around the subject"
+      "expected": "slow camera arc around the subject through a partial arc, the background sliding to the left across the frame"
     },
     {
       "key": "camera-motion/id:auto",
