@@ -120,6 +120,32 @@ describe("llmCompleteStructured", () => {
     },
   )
 
+  it.each([
+    ["response.incomplete", { incomplete_details: { reason: "max_output_tokens" } }, "max_output_tokens"],
+    ["response.failed", { error: { code: "server_error", message: "upstream refused" } }, "server_error upstream refused"],
+    ["response.failed", {}, undefined],
+  ])("names the provider's own reason for a terminal %s and logs it once", async (type, extra, reason) => {
+    const { llmCompleteStructured } = await import("../llm-client.js")
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    fetchMock.mockImplementation(() => Promise.resolve(streamResponse([
+      `data: ${JSON.stringify({ type, response: { usage: { input_tokens: 123, output_tokens: 456 }, ...extra } })}\n\n`,
+    ])))
+    try {
+      // The event NAME alone cannot tell "raise the output budget" from "the endpoint is
+      // failing", and before this the throw carried neither the reason nor a log line — so a
+      // caller that rewrote the message left no record at all (the Scene3D planner did).
+      const expected = new RegExp(`ended with ${type.replace(".", "\\.")}${reason ? `: ${reason}` : ""}`)
+      await expect(llmCompleteStructured(
+        { modelId: "gpt-6-astra", system: "", messages: [{ role: "user", content: "scene" }] },
+        schema, { maxRetries: 0 },
+      )).rejects.toMatchObject({ message: expect.stringMatching(expected) })
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(warn.mock.calls[0]![0]).toContain("[llm-kie-stream-terminal]")
+      // The usage is in the sentence too: a reader should not need the row to size the answer.
+      expect(warn.mock.calls[0]![0]).toContain("in 123 / out 456 tokens")
+    } finally { warn.mockRestore() }
+  })
+
   it.each([true, false])("keeps earlier repair usage when a terminal response reports usage=%s", async (reported) => {
     const { llmCompleteStructured } = await import("../llm-client.js")
     fetchMock.mockResolvedValueOnce(streamResponse([

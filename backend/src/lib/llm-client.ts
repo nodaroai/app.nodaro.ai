@@ -565,6 +565,22 @@ class LlmStreamResponseError extends Error {
 }
 
 /**
+ * Why a terminal responses event was not `response.completed`, in one clause.
+ *
+ * Both shapes the responses dialect uses, read defensively because this runs on a
+ * failure path: `incomplete_details.reason` for `response.incomplete`, `error.code` /
+ * `error.message` for `response.failed`. Bounded — a provider message is not a log budget —
+ * and it returns "" rather than inventing a reason when the event carries none.
+ */
+export function terminalResponseReason(resp: Record<string, unknown> | undefined): string {
+  const text = (value: unknown): string => (typeof value === "string" && value.trim() ? value.trim() : "")
+  const details = resp?.incomplete_details as Record<string, unknown> | undefined
+  const error = resp?.error as Record<string, unknown> | undefined
+  const parts = [text(details?.reason), text(error?.code), text(error?.message)].filter(Boolean)
+  return parts.join(" ").slice(0, 300)
+}
+
+/**
  * Schema-constrained completion with validation + retry — the reliable entry
  * point for "the LLM must return JSON shaped like X".
  *
@@ -1663,7 +1679,19 @@ async function parseSseStream(
             actualUsd = extractActualUsd(resp ?? {}) ?? actualUsd
             if (eventType !== "response.completed") {
               const providerCost = actualUsd ?? (usage ? calculateLlmCost(modelId, usage) : undefined)
-              throw new LlmStreamResponseError(`KIE.ai responses stream ${modelId} ended with ${eventType}`, {
+              // The provider's own reason, not just the event name. `response.incomplete`
+              // carries `incomplete_details.reason` ("max_output_tokens", "content_filter")
+              // and `response.failed` carries `error.code`/`error.message` — the difference
+              // between "raise the output budget" and "the endpoint is failing", which the
+              // event name alone cannot tell apart. Logged too: this throw is the only
+              // record that the call ended, and it had NO log line, so a caller that
+              // rewrites the message (as the Scene3D planner did) left nothing behind.
+              const reason = terminalResponseReason(resp)
+              const detail = `KIE.ai responses stream ${modelId} ended with ${eventType}` +
+                (reason ? `: ${reason}` : "") +
+                ` (in ${usage?.inputTokens ?? 0} / out ${usage?.outputTokens ?? 0} tokens)`
+              console.warn(`[llm-kie-stream-terminal] ${detail}`)
+              throw new LlmStreamResponseError(detail, {
                 inputTokens: usage?.inputTokens ?? 0, outputTokens: usage?.outputTokens ?? 0,
                 providerCost, complete: usage !== undefined && providerCost !== undefined,
               })
