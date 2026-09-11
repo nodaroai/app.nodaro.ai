@@ -90,7 +90,7 @@ test("jobs are merged by id, so a later record enriches rather than duplicates",
 
 test("credential shapes are refused before anything reaches disk", () => {
   // Assembled at runtime so the source never contains a key-shaped literal (gitleaks generic-api-key).
-  const key = ["ndr", "livekey", "abcdef1234567890"].join("_")
+  const key = ["ndr", "livekey", "abcdef1234567890"].join("_") // gitleaks:allow — fake fixture, not a credential
   const receipt = fresh()
   receipt.inputs.oops = `Authorization: Bearer ${key}`
   assert.ok(findSecrets(receipt).includes("nodaro-api-key"))

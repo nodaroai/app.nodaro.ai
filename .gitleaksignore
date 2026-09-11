@@ -13,6 +13,9 @@
 7807cdc7c9fc83cd76350f85b7665b8256af6b52:backend/src/lib/__tests__/sso-assertion.test.ts:generic-api-key:6
 
 # tools/__tests__/scene3d-acceptance-receipt.test.mjs: a FAKE key-shaped string used to prove
-# the receipt writer refuses credentials. Not a credential (PR #1339).
-0cd7ec51055b0e46f1e49227138695a9c1e6eae0:tools/__tests__/scene3d-acceptance-receipt.test.mjs:generic-api-key:91
-4a13999dd5c34df152a8a74f9deb375b547e8175:tools/__tests__/scene3d-acceptance-receipt.test.mjs:generic-api-key:93
+# the receipt writer refuses credentials. Not a credential (PR #1339). LESSON: a fingerprint
+# pins a COMMIT SHA, and a squash merge mints a new one — the PR-branch fingerprints stopped
+# matching the moment #1339 landed on dev, secret-scan went red, and Railway skipped two
+# staging deploys. This entry pins the squash commit; the line itself also carries an inline
+# `gitleaks:allow`, which is content-keyed and survives any future rewrite.
+a89437509185b59cef6498046b3d560ccf0884ca:tools/__tests__/scene3d-acceptance-receipt.test.mjs:generic-api-key:93
