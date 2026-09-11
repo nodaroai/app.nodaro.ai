@@ -172,6 +172,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "≤15s combined, and input video seconds + output duration must stay ≤30s. " +
             "Dropped on models without video-reference support.",
           ),
+        reference_video_captions: z
+          .array(z.string().max(500))
+          .max(10)
+          .optional()
+          .describe(
+            "Index-aligned with reference_video_urls: what each clip is FOR. Rendered `@video_N: <caption>.`",
+          ),
         reference_audio_urls: z
           .union([z.array(z.string()), z.string()])
           .optional()
@@ -311,6 +318,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       const t2vRefImages = t2vRefLimits.images ? await resolveRefArray(args.reference_image_urls, session.userId, "image", t2vRefLimits.images) : []
       const t2vRefVideos = t2vRefLimits.videos ? await resolveRefArray(args.reference_video_urls, session.userId, "video", t2vRefLimits.videos) : []
       const t2vRefAudio = t2vRefLimits.audio ? await resolveRefArray(args.reference_audio_urls, session.userId, "audio", t2vRefLimits.audio) : []
+      // Captions bind SEATS, so they are truncated to the seats the payload
+      // actually ships: `resolveRefArray` may have dropped an unresolvable id
+      // or capped the list at the model's own limit, and a caption left past
+      // the end would name a `@video_N` the model never receives.
+      const t2vRefCaptions = Array.isArray(args.reference_video_captions) && args.reference_video_captions.length > 0
+        ? args.reference_video_captions.slice(0, t2vRefVideos.length)
+        : undefined
       const payload = {
         prompt: compositePrompt,
         provider: model,
@@ -330,6 +344,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(args.reference_order ? { referenceOrder: args.reference_order } : {}),
         ...(t2vRefImages.length ? { referenceImageUrls: t2vRefImages } : {}),
         ...(t2vRefVideos.length ? { referenceVideoUrls: t2vRefVideos } : {}),
+        ...(t2vRefVideos.length && t2vRefCaptions ? { referenceVideoCaptions: t2vRefCaptions } : {}),
         ...(t2vRefAudio.length ? { referenceAudioUrls: t2vRefAudio } : {}),
         mcp_client: session.clientName,
         userId: session.userId,

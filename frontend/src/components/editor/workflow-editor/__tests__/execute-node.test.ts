@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import {
+  SCENE3D_LAYOUT_REFERENCE_SCOPING_FIXTURE,
+  SCENE3D_LAYOUT_REFERENCE_SCOPING_LINE,
+  SCENE3D_LAYOUT_SCOPING_MARKER,
+} from "@nodaro/prompts"
 
 // ---------------------------------------------------------------------------
 // Mock variables (declared before vi.mock calls)
@@ -4135,5 +4140,128 @@ describe("suno-upload-extend", () => {
       defaultParamFlag: false,
       userId: "u1",
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Scene3D layout-reference scoping on the node's OWN Run button
+// ---------------------------------------------------------------------------
+
+/**
+ * Rule 1 of the greybox doctrine on the CANVAS path. The orchestrated DAG has
+ * captioned an attached Scene3D clay render since the doctrine landed; this
+ * path handed `/v1/generate-video` bare URLs, so pressing Run on the very same
+ * node sent the clip unscoped — a greybox reference read as a greybox LOOK.
+ *
+ * The two facts under test are the ones the canvas owns: a clip's line rides
+ * `referenceVideoCaptions` (the SAME route field an API caller fills, and the
+ * same seat the orchestrator's `videoCaptions` lands on), and a still's line —
+ * which has no caption seat — is appended to the prompt body. The wording
+ * itself is pinned to the shared fixture, never restated here.
+ */
+describe("Scene3D layout scoping — canvas Run parity", () => {
+  const MP4 = "https://r2.example/renders/table.mp4"
+  const STILL_URL = "https://r2.example/frames/table-f0.png"
+  const V2_PLAN = {
+    planType: "3d-scene",
+    schemaVersion: 2,
+    revisionId: "rev-table",
+    objects: [{ id: "a", name: "Green", role: "person" }],
+    shots: [{ id: "s1", startFrame: 0, endFrameExclusive: 240 }],
+  }
+  const proNode = {
+    id: "p1",
+    type: "pro-3d-render",
+    position: { x: 0, y: 0 },
+    data: { label: "3D Render Pro", scenePlan: V2_PLAN, generatedVideoUrl: MP4 },
+  } as any
+
+  it("text-to-video: the clay clip's scoping line rides referenceVideoCaptions", async () => {
+    const t2v = makeNode("text-to-video", { provider: "seedance-2", prompt: "Two people talk at dusk." })
+    mockNodes = [proNode, t2v]
+    mockEdges = [{ id: "e1", source: "p1", target: "n1", sourceHandle: "video", targetHandle: "videoReferences" }]
+    mockResolveNodeInputs.mockReturnValue({ referenceVideoUrls: [MP4] })
+    mockExtractNodeOutput.mockImplementation(() => MP4)
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(t2v, makeCtx())
+
+    // runTextToVideoGeneration(nodeId, prompt, ctx, provider, options, idem)
+    const options = mockRunTextToVideoGeneration.mock.calls[0][4] as Record<string, unknown>
+    expect(options.referenceVideoUrls).toEqual([MP4])
+    expect(options.referenceVideoCaptions).toEqual([SCENE3D_LAYOUT_REFERENCE_SCOPING_LINE])
+    // And the same line reaches the model on its seat, through the shared core.
+    const prompt = mockRunTextToVideoGeneration.mock.calls[0][1] as string
+    expect(prompt).toContain(SCENE3D_LAYOUT_REFERENCE_SCOPING_FIXTURE.clipRendered)
+  })
+
+  it("image-to-video: a still on the image rail gets its line in the prompt body", async () => {
+    const i2v = makeNode("image-to-video", { provider: "seedance-2", prompt: "A slow push in." })
+    mockNodes = [proNode, i2v]
+    mockEdges = [{ id: "e1", source: "p1", target: "n1", sourceHandle: "stills", targetHandle: "imageReferences" }]
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: STILL_URL, referenceImageUrls: [STILL_URL] })
+    mockExtractNodeOutput.mockImplementation(() => STILL_URL)
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(i2v, makeCtx())
+
+    const prompt = mockRunVideoGeneration.mock.calls[0][8] as string
+    expect(prompt).toContain(SCENE3D_LAYOUT_REFERENCE_SCOPING_FIXTURE.stillRendered)
+    // An image seat has no caption seat, so nothing is claimed on the video rail.
+    const extras = mockRunVideoGeneration.mock.calls[0][24] as Record<string, unknown> | undefined
+    expect(extras?.referenceVideoCaptions).toBeUndefined()
+  })
+
+  it("sends no caption and changes no prompt when the reference is not a Scene3D render", async () => {
+    const upload = { id: "u1", type: "upload-video", position: { x: 0, y: 0 }, data: { videoUrl: "https://r2.example/uploads/handheld.mp4" } } as any
+    const t2v = makeNode("text-to-video", { provider: "seedance-2", prompt: "A handheld walk." })
+    mockNodes = [upload, t2v]
+    mockEdges = [{ id: "e1", source: "u1", target: "n1", sourceHandle: null, targetHandle: "videoReferences" }]
+    mockResolveNodeInputs.mockReturnValue({ referenceVideoUrls: ["https://r2.example/uploads/handheld.mp4"] })
+    mockExtractNodeOutput.mockImplementation(() => "https://r2.example/uploads/handheld.mp4")
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(t2v, makeCtx())
+
+    const options = mockRunTextToVideoGeneration.mock.calls[0][4] as Record<string, unknown>
+    expect(options.referenceVideoCaptions).toBeUndefined()
+    expect(mockRunTextToVideoGeneration.mock.calls[0][1] as string).not.toContain(SCENE3D_LAYOUT_SCOPING_MARKER)
+  })
+
+  it("the UNIFIED generate-video node is covered by the re-type, not by an edit of its own", async () => {
+    // `generate-video` has no handler of its own: it re-types to i2v/t2v and
+    // recurses, keeping the SAME node id so the edge walk still resolves. If
+    // that ever stopped being true, the node most users actually place would be
+    // the one path with no scoping line.
+    const gv = makeNode("generate-video", { provider: "seedance-2", prompt: "Two people talk at dusk." })
+    mockNodes = [proNode, gv]
+    mockEdges = [{ id: "e1", source: "p1", target: "n1", sourceHandle: "video", targetHandle: "videoReferences" }]
+    mockResolveNodeInputs.mockReturnValue({ referenceVideoUrls: [MP4] })
+    mockExtractNodeOutput.mockImplementation(() => MP4)
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(gv, makeCtx())
+
+    const options = mockRunTextToVideoGeneration.mock.calls[0][4] as Record<string, unknown>
+    expect(options.referenceVideoCaptions).toEqual([SCENE3D_LAYOUT_REFERENCE_SCOPING_LINE])
+  })
+
+  it("adds no second line when the prompt already scopes that seat", async () => {
+    const t2v = makeNode("text-to-video", {
+      provider: "seedance-2",
+      prompt: `Two people talk at dusk.\n${SCENE3D_LAYOUT_REFERENCE_SCOPING_FIXTURE.clipRendered}`,
+    })
+    mockNodes = [proNode, t2v]
+    mockEdges = [{ id: "e1", source: "p1", target: "n1", sourceHandle: "video", targetHandle: "videoReferences" }]
+    mockResolveNodeInputs.mockReturnValue({ referenceVideoUrls: [MP4] })
+    mockExtractNodeOutput.mockImplementation(() => MP4)
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(t2v, makeCtx())
+
+    const options = mockRunTextToVideoGeneration.mock.calls[0][4] as Record<string, unknown>
+    expect(options.referenceVideoCaptions).toBeUndefined()
+    const prompt = mockRunTextToVideoGeneration.mock.calls[0][1] as string
+    expect(prompt.match(new RegExp(SCENE3D_LAYOUT_SCOPING_MARKER, "g"))?.length).toBe(1)
   })
 })

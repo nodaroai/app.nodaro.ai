@@ -99,6 +99,18 @@ one, at frame 0. Use them to feed a shot's opening frame into an image or video
 model as a reference, or to review the blocking shot by shot without scrubbing
 the MP4. A result produced before this existed simply has none.
 
+**Wiring a still into any image input just works.** Their bytes stay in the
+private scene bucket, so the `url` you read back is authenticated rather than a
+public link — but you do not have to solve that to use one. Connect the `stills`
+handle to a node's image or reference-image input and, for that run only, the
+platform grants the model a short-lived, single-artifact read of the exact still
+it needs; the grant expires minutes later and is never stored. The stored
+result keeps the authenticated URL, which is the one still meaningful tomorrow.
+
+The grant is issued against **your own** access, at the moment the run is
+dispatched: a still from a delivery you can no longer read is not sent, and no
+link that outlives the run is created anywhere.
+
 The completed job's `output_data` carries:
 
 | Field | Meaning |
@@ -107,7 +119,7 @@ The completed job's `output_data` carries:
 | `scenePlan` | The exact composition it was rendered from. |
 | `sceneRevisionId` | That revision's id, for a later render-only re-run. |
 | `posterAssetId` | Preview poster for the result. |
-| `shotStills` | One entry per shot, ordered by `shotIndex`: `{ shotIndex, frame, assetId, url }`. `shotIndex` is 0-based in the composition's shot order and `frame` is the shot's own first frame in the composition's frame space, so a still lines up against the MP4 without re-deriving shot boundaries. Each `url` is an authenticated delivery endpoint, not a public link — the editor reads it with your session. Absent on a result that rendered none. |
+| `shotStills` | One entry per shot, ordered by `shotIndex`: `{ shotIndex, frame, assetId, url }`. `shotIndex` is 0-based in the composition's shot order and `frame` is the shot's own first frame in the composition's frame space, so a still lines up against the MP4 without re-deriving shot boundaries. Each `url` is an authenticated delivery endpoint, not a public link — the editor reads it with your session, and a run that wires a still into a model is granted its own short-lived read (see Outputs above). Absent on a result that rendered none. |
 | `sourceArtifactId` | Present when an editable native source was retained. |
 | `validation` | `{ status, reportAssetId, warnings[] }` — each warning has a `code`, a `message` and an optional `shotId`. |
 | `renderer` | Renderer identity/version the export was produced with. |
@@ -123,10 +135,10 @@ the layout and drop the clay:
 
 **1. Never attach the clay render without a scoping line.** One sentence per
 reference, naming what it is *for* and what to *ignore*. Wire the `video`
-output into a video node's **Video references** input and a **workflow run**
-adds the line for that reference itself (the video node's own Run button does
-not add it yet — type it into the prompt there); through the API, pass it as
-the reference's caption — `referenceVideoCaptions[N]` for the clip on
+output into a video node's **Video references** input and the platform adds the
+line for that reference itself — on a workflow run, on the video node's own Run
+button, and in the node's **Final** prompt preview, which shows the line exactly
+as it is sent. Through the API, pass it as the reference's caption — `referenceVideoCaptions[N]` for the clip on
 `referenceVideoUrls[N]`. The line the platform sends for a clip is:
 
 > LAYOUT reference only — match its subject positions and blocking, its foreground occlusion, its framing, its camera angle, its camera motion and its timing. Ignore its untextured grey clay placeholder look, its flat placeholder colours, its materials, its lighting and its empty background; none of that is the target look. Take the look from the prompt and from the other references
@@ -262,13 +274,19 @@ quote endpoint is the authority for any given request, and an install with no
 configured price refuses before reserving anything. Quote first and show
 `maxCredits` — a ceiling, not a charge.
 
+### Frame size
+
 The render stage is priced **per output frame**, so a longer scene and a higher
 frame rate both cost more, in proportion to the frames they produce. The
 per-frame rate is tiered by frame size on the same ladder as
 [Render Video](render-video.md#what-a-3d-scene-render-costs): frames up to
 1920 px on the longest side at the base rate, **1.5x** above that up to 5.12
 megapixels, **2.5x** for a larger frame. A frame at or under 1920 px on its
-longest side is always base-rate, whatever its shape.
+longest side is always base-rate, whatever its shape — raising the frame cap
+cannot make a scene you already render more expensive.
+
+The higher rates are derived from your install's own configured base per-frame
+price, not set separately, so re-pricing the base moves the whole ladder.
 
 That tier reaches your quote only once the deployment's render engine reports
 it in `breakdown` — read the quote you were given rather than computing one, in

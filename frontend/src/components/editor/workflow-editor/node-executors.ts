@@ -278,6 +278,10 @@ export function runVideoGeneration(
   generationType?: string,
   extras?: {
     referenceVideoUrls?: string[];
+    /** Rail captions, index-aligned with `referenceVideoUrls` — the Scene3D
+     *  layout-scoping line rides this seat on the canvas exactly as it does on
+     *  the orchestrated run and on an API call. */
+    referenceVideoCaptions?: string[];
     referenceAudioUrls?: string[];
     webSearch?: boolean;
     nsfwChecker?: boolean;
@@ -332,6 +336,7 @@ export function runVideoGeneration(
         cameraFixed,
         referenceImageUrls,
         referenceVideoUrls: extras?.referenceVideoUrls,
+        referenceVideoCaptions: extras?.referenceVideoCaptions,
         referenceAudioUrls: extras?.referenceAudioUrls,
         webSearch: extras?.webSearch,
         nsfwChecker: extras?.nsfwChecker,
@@ -438,6 +443,8 @@ export function runTextToVideoGeneration(
     generateAudio?: boolean;
     referenceImageUrls?: string[];
     referenceVideoUrls?: string[];
+    /** See runVideoGeneration's `extras.referenceVideoCaptions`. */
+    referenceVideoCaptions?: string[];
     referenceAudioUrls?: string[];
     webSearch?: boolean;
     nsfwChecker?: boolean;

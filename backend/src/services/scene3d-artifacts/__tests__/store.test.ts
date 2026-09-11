@@ -30,6 +30,8 @@ import {
   scene3DRevisionAssetDescriptors,
 } from "../read.js"
 import { runScene3DArtifactGcBatch, sweepExpiredScene3DArtifacts } from "../gc.js"
+import { S3Client } from "@aws-sdk/client-s3"
+import { signScene3DPrivateObjectGet } from "../object-store.js"
 import { resolveScene3DPrivateStorageConfig, type Scene3DObjectStore } from "../object-store.js"
 import { Scene3DArtifactError, type Scene3DPinnedArtifact } from "../types.js"
 
@@ -532,5 +534,81 @@ describe("private storage configuration", () => {
       region: "auto",
       forcePathStyle: false,
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// signScene3DPrivateObjectGet — the ONE read-capability minter
+// ---------------------------------------------------------------------------
+
+/**
+ * `@aws-sdk/s3-request-presigner` is a policed import: a presigned PUT would let
+ * bytes go browser→R2 and bypass every lane the upload policy checks, so the
+ * totality guard in `lib/__tests__/upload-policy.test.ts` allows exactly two
+ * importers — the upload granter, and this function. These cases pin the
+ * property that makes the second one safe: whatever it is asked for, it can only
+ * ever produce a bounded GET.
+ */
+describe("signScene3DPrivateObjectGet", () => {
+  const CFG = {
+    bucket: "scene-private",
+    endpoint: "https://acct.r2.cloudflarestorage.com",
+    region: "auto",
+    accessKeyId: "AKIAEXAMPLE",
+    secretAccessKey: "secret",
+    forcePathStyle: false,
+  }
+  const client = () =>
+    new S3Client({
+      region: CFG.region,
+      endpoint: CFG.endpoint,
+      forcePathStyle: CFG.forcePathStyle,
+      credentials: { accessKeyId: CFG.accessKeyId, secretAccessKey: CFG.secretAccessKey },
+    })
+
+  it("mints a GET — the signed method is GET and nothing else is expressible", async () => {
+    const url = new URL(
+      await signScene3DPrivateObjectGet(client(), CFG.bucket, {
+        objectKey: "scene3d/owner/rev/asset.still.png",
+        expiresInSeconds: 900,
+      }),
+    )
+    // An S3 v4 presigned URL is signed OVER the verb, so a URL signed for GET
+    // is not usable as a PUT. What is observable here is the shape a GET
+    // signature has: host-only signed headers, the object's own key, and the
+    // bound expiry.
+    expect(url.searchParams.get("X-Amz-SignedHeaders")).toBe("host")
+    expect(url.pathname).toContain("asset.still.png")
+    expect(url.host).toBe("scene-private.acct.r2.cloudflarestorage.com")
+    expect(url.searchParams.get("X-Amz-Expires")).toBe("900")
+    expect(url.searchParams.get("X-Amz-Signature")).toBeTruthy()
+    // Private bytes, so no cache between us and the reader may keep a copy.
+    expect(url.searchParams.get("response-cache-control")).toBe("no-store")
+  })
+
+  it("binds the grant to exact bytes when the reader can send If-Match", async () => {
+    const url = new URL(
+      await signScene3DPrivateObjectGet(client(), CFG.bucket, {
+        objectKey: "scene3d/owner/rev/input.glb",
+        expiresInSeconds: 600,
+        ifMatch: '"etag-1"',
+      }),
+    )
+    expect(url.searchParams.get("X-Amz-SignedHeaders")).toContain("if-match")
+    expect(url.searchParams.get("X-Amz-Expires")).toBe("600")
+  })
+
+  it("leaves If-Match out entirely for a reader that sends a bare GET", async () => {
+    // An external provider sends no headers; a REQUIRED If-Match it cannot send
+    // would 412 every fetch, which is why the parameter is optional rather than
+    // defaulted.
+    const url = new URL(
+      await signScene3DPrivateObjectGet(client(), CFG.bucket, {
+        objectKey: "scene3d/owner/rev/asset.still.png",
+        expiresInSeconds: 900,
+      }),
+    )
+    expect(url.searchParams.get("X-Amz-SignedHeaders")).not.toContain("if-match")
+    expect(url.searchParams.has("x-amz-If-Match")).toBe(false)
   })
 })

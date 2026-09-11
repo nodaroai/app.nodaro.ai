@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => {
   // exercise the finalize+refund path. Per-test override for the retry case.
   const mockIsFinalJobAttempt = vi.fn().mockReturnValue(true)
   const mockIsPromptBlocked = vi.fn().mockReturnValue(false)
+  // The Scene3D provider-grant pass. Identity by default (the overwhelmingly
+  // common case: no delivery URL in the payload), overridden per test.
+  const mockSignScene3DDeliveryUrls = vi.fn(async (payload: Record<string, unknown>) => payload)
   const mockInitProviders = vi.fn()
   const mockTryInlineReconcile = vi.fn().mockResolvedValue(undefined)
 
@@ -42,6 +45,7 @@ const mocks = vi.hoisted(() => {
     mockCreateAssetFromJob,
     mockIsFinalJobAttempt,
     mockIsPromptBlocked,
+    mockSignScene3DDeliveryUrls,
     mockInitProviders,
     mockTryInlineReconcile,
     mockHandler,
@@ -100,6 +104,10 @@ vi.mock("@/providers/index.js", () => ({
 
 vi.mock("@/config/content-filter.js", () => ({
   isPromptBlocked: mocks.mockIsPromptBlocked,
+}))
+
+vi.mock("../../services/scene3d-artifacts/delivery-provider-access.js", () => ({
+  signScene3DDeliveryUrlsForProvider: mocks.mockSignScene3DDeliveryUrls,
 }))
 
 vi.mock("../shared.js", () => ({
@@ -217,6 +225,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockHasCreditsRef.value = true
   mocks.mockSingle.mockResolvedValue({ data: mockJobRecord(), error: null })
+  mocks.mockSignScene3DDeliveryUrls.mockImplementation(async (payload: Record<string, unknown>) => payload)
 })
 
 describe("createVideoWorker", () => {
@@ -240,6 +249,51 @@ describe("video worker processor", () => {
     const job = makeBullJob("generate-image")
     await processor(job)
     expect(mocks.mockHandler).toHaveBeenCalledWith(job, expect.objectContaining({ jobId: "job-1" }))
+  })
+
+  // -------------------------------------------------------------------------
+  // Scene3D delivery artifacts for an EXTERNAL provider.
+  //
+  // A 3D Render Pro shot still's URL is the AUTHENTICATED delivery endpoint —
+  // its bytes stay in the private scene bucket by contract — so a provider
+  // fetching `referenceImageUrls` server-to-server gets a 401. THIS dispatch is
+  // where the swap for a signed, bounded GET happens, because it is the one
+  // point every lane converges on (orchestrated DAG, canvas Run, REST, MCP) and
+  // the last moment before the provider call.
+  //
+  // The behaviour of the grant itself is proved in
+  // `services/scene3d-artifacts/__tests__/delivery-provider-access.test.ts`;
+  // what is pinned here is the WIRING: the pass runs with the job OWNER's id
+  // (not the actor of whatever request enqueued it), and its result is what the
+  // handler receives.
+  // -------------------------------------------------------------------------
+  it("signs Scene3D delivery URLs with the job owner's identity before the handler runs", async () => {
+    const signed = { jobId: "job-1", referenceImageUrls: ["https://private.example/signed?X-Amz-Signature=abc"] }
+    mocks.mockSignScene3DDeliveryUrls.mockResolvedValue(signed)
+
+    const job = makeBullJob("generate-image", { referenceImageUrls: ["https://app.nodaro.ai/v1/3d-scene/deliveries/j/assets/a"] })
+    await processor(job)
+
+    expect(mocks.mockSignScene3DDeliveryUrls).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceImageUrls: ["https://app.nodaro.ai/v1/3d-scene/deliveries/j/assets/a"] }),
+      // `jobs.user_id` from the row read at pickup — the delivery's owner.
+      "user-1",
+    )
+    // The handler runs on the SIGNED payload, not the authenticated one.
+    expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
+    expect((mocks.mockHandler.mock.calls[0][0] as { data: unknown }).data).toBe(signed)
+  })
+
+  it("runs the pass BEFORE the handler, so no provider call sees an unsigned URL", async () => {
+    const order: string[] = []
+    mocks.mockSignScene3DDeliveryUrls.mockImplementation(async (payload: Record<string, unknown>) => {
+      order.push("sign")
+      return payload
+    })
+    mocks.mockHandler.mockImplementation(async () => { order.push("handler") })
+
+    await processor(makeBullJob("generate-image"))
+    expect(order).toEqual(["sign", "handler"])
   })
 
   // -------------------------------------------------------------------------

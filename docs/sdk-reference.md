@@ -5170,7 +5170,14 @@ Each `url` is an **authenticated** endpoint on this install
 link: a delivery's artifacts stay in the private scene bucket, and reads are
 re-authorized against the delivery's workflow on every request. Fetch it with
 the same credentials you used to run the job — dropping the URL into a plain
-`<img>` tag, or handing it to a third-party service to fetch, gets a `401`.
+`<img>` tag, or handing it to a third-party service to fetch yourself, gets a
+`401`.
+
+You can still USE a still as a model reference: pass the URL as you read it (in
+`referenceImageUrls`, or by wiring the node's `stills` handle in a workflow) and
+the platform grants that run its own short-lived read of that one artifact, in
+your name, at dispatch time. The grant expires minutes later and nothing durable
+is created — so keep the authenticated URL, not the grant, in anything you store.
 
 
 `renderProAndWait` quotes the identical body first when `params` carries no

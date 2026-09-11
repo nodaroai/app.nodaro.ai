@@ -41,6 +41,18 @@ const MIGRATIONS_DIR = join(REPO_ROOT, "supabase/migrations")
  * Migrations are append-only and ON CONFLICT DO NOTHING is the convention,
  * so reading from any migration that ever inserted the identifier counts
  * (admins can override the price in DB after that, which is the point).
+ *
+ * ONLY a literal `VALUES` list is read. An `INSERT … SELECT` writes identifiers
+ * that do not exist as literals anywhere — they are BUILT at migration time by
+ * concatenating onto rows the database already holds (migration 419's derived
+ * Pro per-frame tiers) — so there is nothing there to compare against
+ * `STATIC_CREDIT_COSTS`. Before this was excluded, the non-greedy `…VALUES`
+ * reach walked straight past the `SELECT` into the row-constructor of a
+ * `CROSS JOIN (VALUES ('large', 1.5), …)` and reported `large` / `xlarge` as
+ * ghost model identifiers. Derived inserts get their own, stricter guard below
+ * (`derived inserts build their ids from an existing model_identifier`) rather
+ * than an allowlist entry, because the risk they carry is different in kind:
+ * not "an id with no price" but "an id nobody can predict".
  */
 function extractInsertedIdentifiers(): Set<string> {
   const identifiers = new Set<string>()
@@ -52,7 +64,7 @@ function extractInsertedIdentifiers(): Set<string> {
     // Match: INSERT INTO (public.)?model_pricing ... VALUES (... ROWS ...)
     // Allow either `ON CONFLICT` clause or a bare `;` to terminate.
     const inserts = sql.matchAll(
-      /INSERT\s+INTO\s+(?:public\.)?model_pricing[\s\S]*?VALUES([\s\S]*?)(?:ON\s+CONFLICT|;\s*$)/gim,
+      /INSERT\s+INTO\s+(?:public\.)?model_pricing(?:(?!\bSELECT\b)[\s\S])*?VALUES([\s\S]*?)(?:ON\s+CONFLICT|;\s*$)/gim,
     )
     for (const match of inserts) {
       const valuesBlock = match[1] ?? ""
@@ -89,7 +101,7 @@ function extractInsertedValues(): Map<string, number> {
   for (const file of migrationFiles) {
     const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8")
     const inserts = sql.matchAll(
-      /INSERT\s+INTO\s+(?:public\.)?model_pricing[\s\S]*?VALUES([\s\S]*?)(?:ON\s+CONFLICT|;\s*$)/gim,
+      /INSERT\s+INTO\s+(?:public\.)?model_pricing(?:(?!\bSELECT\b)[\s\S])*?VALUES([\s\S]*?)(?:ON\s+CONFLICT|;\s*$)/gim,
     )
     for (const match of inserts) {
       const rowMatches = (match[1] ?? "").matchAll(/\(\s*'([^']+)'\s*,\s*(\d+)/g)
@@ -244,6 +256,100 @@ const KNOWN_GHOST_IDENTIFIERS: ReadonlySet<string> = new Set([
   "beeble-switchx:192f:1080p",
   "beeble-switchx:192f:720p",
 ])
+
+/**
+ * The suffixes a derived insert is allowed to append.
+ *
+ * Migration 419's tiers are the only derived rows today. They are declared here
+ * rather than in `KNOWN_GHOST_IDENTIFIERS` because they are not ghosts: they
+ * DO have a price, read at migration time from the operator-seeded base row
+ * each one is a multiple of. What has to be pinned about them is the opposite
+ * property — that a derived insert cannot invent an identifier shape nobody
+ * predicted.
+ */
+const DERIVED_ROW_SUFFIXES: ReadonlySet<string> = new Set([":large", ":xlarge"])
+
+/** The base ids a derived insert may build FROM, as `LIKE` prefixes. */
+const DERIVED_ROW_BASE_PREFIXES: readonly string[] = ["pro-3d-render:render-frame:"]
+
+describe("derived model_pricing inserts", () => {
+  /**
+   * Every `INSERT INTO model_pricing … SELECT …` STATEMENT in the history.
+   *
+   * Statement-scoped on purpose: a reach for `SELECT` from the table name
+   * across the rest of the file finds unrelated ones (a later migration's
+   * `SELECT 1 FROM pg_policies`, for instance) and reports a plain VALUES
+   * insert as derived. So the file is split into statements first, and a
+   * statement counts as derived only when its own `SELECT` comes before any
+   * `VALUES` of its own.
+   */
+  function derivedInserts(): Array<{ file: string; sql: string }> {
+    const out: Array<{ file: string; sql: string }> = []
+    for (const file of readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"))) {
+      for (const statement of readFileSync(join(MIGRATIONS_DIR, file), "utf8").split(";")) {
+        const head = /INSERT\s+INTO\s+(?:public\.)?model_pricing/i.exec(statement)
+        if (!head) continue
+        const body = statement.slice(head.index)
+        const selectAt = body.search(/\bSELECT\b/i)
+        const valuesAt = body.search(/\bVALUES\b/i)
+        if (selectAt < 0) continue
+        if (valuesAt >= 0 && valuesAt < selectAt) continue
+        out.push({ file, sql: body })
+      }
+    }
+    return out
+  }
+
+  it("build their ids from an existing model_identifier, never from a literal", () => {
+    // This is what makes it safe for `extractInsertedIdentifiers` to skip these
+    // statements: the id is a function of a row that already exists, so it
+    // already has a configured price by construction. A derived insert whose
+    // first selected column were a literal would be a NEW identifier with no
+    // price and no static entry — a ghost hiding from the scan above.
+    for (const { file, sql } of derivedInserts()) {
+      expect(sql, `${file}: a derived model_pricing insert must build its id by concatenating onto an existing model_identifier`)
+        .toMatch(/model_identifier\s*\|\|/)
+    }
+  })
+
+  it("append only declared suffixes, onto a declared base prefix", () => {
+    for (const { file, sql } of derivedInserts()) {
+      // A suffix arrives one of two ways: spelled whole in a concatenated
+      // literal (`|| ':large'`), or as a bare `:` separator concatenated with a
+      // name a row-constructor supplies (`|| ':' || tier.name`, the shape 419
+      // uses so the ladder is written once). Collect both, and drop the bare
+      // separator itself — it is punctuation, not a suffix.
+      const literals = [...sql.matchAll(/\|\|\s*'([^']*)'/g)].map((m) => m[1])
+      const separatorOnly = literals.filter((x) => x === ":")
+      const spelled = literals.filter((x) => x.startsWith(":") && x !== ":")
+      const fromRowConstructor = separatorOnly.length > 0
+        ? [...sql.matchAll(/\(\s*'([a-z][a-z0-9-]*)'\s*,/g)].map((m) => `:${m[1]}`)
+        : []
+      const declared = [...spelled, ...fromRowConstructor]
+      expect(declared.length, `${file}: found no declared suffix on a derived insert`).toBeGreaterThan(0)
+      for (const suffix of declared) {
+        expect(DERIVED_ROW_SUFFIXES.has(suffix), `${file}: derived row suffix "${suffix}" is not in DERIVED_ROW_SUFFIXES — add it with a reason, or stop deriving it`).toBe(true)
+      }
+      expect(
+        DERIVED_ROW_BASE_PREFIXES.some((prefix) => sql.includes(prefix)),
+        `${file}: a derived insert must select FROM one of the declared base prefixes (${DERIVED_ROW_BASE_PREFIXES.join(", ")})`,
+      ).toBe(true)
+    }
+  })
+
+  it("never rewrite or delete the base rows they derive from", () => {
+    for (const { file, sql } of derivedInserts()) {
+      expect(sql, `${file}: a derived insert must preserve operator overrides`).toMatch(/ON\s+CONFLICT[\s\S]*?DO\s+NOTHING/i)
+      expect(sql, `${file}: a derived insert must not UPDATE`).not.toMatch(/DO\s+UPDATE/i)
+    }
+  })
+
+  it("is not a vacuous suite — the derived inserts exist", () => {
+    // 419 is the first. If this ever reads 0, the three cases above stopped
+    // proving anything and the parser exclusion lost its justification.
+    expect(derivedInserts().length).toBeGreaterThan(0)
+  })
+})
 
 describe("model_pricing migrations have no undocumented ghosts", () => {
   it("every migration-only identifier is either in STATIC_CREDIT_COSTS or in KNOWN_GHOST_IDENTIFIERS", () => {

@@ -1,9 +1,8 @@
-import { GetObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3"
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
+import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { z } from "zod"
 import type { authorizeScene3DArtifact } from "../../services/scene3d-artifacts/authorize.js"
 import { authorizeScene3DInputArtifact } from "./scene3d-input-authority.js"
-import { normalizeEtag, type Scene3DPrivateStorageConfig } from "../../services/scene3d-artifacts/object-store.js"
+import { normalizeEtag, signScene3DPrivateObjectGet, type Scene3DPrivateStorageConfig } from "../../services/scene3d-artifacts/object-store.js"
 import { Scene3DArtifactError } from "../../services/scene3d-artifacts/types.js"
 import type { PluginSceneArtifactToolkit } from "./scene3d-artifact-contract.js"
 import { withPrivateSceneObjectParams } from "./scene3d-upload-grants.js"
@@ -76,9 +75,12 @@ export function createScene3DInputGranter(
     options?.signal?.throwIfAborted()
     if (current.ContentLength !== artifact.byteLength || normalizeEtag(current.ETag) !== tag) throw changed()
     const ifMatch = `"${tag}"`
-    const url = await getSignedUrl(client, new GetObjectCommand({ Bucket: cfg.bucket, Key: artifact.objectKey,
-      IfMatch: ifMatch, ResponseCacheControl: "no-store" }), {
-      expiresIn: input.expiresInSeconds, signableHeaders: new Set(["if-match"]),
+    // The presigner itself lives in ONE place (`signScene3DPrivateObjectGet`),
+    // which is what lets the upload-policy totality guard answer "can anything
+    // here mint a PUT?" by reading two files. `ifMatch` binds this grant to the
+    // exact bytes the receipt promised — the trusted engine can send the header.
+    const url = await signScene3DPrivateObjectGet(client, cfg.bucket, {
+      objectKey: artifact.objectKey, expiresInSeconds: input.expiresInSeconds, ifMatch,
     })
     // A revocation or cancellation while storage/signing was awaited must not release a URL.
     await active()

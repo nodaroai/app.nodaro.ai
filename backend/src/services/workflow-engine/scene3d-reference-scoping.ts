@@ -48,12 +48,10 @@ import {
   type ExtraRefInput,
 } from "@nodaro/shared"
 import {
-  buildScene3DLayoutScopingLine,
   buildScene3DUnreferencedFiguresWarning,
-  hasScene3DLayoutScopingLine,
-  renderScene3DLayoutScopingLine,
   type Scene3DLayoutReferenceCarrier,
   type Scene3DLayoutScopingSpec,
+  type Scene3DLayoutReferenceSeat,
   type Scene3DUnreferencedFiguresWarning,
 } from "@nodaro/prompts"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
@@ -67,7 +65,7 @@ export interface Scene3DScopingGraph {
   nodeStates?: Record<string, NodeExecutionState>
 }
 
-export interface Scene3DLayoutReference {
+export interface Scene3DLayoutReference extends Scene3DLayoutReferenceSeat {
   /** The Scene3D render node — the producer itself, or the render behind an
    *  extracted frame. */
   readonly sourceNodeId: string
@@ -241,40 +239,12 @@ export function collectScene3DLayoutReferences(
 }
 
 /**
- * Rule 1 for clips: the `videoCaptions` array for `resolveVideoReferenceCore`,
- * index-aligned with `referenceVideoUrls` (holes are `""`, which the renderer
- * skips). `undefined` when there is nothing to add, so a node with no Scene3D
- * reference keeps its prompt byte-identical. A seat the prompt already scopes
- * — by hand, or on a re-run over a stored prompt — gets no second line.
+ * Rule 1's application — both halves — is `@nodaro/prompts`, so the canvas
+ * engine applies the identical rule to the identical seats. Re-exported here
+ * because this module is where the orchestrator reaches for the doctrine, and
+ * `Scene3DLayoutReference` is structurally a `Scene3DLayoutReferenceSeat`.
  */
-export function scene3DLayoutVideoCaptions(
-  references: readonly Scene3DLayoutReference[],
-  prompt: string | undefined,
-): string[] | undefined {
-  const clips = references.filter((r) => r.carries === "clip" && !hasScene3DLayoutScopingLine(prompt, r.binding))
-  if (clips.length === 0) return undefined
-  const captions: string[] = []
-  for (const clip of clips) {
-    while (captions.length <= clip.index) captions.push("")
-    captions[clip.index] = buildScene3DLayoutScopingLine(clip.spec)
-  }
-  return captions
-}
-
-/**
- * Rule 1 for stills: an image seat has no caption seat, so the line is appended
- * to the assembled body in the rendered form (`@image_N: <caption>.`) — the
- * same surface a clip's caption renders to. Same idempotence as the captions.
- */
-export function appendScene3DStillScopingLines(
-  prompt: string | undefined,
-  references: readonly Scene3DLayoutReference[],
-): string | undefined {
-  const stills = references.filter((r) => r.carries === "still" && !hasScene3DLayoutScopingLine(prompt, r.binding))
-  if (stills.length === 0) return prompt
-  const lines = stills.map((still) => renderScene3DLayoutScopingLine(still.binding, still.spec))
-  return prompt ? `${prompt}\n${lines.join("\n")}` : lines.join("\n")
-}
+export { scene3DLayoutVideoCaptions, appendScene3DStillScopingLines } from "@nodaro/prompts"
 
 /** Node types whose wiring into a video node is a character reference. */
 const CHARACTER_SOURCE_TYPES: ReadonlySet<string> = new Set(["character", "face"])

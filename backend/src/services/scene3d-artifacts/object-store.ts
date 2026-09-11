@@ -1,4 +1,5 @@
 import { GetObjectCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { Readable } from "node:stream"
 import { Scene3DArtifactError } from "./types.js"
 
@@ -112,6 +113,46 @@ export function resolveScene3DPrivateStorageConfig(
     secretAccessKey,
     forcePathStyle: forcePathStyleRaw === "true" || forcePathStyleRaw === "1",
   }
+}
+
+/**
+ * Sign a time-bounded GET for one object in the private scene bucket.
+ *
+ * THE ONE PLACE A READ CAPABILITY IS MINTED. `@aws-sdk/s3-request-presigner` is
+ * a policed import — a presigned PUT would let bytes go browser→R2 and bypass
+ * every ingestion lane the upload policy exists to check — and the totality
+ * guard in `lib/__tests__/upload-policy.test.ts` allows exactly two importers:
+ * the upload granter (conditional PUTs for trusted build output) and this
+ * function, which can only ever produce a GET. Callers that need a read URL ask
+ * HERE rather than reaching for the presigner themselves, so "can this codebase
+ * mint an upload capability?" stays answerable by reading two files.
+ *
+ * `no-store` on every one: these objects are private, and a cache between us
+ * and the reader is a copy nobody authorized.
+ *
+ * `ifMatch` is for a reader that can send the header — the trusted engine
+ * binding a grant to the exact bytes it was promised. Leave it off for a reader
+ * that sends a bare GET (an external provider), where a required `If-Match` it
+ * cannot send would 412 every fetch.
+ */
+export function signScene3DPrivateObjectGet(
+  client: S3Client,
+  bucket: string,
+  input: { objectKey: string; expiresInSeconds: number; ifMatch?: string },
+): Promise<string> {
+  return getSignedUrl(
+    client,
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: input.objectKey,
+      ...(input.ifMatch ? { IfMatch: input.ifMatch } : {}),
+      ResponseCacheControl: "no-store",
+    }),
+    {
+      expiresIn: input.expiresInSeconds,
+      ...(input.ifMatch ? { signableHeaders: new Set(["if-match"]) } : {}),
+    },
+  )
 }
 
 function toReadable(body: unknown): Readable {

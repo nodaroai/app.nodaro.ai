@@ -30,6 +30,15 @@ import {
  * revision, and the tab still works until the URL expires. Authorization is
  * re-asked on every read instead, and no user token is ever stored.
  *
+ * ONE bounded exception, and it is not on this route: a delivery artifact bound
+ * for an EXTERNAL provider, which fetches server-to-server and has no
+ * credentials to send. `services/scene3d-artifacts/delivery-provider-access.ts`
+ * mints a short-lived signed GET for exactly that, at provider-dispatch time,
+ * after asking THIS module's own authorizer with the job owner's identity. It
+ * is minutes long, per run, per artifact, and never stored — see that file's
+ * header for why the rule above still holds everywhere a caller can send a
+ * token.
+ *
  * The object store arrives through plugin options
  * (`register(scene3DArtifactRoutes, { store })`). Without one the metadata
  * route still answers and the binary routes say 503.

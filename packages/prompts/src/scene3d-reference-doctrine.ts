@@ -176,6 +176,64 @@ export const SCENE3D_LAYOUT_REFERENCE_SCOPING_FIXTURE = {
   stillRendered: renderScene3DLayoutScopingLine("@image_1", { carries: "still" }),
 } as const
 
+/**
+ * A Scene3D layout reference that has already been LOCATED: what it carries,
+ * which seat it landed on, and what that seat is called to the model.
+ *
+ * Finding these is a graph walk, and the graph differs per engine — the
+ * orchestrator holds `SimpleNode`s and run states, the canvas holds React Flow
+ * nodes and their own data. Applying the doctrine to them does NOT differ, and
+ * that is the half that lives here: the two functions below are the whole of
+ * rule 1's application, so a caption cannot mean one thing on a workflow run
+ * and another on the same node's Run button.
+ */
+export interface Scene3DLayoutReferenceSeat {
+  readonly carries: Scene3DLayoutReferenceCarrier
+  /** 0-based seat in the video rail (clip) or the leading image list (still). */
+  readonly index: number
+  /** `@video_N` / `@image_N`, exactly as the model reads the seat. */
+  readonly binding: string
+  readonly spec: Scene3DLayoutScopingSpec
+}
+
+/**
+ * Rule 1 for clips: the rail-caption array, index-aligned with the reference
+ * video list (holes are `""`, which the renderer skips) — the same seat an API
+ * caller fills through `referenceVideoCaptions`.
+ *
+ * `undefined` when there is nothing to add, so a node with no Scene3D
+ * reference keeps its prompt byte-identical. A seat the prompt already scopes
+ * — by hand, or on a re-run over a stored prompt — gets no second line.
+ */
+export function scene3DLayoutVideoCaptions(
+  seats: readonly Scene3DLayoutReferenceSeat[],
+  prompt: string | undefined,
+): string[] | undefined {
+  const clips = seats.filter((r) => r.carries === "clip" && !hasScene3DLayoutScopingLine(prompt, r.binding))
+  if (clips.length === 0) return undefined
+  const captions: string[] = []
+  for (const clip of clips) {
+    while (captions.length <= clip.index) captions.push("")
+    captions[clip.index] = buildScene3DLayoutScopingLine(clip.spec)
+  }
+  return captions
+}
+
+/**
+ * Rule 1 for stills: an image seat has no caption seat, so the line is appended
+ * to the assembled body in the rendered form (`@image_N: <caption>.`) — the
+ * same surface a clip's caption renders to. Same idempotence as the captions.
+ */
+export function appendScene3DStillScopingLines(
+  prompt: string | undefined,
+  seats: readonly Scene3DLayoutReferenceSeat[],
+): string | undefined {
+  const stills = seats.filter((r) => r.carries === "still" && !hasScene3DLayoutScopingLine(prompt, r.binding))
+  if (stills.length === 0) return prompt
+  const lines = stills.map((still) => renderScene3DLayoutScopingLine(still.binding, still.spec))
+  return prompt ? `${prompt}\n${lines.join("\n")}` : lines.join("\n")
+}
+
 // ---------------------------------------------------------------------------
 // Rule 2 — one character reference per figure
 // ---------------------------------------------------------------------------

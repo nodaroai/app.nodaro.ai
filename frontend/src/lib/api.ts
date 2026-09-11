@@ -2738,6 +2738,10 @@ export interface GenerateVideoOptions {
   cameraFixed?: boolean    // Camera fixed (Bytedance, Seedance)
   referenceImageUrls?: string[]  // Grok I2V (up to 6) / VEO reference mode (up to 3) / Seedance 2 (up to 9)
   referenceVideoUrls?: string[]  // Seedance 2 (up to 3 reference videos)
+  /** Rail captions, INDEX-ALIGNED with `referenceVideoUrls` — the route renders
+   *  each as `@video_N: <caption>.`. The canvas fills it for a Scene3D clay
+   *  reference (the layout-scoping line); an API caller fills the same field. */
+  referenceVideoCaptions?: string[]
   referenceAudioUrls?: string[]  // Seedance 2 (up to 3 reference audio files)
   webSearch?: boolean            // Seedance 2 (required field)
   nsfwChecker?: boolean          // Seedance 2 (optional content filter toggle)
@@ -2811,6 +2815,7 @@ export async function generateVideo(
       cameraFixed: opts.cameraFixed,
       referenceImageUrls: opts.referenceImageUrls,
       referenceVideoUrls: opts.referenceVideoUrls,
+      referenceVideoCaptions: opts.referenceVideoCaptions,
       referenceAudioUrls: opts.referenceAudioUrls,
       webSearch: opts.webSearch,
       nsfwChecker: opts.nsfwChecker,
@@ -3056,6 +3061,10 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   generateAudio?: boolean
   referenceImageUrls?: string[]
   referenceVideoUrls?: string[]
+  /** Rail captions, INDEX-ALIGNED with `referenceVideoUrls` — the route renders
+   *  each as `@video_N: <caption>.`. The canvas fills it for a Scene3D clay
+   *  reference (the layout-scoping line); an API caller fills the same field. */
+  referenceVideoCaptions?: string[]
   referenceAudioUrls?: string[]
   webSearch?: boolean
   nsfwChecker?: boolean
