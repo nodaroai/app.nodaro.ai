@@ -47,8 +47,11 @@ export interface LlmStructuredJobInput extends LlmStructuredInput {
    *  analyzing `videoUrl` again: no second analysis, no second analysis
    *  charge — a retry after a failed draft, another model, different
    *  notes. `videoUrl` may still ride beside it as the record of the source.
-   *  404 when the job is not yours or does not exist; 422 when it is not a
-   *  finished, readable video analysis. Not combinable with `videoAnalysis`. */
+   *  422 when the job is not yours, does not exist, or is not a finished,
+   *  readable video analysis (`analysis_not_found` / `not_analysis` /
+   *  `analysis_failed` / `analysis_not_ready` / `invalid_analysis` — never a
+   *  404, which means the route itself is absent). Not combinable with
+   *  `videoAnalysis`. */
   analysisJobId?: string
 }
 

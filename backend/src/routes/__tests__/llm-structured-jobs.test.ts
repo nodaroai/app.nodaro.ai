@@ -257,9 +257,9 @@ describe("a run drafted from a FINISHED analysis (analysisJobId — the Director
     expect((await post({ ...VALID, analysisJobId: ANALYSIS_ID })).statusCode).toBe(200)
     expect(analysisSeen).toBeNull()
   })
-  it("refuses BEFORE any row exists: missing or foreign → 404, another job type / failed / running / unreadable → 422", async () => {
+  it("refuses BEFORE any row exists — every refusal a 422 (a 404 would read as 'no such route' to the Director's feature-detect): missing or foreign, another job type, failed, running, unreadable", async () => {
     const cases: Array<[unknown, number, string]> = [
-      [null, 404, "not_found"],
+      [null, 422, "analysis_not_found"],
       [finished({ job_type: "generate-image" }), 422, "not_analysis"],
       [finished({ status: "failed" }), 422, "analysis_failed"],
       [finished({ status: "cancelled" }), 422, "analysis_failed"],

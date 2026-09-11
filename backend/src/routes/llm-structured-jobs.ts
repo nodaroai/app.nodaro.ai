@@ -43,8 +43,9 @@ import type { LlmStructuredJobPayload } from "../workers/handlers/llm-structured
  * already owns — a retry after a failed draft, another model, a re-run with
  * different notes — and buys no second one (the Director spec's §13 / P3).
  * The child is admitted BEFORE any row exists (the recast create route's
- * precheck: missing and foreign are the same 404, a failed or still-running
- * analysis is a 422, an unreadable result is a 422) and stamped on the parent
+ * precheck, every refusal a 422: missing and foreign are the same
+ * `analysis_not_found`, a failed or still-running analysis, an unreadable
+ * result — never a 404, which a client reads as "no such route") and stamped on the parent
  * as reused, so the worker's wait returns at once and the row's price is
  * the plan's alone. `videoUrl` may ride beside it as the record of what was
  * analyzed; nothing is fetched from it.
@@ -132,11 +133,14 @@ type ReuseResult = { ok: true; credits: number | null } | { ok: false; status: n
 
 /**
  * Admit a CLIENT-SUPPLIED analysis (the recast create route's precheck, on
- * the caller's own rows): missing and foreign answer the same 404 (no
- * ownership oracle), a job of another type or a terminal failure is a 422,
- * a still-running one is a 422 the caller retries later, and the result is
- * parsed against the shared schema so the worker cannot fail on it after the
- * reservation. Runs BEFORE any row exists — a refusal here costs nothing.
+ * the caller's own rows): missing and foreign answer the SAME 422 (no
+ * ownership oracle — and deliberately NOT a 404: a 404 from this route is
+ * what a client reads as "the route does not exist on this platform", the
+ * Studio Director's session-wide feature-detect), a job of another type or a
+ * terminal failure is a 422, a still-running one is a 422 the caller retries
+ * later, and the result is parsed against the shared schema so the worker
+ * cannot fail on it after the reservation. Runs BEFORE any row exists — a
+ * refusal here costs nothing.
  */
 async function precheckReusedAnalysis(analysisJobId: string, userId: string): Promise<ReuseResult> {
   const row = await readOwnAnalysisChild(analysisJobId, userId)
@@ -145,7 +149,7 @@ async function precheckReusedAnalysis(analysisJobId: string, userId: string): Pr
     status,
     body: { error: { code, message } },
   })
-  if (!row) return refuse(404, "not_found", "analysis job not found")
+  if (!row) return refuse(422, "analysis_not_found", "That analysis isn't available to draft from.")
   if (row.job_type !== "video-analysis") return refuse(422, "not_analysis", "That job isn't a video analysis.")
   if (row.status === "failed" || row.status === "cancelled") {
     return refuse(422, "analysis_failed", "The source analysis failed.")
