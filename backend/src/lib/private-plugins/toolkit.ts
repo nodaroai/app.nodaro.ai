@@ -850,6 +850,30 @@ async function pluginMarkJobFailed(jobId: string, errorMessage: string, detail?:
 }
 
 /**
+ * `tk.jobs.markJobFailedWithOutput` — the same CAS fail, keeping a structured
+ * result on the failed row.
+ *
+ * `output_data` rides the one failure writer's `extra` passthrough, so the
+ * status flip, the live-status CAS, the 500-character message slice and the
+ * `completed_at` stamp are the SAME statement a plain failure makes — there is
+ * no second failure writer here, which is the property `lib/job-failure.ts`
+ * exists to keep.
+ *
+ * Its one consumer is a Pro 3D scene whose draft was refused by the visual
+ * reviewer and RETAINED: the row stays `failed` under `SCENE_QUALITY_FAILED`
+ * and points at the revision, delivery, poster and findings report the run
+ * published before it settled. The producer never puts a media URL in here.
+ */
+async function pluginMarkJobFailedWithOutput(jobId: string, errorMessage: string,
+  outputData: Record<string, unknown>, detail?: string | null): Promise<boolean> {
+  return markJobFailed(jobId, {
+    error_message: errorMessage,
+    error_detail: redactProviderDetail(detail) ?? null,
+    extra: { output_data: outputData },
+  })
+}
+
+/**
  * `tk.jobs.refundJobCredits` — exposes the worker-layer refund to routes.
  * Falsy usageLogId no-ops (the reserve never landed / was already aborted);
  * a plain string reason always refunds (`workers/shared.ts` treats a string
@@ -1288,6 +1312,7 @@ export function buildToolkit(): PluginToolkit {
       readJob,
       requestJobStop,
       markJobFailed: pluginMarkJobFailed,
+      markJobFailedWithOutput: pluginMarkJobFailedWithOutput,
       refundJobCredits: pluginRefundJobCredits,
       hasWaivingRecastRun,
     },

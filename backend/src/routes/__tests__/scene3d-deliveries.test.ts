@@ -62,6 +62,22 @@ describe("retained delivery reads", () => {
     vi.mocked(workflowAccess).mockImplementation(async (_, wf) => wf === SOURCE_WF ? "none" : "own")
     expect((await get(`/assets/${POSTER}`)).statusCode).toBe(404)
   })
+  // A refused Scene3D draft is retained by a job that FAILED. Nothing in this route reads
+  // `jobs.status`, and that is deliberate: the evidence a quality-failed run kept is exactly
+  // as readable as a delivered scene's, and no more. Before it was retained at all, this read
+  // was a 404 with the findings sitting unreachable in the store (job fa2111ae, 2026-09-11).
+  it("serves the retained evidence of a FAILED parent job to its owner and to nobody else", async () => {
+    fixture.db.tables.jobs.push({ id: JOB, user_id: OWNER, workflow_id: WF, status: "failed",
+      output_data: { sceneRevisionId: REV, deliveryId: JOB, validation: { status: "failed" } } })
+    fixture.db.tables.scene3d_deliveries[0].mode = "authored"
+    const res = await get()
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ deliveryId: JOB, sceneRevisionId: REV, mode: "authored" })
+    expect((await get(`/assets/${REPORT}`)).statusCode).toBe(200)
+    vi.mocked(workflowAccess).mockImplementation(async (userId) => userId === OWNER ? "own" : "none")
+    expect((await get("", OTHER)).statusCode).toBe(404)
+    expect((await get(`/assets/${REPORT}`, OTHER)).statusCode).toBe(404)
+  })
   it("requires personal-source ownership even for delivery workflow collaborators", async () => {
     fixture.db.tables.scene3d_deliveries[0].source_workflow_id = null
     expect((await get("", OTHER)).statusCode).toBe(404)

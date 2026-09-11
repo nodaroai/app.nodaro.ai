@@ -1063,6 +1063,28 @@ export interface PluginJobsToolkit {
    */
   markJobFailed?(jobId: string, errorMessage: string, detail?: string | null): Promise<boolean>
   /**
+   * The same CAS and the same boolean, plus `output_data` (2026-09-11, Scene3D
+   * refused drafts).
+   *
+   * It exists for the one shape of failure that still produced something a
+   * caller can USE: a Pro 3D run whose scene was built and reviewed and then
+   * refused retains that draft as a scene revision and a delivery, and the row
+   * has to say WHERE — `sceneRevisionId`, `deliveryId`, `posterAssetId`,
+   * `validation.reportAssetId`. Without it the evidence exists and nothing a
+   * caller can reach addresses it (staging job fa2111ae, 2026-09-11).
+   *
+   * A failed row NEVER carries a media URL through here: the producer omits
+   * `resultUrl`/`videoUrl` (contracts §5 — a failed job must not masquerade as
+   * a video producer), and every reader of `output_data` that resolves media
+   * gates on `status` or on the URL field itself.
+   *
+   * OPTIONAL (additive-contract convention): absent → the plugin falls back to
+   * `markJobFailed`; the verdict still settles and the retained revision and
+   * delivery stay reachable through their own authenticated routes.
+   */
+  markJobFailedWithOutput?(jobId: string, errorMessage: string, outputData: Record<string, unknown>,
+    detail?: string | null): Promise<boolean>
+  /**
    * Exposes the worker-layer refund (`workers/shared.ts` `refundJobCredits`)
    * to routes. Falsy usageLogId no-ops; a string reason always refunds
    * (pre-provider failures — the only kind a synchronous route produces).

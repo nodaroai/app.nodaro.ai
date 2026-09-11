@@ -111,7 +111,9 @@ The grant is issued against **your own** access, at the moment the run is
 dispatched: a still from a delivery you can no longer read is not sent, and no
 link that outlives the run is created anywhere.
 
-The completed job's `output_data` carries:
+The completed job's `output_data` carries the fields below. A job that failed
+with `SCENE_QUALITY_FAILED` carries a smaller set of the same fields, pointing
+at the draft it kept — see [Errors](#errors).
 
 | Field | Meaning |
 |---|---|
@@ -121,7 +123,7 @@ The completed job's `output_data` carries:
 | `posterAssetId` | Preview poster for the result. |
 | `shotStills` | One entry per shot, ordered by `shotIndex`: `{ shotIndex, frame, assetId, url }`. `shotIndex` is 0-based in the composition's shot order and `frame` is the shot's own first frame in the composition's frame space, so a still lines up against the MP4 without re-deriving shot boundaries. Each `url` is an authenticated delivery endpoint, not a public link — the editor reads it with your session, and a run that wires a still into a model is granted its own short-lived read (see Outputs above). Absent on a result that rendered none. |
 | `sourceArtifactId` | Present when an editable native source was retained. |
-| `validation` | `{ status, reportAssetId, warnings[] }` — each warning has a `code`, a `message` and an optional `shotId`. |
+| `validation` | `{ status, reportAssetId, warnings[] }` — each warning has a `code`, a `message` and an optional `shotId`. `status` is `passed` here; a **failed** job can carry this field too, with `status: "failed"` (see [Errors](#errors)). |
 | `renderer` | Renderer identity/version the export was produced with. |
 | `metadata` | `{ width, height, fps, frames, duration }` — check these against a downstream model's video-reference limits before wiring the MP4 in. |
 
@@ -271,6 +273,48 @@ the third is not:
 Work already completed before the failure (an earlier repair pass, for
 example) is charged as usual; the message never promises a refund it cannot
 verify.
+
+#### `SCENE_QUALITY_FAILED` keeps the scene it built
+
+`SCENE_QUALITY_FAILED` means the visual reviewer still found a blocking problem
+after the last correction pass the budget allowed. The job **fails** — there is
+no MP4, and `videoUrl`/`resultUrl` are absent rather than empty — but the scene
+it built is kept, and the failed job's `output_data` says where:
+
+| Field | Meaning |
+|---|---|
+| `sceneRevisionId` | The draft revision. A real, readable scene: `GET /v1/3d-scene/revisions/{revisionId}` returns its manifest. |
+| `deliveryId` | `GET /v1/3d-scene/deliveries/{jobId}` lists its retained evidence, exactly as it does for a delivered scene. |
+| `posterAssetId` | A rendered frame of the draft, read from the delivery's assets route. |
+| `validation` | `{ status: "failed", scope: "authored", reportAssetId, passes, warnings[] }` — `passes` is how many authoring passes were spent, and each warning carries a `code`, a `message` and, where the finding cites frames inside one shot, that `shotId`. |
+| `scenePlan`, `renderer`, `metadata` | The draft composition and its frame size, fps and duration. |
+
+The `reportAssetId` artifact is the reviewer's full account: every finding, its
+category and severity, the frames it cites and the correction it asked for.
+Read it from the delivery assets route.
+
+Nothing about a kept draft claims it passed. `validation.status` is `failed`
+on the job, and the report says `failed` too.
+
+**What you can do with it:**
+
+- **Render it as-is.** Submit it as a scene source with no edit instruction —
+  an ordinary render-only run. It re-runs no authoring and no build, and pays
+  only for the render and export. That run is a normal completed job, and its
+  own `validation` describes the checks a render-only export performs (it says
+  so: `scope: "render-only"`, plus a warning that no new visual review was
+  done). It does not re-judge, or overturn, the authored quality verdict.
+- **Fix it yourself.** Deterministic edits — transform, colour, visibility,
+  shot offsets — apply to the draft like any other retained scene and cost no
+  authoring credits. Each edit produces a new revision whose provenance names
+  the draft it came from.
+- **Re-author from it.** Submit it as a scene source **with** an edit
+  instruction to pay for another authoring pass from the draft's own recipe.
+
+Retaining costs nothing: no extra render, no extra provider call, and the
+settlement is the same one the run would have had. A job that failed *before*
+building anything — a planner refusal, a build the compiler never accepted —
+has no draft to keep, and its `output_data` carries none of the fields above.
 
 The scene instruction supports [prompt pre/post text](../../prompt-pre-post-text.md), applied by the canvas when it submits the instruction.
 
