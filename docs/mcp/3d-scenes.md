@@ -28,7 +28,7 @@ inputs and accepts `replace_references` to replace its image/video list.
 2. Retrieve `scenePlan` from the completed job. Optional references use `{ id, url, kind, role }`, with image/video kind and appearance/layout/motion role.
 3. Call `edit_3d_scene` with that object as `scene_plan`, its `revisionId` as `expected_revision_id`, and either an edit `prompt` or `operations`. Supply `locked_object_ids` to preserve objects.
 4. Call `render_3d_scene` with the resulting `scene_plan`.
-5. Use the MP4 as a video reference in an existing video-generation tool. Continue passing the original appearance image references as appropriate.
+5. Use the MP4 as a video reference in an existing video-generation tool, and say what it is for: pass `reference_video_captions[N]` on `generate_video` alongside `reference_video_urls[N]`. A clay render is a layout anchor, not a look — uncaptioned, it also anchors the grey clay look. Continue passing the original appearance image references as appropriate.
 
 `render_3d_scene` is an MCP convenience tool for the existing `render-video` node, not a separate canvas node. It does not call an LLM. Editing operations avoid an LLM call as well. The initial version supports primitive geometry and deterministic keyframed animation; reference reconstruction is approximate.
 
@@ -59,6 +59,12 @@ Each `url` is an authenticated endpoint on the install
 (`GET /v1/3d-scene/deliveries/{jobId}/assets/{assetId}`), because delivery
 artifacts stay in the private scene bucket. Fetch it with the caller's own
 credentials; it is not a public link to paste somewhere else.
+
+Passing one as a reference works anyway: hand the URL to `generate_image` /
+`generate_video` (or wire the node's `stills` handle) and the platform grants
+that run a short-lived read of that one artifact in the owner's name, so the
+model can fetch it. The grant lasts minutes and is not stored — keep the
+authenticated URL in anything you save.
 
 Its `source` argument is exactly one of:
 

@@ -104,6 +104,11 @@ import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
   readPromptAffixes, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN } from "@nodaro/shared"
 import { applyPromptAffixes, composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
+import {
+  appendScene3DStillScopingLines,
+  collectScene3DLayoutReferences,
+  scene3DLayoutVideoCaptions,
+} from "@/lib/scene3d/reference-scoping"
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared"
 import { scene3DAdvancedEngines } from "@/lib/scene3d-pro-availability"
 import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
@@ -2675,8 +2680,23 @@ function executeNodeCore(
     // stripped, so pass `undefined` (core falls back to its own count).
     const countRefModality = (modality: ReferenceModality): number =>
       countRefModalityEdges(edges, node.id, modality);
+    // Scene3D layout references (a clay render on a reference rail): a scoping
+    // caption per clip seat and a scoping line per still seat, through the same
+    // doctrine the orchestrator applies (payload-builder.ts case
+    // "image-to-video"). Without this, running THIS node sent the clay clip
+    // unscoped while the identical workflow run scoped it — greybox in,
+    // greybox out.
+    const i2vScene3D = collectScene3DLayoutReferences(
+      node,
+      inputs as { referenceVideoUrls?: readonly string[]; referenceImageUrls?: readonly string[] },
+      nodes,
+      edges,
+      referenceImageUrls,
+    );
+    const i2vScene3DCaptions = scene3DLayoutVideoCaptions(i2vScene3D, prompt);
     const i2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, i2vData.extraRefs, {
       referenceOrder: i2vData.referenceOrder,
+      videoCaptions: i2vScene3DCaptions,
       suppressedCanonicalCharacterIds: i2vData.suppressedCanonicalCharacterIds,
       // D5: assets number AFTER leading image-refs (ordinalOffset = EDGE count) +
       // wired entities attach — mirrors the orchestrator (payload-builder.ts) + preview.
@@ -2684,7 +2704,7 @@ function executeNodeCore(
       videoRefCount: i2vProviderSupportsRefs ? countRefModality("video") : undefined,
       audioRefCount: i2vProviderSupportsRefs ? countRefModality("audio") : undefined,
     });
-    prompt = i2vMention.prompt;
+    prompt = appendScene3DStillScopingLines(i2vMention.prompt, i2vScene3D);
     let i2vMergedRefs: string[] | undefined = referenceImageUrls?.length ? [...referenceImageUrls] : undefined;
     if (i2vMention.additionalUrls.length > 0) {
       let remainingMentionUrls = i2vMention.additionalUrls;
@@ -2795,6 +2815,9 @@ function executeNodeCore(
       isVeoRefMode ? "REFERENCE_2_VIDEO" : undefined,
       {
         referenceVideoUrls: referenceVideoUrls?.length ? referenceVideoUrls : undefined,
+        // The rail-caption seat the route reads — the SAME field an API caller
+        // fills. Only ships alongside the clips it captions.
+        referenceVideoCaptions: referenceVideoUrls?.length ? i2vScene3DCaptions : undefined,
         referenceAudioUrls: referenceAudioUrls?.length ? referenceAudioUrls : undefined,
         webSearch: i2vData.webSearch,
         nsfwChecker: i2vData.nsfwChecker,
@@ -2975,8 +2998,18 @@ function executeNodeCore(
     // `referenceImageUrls`, merged with whatever upstream already provided.
     const countRefModality = (modality: ReferenceModality): number =>
       countRefModalityEdges(edges, node.id, modality);
+    // Scene3D layout references — see the i2v branch above. Mirrors the
+    // orchestrator's payload-builder.ts case "text-to-video".
+    const t2vScene3D = collectScene3DLayoutReferences(
+      node,
+      inputs as { referenceVideoUrls?: readonly string[]; referenceImageUrls?: readonly string[] },
+      nodes,
+      edges,
+    );
+    const t2vScene3DCaptions = scene3DLayoutVideoCaptions(t2vScene3D, prompt);
     const t2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, t2vData.extraRefs, {
       referenceOrder: t2vData.referenceOrder,
+      videoCaptions: t2vScene3DCaptions,
       suppressedCanonicalCharacterIds: t2vData.suppressedCanonicalCharacterIds,
       // D5: assets number AFTER leading image-refs (ordinalOffset = EDGE count) +
       // wired entities attach — mirrors the orchestrator (payload-builder.ts) + preview.
@@ -2984,7 +3017,7 @@ function executeNodeCore(
       videoRefCount: t2vProviderSupportsRefs ? countRefModality("video") : undefined,
       audioRefCount: t2vProviderSupportsRefs ? countRefModality("audio") : undefined,
     });
-    prompt = t2vMention.prompt ?? prompt;
+    prompt = appendScene3DStillScopingLines(t2vMention.prompt ?? prompt, t2vScene3D);
     // Post-assembly empty-prompt check: only reject when the FINAL prompt
     // (after mention resolution, identity directives, etc.) is empty. The
     // backend `/v1/text-to-video` route enforces min(1) on the assembled
@@ -3105,6 +3138,9 @@ function executeNodeCore(
       generateAudio: (t2vRaw.generateAudio as boolean | undefined) ?? (isSeedance2T2V ? true : undefined),
       referenceImageUrls: t2vRefImages?.length ? t2vRefImages : undefined,
       referenceVideoUrls: t2vRefVideos?.length ? t2vRefVideos : undefined,
+      // The rail-caption seat the route reads — the SAME field an API caller
+      // fills. Only ships alongside the clips it captions.
+      referenceVideoCaptions: t2vRefVideos?.length ? t2vScene3DCaptions : undefined,
       referenceAudioUrls: t2vRefAudios?.length ? t2vRefAudios : undefined,
       webSearch: (t2vRaw.webSearch as boolean | undefined) ?? (isSeedance2T2V ? false : undefined),
       nsfwChecker: t2vRaw.nsfwChecker as boolean | undefined,

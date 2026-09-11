@@ -18,6 +18,12 @@
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ExtraRef } from "@/types/nodes"
 import { characterMentionSlug, isGeminiOmniProvider, extractCharacterLoraFields, characterMentionableAssetArrays, resolveEffectiveSourceType, resolveVideoProviderForMode, hasFeature, countRefModalityEdges, type ReferenceModality } from "@nodaro/shared"
 import { computeNodePrompt, characterLockToRefLock, collectIdentityLockClause, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, resolveVideoReferenceCore, type CharacterMeta } from "@nodaro/prompts"
+import {
+  appendScene3DStillScopingLines,
+  collectScene3DLayoutReferences,
+  scene3DLayoutVideoCaptions,
+  type Scene3DScopingInputs,
+} from "@/lib/scene3d/reference-scoping"
 import type { ConnectedReference } from "@nodaro/shared"
 import { collectCinematographyHints } from "@/lib/cinematography-hints"
 import { stampElementInjections, collectCharacterElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
@@ -293,6 +299,14 @@ export function resolveVideoPromptMentions(
      * the backend `expandWiredEntityExtraRefs`.
      */
     includeWiredEntities?: boolean
+    /**
+     * Captions for the video rail, INDEX-ALIGNED with `referenceVideoUrls` and
+     * rendered by the core as `@video_N: <caption>.` — the seat an API caller
+     * fills through `referenceVideoCaptions`. The canvas fills it for a Scene3D
+     * clay render (`scene3DLayoutVideoCaptions`); pure pass-through otherwise.
+     * Mirrors the orchestrator's own option of the same name.
+     */
+    videoCaptions?: readonly string[]
   },
 ): { prompt: string | undefined; additionalUrls: string[] } {
   // ── FE-only expansion: wire upstream Character nodes → ConnectedReference[].
@@ -364,6 +378,7 @@ export function resolveVideoPromptMentions(
     imageRefCount: opts?.imageRefCount,
     videoRefCount: opts?.videoRefCount,
     audioRefCount: opts?.audioRefCount,
+    videoCaptions: opts?.videoCaptions,
     // FE gate: same module-level `IMAGE_REFERENCE_FORMAT` constant the image side
     // uses (test→legacy, dev→hybrid, prod→VITE_IMAGE_REFERENCE_FORMAT). This is
     // the FE's single `resolveVideoReferenceCore` call site, so both the run
@@ -385,6 +400,14 @@ export interface AssembleVideoPromptArgs {
    * (there is no `wired`/`override` in a preview, unlike the run).
    */
   readonly refMap: ReadonlyMap<string, string>
+  /**
+   * The reference lists the RUN will ship, in payload order — from
+   * `resolveNodeInputs`. Only the Scene3D layout-scoping pass reads them, to
+   * seat a clay reference on the `@video_N` / `@image_N` it will actually
+   * occupy. Omitted (a caller that has not resolved inputs) → no scoping line
+   * in the preview, which is the old behaviour rather than a guessed seat.
+   */
+  readonly inputs?: Scene3DScopingInputs
 }
 
 /**
@@ -573,6 +596,14 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
     // `undefined` (the core then falls back to its own merged-URL count).
     const countRefModality = (modality: ReferenceModality): number =>
       countRefModalityEdges(edges, id, modality)
+    // Scene3D layout references (a clay render on a reference rail): a scoping
+    // caption per clip seat and a scoping line per still seat, from the same
+    // doctrine the orchestrator applies (payload-builder.ts). Empty without
+    // resolved inputs, so a caller that cannot seat a reference shows no line
+    // rather than one on a guessed seat.
+    const scene3D = args.inputs
+      ? collectScene3DLayoutReferences(node, args.inputs, nodes, edges)
+      : []
     const resolved = resolveVideoPromptMentions(
       prompt,
       id,
@@ -581,6 +612,7 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
       data.extraRefs as readonly ExtraRef[] | undefined,
       {
         referenceOrder: data.referenceOrder as readonly string[] | undefined,
+        videoCaptions: scene3DLayoutVideoCaptions(scene3D, prompt),
         suppressedCanonicalCharacterIds: data.suppressedCanonicalCharacterIds as readonly string[] | undefined,
         // D5: assets number AFTER the leading image-refs (ordinalOffset = EDGE
         // count, FE↔BE parity) + wired entities attach — mirrors the orchestrator
@@ -598,7 +630,7 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
     // directly. Use `?? prompt` uniformly — for i2v/v2v the resolver only
     // returns undefined when the input was already undefined, so the behaviour
     // is identical.
-    prompt = resolved.prompt ?? prompt
+    prompt = appendScene3DStillScopingLines(resolved.prompt ?? prompt, scene3D)
   }
 
   return prompt ?? ""

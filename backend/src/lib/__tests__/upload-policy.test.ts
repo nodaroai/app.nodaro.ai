@@ -118,7 +118,9 @@ describe("upload-policy totality — every byte-carrying lane polices", () => {
     // If someone imports @aws-sdk/s3-request-presigner, bytes could go
     // browser→R2 directly and bypass every policed lane — that lane must then
     // either be dropped again or grow its own policing point. The two private
-    // scene adapters below are the only authorized signing entrypoints.
+    // scene adapters below are the only authorized signing entrypoints: one
+    // that mints conditional PUTs for trusted build output, and one that can
+    // only ever mint a bounded GET.
     const offenders: string[] = []
     const walk = (dir: string): void => {
       for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -132,13 +134,26 @@ describe("upload-policy totality — every byte-carrying lane polices", () => {
           // conditional PUT cannot replace an existing artifact. This is not
           // the browser/MCP ingestion lane protected by the checks above.
           if (file === resolve(SRC, "lib/private-plugins/scene3d-upload-grants.ts")) continue
-          // Existing, revision-authorized inputs receive conditional GETs only;
-          // this opens no upload lane. Its real presigner is exercised by the
-          // input-grants tests, including revoked access and changed receipts.
-          if (file === resolve(SRC, "lib/private-plugins/scene3d-input-grants.ts")) {
+          // The ONE read-capability minter: `signScene3DPrivateObjectGet`.
+          // Every caller that needs a signed read of a private scene object —
+          // the revision-authorized GLB input grant, and a delivery still bound
+          // for an external provider that cannot send a bearer token — goes
+          // through it instead of reaching for the presigner, which is what
+          // keeps this allowlist at two files and the question "can anything
+          // here mint an upload capability?" answerable by reading them.
+          //
+          // Allowlisted on a PROOF, not on trust: the function must build a GET
+          // and the file must contain no command that can write bytes. A future
+          // edit that teaches it PutObject fails HERE, before it can open an
+          // unpoliced ingestion lane.
+          if (file === resolve(SRC, "services/scene3d-artifacts/object-store.ts")) {
             const source = readFileSync(file, "utf8")
             expect(source).toContain("new GetObjectCommand(")
             expect(source).not.toMatch(/(?:PutObject|UploadPart|CreateMultipartUpload|CopyObject)Command/)
+            // One signing call site in the file, so "GET-only" is a property of
+            // the whole module rather than of the one call this test happened
+            // to read.
+            expect(source.match(/getSignedUrl\(/g) ?? []).toHaveLength(1)
             continue
           }
           offenders.push(file)

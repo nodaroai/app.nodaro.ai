@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-09-06T10:23:30.886Z
-generated_from: 88a6e05b4
+generated_at: 2026-09-11T00:29:16.758Z
+generated_from: a2f98be9d
 ---
 
 # Text to Video
@@ -85,6 +85,7 @@ generated_from: 88a6e05b4
 - `reference_order`
 - `reference_image_urls`
 - `reference_video_urls`
+- `reference_video_captions`
 - `reference_audio_urls`
 <!-- AUTO-GEN:END mcp-call -->
 

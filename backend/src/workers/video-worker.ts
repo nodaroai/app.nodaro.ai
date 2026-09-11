@@ -36,6 +36,7 @@ import { scene3dHandlers } from "./handlers/scene3d.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { tryInlineReconcile } from "./inline-reconcile.js"
 import { loadPrivatePlugins } from "../lib/private-plugins/load.js"
+import { signScene3DDeliveryUrlsForProvider } from "../services/scene3d-artifacts/delivery-provider-access.js"
 
 /** How far back into the queue a drain-interrupted job is moved (ms) — a
  *  moment, not a park: Railway brings the replacement container up BEFORE
@@ -270,6 +271,32 @@ export function createVideoWorker() {
           )
           return
         }
+
+        // ── Scene3D delivery artifacts, for an EXTERNAL provider ──────────
+        // A 3D Render Pro shot still's URL is the AUTHENTICATED delivery
+        // endpoint (its bytes stay in the private scene bucket by contract), so
+        // a provider fetching `referenceImageUrls` server-to-server gets a 401
+        // — the `stills` handle was wireable in the editor and broken at the
+        // model. Each such URL is swapped for a signed, bounded GET here.
+        //
+        // HERE, and not in the payload builder or the route, because this is
+        // the ONE place every lane converges: the orchestrated DAG, a canvas
+        // Run, a REST call and an MCP verb all arrive at this dispatch. It is
+        // also the last moment before the provider call, which is what lets the
+        // grant be minutes rather than hours, and it is AFTER the `input_data`
+        // stamp — so the durable row keeps the authenticated URL that still
+        // means something tomorrow and only this in-memory run carries the
+        // ephemeral one.
+        //
+        // Total by construction (every string / string-array field is offered
+        // to a strict recogniser), a no-op for the overwhelming majority of
+        // payloads that carry no delivery URL, and silent on refusal: an
+        // artifact this owner cannot read keeps the URL it had rather than
+        // losing the field.
+        job.data = await signScene3DDeliveryUrlsForProvider(
+          job.data as Record<string, unknown>,
+          jobUserId,
+        )
 
         const handler = allHandlers[job.name]
         if (!handler) {

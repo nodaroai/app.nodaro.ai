@@ -14,6 +14,7 @@ import type { SoundConsumerType } from "@nodaro/prompts"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { buildImageAssembleInput } from "./build-image-assemble-input"
 import { assembleVideoPrompt } from "@/lib/video-prompt-assembly"
+import { resolveNodeInputs } from "@/components/editor/workflow-editor/node-input-resolver"
 import { assembleAudioPrompt, AUDIO_PROMPT_NODE_TYPES, AUDIO_STYLE_FOLD_TYPES } from "@/lib/audio-prompt-assembly"
 import { collectAudioStyleHints } from "@/lib/audio-style-hints"
 import { getSnippetMedia, promptFieldCarriesAffixes } from "@/lib/prompt-fields"
@@ -554,6 +555,11 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
           nodes,
           edges,
           refMap,
+          // The reference lists the run will ship, so a Scene3D clay reference
+          // is seated on the `@video_N` / `@image_N` it will actually occupy
+          // and its scoping line appears in the preview exactly as it is sent.
+          // The same resolver the run calls — nothing here re-derives an order.
+          inputs: resolveNodeInputs(consumerNode, nodes as WorkflowNode[], edges as WorkflowEdge[]),
         })
         // Negative routing: native (Kling/Wan families) → prompt unchanged,
         // negative rides a native param; non-native → folded in as `\nAvoid: …`.
