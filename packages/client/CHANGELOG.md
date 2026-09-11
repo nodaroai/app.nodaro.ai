@@ -1,5 +1,19 @@
 # @nodaro/sdk
 
+## 2.10.0
+
+### Minor Changes
+
+- f79ff5d: Scene3D deliveries can now describe a Pro run whose recipe never compiled: `Scene3DDelivery` gains `sourceKind`, and `sceneRevisionId`/`sourcePlanSha256` are nullable for the `refused-authoring` kind, which retains the compiler's refusal report without a scene behind it.
+- 4f4879b: `llm.structuredJob` accepts `analysisJobId`: draft from a finished `video-analysis` job you own instead of analyzing `videoUrl` again — no second analysis, no second analysis charge. A fresh movie run's row now also carries `analysisCredits` (in `input_data` and `output_data`) from the moment its analysis child is created, not only at completion.
+
+### Patch Changes
+
+- Updated dependencies [0114b68]
+- Updated dependencies [a8e6d21]
+  - @nodaro/prompts@1.19.0
+  - @nodaro/shared@3.9.0
+
 ## 2.9.0
 
 ### Minor Changes
