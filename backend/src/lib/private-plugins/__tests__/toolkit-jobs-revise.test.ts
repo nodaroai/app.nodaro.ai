@@ -93,6 +93,37 @@ describe("tk.jobs revise-lane members", () => {
     })
   })
 
+  /**
+   * `markJobFailedWithOutput` (2026-09-11, Scene3D refused drafts): the SAME
+   * statement a plain failure makes, plus `output_data`. The point of the test
+   * is that nothing about the failure write changes — one CAS, the same live
+   * statuses, the same message slice — so a retained draft cannot become a
+   * second, divergent failure writer.
+   */
+  describe("markJobFailedWithOutput", () => {
+    const retained = { sceneRevisionId: "rev-1", deliveryId: "job-3", posterAssetId: "frame-0",
+      validation: { status: "failed", reportAssetId: "findings", passes: 3, warnings: [] } }
+
+    it("keeps the structured result on the failed row without changing the failure statement", async () => {
+      state.result = { data: [{ id: "job-3" }], error: null }
+
+      await expect(tk.jobs.markJobFailedWithOutput!("job-3", "SCENE_QUALITY_FAILED: refused", retained))
+        .resolves.toBe(true)
+
+      const update = lastChain().update.mock.calls[0]![0] as Record<string, unknown>
+      expect(update.status).toBe("failed")
+      expect(update.error_message).toBe("SCENE_QUALITY_FAILED: refused")
+      expect(update.output_data).toEqual(retained)
+      expect(lastChain().in).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
+    })
+
+    it("reports false without writing output when the row was already terminal", async () => {
+      state.result = { data: [], error: null }
+      await expect(tk.jobs.markJobFailedWithOutput!("job-4", "SCENE_QUALITY_FAILED: refused", retained))
+        .resolves.toBe(false)
+    })
+  })
+
   describe("refundJobCredits", () => {
     it("delegates to the worker-layer refund with the usage log, job, and reason", async () => {
       await tk.jobs.refundJobCredits!("ul-1", "job-1", "revision_unusable")
