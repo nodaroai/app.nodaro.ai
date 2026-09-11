@@ -325,50 +325,44 @@ export function Generate3DSceneConfig({
 
       <ReferenceRoles data={data} onUpdate={onUpdate} sources={sources} />
 
-      <SceneBlock data={data} onUpdate={onUpdate} promptField="scenePrompt" nodeId={nodeId} />
+      {/* Timing + frame are first-class generation parameters — shown inline
+          (and on the node's quick strip), never folded under a "Settings"
+          accordion where the user has to know to look. */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label htmlFor="scene3d-fps" className="mb-1.5 block text-xs">{t("field.fps")}</Label>
+          <Select value={String(data.fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
+            <SelectTrigger id="scene3d-fps" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="24">24</SelectItem>
+              <SelectItem value="30">30</SelectItem>
+              <SelectItem value="60">60</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="scene3d-duration" className="mb-1.5 block text-xs">{t("scriptcfg.durationS")}</Label>
+          <Input
+            id="scene3d-duration"
+            type="number"
+            min={1}
+            max={60}
+            value={data.durationSeconds ?? ""}
+            onChange={(e) => onUpdate({ durationSeconds: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+            className="h-8 text-xs"
+          />
+        </div>
+      </div>
+      <div>
+        <Label className="mb-1.5 block text-xs">{t("field.aspectRatio")}</Label>
+        <AspectRatioSelector
+          options={COMPOSITION_RATIOS}
+          value={data.aspectRatio}
+          onValueChange={(v) => onUpdate({ aspectRatio: v })}
+        />
+      </div>
 
-      <Accordion type="single" collapsible>
-        <AccordionItem value="settings">
-          <AccordionTrigger className="text-xs py-2">{t("settings.title")}</AccordionTrigger>
-          <AccordionContent>
-            <div className="flex flex-col gap-3 pt-1">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="scene3d-fps" className="mb-1.5 block text-xs">{t("field.fps")}</Label>
-                  <Select value={String(data.fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
-                    <SelectTrigger id="scene3d-fps" className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="24">24</SelectItem>
-                      <SelectItem value="30">30</SelectItem>
-                      <SelectItem value="60">60</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="scene3d-duration" className="mb-1.5 block text-xs">{t("scriptcfg.durationS")}</Label>
-                  <Input
-                    id="scene3d-duration"
-                    type="number"
-                    min={1}
-                    max={60}
-                    value={data.durationSeconds ?? ""}
-                    onChange={(e) => onUpdate({ durationSeconds: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
-                    className="h-8 text-xs"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-xs">{t("field.aspectRatio")}</Label>
-                <AspectRatioSelector
-                  options={COMPOSITION_RATIOS}
-                  value={data.aspectRatio}
-                  onValueChange={(v) => onUpdate({ aspectRatio: v })}
-                />
-              </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+      <SceneBlock data={data} onUpdate={onUpdate} promptField="scenePrompt" nodeId={nodeId} />
     </div>
   )
 }

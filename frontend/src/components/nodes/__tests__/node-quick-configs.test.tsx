@@ -242,6 +242,56 @@ describe("assemble-narrated-video NODE_QUICK_CONFIGS registration", () => {
 })
 
 // ===========================================================================
+// generate-3d-scene quick-config registration — length + aspect on the strip,
+// like generate-image / generate-video. Asserted against the SHARED sources
+// (COMPOSITION_RATIOS = the panel's list = the route's Zod enum; SCENE3D_LIMITS
+// = the route's duration bounds) so the strip can't offer a value the
+// `/v1/3d-scene/generate` route rejects.
+// ===========================================================================
+import { SCENE3D_LIMITS } from "@nodaro/shared"
+import { COMPOSITION_RATIOS } from "@/components/editor/config-panels/model-options"
+import { NODE_DEFINITIONS } from "@/types/nodes"
+
+describe("generate-3d-scene NODE_QUICK_CONFIGS registration", () => {
+  const resolve = (c: QuickConfigControl, data: Record<string, unknown> = {}) =>
+    typeof c.options === "function" ? c.options(data) : c.options
+  const defaults = NODE_DEFINITIONS.find((d) => d.type === "generate-3d-scene")!.defaultData as Record<string, unknown>
+
+  it("registers 4 controls: llmModel, reasoningEffort, aspectRatio, durationSeconds", () => {
+    expect(getQuickConfigs("generate-3d-scene").map((c) => c.field)).toEqual([
+      "llmModel",
+      "reasoningEffort",
+      "aspectRatio",
+      "durationSeconds",
+    ])
+  })
+
+  it("aspect control offers exactly the panel's COMPOSITION_RATIOS (the route's enum)", () => {
+    const aspect = getQuickConfigs("generate-3d-scene").find((c) => c.field === "aspectRatio")!
+    expect(resolve(aspect).map((o) => o.value)).toEqual(COMPOSITION_RATIOS.map((r) => r.value))
+  })
+
+  it("duration control is numeric, writes durationSeconds, and custom-ranges over SCENE3D_LIMITS", () => {
+    const duration = getQuickConfigs("generate-3d-scene").find((c) => c.field === "durationSeconds")!
+    expect(duration.numeric).toBe(true)
+    expect(duration.customRange?.min).toBe(SCENE3D_LIMITS.minDurationSeconds)
+    expect(duration.customRange?.max).toBe(SCENE3D_LIMITS.maxDurationSeconds)
+    for (const opt of resolve(duration)) {
+      const n = Number(opt.value)
+      expect(n, `duration preset ${opt.value} in range`).toBeGreaterThanOrEqual(SCENE3D_LIMITS.minDurationSeconds)
+      expect(n, `duration preset ${opt.value} in range`).toBeLessThanOrEqual(SCENE3D_LIMITS.maxDurationSeconds)
+    }
+  })
+
+  it("each control's option set includes the node's default value (defaultData in nodes.ts)", () => {
+    const aspect = getQuickConfigs("generate-3d-scene").find((c) => c.field === "aspectRatio")!
+    const duration = getQuickConfigs("generate-3d-scene").find((c) => c.field === "durationSeconds")!
+    expect(resolve(aspect).map((o) => o.value)).toContain(defaults.aspectRatio)
+    expect(resolve(duration).map((o) => o.value)).toContain(String(defaults.durationSeconds))
+  })
+})
+
+// ===========================================================================
 // video-analysis quick-config registration — the two "how should this run"
 // levers surfaced on the bottom strip (Analysis quality tier + best-of-N Result
 // selection). Both are static enums with no provider dependence. Asserted
