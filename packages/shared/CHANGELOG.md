@@ -1,5 +1,83 @@
 # @nodaro/shared
 
+## 3.8.0
+
+### Minor Changes
+
+- 9d19c35: Add GPT Image 2.5 Flare and Sunburst (text-to-image and image-to-image).
+
+  Four new model ids — `gpt-image-2-5-flare`, `gpt-image-2-5-flare-i2i`,
+  `gpt-image-2-5-sunburst`, `gpt-image-2-5-sunburst-i2i` — with catalog capability
+  sheets, pricing rows (15 / 25 / 40 credits at 1K / 2K / 4K), the t2i→i2i
+  auto-route siblings, a 20000-char prompt ceiling and a 16-image reference cap.
+
+  The image aspect-ratio vocabulary gains `27:16`, `16:27`, `9:8` and `8:9`, so
+  `normalizeModelInput` now snaps to (rather than rejects) the widest GPT ratio
+  set. Existing models are unaffected — the per-model gate is the catalog snap,
+  not this vocabulary bound.
+
+- 15c8b12: 3D Render Pro: one still per shot alongside the MP4.
+
+  `Pro3DRenderJobOutput` gains an optional `shotStills` — `{ shotIndex, frame,
+assetId, url }[]`, ordered by `shotIndex` — and `pro3DRenderShotStills(output)`
+  is the tolerant reader every surface uses to get it in shot order.
+
+  `shotIndex` is the 0-based position in the v2 composition's `shots` array and
+  `frame` is that shot's own first frame in the composition's frame space, so a
+  still can be lined up against the exported video without re-deriving shot
+  boundaries. A v1 (single-shot) scene has exactly one still, index 0 at frame 0.
+
+  The field is OPTIONAL and the reader schema is passthrough, so a result
+  produced before shot stills existed still parses as a complete result; a
+  consumer should read `output.shotStills ?? []`.
+
+- 42d48e0: Scene3D: raise the dimension cap to 2560px and document the baked-rig boundary.
+
+  `SCENE3D_LIMITS.maxDimensionPx` and `SCENE3D_V2_LIMITS.maxDimensionPx` go from 1920
+  to **2560**, on both axes. The widening is additive — every previously valid plan
+  stays valid — and it is backed by a measurement rather than a guess: on the
+  `swangle` software path a production-representative render costs 65 ms/frame at
+  1920×1080, 97 ms at 2560×1440 and 154 ms at the square 2560×2560 worst case. At
+  the contract's 3600-frame ceiling that squares to ~9.2 minutes against the render
+  worker's 25-minute budget, and peaks at 3.1 GB against a 32 GB container limit.
+
+  2560 covers true 21:9 at 1097 and the DCI-adjacent widths that 1920 excluded.
+
+  The module docstring now also states, next to the existing determinism rule, that
+  camera and object RIGS — spline rails, follow-path and track-to constraints, and
+  procedural noise — are deliberately absent from this contract. They are authored
+  upstream and arrive baked (v1 as keyframes, v2 as one camera sample per frame).
+  The format carries no constraint or noise vocabulary on purpose, because a rig
+  evaluated in two different renderers cannot be guaranteed to agree frame for
+  frame. The absence is a boundary, not an unfinished TODO.
+
+- 36f8d20: Scene3D: price a render by its frame size.
+
+  New `scene3d-render-pricing` module — `scene3DRenderTier`,
+  `scene3DRenderTierCredits`, `renderVideoCreditId` and `pro3DRenderFrameUnit`,
+  plus the `SCENE3D_RENDER_TIERS` vocabulary and its two constants.
+
+  A render's work is per pixel per frame, and raising the frame cap from 1920 to
+  2560 px made frames renderable that measure ~97 ms/frame (2560×1440) and
+  ~154 ms/frame (2560×2560) against ~65 ms at 1920×1080. One flat price across
+  that range is either an overcharge on the small frame everyone renders or a
+  giveaway on the large one. So a `3d-scene` render now resolves to one of three
+  tiers: **base** (longest side ≤ 1920 px, 1×), **large** (longer, up to 5.12
+  megapixels, 1.5×) and **xlarge** (longer, above 5.12 megapixels, 2.5×) — the
+  measured ratios rounded to halves, with the boundary at the midpoint of the two
+  measured frames.
+
+  Nothing gets more expensive: a frame whose longest side is at most 1920 px
+  keeps the bare `render-video` identifier and its existing price, whatever its
+  area, so every workflow that ran before the cap moved costs exactly what it
+  did. The two new identifiers describe only frames that could not be rendered at
+  all until it moved. Non-`3d-scene` renders are untouched.
+
+  `pro3DRenderFrameUnit` names the per-frame unit a 3D Render Pro render stage
+  reads, with the same tier suffix and the same base-keeps-its-spelling rule. The
+  tier RATES are deployment configuration (`model_pricing` rows); this module
+  carries only the shape of the price.
+
 ## 3.7.0
 
 ### Minor Changes
