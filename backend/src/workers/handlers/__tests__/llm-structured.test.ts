@@ -162,9 +162,19 @@ describe("handleLlmStructured", () => {
     await handleLlmStructured(job({ ...base, analysisJobId: "child-1" }), ctx)
     const input = mocks.runStructuredCompletion.mock.calls[0][2] as string
     expect(input).toBe(composeAnalysisInput("Draft this.", analysis as never))
-    expect(mocks.jobUpdate).toHaveBeenCalledWith({ output_data: { stage: "drafting", analysisJobId: "child-1" } })
+    // The stage write REPLACES output_data, so the child's price rides it too.
+    expect(mocks.jobUpdate).toHaveBeenCalledWith({ output_data: { stage: "drafting", analysisJobId: "child-1", analysisCredits: 60 } })
     expect(mocks.markJobCompleted).toHaveBeenCalledWith("parent-1", {
       output_data: { output: { title: "Rain" }, inputTokens: 10, outputTokens: 5, analysisJobId: "child-1", analysisCredits: 60 },
+    })
+  })
+  it("a REUSED analysis: waits (returns at once), composes, and reports NO analysis price — the run that made it paid", async () => {
+    mocks.jobRead.mockReturnValue({ status: "completed", progress: 100, output_data: { json: analysis }, error_message: null, user_id: "user-1", credits: 60 })
+    await handleLlmStructured(job({ ...base, analysisJobId: "child-1", analysisReused: true }), ctx)
+    expect(mocks.runStructuredCompletion.mock.calls[0][2]).toBe(composeAnalysisInput("Draft this.", analysis as never))
+    expect(mocks.jobUpdate).toHaveBeenCalledWith({ output_data: { stage: "drafting", analysisJobId: "child-1" } })
+    expect(mocks.markJobCompleted).toHaveBeenCalledWith("parent-1", {
+      output_data: { output: { title: "Rain" }, inputTokens: 10, outputTokens: 5, analysisJobId: "child-1" },
     })
   })
   it("a pre-flight refusal at run time fails the job with its message (no completion, no commit)", async () => {

@@ -43,6 +43,16 @@ export interface LlmStructuredJobInput extends LlmStructuredInput {
   videoUrl?: string
   /** Analysis options, handed to the analysis route unchanged (its tiers). */
   videoAnalysis?: { llmModel?: string; selectionMode?: "choose" | "combine" }
+  /** Draft from THIS finished `video-analysis` job of yours instead of
+   *  analyzing `videoUrl` again: no second analysis, no second analysis
+   *  charge — a retry after a failed draft, another model, different
+   *  notes. `videoUrl` may still ride beside it as the record of the source.
+   *  422 when the job is not yours, does not exist, or is not a finished,
+   *  readable video analysis (`analysis_not_found` / `not_analysis` /
+   *  `analysis_failed` / `analysis_not_ready` / `invalid_analysis` — never a
+   *  404, which means the route itself is absent). Not combinable with
+   *  `videoAnalysis`. */
+  analysisJobId?: string
 }
 
 /** `output_data` of an `llm-structured` job as it progresses: `stage` while
