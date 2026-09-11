@@ -1,5 +1,34 @@
 # @nodaro/prompts
 
+## 1.18.0
+
+### Minor Changes
+
+- 9d19c35: Add GPT Image 2.5 Flare and Sunburst (text-to-image and image-to-image).
+
+  Four new model ids — `gpt-image-2-5-flare`, `gpt-image-2-5-flare-i2i`,
+  `gpt-image-2-5-sunburst`, `gpt-image-2-5-sunburst-i2i` — with catalog capability
+  sheets, pricing rows (15 / 25 / 40 credits at 1K / 2K / 4K), the t2i→i2i
+  auto-route siblings, a 20000-char prompt ceiling and a 16-image reference cap.
+
+  The image aspect-ratio vocabulary gains `27:16`, `16:27`, `9:8` and `8:9`, so
+  `normalizeModelInput` now snaps to (rather than rejects) the widest GPT ratio
+  set. Existing models are unaffected — the per-model gate is the catalog snap,
+  not this vocabulary bound.
+
+- e1280b7: Scene3D layout-reference doctrine: `SCENE3D_LAYOUT_REFERENCE_SCOPING_LINE`, `buildScene3DLayoutScopingLine`, `renderScene3DLayoutScopingLine` and `hasScene3DLayoutScopingLine` — the scoping caption a Scene3D clay render needs when it is attached to a video model as a reference (what it is FOR: positions, occlusion, framing, camera angle and motion, cuts, timing; what to IGNORE: the grey clay look, placeholder colours, materials, lighting, empty background), built as a rail caption for `referenceVideoCaptions[N]`. Plus `buildScene3DUnreferencedFiguresWarning` (`scene3d_unreferenced_figures`): every figure that must look real needs its own character reference, or it inherits the clay look.
+- 7caeaec: Scene3D layout-scoping doctrine gains its APPLICATION, not just its wording: `scene3DLayoutVideoCaptions` (the rail-caption array for a set of located clay references, index-aligned with the reference video list) and `appendScene3DStillScopingLines` (the rendered line for an image seat, which has no caption seat), plus the `Scene3DLayoutReferenceSeat` shape they read.
+
+  Both were previously private to the orchestrator, which meant the canvas could only re-implement them — and a rule re-implemented is a rule that drifts. Locating a clay reference is still per-engine (the graphs differ); saying what to do about one now happens in exactly one place, so a caption cannot mean one thing on a workflow run and another on the same node's Run button.
+
+### Patch Changes
+
+- Updated dependencies [9d19c35]
+- Updated dependencies [15c8b12]
+- Updated dependencies [42d48e0]
+- Updated dependencies [36f8d20]
+  - @nodaro/shared@3.8.0
+
 ## 1.17.2
 
 ### Patch Changes

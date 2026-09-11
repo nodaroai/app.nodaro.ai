@@ -1,5 +1,31 @@
 # @nodaro/sdk
 
+## 2.9.0
+
+### Minor Changes
+
+- d1cac05: `oauth.getAppInfo(clientId, redirectUri?)` — pass the redirect URI and the answer carries `redirectUriRegistered`, so a consent screen can refuse to redirect anywhere unregistered.
+- dd3003b: `DeveloperApp.kind` — how the app came to exist (`user`, `dynamic_mcp`, `first_party_mcp`, `community_instance`). Only `user` apps count toward the per-user registration cap.
+
+### Patch Changes
+
+- 36f8d20: Document what a 3D scene render costs on `RenderScene3DParams`.
+
+  The price follows the plan's own `width`/`height`, not any node setting, so the
+  type a caller fills in is the right place to say so: up to 1920 px on the
+  longest side the render settles under `render-video`, above that under
+  `render-video:3d-large` (1.5x) or `render-video:3d-xlarge` (2.5x above 5.12
+  megapixels). Doc comments only — no behaviour change.
+
+- Updated dependencies [9d19c35]
+- Updated dependencies [15c8b12]
+- Updated dependencies [42d48e0]
+- Updated dependencies [e1280b7]
+- Updated dependencies [36f8d20]
+- Updated dependencies [7caeaec]
+  - @nodaro/shared@3.8.0
+  - @nodaro/prompts@1.18.0
+
 ## 2.8.0
 
 ### Minor Changes
