@@ -24,6 +24,10 @@ export interface LlmStructuredJobPayload extends LlmStructuredBody {
   usageLogId?: string | null
   /** Set by the route for movie runs: the `video-analysis` child to wait on. */
   analysisJobId?: string
+  /** The child was a finished analysis the caller handed in (already paid
+   *  for by the run that made it): the wait returns at once, and its price
+   *  is NOT this run's to report. */
+  analysisReused?: boolean
 }
 
 /** Re-stamp the `pre-task` sentinel this often: the parent may wait 10+
@@ -146,7 +150,8 @@ export const handleLlmStructured: HandlerFn = async function handleLlmStructured
         sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
         now: Date.now,
       })
-      analysisCredits = waited.credits
+      // A reused child's price belongs to the run that bought it.
+      analysisCredits = p.analysisReused ? null : waited.credits
       input = composeAnalysisInput(p.input, waited.analysis)
       if (input.length > LLM_TEXT_INPUT_MAX) {
         throw new Error(`The analysis is too long to draft from (${input.length} characters; the limit is ${LLM_TEXT_INPUT_MAX})`)
@@ -156,7 +161,16 @@ export const handleLlmStructured: HandlerFn = async function handleLlmStructured
     await throwIfJobCancelled()
     await supabase
       .from("jobs")
-      .update({ output_data: { stage: "drafting", ...(p.analysisJobId ? { analysisJobId: p.analysisJobId } : {}) } })
+      // This write REPLACES output_data, so the child's price (stamped at
+      // create) has to ride it or the row forgets what its analysis cost
+      // until completion.
+      .update({
+        output_data: {
+          stage: "drafting",
+          ...(p.analysisJobId ? { analysisJobId: p.analysisJobId } : {}),
+          ...(analysisCredits != null ? { analysisCredits } : {}),
+        },
+      })
       .eq("id", ctx.jobId)
     await setJobProgress(job, ctx.jobId, DRAFT_PROGRESS)
 

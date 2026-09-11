@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   eqUser: vi.fn(),
   refundReservedCreditsForJob: vi.fn(),
   order: [] as string[],
+  /** What `select(…).eq(…).eq(…).maybeSingle()` answers. */
+  read: vi.fn(),
 }))
 
 vi.mock("../supabase.js", () => {
@@ -27,11 +29,20 @@ vi.mock("../supabase.js", () => {
     mocks.eqId(col, val)
     return { eq: eqUser }
   }
+  const selectEqUser = (col: string, val: string) => {
+    mocks.eqUser(col, val)
+    return { maybeSingle: async () => mocks.read() }
+  }
+  const selectEqId = (col: string, val: string) => {
+    mocks.eqId(col, val)
+    return { eq: selectEqUser }
+  }
   return {
     supabase: {
       from: vi.fn((table: string) => ({
         update: (row: Record<string, unknown>) => { mocks.jobUpdate(table, row); return { eq: eqId } },
         delete: () => { mocks.jobDelete(table); mocks.order.push("delete"); return { eq: eqId } },
+        select: () => ({ eq: selectEqId }),
       })),
     },
   }
@@ -40,7 +51,7 @@ vi.mock("../credits-job-lifecycle.js", () => ({
   refundReservedCreditsForJob: mocks.refundReservedCreditsForJob,
 }))
 
-import { stampAnalysisChild, discardUnstartedJob } from "../llm-structured-job-row.js"
+import { stampAnalysisChild, discardUnstartedJob, readOwnAnalysisChild } from "../llm-structured-job-row.js"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -50,21 +61,51 @@ beforeEach(() => {
 
 describe("stampAnalysisChild", () => {
   it("writes the child id into the stored projection and opens output_data at the analyzing stage", async () => {
-    await stampAnalysisChild("parent-1", "user-1", { type: "llm-structured", origin: "studio" }, "child-1")
+    await stampAnalysisChild("parent-1", "user-1", { type: "llm-structured", origin: "studio" }, { analysisJobId: "child-1" })
     expect(mocks.jobUpdate).toHaveBeenCalledWith("jobs", {
       input_data: { type: "llm-structured", origin: "studio", analysisJobId: "child-1" },
       output_data: { stage: "analyzing", analysisJobId: "child-1" },
     })
   })
+  it("carries the child's price into BOTH halves — input_data survives every output_data rewrite", async () => {
+    await stampAnalysisChild("parent-1", "user-1", { type: "llm-structured" }, { analysisJobId: "child-1", analysisCredits: 60 })
+    expect(mocks.jobUpdate).toHaveBeenCalledWith("jobs", {
+      input_data: { type: "llm-structured", analysisJobId: "child-1", analysisCredits: 60 },
+      output_data: { stage: "analyzing", analysisJobId: "child-1", analysisCredits: 60 },
+    })
+  })
+  it("a REUSED child opens at the drafting stage, marked, and prices nothing", async () => {
+    await stampAnalysisChild("parent-1", "user-1", { type: "llm-structured" }, { analysisJobId: "child-1", reused: true })
+    expect(mocks.jobUpdate).toHaveBeenCalledWith("jobs", {
+      input_data: { type: "llm-structured", analysisJobId: "child-1", analysisReused: true },
+      output_data: { stage: "drafting", analysisJobId: "child-1" },
+    })
+  })
   it("never mutates the projection it was handed", async () => {
     const inputData = { type: "llm-structured" }
-    await stampAnalysisChild("parent-1", "user-1", inputData, "child-1")
+    await stampAnalysisChild("parent-1", "user-1", inputData, { analysisJobId: "child-1" })
     expect(inputData).toEqual({ type: "llm-structured" })
   })
   it("scopes the update to the caller's own row", async () => {
-    await stampAnalysisChild("parent-1", "user-1", {}, "child-1")
+    await stampAnalysisChild("parent-1", "user-1", {}, { analysisJobId: "child-1" })
     expect(mocks.eqId).toHaveBeenCalledWith("id", "parent-1")
     expect(mocks.eqUser).toHaveBeenCalledWith("user_id", "user-1")
+  })
+})
+
+describe("readOwnAnalysisChild", () => {
+  it("reads the caller's OWN row — pinned by id AND user — and answers it", async () => {
+    const row = { id: "a-1", job_type: "video-analysis", status: "completed", output_data: { json: {} }, credits: 60 }
+    mocks.read.mockResolvedValue({ data: row, error: null })
+    await expect(readOwnAnalysisChild("a-1", "user-1")).resolves.toEqual(row)
+    expect(mocks.eqId).toHaveBeenCalledWith("id", "a-1")
+    expect(mocks.eqUser).toHaveBeenCalledWith("user_id", "user-1")
+  })
+  it("missing and foreign are the same null (no ownership oracle); a read FAILURE throws instead", async () => {
+    mocks.read.mockResolvedValue({ data: null, error: null })
+    await expect(readOwnAnalysisChild("a-1", "user-1")).resolves.toBeNull()
+    mocks.read.mockResolvedValue({ data: null, error: { message: "boom" } })
+    await expect(readOwnAnalysisChild("a-1", "user-1")).rejects.toThrow("boom")
   })
 })
 

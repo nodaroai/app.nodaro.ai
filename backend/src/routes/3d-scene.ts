@@ -434,7 +434,7 @@ export async function scene3DRoutes(app: FastifyInstance) {
             return reply.status(child.status).send(child.body)
           }
           analysisJobId = child.jobId
-          await stampAnalysisChild(job.id, userId, inputData, analysisJobId)
+          await stampAnalysisChild(job.id, userId, inputData, { analysisJobId })
         }
 
         const payload: Scene3DJobPayload = {
@@ -633,7 +633,7 @@ export async function scene3DRoutes(app: FastifyInstance) {
             return reply.status(child.status).send(child.body)
           }
           analysisJobId = child.jobId
-          await stampAnalysisChild(job.id, userId, inputData, analysisJobId)
+          await stampAnalysisChild(job.id, userId, inputData, { analysisJobId })
         }
 
         const payload: Scene3DJobPayload = {

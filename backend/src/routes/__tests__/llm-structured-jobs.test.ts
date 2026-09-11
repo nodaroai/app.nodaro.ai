@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   queueAdd: vi.fn(),
   jobUpdate: vi.fn(),
   jobDelete: vi.fn(),
+  /** The caller's own analysis child, as `readOwnAnalysisChild` reads it. */
+  jobRead: vi.fn(),
 }))
 
 vi.mock("@/lib/config.js", () => ({
@@ -35,11 +37,16 @@ vi.mock("@/lib/supabase.js", () => {
   // update({...}).eq("id").eq("user_id") and delete().eq("id").eq("user_id")
   const terminal = vi.fn().mockResolvedValue({ data: null, error: null })
   const eq1 = vi.fn(() => ({ eq: terminal }))
+  // select("…").eq("id").eq("user_id").maybeSingle() → the caller's own child
+  const maybeSingle = async () => ({ data: mocks.jobRead(), error: null })
+  const selectEq2 = vi.fn(() => ({ maybeSingle }))
+  const selectEq1 = vi.fn(() => ({ eq: selectEq2 }))
   return {
     supabase: {
       from: vi.fn(() => ({
         update: (row: Record<string, unknown>) => { mocks.jobUpdate(row); return { eq: eq1 } },
         delete: () => { mocks.jobDelete(); return { eq: eq1 } },
+        select: () => ({ eq: selectEq1 }),
       })),
     },
   }
@@ -70,6 +77,7 @@ beforeEach(async () => {
   mocks.queueAdd.mockResolvedValue({ id: "bull-1" })
   analysisAnswer = { status: 200, body: { jobId: "child-1" } }
   analysisSeen = null
+  mocks.jobRead.mockReturnValue(null)
 
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
@@ -157,6 +165,7 @@ describe("a story run", () => {
 
 describe("a movie run", () => {
   it("creates the child through the analysis route with the caller's auth + workspace forwarded, stamps it on the parent, enqueues it", async () => {
+    mocks.jobRead.mockReturnValue({ id: "child-1", job_type: "video-analysis", status: "pending", output_data: null, credits: 60 })
     const res = await post({ ...VALID, videoUrl: VIDEO, videoAnalysis: { llmModel: "mixed", selectionMode: "combine" } })
     expect(res.statusCode).toBe(200)
 
@@ -169,15 +178,26 @@ describe("a movie run", () => {
     // has a single thing to undo) …
     expect(mocks.insertJob).toHaveBeenCalledTimes(1)
     expect(mocks.reserveCreditsForJob).toHaveBeenCalledTimes(1)
-    // … then stamped with the child, in input_data AND output_data.stage
+    // … then stamped with the child, in input_data AND output_data.stage,
+    // WITH the child's own price (its reservation is on its row already) so
+    // a run list shows the whole cost from the first read
     expect(mocks.jobUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      input_data: expect.objectContaining({ analysisJobId: "child-1", videoUrl: VIDEO, videoAnalysis: { llmModel: "mixed", selectionMode: "combine" } }),
-      output_data: { stage: "analyzing", analysisJobId: "child-1" },
+      input_data: expect.objectContaining({ analysisJobId: "child-1", analysisCredits: 60, videoUrl: VIDEO, videoAnalysis: { llmModel: "mixed", selectionMode: "combine" } }),
+      output_data: { stage: "analyzing", analysisJobId: "child-1", analysisCredits: 60 },
     }))
     const payload = mocks.queueAdd.mock.calls[0][1]
     expect(payload.analysisJobId).toBe("child-1")
+    expect(payload).not.toHaveProperty("analysisReused")
     expect(payload).not.toHaveProperty("videoUrl")
     expect(payload).not.toHaveProperty("videoAnalysis")
+  })
+  it("a child whose price is not readable yet is stamped without one — never a guessed number", async () => {
+    mocks.jobRead.mockReturnValue(null)
+    const res = await post({ ...VALID, videoUrl: VIDEO })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.jobUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      output_data: { stage: "analyzing", analysisJobId: "child-1" },
+    }))
   })
   it("propagates the analysis route's refusal verbatim (422 too long) and undoes the parent: refund, delete, nothing enqueued", async () => {
     analysisAnswer = { status: 422, body: { error: { code: "video_too_long", message: "Video is 720 seconds. Maximum duration for analysis is 600 seconds (10 minutes)." } } }
@@ -195,5 +215,68 @@ describe("a movie run", () => {
     expect(res.json().error.code).toBe("analysis_unavailable")
     expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("parent-1")
     expect(mocks.jobDelete).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("a run drafted from a FINISHED analysis (analysisJobId — the Director spec's P3)", () => {
+  const ANALYSIS_ID = "00000000-0000-4000-8000-00000000a001"
+  const finished = (over: Record<string, unknown> = {}) => ({
+    id: ANALYSIS_ID,
+    job_type: "video-analysis",
+    status: "completed",
+    output_data: {
+      json: {
+        meta: { durationSec: 12, width: 1920, height: 1080, aspectRatio: "16:9", title: "Clip" },
+        slots: [],
+        scenes: [{ startSec: 0, endSec: 4, label: "Hook", shotType: "Medium Close-Up", camera: "push-in", visual: "waves", audio: [], sceneNumber: 1, visualResolved: "waves", slotRefs: [] }],
+        warnings: [],
+      },
+    },
+    credits: 60,
+    ...over,
+  })
+
+  it("creates NO child, stamps the parent as reused at the drafting stage with no analysis price, and tells the worker", async () => {
+    mocks.jobRead.mockReturnValue(finished())
+    const res = await post({ ...VALID, videoUrl: VIDEO, analysisJobId: ANALYSIS_ID })
+    expect(res.statusCode).toBe(200)
+    expect(analysisSeen).toBeNull()
+    expect(mocks.insertJob).toHaveBeenCalledTimes(1)
+    expect(mocks.reserveCreditsForJob).toHaveBeenCalledTimes(1)
+    expect(mocks.jobUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      input_data: expect.objectContaining({ analysisJobId: ANALYSIS_ID, analysisReused: true, videoUrl: VIDEO }),
+      output_data: { stage: "drafting", analysisJobId: ANALYSIS_ID },
+    }))
+    expect(mocks.jobUpdate.mock.calls[0][0].input_data).not.toHaveProperty("analysisCredits")
+    const payload = mocks.queueAdd.mock.calls[0][1]
+    expect(payload).toMatchObject({ analysisJobId: ANALYSIS_ID, analysisReused: true })
+    expect(payload).not.toHaveProperty("videoUrl")
+  })
+  it("needs no videoUrl at all — the analysis IS the source", async () => {
+    mocks.jobRead.mockReturnValue(finished())
+    expect((await post({ ...VALID, analysisJobId: ANALYSIS_ID })).statusCode).toBe(200)
+    expect(analysisSeen).toBeNull()
+  })
+  it("refuses BEFORE any row exists: missing or foreign → 404, another job type / failed / running / unreadable → 422", async () => {
+    const cases: Array<[unknown, number, string]> = [
+      [null, 404, "not_found"],
+      [finished({ job_type: "generate-image" }), 422, "not_analysis"],
+      [finished({ status: "failed" }), 422, "analysis_failed"],
+      [finished({ status: "cancelled" }), 422, "analysis_failed"],
+      [finished({ status: "processing" }), 422, "analysis_not_ready"],
+      [finished({ output_data: { json: { scenes: "nope" } } }), 422, "invalid_analysis"],
+    ]
+    for (const [row, status, code] of cases) {
+      mocks.jobRead.mockReturnValue(row)
+      const res = await post({ ...VALID, analysisJobId: ANALYSIS_ID })
+      expect([res.statusCode, res.json().error.code]).toEqual([status, code])
+    }
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+    expect(mocks.reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+  it("400 on videoAnalysis beside analysisJobId (nothing is analyzed), and on a non-uuid id", async () => {
+    expect((await post({ ...VALID, videoUrl: VIDEO, analysisJobId: ANALYSIS_ID, videoAnalysis: { llmModel: "smart" } })).statusCode).toBe(400)
+    expect((await post({ ...VALID, analysisJobId: "child-1" })).statusCode).toBe(400)
+    expect(mocks.insertJob).not.toHaveBeenCalled()
   })
 })
