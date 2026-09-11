@@ -27,8 +27,8 @@ const map: LocaleCatalogMap = {
   "dolly-in": { label: "Долли вперёд", description: "Толчок камеры к объекту (с параллаксом)" },
   "dolly-out": { label: "Долли назад", description: "Отъезд камеры назад (с параллаксом)" },
   "dolly-zoom": { label: "Долли-зум", description: "Эффект головокружения: долли против зума" },
-  "push-in": { label: "Лёгкий наезд", description: "Медленный мягкий наезд на объект" },
-  "pull-out": { label: "Лёгкий отъезд", description: "Медленный мягкий отъезд от объекта" },
+  "push-in": { label: "Резкий наезд", description: "Быстрый энергичный наезд на объект" },
+  "pull-out": { label: "Резкий отъезд", description: "Быстрый энергичный отъезд от объекта" },
   "breathing": { label: "Дышащая камера", description: "Тонкое непрерывное колебание наезд-отъезд, органичное ощущение съёмки с рук" },
   "push-pull": { label: "Push-Pull / Качание", description: "Камера движется к объекту, затем обратно, маятниковое приближение и отдаление" },
   "creep-in": { label: "Незаметный наезд", description: "Чрезвычайно медленный незаметный наезд, нагнетающий страх или напряжение" },
@@ -48,8 +48,8 @@ const map: LocaleCatalogMap = {
   "dutch-angle": { label: "Голландский угол", description: "Статичный наклонённый кадр для напряжения" },
 
   // Orbit / Arc
-  "orbit-left": { label: "Орбита влево", description: "Полный круг вокруг объекта влево" },
-  "orbit-right": { label: "Орбита вправо", description: "Полный круг вокруг объекта вправо" },
+  "orbit-left": { label: "Орбита влево", description: "Большая частичная орбита вокруг объекта влево" },
+  "orbit-right": { label: "Орбита вправо", description: "Большая частичная орбита вокруг объекта вправо" },
   "spin-360": { label: "Полный оборот 360°", description: "Камера поворачивается на полные 360 градусов вокруг своей оси" },
   "orbit-360": { label: "Полная орбита 360°", description: "Камера описывает полную дугу 360 градусов вокруг объекта" },
   "arc-left": { label: "Дуга влево", description: "Частичная дуга вокруг объекта влево" },
@@ -88,7 +88,7 @@ const map: LocaleCatalogMap = {
   "handheld-vlog": { label: "Влог с рук", description: "Непринуждённая ручная съёмка в стиле влога" },
   "pov-walk": { label: "POV-ходьба", description: "POV-ходьба от первого лица" },
   "velocity-edit": { label: "Скоростной монтаж", description: "Темп с ускорением в стиле TikTok" },
-  "match-cut-zoom": { label: "Зум для match cut", description: "Зум, синхронизированный с битом для склейки" },
+  "match-cut-zoom": { label: "Зум для match cut", description: "Быстрый зум с резкой склейкой на совпадающую форму" },
   "screen-tap": { label: "Касание экрана", description: "Переход с касанием пальца по экрану" },
   "phone-flip": { label: "Переключение камеры телефона", description: "Переключение между фронтальной и основной камерой" },
   // Location-studio extension (PR #2505 follow-up)

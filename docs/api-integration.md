@@ -2874,8 +2874,15 @@ does not advertise an outdated native source file.
 
 An export that retains delivery evidence exposes it separately from its source:
 
-- `GET /v1/3d-scene/deliveries/:jobId` returns the exact `sceneRevisionId`, source
-  digests, mode, and opaque poster/report descriptors.
+- `GET /v1/3d-scene/deliveries/:jobId` returns `sourceKind`, the exact
+  `sceneRevisionId`, source digests, mode, and opaque poster/report descriptors.
+  One kind has no scene behind it: `refused-authoring`, published by a
+  3D Render Pro run whose recipe the compiler refused on every pass. Nothing
+  compiled, so no revision exists and no frame was rendered — `sceneRevisionId`
+  and `sourcePlanSha256` are `null`, there is no poster, and the descriptors are
+  the refusal report alone. The run's retained recipe is not among them: it is
+  kept for re-authoring, never served. See
+  [3D Render Pro](nodes/composition/pro-3d-render.md).
 - `GET /v1/3d-scene/deliveries/:jobId/assets/:assetId` returns those bytes with
   bearer authentication, range support, and `Cache-Control: no-store`.
 

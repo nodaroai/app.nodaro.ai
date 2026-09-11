@@ -5206,7 +5206,10 @@ fixed and server-owned. See
 ### Scene asset reads
 
 `client.scene3d.getDelivery(jobId)` reads retained export metadata, including its
-exact source revision and poster/report descriptors. For each descriptor, call
+`sourceKind`, its exact source revision and poster/report descriptors. On a
+`refused-authoring` delivery — a 3D Render Pro run whose recipe never compiled —
+`sceneRevisionId` and `sourcePlanSha256` are `null` and the only descriptor is
+the compiler's refusal report; there is no scene and no poster. For each descriptor, call
 `client.scene3d.deliveryAssetBytes(jobId, asset, { signal })` to read bounded
 bytes through fresh authentication. Access requires both delivery and source
 permissions, including after the source revision has been deleted. These methods

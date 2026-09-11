@@ -27,8 +27,8 @@ const map: LocaleCatalogMap = {
   "dolly-in": { label: "ドリー・イン", description: "被写体に向かってカメラを押し込む（パララックスあり）" },
   "dolly-out": { label: "ドリー・アウト", description: "カメラを引いていく（パララックスあり）" },
   "dolly-zoom": { label: "ドリーズーム", description: "ヴァーティゴ効果：ドリーがズームと逆方向" },
-  "push-in": { label: "プッシュイン", description: "被写体へのゆっくり繊細な押し込み" },
-  "pull-out": { label: "プルアウト", description: "被写体からのゆっくり繊細な引き戻し" },
+  "push-in": { label: "プッシュイン", description: "被写体への速く力強い押し込み" },
+  "pull-out": { label: "プルアウト", description: "被写体からの速く力強い引き戻し" },
   "breathing": { label: "ブリージング・カメラ", description: "繊細で連続的なプッシュインとプルアウトの揺らぎ、有機的な手持ちの感触" },
   "push-pull": { label: "プッシュプル／スウィング", description: "カメラが被写体に近づいてから離れる、振り子のような接近と後退" },
   "creep-in": { label: "クリープイン", description: "ほとんど気づかれないほどゆっくりのプッシュイン、恐怖や緊張を高める" },
@@ -48,8 +48,8 @@ const map: LocaleCatalogMap = {
   "dutch-angle": { label: "ダッチアングル", description: "緊張感を与える固定の傾いたフレーム" },
 
   // Orbit
-  "orbit-left": { label: "オービット・レフト", description: "被写体の周りを左に1周回る" },
-  "orbit-right": { label: "オービット・ライト", description: "被写体の周りを右に1周回る" },
+  "orbit-left": { label: "オービット・レフト", description: "被写体の周りを左に大きく部分的に回る" },
+  "orbit-right": { label: "オービット・ライト", description: "被写体の周りを右に大きく部分的に回る" },
   "spin-360": { label: "フル360°スピン", description: "カメラが軸上で360度フル回転する" },
   "orbit-360": { label: "フル360°オービット", description: "カメラが被写体の周りを360度の完全な弧で回る" },
   "arc-left": { label: "アーク・レフト", description: "被写体の周りを左に部分的に弧を描く" },
@@ -88,7 +88,7 @@ const map: LocaleCatalogMap = {
   "handheld-vlog": { label: "ハンドヘルド・ヴログ", description: "カジュアルなヴログ風の手持ち" },
   "pov-walk": { label: "POVウォーク", description: "一人称の歩行POV" },
   "velocity-edit": { label: "ベロシティエディット", description: "TikTok風のスピードランプ・ペーシング" },
-  "match-cut-zoom": { label: "マッチカット・ズーム", description: "カット用にビートに合わせたズーム" },
+  "match-cut-zoom": { label: "マッチカット・ズーム", description: "同じ形にハードカットする速いズーム" },
   "screen-tap": { label: "スクリーンタップ", description: "画面上の指タップによるトランジション" },
   "phone-flip": { label: "フォンフリップ", description: "前面／背面カメラの切り替え" },
   // Location-studio extension (PR #2505 follow-up)

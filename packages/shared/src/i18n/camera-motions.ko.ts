@@ -27,8 +27,8 @@ const map: LocaleCatalogMap = {
   "dolly-in": { label: "달리 인", description: "피사체를 향해 카메라를 밀어 넣습니다 (시차)" },
   "dolly-out": { label: "달리 아웃", description: "카메라를 멀리 밀어냅니다 (시차)" },
   "dolly-zoom": { label: "달리 줌", description: "버티고 효과: 달리와 줌이 반대로 동작합니다" },
-  "push-in": { label: "푸시 인", description: "피사체를 향한 천천히 미묘한 푸시입니다" },
-  "pull-out": { label: "풀 아웃", description: "피사체로부터 천천히 미묘한 풀백입니다" },
+  "push-in": { label: "푸시 인", description: "피사체를 향한 빠르고 힘찬 푸시입니다" },
+  "pull-out": { label: "풀 아웃", description: "피사체로부터 빠르고 힘찬 풀백입니다" },
   "breathing": { label: "브리딩 카메라", description: "은은하게 지속되는 푸시 인 / 풀 아웃의 진동, 유기적인 핸드헬드 느낌입니다" },
   "push-pull": { label: "푸시 풀 / 스윙", description: "카메라가 피사체를 향해 다가갔다가 다시 멀어지는, 흔들리는 접근과 후퇴입니다" },
   "creep-in": { label: "크리프 인", description: "감지하기 어려울 만큼 느린 푸시 인으로 공포감이나 긴장감을 쌓아갑니다" },
@@ -48,8 +48,8 @@ const map: LocaleCatalogMap = {
   "dutch-angle": { label: "더치 앵글", description: "긴장감을 주는 정적 기울어진 프레임입니다" },
 
   // Orbit / Arc
-  "orbit-left": { label: "오비트 왼쪽", description: "피사체 주위를 왼쪽으로 한 바퀴 도는 궤도입니다" },
-  "orbit-right": { label: "오비트 오른쪽", description: "피사체 주위를 오른쪽으로 한 바퀴 도는 궤도입니다" },
+  "orbit-left": { label: "오비트 왼쪽", description: "피사체 주위를 왼쪽으로 크게 부분 선회합니다" },
+  "orbit-right": { label: "오비트 오른쪽", description: "피사체 주위를 오른쪽으로 크게 부분 선회합니다" },
   "spin-360": { label: "풀 360° 스핀", description: "카메라가 자신의 축을 중심으로 360도 완전 회전합니다" },
   "orbit-360": { label: "풀 360° 오비트", description: "카메라가 피사체 주위를 360도 완전한 호로 돕니다" },
   "arc-left": { label: "아크 왼쪽", description: "피사체 주위를 왼쪽으로 부분적으로 도는 호입니다" },
@@ -88,7 +88,7 @@ const map: LocaleCatalogMap = {
   "handheld-vlog": { label: "핸드헬드 블로그", description: "캐주얼한 블로그 스타일 핸드헬드입니다" },
   "pov-walk": { label: "POV 워크", description: "1인칭 보행 POV입니다" },
   "velocity-edit": { label: "벨로시티 에디트", description: "TikTok 스피드 램프 페이싱입니다" },
-  "match-cut-zoom": { label: "매치 컷 줌", description: "컷에 맞춘 비트 타이밍 줌입니다" },
+  "match-cut-zoom": { label: "매치 컷 줌", description: "일치하는 형태로 하드 컷하는 빠른 줌입니다" },
   "screen-tap": { label: "스크린 탭", description: "화면 위 손가락 탭 트랜지션입니다" },
   "phone-flip": { label: "폰 플립", description: "전면/후면 카메라 플립입니다" },
   // Location-studio extension (PR #2505 follow-up)

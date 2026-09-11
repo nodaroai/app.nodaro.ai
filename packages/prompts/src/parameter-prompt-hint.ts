@@ -35,6 +35,7 @@ import { buildPoseHints } from "./pose.js"
 import { buildStylingHints } from "./styling.js"
 import { buildTemporalHints } from "./temporal.js"
 import { composeCameraMotionHintFromConnections } from "./camera-motions.js"
+import { joinHintFragments } from "./hint-join.js"
 import { composeTransitionHintFromConnections, type TransitionDuration, type TransitionIntensity, type TransitionPosition, type TransitionTiming } from "./transitions.js"
 import { composeCharacterFxHintFromConnections, type CharacterFxDuration, type CharacterFxIntensity, type CharacterFxPosition, type CharacterFxTiming } from "./character-fx.js"
 import { buildMaterialHints } from "./materials.js"
@@ -84,7 +85,7 @@ function withCustomText(data: Record<string, unknown>, mainHint: string): string
   if (mainHint) fragments.push(mainHint)
   const post = typeof data.postText === "string" ? data.postText.trim() : ""
   if (post) fragments.push(post)
-  return fragments.join(", ")
+  return joinHintFragments(fragments)
 }
 
 /**

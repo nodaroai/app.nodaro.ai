@@ -21,8 +21,21 @@ export interface Scene3DDeliveryAsset {
 /** Export evidence is retained separately from the immutable scene it rendered. */
 export interface Scene3DDelivery {
   deliveryId: string
-  sceneRevisionId: string
-  sourcePlanSha256: string
+  /**
+   * Null on a `refused-authoring` delivery and on that alone.
+   *
+   * A Pro run whose recipe the compiler refused on every pass still retains the refusal
+   * report, but nothing was ever compiled, so no scene revision was published. The field is
+   * null rather than absent so the shape stays one shape; read `sourceKind` to tell why.
+   */
+  sceneRevisionId: string | null
+  /**
+   * What this delivery was made from. Absent when read from a deployment that predates the
+   * refused lane, where every delivery necessarily had a scene behind it.
+   */
+  sourceKind?: "retained-revision" | "job-output" | "refused-authoring"
+  /** Null when there is no plan to hash — see `sceneRevisionId`. */
+  sourcePlanSha256: string | null
   sourceContentHash: string | null
   sourceJobId: string | null
   workflowId: string | null

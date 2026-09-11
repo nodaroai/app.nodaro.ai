@@ -27,8 +27,8 @@ const map: LocaleCatalogMap = {
   "dolly-in": { label: "Dolly In", description: "camera को subject की ओर धकेलें (parallax)" },
   "dolly-out": { label: "Dolly Out", description: "camera को दूर खींचें (parallax)" },
   "dolly-zoom": { label: "Dolly Zoom", description: "Vertigo प्रभाव: dolly zoom के विपरीत" },
-  "push-in": { label: "Push In", description: "subject की ओर धीमा सूक्ष्म push" },
-  "pull-out": { label: "Pull Out", description: "subject से धीमा सूक्ष्म pull back" },
+  "push-in": { label: "Push In", description: "subject की ओर तेज़ ज़ोरदार push" },
+  "pull-out": { label: "Pull Out", description: "subject से तेज़ ज़ोरदार pull back" },
   "breathing": { label: "Breathing Camera", description: "सूक्ष्म निरंतर push-in / pull-out दोलन, organic handheld अनुभव" },
   "push-pull": { label: "Push-Pull / Swing", description: "Camera subject की ओर बढ़ता है फिर पीछे, झूलता हुआ approach-and-retreat" },
   "creep-in": { label: "Creep-In", description: "अदृश्य रूप से धीमा push-in जो भय या तनाव बढ़ाता है" },
@@ -48,8 +48,8 @@ const map: LocaleCatalogMap = {
   "dutch-angle": { label: "Dutch Angle", description: "तनाव के लिए स्थिर tilted frame" },
 
   // Orbit / Arc
-  "orbit-left": { label: "Orbit बाएँ", description: "subject के चारों ओर बाएँ पूरा वृत्त" },
-  "orbit-right": { label: "Orbit दाएँ", description: "subject के चारों ओर दाएँ पूरा वृत्त" },
+  "orbit-left": { label: "Orbit बाएँ", description: "subject के चारों ओर बाएँ बड़ा आंशिक orbit" },
+  "orbit-right": { label: "Orbit दाएँ", description: "subject के चारों ओर दाएँ बड़ा आंशिक orbit" },
   "spin-360": { label: "Full 360 Spin", description: "Camera अपनी धुरी पर पूरे 360 degree घूमता है" },
   "orbit-360": { label: "Full 360 Orbit", description: "Camera subject के चारों ओर पूरे 360 degree का arc बनाता है" },
   "arc-left": { label: "Arc बाएँ", description: "subject के चारों ओर बाएँ आंशिक arc" },
@@ -88,7 +88,7 @@ const map: LocaleCatalogMap = {
   "handheld-vlog": { label: "Handheld Vlog", description: "Casual vlog-शैली का handheld" },
   "pov-walk": { label: "POV Walk", description: "प्रथम-व्यक्ति चलते हुए POV" },
   "velocity-edit": { label: "Velocity Edit", description: "TikTok speed-ramp pacing" },
-  "match-cut-zoom": { label: "Match Cut Zoom", description: "Cut के लिए beat-समय वाला zoom" },
+  "match-cut-zoom": { label: "Match Cut Zoom", description: "मेल खाती आकृति पर hard cut वाला तेज़ zoom" },
   "screen-tap": { label: "Screen Tap", description: "On-screen finger-tap transition" },
   "phone-flip": { label: "Phone Flip", description: "आगे/पीछे camera flip" },
   // Location-studio extension (PR #2505 follow-up)

@@ -4,7 +4,7 @@ import { vi } from "vitest"
 import { createFakeSupabase, type Row } from "./fake-supabase.js"
 import { scene3DPlanDigest } from "../publish.js"
 import { scene3DArtifactObjectKey } from "../object-keys.js"
-import type { Scene3DDeliveryPublishInput } from "../delivery-types.js"
+import type { Scene3DDeliveryPublishInput, Scene3DRefusedDeliveryPublishInput } from "../delivery-types.js"
 import type { Scene3DObjectStore } from "../object-store.js"
 
 export const OWNER = "00000000-0000-4000-8000-000000000001"
@@ -16,6 +16,7 @@ export const WF = "00000000-0000-4000-8000-000000000020"
 export const SOURCE_WF = "00000000-0000-4000-8000-000000000021"
 export const POSTER = "00000000-0000-4000-8000-0000000000a1"
 export const REPORT = "00000000-0000-4000-8000-0000000000a2"
+export const SOURCE_JSON = "00000000-0000-4000-8000-0000000000a4"
 export const sha = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex")
 
 export function deliveryFixture() {
@@ -66,6 +67,59 @@ export function deliveryFixture() {
     db.tables.scene3d_delivery_artifacts.push(...artifacts.map((a) => ({ job_id: JOB,
       artifact_id: a.artifactId, artifact_owner_id: OWNER, usage: a.kind === "poster" ? "poster" : "validation",
       via_revision_id: null })))
+    db.tables.scene3d_upload_intents.length = 0
+  }
+  return { input, db, store, authorizeJob, objects, delivery, assetRows, published }
+}
+
+/**
+ * A run whose recipe the compiler refused on every pass: no revision, no plan, no poster.
+ *
+ * The deliberate absence is the point — `scene3d_revisions` is EMPTY here. A fixture that
+ * published a revision would prove nothing about the lane this exists for, because the whole
+ * reason it exists is that no revision could be published.
+ */
+export function refusedDeliveryFixture() {
+  const report = Buffer.from(JSON.stringify({ format: "scene3d-delivery-validation", version: 1,
+    status: "failed", phase: "build", passes: 3 }))
+  const recipe = Buffer.from(JSON.stringify({ format: "scene3d-authoring-source", version: 1,
+    recipe: { header: { frameStart: 0 } }, inputs: [] }))
+  const bytes = [report, recipe]
+  const artifacts: Scene3DRefusedDeliveryPublishInput["artifacts"] = (["validation-report", "source-json"] as const)
+    .map((kind, i) => {
+      const artifactId = [REPORT, SOURCE_JSON][i]
+      return { artifactId, kind, sha256: sha(bytes[i]), byteLength: bytes[i].length,
+        objectKey: scene3DArtifactObjectKey(OWNER, REV, artifactId, kind) }
+    })
+  const input: Scene3DRefusedDeliveryPublishInput = { jobId: JOB, userId: OWNER, revisionId: REV,
+    source: { kind: "refused-authoring" }, mode: "authored", artifacts }
+  const db = createFakeSupabase({
+    jobs: [{ id: JOB, user_id: OWNER, workflow_id: WF, status: "processing", output_data: null }],
+    scene3d_upload_intents: artifacts.map((a) => ({ artifact_id: a.artifactId, user_id: OWNER,
+      job_id: JOB, revision_id: REV, kind: a.kind, bucket: "private-scenes", object_key: a.objectKey,
+      receipt_sha256: a.sha256, receipt_byte_length: a.byteLength, receipt_etag: "tag" })),
+  })
+  db.rpc.mockResolvedValue({ data: "created", error: null })
+  const objects = new Map(artifacts.map((a, i) => [a.objectKey!, bytes[i]]))
+  const store: Scene3DObjectStore = { bucket: "private-scenes", get: vi.fn(async (key, range) => {
+    const value = objects.get(key)!
+    const selected = range ? value.subarray(range.start, range.endInclusive + 1) : value
+    return { body: Readable.from([selected]), contentLength: selected.length, etag: "tag" }
+  }), delete: vi.fn() }
+  const authorizeJob = vi.fn(async () => ({ workflowId: WF }))
+  const delivery: Row = { job_id: JOB, user_id: OWNER, workflow_id: WF,
+    source_kind: "refused-authoring", source_revision_id: REV, source_plan_sha256: null,
+    source_content_hash: null, source_job_id: JOB, source_owner_id: OWNER, source_workflow_id: WF,
+    mode: "authored", created_at: "2026-09-11T00:00:00Z" }
+  const assetRows = artifacts.map((a) => ({ id: a.artifactId, user_id: OWNER, kind: a.kind,
+    sha256: a.sha256, byte_length: a.byteLength, object_key: a.objectKey,
+    bucket: store.bucket, etag: "tag", created_at: "2026-09-11T00:00:00Z", expires_at: null }))
+  function published() {
+    db.tables.scene3d_deliveries.push({ ...delivery })
+    db.tables.scene3d_artifacts.push(...assetRows.map((a) => ({ ...a })))
+    db.tables.scene3d_delivery_artifacts.push(...artifacts.map((a) => ({ job_id: JOB,
+      artifact_id: a.artifactId, artifact_owner_id: OWNER,
+      usage: a.kind === "validation-report" ? "validation" : "checkpoint", via_revision_id: null })))
     db.tables.scene3d_upload_intents.length = 0
   }
   return { input, db, store, authorizeJob, objects, delivery, assetRows, published }

@@ -85,6 +85,27 @@ export interface PluginSceneDeliveryPublish extends PluginSceneArtifactScope {
     height?: number
   }>
 }
+/**
+ * The evidence a Pro authoring run retains when its recipe NEVER compiled.
+ *
+ * Separate from `PluginSceneDeliveryPublish` rather than a widening of it, because the two
+ * have no evidence in common. A rendered delivery pins a poster and names the plan it was
+ * rendered from; a refused one has neither — the compiler produced no plan, so no revision
+ * could be published and nothing was ever rendered. What it does have is the compiler's
+ * reasons (the report) and the planner's final recipe, and pinning them is the only thing
+ * that keeps them reachable at all.
+ *
+ * `revisionId` is the attempt identity the artifacts were reserved under, not a published
+ * scene: it binds the pins to this parent's own upload reservations. The recipe is retained,
+ * never published — `source-json` is a private checkpoint kind, so the delivery routes
+ * neither list it nor serve its bytes.
+ */
+export interface PluginSceneRefusedDeliveryPublish extends PluginSceneArtifactScope {
+  source: { kind: "refused-authoring" }
+  mode: "authored"
+  /** Exactly one `validation-report`; at most one `source-json` beside it. */
+  artifacts: Array<{ artifactId: string; kind: "validation-report" | "source-json"; sha256: string; byteLength: number }>
+}
 export interface PluginSceneArtifactToolkit {
   /** Resolve an authorized pinned input before quoting; immutable metadata only, no fetch grant. */
   resolveInput?(input: { userId: string; revisionId: string; assetId: string },
@@ -118,6 +139,12 @@ export interface PluginSceneArtifactToolkit {
   publish(input: PluginSceneArtifactPublish): Promise<{ revisionId: string; status: "created" | "unchanged"; artifactIds: string[] }>
   /** Retain export evidence without cloning or modifying the source revision. */
   publishDelivery?(input: PluginSceneDeliveryPublish): Promise<{
+    deliveryId: string; revisionId: string; status: "created" | "unchanged"; artifactIds: string[]
+  }>
+  /** Retain the evidence of authoring that never compiled: the refusal report, and privately
+   *  the last recipe. Absent on a host that predates the refused lane, which is what makes
+   *  retention degrade to "nothing was kept" instead of failing the run. */
+  publishRefusedDelivery?(input: PluginSceneRefusedDeliveryPublish): Promise<{
     deliveryId: string; revisionId: string; status: "created" | "unchanged"; artifactIds: string[]
   }>
 }
