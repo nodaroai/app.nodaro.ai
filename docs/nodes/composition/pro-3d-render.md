@@ -257,7 +257,20 @@ open.
 Runtime failures use the scene error codes (`SCENE_RESOURCE_LIMIT`,
 `SCENE_EXPORT_UNSUPPORTED`, `SCENE_QUALITY_FAILED`, `SCENE_REVISION_CONFLICT`,
 `SCENE_BUILD_TIMEOUT`, `SCENE_RENDER_FAILED`, and the local-executor codes) on
-the job, not the submission.
+the job, not the submission. The job's error message starts with the code.
+
+The planning stage adds three codes of its own. Two are worth retrying as-is;
+the third is not:
+
+| Code | Retry? | Meaning |
+|---|---|---|
+| `SCENE_PROVIDER_UNAVAILABLE` | Yes, after a few minutes | The scene planner's model provider was unavailable, overloaded or rate-limited, or the call never received an answer. The brief was not the problem. |
+| `SCENE_PLANNING_TIMEOUT` | Yes | Planning ran past its time bound. Retry, or shorten the brief and reference set. |
+| `SCENE_PLANNER_OUTPUT_INVALID` | No, not unchanged | The provider answered, but the recipe it produced could not be accepted by the compiler. Simplify the brief or use fewer references. |
+
+Work already completed before the failure (an earlier repair pass, for
+example) is charged as usual; the message never promises a refund it cannot
+verify.
 
 The scene instruction supports [prompt pre/post text](../../prompt-pre-post-text.md), applied by the canvas when it submits the instruction.
 
