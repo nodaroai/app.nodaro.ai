@@ -1,5 +1,17 @@
 # @nodaro/sdk
 
+## 2.12.0
+
+### Minor Changes
+
+- e5a3719: Correct character motion catalog copy, add everyday and accessible movements, bind animal and object recipients, preserve literal reference names, and expose authored sequence diagnostics and discovery metadata. Existing motion IDs remain resolvable.
+
+### Patch Changes
+
+- Updated dependencies [e5a3719]
+  - @nodaro/prompts@1.21.0
+  - @nodaro/shared@3.11.0
+
 ## 2.11.0
 
 ### Minor Changes
