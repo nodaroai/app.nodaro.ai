@@ -1,5 +1,142 @@
 # @nodaro/shared
 
+## 3.12.0
+
+### Minor Changes
+
+- e37fe27: `apply-edl` joins the producer/output classifiers: it is added to `DYNAMIC_PRODUCER_TYPES` (a node whose media output type is decided at runtime) and to the `VIDEO_OUTPUT_TYPES` set so `getOutputType` classifies its default handle as video (not the DYNAMIC→"data" fallback). Additive — existing members are unchanged; consumers that iterate these sets now see `apply-edl`.
+- 81be5f2: Captions: named "look" presets + a typed SDK `media.addCaptions()`.
+
+  `@nodaro/shared` gains `CAPTION_LOOK_IDS`, `CAPTION_LOOKS`, `DEFAULT_CAPTION_LOOK`, `KINETIC_ONLY_CAPTION_LEVER_KEYS`, `autoStrokeWidth`, `resolveCaptionLook`, and the types `CaptionLookId`, `CaptionLookLevers`, `KineticOnlyCaptionLeverKey`. A look is a bundle of visual levers (font, weight, colour, outline, spoken-word colour, casing) so a kinetic caption reads well from one field: `outline` (Montserrat 900, uppercase, white on a black outline sized `max(2, round(fontSize·0.1))`px, yellow spoken word — the TikTok/CapCut read) and `clean` (Inter, soft shadow, no casing/outline). `resolveCaptionLook(look, explicit, fontSize)` merges an explicit lever over the look; an UNSET look resolves to `outline`. Structural/config vocabulary only — no creative doctrine.
+
+  `@nodaro/sdk`: new `client.media.addCaptions(input)` — burns captions into a video via `POST /v1/add-captions`, with the `look` preset, the explicit look levers, and per-segment captions. New exported types `AddCaptionsInput`, `CaptionLookInput`, `CaptionSegmentInput`, `CaptionEntry`.
+
+- a48b462: `edit-plan` (podcast editing) support in the shared contract. All additive —
+  existing members are unchanged.
+
+  `edl.ts` gains:
+
+  - `unwrapEditPlanOutput(outputData)` — normalizes an edit-plan job's `output_data`
+    into the value stored on the node's `data.generatedJson` (clips → bare `Edl[]`,
+    chapters → `{version, chapters}`, tighten → the `Edl`).
+  - `ChapterSet` type (the `chapters` mode output shape).
+  - The credit-id STRUCTURE (values live app-side): `EDIT_PLAN_MODES`,
+    `EDIT_PLAN_TIERS`, `EDIT_PLAN_BUCKET_MINUTES`, `EDIT_PLAN_MAX_MINUTES`,
+    `EDIT_PLAN_BASE_CREDIT_ID`, `editPlanBucketMinutes`, `buildEditPlanCreditId`,
+    `asEditPlanMode`, `asEditPlanTier`, and the `EditPlanMode` / `EditPlanTier`
+    types — the same structural credit-id vocabulary as `buildVideoAnalysisCreditId`
+    (no pricing values; those stay in the app + migration).
+
+  `producer-types.ts`: `edit-plan` joins `FAN_OUT_EACH_TYPES` so a `clips` edge
+  fans out one downstream execution per clip.
+
+- dcaaa20: `edl.ts` gains `transcriptDurationSec(transcript)` — the latest `endMs` across a
+  transcript's words AND segments, in seconds (the max over both, mirroring the
+  plugin's own `transcriptDurationMs`). Additive; returns `undefined` for any
+  shape it can't measure. It is the edit-plan reserve's duration fallback beneath
+  the master-source ffprobe: a URL/reference-audio master exposes no length on its
+  node data, so an orchestrated reserve that cannot probe the media buckets the
+  credit hold on this transcript clock instead of the 180-minute ceiling.
+- 2b32c90: Add the EDL (edit decision list) contract — the shared data shape the podcast-editing primitives compose on. New exports from `@nodaro/shared`: `Edl`, `EdlSource`, `EdlSegment`, `EdlLayout`, `EdlRegion`, `EdlClipSet`, `EdlDropped`, `Transcript`, `EDL_VERSION`, and the pure functions `edlDurationMs`, `validateEdl`, `validateEdlClipSet`, `remapMsThroughEdl`, `remapTranscriptThroughEdl`, `speakerTurns`, `normalizeEdl`, `normalizeTranscript`. Structural vocabulary only — no creative content. Times are integer milliseconds; a crossfade overlaps (compresses the timeline); the contract carries a clock, per-source offsets and a per-slot weight so the multicam and speaker-view work can extend it additively.
+- 6ad3d61: Instagram scraper node: shared vocabulary (`instagram-scrape.ts` — modes, tiered credit ids reusing the analysis multiples, featured text/image/video outputs, target splitter, `instagramScrapeCreditIdFromNode`), the shared scraper handle-typing branch now covers `instagram-scrape`, and `@nodaro/prompts` adds `POST_CONTENT_ANALYSIS_SYSTEM_PROMPT` (the organic-content twin of the ad-analyst prompt, same output shape) so scraper nodes can run a content-analyst pass.
+- 368e95a: Meta Ads: node-side advertiser mode vocabulary — `META_ADS_NODE_MODES` / `metaAdsNodeMode`, the `MetaAdsAdvertiser` pick shape with `metaAdsAdvertisersFrom` / `isFacebookPageUrl`, and the two single-source helpers every engine and quote read: `metaAdsScrapeSources` (billable source count) and `metaAdsScrapeWireSources` (node data → the search / pages wire request).
+- c79489e: Meta Ads: optional per-ad AI analysis vocabulary — the analysis tier helpers (`metaAdsAnalysisTier`, `metaAdsAnalysisTierFrom`, `metaAdsAnalysisCreditId`), the `AdCreativeAnalysis` shape with a defensive `adCreativeAnalysisFrom` reader, the `meta-ads-analysis` LLM feature, and one node→identifier helper `metaAdsScrapeCreditIdFromNode` so the card badge, run total, pre-run estimator and backend quote all price count × sources × analysis through the same builder. `buildMetaAdsScrapeCreditId` gains an `analysis` tier input; `META_ADS_SCRAPE_CREDIT_COSTS` now carries the analysis SKUs.
+- a976e32: Meta Ads: advertiser mode can be driven by the `in` input — `metaAdsScrapeWireSources` emits `advertiserNames` (resolved to Page urls server-side) when advertiser mode has no picks but upstream text, `splitMetaAdsAdvertiserNames` parses one-name-per-line/comma input, and `resolveMetaAdsScrapeCreditId` counts those names as billable sources.
+- 1126801: Meta Ads: creative-format vocabulary (`META_ADS_FORMATS`, `classifyCreativeFormat`), featured-ad output helpers (`featuredMetaAdOutputs`, `clampMetaAdsFeaturedIndex`), and the node's typed `text` / `image` / `video` output handles resolve as the canonical single-media producers in `resolveEffectiveSourceType`.
+- 7f5159d: Add the Meta Ads scraper node vocabulary: `META_ADS_SCRAPE_*` constants (modes, periods, statuses, count/source ceilings, credit tiers), `splitMetaAdsPageUrls`, and the credit identifier builders `buildMetaAdsScrapeCreditId` / `resolveMetaAdsScrapeCreditId` shared by the backend guard, the reservation and the editor's credit badge.
+- 8e97188: Transcribe: a capability table for word timestamps.
+
+  `@nodaro/shared` gains `TRANSCRIBE_LANES`, `TranscribeLane`, `TRANSCRIBE_PROVIDER_CAPABILITIES`, `transcribeProvidersWithWordTimestamps()`, `transcribeLaneSupportsWordTimestamps()`, `DEFAULT_TRANSCRIBE_PROVIDER`, and `DEFAULT_TRANSCRIBE_NODE_PROVIDER`. `TRANSCRIBE_LANES` is the superset of `TRANSCRIBE_PROVIDERS` covering every transcription lane the platform implements (including the two Replicate lanes hidden from the user-facing enum but still reachable through the route default and add-captions' internal auto-transcribe). The capability table records which lanes return per-word timings: `openai/whisper` does not (it has no `word_timestamps` input in any published version, so the key is silently dropped), while `incredibly-fast-whisper` and `elevenlabs-stt` do. Callers ask the table instead of matching on a provider name — `transcribeLaneSupportsWordTimestamps(lane)` answers it for an UNTRUSTED lane id (node data, an imported workflow, a wire body), returning `false` for anything it has never heard of rather than throwing.
+
+  `DEFAULT_TRANSCRIBE_NODE_PROVIDER` is the lane a transcribe NODE with no `provider` resolves to (`elevenlabs-stt`), deliberately distinct from `DEFAULT_TRANSCRIBE_PROVIDER`, which is the `/v1/transcribe` route's legacy fallback for an absent `provider` (`whisper`) and is kept only so a pre-existing REST caller keeps billing the same id.
+
+  Structural vocabulary only — no creative content, no pricing, no behaviour change inside the package.
+
+- 74e4373: Seedance video EDIT contract for the Video to Video node. Seedance has no video-to-video endpoint — it edits a video handed to it as a _reference_ when the prompt reads as an edit instruction — so every surface dispatches that lane as a text-to-video request in edit shape, with the source clip as reference video 1.
+
+  `@nodaro/shared` adds:
+
+  - `SEEDANCE_VIDEO_EDIT_PROVIDERS` + `isSeedanceVideoEditProvider(provider)` — the models that behave this way (`seedance-2-5` today), and the type `SeedanceVideoEditProvider`.
+  - `VIDEO_TO_VIDEO_NODE_PROVIDERS` + `VideoToVideoNodeProvider` — every model the Video to Video NODE offers, i.e. `VIDEO_TO_VIDEO_PROVIDERS` plus the edit providers. `VIDEO_TO_VIDEO_PROVIDERS` (the `/v1/video-to-video` route enum) is deliberately UNCHANGED: that endpoint cannot serve these models, so a client must keep validating route requests against it.
+  - `SEEDANCE_VIDEO_EDIT_SHAPE` — the `{ aspectRatio: "adaptive", duration: -1 }` pair the edit request sends up front, so the output keeps the source clip's own ratio and length.
+  - `seedanceVideoEditCreditId(provider, resolution?)` — the credit identifier that lane reserves under (the reference-video ladder at the model's longest clip, settled down to the delivered length). One builder, so a quote can never disagree with the reservation.
+
+  `@nodaro/prompts` adds:
+
+  - `SEEDANCE_VIDEO_EDIT_PREFIX` — the `edit {video:1} as follows:\n` instruction, written with the editor reference token so it resolves through the normal reference resolver.
+  - `buildSeedanceVideoEditPrompt(prompt)` — frames a prompt as an edit of the source clip. Idempotent: a prompt that already opens with the instruction (either token spelling) is returned unchanged.
+
+  All additive — no existing export changes shape or behaviour.
+
+- d4b3145: Auto video duration. `VIDEO_DURATION_AUTO` (`-1`), `isAutoVideoDuration`, `supportsAutoVideoDuration` and `maxVideoDurationSec` are new exports, and `MODEL_CATALOG` entries gain an optional `autoDuration` capability (declared on the Seedance 2 family) — the model picks the clip length. `pricedOutputDurationSec` prices Auto at the model's longest clip, so `buildVideoCreditModelIdentifier(provider, -1, …)` returns the top duration tier instead of the cheapest one; `normalizeModelInput` / `validateModelInput` accept `-1` for a model that declares the capability. Additive — every existing duration behaves as before.
+
+### Patch Changes
+
+- a7774fc: Add the `edit` resource for the phase-1 editorial (podcast-editing) primitives.
+  `client.edit` exposes:
+
+  - `silenceDetect(input)` → `POST /v1/silence-detect` — detect silence ranges in
+    an audio/video source (keyless ffmpeg pass).
+  - `applyEdl(input)` → `POST /v1/apply-edl` — render an edit decision list into a
+    video or audio cut, with optional positional source overrides, a transcript to
+    remap, output/quality and a default crossfade.
+  - `editPlan(input)` → `POST /v1/edit-plan` (Cloud edition) — plan a
+    transcript-driven cut / clips / chapters from a timed transcript and media
+    sources.
+  - `remapTranscript(edl, transcript)` — a PURE client-side helper (no request)
+    that runs `@nodaro/shared`'s `remapTranscriptThroughEdl`.
+
+  The EDL / transcript / result vocabulary (`Edl`, `Transcript`, `EditPlanMode`,
+  `EditPlanTier`, `EdlClipSet`, `ChapterSet`, `SilenceRanges`) and the
+  `unwrapEditPlanOutput` result-normalizer are re-exported for one-dependency use.
+  Additive — no existing surface changes.
+
+  The `@nodaro/shared` patch bump carries no source change: it exists only to lift
+  the SDK's `@nodaro/shared` floor to a version that ships `edl.ts`. The new
+  resource static-imports `remapTranscriptThroughEdl` / `unwrapEditPlanOutput` from
+  `@nodaro/shared`, so pairing this SDK with an older shared (pre-`edl.ts`) would
+  fail the whole SDK at import — the changeset rewrites the dependency range so a
+  consumer can never resolve that stale sibling.
+
+- 8efa462: Serve `gpt-5.6-sol` over KIE's collapsed streaming wire (`kieCollapseStream`). KIE's non-streaming responses endpoint returned `500 server_error` for it on 2026-09-17, retiring the 2026-07-14 reading that the GPT-5.6 family is reliable non-stream; this is the same lane failure and the same remedy `gpt-6-astra` already carries.
+- a610640: Add the two commands that make the transcribe → captions path runnable from a
+  terminal:
+
+  - `nodaro audio transcribe --audio <url>` — speech to text (`--provider`,
+    `--language`, `--diarize`, `--tag-audio-events`, `--word-timestamps`). The
+    flag shape follows the rest of the `audio` group, which takes its source as
+    `--audio <url>`. `--word-timestamps` on a lane that cannot produce them is
+    refused locally with the same verdict the route gives, and the message names
+    only providers this command would itself accept.
+  - `nodaro media add-captions <videoUrl>` — burn captions in (`--text`,
+    `--captions-file`, `--style`, `--look`, `--position`, `--position-y`,
+    `--font-size`, `--font-family`, `--font-weight`, `--color`,
+    `--background-color`, `--stroke-color`, `--stroke-width`,
+    `--highlight-color`, `--uppercase`, `--no-auto-transcribe`,
+    `--transcribe-provider`, `--segments-file`). `--captions-file` takes a JSON
+    array of word-timed entries — an `audio transcribe` job's `output_data.words`
+    drops in verbatim — and `--segments-file` gives non-overlapping ranges their
+    own treatment. Both file inputs are array-guarded with a friendly message
+    naming the flag, like `edit plan --sources-file`.
+
+  Each is a thin wrapper over the SDK (`client.audio.transcribe` /
+  `client.media.addCaptions`) and honours the CLI's multi-profile auth, `--json`
+  and `--watch` conventions. Every enum a flag validates against is read from
+  `@nodaro/shared` (`ALL_CAPTION_STYLES`, `CAPTION_LOOK_IDS`,
+  `SUPPORTED_FONT_NAMES`, `TRANSCRIBE_PROVIDERS`, `TRANSCRIBE_LANES`) rather than
+  re-listed here, so a new style, look, face or lane needs no CLI edit. Note that
+  the two provider flags read DIFFERENT enums on purpose: `--provider` on
+  transcribe accepts the enabled `TRANSCRIBE_PROVIDERS`, while add-captions'
+  `--transcribe-provider` accepts every `TRANSCRIBE_LANES` member, matching what
+  each route's own Zod accepts.
+
+  The `@nodaro/shared` patch bump carries no source change: it exists only to lift
+  the CLI's `@nodaro/shared` floor to a version that ships `TRANSCRIBE_LANES` and
+  the capability helpers. The commands VALUE-import those symbols, so pairing this
+  CLI with an older shared would make the validation read `undefined` at runtime —
+  the bump rewrites the dependency range so a consumer can never resolve that
+  stale sibling.
+
 ## 3.11.0
 
 ### Minor Changes
