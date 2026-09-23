@@ -214,9 +214,9 @@ this workflow — and enforces the answer:
 
 | Route | Needs |
 |-------|-------|
-| `GET /v1/workflows/:id` | `view`. The response carries the caller's own `access`, so an editor opening a workflow they may only read gets a read-only canvas without asking twice. |
+| `GET /v1/workflows/:id` | `view`. The response carries the caller's own `access`, so an editor opening a workflow they may only read gets a read-only canvas without asking twice. A `view`-only reader does not receive a studio production's empty media slots (`stillSlots` / `clipSlots` on each `settings.studio.shots[]` entry) — they are the owner's unsubmitted drafts. `edit` and `own` do receive them, because an editor saves `settings` back whole. |
 | `GET /v1/workflows/:id/access` | `view`. Just the answer — `{ access, workspaceId, visibility, canChangeVisibility }` and never the graph, for a client that already has the workflow and only needs to know what it may do with it. |
-| `GET /v1/workflows/:id/export` | `view`. Bundled assets (`?assets=true`) stay scoped to the CALLER: being allowed to read a workflow is not being allowed to walk out with the characters and locations behind it, so a shared export comes back with the graph and without them. |
+| `GET /v1/workflows/:id/export` | `view`. Bundled assets (`?assets=true`) stay scoped to the CALLER: being allowed to read a workflow is not being allowed to walk out with the characters and locations behind it, so a shared export comes back with the graph and without them. A `view`-only reader's export leaves out the same studio empty-slot drafts. |
 | `GET /v1/workflows/:id/interface` | `view` |
 | `PATCH /v1/workflows/:id` | `edit` |
 | `POST /v1/workflows/:parentId/sub-workflows` | `edit` on the parent |

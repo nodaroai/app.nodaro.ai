@@ -67,8 +67,8 @@ export const STUDIO_SHOT_TRANSIENT_KEYS = ["pendingClips", "pendingClip", "pendi
  * Not transient — the owner's own exports and copies keep them — so they are
  * NOT on {@link STUDIO_SHOT_TRANSIENT_KEYS}. They are unsubmitted prose and
  * reference urls the owner never generated, so no OTHER reader receives them.
- * The production codec (`@nodaroai/studio-production` ≥ 0.7.0) strips the same
- * two keys for its own non-owner projection (`SLOT_DRAFT_SHOT_KEYS`).
+ * The studio codec keeps its own copy of these two keys for its own non-owner
+ * projection.
  */
 export const STUDIO_SHOT_DRAFT_KEYS = ["stillSlots", "clipSlots"] as const
 

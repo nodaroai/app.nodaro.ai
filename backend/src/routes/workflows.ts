@@ -1914,6 +1914,10 @@ export async function workflowRoutes(app: FastifyInstance) {
     )
     if (!loaded.ok) return
     const wf = loaded.row
+    // Same rule as `GET /v1/workflows/:id`: a `view` reader exports the work,
+    // never its owner's unsubmitted drafts — the studio's empty media slots
+    // (studio ruling T11 / E14). `edit` and `own` export the settings raw.
+    const settings = loaded.access === "view" ? stripStudioDraftSettings(wf.settings) : wf.settings
 
     const rawNodes = asObjectArray(wf.nodes)
     const result: WorkflowExport = {
@@ -1925,7 +1929,7 @@ export async function workflowRoutes(app: FastifyInstance) {
       // connectionId) — those come off on every export shape.
       nodes: (includeAssets ? stripUnownedRefs(rawNodes as any) : stripExportContent(rawNodes as any)) as any,
       edges: (wf.edges ?? []) as any,
-      settings: (wf.settings ?? {}) as Record<string, unknown>,
+      settings: (settings ?? {}) as Record<string, unknown>,
     }
 
     if (includeAssets) {
@@ -1939,7 +1943,7 @@ export async function workflowRoutes(app: FastifyInstance) {
       // bind entities the graph never mentions (a studio shot's PLAN carries
       // chips before anything is framed), and the import re-points exactly the
       // chips this collects.
-      const ids = collectAssetIds(rawNodes, wf.settings)
+      const ids = collectAssetIds(rawNodes, settings)
       const assetsResult = await fetchExportAssets(ids, userId)
       if ("error" in assetsResult) return sendInternalError(reply, req, assetsResult.error, "Failed to export workflow")
       result.assets = assetsResult
