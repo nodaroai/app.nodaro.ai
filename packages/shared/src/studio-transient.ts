@@ -60,6 +60,21 @@ export const STUDIO_TRANSIENT_KEYS = [
  */
 export const STUDIO_SHOT_TRANSIENT_KEYS = ["pendingClips", "pendingClip", "pendingStills"] as const
 
+/**
+ * ...and a SHOT entry's owner DRAFTS: the studio's empty media slots (studio
+ * spec 2026-09-23-media-slots-design, ruling T11 / E14).
+ *
+ * Not transient — the owner's own exports and copies keep them — so they are
+ * NOT on {@link STUDIO_SHOT_TRANSIENT_KEYS}. They are unsubmitted prose and
+ * reference urls the owner never generated, so no OTHER reader receives them.
+ * The production codec (`@nodaroai/studio-production` ≥ 0.7.0) strips the same
+ * two keys for its own non-owner projection (`SLOT_DRAFT_SHOT_KEYS`).
+ */
+export const STUDIO_SHOT_DRAFT_KEYS = ["stillSlots", "clipSlots"] as const
+
+/** Everything a shot entry loses on its way to a reader who is not its owner. */
+const STUDIO_SHOT_PRIVATE_KEYS: ReadonlyArray<string> = [...STUDIO_SHOT_TRANSIENT_KEYS, ...STUDIO_SHOT_DRAFT_KEYS]
+
 function withoutKeys(
   source: Record<string, unknown>,
   drop: ReadonlyArray<string>,
@@ -73,22 +88,22 @@ function withoutKeys(
 }
 
 /**
- * `settings.studio.shots` with every shot's in-flight markers removed.
+ * `settings.studio.shots` with the given per-shot keys removed.
  *
  * Returns the SAME array when no shot carried one, so an idle production's
  * share read allocates nothing. Anything that is not a shot-shaped object rides
  * through untouched: this runs on whatever is in the column, and a projection
  * that threw on an unexpected row would take the share read down with it.
  */
-function stripShots(value: unknown): unknown {
+function stripShots(value: unknown, drop: ReadonlyArray<string>): unknown {
   if (!Array.isArray(value)) return value
   let changed = false
   const out = value.map((entry) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry
     const shot = entry as Record<string, unknown>
-    if (!STUDIO_SHOT_TRANSIENT_KEYS.some((key) => key in shot)) return entry
+    if (!drop.some((key) => key in shot)) return entry
     changed = true
-    return withoutKeys(shot, STUDIO_SHOT_TRANSIENT_KEYS)
+    return withoutKeys(shot, drop)
   })
   return changed ? out : value
 }
@@ -112,7 +127,7 @@ export function stripStudioTransientSettings(settings: unknown): unknown {
 
   const source = studio as Record<string, unknown>
   const kept = withoutKeys(source, STUDIO_TRANSIENT_KEYS)
-  const shots = stripShots(source.shots)
+  const shots = stripShots(source.shots, STUDIO_SHOT_PRIVATE_KEYS)
   if (source.shots !== undefined) kept.shots = shots
 
   // Nothing to drop at either level — hand back the original object so an
@@ -121,4 +136,19 @@ export function stripStudioTransientSettings(settings: unknown): unknown {
     return settings
   }
   return { ...(settings as Record<string, unknown>), studio: kept }
+}
+
+/**
+ * `settings` with ONLY the studio's owner drafts removed — the bin and the
+ * in-flight markers stay. For a `view` reader's `GET /v1/workflows/:id`, which
+ * must change nothing else about the row it returns. The very same object
+ * back when no shot carries a draft.
+ */
+export function stripStudioDraftSettings(settings: unknown): unknown {
+  if (!settings || typeof settings !== "object") return settings
+  const studio = (settings as { studio?: unknown }).studio
+  if (!studio || typeof studio !== "object" || Array.isArray(studio)) return settings
+  const source = studio as Record<string, unknown>
+  const shots = stripShots(source.shots, STUDIO_SHOT_DRAFT_KEYS)
+  return shots === source.shots ? settings : { ...(settings as Record<string, unknown>), studio: { ...source, shots } }
 }

@@ -798,3 +798,32 @@ describe("GET /v1/workflows/shared-with-me", () => {
     expect(res.json().data).toEqual([])
   })
 })
+
+describe("GET /v1/workflows/:id — a `view` reader never receives the owner's studio drafts (T11)", () => {
+  const SLOTTED = { ...WORKSPACE_WORKFLOW, settings: { studio: { version: 3, shots: [
+    { id: "s1", imageNodeId: "generate-image-s1", stillSlots: [{ id: "slot-1", inputs: { prompt: "an unsent idea" } }],
+      clipSlots: [{ id: "slot-2", inputs: { prompt: "an unsent move" } }] },
+  ] } } }
+  const shotsIn = (body: string) =>
+    (JSON.parse(body) as { data: { settings: { studio: { shots: Array<Record<string, unknown>> } } } }).data.settings.studio.shots
+
+  it("drops them for `view`", async () => {
+    plugin({ access: "view" })
+    workflowRow(SLOTTED)
+    const res = await app.inject({ method: "GET", url: `/v1/workflows/${WF}`, headers: { "x-user-id": OTHER } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.access).toBe("view")
+    expect(shotsIn(res.body)).toEqual([{ id: "s1", imageNodeId: "generate-image-s1" }])
+    expect(res.body).not.toContain("an unsent")
+  })
+
+  it.each(["edit", "own"])("keeps them for `%s` — that reader saves settings back whole", async (access) => {
+    plugin({ access })
+    workflowRow(SLOTTED)
+    const res = await app.inject({ method: "GET", url: `/v1/workflows/${WF}`,
+      headers: { "x-user-id": access === "own" ? CREATOR : OTHER } })
+    expect(res.statusCode).toBe(200)
+    expect(shotsIn(res.body)[0]!.stillSlots).toHaveLength(1)
+    expect(shotsIn(res.body)[0]!.clipSlots).toHaveLength(1)
+  })
+})

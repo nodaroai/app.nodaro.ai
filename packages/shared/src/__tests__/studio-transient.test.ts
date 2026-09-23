@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest"
 
 import {
+  STUDIO_SHOT_DRAFT_KEYS,
   STUDIO_SHOT_TRANSIENT_KEYS,
   STUDIO_TRANSIENT_KEYS,
+  stripStudioDraftSettings,
   stripStudioTransientSettings,
 } from "../studio-transient.js"
 
@@ -185,6 +187,27 @@ describe("stripStudioTransientSettings", () => {
     expect(out.version).toBe(3)
   })
 
+  it("drops a shot's empty media slots — the owner's drafts, never a viewer's (T11)", () => {
+    const settings = { studio: { version: 3, shots: [
+      { id: "s1", imageNodeId: "img-1", stillSlots: [{ id: "slot-1", inputs: { prompt: "an unsent idea" } }],
+        clipSlots: [{ id: "slot-2", inputs: {} }] },
+      { id: "s2" },
+    ] } }
+    const shots = studioOf(stripStudioTransientSettings(settings)).shots
+    expect(shots).toEqual([{ id: "s1", imageNodeId: "img-1" }, { id: "s2" }])
+  })
+
+  it("stripStudioDraftSettings drops ONLY the slots — a `view` read keeps everything else", () => {
+    const settings = { studio: { version: 3, trash: [{ id: "t-1" }], shots: [
+      { id: "s1", pendingClips: [{ jobId: "job-1" }], stillSlots: [{ id: "slot-1", inputs: {} }] },
+    ] } }
+    expect(stripStudioDraftSettings(settings)).toEqual({ studio: { version: 3, trash: [{ id: "t-1" }],
+      shots: [{ id: "s1", pendingClips: [{ jobId: "job-1" }] }] } })
+    const none = { studio: { version: 3, shots: [{ id: "s1" }] } }
+    expect(stripStudioDraftSettings(none)).toBe(none)
+    expect(stripStudioDraftSettings(null)).toBeNull()
+  })
+
   it("pins the two lists — a key added to the type alone strips nothing", () => {
     // The lists are the contract: the codec's own strip re-exports them, so a
     // key that falls off here falls off there too, silently, on both sides.
@@ -201,5 +224,8 @@ describe("stripStudioTransientSettings", () => {
       "pendingClip",
       "pendingStills",
     ])
+    // The owner's drafts are a list of their own: the export projection reads
+    // the transient list, and the owner's exports keep their slots.
+    expect([...STUDIO_SHOT_DRAFT_KEYS]).toEqual(["stillSlots", "clipSlots"])
   })
 })

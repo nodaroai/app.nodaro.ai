@@ -4,7 +4,7 @@ import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../lib/cloud-
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { findDeniedNodeTypesForUser } from "../lib/availability-viewer.js"
 import { z } from "zod"
-import { stripExportContent, stripUnownedRefs, stripTransientRuntimeData, validateSubWorkflowRoutes, WORKFLOW_VISIBILITIES, type WorkflowExport } from "@nodaro/shared"
+import { stripExportContent, stripStudioDraftSettings, stripUnownedRefs, stripTransientRuntimeData, validateSubWorkflowRoutes, WORKFLOW_VISIBILITIES, type WorkflowExport } from "@nodaro/shared"
 import { publicWorkflowProjection } from "../lib/public-workflow-projection.js"
 import { supabase } from "../lib/supabase.js"
 import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../lib/default-project.js"
@@ -1276,7 +1276,14 @@ export async function workflowRoutes(app: FastifyInstance) {
     // Sent from here rather than fetched separately so the editor never has to
     // ask a second question about a workflow it just received, and so the two
     // answers cannot disagree with each other.
-    return { data: { ...toWorkflowFull(loaded.row), access: loaded.access } }
+    //
+    // A `view` reader was shown the work, not its owner's unsubmitted drafts —
+    // the studio's empty media slots (studio ruling T11 / E14). `view` only: an
+    // `edit` collaborator's editor saves `settings` back whole, so hiding the
+    // drafts from them would erase the owner's on their next save.
+    const full = toWorkflowFull(loaded.row)
+    const settings = loaded.access === "view" ? stripStudioDraftSettings(full.settings) : full.settings
+    return { data: { ...full, settings, access: loaded.access } }
   })
 
   // Public (share-by-link) read — NO auth (listed in auth.ts PUBLIC_ROUTES).

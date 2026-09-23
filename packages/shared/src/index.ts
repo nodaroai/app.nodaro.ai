@@ -1296,7 +1296,9 @@ export * from "./scene3d-render-pricing.js"
 export {
   STUDIO_TRANSIENT_KEYS,
   STUDIO_SHOT_TRANSIENT_KEYS,
+  STUDIO_SHOT_DRAFT_KEYS,
   stripStudioTransientSettings,
+  stripStudioDraftSettings,
 } from "./studio-transient.js"
 
 export * from "./scene3d-v2-edit.js"

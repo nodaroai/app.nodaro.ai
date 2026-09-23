@@ -560,6 +560,19 @@ describe("GET /v1/public/workflows/:id", () => {
     expect(data.userId).toBeUndefined()
     expect(data.projectId).toBeUndefined()
   })
+
+  it("an ordinary shared production's public read carries none of the owner's empty slots (T11)", async () => {
+    mockPublicRead({
+      ...DB_WORKFLOW_FULL,
+      settings: { studio: { shared: true, version: 3, shots: [
+        { id: "s1", stillSlots: [{ id: "slot-1", inputs: { prompt: "an unsent idea" } }], clipSlots: [{ id: "slot-2", inputs: {} }] },
+      ] } },
+    })
+    const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}` })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.settings).toEqual({ studio: { shared: true, version: 3, shots: [{ id: "s1" }] } })
+    expect(res.body).not.toContain("an unsent")
+  })
 })
 
 // ---------------------------------------------------------------------------
