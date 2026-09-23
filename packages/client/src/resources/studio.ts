@@ -25,9 +25,9 @@ export interface StudioProductionCapabilities {
     editSequencePlans?: boolean
     generateLinkedClips: boolean
     retakeLinkedClips?: boolean
-    /** The host's codec keeps a scene's empty media slots (studio codec ≥ 0.7.0). */
+    /** The host keeps a scene's empty media slots. */
     mediaSlots?: boolean
-    /** The host's codec writes clip inputs onto the clip slot (studio codec ≥ 0.8.0). */
+    /** The host keeps a clip's inputs on its clip slot. */
     clipSlotInputs?: boolean
   }
   sourceFrameReferences: boolean

@@ -1277,10 +1277,11 @@ export async function workflowRoutes(app: FastifyInstance) {
     // ask a second question about a workflow it just received, and so the two
     // answers cannot disagree with each other.
     //
-    // A `view` reader was shown the work, not its owner's unsubmitted drafts —
-    // the studio's empty media slots (studio ruling T11 / E14). `view` only: an
-    // `edit` collaborator's editor saves `settings` back whole, so hiding the
-    // drafts from them would erase the owner's on their next save.
+    // A `view` reader was shown the work, not its owner's unsubmitted drafts
+    // or runs in flight — the studio's empty media slots and per-scene run
+    // markers (studio rulings T11 / T22). `view` only: an `edit` collaborator's
+    // editor saves `settings` back whole, so hiding them from that reader would
+    // erase the owner's on their next save.
     const full = toWorkflowFull(loaded.row)
     const settings = loaded.access === "view" ? stripStudioDraftSettings(full.settings) : full.settings
     return { data: { ...full, settings, access: loaded.access } }
@@ -1915,8 +1916,9 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (!loaded.ok) return
     const wf = loaded.row
     // Same rule as `GET /v1/workflows/:id`: a `view` reader exports the work,
-    // never its owner's unsubmitted drafts — the studio's empty media slots
-    // (studio ruling T11 / E14). `edit` and `own` export the settings raw.
+    // never its owner's unsubmitted drafts or runs in flight — the studio's
+    // empty media slots and per-scene run markers (studio rulings T11 / T22).
+    // `edit` and `own` export the settings raw.
     const settings = loaded.access === "view" ? stripStudioDraftSettings(wf.settings) : wf.settings
 
     const rawNodes = asObjectArray(wf.nodes)

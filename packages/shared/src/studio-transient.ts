@@ -61,8 +61,8 @@ export const STUDIO_TRANSIENT_KEYS = [
 export const STUDIO_SHOT_TRANSIENT_KEYS = ["pendingClips", "pendingClip", "pendingStills"] as const
 
 /**
- * ...and a SHOT entry's owner DRAFTS: the studio's empty media slots (studio
- * spec 2026-09-23-media-slots-design, ruling T11 / E14).
+ * ...and a SHOT entry's owner DRAFTS: the studio's empty media slots — a slot
+ * the owner opened and filled in but has not generated from yet.
  *
  * Not transient — the owner's own exports and copies keep them — so they are
  * NOT on {@link STUDIO_SHOT_TRANSIENT_KEYS}. They are unsubmitted prose and
@@ -139,16 +139,25 @@ export function stripStudioTransientSettings(settings: unknown): unknown {
 }
 
 /**
- * `settings` with ONLY the studio's owner drafts removed — the bin and the
- * in-flight markers stay. For a `view` reader's `GET /v1/workflows/:id`, which
- * must change nothing else about the row it returns. The very same object
- * back when no shot carries a draft.
+ * `settings` with every SHOT's owner-private state removed — its empty media
+ * slots ({@link STUDIO_SHOT_DRAFT_KEYS}) and its in-flight run markers
+ * ({@link STUDIO_SHOT_TRANSIENT_KEYS}) — while the bin, the document-level
+ * markers and everything else stay.
+ *
+ * For a reader the owner let LOOK but not edit: a `view` reader's
+ * `GET /v1/workflows/:id` and `GET /v1/workflows/:id/export`, and the MCP
+ * `get_workflow_json` / `export_workflow` tools on the same access. The markers
+ * go with the slots because a viewer cannot land the owner's runs, and a
+ * marker for a run started from a slot carries that slot's unsent inputs.
+ * An editor keeps both: their editor saves `settings` back whole.
+ *
+ * The very same object back when no shot carries either.
  */
 export function stripStudioDraftSettings(settings: unknown): unknown {
   if (!settings || typeof settings !== "object") return settings
   const studio = (settings as { studio?: unknown }).studio
   if (!studio || typeof studio !== "object" || Array.isArray(studio)) return settings
   const source = studio as Record<string, unknown>
-  const shots = stripShots(source.shots, STUDIO_SHOT_DRAFT_KEYS)
+  const shots = stripShots(source.shots, STUDIO_SHOT_PRIVATE_KEYS)
   return shots === source.shots ? settings : { ...(settings as Record<string, unknown>), studio: { ...source, shots } }
 }

@@ -190,19 +190,29 @@ describe("stripStudioTransientSettings", () => {
   it("drops a shot's empty media slots — the owner's drafts, never a viewer's (T11)", () => {
     const settings = { studio: { version: 3, shots: [
       { id: "s1", imageNodeId: "img-1", stillSlots: [{ id: "slot-1", inputs: { prompt: "an unsent idea" } }],
-        clipSlots: [{ id: "slot-2", inputs: {} }] },
+        clipSlots: [{ id: "slot-2", inputs: {} }],
+        // A run started from a slot: its marker carries the slot's inputs.
+        pendingStills: [{ jobId: "job-1", startedAt: 1, slotId: "slot-1", prompt: "an unsent idea" }] },
       { id: "s2" },
     ] } }
     const shots = studioOf(stripStudioTransientSettings(settings)).shots
     expect(shots).toEqual([{ id: "s1", imageNodeId: "img-1" }, { id: "s2" }])
   })
 
-  it("stripStudioDraftSettings drops ONLY the slots — a `view` read keeps everything else", () => {
-    const settings = { studio: { version: 3, trash: [{ id: "t-1" }], shots: [
-      { id: "s1", pendingClips: [{ jobId: "job-1" }], stillSlots: [{ id: "slot-1", inputs: {} }] },
+  it("stripStudioDraftSettings drops a shot's slots AND its in-flight runs — a `view` read keeps the rest", () => {
+    // The per-shot run markers go with the slots: a viewer cannot land the
+    // owner's runs, and a slot-tagged marker carries that slot's unsent inputs.
+    // The bin and the document-level markers are not this strip's business.
+    const settings = { studio: { version: 3, trash: [{ id: "t-1" }], pendingMusic: { jobId: "job-9" }, shots: [
+      { id: "s1", pendingClips: [{ jobId: "job-1" }], pendingClip: { jobId: "job-0" },
+        pendingStills: [{ jobId: "job-2", startedAt: 1, slotId: "slot-1", prompt: "an unsent idea" }],
+        stillSlots: [{ id: "slot-1", inputs: {} }], clipSlots: [{ id: "slot-2", inputs: {} }] },
     ] } }
     expect(stripStudioDraftSettings(settings)).toEqual({ studio: { version: 3, trash: [{ id: "t-1" }],
-      shots: [{ id: "s1", pendingClips: [{ jobId: "job-1" }] }] } })
+      pendingMusic: { jobId: "job-9" }, shots: [{ id: "s1" }] } })
+    // A marker alone — no slot on the scene — goes too.
+    const runOnly = { studio: { version: 3, shots: [{ id: "s1", pendingStills: [{ jobId: "job-3" }] }] } }
+    expect(stripStudioDraftSettings(runOnly)).toEqual({ studio: { version: 3, shots: [{ id: "s1" }] } })
     const none = { studio: { version: 3, shots: [{ id: "s1" }] } }
     expect(stripStudioDraftSettings(none)).toBe(none)
     expect(stripStudioDraftSettings(null)).toBeNull()
