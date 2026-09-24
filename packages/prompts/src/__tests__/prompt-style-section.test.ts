@@ -27,7 +27,7 @@ import { getCameraFormatPromptHint } from "../camera-format.js"
 import { getFramingPromptHint } from "../framing.js"
 import { getLightingPromptHint } from "../lighting.js"
 import { getCameraMotionTerm } from "../camera-motions.js"
-import { getTransitionTerm } from "../transitions.js"
+import { renderTransitionBases } from "../transitions.js"
 
 /**
  * THE `[style]` SECTION CONTRACT, at the level it is defined: clauses in, one
@@ -97,7 +97,7 @@ describe("partitionStyleClauses — which slot a clause lands in", () => {
       ).map((c) => [c.text, c.slot]),
     )
     expect(slots.get(getCameraMotionTerm(CAMERA_MOTION))).toBe("body")
-    expect(slots.get(getTransitionTerm(TRANSITION))).toBe("body")
+    expect(slots.get(renderTransitionBases([TRANSITION])[0])).toBe("body")
     expect(slots.get(getStylePromptHint(STYLE))).toBe("film")
     expect(slots.get(getFramingPromptHint(SHOT_SIZE))).toBe("scene")
   })

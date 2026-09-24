@@ -87,12 +87,16 @@ describe("instant transitions — the composer drops the duration lever", () => 
     })
   }
 
-  it("compact match cut reads term + anti-blend clause + position only", () => {
+  it("compact match cut reads term (hint; anti-blend clause) + position only", () => {
     expect(
       composeTransitionHintFromConnections(
         "match-cut", [], [], { position: "middle", duration: "short", intensity: "natural" }, "compact",
       ),
-    ).toBe(`match cut — ${INSTANT_CUT_CLAUSE}, the transition occurs in the middle of the clip`)
+    ).toBe(
+      "match cut (the final composition of the first shot matches the opening composition of the second shot " +
+      `in shape, color, and motion, so the cut feels like a visual rhyme; ${INSTANT_CUT_CLAUSE}), ` +
+      "the transition occurs in the middle of the clip",
+    )
   })
 
   it("a non-instant row keeps its duration", () => {
@@ -114,34 +118,79 @@ describe("instant transitions — the composer drops the duration lever", () => 
 
 /**
  * Transition QA, 2026-09-24 (seedance-2-5, prod): the bare term "match cut,
- * with natural unhurried timing" still rendered as a ~1 s dissolve. An
- * explicit anti-blend instruction after the term made it a true single-frame
- * hard cut, with and without an end frame.
+ * with natural unhurried timing" still rendered as a ~1 s dissolve. Every
+ * transition in a video prompt now reads `<term> (<hint body>)`, and an
+ * all-instant pick carries the anti-blend clause inside its parentheses.
  */
-describe("instant transitions — the anti-blend clause", () => {
-  for (const mode of ["full", "compact"] as const) {
-    const base = mode === "compact" ? getTransitionTerm : getTransitionPromptHint
+describe("transitions in a video prompt — `term (hint)`", () => {
+  const LEVERS = { duration: "short", intensity: "natural" } as const
 
-    it(`${mode}: every instant row carries the clause exactly once, right after its own base`, () => {
-      for (const id of INSTANT_IDS) {
-        const r = composeTransitionHintFromConnections(id, [], [], undefined, mode)
-        expect(r).toBe(`${base(id)} — ${INSTANT_CUT_CLAUSE}`)
+  it("the six A/B strings (compact, short + natural levers)", () => {
+    const c = (id: string) => composeTransitionHintFromConnections(id, [], [], LEVERS, "compact")
+    expect(c("match-cut")).toBe(
+      "match cut (the final composition of the first shot matches the opening composition of the second shot " +
+      `in shape, color, and motion, so the cut feels like a visual rhyme; ${INSTANT_CUT_CLAUSE})`,
+    )
+    expect(c("none")).toBe(
+      `hard cut (no transition, instantaneous switch from first shot to second shot; ${INSTANT_CUT_CLAUSE})`,
+    )
+    expect(c("whip-pan")).toBe(
+      "whip pan (the camera whips sideways at high speed, smearing the frame into heavy horizontal motion blur, " +
+      "and the second shot enters already travelling in the same direction before it settles into its framing), " +
+      "lasting approximately 1 second, with natural unhurried timing",
+    )
+    expect(c("roll-transition")).toBe(
+      `camera roll transition (${getTransitionPromptHint("roll-transition")}), ` +
+      "lasting approximately 1 second, with natural unhurried timing",
+    )
+    expect(c("freeze-frame-jump")).toBe(
+      "freeze-frame time jump (motion arrests mid-action, the frame holds frozen for a beat, then snaps to a new " +
+      "moment hours or days later in the same scene with subjects in different positions), " +
+      "lasting approximately 1 second, with natural unhurried timing",
+    )
+    expect(c("shatter-glass")).toBe(
+      `shatter like glass and reform (${getTransitionPromptHint("shatter-glass")}), ` +
+      "lasting approximately 1 second, with natural unhurried timing",
+    )
+  })
+
+  for (const mode of ["full", "compact"] as const) {
+    it(`${mode}: every row reads \`term (…)\` — the hint never restates its own "<label>:" heading`, () => {
+      for (const t of TRANSITIONS) {
+        const term = getTransitionTerm(t.id)
+        const r = composeTransitionHintFromConnections(t.id, [], [], undefined, mode)
+        if (!term) { expect(r).toBe(""); continue }
+        expect(r.startsWith(`${term} (`), t.id).toBe(true)
+        expect(r.endsWith(")"), t.id).toBe(true)
+        expect(r.slice(term.length + 2).toLowerCase().startsWith(`${term.toLowerCase()}:`), t.id).toBe(false)
+        expect(r).not.toMatch(/\(\s*[^,;()]{1,60}: /)
       }
     })
 
-    it(`${mode}: an all-instant multi-pick carries it once, after the last base`, () => {
-      const r = composeTransitionHintFromConnections(["match-cut", "smash-cut"], [], [], undefined, mode)
-      expect(r).toBe(`${base("match-cut")}, and ${base("smash-cut")} — ${INSTANT_CUT_CLAUSE}`)
-      expect(r.split(INSTANT_CUT_CLAUSE).length).toBe(2)
+    it(`${mode}: every instant row carries the clause exactly once, inside its parentheses`, () => {
+      for (const id of INSTANT_IDS) {
+        const r = composeTransitionHintFromConnections(id, [], [], undefined, mode)
+        expect(r.endsWith(`; ${INSTANT_CUT_CLAUSE})`), id).toBe(true)
+        expect(r.split(INSTANT_CUT_CLAUSE).length, id).toBe(2)
+      }
     })
 
-    it(`${mode}: a mixed pick is unchanged — no clause, duration and intensity kept`, () => {
+    it(`${mode}: an all-instant multi-pick carries it once, in the last parentheses`, () => {
+      const r = composeTransitionHintFromConnections(["match-cut", "smash-cut"], [], [], undefined, mode)
+      const [a, b] = r.split(", and smash cut (")
+      expect(a.startsWith("match cut (")).toBe(true)
+      expect(a).not.toContain(INSTANT_CUT_CLAUSE)
+      expect(b.endsWith(`; ${INSTANT_CUT_CLAUSE})`)).toBe(true)
+    })
+
+    it(`${mode}: a mixed pick carries no clause and keeps duration and intensity`, () => {
       const r = composeTransitionHintFromConnections(
         ["match-cut", "cross-dissolve"], [], [], { position: "end", duration: "short", intensity: "natural" }, mode,
       )
+      expect(r).not.toContain(INSTANT_CUT_CLAUSE)
       expect(r).toBe(
-        `${base("match-cut")}, and ${base("cross-dissolve")}, the transition occurs at the end of the clip, ` +
-        "lasting approximately 1 second, with natural unhurried timing",
+        renderTransitionBases(["match-cut", "cross-dissolve"]).join(", and ") +
+        ", the transition occurs at the end of the clip, lasting approximately 1 second, with natural unhurried timing",
       )
     })
 
@@ -153,30 +202,22 @@ describe("instant transitions — the anti-blend clause", () => {
     })
   }
 
-  it("the direction-registry fold (server path) words a cut identically", () => {
-    expect(renderTransitionBases(["match-cut"], "compact")).toEqual([`match cut — ${INSTANT_CUT_CLAUSE}`])
-    expect(renderDirectionHints({ transition: "match-cut" }, { surface: "video", mode: VIDEO_HINT_MODE_DEFAULT }))
-      .toEqual([`match cut — ${INSTANT_CUT_CLAUSE}`])
-    expect(renderDirectionHints({ transition: "snap-to-black" }, { surface: "video", mode: "full" }))
-      .toEqual([`${getTransitionPromptHint("snap-to-black")} — ${INSTANT_CUT_CLAUSE}`])
-    // Mixed pick: per-id fragments, exactly as before.
-    expect(renderDirectionHints({ transition: ["match-cut", "cross-dissolve"] }, { surface: "video", mode: VIDEO_HINT_MODE_DEFAULT }))
-      .toEqual(["match cut", getTransitionTerm("cross-dissolve")])
-  })
-})
-
-describe("instant transitions — on the wire catalog", () => {
-  it("the transition picker options carry instant: true on exactly the cut rows", () => {
-    const options = getPickerCatalog("transition")?.options ?? []
-    expect(options.length).toBe(TRANSITIONS.length)
-    expect(options.filter((o) => o.instant === true).map((o) => o.id).sort()).toEqual([...INSTANT_IDS].sort())
-    // Absent (not `false`) everywhere else, so a non-transition catalog's shape is unchanged.
-    for (const o of options) if (!INSTANT_IDS.includes(o.id)) expect(o).not.toHaveProperty("instant")
+  it("`none` does not say 'hard cut' three times", () => {
+    const r = composeTransitionHintFromConnections("none", [], [], undefined, "compact")
+    expect(r.split("hard cut").length - 1).toBe(2)
   })
 
-  it("no other catalog grows the field", () => {
-    const camera = getPickerCatalog("camera-motion")?.options ?? []
-    expect(camera.length).toBeGreaterThan(0)
-    for (const o of camera) expect(o).not.toHaveProperty("instant")
+  it("the direction-registry fold (server path) words a transition identically", () => {
+    for (const mode of [VIDEO_HINT_MODE_DEFAULT, "full", "compact"] as const) {
+      expect(renderDirectionHints({ transition: "match-cut" }, { surface: "video", mode }))
+        .toEqual([composeTransitionHintFromConnections("match-cut", [], [])])
+      expect(renderDirectionHints({ transition: "whip-pan" }, { surface: "video", mode }))
+        .toEqual([composeTransitionHintFromConnections("whip-pan", [], [])])
+      // Multi-pick: one fragment per id, the clause only in the last of an all-instant pick.
+      expect(renderDirectionHints({ transition: ["match-cut", "cross-dissolve"] }, { surface: "video", mode }))
+        .toEqual(renderTransitionBases(["match-cut", "cross-dissolve"]))
+    }
+    // A transition never reaches an image prompt.
+    expect(renderDirectionHints({ transition: "match-cut" }, { surface: "image" })).toEqual([])
   })
 })

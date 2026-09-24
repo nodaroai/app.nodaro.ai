@@ -18,19 +18,21 @@ Unlike the `transition` field on the Combine Videos node (which is an FFmpeg pos
 | Intensity | select | `"auto"` | Energy/character of the transition: `auto` / `subtle` / `natural` / `dynamic` / `crazy`. Ignored for a cut (see below). |
 | Pre Text | text | empty | Free-form text prepended to the composed hint. |
 | Post Text | text | empty | Free-form text appended to the composed hint. |
-| Hint mode  | select       | `full`    | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
+| Hint mode  | select       | `full`    | Does not change how the transition itself is written — always `<name> (<description>)` (see below). It still sets the detail level of the pickers wired into `startState` / `endState`. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 All four enum fields default to `auto`, which contributes no prompt text. Setting them to non-`auto` values appends descriptive clauses to the composed hint.
 
 Position, Duration and Intensity are catalogs, not free values: the `transition` picker catalog exposes them as `dimensions` beside its `options` (`GET /v1/picker-catalogs/transition`, `client.pickerCatalogs.get("transition")`, the MCP `get_picker_catalog` tool, or `TRANSITION_POSITIONS` / `TRANSITION_DURATIONS` / `TRANSITION_INTENSITIES` from `@nodaro/prompts`), each row carrying the exact clause it injects. The [Character FX](./character-fx.md) node has the same three fields with the same ids but its own wording — read each node's own rows. See [Parameter Picker Catalogs](../../picker-catalogs.md#single-dimension-pickers-with-secondary-parameters-transition-character-fx).
 
+**How a transition reads in the video prompt.** Each picked transition is written as its short name followed by the full description of how it plays out, in parentheses: `<name> (<description>)`. For example, `whip pan (the camera whips sideways at high speed, smearing the frame into heavy horizontal motion blur, and the second shot enters already travelling in the same direction before it settles into its framing)`. The name alone was not enough for video models to perform the transition. The description does not repeat a leading "name:" heading, and a transition whose description is only its name is written as the name alone. Position, Duration and Intensity follow the parentheses: `…), lasting approximately 1 second, with natural unhurried timing`. This is the same in both hint modes, and the same for a transition sent in the `direction` field of a video request. Transitions never reach image prompts.
+
 **Cuts are worded as true hard cuts.** Eight transitions are cuts — the change happens between two frames: `none` (hard cut), `snap-to-black`, `match-cut`, `smash-cut`, `seamless-match`, `jump-cut`, `jump-match` and `action-relay`. When every picked transition is a cut:
 
-- The transition text is followed, once, by an explicit anti-blend instruction — `match cut — an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend`. On its own, the name of a cut is often rendered as a short dissolve; with this instruction, video models render a true single-frame cut. Each cut keeps its own meaning (a match cut still matches shapes; snap to black still holds black for a beat).
+- The parentheses end, once, with an explicit anti-blend instruction: `match cut (the final composition of the first shot matches the opening composition of the second shot in shape, color, and motion, so the cut feels like a visual rhyme; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)`. Without it, video models often render a cut as a short dissolve. With two cuts picked, the instruction appears once, in the second one's parentheses.
 - Duration and Intensity are dropped from the prompt. Both describe how a transition plays out over time ("lasting approximately 1 second", "with natural unhurried timing"), and on a cut either one makes video models blend the two images instead of cutting.
 - Position still applies — where the cut lands is a real choice.
 
-When two transitions are picked and only one is a cut, nothing changes: Duration and Intensity are kept and no anti-blend instruction is added. The same wording applies to a transition sent in the `direction` field of a video request. The picker catalog marks these rows `instant: true` on their options, and `@nodaro/prompts` exports `isInstantTransition(id)`, so a client can hide the Duration and Intensity controls for them.
+When two transitions are picked and only one is a cut, no anti-blend instruction is added and Duration and Intensity are kept. The picker catalog marks the cut rows `instant: true` on their options, and `@nodaro/prompts` exports `isInstantTransition(id)`, so a client can hide the Duration and Intensity controls for them.
 
 ## Catalog (82 entries across 8 categories)
 
@@ -49,7 +51,7 @@ Two defaults round out the catalog: `auto` (let the model choose) and `none` (ha
 
 ## Multi-pick
 
-Up to 2 transitions can be selected and compounded (`action-fx` parity). The composer joins their prompt hints with `", and "`. Examples:
+Up to 2 transitions can be selected and compounded (`action-fx` parity). Each is written as `<name> (<description>)` and the two are joined with `", and "`. Examples:
 - `["smash-cut", "white-flash"]` — a jarring smash cut blended with a camera-flash bloom.
 - `["fast-forward-day-night", "color-invert"]` — time accelerates with a color-flip moment.
 
@@ -64,7 +66,7 @@ The node has two input handles that accept any upstream parameter picker (Tone, 
 
 Worked example with `fast-forward-day-night`, position=`end`, duration=`medium`, intensity=`dynamic`, startState wired to `[Tone: "warm golden morning light"]`, endState wired to `[Tone: "deep blue moonlit night"]`:
 
-> *"fast-forward time-lapse transition: the sun visibly arcs across the sky, shadows sweep, clouds streak, sky shifts from daylight blue through golden hour to deep night, stars emerge, all while the framing and camera position remain locked on the same scene, the transition occurs at the end of the clip, lasting approximately 2 seconds, with dynamic energy and assertive flourish, starting from warm golden morning light, ending at deep blue moonlit night"*
+> *"day-to-night time-lapse (the sun visibly arcs across the sky, shadows sweep, clouds streak, sky shifts from daylight blue through golden hour to deep night, stars emerge, all while framing and camera position remain locked on the same scene), the transition occurs at the end of the clip, lasting approximately 2 seconds, with dynamic energy and assertive flourish, starting from warm golden morning light, ending at deep blue moonlit night"*
 
 ## Inputs & Outputs
 

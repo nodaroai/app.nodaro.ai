@@ -59,7 +59,7 @@ export interface Transition {
    *
    * The bare term is not enough on its own either: "match cut" still came back
    * as a ~1 s superimposition in prod QA (seedance-2-5). The composer therefore
-   * follows an all-instant pick with `INSTANT_CUT_CLAUSE`, once — the explicit
+   * puts `INSTANT_CUT_CLAUSE` inside an all-instant pick's parentheses, once — the explicit
    * anti-blend instruction that made the model render a true single-frame cut.
    */
   readonly instant?: boolean
@@ -354,11 +354,11 @@ export function isInstantTransition(
 }
 
 /**
- * The anti-blend instruction that follows an all-instant transition pick —
- * the ONE place this sentence lives (see `Transition.instant`). Each row keeps
- * its own meaning in its term/hint (a match cut still matches shapes, snap to
- * black still holds black for a beat); this clause only forbids the blend a
- * video model otherwise puts between the two images. Measured on prod with
+ * The anti-blend instruction an all-instant transition pick carries — the ONE
+ * place this sentence lives (see `Transition.instant`). Each row keeps its own
+ * meaning in its own hint (a match cut still matches shapes, snap to black
+ * still holds black for a beat); this clause only forbids the blend a video
+ * model otherwise puts between the two images. Measured on prod with
  * seedance-2-5: with it, a match cut renders as a true single-frame hard cut,
  * with and without an end frame; without it, as a ~1 s dissolve.
  */
@@ -366,33 +366,79 @@ export const INSTANT_CUT_CLAUSE =
   "an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend"
 
 /**
- * The transition BASE fragments for a pick — one per id that resolves to a
- * non-empty hint (the `term` in compact mode, the full `promptHint`
- * otherwise), in pick order. When EVERY contributing id is instant, the last
- * fragment is followed by ` — ${INSTANT_CUT_CLAUSE}`.
+ * A short "<label>: " heading at the head of a hint ("match cut: …", "whip pan
+ * transition: …", "fast-forward time-lapse transition: …"). At most five words
+ * with no clause punctuation, so a colon deep inside a sentence never matches.
+ */
+const LEADING_LABEL = /^\s*((?:[^\s:,;.()]+\s+){0,4}[^\s:,;.()]+)\s*:\s+/
+
+const normalizePhrase = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, " ")
+
+/**
+ * The hint BODY that goes inside a transition's parentheses: the promptHint
+ * with its leading "<label>:" heading removed (the term already names it) and
+ * any comma-separated item that merely restates the term dropped (`none`'s
+ * "no transition, hard cut, instantaneous switch …" loses its "hard cut").
+ */
+function transitionHintBody(id: string, term: string): string {
+  const hint = getTransitionPromptHint(id).replace(LEADING_LABEL, "").trim()
+  const t = normalizePhrase(term)
+  return hint
+    .split(/,\s*/)
+    .filter((item) => normalizePhrase(item) !== t)
+    .join(", ")
+    .trim()
+}
+
+/**
+ * One picked transition as a VIDEO prompt reads it: `<term> (<hint body>)`.
+ * The term names the move in the editor's own words; the parentheses carry the
+ * model-facing mechanism, which the term alone does not convey (a bare "match
+ * cut" rendered as a dissolve on prod). `withCutClause` appends
+ * `; INSTANT_CUT_CLAUSE` inside the parentheses. A row whose hint is just its
+ * term (or empty) renders as the term alone; an unknown id or "auto" as "".
+ */
+function transitionFragment(id: string, withCutClause: boolean): string {
+  const term = getTransitionTerm(id)
+  if (!term) return ""
+  const inner = [transitionHintBody(id, term), withCutClause ? INSTANT_CUT_CLAUSE : ""]
+    .filter((part) => part.length > 0)
+    .join("; ")
+  return inner.length > 0 && normalizePhrase(inner) !== normalizePhrase(term)
+    ? `${term} (${inner})`
+    : term
+}
+
+/**
+ * The transition BASE fragments for a pick — one `<term> (<hint body>)` per id
+ * that resolves to a term, in pick order. When EVERY contributing id is
+ * instant, the LAST fragment's parentheses also carry `; INSTANT_CUT_CLAUSE`
+ * (once per pick — two cuts picked together are still one cut). A mixed pick
+ * carries no clause: its non-cut is meant to blend.
  *
- * The clause is attached to the fragment rather than emitted as its own: the
- * cap-aware assemblers shed whole fragments from the tail, and a lone
- * anti-blend fragment shed away from its term would leave exactly the bare
- * "match cut" that renders as a dissolve.
+ * The same text in both hint modes. A transition only ever reaches a VIDEO
+ * prompt (the registry row is `surface: "video"`; the canvas node is in
+ * `VIDEO_ONLY_PARAMETER_NODE_TYPES`), and there the bare compact term was not
+ * enough to steer the model, so the mode no longer changes a transition.
  *
- * Shared by `composeTransitionHintFromConnections` (the canvas transition
- * node) and the direction registry's `transition` row (the server fold of
- * `direction.transition`), so both paths word a cut identically.
+ * Each fragment is ONE string, parentheses included: the cap-aware assemblers
+ * shed whole fragments from the tail, so a fragment is kept or dropped whole
+ * and can never lose its hint or its clause on its own.
+ *
+ * Shared by `composeTransitionHintFromConnections` (the canvas transition node,
+ * Studio's transition clauses) and the direction registry's `transition` row
+ * (the server fold of `direction.transition`), so both paths word a transition
+ * identically.
  */
 export function renderTransitionBases(
   ids: ReadonlyArray<string>,
-  mode: PickerHintMode = "full",
+  _mode: PickerHintMode = "full",
 ): string[] {
-  const resolveBase = mode === "compact" ? getTransitionTerm : getTransitionPromptHint
-  // Only ids that contribute a base hint count — a no-op "auto" beside a cut
+  // Only ids that contribute a fragment count — a no-op "auto" beside a cut
   // must not make the pick look non-instant.
-  const picked = ids.filter((id) => resolveBase(id).length > 0)
-  const bases = picked.map(resolveBase)
-  if (bases.length > 0 && isInstantTransition(picked)) {
-    bases[bases.length - 1] = `${bases[bases.length - 1]} — ${INSTANT_CUT_CLAUSE}`
-  }
-  return bases
+  const picked = ids.filter((id) => getTransitionTerm(id).length > 0)
+  const instant = isInstantTransition(picked)
+  return picked.map((id, i) => transitionFragment(id, instant && i === picked.length - 1))
 }
 
 // ---------------------------------------------------------------------------
@@ -474,18 +520,17 @@ const INTENSITY_CLAUSES = clausesOf(TRANSITION_INTENSITIES)
  *
  * Behavior:
  * - 0 hints (no transition, empty array, or all-empty hints) → ""
- * - n base hints joined with ", and "
+ * - each pick rendered `<term> (<hint body>)` (`renderTransitionBases`),
+ *   n picks joined with ", and "
  * - Timing/start/end clauses apply ONCE at the outer layer, not per-id
  * - When every picked id is instant (a cut — see `isInstantTransition`) the
- *   base carries `INSTANT_CUT_CLAUSE` once, after the term(s), and the
+ *   last base's parentheses carry `INSTANT_CUT_CLAUSE` once, and the
  *   duration and intensity clauses are dropped; position still applies
  * - null input is treated like undefined (falsy short-circuit → returns "")
  *
- * @param mode `"compact"` builds the base from each transition's short
- *   professional `term` ("hard cut") instead of its full mechanism paragraph.
- *   Everything else — the ", and " multi-pick join, the position/duration/
- *   intensity clauses, and the "starting from"/"ending at" clauses — is
- *   emitted identically in both modes.
+ * @param mode Accepted for the picker-hint signature; a transition composes
+ *   the same text in both modes — each pick as `<term> (<hint body>)`, see
+ *   `renderTransitionBases`.
  */
 export function composeTransitionHintFromConnections(
   transitionId: string | ReadonlyArray<string> | undefined,
@@ -497,13 +542,10 @@ export function composeTransitionHintFromConnections(
   const ids = Array.isArray(transitionId)
     ? Array.from(new Set(transitionId)).slice(0, 2)
     : transitionId ? [transitionId] : []
-  // ONLY the base fragment swaps in compact mode — the multi-pick join, the
-  // timing clauses and the start/end clauses below are identical either way.
   const baseHints = renderTransitionBases(ids, mode)
   if (baseHints.length === 0) return ""
-  // Same "contributes a base hint" filter `renderTransitionBases` applies.
-  const resolveBase = mode === "compact" ? getTransitionTerm : getTransitionPromptHint
-  const instant = isInstantTransition(ids.filter((id) => resolveBase(id).length > 0))
+  // Same "contributes a fragment" filter `renderTransitionBases` applies.
+  const instant = isInstantTransition(ids.filter((id) => getTransitionTerm(id).length > 0))
 
   const combinedBase = baseHints.join(", and ")
   const parts: string[] = [combinedBase]
