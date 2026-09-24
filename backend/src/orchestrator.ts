@@ -7,6 +7,7 @@
 
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
 import { loadOverlay } from "./lib/overlay/load.js"
+import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { loadAvailabilityOverrides } from "./lib/availability-override.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { beginWorkerDrain, SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
@@ -25,6 +26,7 @@ process.on("uncaughtException", (err) => {
 // orchestrator worker in server.ts is already covered by buildApp's loadOverlay.
 // No-op + byte-identical when NODARO_OVERLAY_PACKAGE is unset.
 await loadOverlay()
+await initializeExternalWallet(true)
 
 // Mainline prompt policies run AFTER the overlay's (registration order):
 // the minor-age floor is a platform safety invariant, not deployment content.
