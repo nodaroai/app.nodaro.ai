@@ -203,7 +203,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "zoom-into-mirror",  label: "Zoom Into Mirror",     category: "portal", description: "Push into mirror, scene inside reflection",
     promptHint: "the camera pushes toward a mirror in the scene, the mirror's reflection fills the frame, and the camera passes through the mirror surface into the reflected world which becomes the new scene" },
   { id: "zoom-into-screen",  label: "Zoom Into Screen",     category: "portal", description: "Push into TV/phone screen",
-    promptHint: "the camera pushes toward a screen visible in the scene (TV, phone, monitor), the screen's image fills the frame, and the camera passes through into that image which becomes the new scene" },
+    promptHint: "the camera pushes toward a screen visible in the scene, such as a TV, phone or monitor, the screen's image fills the frame, and the camera passes through into that image which becomes the new scene" },
   { id: "zoom-into-book",    label: "Zoom Into Book",       category: "portal", description: "Push into book page illustration",
     promptHint: "the camera pushes down into an illustrated page in a book, the illustration grows to fill the frame, and the illustration comes alive as the new scene" },
   { id: "walk-through-door", label: "Walk Through Doorway", category: "portal", description: "Through doorway into new scene",
@@ -369,6 +369,9 @@ export const INSTANT_CUT_CLAUSE =
  * A short "<label>: " heading at the head of a hint ("match cut: …", "whip pan
  * transition: …", "fast-forward time-lapse transition: …"). At most five words
  * with no clause punctuation, so a colon deep inside a sentence never matches.
+ * ANY such heading is stripped — including one on a catalog-pack row — because
+ * the term already names the move (documented in
+ * `docs/design/catalog-pack-seam.md` and `docs/nodes/parameters/transition.md`).
  */
 const LEADING_LABEL = /^\s*((?:[^\s:,;.()]+\s+){0,4}[^\s:,;.()]+)\s*:\s+/
 
@@ -412,9 +415,11 @@ function transitionFragment(id: string, withCutClause: boolean): string {
 /**
  * The transition BASE fragments for a pick — one `<term> (<hint body>)` per id
  * that resolves to a term, in pick order. When EVERY contributing id is
- * instant, the LAST fragment's parentheses also carry `; INSTANT_CUT_CLAUSE`
- * (once per pick — two cuts picked together are still one cut). A mixed pick
- * carries no clause: its non-cut is meant to blend.
+ * instant, the FIRST fragment's parentheses also carry `; INSTANT_CUT_CLAUSE`
+ * (once per pick — two cuts picked together are still one cut). FIRST, not
+ * last: the direction fold sheds fragments from the TAIL under a provider cap,
+ * so the clause rides the fragment that survives longest. A mixed pick carries
+ * no clause: its non-cut is meant to blend.
  *
  * The same text in both hint modes. A transition only ever reaches a VIDEO
  * prompt (the registry row is `surface: "video"`; the canvas node is in
@@ -438,7 +443,7 @@ export function renderTransitionBases(
   // must not make the pick look non-instant.
   const picked = ids.filter((id) => getTransitionTerm(id).length > 0)
   const instant = isInstantTransition(picked)
-  return picked.map((id, i) => transitionFragment(id, instant && i === picked.length - 1))
+  return picked.map((id, i) => transitionFragment(id, instant && i === 0))
 }
 
 // ---------------------------------------------------------------------------
@@ -524,7 +529,7 @@ const INTENSITY_CLAUSES = clausesOf(TRANSITION_INTENSITIES)
  *   n picks joined with ", and "
  * - Timing/start/end clauses apply ONCE at the outer layer, not per-id
  * - When every picked id is instant (a cut — see `isInstantTransition`) the
- *   last base's parentheses carry `INSTANT_CUT_CLAUSE` once, and the
+ *   first base's parentheses carry `INSTANT_CUT_CLAUSE` once, and the
  *   duration and intensity clauses are dropped; position still applies
  * - null input is treated like undefined (falsy short-circuit → returns "")
  *

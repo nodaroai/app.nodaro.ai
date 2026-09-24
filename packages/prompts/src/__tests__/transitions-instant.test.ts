@@ -12,6 +12,7 @@ import {
 } from "../transitions.js"
 import { getPickerCatalog } from "../picker-catalogs.js"
 import { VIDEO_HINT_MODE_DEFAULT, renderDirectionHints } from "../direction-registry.js"
+import { composeVideoPromptText } from "../assemble-video-input.js"
 
 /**
  * F5 (transition QA, 2026-09-22): a duration clause on a cut ("match cut, …,
@@ -175,12 +176,12 @@ describe("transitions in a video prompt — `term (hint)`", () => {
       }
     })
 
-    it(`${mode}: an all-instant multi-pick carries it once, in the last parentheses`, () => {
+    it(`${mode}: an all-instant multi-pick carries it once, in the first parentheses`, () => {
       const r = composeTransitionHintFromConnections(["match-cut", "smash-cut"], [], [], undefined, mode)
       const [a, b] = r.split(", and smash cut (")
       expect(a.startsWith("match cut (")).toBe(true)
-      expect(a).not.toContain(INSTANT_CUT_CLAUSE)
-      expect(b.endsWith(`; ${INSTANT_CUT_CLAUSE})`)).toBe(true)
+      expect(a.endsWith(`; ${INSTANT_CUT_CLAUSE})`)).toBe(true)
+      expect(b).not.toContain(INSTANT_CUT_CLAUSE)
     })
 
     it(`${mode}: a mixed pick carries no clause and keeps duration and intensity`, () => {
@@ -213,11 +214,29 @@ describe("transitions in a video prompt — `term (hint)`", () => {
         .toEqual([composeTransitionHintFromConnections("match-cut", [], [])])
       expect(renderDirectionHints({ transition: "whip-pan" }, { surface: "video", mode }))
         .toEqual([composeTransitionHintFromConnections("whip-pan", [], [])])
-      // Multi-pick: one fragment per id, the clause only in the last of an all-instant pick.
+      // Multi-pick: one fragment per id, the clause only in the first of an all-instant pick.
       expect(renderDirectionHints({ transition: ["match-cut", "cross-dissolve"] }, { surface: "video", mode }))
         .toEqual(renderTransitionBases(["match-cut", "cross-dissolve"]))
     }
     // A transition never reaches an image prompt.
     expect(renderDirectionHints({ transition: "match-cut" }, { surface: "image" })).toEqual([])
+  })
+
+  it("under a prompt cap, the tail-shed keeps the anti-blend clause on a two-cut pick", () => {
+    const direction = { transition: ["match-cut", "none"] }
+    const [first, second] = renderTransitionBases(["match-cut", "none"])
+    expect(first.endsWith(`; ${INSTANT_CUT_CLAUSE})`)).toBe(true)
+    expect(second).not.toContain(INSTANT_CUT_CLAUSE)
+    const full = composeVideoPromptText("a knight", direction)!
+    expect(full).toContain(second)
+    // A cap the whole fold does not fit, but the first fragment does: the second
+    // cut is shed and the clause survives with the first. (With the clause on
+    // the LAST fragment, this shed dropped it.)
+    for (const cap of [full.length - 1, `a knight. ${first}`.length]) {
+      const shed = composeVideoPromptText("a knight", direction, undefined, { cap })!
+      expect(shed.length).toBeLessThanOrEqual(cap)
+      expect(shed).not.toContain(second)
+      expect(shed).toContain(INSTANT_CUT_CLAUSE)
+    }
   })
 })
