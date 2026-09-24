@@ -164,7 +164,9 @@ describe("transitions in a video prompt — `term (hint)`", () => {
         expect(r.startsWith(`${term} (`), t.id).toBe(true)
         expect(r.endsWith(")"), t.id).toBe(true)
         expect(r.slice(term.length + 2).toLowerCase().startsWith(`${term.toLowerCase()}:`), t.id).toBe(false)
-        expect(r).not.toMatch(/\(\s*[^,;()]{1,60}: /)
+        // `rewind` opens with "reverse motion:" on purpose: that is the exact wording that won the A/B
+        // (descab4 C3), and it is a description lead-in, not the row's own "<label>:" heading.
+        if (t.id !== "rewind") expect(r, t.id).not.toMatch(/\(\s*[^,;()]{1,60}: /)
       }
     })
 
