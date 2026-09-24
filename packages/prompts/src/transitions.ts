@@ -137,7 +137,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "rewind",                  label: "Rewind",                     category: "time", description: "Time reverses, motion plays backward",
     promptHint: "rewind transition: time reverses and all motion plays smoothly backward, water flows up, debris reassembles, the subject's recent actions undo, with a faint VHS-rewind tracking distortion at the edges", term: "reverse-motion rewind" },
   { id: "freeze-frame-jump",       label: "Freeze-Frame Jump",          category: "time", description: "Action freezes, jumps forward in time",
-    promptHint: "freeze-frame transition: motion arrests mid-action, the frame holds frozen for a beat, then snaps to a new moment hours or days later in the same scene with subjects in different positions", term: "freeze-frame time jump" },
+    promptHint: "freeze-frame transition: all motion stops mid-action and the picture holds still for a beat; only then does it jump to the same view hours or days later, everything in new positions, and motion resumes", term: "freeze-frame time jump" },
   { id: "weather-shift",           label: "Weather Shift",              category: "time", description: "Same scene through changing weather",
     promptHint: "accelerated weather transition: same scene, framing locked — clear sky darkens to storm clouds, rain begins and intensifies then clears, sun returns through breaking clouds", term: "weather time-lapse" },
   { id: "flashback",               label: "Flashback",                  category: "time", description: "Memory-flashback into a past moment of the subject",
