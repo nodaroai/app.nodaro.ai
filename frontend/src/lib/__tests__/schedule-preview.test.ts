@@ -70,7 +70,10 @@ describe("runs per day and the next runs", () => {
     // the window ends at 06:30:29.999 tomorrow, so tomorrow's 06:30 run counts
     // (a window a whole minute short would stop at 06:29 and read 95)
     expect(scheduleRunsPerDay(every15, "UTC", at("2026-09-24T06:30:30Z"))).toBe(96)
-  })
+    // 2,880 day-long walks: ~6 s under coverage on a busy CI runner, past
+    // vitest's 5 s default (it failed main that way on 2026-09-24). The sweep of
+    // EVERY minute is the property, so it gets the time rather than fewer minutes.
+  }, 30_000)
 
   it("counts the next 24 hours", () => {
     expect(scheduleRunsPerDay(every20, "UTC", at("2026-07-01T06:30:00Z"))).toBe(72)

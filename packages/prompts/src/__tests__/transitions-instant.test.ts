@@ -138,20 +138,20 @@ describe("transitions in a video prompt — `term (hint)`", () => {
     expect(c("whip-pan")).toBe(
       "whip pan (the camera whips sideways at high speed, smearing the frame into heavy horizontal motion blur, " +
       "and the second shot enters already travelling in the same direction before it settles into its framing), " +
-      "lasting approximately 1 second, with natural unhurried timing",
+      "lasting approximately 1 second, with natural timing",
     )
     expect(c("roll-transition")).toBe(
       `camera roll transition (${getTransitionPromptHint("roll-transition")}), ` +
-      "lasting approximately 1 second, with natural unhurried timing",
+      "lasting approximately 1 second, with natural timing",
     )
     expect(c("freeze-frame-jump")).toBe(
-      "freeze-frame time jump (motion arrests mid-action, the frame holds frozen for a beat, then snaps to a new " +
-      "moment hours or days later in the same scene with subjects in different positions), " +
-      "lasting approximately 1 second, with natural unhurried timing",
+      "freeze-frame time jump (all motion stops mid-action and the picture holds still for a beat; only then does it " +
+      "jump to the same view hours or days later, everything in new positions, and motion resumes), " +
+      "lasting approximately 1 second, with natural timing",
     )
     expect(c("shatter-glass")).toBe(
       `shatter like glass and reform (${getTransitionPromptHint("shatter-glass")}), ` +
-      "lasting approximately 1 second, with natural unhurried timing",
+      "lasting approximately 1 second, with natural timing",
     )
   })
 
@@ -191,7 +191,7 @@ describe("transitions in a video prompt — `term (hint)`", () => {
       expect(r).not.toContain(INSTANT_CUT_CLAUSE)
       expect(r).toBe(
         renderTransitionBases(["match-cut", "cross-dissolve"]).join(", and ") +
-        ", the transition occurs at the end of the clip, lasting approximately 1 second, with natural unhurried timing",
+        ", the transition occurs at the end of the clip, lasting approximately 1 second, with natural timing",
       )
     })
 

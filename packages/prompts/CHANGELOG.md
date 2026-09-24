@@ -1,5 +1,38 @@
 # @nodaro/prompts
 
+## 1.25.0
+
+### Minor Changes
+
+- 6caa3f2: Camera Motion picker: every option now sends its lab-approved wording.
+
+  The remaining 19 `camera-motions` options take the injections approved in the
+  Camera Motion Lab — each tested on Seedance 2.5 from a base frame built for its
+  family: static, handheld, steadicam, handheld vlog, gentle drift, parallax,
+  dutch angle, full 360 spin, Ronin glide, serpentine track, POV walk, aerial,
+  helicopter, fly over, POV, rack focus, screen tap, phone flip and over the
+  shoulder. The texture moves (handheld, steadicam, vlog, drift) carry an
+  explicit hold-position clause, the transitions describe only what the frame
+  does, and POV holds a walking pace. All 64 buildable options now send approved
+  wording; `auto`, `boom-up` and `boom-down` are unchanged (never built).
+
+  The compact terms of `screen-tap` and `phone-flip` no longer name a physical
+  trigger ("finger-tap", "phone"): the model drew one into the scene.
+
+- e3bd84c: Transition wording round 2.
+
+  - `aging` and `zoom-into-mouth` have new descriptions. Aging now reads `the subject visibly ages forward - fine lines deepen into wrinkles, hair greys to silver, posture settles - while the framing stays unchanged`; zoom into mouth no longer mentions the throat (`… and the camera passes through into the new scene …`).
+  - A cut (every picked transition `instant`) with position `full` no longer adds "the transition spans the entire clip" — a single-frame cut spans nothing. `start` / `middle` / `end` on a cut, and every position on a non-cut, are unchanged.
+  - `composeTransitionHintFromConnections` takes an optional sixth argument, `{ scope: "shot" }`, for a hint folded into one shot's time window of a multi-shot prompt: the position clause then says "of this shot" instead of "of the clip" (`the transition occurs in the middle of this shot`). Without it the wording is unchanged. New exported types `TransitionHintScope` and `TransitionHintOptions`.
+
+### Patch Changes
+
+- ae2594b: Transition `freeze-frame-jump` gets a new description: all motion stops mid-action and the picture holds still for a beat; only then does it jump to the same view hours or days later, everything in new positions, and motion resumes. It stays a timed transition (not a cut), so its duration and intensity levers are unchanged.
+- 91bf43d: Transition timing wording.
+
+  - Intensity `natural` on a transition now reads `with natural timing` (was `with natural unhurried timing`). Character FX keeps its own `with natural unhurried timing`. A cut still drops the intensity clause.
+  - With `{ scope: "shot" }`, position `full` on a transition that is not a cut reads `the transition spans this entire shot` instead of `the transition spans the entire clip`. Without the option the wording is unchanged, and a cut with `full` still adds no position clause.
+
 ## 1.24.0
 
 ### Minor Changes
