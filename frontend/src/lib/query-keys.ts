@@ -212,7 +212,7 @@ export const queryKeys = {
   telegramAccounts: {
     all: ["telegram-accounts"] as const,
     list: () => ["telegram-accounts", "list"] as const,
-    consent: () => ["telegram-accounts", "consent"] as const,
+    consent: (locale: string) => ["telegram-accounts", "consent", locale] as const,
   },
 
   // Developer Apps (OAuth)

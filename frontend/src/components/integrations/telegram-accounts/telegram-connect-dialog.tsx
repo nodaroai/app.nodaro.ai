@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useT } from "@/lib/i18n"
+import { useUserLocale } from "@/lib/locale-store"
 import { getTelegramConsent } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 import { ConnectForm, EMPTY_FORM, canSubmit, normalizePhone, type ConnectFormValues } from "./connect-form"
@@ -42,9 +43,11 @@ export function TelegramConnectDialog({ open, onOpenChange, onConnected }: Teleg
   const [values, setValues] = useState<ConnectFormValues>(EMPTY_FORM)
   const [code, setCode] = useState("")
   const [password, setPassword] = useState("")
+  // The terms in the app's language; one version covers every translation.
+  const locale = useUserLocale()
   const consent = useQuery({
-    queryKey: queryKeys.telegramAccounts.consent(),
-    queryFn: getTelegramConsent,
+    queryKey: queryKeys.telegramAccounts.consent(locale),
+    queryFn: () => getTelegramConsent(locale),
     enabled: open,
     staleTime: 5 * 60_000,
   })
