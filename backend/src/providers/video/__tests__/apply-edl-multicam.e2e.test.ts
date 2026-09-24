@@ -340,8 +340,7 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
     // from it — one starting exactly at its origin reads its first frame — and
     // the neighbouring shape, a segment starting 0.5 s before it exists, is
     // refused at ingress naming the segment (the honest-window rule, before
-    // anything is reserved — ingress IS the guard here: the executor itself
-    // would clamp that read to the source's first frame, `Math.max(0, …)`).
+    // anything is reserved; the executor's window check refuses it too).
     //   s0 Q [2.0,3.0) → Q src [2.5,3.5): M15 Y15;   s1 L [4.0,5.3) → L src [0,1.3): R30 G9
     //   s2 Q [5.3,6.0) → Q src [5.8,6.5): M6 Y15;    s3 L [6.5,7.7) → L src [2.5,3.7): B15 R21
     const lateCam = (s1InMs: number): Edl => ({

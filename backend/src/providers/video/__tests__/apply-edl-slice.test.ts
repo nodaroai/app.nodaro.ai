@@ -23,6 +23,7 @@ const EDL: Edl = {
 
 const OPTS: SliceOptions = {
   output: "video",
+  quality: "final",
   target: { width: 320, height: 240 },
   fps: 30,
   chunkStartSec: 0,
@@ -290,5 +291,23 @@ describe("a chunk's picture, its gridHold and the next chunk's start agree — e
       expect(endFrameOfHold(g), `${JSON.stringify(segs)} @${fps} from ${chunkStartSec}`).toBe(expected)
     }
     expect(ties).toBeGreaterThan(20) // the generator really lands on exact half-frame ties
+  })
+})
+
+describe("the encoder follows the render's quality, not its canvas size (A1)", () => {
+  const encoder = (c: ReturnType<typeof cmd>) => {
+    const a = c.outputArgs
+    return { preset: a[a.indexOf("-preset") + 1], crf: a[a.indexOf("-crf") + 1] }
+  }
+  it("a FINAL render of a ≤720p canvas encodes at delivery quality — the old height rule gave it the proxy encoder", () => {
+    expect(encoder(cmd({ quality: "final", target: { width: 1280, height: 720 } }))).toEqual({ preset: "fast", crf: "18" })
+    expect(encoder(cmd({ quality: "final", target: { width: 320, height: 240 } }))).toEqual({ preset: "fast", crf: "18" })
+  })
+  it("a PROXY render encodes fast, whatever its canvas", () => {
+    expect(encoder(cmd({ quality: "proxy", target: { width: 1280, height: 720 } }))).toEqual({ preset: "veryfast", crf: "26" })
+    expect(encoder(cmd({ quality: "proxy", target: { width: 640, height: 360 } }))).toEqual({ preset: "veryfast", crf: "26" })
+  })
+  it("the resume key moves with the quality (a proxy chunk is never resumed into a final render)", () => {
+    expect(sliceFingerprint(cmd({ quality: "proxy" }), EDL, "v")).not.toBe(sliceFingerprint(cmd({ quality: "final" }), EDL, "v"))
   })
 })

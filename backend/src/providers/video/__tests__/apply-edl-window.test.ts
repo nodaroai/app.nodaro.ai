@@ -144,6 +144,26 @@ describe("assertSegmentsWithinSources", () => {
     expect(assertSegmentsWithinSources(e, undefined, true, ends({ A: { video: UNMEASURED, audio: ABSENT } }))).toHaveLength(1)
   })
 
+  // Ingress already refuses a read before a source's origin; the executor must
+  // too, never clamp it to the source's first frame (A1, found by B1).
+  it("a read that starts before its source's origin is refused, naming the segment — never clamped", () => {
+    const late = { ...A, offsetMs: 4000 }
+    const at = (inMs: number) => edl([late], [{ id: "s0", inMs, outMs: inMs + 2000, video: "A" }])
+    const err = thrown(() => assertSegmentsWithinSources(at(3000), undefined, true, ends({ A: { video: m(60), audio: m(60) } })))
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(String(err)).toMatch(/segment\[0\] "s0" starts at 3\.000s on the master clock, before source "A" begins \(its offsetMs is 4000\)/)
+    expect(assertSegmentsWithinSources(at(4000), undefined, true, ends({ A: { video: m(60), audio: m(60) } }))).toEqual([])
+  })
+
+  it("the pre-origin refusal needs no probe data: a source whose probe failed, or whose sound track is absent, is refused too", () => {
+    const late = { ...A, offsetMs: 4000 }
+    const e = edl([late], [{ id: "s0", inMs: 3000, outMs: 5000, video: "A" }])
+    // probe failed outright → no entry at all
+    expect(() => assertSegmentsWithinSources(e, undefined, true, new Map())).toThrow(/starts at 3\.000s .* before source "A" begins/)
+    // an audio-only cut from a source whose sound track is absent
+    expect(() => assertSegmentsWithinSources(e, undefined, false, ends({ A: { video: m(60), audio: ABSENT } }))).toThrow(/before source "A" begins/)
+  })
+
   it("a source with no entry at all (its probe failed outright; the caller already logged it) is skipped", () => {
     const e = edl([A], [{ id: "s0", inMs: 0, outMs: 90_000, video: "A" }])
     expect(assertSegmentsWithinSources(e, master(e), true, new Map())).toEqual([])

@@ -224,6 +224,19 @@ export function assertSegmentsWithinSources(
     const aId = audioSourceId(edl, seg, masterAudioId)
     if (aId) reads.push({ id: aId, track: "audio" })
     for (const { id, track } of reads) {
+      // A read before the source's origin (masterMs < offsetMs) has no media:
+      // refuse it, never clamp it to the first frame. It depends only on the
+      // EDL, so it runs FIRST — before the probe-keyed skips below (a probe that
+      // failed, or a sound track that is absent, must not wave it through).
+      // Ingress (`validateEffectiveEdl`) already refuses it; this is the
+      // executor's own guarantee for any caller that reaches it.
+      const originMs = offsetOf(edl.sources.find((s) => s.id === id))
+      if (seg.inMs < originMs) {
+        throw new DeterministicJobError(
+          `apply-edl: segment[${i}] "${seg.id}" starts at ${secs(seg.inMs).toFixed(3)}s on the master clock, before source "${id}" ` +
+            `begins (its offsetMs is ${originMs}) — start the segment later or check the source's offsetMs`,
+        )
+      }
       const t = sourceEnds.get(id)?.[track]
       if (t === undefined) continue
       if (t.state === "absent") {
@@ -291,6 +304,11 @@ const even = (d: { width: number; height: number }): { width: number; height: nu
 /** How ONE contiguous slice of segments renders (see `buildSliceCommand`). */
 export interface SliceOptions {
   readonly output: "video" | "audio"
+  /** Keys the ENCODER: a proxy (review) render encodes fast at a lower
+   *  quality; a final one at delivery quality — whatever the canvas size. (It
+   *  used to key on `target.height <= 720`, so a FINAL render of 720p sources
+   *  got the proxy encoder.) The canvas cap is `targetForQuality`'s job. */
+  readonly quality: "proxy" | "final"
   readonly target: { width: number; height: number }
   readonly fps: number
   /** This chunk's start position on the GLOBAL output timeline, in seconds
@@ -461,6 +479,9 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
   // Where each segment reads, on its source's own clock (master − offsetMs).
   const videoReadOf = (seg: EdlSegment) => {
     const vs = edl.sources.find((s) => s.id === seg.video)!
+    // max(0): unreachable in a render — assertSegmentsWithinSources refuses a
+    // pre-origin read first; kept so a direct builder call never asks for
+    // negative source time.
     const start = Math.max(0, secs(seg.inMs - offsetOf(vs)))
     return { id: vs.id, start, end: Math.max(start, secs(seg.outMs - offsetOf(vs))) }
   }
@@ -657,7 +678,7 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
 
   const fullFilter = [graph, ...chainParts].filter(Boolean).join(";")
 
-  const proxy = target.height <= 720
+  const proxy = opts.quality === "proxy"
   const outputArgs: string[] = []
   if (wantVideo) {
     outputArgs.push("-map", videoOutLabel!)
@@ -957,7 +978,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
     for (let c = 0; c < chunks.length; c++) {
       const chunkPath = join(workDir, `chunk-${c}.${ext}`)
       const cmd = buildSliceCommand(edl, chunks[c], {
-        output, target, fps, chunkStartSec, masterAudioId, audioPresent, omitAudio: muxAudioSeparately,
+        output, quality, target, fps, chunkStartSec, masterAudioId, audioPresent, omitAudio: muxAudioSeparately,
       })
       // The key is the command's fingerprint, so a checkpoint rendered for a
       // different plan (other chunk boundaries, grid position, width cap,
@@ -1033,7 +1054,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
         for (let k = 0; k < audioChunks.length; k++) {
           const pcmPath = join(workDir, `audio-${k}.wav`)
           await renderSlice(edl, audioChunks[k], {
-            output: "audio", audioCodec: "pcm", target, fps, chunkStartSec: 0, masterAudioId, audioPresent, sourcePaths, outPath: pcmPath,
+            output: "audio", audioCodec: "pcm", quality, target, fps, chunkStartSec: 0, masterAudioId, audioPresent, sourcePaths, outPath: pcmPath,
           })
           pcmPaths.push(pcmPath)
         }
