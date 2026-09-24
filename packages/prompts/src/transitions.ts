@@ -55,7 +55,9 @@ export interface Transition {
    * dramatic distortion"), and a cut has no performance to shape — "unhurried"
    * on a match cut is another invitation to blend. So the composer drops the
    * intensity clause too when every pick is instant. Position still applies —
-   * WHERE the cut lands is a real choice.
+   * WHERE the cut lands is a real choice — except `full`: a single-frame cut
+   * cannot "span the entire clip", so that clause is dropped on an all-instant
+   * pick (start / middle / end still place the cut).
    *
    * The bare term is not enough on its own either: "match cut" still came back
    * as a ~1 s superimposition in prod QA (seedance-2-5). The composer therefore
@@ -131,7 +133,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "seasonal-shift",          label: "Seasonal Shift",             category: "time", description: "Same scene through changing seasons",
     promptHint: "accelerated seasonal time-lapse: foliage transitions from spring green to summer lushness to autumn red-gold to winter bare, leaves fall and regrow, snow accumulates and melts, all within the same locked framing", term: "seasonal time-lapse" },
   { id: "aging",                   label: "Aging",                      category: "time", description: "Subject visibly ages forward in time",
-    promptHint: "accelerated aging transition: the subject visibly ages forward — skin develops fine lines then deeper wrinkles, hair lightens to silver, posture shifts subtly, while the framing holds steady on the face", term: "accelerated aging" },
+    promptHint: "accelerated aging transition: the subject visibly ages forward - fine lines deepen into wrinkles, hair greys to silver, posture settles - while the framing stays unchanged", term: "accelerated aging" },
   { id: "rewind",                  label: "Rewind",                     category: "time", description: "Time reverses, motion plays backward",
     promptHint: "rewind transition: time reverses and all motion plays smoothly backward, water flows up, debris reassembles, the subject's recent actions undo, with a faint VHS-rewind tracking distortion at the edges", term: "reverse-motion rewind" },
   { id: "freeze-frame-jump",       label: "Freeze-Frame Jump",          category: "time", description: "Action freezes, jumps forward in time",
@@ -213,7 +215,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "pull-out-reveal",   label: "Pull-Out Reveal",      category: "portal", description: "Reveals scene was a picture in larger context",
     promptHint: "the camera pulls back rapidly and reveals that the entire first scene was actually contained within a picture, painting, screen, or window in a larger second scene", term: "pull-back reveal" },
   { id: "zoom-into-mouth",   label: "Zoom Into Mouth",      category: "portal", description: "Push into open mouth, emerges in new world inside",
-    promptHint: "the camera pushes into the subject's open mouth, the dark interior fills the frame, and the camera passes through the throat into the new scene which materialises as if emerging from inside the body" },
+    promptHint: "the camera pushes into the subject's open mouth, the dark interior fills the frame, and the camera passes through into the new scene which materialises as if emerging from inside the body" },
   { id: "push-through-glass", label: "Push Through Glass",   category: "portal", description: "Camera pushes through pane of glass into new world",
     promptHint: "the camera pushes toward a pane of glass in the scene, the surface ripples like liquid as the camera passes through with a faint refraction, and the space on the other side resolves as the new scene" },
   { id: "soul-jump",         label: "Soul Jump",            category: "portal", description: "Translucent soul leaves body, enters new body",
@@ -514,6 +516,32 @@ function clausesOf<T extends TransitionTimingOption>(
 }
 
 const POSITION_CLAUSES = clausesOf(TRANSITION_POSITIONS)
+
+/**
+ * Where the composed hint lands. `"clip"` (the default) is a whole video's
+ * prompt, so a position is placed within "the clip". `"shot"` is one shot's
+ * time window inside a multi-shot prompt (`0-2s — …`, `2-4s — …`): there "the
+ * middle of the clip" points the model at the wrong span, so the position
+ * clause says "of this shot" instead.
+ */
+export type TransitionHintScope = "clip" | "shot"
+
+export interface TransitionHintOptions {
+  readonly scope?: TransitionHintScope
+}
+
+/**
+ * The position clauses for a shot window — DERIVED from `POSITION_CLAUSES`, so
+ * the catalog stays the one source of the wording: every " of the clip" reads
+ * " of this shot". A clause without that phrase (`full`'s "spans the entire
+ * clip") is left as it is; `transitions-scope.test.ts` pins which rows change,
+ * so a reword that drops "of the clip" fails loudly instead of quietly saying
+ * "clip" inside a shot window.
+ */
+const SHOT_POSITION_CLAUSES: typeof POSITION_CLAUSES = Object.fromEntries(
+  Object.entries(POSITION_CLAUSES).map(([id, clause]) => [id, clause.replace(/ of the clip\b/g, " of this shot")]),
+) as typeof POSITION_CLAUSES
+
 const DURATION_CLAUSES = clausesOf(TRANSITION_DURATIONS)
 const INTENSITY_CLAUSES = clausesOf(TRANSITION_INTENSITIES)
 
@@ -530,12 +558,16 @@ const INTENSITY_CLAUSES = clausesOf(TRANSITION_INTENSITIES)
  * - Timing/start/end clauses apply ONCE at the outer layer, not per-id
  * - When every picked id is instant (a cut — see `isInstantTransition`) the
  *   first base's parentheses carry `INSTANT_CUT_CLAUSE` once, and the
- *   duration and intensity clauses are dropped; position still applies
+ *   duration and intensity clauses are dropped; position still applies,
+ *   except `full` — a single-frame cut spans nothing, so it adds no clause
  * - null input is treated like undefined (falsy short-circuit → returns "")
  *
  * @param mode Accepted for the picker-hint signature; a transition composes
  *   the same text in both modes — each pick as `<term> (<hint body>)`, see
  *   `renderTransitionBases`.
+ * @param options `scope: "shot"` when the hint is folded into one shot's time
+ *   window of a multi-shot prompt — the position clause then says "of this
+ *   shot" instead of "of the clip". Omitted, the wording is the clip's.
  */
 export function composeTransitionHintFromConnections(
   transitionId: string | ReadonlyArray<string> | undefined,
@@ -543,6 +575,7 @@ export function composeTransitionHintFromConnections(
   endHints: ReadonlyArray<string>,
   timing?: TransitionTiming,
   mode: PickerHintMode = "full",
+  options?: TransitionHintOptions,
 ): string {
   const ids = Array.isArray(transitionId)
     ? Array.from(new Set(transitionId)).slice(0, 2)
@@ -555,8 +588,11 @@ export function composeTransitionHintFromConnections(
   const combinedBase = baseHints.join(", and ")
   const parts: string[] = [combinedBase]
 
-  if (timing?.position && timing.position !== "auto") {
-    parts.push(POSITION_CLAUSES[timing.position])
+  // "Spans the entire clip" beside a single-frame cut contradicts it, so an
+  // all-instant pick drops `full`; start / middle / end still place the cut.
+  if (timing?.position && timing.position !== "auto" && !(instant && timing.position === "full")) {
+    const clauses = options?.scope === "shot" ? SHOT_POSITION_CLAUSES : POSITION_CLAUSES
+    parts.push(clauses[timing.position])
   }
   // A cut has no duration and no performance: "lasting approximately 1
   // second" or "with natural unhurried timing" on a match cut makes the model
