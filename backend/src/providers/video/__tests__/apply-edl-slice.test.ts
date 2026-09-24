@@ -6,7 +6,7 @@
 // crossfade chunk's end-of-chunk hold to the frame grid (Track 0.14).
 import { describe, it, expect } from "vitest"
 import type { Edl, EdlSegment } from "@nodaro/shared"
-import { buildSliceCommand, chunkOutputSec, sliceFingerprint, INPUT_SEEK_MARGIN_SEC, type SliceOptions } from "../apply-edl.js"
+import { buildSliceCommand, chunkOutputSec, sliceFingerprint, INPUT_SEEK_MARGIN_SEC, type PlanSegment, type SliceOptions } from "../apply-edl.js"
 
 const EDL: Edl = {
   version: 1,
@@ -309,5 +309,29 @@ describe("the encoder follows the render's quality, not its canvas size (A1)", (
   })
   it("the resume key moves with the quality (a proxy chunk is never resumed into a final render)", () => {
     expect(sliceFingerprint(cmd({ quality: "proxy" }), EDL, "v")).not.toBe(sliceFingerprint(cmd({ quality: "final" }), EDL, "v"))
+  })
+})
+
+// Plan B2 (review round 2 of #1630): a split head lying wholly inside the
+// crossfade into it blends over all of its frames — the frames one pass blends —
+// but only when its segment goes on: its tail (next chunk) holds a frame of its
+// own. Otherwise one pass shows no picture of that segment at all, and neither
+// may the split.
+describe("a split head wholly inside its dissolve", () => {
+  // At 30 fps: A holds frames [0, 30); the head starts at 0.964 s (frame 29),
+  // ends at 1.004 s (frame 30) — its one frame is all dissolve.
+  const head = (tailMs: number): PlanSegment => ({
+    id: "h~1", inMs: 0, outMs: 40, video: "B", transition: { type: "crossfade", durationMs: 36 }, splitTailMs: tailMs,
+  })
+  const chunk = (tailMs: number) => [{ id: "a", inMs: 0, outMs: 1000, video: "A" } as PlanSegment, head(tailMs)]
+  it("blends when its tail has a frame of its own", () => {
+    expect(cmd({ omitAudio: true }, chunk(500)).filterGraph).toContain("xfade")
+  })
+  it("adds no picture when its tail rounds to no frame — as one pass shows none", () => {
+    expect(cmd({ omitAudio: true }, chunk(5)).filterGraph).not.toContain("xfade")
+  })
+  it("a head that outlasts its dissolve blends either way (the ordinary split)", () => {
+    const long: PlanSegment = { ...head(5), outMs: 200 }
+    expect(cmd({ omitAudio: true }, [chunk(5)[0], long]).filterGraph).toContain("xfade")
   })
 })
