@@ -232,6 +232,20 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   // plugin's own route matrices.
   "/v1/workflows/:p/collaborators",
   "/v1/workflows/:p/collaborators/:p",
+  // Telegram accounts are Cloud-only routes, registered at runtime by the
+  // cloud-plugins `registerRoutes()` and deliberately absent from core: a
+  // deployment without the plugin answers 404, which the Integrations card
+  // reads as "not offered here" and renders nothing. The contract is the
+  // plugin's own and exercised by its route tests.
+  "/v1/telegram-accounts",
+  "/v1/telegram-accounts/:p",
+  "/v1/telegram-accounts/:p/pause",
+  "/v1/telegram-accounts/:p/resume",
+  "/v1/telegram-accounts/consent",
+  "/v1/telegram-accounts/login",
+  "/v1/telegram-accounts/login/:p",
+  "/v1/telegram-accounts/login/:p/code",
+  "/v1/telegram-accounts/login/:p/password",
 ])
 
 // ---------------------------------------------------------------------------
