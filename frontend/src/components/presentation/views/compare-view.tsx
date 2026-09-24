@@ -14,6 +14,7 @@ import {
 import { getOutputType, type OutputType } from "@/lib/presentation-utils"
 import { isVideoUrl, isImageUrl, isAudioUrl } from "@/lib/media-type"
 import { GlassCard } from "../output-cards/shared"
+import { useT } from "@/lib/i18n"
 import type { ViewProps } from "./types"
 
 /** Resolve output type from node type, falling back to URL-based detection for data types (e.g. loop nodes) */
@@ -53,6 +54,7 @@ export function CompareView({
   const [leftId, setLeftId] = useState<string>(initialLeft ?? "")
   const [rightId, setRightId] = useState<string>(initialRight ?? "")
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const t = useT()
 
   // Sync when defaults change (e.g. settings loaded after mount)
   useEffect(() => {
@@ -173,7 +175,7 @@ export function CompareView({
         <div className="flex items-end gap-2 mb-4">
           <div className="flex-1">
             <ItemSelect
-              label="Left"
+              label={t("common.left")}
               value={leftId}
               onChange={handleLeftChange}
               groups={groupedItems}
@@ -182,14 +184,14 @@ export function CompareView({
           <button
             type="button"
             onClick={handleSwap}
-            title="Swap selections"
+            title={t("present.swapSelections")}
             className="shrink-0 mb-0.5 w-9 h-9 rounded-lg border border-border bg-card hover:bg-accent/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeftRight className="w-4 h-4" />
           </button>
           <div className="flex-1">
             <ItemSelect
-              label="Right"
+              label={t("common.right")}
               value={rightId}
               onChange={handleRightChange}
               groups={groupedItems}
@@ -200,7 +202,7 @@ export function CompareView({
         {/* Comparison area */}
         {!leftItem || !rightItem ? (
           <div className="text-sm text-muted-foreground text-center py-16">
-            Select two items to compare
+            {t("present.selectTwoToCompare")}
           </div>
         ) : bothVisual ? (
           <div className="relative">
@@ -209,7 +211,7 @@ export function CompareView({
               type="button"
               onClick={() => setIsFullscreen(true)}
               className="absolute bottom-3 right-3 z-20 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
-              title="Fullscreen compare"
+              title={t("present.fullscreenCompare")}
             >
               <Maximize2 className="w-4 h-4" />
             </button>
@@ -289,6 +291,7 @@ function ItemSelect({
   onChange: (id: string) => void
   groups: { inputItems: CompareItem[]; outputItems: CompareItem[] }
 }) {
+  const t = useT()
   return (
     <div>
       <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1 block">
@@ -296,12 +299,12 @@ function ItemSelect({
       </label>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger className="w-full">
-          <SelectValue placeholder="Select item..." />
+          <SelectValue placeholder={t("present.selectItemPlaceholder")} />
         </SelectTrigger>
         <SelectContent>
           {groups.inputItems.length > 0 && (
             <SelectGroup>
-              <SelectLabel>Inputs</SelectLabel>
+              <SelectLabel>{t("preview.inputs")}</SelectLabel>
               {groups.inputItems.map((item) => (
                 <SelectItem key={item.id} value={item.id}>
                   {item.title}
@@ -311,7 +314,7 @@ function ItemSelect({
           )}
           {groups.outputItems.length > 0 && (
             <SelectGroup>
-              <SelectLabel>Outputs</SelectLabel>
+              <SelectLabel>{t("preview.outputs")}</SelectLabel>
               {groups.outputItems.map((item) => (
                 <SelectItem key={item.id} value={item.id}>
                   {item.title}
@@ -464,6 +467,7 @@ function VisualSlider({ leftItem, rightItem, fullscreen }: { leftItem: CompareIt
 }
 
 function CompareItemDisplay({ item }: { item: CompareItem }) {
+  const t = useT()
   return (
     <GlassCard>
       <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">
@@ -480,7 +484,7 @@ function CompareItemDisplay({ item }: { item: CompareItem }) {
           {item.text}
         </div>
       ) : (
-        <div className="h-32 flex items-center justify-center text-muted-foreground/40 text-xs">No content</div>
+        <div className="h-32 flex items-center justify-center text-muted-foreground/40 text-xs">{t("present.noContent")}</div>
       )}
     </GlassCard>
   )

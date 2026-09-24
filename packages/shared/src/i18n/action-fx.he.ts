@@ -3,7 +3,7 @@ import type { LocaleCatalogMap } from "./types.js"
 const map: LocaleCatalogMap = {
   // ── Disaster ──
   "earthquake-tremor": { label: "רעש אדמה קל", description: "רעידת קרקע קלה, חפצים תלויים מתנדנדים" },
-  "earthquake-major": { label: "רעידת אדמה חזקה", description: "קרקע נסדקת, פסולת נופלת" },
+  "earthquake-major": { label: "רעידת אדמה חזקה", description: "קרקע נסדקת, הריסות נופלות" },
   "building-collapse": { label: "התמוטטות בניין", description: "מבנה מתפורר תוך כדי נפילה" },
   "tsunami-wave": { label: "גל צונאמי", description: "קיר עצום של מים שניתך" },
   "tornado": { label: "טורנדו", description: "ענן משפך נוגע בקרקע" },
@@ -21,7 +21,7 @@ const map: LocaleCatalogMap = {
 
   // ── Fire & Blasts ──
   "explosion-small": { label: "פיצוץ קטן", description: "פיצוץ קומפקטי עם הבזק מוקדי" },
-  "explosion-large": { label: "פיצוץ גדול", description: "כדור אש בגודל רכב עם פסולת" },
+  "explosion-large": { label: "פיצוץ גדול", description: "כדור אש בגודל רכב עם שברים" },
   "explosion-massive": { label: "פיצוץ אדיר", description: "כדור אש מפלס בניינים עם גל הדף" },
   "nuclear-detonation": { label: "התפוצצות גרעינית", description: "ענן פטרייה + הבזק מסנוור באופק" },
   "fireball-airborne": { label: "כדור אש באוויר", description: "כדור להבה מתגלגל באוויר" },
@@ -29,7 +29,7 @@ const map: LocaleCatalogMap = {
   "oil-fire": { label: "שריפת נפט", description: "להבות גבוהות שמנוניות + עשן שחור סמיך" },
   "blazing-inferno": { label: "תופת בוערת", description: "קיר של אש בולע הכל" },
   "flame-burst": { label: "פרץ להבה", description: "סילון אש מהיר וממוקד" },
-  "ember-shower": { label: "מקלחת גחלים", description: "מפל של גחלים כתומות זוהרות" },
+  "ember-shower": { label: "מטר גחלים", description: "מפל של גחלים כתומות זוהרות" },
   "smoke-pillar": { label: "עמוד עשן", description: "עמוד אנכי גבוה של עשן שחור" },
   "mushroom-cloud": { label: "ענן פטרייה", description: "ענן פיצוץ קלאסי עם כיפה וגזע" },
 
@@ -43,19 +43,19 @@ const map: LocaleCatalogMap = {
   "electric-discharge": { label: "פריקה חשמלית", description: "פרץ של אנרגיה מקושתת ממכשיר תקול" },
   "transformer-blowout": { label: "פיצוץ שנאי", description: "פיצוץ כחול-לבן בראש עמוד חשמל" },
   "st-elmos-fire": { label: "אש סנט אלמו", description: "זוהר פלזמה כחול מצמרר על קצוות מתכת" },
-  "static-shock-burst": { label: "התפרצות שוק סטטי", description: "ניצוץ קטן ונראה של חשמל סטטי" },
+  "static-shock-burst": { label: "פרץ חשמל סטטי", description: "ניצוץ קטן ונראה של חשמל סטטי" },
 
   // ── Combat ──
   "muzzle-flash": { label: "הבזק לוע", description: "הבזק כתום עז מקנה כלי הנשק" },
-  "gunshot-impact": { label: "פגיעת ירייה", description: "כדור פוגע במשטח עם תרסיס פסולת" },
+  "gunshot-impact": { label: "פגיעת ירייה", description: "כדור פוגע במשטח עם תרסיס שברים" },
   "bullet-trail": { label: "שובל כדור", description: "פס נראה של כדור באוויר" },
-  "sword-spark": { label: "ניצוצות חרב", description: "מקלחת מאקרו של ניצוצות חיכוך מתכת על מתכת" },
+  "sword-spark": { label: "ניצוצות חרב", description: "מטר ניצוצות חיכוך מתכת על מתכת בתקריב מאקרו" },
   "blade-clash": { label: "התנגשות להבים", description: "שני להבים נפגשים עם גל הדף" },
   "ricochet-spark": { label: "ניצוץ ריקושט", description: "כדור מקפץ ממתכת עם ניצוצות" },
-  "debris-field": { label: "שדה פסולת", description: "רסיסים קפואים באוויר מתפזרים" },
+  "debris-field": { label: "שדה שברים", description: "רסיסים קפואים באוויר מתפזרים" },
   "glass-shatter-airborne": { label: "התנפצות זכוכית באוויר", description: "זכוכית מתפוצצת לרסיסים מרחפים" },
   "shockwave-ground": { label: "גל הדף קרקעי", description: "טבעת מתרחבת נראית בגובה הקרקע" },
-  "sonic-boom": { label: "בום קולי", description: "חרוט של אוויר דחוס במהירות על-קולית" },
+  "sonic-boom": { label: "בום על-קולי", description: "חרוט של אוויר דחוס במהירות על-קולית" },
   "smoke-grenade": { label: "רימון עשן", description: "עשן צבעוני סמיך מתפרץ החוצה" },
   "flashbang": { label: "רימון הלם", description: "פרץ אור לבן מסנוור" },
   "blood-spray": { label: "תרסיס דם", description: "קשת קולנועית של טיפות דם" },

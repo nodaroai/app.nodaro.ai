@@ -115,7 +115,7 @@ function WebhookOutputNodeComponent({ id, data, selected }: NodeProps) {
               POST
             </span>
             <span className="truncate font-mono text-[11.5px]" title={nodeData.url || undefined}>
-              {nodeData.url || "Set webhook URL..."}
+              {nodeData.url || t("node.setWebhookUrl")}
             </span>
           </div>
 

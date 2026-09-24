@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 import { memo, useCallback, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { Position, type NodeProps } from "@xyflow/react"
@@ -28,19 +28,21 @@ import type { VideoAuditNodeData, VideoAuditReport } from "@/types/nodes"
  *  guards refused, what is merely flagged. Never alphabetical: "corrected"
  *  first is the whole point of a fix-and-disclose report. */
 const FINDING_KINDS = ["corrected", "refused", "watch"] as const
+const FINDING_LABEL_KEYS: Record<(typeof FINDING_KINDS)[number], MessageKey> = { corrected: "node.findingCorrected", refused: "node.findingRefused", watch: "node.findingWatch" }
 
 /** `3 corrected · 1 refused · 2 watch` — zero-count kinds are dropped so a
  *  clean audit reads as "nothing changed" instead of three zeroes. */
 function summariseFindings(report: VideoAuditReport): string {
   const counts = new Map<string, number>()
   for (const f of report.findings) counts.set(f.kind, (counts.get(f.kind) ?? 0) + 1)
-  const parts = FINDING_KINDS.filter((k) => (counts.get(k) ?? 0) > 0).map((k) => `${counts.get(k)} ${k}`)
-  return parts.length > 0 ? parts.join(" · ") : "nothing changed"
+  const parts = FINDING_KINDS.filter((k) => (counts.get(k) ?? 0) > 0).map((k) => tx(FINDING_LABEL_KEYS[k], { n: counts.get(k) ?? 0 }))
+  return parts.length > 0 ? parts.join(" · ") : tx("node.nothingChanged")
 }
 
 /** The node's report strip — the summary sentence plus the counts by kind.
  *  Also shown inside the expanded modal, so it is one component. */
 function AuditReportStrip({ report, compact }: { readonly report: VideoAuditReport; readonly compact?: boolean }) {
+  const t = useT()
   return (
     <div className="rounded-md border bg-muted/30 px-2 py-1.5 flex flex-col gap-1 shrink-0">
       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground tabular-nums">
@@ -48,7 +50,7 @@ function AuditReportStrip({ report, compact }: { readonly report: VideoAuditRepo
         <span>{summariseFindings(report)}</span>
         {/* The run's OWN truth about which credit family it billed — the wired
             state can change after the fact, the report can't. */}
-        {report.autoAnalysis && <span className="ml-auto shrink-0">ran its own analysis</span>}
+        {report.autoAnalysis && <span className="ml-auto shrink-0">{t("node.ranItsOwnAnalysis")}</span>}
       </div>
       {report.summary && (
         <p
@@ -95,7 +97,7 @@ function ResultTreeModal({
             >
               {t("cfgext.scrapeCopyJson")}
             </button>
-            <button type="button" aria-label="Close" className="text-muted-foreground hover:text-foreground" onClick={onClose}>
+            <button type="button" aria-label={t("common.close")} className="text-muted-foreground hover:text-foreground" onClick={onClose}>
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -247,7 +249,7 @@ function VideoAuditNodeComponent({ id, data, selected }: NodeProps) {
               running (the strip's own `autoAnalysis` reports the run's truth). */}
           {status !== "running" && !analysisWired && (
             <p className="text-[10px] leading-snug text-muted-foreground/70 shrink-0">
-              No analysis wired — this node runs its own fast analysis first, which costs more credits.
+              {t("node.noAnalysisWiredRunsOwn")}
             </p>
           )}
         </div>

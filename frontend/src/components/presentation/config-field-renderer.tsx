@@ -28,6 +28,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
+import { useT, type MessageKey, type TFunction } from "@/lib/i18n"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import type { WorkflowNode } from "@/types/nodes"
@@ -253,6 +254,7 @@ function TextareaField({
   onChange: (v: unknown) => void
   readOnly?: boolean
 }) {
+  const t = useT()
   const strValue = String(value ?? "")
 
   return (
@@ -261,7 +263,7 @@ function TextareaField({
       <Textarea
         value={strValue}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={`Enter ${label.toLowerCase()}...`}
+        placeholder={t("present.enterFieldPlaceholder", { label: label.toLowerCase() })}
         readOnly={readOnly}
         className={cn(
           "min-h-[72px] resize-none",
@@ -298,6 +300,7 @@ function OptionSelect({
     : options
 
   useAutoReset(value, filtered, onChange, autoReset ?? false)
+  const t = useT()
 
   const strValue = String(value ?? "")
 
@@ -313,14 +316,14 @@ function OptionSelect({
           className={cn("w-full", readOnly && "opacity-70 cursor-default")}
           aria-label={label}
         >
-          <SelectValue placeholder={`Select ${label.toLowerCase()}...`} />
+          <SelectValue placeholder={t("present.selectFieldPlaceholder", { label: label.toLowerCase() })} />
         </SelectTrigger>
         <SelectContent>
           {filtered.map((opt) => (
             <SelectItem key={opt.value} value={opt.value}>
               <span>{opt.label}</span>
               {showDesc && opt.desc && (
-                <span className="ml-1.5 text-xs text-muted-foreground">
+                <span className="ms-1.5 text-xs text-muted-foreground">
                   - {opt.desc}
                 </span>
               )}
@@ -339,6 +342,7 @@ function OptionSelect({
 
 function renderGenerateImage(
   props: ConfigFieldRendererProps,
+  t: TFunction,
 ): React.ReactNode | null {
   const { field, value, nodeData, onChange, allowedValues, readOnly, customLabel } = props
   const provider = String(nodeData.provider ?? "")
@@ -347,7 +351,7 @@ function renderGenerateImage(
     case "provider":
       return (
         <OptionSelect
-          label={customLabel ?? "Model"}
+          label={customLabel ?? t("field.model")}
           options={IMAGE_GEN_MODELS}
           value={value}
           onChange={onChange}
@@ -359,7 +363,7 @@ function renderGenerateImage(
     case "aspectRatio":
       return (
         <AspectRatioField
-          label={customLabel ?? "Aspect Ratio"}
+          label={customLabel ?? t("field.aspectRatio")}
           options={getAspectRatiosForModel(provider)}
           value={value}
           onChange={onChange}
@@ -373,7 +377,7 @@ function renderGenerateImage(
       if (!qualityOpts) return null
       return (
         <OptionSelect
-          label={customLabel ?? "Quality"}
+          label={customLabel ?? t("field.quality")}
           options={qualityOpts}
           value={value}
           onChange={onChange}
@@ -388,7 +392,7 @@ function renderGenerateImage(
       if (!resOpts) return null
       return (
         <OptionSelect
-          label={customLabel ?? "Resolution"}
+          label={customLabel ?? t("field.resolution")}
           options={resOpts}
           value={value}
           onChange={onChange}
@@ -400,12 +404,12 @@ function renderGenerateImage(
     }
     case "style": {
       const styleOptions: readonly OptionEntry[] = [
-        { value: "__none__", label: "None" },
+        { value: "__none__", label: t("common.none") },
         ...imageStylePresets().map((s) => ({ value: s.value, label: s.label })),
       ]
       return (
         <OptionSelect
-          label={customLabel ?? "Style"}
+          label={customLabel ?? t("field.style")}
           options={styleOptions}
           value={value === "" ? "__none__" : value}
           onChange={(v) => onChange(v === "__none__" ? "" : v)}
@@ -417,7 +421,7 @@ function renderGenerateImage(
     case "negativePrompt":
       return (
         <TextareaField
-          label={customLabel ?? "Negative Prompt"}
+          label={customLabel ?? t("field.negativePrompt")}
           value={value}
           onChange={onChange}
           readOnly={readOnly}
@@ -430,6 +434,7 @@ function renderGenerateImage(
 
 function renderTextToVideo(
   props: ConfigFieldRendererProps,
+  t: TFunction,
 ): React.ReactNode | null {
   const { field, value, onChange, allowedValues, readOnly, customLabel } = props
 
@@ -437,7 +442,7 @@ function renderTextToVideo(
     case "provider":
       return (
         <OptionSelect
-          label={customLabel ?? "Model"}
+          label={customLabel ?? t("field.model")}
           options={VIDEO_T2V_MODELS}
           value={value}
           onChange={onChange}
@@ -453,7 +458,7 @@ function renderTextToVideo(
       // for providers without a catalog aspect list.
       return (
         <AspectRatioField
-          label={customLabel ?? "Aspect Ratio"}
+          label={customLabel ?? t("field.aspectRatio")}
           options={getAspectRatiosForVideoModel(String(props.nodeData.provider ?? "seedance-2-fast"))}
           value={value}
           onChange={onChange}
@@ -465,7 +470,7 @@ function renderTextToVideo(
     case "motion":
       return (
         <SliderField
-          label={customLabel ?? "Motion Amount"}
+          label={customLabel ?? t("present.motionAmount")}
           value={value}
           onChange={onChange}
           min={1}
@@ -477,7 +482,7 @@ function renderTextToVideo(
     case "generateAudio":
       return (
         <ToggleField
-          label={customLabel ?? "Generate Audio"}
+          label={customLabel ?? t("vidcfg.generateAudio")}
           value={value}
           onChange={onChange}
           readOnly={readOnly}
@@ -490,6 +495,7 @@ function renderTextToVideo(
 
 function renderGenerateVideo(
   props: ConfigFieldRendererProps,
+  t: TFunction,
 ): React.ReactNode | null {
   const { field, value, onChange, allowedValues, readOnly, customLabel } = props
 
@@ -497,7 +503,7 @@ function renderGenerateVideo(
     case "provider":
       return (
         <OptionSelect
-          label={customLabel ?? "Model"}
+          label={customLabel ?? t("field.model")}
           options={VIDEO_GEN_MODELS}
           value={value}
           onChange={onChange}
@@ -513,7 +519,7 @@ function renderGenerateVideo(
       // for providers without a catalog aspect list.
       return (
         <AspectRatioField
-          label={customLabel ?? "Aspect Ratio"}
+          label={customLabel ?? t("field.aspectRatio")}
           options={getAspectRatiosForVideoModel(String(props.nodeData.provider ?? "seedance-2-fast"))}
           value={value}
           onChange={onChange}
@@ -525,7 +531,7 @@ function renderGenerateVideo(
     case "motion":
       return (
         <SliderField
-          label={customLabel ?? "Motion Amount"}
+          label={customLabel ?? t("present.motionAmount")}
           value={value}
           onChange={onChange}
           min={1}
@@ -537,7 +543,7 @@ function renderGenerateVideo(
     case "generateAudio":
       return (
         <ToggleField
-          label={customLabel ?? "Generate Audio"}
+          label={customLabel ?? t("vidcfg.generateAudio")}
           value={value}
           onChange={onChange}
           readOnly={readOnly}
@@ -560,6 +566,7 @@ function renderGenerateVideo(
  */
 function renderGenerateVideoPro(
   props: ConfigFieldRendererProps,
+  t: TFunction,
 ): React.ReactNode | null {
   const { field, value, nodeData, onChange, allowedValues, readOnly, customLabel } = props
   const provider = String(nodeData.provider ?? "seedance-2")
@@ -568,7 +575,7 @@ function renderGenerateVideoPro(
     case "prompt":
       return (
         <TextareaField
-          label={customLabel ?? "Prompt"}
+          label={customLabel ?? t("present.prompt")}
           value={value}
           onChange={onChange}
           readOnly={readOnly}
@@ -577,7 +584,7 @@ function renderGenerateVideoPro(
     case "provider":
       return (
         <OptionSelect
-          label={customLabel ?? "Model"}
+          label={customLabel ?? t("field.model")}
           options={GVP_PROVIDERS}
           value={value}
           onChange={onChange}
@@ -589,7 +596,7 @@ function renderGenerateVideoPro(
     case "duration":
       return (
         <SliderField
-          label={customLabel ?? "Duration (seconds)"}
+          label={customLabel ?? t("field.durationSeconds")}
           value={value}
           onChange={onChange}
           min={4}
@@ -601,7 +608,7 @@ function renderGenerateVideoPro(
     case "aspectRatio":
       return (
         <AspectRatioField
-          label={customLabel ?? "Aspect Ratio"}
+          label={customLabel ?? t("field.aspectRatio")}
           options={getAspectRatiosForVideoModel(provider)}
           value={value}
           onChange={onChange}
@@ -615,7 +622,7 @@ function renderGenerateVideoPro(
       if (!resOpts) return null
       return (
         <OptionSelect
-          label={customLabel ?? "Resolution"}
+          label={customLabel ?? t("field.resolution")}
           options={resOpts}
           value={value}
           onChange={onChange}
@@ -628,7 +635,7 @@ function renderGenerateVideoPro(
     case "generateAudio":
       return (
         <ToggleField
-          label={customLabel ?? "Generate Audio"}
+          label={customLabel ?? t("vidcfg.generateAudio")}
           value={value}
           onChange={onChange}
           readOnly={readOnly}
@@ -643,8 +650,7 @@ function renderGenerateVideoPro(
  *  regardless of which one an app curator chose to expose as a card — the two
  *  numeric fields render as independent cards in the app runner, so there's
  *  no single "group footer" slot to hang a one-time note on. */
-const EDIT_VIDEO_PRO_SPAN_HELP_TEXT =
-  "Span must fall within your video's length; an out-of-range span fails after reserving and auto-refunds."
+const EDIT_VIDEO_PRO_SPAN_HELP_TEXT: MessageKey = "present.spanHelpText"
 
 /**
  * Edit Video Pro — span-replace sibling of Generate Video Pro (Task 14).
@@ -659,6 +665,7 @@ const EDIT_VIDEO_PRO_SPAN_HELP_TEXT =
  */
 function renderEditVideoPro(
   props: ConfigFieldRendererProps,
+  t: TFunction,
 ): React.ReactNode | null {
   const { field, value, onChange, readOnly, customLabel, allowedValues } = props
 
@@ -666,7 +673,7 @@ function renderEditVideoPro(
     case "prompt":
       return (
         <TextareaField
-          label={customLabel ?? "Prompt"}
+          label={customLabel ?? t("present.prompt")}
           value={value}
           onChange={onChange}
           readOnly={readOnly}
@@ -675,7 +682,7 @@ function renderEditVideoPro(
     case "provider":
       return (
         <OptionSelect
-          label={customLabel ?? "Model"}
+          label={customLabel ?? t("field.model")}
           options={EVP_PROVIDERS}
           value={value}
           onChange={onChange}
@@ -687,31 +694,31 @@ function renderEditVideoPro(
     case "spanStart":
       return (
         <NumberField
-          label={customLabel ?? "Span Start (seconds)"}
+          label={customLabel ?? t("present.spanStartSeconds")}
           value={value}
           onChange={onChange}
           min={0}
           step={0.1}
           readOnly={readOnly}
-          helpText={EDIT_VIDEO_PRO_SPAN_HELP_TEXT}
+          helpText={t(EDIT_VIDEO_PRO_SPAN_HELP_TEXT)}
         />
       )
     case "spanEnd":
       return (
         <NumberField
-          label={customLabel ?? "Span End (seconds)"}
+          label={customLabel ?? t("present.spanEndSeconds")}
           value={value}
           onChange={onChange}
           min={0}
           step={0.1}
           readOnly={readOnly}
-          helpText={EDIT_VIDEO_PRO_SPAN_HELP_TEXT}
+          helpText={t(EDIT_VIDEO_PRO_SPAN_HELP_TEXT)}
         />
       )
     case "generateAudio":
       return (
         <ToggleField
-          label={customLabel ?? "Generate Audio"}
+          label={customLabel ?? t("vidcfg.generateAudio")}
           value={value}
           onChange={onChange}
           readOnly={readOnly}
@@ -756,7 +763,7 @@ function FallbackField(props: ConfigFieldRendererProps): React.ReactNode | null 
 /** Lookup: nodeType -> render function that returns hook-using components. */
 const NODE_RENDERERS: Record<
   string,
-  (props: ConfigFieldRendererProps) => React.ReactNode | null
+  (props: ConfigFieldRendererProps, t: TFunction) => React.ReactNode | null
 > = {
   "generate-image": renderGenerateImage,
   "text-to-video": renderTextToVideo,
@@ -768,9 +775,10 @@ const NODE_RENDERERS: Record<
 export function ConfigFieldRenderer(
   props: ConfigFieldRendererProps,
 ): React.ReactNode | null {
+  const t = useT()
   const renderer = NODE_RENDERERS[props.nodeType]
   if (renderer) {
-    const result = renderer(props)
+    const result = renderer(props, t)
     // If the node-specific renderer handled this field, use it.
     // If it returned null (unrecognized field within that node type), fall back.
     if (result !== null) return result

@@ -5501,6 +5501,7 @@ function formatProbedDuration(sec: number): string {
 
 export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysisNodeData>) {
   const t = useT()
+  const localizeTier = useLocalizeOptionLabel()
   // Show the quality tier; a legacy raw model id falls back to the default tier.
   const tier = isVideoAnalysisTier(data.llmModel ?? "") ? (data.llmModel as string) : DEFAULT_VIDEO_ANALYSIS_TIER
   // FAIL-SAFE write-back (Provider Enum Sync pitfall 12b): a pre-tier node
@@ -5583,9 +5584,9 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {VIDEO_ANALYSIS_TIER_ORDER.map((t) => (
-              <SelectItem key={t} value={t}>
-                {VIDEO_ANALYSIS_TIER_LABELS[t]}
+            {VIDEO_ANALYSIS_TIER_ORDER.map((tier) => (
+              <SelectItem key={tier} value={tier}>
+                {localizeTier(VIDEO_ANALYSIS_TIER_LABELS[tier])}
               </SelectItem>
             ))}
           </SelectContent>

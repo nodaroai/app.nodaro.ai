@@ -1,4 +1,5 @@
 import { EnvironmentalAssetTab } from "./environmental-asset-tab"
+import { useT } from "@/lib/i18n"
 import type { LocationStudioState } from "./use-location-studio"
 
 /**
@@ -26,12 +27,13 @@ interface AnglesTabProps {
 }
 
 export function AnglesTab({ studio }: AnglesTabProps) {
+  const t = useT()
   return (
     <EnvironmentalAssetTab
       studio={studio}
       bucketName="angles"
       presets={ANGLES_PRESETS}
-      iconLabel="🎥 Angles"
+      iconLabel={t("studio.locationAnglesTabTitle")}
     />
   )
 }

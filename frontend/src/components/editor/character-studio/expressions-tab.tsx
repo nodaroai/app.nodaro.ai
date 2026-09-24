@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react"
 import { toast } from "sonner"
 import { generateCharacterAsset, modifyImage } from "@/lib/api"
+import { tx, useT } from "@/lib/i18n"
 import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs, StudioAssetType } from "./use-character-studio-jobs"
 import { AssetCard } from "./asset-card"
@@ -102,6 +103,7 @@ export function ImageAssetTab({
    *  already on the Appearance tab and don't need the gate. See PR 2 Task 18. */
   onSwitchToAppearance?: () => void
 }) {
+  const t = useT()
   const items = (state.staged[arrayField] as { name: string; url: string }[]) ?? []
   const trackingAssetType = ARRAY_FIELD_TO_TRACKING_TYPE[arrayField]
   const pendingForType = Array.from(jobs.pending.entries()).filter(([, m]) => m.assetType === trackingAssetType)
@@ -142,7 +144,7 @@ export function ImageAssetTab({
         characterId = await state.ensureSaved()
       } catch (e) {
         jobs.abort(tempId)
-        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        toast.error(e instanceof Error ? e.message : tx("studio.couldNotSaveCharacter"))
         return
       }
       try {
@@ -168,7 +170,7 @@ export function ImageAssetTab({
         jobs.settle(tempId, jobId)
       } catch (e) {
         jobs.abort(tempId)
-        toast.error(e instanceof Error ? e.message : "Generation failed.")
+        toast.error(e instanceof Error ? e.message : tx("studio.generationFailedDot"))
       }
     },
     [state, jobs, assetType, attachToColumn, trackingAssetType],
@@ -177,7 +179,7 @@ export function ImageAssetTab({
   const handleGenerateAll = useCallback(async () => {
     const existing = new Set(items.map((i) => i.name.toLowerCase()))
     const missing = presets.filter((p) => !existing.has(p.toLowerCase()))
-    if (missing.length >= 4 && !window.confirm(`This will generate ${missing.length} ${title.toLowerCase()}. Continue?`)) return
+    if (missing.length >= 4 && !window.confirm(tx("studio.confirmGenerateAll", { n: missing.length, title: title.toLowerCase() }))) return
     for (const p of missing) {
       // fire sequentially so the credit guard isn't slammed; await the request, not the job
       await handleGenerate(p, true, currentModel)
@@ -191,7 +193,7 @@ export function ImageAssetTab({
       try {
         characterId = await state.ensureSaved()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        toast.error(e instanceof Error ? e.message : tx("studio.couldNotSaveCharacter"))
         return
       }
       const trackName = mode === "replace" ? asset.name : `${asset.name} (v)`
@@ -235,7 +237,7 @@ export function ImageAssetTab({
       try {
         characterId = await state.ensureSaved()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        toast.error(e instanceof Error ? e.message : tx("studio.couldNotSaveCharacter"))
         return
       }
       // "replace" deletes the old card immediately; the new generation lands as a fresh card on
@@ -288,7 +290,7 @@ export function ImageAssetTab({
         characterId = await state.ensureSaved()
       } catch (e) {
         jobs.abort(tempId)
-        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        toast.error(e instanceof Error ? e.message : tx("studio.couldNotSaveCharacter"))
         return
       }
       try {
@@ -315,7 +317,7 @@ export function ImageAssetTab({
         jobs.settle(tempId, jobId)
       } catch (e) {
         jobs.abort(tempId)
-        toast.error(e instanceof Error ? e.message : "Generation failed.")
+        toast.error(e instanceof Error ? e.message : tx("studio.generationFailedDot"))
       }
     },
     [state, jobs, assetType, currentModel, attachToColumn, trackingAssetType],
@@ -334,14 +336,14 @@ export function ImageAssetTab({
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-3 py-6 text-center">
         <div className="text-[11px] text-amber-300 mb-2">
-          Generate a portrait first to enable asset generations.
+          {t("studio.generatePortraitFirstGate")}
         </div>
         <button
           type="button"
           onClick={onSwitchToAppearance}
           className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5"
         >
-          Open Profile
+          {t("studio.openProfile")}
         </button>
       </div>
     )
@@ -360,18 +362,18 @@ export function ImageAssetTab({
             onClick={() => setGenPanelOpen(true)}
             className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
           >
-            Custom prompt
+            {t("studio.customPrompt")}
           </button>
           <button
             type="button"
             onClick={() => setRefsDrawerOpen(true)}
             className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
           >
-            Real-life refs
+            {t("studio.realLifeRefs")}
           </button>
           {onImport && (
             <button onClick={onImport} className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-400">
-              ↑ Import
+              ↑ {t("common.import")}
             </button>
           )}
         </div>
@@ -425,7 +427,7 @@ export function ImageAssetTab({
             className="rounded-md border border-dashed border-[#334155] flex items-center justify-center text-slate-500 text-xl"
             style={{ aspectRatio: fallbackAspect }}
             onClick={() => {
-              const p = window.prompt(`New ${title.toLowerCase()} prompt:`)
+              const p = window.prompt(tx("studio.newPromptFor", { title: title.toLowerCase() }))
               if (p) handleGenerate(p, false, currentModel)
             }}
           >
@@ -437,7 +439,7 @@ export function ImageAssetTab({
         presets={presets}
         models={IMAGE_MODELS}
         defaultModel={DEFAULT_IMAGE_MODEL}
-        customPlaceholder={`Custom ${title.toLowerCase()}: e.g. "winking with a raised eyebrow, playful"`}
+        customPlaceholder={t("studio.customTitleExamplePh", { title: title.toLowerCase() })}
         onGenerate={handleGenerate}
         onGenerateAll={handleGenerateAll}
         generateAllCount={missingCount}
@@ -458,13 +460,14 @@ export function ImageAssetTab({
           void fireCustomGen(submission)
         }}
         assetType={assetType}
+        typeLabel={title.toLowerCase()}
         characterId={state.staged.characterDbId ?? ""}
         canonicalDescription={state.staged.canonicalDescription}
       />
       <PerVariantRealLifeRefsDrawer
         open={refsDrawerOpen}
         onClose={() => setRefsDrawerOpen(false)}
-        title={`Real-life refs · ${title}`}
+        title={t("studio.realLifeRefsTitle", { title })}
         variants={presets}
         refsByVariant={state.staged.realLifeRefsByVariant ?? {}}
         onChange={(next) => state.patch({ realLifeRefsByVariant: next })}
@@ -482,6 +485,7 @@ export function ExpressionsTab({
   jobs: CharacterStudioJobs
   onSwitchToAppearance?: () => void
 }) {
+  const t = useT()
   return (
     <ImageAssetTab
       state={state}
@@ -489,10 +493,10 @@ export function ExpressionsTab({
       assetType="expressions"
       arrayField="expressions"
       presets={EXPRESSION_PRESETS}
-      title="Expressions"
-      description="Emotion and facial expression reference images"
+      title={t("studio.expressions")}
+      description={t("studio.expressionsDescription")}
       onImport={() => {
-        const url = window.prompt("Paste an image URL to import as an expression:")?.trim()
+        const url = window.prompt(tx("studio.pasteImageUrlExpression"))?.trim()
         if (url) state.patch({ expressions: [...state.staged.expressions, { name: "imported", url }] })
       }}
       onSwitchToAppearance={onSwitchToAppearance}

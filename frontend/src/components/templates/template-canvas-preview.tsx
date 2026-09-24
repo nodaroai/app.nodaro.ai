@@ -72,7 +72,7 @@ export function TemplateCanvasPreview({ slug, open, fallback, onBack }: Template
       <DialogContent
         showCloseButton={false}
         overlayClassName="bg-[var(--home-bg)]"
-        className="templates-page templates-dots @container fixed inset-0 top-0 left-0 block h-full w-full max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-[var(--home-bg)] p-0 text-[var(--home-fg)] shadow-none [--templates-dot-gap:20px] sm:max-w-none"
+        className="templates-page templates-dots @container fixed inset-0 top-0 start-0 block h-full w-full max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-[var(--home-bg)] p-0 text-[var(--home-fg)] shadow-none [--templates-dot-gap:20px] sm:max-w-none"
       >
         <DialogTitle className="sr-only">{summary?.name ?? t("templates.title")}</DialogTitle>
         <DialogDescription className="sr-only">{t("templates.readOnly")}</DialogDescription>

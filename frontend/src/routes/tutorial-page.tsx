@@ -8,6 +8,7 @@ import { Suspense, useCallback, useEffect, useState } from "react"
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
 import { createClient } from "@/lib/supabase"
 import { getTemplateBySlug, cloneTemplate, getModelCreditCost } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
@@ -33,6 +34,7 @@ export default function TutorialPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const focus = useTutorialFocus()
+  const t = useT()
   const [starting, setStarting] = useState(false)
 
   const definition = getTutorial(slug)
@@ -89,11 +91,11 @@ export default function TutorialPage() {
     setStarting(true)
     try {
       const { data: projectId, error } = await createClient().rpc("ensure_default_project")
-      if (error || !projectId) throw new Error(error?.message ?? "No project available")
+      if (error || !projectId) throw new Error(error?.message ?? tx("misc.noProjectAvailable"))
       const result = await cloneTemplate(templateSlug, projectId as string, template?.name)
       navigate(`/projects/${result.projectId}/workflows/${result.workflowId}`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not open this tutorial")
+      toast.error(err instanceof Error ? err.message : tx("misc.tutorialOpenFailed"))
       setStarting(false)
     }
   }, [slug, templateSlug, searchParams, starting, user, navigate, template?.name])
@@ -102,25 +104,25 @@ export default function TutorialPage() {
     return (
       <Centered>
         <div>
-          <p>This tutorial does not have a guided view.</p>
+          <p>{t("misc.tutorialNoGuidedView")}</p>
           <p style={{ marginTop: 12 }}>
             <Link to="/projects?tab=explore" style={{ color: "var(--nd-accent-dim)" }}>
-              Back to tutorials
+              {t("misc.backToTutorials")}
             </Link>
           </p>
         </div>
       </Centered>
     )
   }
-  if (isLoading) return <Centered>Loading tutorial…</Centered>
+  if (isLoading) return <Centered>{t("misc.loadingTutorial")}</Centered>
   if (isError || !template) {
     return (
       <Centered>
         <div>
-          <p>This tutorial is not available yet.</p>
+          <p>{t("misc.tutorialNotAvailable")}</p>
           <p style={{ marginTop: 12 }}>
             <Link to="/projects?tab=explore" style={{ color: "var(--nd-accent-dim)" }}>
-              Back to tutorials
+              {t("misc.backToTutorials")}
             </Link>
           </p>
         </div>
@@ -137,10 +139,10 @@ export default function TutorialPage() {
   const credits = startCostModel
     ? (startCost ?? 0)
     : (template.estimatedCredits ?? 0)
-  const costChip = hasCredits() ? (startCostModel ? `${formatCreditUnits(credits)} to start` : formatCreditUnits(credits)) : null
+  const costChip = hasCredits() ? (startCostModel ? t("misc.creditsToStart", { credits: formatCreditUnits(credits) }) : formatCreditUnits(credits)) : null
 
   const chips = [
-    `${steps.length} steps`,
+    t("misc.nSteps", { n: steps.length }),
     `~${minutes} min`,
     ...(chip ? [chip] : costChip && credits > 0 ? [costChip] : []),
   ]
@@ -149,7 +151,7 @@ export default function TutorialPage() {
     <TutorialShell
       title={definition.title ?? template.name}
       summary={definition.summary ?? template.description ?? ""}
-      breadcrumb="Tutorials"
+      breadcrumb={t("nav.tutorials")}
       steps={steps}
       chips={chips}
       focus={focus}
@@ -157,10 +159,10 @@ export default function TutorialPage() {
       edges={edges}
       note={note}
       onRun={startForReal}
-      runLabel={starting ? "Opening…" : "Run tutorial"}
+      runLabel={starting ? t("misc.opening") : t("misc.runTutorial")}
       runDisabled={starting}
     >
-      <Suspense fallback={<div className="nd-state">Loading…</div>}>
+      <Suspense fallback={<div className="nd-state">{t("common.loading")}</div>}>
         <Body
           nodes={nodes}
           edges={edges}

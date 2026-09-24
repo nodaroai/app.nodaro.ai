@@ -10,10 +10,12 @@
  */
 import { Link } from "react-router-dom"
 import { FilePlus2 } from "lucide-react"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
+import { useT } from "@/lib/i18n"
 
 export function CreatedWorkflowPins() {
+  const t = useT()
   const created = useCopilotStore((s) => s.turn.createdWorkflows)
   if (created.length === 0) return null
 
@@ -26,7 +28,7 @@ export function CreatedWorkflowPins() {
         >
           <FilePlus2 className="w-3 h-3 flex-none text-primary" strokeWidth={2.2} aria-hidden />
           <span className="min-w-0 flex-1 text-[11.5px] leading-[1.45] text-foreground break-words">
-            <span className="text-[var(--copilot-dim)]">{S.workflowCreated} · </span>
+            <span className="text-[var(--copilot-dim)]">{t(K.workflowCreated)} · </span>
             {workflow.name}
           </span>
           {/* A real navigation, not a canvas swap: this conversation belongs to
@@ -36,7 +38,7 @@ export function CreatedWorkflowPins() {
             to={`/projects/${encodeURIComponent(workflow.projectId)}/workflows/${encodeURIComponent(workflow.workflowId)}`}
             className="flex-none text-[11px] text-[var(--copilot-muted)] hover:text-foreground underline"
           >
-            {S.workflowCreatedOpen}
+            {t(K.workflowCreatedOpen)}
           </Link>
         </div>
       ))}

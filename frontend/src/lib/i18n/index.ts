@@ -7,24 +7,18 @@ import { useMemo } from "react"
 import { useLocaleStore } from "@/lib/locale-store"
 import type { LocaleId } from "@nodaro/shared"
 import { en, type MessageKey, type ChromeDict } from "./en"
-import { he } from "./he"
-import { ar } from "./ar"
-import { de } from "./de"
-import { es } from "./es"
-import { fr } from "./fr"
-import { hi } from "./hi"
-import { ja } from "./ja"
-import { ko } from "./ko"
-import { ptBR } from "./pt-br"
-import { ru } from "./ru"
-import { zhCN } from "./zh-cn"
+import { DICTS } from "./dicts"
 
-// All twelve shipped locales are registered here. Most start as empty stub
-// dicts and fall back to English until translated; `en` and `he` are
-// complete.
-const DICTS: Partial<Record<LocaleId, ChromeDict>> = {
-  en, he, ar, de, es, fr, hi, ja, ko, "pt-BR": ptBR, ru, "zh-CN": zhCN,
-}
+export {
+  CHROME_COMPLETE_RATIO,
+  chromeCoverage,
+  isChromeComplete,
+  isOfferedLocale,
+  languageMenuRows,
+  offeredLanguages,
+} from "./offered-locales"
+
+export { formatDate, formatDateTime, formatNumber, formatTime, uiLocale } from "./format"
 
 /** Locale ids that have a registered chrome dict (empty or not). */
 export function registeredChromeLocales(): LocaleId[] {

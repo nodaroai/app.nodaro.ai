@@ -12,6 +12,7 @@ import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
 import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config"
 import { useT } from "@/lib/i18n"
+import { formatNumber } from "@/lib/i18n/format"
 
 const PENDING_PLAN_KEY = "nodaro_pending_plan"
 
@@ -260,7 +261,7 @@ export default function LoginPage() {
 
           {showEmailAuth && (
             <>
-              <form onSubmit={handleEmailSignIn} className="space-y-3 text-left">
+              <form onSubmit={handleEmailSignIn} className="space-y-3 text-start">
                 <Input
                   type="email"
                   value={email}
@@ -345,7 +346,7 @@ export default function LoginPage() {
             </p>
           ) : (
             <p className="text-xs text-muted-foreground/60 pt-1">
-              {t("auth.freeCredits", { credits: FREE_TIER_CREDITS.toLocaleString() })}
+              {t("auth.freeCredits", { credits: formatNumber(FREE_TIER_CREDITS) })}
             </p>
           )}
         </div>

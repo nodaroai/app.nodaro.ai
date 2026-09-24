@@ -2,6 +2,7 @@ import type { StudioPageProps } from "../../studio-shell/types"
 import type { CreatureStudioState } from "../use-creature-studio"
 import type { CreatureStudioJobs } from "../use-creature-studio-jobs"
 import { optimizedImageUrl } from "@/lib/image"
+import { useT } from "@/lib/i18n"
 
 /**
  * Board page — read-only display of the creature's named composite reference
@@ -11,13 +12,14 @@ import { optimizedImageUrl } from "@/lib/image"
  * full-size in a new tab — same enlarge affordance as the character Board page.
  */
 export function BoardPage({ state }: StudioPageProps<CreatureStudioState, CreatureStudioJobs>) {
+  const t = useT()
   const boards = state.stagedData?.boards ?? []
 
   if (boards.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-3 py-6 text-center">
-        <p className="text-sm text-muted-foreground">No reference boards yet.</p>
-        <p className="mt-1 text-xs text-muted-foreground/70">Boards created in the studio appear here.</p>
+        <p className="text-sm text-muted-foreground">{t("creature.noBoardsYet")}</p>
+        <p className="mt-1 text-xs text-muted-foreground/70">{t("creature.boardsHint")}</p>
       </div>
     )
   }
@@ -30,7 +32,7 @@ export function BoardPage({ state }: StudioPageProps<CreatureStudioState, Creatu
             key={`${b.name}-${i}`}
             className="group relative overflow-hidden rounded-md border border-border bg-[#1a1d27]"
           >
-            <a href={b.url} target="_blank" rel="noopener noreferrer" title="Open full size">
+            <a href={b.url} target="_blank" rel="noopener noreferrer" title={t("creature.openFullSize")}>
               <img src={optimizedImageUrl(b.url)} alt={b.name} className="w-full object-contain" loading="lazy" />
             </a>
             {b.name && (

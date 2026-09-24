@@ -307,6 +307,18 @@ describe("the wire message", () => {
     expect(body.body.message).toContain('character "Maya"')
     expect(body.body.message).not.toMatch(/https?:/)
   })
+
+  it("carries the interface language so the copilot answers in it", async () => {
+    const { useLocaleStore } = await import("@/lib/locale-store")
+    const before = useLocaleStore.getState().locale
+    useLocaleStore.setState({ locale: "he" })
+    try {
+      await sendCopilotMessage("hello")
+    } finally {
+      useLocaleStore.setState({ locale: before })
+    }
+    expect(streamRequest.mock.calls[0]?.[1]).toMatchObject({ body: { locale: "he" } })
+  })
 })
 
 describe("the editor's view of a turn", () => {
@@ -768,8 +780,12 @@ describe("the auto-posted user strings", () => {
     // auto-post; the moment such a string embeds provider or execution text
     // (which can carry attacker-influenced URLs), that harvest must learn to
     // exclude it first. This pin makes that change loud instead of silent.
-    const { COPILOT_STRINGS } = await import("../strings")
-    expect(COPILOT_STRINGS.fixItMessage).not.toMatch(/http/i)
+    // The message is posted in the user's language, so every locale is pinned.
+    const { COPILOT_KEYS } = await import("../strings")
+    const { registeredChromeLocales, translate } = await import("@/lib/i18n")
+    for (const locale of ["en" as const, ...registeredChromeLocales()]) {
+      expect(translate(locale, COPILOT_KEYS.fixItMessage), locale).not.toMatch(/http/i)
+    }
   })
 })
 

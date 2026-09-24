@@ -13,7 +13,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { COPILOT_RAIL_WIDTH } from "@/hooks/use-copilot-ui-store"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
+import { useT } from "@/lib/i18n"
 import { focusNodes } from "@/ee/lib/copilot/canvas-sync"
 import { useCopilotMentions } from "@/ee/lib/copilot/use-copilot-mentions"
 import { sendCopilotMessage, stopCopilotTurn, teardownCopilot } from "@/ee/lib/copilot/turn-engine"
@@ -60,6 +61,7 @@ export default function CopilotPanel({
   activeExecutionId,
   fullScreen,
 }: CopilotPanelProps) {
+  const t = useT()
   const { user } = useAuth()
   const userId = user?.id
   const workflowId = useWorkflowStore((s) => s.workflowId)
@@ -156,7 +158,7 @@ export default function CopilotPanel({
 
   return (
     <aside
-      aria-label={S.title}
+      aria-label={t(K.title)}
       style={fullScreen ? undefined : { width: COPILOT_RAIL_WIDTH }}
       className={`bg-[var(--copilot-panel)] flex flex-col min-h-0 ${
         fullScreen ? "absolute inset-0 z-40" : "flex-none border-e border-border"
@@ -189,7 +191,7 @@ export default function CopilotPanel({
 
       {/* One short, stable sentence per state change — this is what gets announced. */}
       <div className="sr-only" role="status" aria-live="polite">
-        {streaming ? S.a11yWorking : turnStatus === "completed" ? S.a11yDone : ""}
+        {streaming ? t(K.a11yWorking) : turnStatus === "completed" ? t(K.a11yDone) : ""}
       </div>
 
       {busy && (
@@ -200,10 +202,10 @@ export default function CopilotPanel({
           />
           <div className="min-w-0">
             <div className="text-[11.5px] font-medium text-foreground">
-              {busy.kind === "ours" ? S.stillWorkingTitle : S.otherTabTitle}
+              {t(busy.kind === "ours" ? K.stillWorkingTitle : K.otherTabTitle)}
             </div>
             {busy.kind === "ours" && (
-              <div className="text-[11px] text-[var(--copilot-muted)]">{S.stillWorkingBlurb}</div>
+              <div className="text-[11px] text-[var(--copilot-muted)]">{t(K.stillWorkingBlurb)}</div>
             )}
           </div>
         </div>
@@ -211,8 +213,8 @@ export default function CopilotPanel({
 
       {isReadOnly ? (
         <div className="flex-none px-3.5 py-4 border-t border-border">
-          <div className="text-xs font-semibold text-foreground">{S.readOnlyTitle}</div>
-          <div className="mt-1 text-[11.5px] text-[var(--copilot-muted)]">{S.readOnlyBlurb}</div>
+          <div className="text-xs font-semibold text-foreground">{t(K.readOnlyTitle)}</div>
+          <div className="mt-1 text-[11.5px] text-[var(--copilot-muted)]">{t(K.readOnlyBlurb)}</div>
         </div>
       ) : (
         <CopilotComposer
@@ -230,10 +232,12 @@ export default function CopilotPanel({
   )
 }
 
-/** "Hey asi" — the greeting uses whatever first name we can honestly derive. */
+/**
+ * "Hey asi" — the greeting uses whatever first name we can honestly derive, and
+ * "" when there is none (the empty state then greets without a name).
+ */
 function firstNameOf(email: string | undefined, fullName: string | undefined): string {
   const fromName = fullName?.trim().split(/\s+/)[0]
   if (fromName) return fromName
-  const local = email?.split("@")[0] ?? ""
-  return local || "there"
+  return email?.split("@")[0] ?? ""
 }

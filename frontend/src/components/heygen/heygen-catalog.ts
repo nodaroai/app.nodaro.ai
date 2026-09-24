@@ -30,6 +30,7 @@ import {
   type HeygenVoice,
 } from "@/lib/api"
 import type { AiAvatarData } from "@/types/nodes"
+import { tx, type MessageKey, type TFunction } from "@/lib/i18n"
 
 export const HEYGEN_AVATARS_QUERY_KEY = ["heygen-avatars"] as const
 export const HEYGEN_PRIVATE_AVATARS_QUERY_KEY = ["heygen-avatars-private"] as const
@@ -285,11 +286,25 @@ export function avatarIsUsable(avatar: HeygenAvatar): boolean {
   return avatar.status === undefined
 }
 
-/** The tile badge for a look that is not (yet) usable; null when it is. */
-export function avatarStatusLabel(avatar: HeygenAvatar): "Processing…" | "Failed" | null {
-  if (avatar.status === "processing") return "Processing…"
-  if (avatar.status === "failed") return "Failed"
+/** Why a look is not (yet) usable; null when it is. Branch on THIS, never on
+ *  the localized label. */
+export type AvatarStatus = "processing" | "failed"
+export function avatarStatus(avatar: HeygenAvatar): AvatarStatus | null {
+  if (avatar.status === "processing") return "processing"
+  if (avatar.status === "failed") return "failed"
   return null
+}
+
+export const AVATAR_STATUS_KEYS: Record<AvatarStatus, MessageKey> = {
+  processing: "heygen.statusProcessing",
+  failed: "common.failed",
+}
+
+/** The tile badge for a look that is not (yet) usable; null when it is.
+ *  Localized — pass the component's `t`; a bare call reads the live locale. */
+export function avatarStatusLabel(avatar: HeygenAvatar, t: TFunction = tx): string | null {
+  const status = avatarStatus(avatar)
+  return status ? t(AVATAR_STATUS_KEYS[status]) : null
 }
 
 // ---------------------------------------------------------------------------
@@ -306,6 +321,14 @@ export function normalizeGender(raw: string | undefined): "female" | "male" | "u
   if (g === "female" || g === "woman" || g === "f") return "female"
   if (g === "male" || g === "man" || g === "m") return "male"
   return "unknown"
+}
+
+/** Localized label for a folded gender; "" for "unknown" (callers pick their
+ *  own fallback — a facet says "Unspecified", a meta line drops it). */
+export function genderLabel(gender: string, t: TFunction = tx): string {
+  if (gender === "female") return t("heygen.genderFemale")
+  if (gender === "male") return t("heygen.genderMale")
+  return ""
 }
 
 /** Derive the sorted list of (folded) genders present in the catalog. */
@@ -371,8 +394,8 @@ export function voiceSelectionPatch(voice: HeygenVoice): Partial<AiAvatarData> {
  * panel, the published-app card and the on-node quick pick can't paraphrase
  * each other — it is the community-edition "fails honestly" contract.
  */
-export function keylessCatalogHint(what: "avatars" | "voices"): string {
-  return `Add a HeyGen key or connect nodaro.ai under Integrations → Model providers to browse ${what}.`
+export function keylessCatalogHint(what: "avatars" | "voices", t: TFunction = tx): string {
+  return t(what === "avatars" ? "heygen.keylessHintAvatars" : "heygen.keylessHintVoices")
 }
 
 /**

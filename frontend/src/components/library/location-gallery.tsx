@@ -16,6 +16,9 @@ import { useLocations, useArchivedLocations } from "@/hooks/queries/use-assets-q
 import { useInvalidateLocation } from "@/hooks/queries/use-invalidate-location"
 import { useQueryClient } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
+import { useT, tx } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import {
   restoreLocation,
   permanentDeleteLocation,
@@ -42,6 +45,8 @@ type TabKey = "active" | "archived"
 export default function LocationGallery() {
   const { user } = useAuth()
   const [tab, setTab] = useState<TabKey>("active")
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const queryClient = useQueryClient()
   const invalidateActive = useInvalidateLocation(undefined, user?.id)
 
@@ -80,11 +85,11 @@ export default function LocationGallery() {
         invalidateLists()
         toast.success(
           result.name !== loc.name
-            ? `Restored as '${result.name}' (the original name was taken)`
-            : `Restored '${result.name}'`,
+            ? tx("lib.restoredAsRenamed", { name: result.name })
+            : tx("lib.restoredNamed", { name: result.name }),
         )
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to restore location.")
+        toast.error(err instanceof Error ? err.message : tx("lib.restoreLocationFailed"))
       }
     },
     [invalidateLists],
@@ -119,12 +124,12 @@ export default function LocationGallery() {
     try {
       await permanentDeleteLocation(deleteTarget.id)
       invalidateLists()
-      toast.success(`Permanently deleted '${deleteTarget.name}'`)
+      toast.success(tx("lib.permanentlyDeletedNamed", { name: deleteTarget.name }))
       setDeleteTarget(null)
       setDeleteConfirmText("")
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Failed to permanently delete location.",
+        err instanceof Error ? err.message : tx("lib.permanentDeleteFailed"),
       )
     } finally {
       setDeleting(false)
@@ -138,11 +143,11 @@ export default function LocationGallery() {
     <div className="max-w-5xl mx-auto space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link to="/projects" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Back">
-          <ArrowLeft className="h-5 w-5" />
+        <Link to="/projects" className="text-muted-foreground hover:text-foreground transition-colors" aria-label={t("common.back")}>
+          <ArrowLeft className={cn("h-5 w-5", isRtl && "rotate-180")} />
         </Link>
         <MapPin className="h-6 w-6 text-cyan-500" />
-        <h1 className="text-2xl font-bold">Location Library</h1>
+        <h1 className="text-2xl font-bold">{t("lib.locationLibrary")}</h1>
       </div>
 
       {/* Tabs */}
@@ -156,8 +161,8 @@ export default function LocationGallery() {
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          Active
-          {activeCount > 0 && <span className="ml-1.5 opacity-60">({activeCount})</span>}
+          {t("lib.tabActive")}
+          {activeCount > 0 && <span className="ms-1.5 opacity-60">({activeCount})</span>}
         </button>
         <button
           type="button"
@@ -168,8 +173,8 @@ export default function LocationGallery() {
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          Archived
-          {archivedCount > 0 && <span className="ml-1.5 opacity-60">({archivedCount})</span>}
+          {t("lib.tabArchived")}
+          {archivedCount > 0 && <span className="ms-1.5 opacity-60">({archivedCount})</span>}
         </button>
       </div>
 
@@ -224,11 +229,12 @@ function ActivePane({
   locations: DbLocation[]
   refetch: () => void
 }) {
+  const t = useT()
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
         <Loader2 className="w-8 h-8 animate-spin mb-2" />
-        <p className="text-sm">Loading locations...</p>
+        <p className="text-sm">{t("lib.loadingLocations")}</p>
       </div>
     )
   }
@@ -236,9 +242,9 @@ function ActivePane({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-destructive">
         <AlertCircle className="w-8 h-8 mb-2" />
-        <p className="text-sm">{error instanceof Error ? error.message : "Failed to load locations"}</p>
+        <p className="text-sm">{error instanceof Error ? error.message : t("lib.loadLocationsFailed")}</p>
         <Button variant="outline" size="sm" className="mt-2" onClick={refetch}>
-          Retry
+          {t("common.retry")}
         </Button>
       </div>
     )
@@ -247,8 +253,8 @@ function ActivePane({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
         <MapPin className="w-10 h-10 mb-2 opacity-40" />
-        <p className="text-sm">No saved locations</p>
-        <p className="text-xs mt-1">Generate a location image to save it here</p>
+        <p className="text-sm">{t("lib.noSavedLocations")}</p>
+        <p className="text-xs mt-1">{t("lib.generateLocationHint")}</p>
       </div>
     )
   }
@@ -303,11 +309,12 @@ function ArchivedPane({
   onPermanentDelete: (e: React.MouseEvent, loc: DbLocation) => void
   refetch: () => void
 }) {
+  const t = useT()
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
         <Loader2 className="w-8 h-8 animate-spin mb-2" />
-        <p className="text-sm">Loading archive...</p>
+        <p className="text-sm">{t("lib.loadingArchive")}</p>
       </div>
     )
   }
@@ -315,9 +322,9 @@ function ArchivedPane({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-destructive">
         <AlertCircle className="w-8 h-8 mb-2" />
-        <p className="text-sm">{error instanceof Error ? error.message : "Failed to load archived locations"}</p>
+        <p className="text-sm">{error instanceof Error ? error.message : t("lib.loadArchivedFailed")}</p>
         <Button variant="outline" size="sm" className="mt-2" onClick={refetch}>
-          Retry
+          {t("common.retry")}
         </Button>
       </div>
     )
@@ -326,8 +333,8 @@ function ArchivedPane({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
         <ArchiveRestore className="w-10 h-10 mb-2 opacity-40" />
-        <p className="text-sm">No archived locations</p>
-        <p className="text-xs mt-1">Archived locations land here. Restore any time.</p>
+        <p className="text-sm">{t("lib.noArchivedLocations")}</p>
+        <p className="text-xs mt-1">{t("lib.archivedLocationsHint")}</p>
       </div>
     )
   }
@@ -362,18 +369,18 @@ function ArchivedPane({
               variant="outline"
               className="h-8 flex-1 text-xs gap-1"
               onClick={(e) => onRestore(e, loc)}
-              title={`Restore ${loc.name}`}
+              title={t("lib.restoreNamed", { name: loc.name })}
             >
               <ArchiveRestore className="w-3.5 h-3.5" />
-              Restore
+              {t("archive.restore")}
             </Button>
             <Button
               size="sm"
               variant="ghost"
               className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
               onClick={(e) => onPermanentDelete(e, loc)}
-              title={`Permanently delete ${loc.name}`}
-              aria-label={`Permanently delete ${loc.name}`}
+              title={t("lib.permanentlyDeleteNamed", { name: loc.name })}
+              aria-label={t("lib.permanentlyDeleteNamed", { name: loc.name })}
             >
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
@@ -409,6 +416,7 @@ function PermanentDeleteModal({
   onConfirm: () => void
 }) {
   const matches = confirmText === target.name
+  const t = useT()
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center">
       <div
@@ -421,11 +429,9 @@ function PermanentDeleteModal({
             <Trash2 className="w-4 h-4 text-destructive" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold">Permanently delete '{target.name}'?</h4>
+            <h4 className="text-sm font-semibold">{t("lib.permanentlyDeleteConfirmTitle", { name: target.name })}</h4>
             <p className="text-xs text-muted-foreground mt-1">
-              This is permanent. The location row and every R2-hosted asset (main image,
-              time-of-day variants, weather, seasons, angles, lighting, atmosphere
-              motion clips, reference photos) will be deleted. This cannot be undone.
+              {t("lib.permanentDeleteDesc")}
             </p>
           </div>
         </div>
@@ -435,7 +441,7 @@ function PermanentDeleteModal({
             htmlFor="permanent-delete-confirm"
             className="text-xs text-muted-foreground block mb-1.5"
           >
-            Type <span className="font-semibold text-foreground">{target.name}</span> to confirm:
+            {t("lib.typeToConfirmPre")} <span className="font-semibold text-foreground">{target.name}</span> {t("lib.typeToConfirmPost")}
           </label>
           <input
             id="permanent-delete-confirm"
@@ -447,13 +453,13 @@ function PermanentDeleteModal({
             autoComplete="off"
             className="w-full px-3 py-2 text-sm bg-background border border-border rounded-md outline-none focus:ring-2 focus:ring-destructive/40"
             placeholder={target.name}
-            aria-label="Type location name to confirm"
+            aria-label={t("lib.typeLocationNameAria")}
           />
         </div>
 
         <div className="flex justify-end gap-2">
           <Button size="sm" variant="ghost" onClick={onCancel} disabled={deleting}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             size="sm"
@@ -462,11 +468,11 @@ function PermanentDeleteModal({
             disabled={!matches || deleting}
           >
             {deleting ? (
-              <Loader2 className="w-3 h-3 animate-spin mr-1" />
+              <Loader2 className="w-3 h-3 animate-spin me-1" />
             ) : (
-              <Trash2 className="w-3 h-3 mr-1" />
+              <Trash2 className="w-3 h-3 me-1" />
             )}
-            Permanently delete
+            {t("lib.permanentlyDelete")}
           </Button>
         </div>
       </div>

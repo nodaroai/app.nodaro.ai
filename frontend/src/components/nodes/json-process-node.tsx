@@ -1,6 +1,7 @@
 "use client"
 
 import { memo } from "react"
+import { useT } from "@/lib/i18n"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Filter, Braces } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -12,6 +13,7 @@ import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { JsonProcessNodeData } from "@/types/nodes"
 
 function JsonProcessNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as JsonProcessNodeData
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -19,27 +21,27 @@ function JsonProcessNodeComponent({ id, data, selected }: NodeProps) {
 
   useAutoExecute(id, data as Record<string, unknown>)
 
-  const modeBadge = nodeData.mode === "advanced" ? "Advanced" : "Visual"
+  const modeBadge = nodeData.mode === "advanced" ? t("utilcfg.modeAdvanced") : t("utilcfg.modeVisual")
 
   const summaryLine =
     nodeData.mode === "advanced"
       ? nodeData.expression.length > 40
         ? nodeData.expression.slice(0, 40) + "..."
-        : nodeData.expression || "(no expression)"
+        : nodeData.expression || t("node.noExpression")
       : [
-          nodeData.inputPath ? `.${nodeData.inputPath}` : "(root)",
-          `${nodeData.filters?.length ?? 0} filter${(nodeData.filters?.length ?? 0) === 1 ? "" : "s"}`,
-          `${nodeData.projections?.length ?? 0} field${(nodeData.projections?.length ?? 0) === 1 ? "" : "s"}`,
+          nodeData.inputPath ? `.${nodeData.inputPath}` : t("node.jsonRoot"),
+          t((nodeData.filters?.length ?? 0) === 1 ? "node.nFilterOne" : "node.nFilterMany", { n: nodeData.filters?.length ?? 0 }),
+          t((nodeData.projections?.length ?? 0) === 1 ? "node.nFieldOne" : "node.nFieldMany", { n: nodeData.projections?.length ?? 0 }),
         ].join(" \u2192 ")
 
   let resultLabel: string | undefined
   if (status === "completed" && nodeData.processedResult !== undefined) {
     const r = nodeData.processedResult
     if (Array.isArray(r)) {
-      resultLabel = `${r.length} item${r.length === 1 ? "" : "s"}`
+      resultLabel = t(r.length === 1 ? "inputcfg.itemOne" : "txtcfg.itemCount", { n: r.length })
     } else if (r !== null && typeof r === "object") {
       const keyCount = Object.keys(r as object).length
-      resultLabel = `object (${keyCount} key${keyCount === 1 ? "" : "s"})`
+      resultLabel = t(keyCount === 1 ? "node.objectKeysOne" : "node.objectKeysMany", { n: keyCount })
     } else {
       resultLabel = String(r)
     }

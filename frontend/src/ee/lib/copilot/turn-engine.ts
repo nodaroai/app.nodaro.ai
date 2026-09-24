@@ -7,6 +7,8 @@
  * explicit stop, a workflow change, or leaving the editor.
  */
 import { getAuthHeaders } from "@/lib/api"
+import { tx, type MessageKey } from "@/lib/i18n"
+import { useLocaleStore } from "@/lib/locale-store"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { runtimeApiUrl } from "@/lib/runtime-config"
@@ -16,7 +18,7 @@ import { useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
 import { CopilotApiError, cancelCopilotTurn, createCopilotThread, updateCopilotThread } from "./api"
 import { ensureCanvasVersion } from "./canvas-sync"
 import { buildWireMessage } from "./mentions"
-import { COPILOT_STRINGS } from "./strings"
+import { COPILOT_KEYS as K } from "./strings"
 import {
   copilotState,
   setCopilotState,
@@ -126,33 +128,36 @@ async function send(
   if (!workflow.workflowId || workflow.isDirty) {
     const { save, projectId } = copilotState().bridge
     if (!save || !projectId) {
-      setCopilotState({ notice: "Open the workflow editor to save before asking." })
+      setCopilotState({ notice: tx(K.openEditorToSave) })
       return
     }
-    setCopilotState({ notice: COPILOT_STRINGS.saving })
+    // Resolved ONCE: the notice doubles as a sentinel across the await below,
+    // and re-translating it there would miss after a mid-save language switch.
+    const savingNotice = tx(K.saving)
+    setCopilotState({ notice: savingNotice })
     // `save` RESOLVES with { success: false } on every real failure path
     // (remote conflict, write error, no project) — it does not throw. Reading
     // the result is the whole guard; a try/catch alone would let a failed save
     // fall through and hand the copilot a graph without the user's edits.
     const result = await save(projectId).catch(() => ({ success: false }) as CopilotSaveResult)
-    if (copilotState().notice === COPILOT_STRINGS.saving) setCopilotState({ notice: null })
+    if (copilotState().notice === savingNotice) setCopilotState({ notice: null })
     if (!result?.success) {
       setCopilotState({
-        notice: SAVE_FAILED_NOTICE.get(result?.error ?? "") ?? "Could not save the workflow — try again.",
+        notice: tx(SAVE_FAILED_NOTICE.get(result?.error ?? "") ?? K.saveFailed),
       })
       return
     }
     // The user can type while the save is in flight; the flag, not the call, is
     // the invariant that the copilot and the canvas agree on one graph.
     if (useWorkflowStore.getState().isDirty) {
-      setCopilotState({ notice: "You changed the canvas while it was saving — try again." })
+      setCopilotState({ notice: tx(K.changedWhileSaving) })
       return
     }
   }
 
   const workflowId = useWorkflowStore.getState().workflowId
   if (!workflowId) {
-    setCopilotState({ notice: "Save the workflow first." })
+    setCopilotState({ notice: tx(K.saveFirst) })
     return
   }
 
@@ -211,6 +216,9 @@ async function send(
         baseVersion: useWorkflowStore.getState().loadedVersion ?? undefined,
         // The guard-time ceiling hint; the server's thread row stays authoritative.
         tier: copilotState().modelTier,
+        // The language the person is reading the panel in, read live at send
+        // time (not the profile column) — the copilot answers in it.
+        locale: useLocaleStore.getState().locale,
       },
       baseUrl: runtimeApiUrl(),
       headers,
@@ -306,7 +314,7 @@ async function onEvent(event: CopilotStreamEvent, workflowId: string): Promise<v
   if (event.type === "workflow_updated") {
     const outcome = await ensureCanvasVersion(workflowId, event.data.version, controller?.signal)
     if (outcome === "dirty" || outcome === "failed") {
-      setCopilotState({ notice: "The canvas is behind — reload to see the copilot's latest changes." })
+      setCopilotState({ notice: tx(K.canvasBehind) })
     }
     return
   }
@@ -390,13 +398,13 @@ function startProposedNodeRun(node: CopilotRunProposalNode): void {
   // retry into forever.
   if (!proposedNodeIsIntact(node)) {
     copilotState().dismissProposal()
-    setCopilotState({ notice: COPILOT_STRINGS.nodeRunStale })
+    setCopilotState({ notice: tx(K.nodeRunStale) })
     return
   }
   // The card shows a price and this click agrees to spend it. A price computed
   // for a different graph is not this one's.
   if (!estimateIsCurrent(bridge)) {
-    setCopilotState({ notice: COPILOT_STRINGS.estimateStale })
+    setCopilotState({ notice: tx(K.estimateStale) })
     return
   }
   // A single-node run has no execution to follow: the canvas owns its
@@ -404,9 +412,9 @@ function startProposedNodeRun(node: CopilotRunProposalNode): void {
   // workflow-level. So the card's job ends here — leaving the panel on a
   // "Running" state it could never resolve would be the lie.
   copilotState().dismissProposal()
-  setCopilotState({ notice: COPILOT_STRINGS.nodeRunStarted(node.label) })
+  setCopilotState({ notice: tx(K.nodeRunStarted, { label: node.label }) })
   void Promise.resolve(bridge.runNode(node.id, { skipConfirm: true })).then((result) => {
-    if (!result?.started) setCopilotState({ notice: COPILOT_STRINGS.nodeRunFailed })
+    if (!result?.started) setCopilotState({ notice: tx(K.nodeRunFailed) })
   })
 }
 
@@ -467,10 +475,10 @@ export function reportRunOutcome(executionId: string, status: "succeeded" | "fai
   // feature exists for. A success needs no paid round-trip to confirm itself.
   if (status !== "failed" || state.runMode !== "auto" || state.streaming) return
   if (state.autoFixChain >= MAX_AUTO_FIX_CHAIN) {
-    setCopilotState({ notice: COPILOT_STRINGS.autoFixExhausted })
+    setCopilotState({ notice: tx(K.autoFixExhausted) })
     return
   }
-  void sendCopilotMessage(COPILOT_STRINGS.fixItMessage, { auto: true })
+  void sendCopilotMessage(tx(K.fixItMessage), { auto: true })
 }
 
 /** Stop following an execution — the user discarded it, so its outcome is not news. */
@@ -497,7 +505,7 @@ function estimateIsCurrent(bridge: CopilotEditorBridge): boolean {
 
 /** Ask mode, or a user who wants the fix loop on demand. */
 export function askForFix(): void {
-  void sendCopilotMessage(COPILOT_STRINGS.fixItMessage)
+  void sendCopilotMessage(tx(K.fixItMessage))
 }
 
 // ---------------------------------------------------------------------------
@@ -573,7 +581,7 @@ function handleStreamError(err: unknown, bornIn: number): void {
         status: "failed",
         error: {
           code: String(body.code ?? "request_failed"),
-          message: String(body.message ?? "The copilot could not start this turn."),
+          message: String(body.message ?? tx(K.turnStartFailed)),
         },
       }),
       bornIn,
@@ -584,7 +592,7 @@ function handleStreamError(err: unknown, bornIn: number): void {
     (turn) => ({
       ...turn,
       status: "failed",
-      error: { code: "network_error", message: "Lost the connection to the copilot." },
+      error: { code: "network_error", message: tx(K.connectionLost) },
     }),
     bornIn,
   )
@@ -611,15 +619,19 @@ function parseErrorBody(message: string): Record<string, unknown> {
 
 function describeApiError(err: unknown): string {
   if (err instanceof CopilotApiError) return err.message
-  return "Could not start a copilot conversation."
+  return tx(K.threadStartFailed)
 }
 
-/** Turn the persistence layer's error codes into something a person can act on. */
-const SAVE_FAILED_NOTICE = new Map<string, string>([
-  ["remote_conflict", "This workflow changed somewhere else — reload, then ask again."],
-  ["not_writable", "Changes to this workflow can't be saved from your account — use Clone & Remix, then ask again on your copy."],
-  ["Empty workflow", "Add a node first, or describe what to build and it will be created."],
-  ["No project ID", "Open the workflow from its project, then try again."],
+/**
+ * Turn the persistence layer's error codes into something a person can act on.
+ * Holds KEYS, translated where the notice is written — a map of sentences here
+ * would freeze them in whatever language the module first loaded in.
+ */
+const SAVE_FAILED_NOTICE = new Map<string, MessageKey>([
+  ["remote_conflict", K.saveRemoteConflict],
+  ["not_writable", K.saveNotWritable],
+  ["Empty workflow", K.saveEmptyWorkflow],
+  ["No project ID", K.saveNoProject],
 ])
 
 function numberOr(value: unknown, fallback: number): number {

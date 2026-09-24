@@ -5,6 +5,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getNodeLabel } from "@/lib/presentation-utils"
 import { isParameterPickerNode } from "@/lib/parameter-picker-types"
 import type { WorkflowNode } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
 import { getChipValue, isUploadNode } from "./chat-view-helpers"
 
 /** Inputs that own internal modals / large surfaces — edited in a Dialog, not a popover. */
@@ -26,6 +27,7 @@ interface ComposerChipProps {
  */
 export function ComposerChip({ node, inputValues, renderInputCard, disabled }: ComposerChipProps) {
   const [open, setOpen] = useState(false)
+  const t = useT()
   const label = getNodeLabel(node)
   const type = node.type ?? ""
   const pickerMode = useWorkflowStore((s) => s.presentationSettings.cardMeta?.[node.id]?.pickerMode)
@@ -59,7 +61,7 @@ export function ComposerChip({ node, inputValues, renderInputCard, disabled }: C
       {filled ? (
         <span className="truncate text-foreground/90">{value}</span>
       ) : (
-        <span className="shrink-0">+ Add</span>
+        <span className="shrink-0">{t("present.plusAdd")}</span>
       )}
     </button>
   )

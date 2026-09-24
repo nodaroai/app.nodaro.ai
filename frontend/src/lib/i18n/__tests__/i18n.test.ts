@@ -70,8 +70,10 @@ describe("i18n translate()", () => {
   })
 
   it("every en key has a Hebrew translation (translate() falls back silently, so this is the only signal)", () => {
-    // Pre-existing gaps, tracked: the SSO copy is not offered in Hebrew yet.
-    const KNOWN_UNTRANSLATED = new Set(["auth.continueWithSso", "auth.ssoExchanging"])
+    // A deliberately-untranslated key goes here WITH a reason; the set is
+    // empty since the 2026-09 pass closed the SSO gap. Keep it small — the
+    // offered-locales gate hides a language whose coverage drops below 98%.
+    const KNOWN_UNTRANSLATED = new Set<string>([])
     const missing = Object.keys(en).filter((k) => !(k in he) && !KNOWN_UNTRANSLATED.has(k))
     expect(missing, `en keys with no he value:\n${missing.join("\n")}`).toEqual([])
     for (const k of KNOWN_UNTRANSLATED) expect(k in he, `${k} is translated now — drop it from KNOWN_UNTRANSLATED`).toBe(false)

@@ -17,12 +17,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { reportCommunityListing } from "@/lib/api"
+import { tx, useT } from "@/lib/i18n"
 
 const REPORT_REASONS = [
-  { value: "real_person_no_consent", label: "Depicts a real person without consent" },
-  { value: "inappropriate", label: "Inappropriate content" },
-  { value: "ip_violation", label: "IP violation" },
-  { value: "other", label: "Other" },
+  { value: "real_person_no_consent", labelKey: "community.reasonRealPerson" },
+  { value: "inappropriate", labelKey: "community.reasonInappropriate" },
+  { value: "ip_violation", labelKey: "community.reasonIpViolation" },
+  { value: "other", labelKey: "cat.other" },
 ] as const
 
 interface ReportDialogProps {
@@ -32,6 +33,7 @@ interface ReportDialogProps {
 }
 
 export function ReportDialog({ listingId, open, onOpenChange }: ReportDialogProps) {
+  const t = useT()
   const [reason, setReason] = useState<string>("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -40,11 +42,11 @@ export function ReportDialog({ listingId, open, onOpenChange }: ReportDialogProp
     setSubmitting(true)
     try {
       await reportCommunityListing(listingId, reason)
-      toast.success("Report submitted. Thank you.")
+      toast.success(tx("community.reportSubmitted"))
       setReason("")
       onOpenChange(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to submit report")
+      toast.error(err instanceof Error ? err.message : tx("community.reportFailed"))
     } finally {
       setSubmitting(false)
     }
@@ -54,21 +56,21 @@ export function ReportDialog({ listingId, open, onOpenChange }: ReportDialogProp
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Report listing</DialogTitle>
+          <DialogTitle>{t("community.reportListing")}</DialogTitle>
           <DialogDescription>
-            Let us know why you&apos;re reporting this listing. Our team will review it.
+            {t("community.reportDescription")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="py-2">
           <Select value={reason} onValueChange={setReason}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a reason" />
+              <SelectValue placeholder={t("community.selectReason")} />
             </SelectTrigger>
             <SelectContent>
               {REPORT_REASONS.map((r) => (
                 <SelectItem key={r.value} value={r.value}>
-                  {r.label}
+                  {t(r.labelKey)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -77,10 +79,10 @@ export function ReportDialog({ listingId, open, onOpenChange }: ReportDialogProp
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button onClick={handleSubmit} disabled={!reason || submitting}>
-            {submitting ? "Submitting…" : "Submit report"}
+            {submitting ? t("community.submitting") : t("community.submitReport")}
           </Button>
         </DialogFooter>
       </DialogContent>

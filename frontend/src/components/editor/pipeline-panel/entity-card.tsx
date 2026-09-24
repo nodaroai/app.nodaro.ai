@@ -7,6 +7,7 @@ import { pipelinesApi } from "@/lib/pipelines-api"
 import { Button } from "@/components/ui/button"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 
 interface Props {
   entity: PipelineEntity
@@ -109,6 +110,7 @@ export function EntityCard({
   disabled,
   mode,
 }: Props) {
+  const t = useT()
   const status = entity.status
   const metadata = entity.metadata as Record<string, unknown> | null
   const name = String(metadata?.name ?? entity.entity_key)
@@ -221,12 +223,12 @@ export function EntityCard({
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
-            {status === "generating" ? "Generating..." : "—"}
+            {status === "generating" ? t("cfgext.entGenerating") : "—"}
           </div>
         )}
         <div
           className={cn(
-            "absolute top-1 right-1 text-xs px-1.5 py-0.5 rounded",
+            "absolute top-1 end-1 text-xs px-1.5 py-0.5 rounded",
             STATUS_PILL_COLORS[status],
           )}
         >
@@ -277,8 +279,8 @@ export function EntityCard({
             <li key={i}>
               <span className="font-semibold">{f.category}:</span> {f.description}
               {f.suggested_fix && (
-                <div className="ml-3 text-zinc-500 dark:text-zinc-400">
-                  Try: {f.suggested_fix}
+                <div className="ms-3 text-zinc-500 dark:text-zinc-400">
+                  {t("pipe.tryPrefix", { suggestion: f.suggested_fix })}
                 </div>
               )}
             </li>
@@ -288,7 +290,7 @@ export function EntityCard({
       {status === "awaiting_approval" && mode !== "auto" && (
         <div className="flex gap-1">
           <Button size="sm" onClick={onApprove} disabled={disabled} className="flex-1">
-            Approve
+            {t("pipe.approve")}
           </Button>
           <Button
             size="sm"
@@ -297,7 +299,7 @@ export function EntityCard({
             disabled={disabled}
             className="flex-1"
           >
-            Reject
+            {t("cfgext.shmReject")}
           </Button>
         </div>
       )}
@@ -317,7 +319,7 @@ export function EntityCard({
             disabled={disabled || recovering}
             className="flex-1"
           >
-            {skipMutation.isPending ? "Skipping…" : "Skip"}
+            {skipMutation.isPending ? t("cfgext.sceneSkipping") : t("pipe.skip")}
           </Button>
           <Button
             size="sm"
@@ -326,7 +328,7 @@ export function EntityCard({
             disabled={disabled || recovering}
             className="flex-1"
           >
-            {regenerateMutation.isPending ? "Regenerating…" : "Regenerate"}
+            {regenerateMutation.isPending ? t("cfgext.sceneRegenerating") : t("pipe.regenerate")}
           </Button>
         </div>
       )}
@@ -343,21 +345,20 @@ export function EntityCard({
           <div className="text-xs text-amber-800 dark:text-amber-200">
             {variantError ? (
               <>
-                <span className="font-medium">Variant generation failed:</span>{" "}
+                <span className="font-medium">{t("pipe.variantGenFailed")}</span>{" "}
                 {variantError}
               </>
             ) : variantsFailedCount > 0 ? (
               <>
                 <span className="font-medium">
-                  {variantsFailedCount} of {variantsTotalCount} variants failed.
+                  {t("pipe.variantsFailedCount", { failed: variantsFailedCount, total: variantsTotalCount })}
                 </span>{" "}
-                Retry to regenerate the missing ones.
+                {t("pipe.retryRegenerateMissing")}
               </>
             ) : (
               <>
-                <span className="font-medium">Variants not generated.</span>{" "}
-                The character is approved but no angle/expression variants
-                were created. Retry to attempt generation.
+                <span className="font-medium">{t("pipe.variantsNotGenerated")}</span>{" "}
+                {t("pipe.variantsNotGeneratedDesc")}
               </>
             )}
           </div>
@@ -368,7 +369,7 @@ export function EntityCard({
             disabled={disabled || recovering}
             data-testid="retry-variants-btn"
           >
-            {retryVariantsMutation.isPending ? "Retrying…" : "Retry variants"}
+            {retryVariantsMutation.isPending ? t("pipe.retrying") : t("pipe.retryVariants")}
           </Button>
         </div>
       )}

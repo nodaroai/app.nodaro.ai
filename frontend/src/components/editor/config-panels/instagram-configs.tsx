@@ -45,6 +45,7 @@ import {
 import { MappableField } from "./mappable-field"
 import { LlmModelSelect } from "./llm-model-select"
 import type { ConfigProps } from "./types"
+import { formatNumber } from "@/lib/i18n/format"
 
 const STRUCTURED_VISION_MODEL_IDS = new Set(STRUCTURED_VISION_MODELS.map((m) => m.id))
 const fieldClass = "h-auto rounded-xl border-[var(--meta-ads-border)] bg-[var(--meta-ads-surface-3)] px-3.5 py-3 text-[14px] font-semibold text-[var(--meta-ads-text)] shadow-none"
@@ -216,8 +217,8 @@ function InstagramResultsTab({ data, onUpdate }: { readonly data: InstagramScrap
                   <span className="truncate text-[11.5px] text-[var(--meta-ads-muted)]">{[instagramTimestampLabel(post), formatKey ? t(formatKey) : ""].filter(Boolean).join(" · ")}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-2 text-[11px] font-semibold text-[var(--meta-ads-muted)]">
-                  {likes !== null && <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{likes.toLocaleString()}</span>}
-                  {comments !== null && <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{comments.toLocaleString()}</span>}
+                  {likes !== null && <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{formatNumber(likes)}</span>}
+                  {comments !== null && <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{formatNumber(comments)}</span>}
                 </span>
               </button>
               {open && (

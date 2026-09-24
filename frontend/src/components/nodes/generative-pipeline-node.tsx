@@ -9,12 +9,14 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GenerativePipelineNodeData } from "@/types/nodes"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 
 function GenerativePipelineNodeImpl({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as GenerativePipelineNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = nodeData.status ?? "queued"
-  const label = nodeData.label ?? "Story → Video"
+  const label = nodeData.label ?? t("node.storyToVideo")
   return (
     <div
       className="relative"
@@ -47,7 +49,7 @@ function GenerativePipelineNodeImpl({ id, data, selected }: NodeProps) {
       >
         <div className="flex h-full flex-col gap-2 p-3">
           <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Story → Video
+            {t("node.storyToVideo")}
           </div>
           <div className="text-xs text-zinc-600 dark:text-zinc-300">
             {nodeData.target_duration_seconds ?? "—"}s · {(nodeData.format ?? "—").replace("_", " ")}

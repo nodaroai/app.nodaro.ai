@@ -9,6 +9,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
 import { WaveformAudioPlayer } from "@/components/audio-player"
+import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 
 const VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "motion-transfer", "lip-sync", "suno-music-video"])
 const AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
@@ -85,6 +87,8 @@ function IterationCard({
   readonly nodeType: string
   readonly nodeId: string
 }) {
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const [expanded, setExpanded] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const addNode = useWorkflowStore((s) => s.addNode)
@@ -136,7 +140,7 @@ function IterationCard({
       >
         {expanded
           ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-          : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+          : <ChevronRight className={cn("w-3.5 h-3.5 text-gray-400 shrink-0", isRtl && "rotate-180")} />
         }
         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-[#888] shrink-0">
           #{index + 1}
@@ -146,7 +150,7 @@ function IterationCard({
         {resultIsUrl && mediaType === "image" && (
           <CachedImage
             src={result}
-            alt={`Result ${index + 1}`}
+            alt={t("editor.iterResultAlt", { n: index + 1 })}
             className="w-8 h-8 rounded object-cover shrink-0"
             thumbnail
             thumbnailWidth={80}
@@ -165,7 +169,7 @@ function IterationCard({
 
         {/* Input preview */}
         {!inputIsUrl && input && (
-          <span className="text-[11px] text-gray-500 dark:text-[#999] truncate text-left flex-1">
+          <span className="text-[11px] text-gray-500 dark:text-[#999] truncate text-start flex-1">
             {inputPreview}
           </span>
         )}
@@ -185,7 +189,7 @@ function IterationCard({
           {input && (
             <div className="pt-2">
               <span className="text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-[#666]">
-                Input
+                {t("exec.input")}
               </span>
               {inputIsUrl ? (
                 <a href={input} target="_blank" rel="noopener noreferrer" className="block text-[11px] text-blue-500 hover:underline truncate mt-0.5">
@@ -203,13 +207,13 @@ function IterationCard({
           {hasResult && (
             <div>
               <span className="text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-[#666]">
-                Result
+                {t("editor.iterResult")}
               </span>
               {resultIsUrl && mediaType === "image" && (
                 <div className="mt-1">
                   <CachedImage
                     src={result}
-                    alt={`Result ${index + 1}`}
+                    alt={t("editor.iterResultAlt", { n: index + 1 })}
                     className="w-full max-h-48 rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
                     onClick={() => setLightboxOpen(true)}
                     thumbnail
@@ -218,7 +222,7 @@ function IterationCard({
                   {lightboxOpen && (
                     <ImageLightbox
                       src={result}
-                      alt={`Result ${index + 1}`}
+                      alt={t("editor.iterResultAlt", { n: index + 1 })}
                       onClose={() => setLightboxOpen(false)}
                     />
                   )}
@@ -243,7 +247,7 @@ function IterationCard({
           )}
 
           {!hasResult && (
-            <p className="text-[11px] text-red-400 pt-1">Failed</p>
+            <p className="text-[11px] text-red-400 pt-1">{t("common.failed")}</p>
           )}
 
           {/* Action buttons */}
@@ -255,8 +259,8 @@ function IterationCard({
                 className="h-7 text-[11px] flex-1"
                 onClick={handleDownload}
               >
-                <Download className="w-3 h-3 mr-1" />
-                Download
+                <Download className="w-3 h-3 me-1" />
+                {t("common.download")}
               </Button>
               {(mediaType === "image" || mediaType === "video") && (
                 <Button
@@ -265,8 +269,8 @@ function IterationCard({
                   className="h-7 text-[11px] flex-1"
                   onClick={handleContinue}
                 >
-                  <ExternalLink className="w-3 h-3 mr-1" />
-                  Continue
+                  <ExternalLink className="w-3 h-3 me-1" />
+                  {t("common.continue")}
                 </Button>
               )}
             </div>
@@ -283,6 +287,7 @@ export function IterationResultsPanel({
   listResults,
   listInputs,
 }: IterationResultsPanelProps) {
+  const t = useT()
   const [downloading, setDownloading] = useState(false)
   const mediaType = getMediaType(nodeType)
   const mediaIcon = getMediaIcon(mediaType)
@@ -312,7 +317,7 @@ export function IterationResultsPanel({
       <div className="flex items-center justify-between mb-3">
         <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] flex items-center gap-1.5">
           {mediaIcon}
-          Results ({successCount}/{listResults.length})
+          {t("editor.iterResultsCount", { done: successCount, total: listResults.length })}
         </Label>
       </div>
 
@@ -340,8 +345,8 @@ export function IterationResultsPanel({
             onClick={handleDownloadAll}
             disabled={downloading}
           >
-            <Download className="w-3 h-3 mr-1.5" />
-            {downloading ? "Downloading..." : `Download All (${mediaResults.length})`}
+            <Download className="w-3 h-3 me-1.5" />
+            {downloading ? t("editor.downloading") : t("editor.downloadAll", { n: mediaResults.length })}
           </Button>
         </div>
       )}

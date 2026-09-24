@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { queryKeys } from "@/lib/query-keys"
 import { useVocabulary } from "@/ee/hooks/use-workspace"
+import { useT, type TFunction } from "@/lib/i18n"
 import {
   OrgApiError,
   getWorkspace,
@@ -29,10 +30,11 @@ import {
  * stop trusting.
  */
 export default function WorkspacePeoplePage() {
+  const t = useT()
   const { id = "" } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const vocabulary = useVocabulary()
-  const workspaceWord = vocabulary.workspace ?? "Workspace"
+  const workspaceWord = vocabulary.workspace ?? t("org.workspaceWord")
 
   const workspace = useQuery({
     queryKey: queryKeys.orgs.workspace(id),
@@ -59,21 +61,21 @@ export default function WorkspacePeoplePage() {
     onSuccess: refresh,
   })
 
-  if (workspace.isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+  if (workspace.isLoading) return <div className="p-6 text-sm text-muted-foreground">{t("common.loading")}</div>
 
   if (workspace.error || !workspace.data) {
     const code = workspace.error instanceof OrgApiError ? workspace.error.code : "internal_error"
     return (
       <div className="mx-auto max-w-xl p-6">
         <Card className="space-y-4 p-8">
-          <h1 className="text-xl font-semibold">Not available</h1>
+          <h1 className="text-xl font-semibold">{t("org.notAvailable")}</h1>
           <p className="text-sm text-muted-foreground">
             {code === "member_suspended"
-              ? "You cannot open this while your membership is suspended."
-              : `This ${workspaceWord.toLowerCase()} does not exist, or you are not a member of it.`}
+              ? t("org.suspendedCannotOpenShort")
+              : t("org.workspaceMissingOrNotMember", { workspace: workspaceWord.toLowerCase() })}
           </p>
           <Button asChild variant="outline">
-            <Link to="/">Back to your work</Link>
+            <Link to="/">{t("org.backToYourWork")}</Link>
           </Button>
         </Card>
       </div>
@@ -87,7 +89,7 @@ export default function WorkspacePeoplePage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold">People</h1>
+        <h1 className="text-2xl font-semibold">{t("org.people")}</h1>
         <Link to={`/w/${id}`} className="text-sm text-muted-foreground hover:underline">
           {workspace.data.name}
         </Link>
@@ -95,22 +97,22 @@ export default function WorkspacePeoplePage() {
 
       {workspace.data.archived && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-muted-foreground">
-          This {workspaceWord.toLowerCase()} is archived. Its members cannot be changed until it is reopened.
+          {t("org.archivedMembersLocked", { workspace: workspaceWord.toLowerCase() })}
         </p>
       )}
 
       {mutationError && (
         <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-          {actionFailureMessage(mutationError)}
+          {actionFailureMessage(mutationError, t)}
         </p>
       )}
 
-      {members.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-      {members.error && <p className="text-sm text-muted-foreground">Could not load the people here.</p>}
+      {members.isLoading && <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}
+      {members.error && <p className="text-sm text-muted-foreground">{t("org.peopleLoadFailed")}</p>}
 
       {members.data && members.data.data.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          Nobody has been added to this {workspaceWord.toLowerCase()} yet.
+          {t("org.nobodyAddedYet", { workspace: workspaceWord.toLowerCase() })}
         </p>
       )}
 
@@ -131,8 +133,7 @@ export default function WorkspacePeoplePage() {
 
       {isAdmin && (
         <p className="text-xs text-muted-foreground">
-          Removing someone here takes them out of this {workspaceWord.toLowerCase()} only. They stay in the
-          organization.
+          {t("org.removeFromWorkspaceOnly", { workspace: workspaceWord.toLowerCase() })}
         </p>
       )}
     </div>
@@ -152,6 +153,7 @@ function PersonRow({
   onPatch: (input: { role?: "admin" | "member"; status?: "active" | "suspended" }) => void
   onRemove: () => void
 }) {
+  const t = useT()
   // `status` and `creditCap` are present only in an admin's copy of the row —
   // the server decides that, and their absence is what tells this component
   // it is rendering a member's view.
@@ -162,22 +164,22 @@ function PersonRow({
       <p className="min-w-0 flex-1 truncate text-sm font-medium">{member.displayName ?? member.userId}</p>
 
       {seesStanding && member.status === "suspended" && (
-        <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">Suspended</span>
+        <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">{t("devApps.statusSuspended")}</span>
       )}
 
       {canChange ? (
         <Select value={member.role} onValueChange={(role) => onPatch({ role: role as "admin" | "member" })}>
-          <SelectTrigger className="w-36" aria-label={`Role for ${member.displayName ?? member.userId}`}>
+          <SelectTrigger className="w-36" aria-label={t("org.roleFor", { name: member.displayName ?? member.userId })}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="member">{vocabulary.workspace_member ?? "Member"}</SelectItem>
-            <SelectItem value="admin">{vocabulary.workspace_admin ?? "Admin"}</SelectItem>
+            <SelectItem value="member">{vocabulary.workspace_member ?? t("org.roleMember")}</SelectItem>
+            <SelectItem value="admin">{vocabulary.workspace_admin ?? t("org.roleAdmin")}</SelectItem>
           </SelectContent>
         </Select>
       ) : (
         <span className="text-xs text-muted-foreground">
-          {member.role === "admin" ? (vocabulary.workspace_admin ?? "Admin") : (vocabulary.workspace_member ?? "Member")}
+          {member.role === "admin" ? (vocabulary.workspace_admin ?? t("org.roleAdmin")) : (vocabulary.workspace_member ?? t("org.roleMember"))}
         </span>
       )}
 
@@ -188,10 +190,10 @@ function PersonRow({
             variant="outline"
             onClick={() => onPatch({ status: member.status === "suspended" ? "active" : "suspended" })}
           >
-            {member.status === "suspended" ? "Reinstate" : "Suspend"}
+            {member.status === "suspended" ? t("org.reinstate") : t("org.suspend")}
           </Button>
           <Button size="sm" variant="ghost" onClick={onRemove}>
-            Remove
+            {t("common.remove")}
           </Button>
         </div>
       )}
@@ -199,18 +201,18 @@ function PersonRow({
   )
 }
 
-function actionFailureMessage(error: unknown): string {
+function actionFailureMessage(error: unknown, t: TFunction): string {
   const code = error instanceof OrgApiError ? error.code : "internal_error"
   switch (code) {
     case "insufficient_role":
-      return "You cannot make that change."
+      return t("org.cannotMakeChange")
     case "workspace_archived":
-      return "This workspace is archived, so its members cannot be changed."
+      return t("org.archivedMembersCannotChange")
     case "org_not_active":
-      return "This organization is not active."
+      return t("org.orgNotActive")
     case "not_found":
-      return "That person is no longer here. Reload to see the current list."
+      return t("org.personGone")
     default:
-      return "Something went wrong. Try again in a moment."
+      return t("org.somethingWrongTryAgain")
   }
 }

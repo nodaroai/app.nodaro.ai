@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button"
 import { usePipelineChat } from "./use-pipeline-chat"
 import { ChatHistory } from "./chat-history"
 import { ChatInput } from "./chat-input"
+import { useT } from "@/lib/i18n"
+import { useLocaleStore } from "@/lib/locale-store"
 
 interface Props {
   pipelineId: string
@@ -25,11 +27,11 @@ const AUTO_COLLAPSE_VIEWPORT = 1280
 
 /**
  * Phase 1D.2b — Adjacent chat panel mounted next to PipelinePanel
- * (which is fixed at right:0 width 420px). This panel renders to the
- * left of it.
+ * (which is fixed at the inline end, width 420px). This panel renders on
+ * its inline-start side — left of it in LTR, right of it in RTL.
  *
  * Features:
- *  - Resize handle on left edge; width clamps to [280, 640] and is
+ *  - Resize handle on the free (inline-start) edge; width clamps to [280, 640] and is
  *    persisted to localStorage(`nodaro-pipeline-chat-width`).
  *  - Minimize button collapses to a 32px tab showing the turn count.
  *  - Auto-collapse when the viewport drops below 1280px (with manual
@@ -38,6 +40,7 @@ const AUTO_COLLAPSE_VIEWPORT = 1280
  *    instance.
  */
 export function ChatPanel({ pipelineId, stage, onApplied }: Props) {
+  const t = useT()
   const {
     turns,
     remaining,
@@ -105,11 +108,13 @@ export function ChatPanel({ pipelineId, stage, onApplied }: Props) {
   useEffect(() => {
     function onMove(e: MouseEvent) {
       if (!dragging.current) return
-      // Pipeline panel is 420px wide on the right. Chat panel sits to
-      // its left starting at `right: 420px`. Width is measured from the
-      // mouse X to the chat panel's right edge (= window.innerWidth − 420).
-      const rightEdge = window.innerWidth - 420
-      const w = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, rightEdge - e.clientX))
+      // The pipeline panel is 420px wide on the inline END (right in LTR,
+      // left in RTL). The chat panel docks against it at `inset-inline-end:
+      // 420px`, so its docked edge sits at x = innerWidth − 420 (LTR) or
+      // x = 420 (RTL), and the width runs from there to the mouse.
+      const rtl = useLocaleStore.getState().dir === "rtl"
+      const dragged = rtl ? e.clientX - 420 : window.innerWidth - 420 - e.clientX
+      const w = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragged))
       setWidth(w)
     }
     function onUp() {
@@ -143,10 +148,10 @@ export function ChatPanel({ pipelineId, stage, onApplied }: Props) {
       <button
         type="button"
         onClick={toggleCollapsed}
-        className="fixed top-0 h-full z-40 w-8 border-l border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50 dark:bg-[#121212] hover:bg-zinc-100 dark:hover:bg-[#1E1E1E] flex flex-col items-center justify-start pt-4 text-xs text-zinc-700 dark:text-zinc-200"
-        style={{ right: 420 }}
+        className="fixed top-0 h-full z-40 w-8 border-s border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50 dark:bg-[#121212] hover:bg-zinc-100 dark:hover:bg-[#1E1E1E] flex flex-col items-center justify-start pt-4 text-xs text-zinc-700 dark:text-zinc-200"
+        style={{ insetInlineEnd: 420 }}
         data-testid="chat-panel-collapsed"
-        title="Open chat"
+        title={t("pipe.openChat")}
       >
         <span aria-hidden>💬</span>
         <span className="mt-1 font-medium">{turns.length}</span>
@@ -156,22 +161,22 @@ export function ChatPanel({ pipelineId, stage, onApplied }: Props) {
 
   return (
     <aside
-      className="fixed top-0 h-full z-40 border-l border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50 dark:bg-[#121212] flex flex-col"
-      style={{ right: 420, width }}
+      className="fixed top-0 h-full z-40 border-s border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50 dark:bg-[#121212] flex flex-col"
+      style={{ insetInlineEnd: 420, width }}
       data-testid="chat-panel"
     >
       <div
-        className="absolute left-0 top-0 h-full w-1 cursor-col-resize hover:bg-[#ff0073]/40"
+        className="absolute start-0 top-0 h-full w-1 cursor-col-resize hover:bg-[#ff0073]/40"
         onMouseDown={onMouseDown}
         data-testid="chat-panel-resize-handle"
       />
       <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
         <div>
           <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
-            Refine
+            {t("pipe.refine")}
           </div>
           <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 capitalize">
-            {stage.replace(/_/g, " ")} chat
+            {t("pipe.stageChat", { stage: stage.replace(/_/g, " ") })}
           </div>
         </div>
         <Button
@@ -179,7 +184,7 @@ export function ChatPanel({ pipelineId, stage, onApplied }: Props) {
           variant="ghost"
           onClick={toggleCollapsed}
           data-testid="chat-panel-collapse-btn"
-          aria-label="Collapse chat"
+          aria-label={t("pipe.collapseChat")}
         >
           —
         </Button>

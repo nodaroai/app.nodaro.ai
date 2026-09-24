@@ -13,6 +13,7 @@ import {
 import { ProviderKeyTile } from "./provider-key-tile"
 import { NodaroScopeDialog } from "@/components/integrations/nodaro-scope-dialog"
 import { Link } from "react-router-dom"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 /**
  * /setup — self-host install health screen.
@@ -105,11 +106,11 @@ const codeStyle: React.CSSProperties = {
 }
 
 /** Caption shown next to the latency figure, per backend status value. */
-const STATUS_CAPTION: Record<string, string> = {
-  ok: "connected",
-  error: "unreachable",
-  migrations_missing: "migrations missing",
-  not_configured: "not configured",
+const STATUS_CAPTION: Record<string, MessageKey> = {
+  ok: "setup.statusConnected",
+  error: "setup.statusUnreachable",
+  migrations_missing: "setup.statusMigrationsMissing",
+  not_configured: "setup.statusNotConfigured",
 }
 
 type Severity = "up" | "degraded" | "down"
@@ -223,6 +224,7 @@ function Sparkline({ samples }: { readonly samples: readonly number[] }) {
  */
 function EncryptionCard({ check }: { readonly check: EncryptionCheck }) {
   const severity: Severity = check.ok ? "up" : "down"
+  const t = useT()
   return (
     <div
       style={{
@@ -237,30 +239,30 @@ function EncryptionCard({ check }: { readonly check: EncryptionCheck }) {
     >
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <span style={{ fontSize: 16, fontWeight: 600 }}>Encryption</span>
-          <span style={{ fontFamily: MONO, fontSize: 11, color: SUBTLE }}>instance key · pasted keys, social tokens</span>
+          <span style={{ fontSize: 16, fontWeight: 600 }}>{t("setup.encryption")}</span>
+          <span style={{ fontFamily: MONO, fontSize: 11, color: SUBTLE }}>{t("setup.encryptionDetail")}</span>
         </div>
         <span
-          aria-label={check.ok ? "key present" : "key missing"}
+          aria-label={check.ok ? t("setup.keyPresent") : t("setup.keyMissing")}
           style={{ width: 9, height: 9, borderRadius: 999, background: SEVERITY_COLOR[severity], marginTop: 6, flexShrink: 0 }}
         />
       </div>
       {check.ok ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 14, color: INK }}>
-            key present &middot;{" "}
+            {t("setup.keyPresent")} &middot;{" "}
             <span style={{ fontFamily: MONO, fontSize: 12, color: MUTED }}>
-              {check.source === "generated" ? "generated on first boot" : `from ${check.envVar ?? "environment"}`}
+              {check.source === "generated" ? t("setup.generatedOnFirstBoot") : t("setup.fromEnvVar", { env: check.envVar ?? t("setup.environment") })}
             </span>
           </span>
           {check.source === "generated" && (
             <span style={{ fontFamily: MONO, fontSize: 10.5, color: MUTED }}>
-              lives in the app-data volume (/data/nodaro/encryption-key) — back it up with the database
+              {t("setup.encryptionKeyLocation")}
             </span>
           )}
         </div>
       ) : (
-        <span style={{ fontSize: 12.5, lineHeight: 1.45, color: "#b60a43" }}>{check.hint ?? "No instance encryption key."}</span>
+        <span style={{ fontSize: 12.5, lineHeight: 1.45, color: "#b60a43" }}>{check.hint ?? t("setup.noEncryptionKey")}</span>
       )}
     </div>
   )
@@ -274,8 +276,9 @@ function ServiceCard({
   readonly samples: readonly number[]
 }) {
   const { check } = service
+  const t = useT()
   const severity = severityOf(check)
-  const caption = STATUS_CAPTION[check.status] ?? check.status
+  const caption = STATUS_CAPTION[check.status] ? t(STATUS_CAPTION[check.status]) : check.status
   return (
     <div
       style={{
@@ -346,6 +349,7 @@ const ENV_TEMPLATE = `# Nodaro self-host \u2014 provider keys. Paste into the .e
 
 export default function SetupPage() {
   const [status, setStatus] = useState<SetupStatus | null>(null)
+  const t = useT()
   const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
   // The post-connect choice (4b): an OAuth Connect that started from /setup
   // bounces back to /setup?nodaro=connected — ask how the new connection
@@ -412,9 +416,9 @@ export default function SetupPage() {
 
   const services: ServiceView[] = status
     ? [
-        { id: "database", name: "Database", detail: "Supabase / Postgres", check: status.checks.database },
-        { id: "redis", name: "Redis", detail: "queue + cache", check: status.checks.redis },
-        { id: "storage", name: "Storage", detail: "object storage", check: status.checks.storage },
+        { id: "database", name: t("setup.serviceDatabase"), detail: "Supabase / Postgres", check: status.checks.database },
+        { id: "redis", name: "Redis", detail: t("setup.redisDetail"), check: status.checks.redis },
+        { id: "storage", name: t("lib.storage"), detail: t("setup.storageDetail"), check: status.checks.storage },
       ]
     : []
 
@@ -444,14 +448,14 @@ export default function SetupPage() {
 
   const anyDown = services.some((s) => severityOf(s.check) === "down")
   const overallLabel = apiDown
-    ? "API unreachable"
+    ? t("setup.apiUnreachable")
     : !status
-      ? "Checking…"
+      ? t("setup.checking")
       : anyDown
-        ? "Degraded"
+        ? t("setup.degraded")
         : upCount === services.length && status.checks.providers.ok
-          ? "All systems go"
-          : "Needs attention"
+          ? t("setup.allSystemsGo")
+          : t("setup.needsAttention")
 
   const liveDotColor = apiDown ? DANGER : anyDown ? WARN : OK
 
@@ -460,16 +464,26 @@ export default function SetupPage() {
   const step2Done = status?.checks.providers.ok === true
   const currentStep = !step1Done ? 1 : !step2Done ? 2 : 3
   const progressPct = Math.round((((step1Done ? 1 : 0) + (step2Done ? 1 : 0)) / 3) * 100)
-  const steps = [
+  const steps: ReadonlyArray<{
+    n: number
+    done: boolean
+    accent: boolean
+    altKeys: boolean
+    whereKey: MessageKey
+    title: string
+    desc: string
+    cta: string
+    href: string
+  }> = [
     {
       n: 1,
       done: step1Done,
       accent: false,
       altKeys: false,
-      where: "THIS SERVER",
-      title: "Create your server login",
-      desc: "Your operator account for this server only \u2014 it is NOT a nodaro.ai account (that one comes in step 2, if you want it).",
-      cta: "Create account",
+      whereKey: "setup.whereThisServer",
+      title: t("setup.step1Title"),
+      desc: t("setup.step1Desc"),
+      cta: t("signup.createAccount"),
       href: "/signup?from=setup",
     },
     {
@@ -477,10 +491,10 @@ export default function SetupPage() {
       done: step2Done,
       accent: true,
       altKeys: true,
-      where: "OPENS NODARO.AI",
-      title: "Connect a model provider",
-      desc: "Connect briefly leaves this server: it opens nodaro.ai, you sign in or create a free account THERE, approve, and you're back here connected (1,500 free credits). Or stay local with your own API keys \u2014 both run side by side.",
-      cta: "Connect nodaro.ai",
+      whereKey: "setup.whereOpensNodaro",
+      title: t("setup.step2Title"),
+      desc: t("setup.step2Desc"),
+      cta: t("dash.connectNodaro"),
       href: "/integrations",
     },
     {
@@ -488,23 +502,23 @@ export default function SetupPage() {
       done: false,
       accent: false,
       altKeys: false,
-      where: "THIS SERVER",
-      title: "Create your first workflow",
-      desc: "Open the canvas and generate something.",
-      cta: "Open Nodaro",
+      whereKey: "setup.whereThisServer",
+      title: t("setup.step3Title"),
+      desc: t("setup.step3Desc"),
+      cta: t("setup.openNodaro"),
       href: "/projects",
     },
   ]
-  const currentStepLabel = `Setup \u00b7 step ${currentStep} of 3`
+  const currentStepLabel = t("setup.tabSetupStep", { n: currentStep })
   const healthSummaryLine = apiDown
-    ? "API unreachable"
+    ? t("setup.apiUnreachable")
     : !status
-      ? "Checking\u2026"
+      ? t("setup.checking")
       : anyDown
-        ? "Some services need attention"
+        ? t("setup.someServicesNeedAttention")
         : avgLatency !== null
-          ? `All services connected \u00b7 ${avgLatency}ms avg latency`
-          : "All services connected"
+          ? t("setup.allConnectedLatency", { ms: avgLatency })
+          : t("setup.allServicesConnected")
 
   // One-click cloud connect: call the start endpoint directly and jump to
   // the nodaro.ai consent — no stop at /integrations (founder: the extra hop
@@ -598,7 +612,7 @@ export default function SetupPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <h1 style={{ margin: 0, fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em" }}>
-                  Set up your install
+                  {t("setup.title")}
                 </h1>
                 {status && (
                   <span
@@ -617,7 +631,7 @@ export default function SetupPage() {
                   </span>
                 )}
               </div>
-              <p style={{ margin: 0, fontSize: 15, color: MUTED }}>Three steps to a working Nodaro server. Health checks are below.</p>
+              <p style={{ margin: 0, fontSize: 15, color: MUTED }}>{t("setup.subtitle")}</p>
             </div>
           </div>
 
@@ -642,7 +656,7 @@ export default function SetupPage() {
               type="button"
               className="nd-refresh"
               onClick={handleRefresh}
-              aria-label="Refresh install health"
+              aria-label={t("setup.refreshHealthAria")}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -665,7 +679,7 @@ export default function SetupPage() {
               >
                 ↻
               </span>
-              <span>Refresh</span>
+              <span>{t("common.refresh")}</span>
             </button>
           </div>
         </header>
@@ -673,7 +687,7 @@ export default function SetupPage() {
 
         {/* Tab strip: guided setup is the landing; health is one click away. */}
         <div style={{ display: "inline-flex", gap: 4, background: "rgba(11,13,18,.05)", borderRadius: 14, padding: 5, alignSelf: "flex-start" }}>
-          {([["setup", currentStepLabel], ["health", "Install health"]] as const).map(([id, label]) => (
+          {([["setup", currentStepLabel], ["health", t("integ.installHealth")]] as const).map(([id, label]) => (
             <button
               key={id}
               onClick={() => setTab(id)}
@@ -709,8 +723,8 @@ export default function SetupPage() {
               }}
             >
               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: ".14em", color: SUBTLE }}>GUIDED SETUP</span>
-                <span style={{ fontSize: 17, fontWeight: 700 }}>Step {currentStep} of 3 · {steps[currentStep - 1]?.title}</span>
+                <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: ".14em", color: SUBTLE }}>{t("setup.guidedSetup")}</span>
+                <span style={{ fontSize: 17, fontWeight: 700 }}>{t("setup.stepOf3", { n: currentStep, title: steps[currentStep - 1]?.title ?? "" })}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ display: "flex", gap: 5 }}>
@@ -761,20 +775,20 @@ export default function SetupPage() {
                           fontFamily: MONO,
                           fontSize: 9.5,
                           letterSpacing: ".1em",
-                          color: st.where === "OPENS NODARO.AI" ? "oklch(0.45 0.09 205)" : SUBTLE,
-                          border: `1px solid ${st.where === "OPENS NODARO.AI" ? "#bfe3ea" : "rgba(11,13,18,.14)"}`,
-                          background: st.where === "OPENS NODARO.AI" ? "#f2fafc" : "transparent",
+                          color: st.whereKey === "setup.whereOpensNodaro" ? "oklch(0.45 0.09 205)" : SUBTLE,
+                          border: `1px solid ${st.whereKey === "setup.whereOpensNodaro" ? "#bfe3ea" : "rgba(11,13,18,.14)"}`,
+                          background: st.whereKey === "setup.whereOpensNodaro" ? "#f2fafc" : "transparent",
                           borderRadius: 5,
                           padding: "3px 7px",
                           whiteSpace: "nowrap",
                           opacity: locked ? 0.55 : 1,
                         }}
                       >
-                        {st.where}
+                        {t(st.whereKey)}
                       </span>
                       {active && (
                         <span style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: ".1em", color: "#b60a43", background: "#fce4ec", borderRadius: 999, padding: "4px 10px" }}>
-                          DO THIS NOW
+                          {t("setup.doThisNow")}
                         </span>
                       )}
                     </div>
@@ -810,7 +824,7 @@ export default function SetupPage() {
                             opacity: connectPending ? 0.75 : 1,
                           }}
                         >
-                          {connectPending ? "Opening nodaro.ai\u2026" : <>{st.cta} &rarr;</>}
+                          {connectPending ? t("setup.openingNodaro") : <>{st.cta} &rarr;</>}
                         </button>
                       ) : (
                         <a
@@ -847,7 +861,7 @@ export default function SetupPage() {
                             borderRadius: connectError ? 9 : 0,
                           }}
                         >
-                          USE MY OWN KEYS &rarr;
+                          {t("setup.useMyOwnKeys")}
                         </button>
                       )}
                       {st.accent && connectError && (
@@ -869,7 +883,7 @@ export default function SetupPage() {
                     </span>
                   ) : (
                     <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: ".12em", color: FAINT }}>
-                      {st.done ? "DONE" : st.n === currentStep + 1 ? "UP NEXT" : "LOCKED"}
+                      {st.done ? t("setup.stepDone") : st.n === currentStep + 1 ? t("setup.stepUpNext") : t("setup.stepLocked")}
                     </span>
                   )}
                 </div>
@@ -905,7 +919,7 @@ export default function SetupPage() {
                 textUnderlineOffset: 4,
               }}
             >
-              VIEW INSTALL HEALTH &rarr;
+              {t("setup.viewInstallHealth")}
             </button>
           </div>
         )}
@@ -923,10 +937,10 @@ export default function SetupPage() {
           }}
         >
           {[
-            { label: "Overall", value: overallLabel },
-            { label: "Services", value: status ? `${upCount}/${services.length} up` : "—" },
-            { label: "Provider keys", value: status ? `${keysSet}/${keysTotal} set` : "—" },
-            { label: "Latency", value: avgLatency !== null ? `${avgLatency}ms avg` : "—" },
+            { label: t("setup.overall"), value: overallLabel },
+            { label: t("setup.services"), value: status ? t("setup.servicesUp", { up: upCount, total: services.length }) : "—" },
+            { label: t("settings.providerKeys"), value: status ? t("integ.keysSetCount", { set: keysSet, total: keysTotal }) : "—" },
+            { label: t("setup.latency"), value: avgLatency !== null ? t("setup.msAvg", { ms: avgLatency }) : "—" },
           ].map((cell) => (
             <div key={cell.label} style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
               <span
@@ -959,10 +973,9 @@ export default function SetupPage() {
           >
             <span style={{ width: 3, alignSelf: "stretch", background: DANGER, borderRadius: 2, flex: "none" }} />
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <span style={{ fontSize: 14, fontWeight: 600 }}>API unreachable</span>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{t("setup.apiUnreachable")}</span>
               <span style={{ fontSize: 14, color: MUTED, lineHeight: 1.55, maxWidth: "62ch" }}>
-                The frontend is up but the backend is not answering. Check the container logs
-                (docker compose logs -f) and that port 3000 is not blocked.
+                {t("setup.apiUnreachableDesc")}
               </span>
             </div>
           </div>
@@ -1016,8 +1029,8 @@ export default function SetupPage() {
             }}
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              <span style={{ fontSize: 16, fontWeight: 600 }}>Provider keys</span>
-              <span style={{ fontFamily: MONO, fontSize: 11, color: SUBTLE }}>paste here or set in .env &middot; relates to step 2</span>
+              <span style={{ fontSize: 16, fontWeight: 600 }}>{t("settings.providerKeys")}</span>
+              <span style={{ fontFamily: MONO, fontSize: 11, color: SUBTLE }}>{t("setup.providerKeysDetail")}</span>
             </div>
             {status && (() => {
               // Choosing the cloud path must not read as a warning: with a
@@ -1049,10 +1062,10 @@ export default function SetupPage() {
                   />
                   <span>
                     {viaCloud
-                      ? "connected via nodaro.ai"
+                      ? t("setup.connectedViaNodaro")
                       : keysMissing > 0
-                        ? `${keysMissing} missing`
-                        : "all set"}
+                        ? t("setup.nMissing", { n: keysMissing })
+                        : t("setup.allSet")}
                   </span>
                 </span>
               )
@@ -1094,37 +1107,33 @@ export default function SetupPage() {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {connected ? "CONNECTED" : "FASTEST WAY"}
+                      {connected ? t("setup.connectedUpper") : t("setup.fastestWay")}
                     </span>
                   </span>
                   <span style={{ fontSize: 14.5, color: MUTED }}>
                     {connected ? (
                       <>
-                        This install generates through your nodaro.ai account &mdash; image, video, speech, LLM,
-                        avatars, relight and web scrape without the keys they would need; paste a key only to call
-                        that vendor directly.
+                        {t("setup.connectedDesc")}
                         {coverage.uncoveredMissing.length > 0 && (
                           <>
-                            {" "}Still needs its own key:{" "}
-                            {coverage.uncoveredMissing.map((t) => t.name).join(", ")}.
+                            {" "}{t("setup.stillNeedsOwnKey", { names: coverage.uncoveredMissing.map((tile) => tile.name).join(", ") })}
                           </>
                         )}
                       </>
                     ) : coverage.coveredMissing > 0 ? (
                       <>
                         <strong style={{ color: INK, fontWeight: 600 }}>
-                          One click clears {coverage.coveredMissing} of the {keysMissing} missing
+                          {t("setup.oneClickClears", { n: coverage.coveredMissing, total: keysMissing })}
                         </strong>
-                        {" \u2014 OAuth sign-in, no API keys to manage."}
+                        {" "}{t("setup.oauthNoKeys")}
                         {coverage.uncoveredMissing.length > 0 && (
                           <>
-                            {" "}Not covered (own key needed):{" "}
-                            {coverage.uncoveredMissing.map((t) => t.name).join(", ")}.
+                            {" "}{t("setup.notCoveredOwnKey", { names: coverage.uncoveredMissing.map((tile) => tile.name).join(", ") })}
                           </>
                         )}
                       </>
                     ) : (
-                      <>One account, every model &mdash; OAuth sign-in, runs alongside your keys.</>
+                      <>{t("setup.oneAccountEveryModel")}</>
                     )}
                   </span>
                   {!connected && connectError && (
@@ -1133,7 +1142,7 @@ export default function SetupPage() {
                       data-testid="cloud-connect-error"
                       style={{ fontSize: 12.5, lineHeight: 1.45, color: "#b60a43", marginTop: 6 }}
                     >
-                      {connectError} The keys below work without it.
+                      {connectError} {t("setup.keysBelowWork")}
                     </span>
                   )}
                 </div>
@@ -1150,7 +1159,7 @@ export default function SetupPage() {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    MANAGE &rarr;
+                    {t("setup.manage")}
                   </a>
                 ) : (
                   status?.hasUsers === false ? (
@@ -1167,7 +1176,7 @@ export default function SetupPage() {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      Connect nodaro.ai &rarr;
+                      {t("dash.connectNodaro")} &rarr;
                     </a>
                   ) : (
                     <button
@@ -1187,7 +1196,7 @@ export default function SetupPage() {
                         opacity: connectPending ? 0.75 : 1,
                       }}
                     >
-                      {connectPending ? "Opening nodaro.ai\u2026" : <>Connect nodaro.ai &rarr;</>}
+                      {connectPending ? t("setup.openingNodaro") : <>{t("dash.connectNodaro")} &rarr;</>}
                     </button>
                   )
                 )}
@@ -1212,10 +1221,10 @@ export default function SetupPage() {
                 }}
               >
                 <span style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", color: SUBTLE }}>
-                  Used by specific nodes
+                  {t("integ.usedBySpecificNodes")}
                 </span>
                 <span style={{ fontFamily: MONO, fontSize: 10.5, color: FAINT }}>
-                  only needed for the node each one names &mdash; leave them empty otherwise
+                  {t("setup.nodeSpecificHint")}
                 </span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" }}>
@@ -1244,8 +1253,7 @@ export default function SetupPage() {
               }}
             >
               <span>
-                prefer a file? keys can also live in a plain-text <span style={{ color: INK }}>.env</span> in your install
-                folder &mdash; a key set there wins over one pasted here &mdash; this list refreshes on its own
+                {t("setup.preferFilePre")} <span style={{ color: INK }}>.env</span> {t("setup.preferFilePost")}
               </span>
               <span style={{ display: "inline-flex", gap: 18 }}>
                 <button
@@ -1263,7 +1271,7 @@ export default function SetupPage() {
                     padding: 0,
                   }}
                 >
-                  {envHelpOpen ? "HIDE STEPS" : "HOW? \u2192"}
+                  {envHelpOpen ? t("setup.hideSteps") : t("setup.howArrow")}
                 </button>
                 <button
                   onClick={() => {
@@ -1289,7 +1297,7 @@ export default function SetupPage() {
                     padding: 0,
                   }}
                 >
-                  {envCopied ? "COPIED \u2713" : "COPY .ENV TEMPLATE"}
+                  {envCopied ? t("setup.copiedCheck") : t("setup.copyEnvTemplate")}
                 </button>
               </span>
             </div>
@@ -1308,21 +1316,21 @@ export default function SetupPage() {
                 }}
               >
                 <li>
-                  Open the folder where you installed Nodaro &mdash; the one that contains{" "}
+                  {t("setup.envStep1")}{" "}
                   <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>docker-compose.community.yml</code>.
                 </li>
                 <li>
-                  Create (or open) a file named <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>.env</code>{" "}
-                  there, in any text editor, and paste the template &mdash; the COPY button above fills your clipboard.
+                  {t("setup.envStep2Pre")} <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>.env</code>{" "}
+                  {t("setup.envStep2Post")}
                 </li>
                 <li>
-                  Put your key after the <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>=</code> and remove
-                  the <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>#</code> at the start of that line.
+                  {t("setup.envStep3Pre")} <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>=</code> {t("setup.envStep3Mid")}{" "}
+                  <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>#</code> {t("setup.envStep3Post")}
                 </li>
                 <li>
-                  In a terminal in that folder, run{" "}
+                  {t("setup.envStep4Pre")}{" "}
                   <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>docker compose -f docker-compose.community.yml up -d</code>{" "}
-                  &mdash; or paste these steps into your AI assistant and it will drive.
+                  {t("setup.envStep4Post")}
                 </li>
               </ol>
             )}
@@ -1370,7 +1378,7 @@ export default function SetupPage() {
           }}
         >
           <span>
-            {checkedAt ? `Last checked ${clockOf(checkedAt)} · refreshes every 5s` : "Checking…"}
+            {checkedAt ? t("setup.lastChecked", { time: clockOf(checkedAt) }) : t("setup.checking")}
           </span>
           <Link
             to="/"
@@ -1385,7 +1393,7 @@ export default function SetupPage() {
               paddingBottom: 1,
             }}
           >
-            Back to app →
+            {t("gallery.backToApp")} →
           </Link>
         </footer>
       </div>

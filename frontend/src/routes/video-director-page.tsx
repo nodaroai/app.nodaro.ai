@@ -151,7 +151,7 @@ export default function VideoDirectorPage() {
                   disabled={isRunning}
                   onClick={() => setGenre(opt.value)}
                   aria-pressed={active}
-                  className={`rounded-md border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  className={`rounded-md border p-3 text-start transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                     active
                       ? "border-primary bg-primary/10"
                       : "bg-card hover:border-primary/50"
@@ -184,7 +184,7 @@ export default function VideoDirectorPage() {
             rows={4}
             className="resize-none bg-card"
           />
-          <div className="mt-0.5 text-right text-[10px] text-muted-foreground">
+          <div className="mt-0.5 text-end text-[10px] text-muted-foreground">
             {t("vd.charCount", { n: brief.length, max: MAX_BRIEF })}
           </div>
         </div>

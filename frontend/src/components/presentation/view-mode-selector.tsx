@@ -1,13 +1,16 @@
 import { Columns, Rows, LayoutGrid, Maximize, GitCompareArrows, MessageSquare } from "lucide-react"
 import type { PresentationViewMode } from "@/hooks/use-workflow-store"
+import { useT, type MessageKey } from "@/lib/i18n"
 
-export const VIEW_MODES: { mode: PresentationViewMode; icon: typeof Columns; label: string }[] = [
-  { mode: "horizontal", icon: Columns, label: "Horizontal split" },
-  { mode: "vertical", icon: Rows, label: "Vertical stack" },
-  { mode: "gallery", icon: LayoutGrid, label: "Gallery grid" },
-  { mode: "fullscreen", icon: Maximize, label: "Fullscreen slideshow" },
-  { mode: "compare", icon: GitCompareArrows, label: "Compare side-by-side" },
-  { mode: "chat", icon: MessageSquare, label: "Chat" },
+/** Every view mode, with its icon and the dictionary key of its name —
+ *  consumers render the name with `t(label)`. */
+export const VIEW_MODES: { mode: PresentationViewMode; icon: typeof Columns; label: MessageKey }[] = [
+  { mode: "horizontal", icon: Columns, label: "viewMode.horizontal" },
+  { mode: "vertical", icon: Rows, label: "viewMode.vertical" },
+  { mode: "gallery", icon: LayoutGrid, label: "viewMode.gallery" },
+  { mode: "fullscreen", icon: Maximize, label: "viewMode.fullscreen" },
+  { mode: "compare", icon: GitCompareArrows, label: "viewMode.compare" },
+  { mode: "chat", icon: MessageSquare, label: "viewMode.chat" },
 ]
 
 /** All view mode values, derived from VIEW_MODES */
@@ -20,6 +23,7 @@ interface ViewModeSelectorProps {
 }
 
 export function ViewModeSelector({ viewMode, onChange, allowedModes }: ViewModeSelectorProps) {
+  const t = useT()
   const modes = allowedModes
     ? VIEW_MODES.filter((m) => allowedModes.includes(m.mode))
     : VIEW_MODES
@@ -31,7 +35,7 @@ export function ViewModeSelector({ viewMode, onChange, allowedModes }: ViewModeS
           key={mode}
           type="button"
           onClick={() => onChange(mode)}
-          title={label}
+          title={t(label)}
           className={`flex items-center justify-center w-8 h-7 rounded-md transition-colors ${
             viewMode === mode
               ? "bg-[#ff0073]/10 text-[#ff0073]"

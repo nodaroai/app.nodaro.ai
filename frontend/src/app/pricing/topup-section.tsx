@@ -2,6 +2,8 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "@/lib/pricing-data"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
+import { useT } from "@/lib/i18n"
+import { formatNumber } from "@/lib/i18n/format"
 
 /**
  * "API / Pay-as-you-go" top-up section, styled per the designer's Pricing
@@ -27,6 +29,7 @@ interface TopupSectionProps {
 export function TopupSection({ topupBalance, onLoad, loading }: TopupSectionProps) {
   const [selectedUsd, setSelectedUsd] = useState<number | null>(25)
   const [customUsd, setCustomUsd] = useState("")
+  const t = useT()
 
   const parsedCustom = /^\d+$/.test(customUsd) ? parseInt(customUsd, 10) : NaN
   const customValid =
@@ -43,20 +46,18 @@ export function TopupSection({ topupBalance, onLoad, loading }: TopupSectionProp
       >
         <div className="flex flex-wrap justify-between gap-4 p-8">
           <div className="max-w-xl">
-            <h2 className="text-2xl font-bold">API / Pay-as-you-go</h2>
+            <h2 className="text-2xl font-bold">{t("pricing.topupTitle")}</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Build with the API, SDK, CLI and MCP without a subscription. All
-              models unlocked from your first load, no watermark, no daily cap.
-              Outputs are public — private mode is a subscription feature.
+              {t("pricing.topupDesc")}
             </p>
           </div>
           {topupBalance !== undefined && (
-            <div className="text-right">
+            <div className="text-end">
               <div className="font-mono text-xs tracking-[0.2em] text-muted-foreground">
-                YOUR TOP-UP BALANCE
+                {t("pricing.yourTopupBalance")}
               </div>
               <div className="font-mono text-3xl font-bold text-[var(--tps-cyan)]">
-                {creditUnits(topupBalance).toLocaleString()}
+                {formatNumber(creditUnits(topupBalance))}
               </div>
             </div>
           )}
@@ -77,7 +78,7 @@ export function TopupSection({ topupBalance, onLoad, loading }: TopupSectionProp
                 }}
                 aria-pressed={selected}
                 className={cn(
-                  "relative p-6 text-left border-r last:border-r-0 border-[var(--tps-border)] transition-colors",
+                  "relative p-6 text-start border-e last:border-e-0 border-[var(--tps-border)] transition-colors",
                   selected
                     ? "bg-[var(--tps-tile-active)]"
                     : "hover:bg-[var(--tps-tile-hover)]"
@@ -90,7 +91,7 @@ export function TopupSection({ topupBalance, onLoad, loading }: TopupSectionProp
                   ${(usd / creditUnits(credits)).toFixed(4)} / {creditUnitLabel()}
                 </div>
                 <div className="mt-3 text-4xl font-bold tracking-tight">
-                  {creditUnits(credits).toLocaleString()}
+                  {formatNumber(creditUnits(credits))}
                 </div>
                 <div className="text-sm text-muted-foreground">{creditUnitLabel("credits")}</div>
                 <div className="mt-3 text-2xl font-semibold">${usd}</div>
@@ -101,7 +102,7 @@ export function TopupSection({ topupBalance, onLoad, loading }: TopupSectionProp
 
         <div className="flex flex-wrap items-center gap-4 border-t border-[var(--tps-border)] p-6 bg-[var(--tps-inset)]">
           <label className="text-sm font-medium" htmlFor="topup-custom-usd">
-            Or load any whole-dollar amount
+            {t("pricing.loadAnyAmount")}
           </label>
           <div className="flex items-center gap-1 rounded-md border border-[var(--tps-input-border)] px-3 py-2 font-mono text-sm">
             <span className="text-muted-foreground">$</span>
@@ -117,19 +118,19 @@ export function TopupSection({ topupBalance, onLoad, loading }: TopupSectionProp
           </div>
           <span className="text-sm text-muted-foreground">
             {customUsd && customValid
-              ? `= ${creditUnits(creditsForLoadUsd(parsedCustom)).toLocaleString()} credits`
-              : "credits valid for 12 months"}
+              ? t("pricing.equalsCredits", { n: formatNumber(creditUnits(creditsForLoadUsd(parsedCustom))) })
+              : t("pricing.creditsValid12Months")}
           </span>
           <button
             type="button"
             disabled={effectiveUsd === null || loading}
             onClick={() => effectiveUsd !== null && onLoad(effectiveUsd)}
             className={cn(
-              "ml-auto rounded-lg bg-[var(--tps-cyan)] px-6 py-2.5 text-sm font-semibold text-[var(--tps-on-cyan)] shadow-sm transition-opacity",
+              "ms-auto rounded-lg bg-[var(--tps-cyan)] px-6 py-2.5 text-sm font-semibold text-[var(--tps-on-cyan)] shadow-sm transition-opacity",
               (effectiveUsd === null || loading) && "opacity-40 pointer-events-none"
             )}
           >
-            {loading ? "Opening checkout…" : "Load credits"}
+            {loading ? t("pricing.openingCheckout") : t("pricing.loadCredits")}
           </button>
         </div>
       </div>

@@ -34,7 +34,7 @@ type J = CreatureStudioJobs
  * voice is set (mirrors the character voice nav entry).
  */
 export const CREATURE_STUDIO_NAV: StudioNavConfig<S, J> = {
-  accentActiveClassName: "text-[#A78BFA] bg-[#221a33] border-r-2 border-[#A78BFA]",
+  accentActiveClassName: "text-[#A78BFA] bg-[#221a33] border-e-2 border-[#A78BFA]",
   groups: [
     { label: "Resources", pages: [
       { key: "references", label: "References", icon: "📷", Component: ReferencesPage },

@@ -56,7 +56,7 @@ export function MissingRefsChip({ nodeId, nodeType, handleId }: MissingRefsChipP
         <PopoverTrigger asChild>
           <button
             type="button"
-            aria-label={`${missing.length} missing prompt input${missing.length > 1 ? "s" : ""}`}
+            aria-label={missing.length > 1 ? t("node.missingPromptInputsMany", { n: missing.length }) : t("node.missingPromptInputsOne", { n: missing.length })}
             className={cn(
               "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-colors",
               "border-amber-500/60 bg-amber-500/15 text-amber-600 hover:bg-amber-500/25 dark:text-amber-400",

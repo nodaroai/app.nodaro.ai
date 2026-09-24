@@ -265,7 +265,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
                   {r.thumbnailUrl ? (
                     <CachedImage
                       src={r.thumbnailUrl}
-                      alt={`Result ${i + 1}`}
+                      alt={t("node.resultN", { n: i + 1 })}
                       className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
                         i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                       }`}

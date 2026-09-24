@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { usePickerDir } from "@/lib/locale-store"
+import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { SingleDimParameterPickerMeta } from "@/lib/picker-ui"
 
@@ -43,6 +44,7 @@ export function PickerRestrictDialog({
   const dir = usePickerDir()
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog(meta.catalogId)
   const [query, setQuery] = useState("")
+  const t = useT()
 
   const allIds = useMemo(() => meta.entries.map((e) => e.id), [meta.entries])
 
@@ -107,15 +109,15 @@ export function PickerRestrictDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Filter className="size-4 text-[#ff0073]" />
-            {`Restrict ${meta.label}`}
+            {t("present.restrictLabel", { label: meta.label })}
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex items-center justify-between gap-2 pb-2">
           <p className="text-xs text-muted-foreground">
             {allChecked
-              ? "All values allowed"
-              : `${checkedCount}/${total} values allowed`}
+              ? t("present.allValuesAllowed")
+              : t("present.valuesAllowedCount", { n: checkedCount, total })}
           </p>
           <div className="flex gap-1">
             <Button
@@ -125,7 +127,7 @@ export function PickerRestrictDialog({
               disabled={allChecked}
               className="text-xs h-7"
             >
-              Select all
+              {t("present.selectAllEntries")}
             </Button>
             <Button
               variant="ghost"
@@ -134,26 +136,26 @@ export function PickerRestrictDialog({
               disabled={checkedCount <= 1}
               className="text-xs h-7"
             >
-              Clear
+              {t("common.clear")}
             </Button>
           </div>
         </div>
 
         <div className="relative shrink-0 mb-2">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+          <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
           <Input
-            placeholder={`Search ${meta.label.toLowerCase()}…`}
+            placeholder={t("present.searchLabelPlaceholder", { label: meta.label.toLowerCase() })}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="pl-8 h-9 text-sm"
-            aria-label={`Search ${meta.label}`}
+            className="ps-8 h-9 text-sm"
+            aria-label={t("present.searchLabel", { label: meta.label })}
           />
         </div>
 
         <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-3">
           {grouped.length === 0 || filtered.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-8">
-              No matches{query && <> for "{query}"</>}
+              {query ? t("present.noMatchesFor", { query }) : t("present.noMatches")}
             </p>
           ) : (
             grouped.map((group) => (

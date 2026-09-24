@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { CachedImage } from "@/components/ui/cached-image"
 import { getLibraryAssets, type LibraryAsset } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
+import { useT } from "@/lib/i18n"
 
 interface WorkflowAsset {
   nodeId: string
@@ -29,6 +30,7 @@ type Tab = "workflow" | "library" | "file"
 const TYPE_ICON = { video: Film, image: ImageIcon, audio: Volume2 } as const
 
 export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport, onClose }: ImportPickerProps) {
+  const t = useT()
   const hasWorkflow = workflowAssets && workflowAssets.length > 0
   const [activeTab, setActiveTab] = useState<Tab>(hasWorkflow ? "workflow" : "library")
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -147,9 +149,9 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
   }
 
   const tabs: Array<{ id: Tab; label: string; icon: typeof FolderOpen }> = [
-    ...(hasWorkflow ? [{ id: "workflow" as Tab, label: "From Workflow", icon: FolderOpen }] : []),
-    { id: "library", label: "From Library", icon: FolderOpen },
-    { id: "file", label: "From File", icon: Upload },
+    ...(hasWorkflow ? [{ id: "workflow" as Tab, label: t("mediaed.fromWorkflow"), icon: FolderOpen }] : []),
+    { id: "library", label: t("mediaed.fromLibrary"), icon: FolderOpen },
+    { id: "file", label: t("editor.fromFile"), icon: Upload },
   ]
 
   return createPortal(
@@ -157,7 +159,7 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
       <div className="bg-[#1E1E1E] border border-[#2D2D2D] rounded-lg w-[600px] max-h-[500px] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#2D2D2D]">
-          <span className="text-sm font-medium text-white">Import Assets</span>
+          <span className="text-sm font-medium text-white">{t("mediaed.importAssets")}</span>
           <button type="button" onClick={onClose} className="text-white/50 hover:text-white"><X className="w-4 h-4" /></button>
         </div>
 
@@ -190,7 +192,7 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
                     onClick={() => toggleSelect(asset.nodeId)}
                     className={`relative flex flex-col items-center gap-1 p-2 rounded-md border transition-colors ${isSelected ? "border-[#ff0073] bg-[#ff0073]/10" : "border-[#2D2D2D] hover:border-white/30"}`}
                   >
-                    {isSelected && <Check className="absolute top-1 right-1 w-3 h-3 text-[#ff0073]" />}
+                    {isSelected && <Check className="absolute top-1 end-1 w-3 h-3 text-[#ff0073]" />}
                     {asset.thumbnailUrl ? (
                       <CachedImage src={asset.thumbnailUrl} alt="" className="w-16 h-16 object-cover rounded" thumbnail thumbnailWidth={128} />
                     ) : (
@@ -208,23 +210,23 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
             <div className="flex flex-col gap-2">
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
+                  <Search className="absolute start-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
                   <Input
                     value={librarySearch}
                     onChange={e => setLibrarySearch(e.target.value)}
-                    placeholder="Search library..."
-                    className="pl-7 h-7 text-xs bg-black/30 border-white/10"
+                    placeholder={t("mediaed.searchLibrary")}
+                    className="ps-7 h-7 text-xs bg-black/30 border-white/10"
                   />
                 </div>
                 <div className="flex gap-1">
-                  {(["all", "video", "image", "audio"] as const).map(t => (
+                  {(["all", "video", "image", "audio"] as const).map(ft => (
                     <button
-                      key={t}
+                      key={ft}
                       type="button"
-                      onClick={() => setLibraryType(t)}
-                      className={`px-2 py-1 text-[10px] rounded ${libraryType === t ? "bg-[#ff0073] text-white" : "bg-white/5 text-white/50 hover:text-white/80"}`}
+                      onClick={() => setLibraryType(ft)}
+                      className={`px-2 py-1 text-[10px] rounded ${libraryType === ft ? "bg-[#ff0073] text-white" : "bg-white/5 text-white/50 hover:text-white/80"}`}
                     >
-                      {t === "all" ? "All" : t.charAt(0).toUpperCase() + t.slice(1)}
+                      {ft === "all" ? t("common.all") : ft === "video" ? t("common.video") : ft === "image" ? t("common.image") : t("mediaed.typeAudio")}
                     </button>
                   ))}
                 </div>
@@ -239,7 +241,7 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
                       onClick={() => toggleSelect(asset.id)}
                       className={`relative flex flex-col items-center gap-1 p-1.5 rounded border transition-colors ${isSelected ? "border-[#ff0073] bg-[#ff0073]/10" : "border-[#2D2D2D] hover:border-white/30"}`}
                     >
-                      {isSelected && <Check className="absolute top-0.5 right-0.5 w-3 h-3 text-[#ff0073]" />}
+                      {isSelected && <Check className="absolute top-0.5 end-0.5 w-3 h-3 text-[#ff0073]" />}
                       {asset.thumbnailUrl ? (
                         <CachedImage src={asset.thumbnailUrl} alt="" className="w-14 h-14 object-cover rounded" thumbnail thumbnailWidth={112} />
                       ) : asset.mimeType.startsWith("image/") ? (
@@ -258,11 +260,11 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
               </div>
               {libraryHasMore && (
                 <button type="button" onClick={() => loadLibrary(false)} disabled={libraryLoading} className="text-xs text-white/50 hover:text-white/80 py-1">
-                  {libraryLoading ? "Loading..." : "Load more"}
+                  {libraryLoading ? t("common.loading") : t("apps.analytics.loadMore")}
                 </button>
               )}
               {!libraryLoading && libraryAssets.length === 0 && (
-                <p className="text-xs text-white/30 text-center py-8">No assets found</p>
+                <p className="text-xs text-white/30 text-center py-8">{t("mediaed.noAssetsFound")}</p>
               )}
             </div>
           )}
@@ -271,14 +273,14 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
         {/* Footer */}
         {activeTab !== "file" && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-[#2D2D2D]">
-            <span className="text-[10px] text-white/40">{selected.size} selected</span>
+            <span className="text-[10px] text-white/40">{t("mediaed.selectedCount", { n: selected.size })}</span>
             <button
               type="button"
               onClick={handleImportSelected}
               disabled={selected.size === 0 || importing}
               className="px-4 py-1.5 text-xs font-medium rounded-md bg-[#ff0073] text-white hover:bg-[#ff0073]/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {importing ? "Importing..." : `Import${selected.size > 0 ? ` (${selected.size})` : ""}`}
+              {importing ? t("mediaed.importing") : `${t("common.import")}${selected.size > 0 ? ` (${selected.size})` : ""}`}
             </button>
           </div>
         )}

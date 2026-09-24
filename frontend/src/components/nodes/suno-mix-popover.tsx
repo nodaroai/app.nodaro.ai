@@ -29,8 +29,8 @@ export function SunoMixPopover({ nodeId }: { readonly nodeId: string }) {
       }
     >
       <PopoverTrigger
-        aria-label="Mix"
-        title="Mix"
+        aria-label={t("node.mix")}
+        title={t("node.mix")}
         className="h-6 px-1.5 inline-flex items-center gap-1 rounded-md text-[10px] text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10 [&_svg]:size-3 [&_svg]:opacity-70"
       >
         <Sliders />

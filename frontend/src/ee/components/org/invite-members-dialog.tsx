@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { tx, useT, type TFunction } from "@/lib/i18n"
 import { OrgApiError, createInvitations, type InvitationDelivery, type WorkspaceView } from "@/ee/lib/orgs-api"
 
 /**
@@ -94,6 +95,7 @@ export function InviteMembersDialog({
   vocabulary = {},
   onInvited,
 }: InviteMembersDialogProps) {
+  const t = useT()
   const [raw, setRaw] = useState("")
   const [orgRole, setOrgRole] = useState<"admin" | "member">("member")
   const [workspaceId, setWorkspaceId] = useState<string>("")
@@ -103,7 +105,7 @@ export function InviteMembersDialog({
 
   const parsed = useMemo(() => parseEmails(raw), [raw])
   const tooMany = parsed.valid.length > MAX_EMAILS
-  const workspaceWord = vocabulary.workspace ?? "workspace"
+  const workspaceWord = vocabulary.workspace ?? t("org.workspaceWord")
 
   const reset = useCallback(() => {
     setRaw("")
@@ -150,22 +152,21 @@ export function InviteMembersDialog({
     >
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Invite people</DialogTitle>
+          <DialogTitle>{t("org.invitePeople")}</DialogTitle>
           <DialogDescription>
-            Paste the addresses however you have them — commas, semicolons or one per line.
+            {t("org.invitePasteHint")}
           </DialogDescription>
         </DialogHeader>
 
         {deliveries ? (
           <div className="space-y-3">
             <p className="text-sm">
-              {deliveries.filter((d) => d.status === "sent").length} sent, {needsHandOver.length} to pass on.
+              {t("org.inviteResultSummary", { sent: deliveries.filter((d) => d.status === "sent").length, handover: needsHandOver.length })}
             </p>
             {needsHandOver.length > 0 && (
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  These could not be emailed. Copy each link to the person it is for — the invitation exists either
-                  way.
+                  {t("org.inviteHandoverHint")}
                 </p>
                 <ul className="max-h-56 space-y-2 overflow-y-auto">
                   {needsHandOver.map((delivery) => (
@@ -179,7 +180,7 @@ export function InviteMembersDialog({
                         className="mt-2"
                         onClick={() => void navigator.clipboard?.writeText(delivery.link ?? "")}
                       >
-                        Copy link
+                        {t("org.copyLink")}
                       </Button>
                     </li>
                   ))}
@@ -193,14 +194,14 @@ export function InviteMembersDialog({
                   reset()
                 }}
               >
-                Done
+                {t("common.done")}
               </Button>
             </DialogFooter>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="invite-emails">Email addresses</Label>
+              <Label htmlFor="invite-emails">{t("org.emailAddresses")}</Label>
               <Textarea
                 id="invite-emails"
                 value={raw}
@@ -210,22 +211,22 @@ export function InviteMembersDialog({
                 disabled={busy}
               />
               <p className={cn("text-xs", tooMany ? "text-destructive" : "text-muted-foreground")}>
-                {summarize(parsed, tooMany)}
+                {summarize(parsed, tooMany, t)}
               </p>
               {parsed.invalid.length > 0 && (
                 <p className="text-xs text-destructive">
-                  Not an address: {parsed.invalid.slice(0, 5).join(", ")}
-                  {parsed.invalid.length > 5 ? ` and ${parsed.invalid.length - 5} more` : ""}
+                  {t("org.notAnAddress", { list: parsed.invalid.slice(0, 5).join(", ") })}
+                  {parsed.invalid.length > 5 ? ` ${t("org.andNMore", { n: parsed.invalid.length - 5 })}` : ""}
                 </p>
               )}
             </div>
 
             {workspaces.length > 0 && (
               <div className="space-y-2">
-                <Label htmlFor="invite-workspace">Add to a {workspaceWord.toLowerCase()}</Label>
+                <Label htmlFor="invite-workspace">{t("org.addToWorkspace", { workspace: workspaceWord.toLowerCase() })}</Label>
                 <Select value={workspaceId} onValueChange={setWorkspaceId} disabled={busy}>
                   <SelectTrigger id="invite-workspace">
-                    <SelectValue placeholder={`No ${workspaceWord.toLowerCase()} — the organization only`} />
+                    <SelectValue placeholder={t("org.noWorkspaceOrgOnly", { workspace: workspaceWord.toLowerCase() })} />
                   </SelectTrigger>
                   <SelectContent>
                     {workspaces.map((workspace) => (
@@ -240,14 +241,14 @@ export function InviteMembersDialog({
 
             {canInviteAdmins && (
               <div className="space-y-2">
-                <Label htmlFor="invite-role">Role in the organization</Label>
+                <Label htmlFor="invite-role">{t("org.roleInOrg")}</Label>
                 <Select value={orgRole} onValueChange={(v) => setOrgRole(v as "admin" | "member")} disabled={busy}>
                   <SelectTrigger id="invite-role">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="member">{vocabulary.workspace_member ?? "Member"}</SelectItem>
-                    <SelectItem value="admin">{vocabulary.org_admin ?? "Admin"}</SelectItem>
+                    <SelectItem value="member">{vocabulary.workspace_member ?? t("org.roleMember")}</SelectItem>
+                    <SelectItem value="admin">{vocabulary.org_admin ?? t("org.roleAdmin")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -257,10 +258,10 @@ export function InviteMembersDialog({
 
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button onClick={send} disabled={busy || parsed.valid.length === 0 || tooMany}>
-                {busy ? "Sending…" : sendLabel(parsed.valid.length)}
+                {busy ? t("pipe.sending") : sendLabel(parsed.valid.length, t)}
               </Button>
             </DialogFooter>
           </div>
@@ -270,32 +271,32 @@ export function InviteMembersDialog({
   )
 }
 
-function summarize(parsed: ParsedEmails, tooMany: boolean): string {
-  if (tooMany) return `${parsed.valid.length} addresses — ${MAX_EMAILS} at a time is the limit.`
-  if (parsed.valid.length === 0) return "No addresses yet."
-  const parts = [`${parsed.valid.length} ${parsed.valid.length === 1 ? "address" : "addresses"}`]
-  if (parsed.duplicates > 0) parts.push(`${parsed.duplicates} repeated`)
+function summarize(parsed: ParsedEmails, tooMany: boolean, t: TFunction): string {
+  if (tooMany) return t("org.tooManyAddresses", { n: parsed.valid.length, max: MAX_EMAILS })
+  if (parsed.valid.length === 0) return t("org.noAddressesYet")
+  const parts = [parsed.valid.length === 1 ? t("org.oneAddress") : t("org.nAddresses", { n: parsed.valid.length })]
+  if (parsed.duplicates > 0) parts.push(t("org.nRepeated", { n: parsed.duplicates }))
   return `${parts.join(", ")}.`
 }
 
-function sendLabel(count: number): string {
-  if (count === 0) return "Send invitations"
-  return count === 1 ? "Send 1 invitation" : `Send ${count} invitations`
+function sendLabel(count: number, t: TFunction): string {
+  if (count === 0) return t("org.sendInvitations")
+  return count === 1 ? t("org.sendOneInvitation") : t("org.sendNInvitations", { n: count })
 }
 
 function failureMessage(code: string): string {
   switch (code) {
     case "bulk_invite_cap_exceeded":
-      return "This organization has reached its invitation limit for today. Try again tomorrow."
+      return tx("org.inviteCapExceeded")
     case "insufficient_role":
-      return "You cannot invite people here."
+      return tx("org.inviteInsufficientRole")
     case "org_not_active":
-      return "This organization is not active, so nobody can be invited yet."
+      return tx("org.inviteOrgNotActive")
     case "workspace_archived":
-      return "That workspace is archived and cannot take new people."
+      return tx("org.inviteWorkspaceArchived")
     case "validation_error":
-      return "One of the addresses was rejected. Check the list and try again."
+      return tx("org.inviteValidationError")
     default:
-      return "Something went wrong sending the invitations. Try again in a moment."
+      return tx("org.inviteFailedGeneric")
   }
 }

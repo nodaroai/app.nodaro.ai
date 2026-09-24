@@ -19,22 +19,23 @@ import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 import type { CharacterNodeData, CharacterAssetItem } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
 import { CharacterAssetVideoGrid } from "@/components/editor/character-asset-video-grid"
 
 type TabType = "main" | "expressions" | "poses" | "lighting" | "angles" | "sheets" | "videos" | "voice" | "custom"
 
-const TABS: readonly { readonly id: TabType; readonly label: string }[] = [
-  { id: "main", label: "Main" },
-  { id: "expressions", label: "Expressions" },
-  { id: "poses", label: "Poses" },
-  { id: "lighting", label: "Lighting" },
-  { id: "angles", label: "Angles" },
-  { id: "sheets", label: "Sheets" },
-  { id: "videos", label: "Videos" },
-  { id: "voice", label: "Voice" },
-  { id: "custom", label: "Custom" },
+const TABS: readonly { readonly id: TabType; readonly labelKey: MessageKey }[] = [
+  { id: "main", labelKey: "entity.tabMain" },
+  { id: "expressions", labelKey: "entity.tabExpressions" },
+  { id: "poses", labelKey: "entity.tabPoses" },
+  { id: "lighting", labelKey: "entity.tabLighting" },
+  { id: "angles", labelKey: "entity.tabAngles" },
+  { id: "sheets", labelKey: "entity.tabSheets" },
+  { id: "videos", labelKey: "assetlib.tabVideos" },
+  { id: "voice", labelKey: "entity.tabVoice" },
+  { id: "custom", labelKey: "common.custom" },
 ]
 
 interface CharacterPageModalProps {
@@ -55,22 +56,23 @@ function InlineDeleteConfirm({
   readonly onCancel: () => void
   readonly onConfirm: () => void
 }) {
+  const t = useT()
   return (
     <span className="flex items-center gap-1 text-[10px]">
-      <span className="text-red-500 font-medium">Delete?</span>
+      <span className="text-red-500 font-medium">{t("entity.deleteQuestion")}</span>
       <button
         type="button"
         className="px-1.5 py-0.5 rounded text-[10px] bg-muted hover:bg-muted/80 text-muted-foreground"
         onClick={(e) => { e.stopPropagation(); onCancel() }}
       >
-        Cancel
+        {t("common.cancel")}
       </button>
       <button
         type="button"
         className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/90 hover:bg-red-500 text-white"
         onClick={(e) => { e.stopPropagation(); onConfirm() }}
       >
-        Delete
+        {t("common.delete")}
       </button>
     </span>
   )
@@ -101,12 +103,13 @@ function DraggableImage({
   readonly onConfirmDelete?: () => void
   readonly isMainImage?: boolean
 }) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-1.5">
       <div className="relative group">
         <CachedImage
           src={src}
-          alt={label ?? "Character image"}
+          alt={label ?? t("entity.characterImageAlt")}
           draggable
           onDragStart={(e) => startDrag(e, src, onDragStarted)}
           onDragEnd={() => onDragEnded?.()}
@@ -122,10 +125,10 @@ function DraggableImage({
         {onAddToCanvas && (
           <button
             type="button"
-            className="absolute bottom-1 right-1 w-6 h-6 flex items-center justify-center bg-primary text-primary-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-primary/90"
+            className="absolute bottom-1 end-1 w-6 h-6 flex items-center justify-center bg-primary text-primary-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-primary/90"
             onClick={(e) => { e.stopPropagation(); onAddToCanvas(src) }}
-            aria-label="Add to canvas"
-            title="Add to canvas"
+            aria-label={t("entity.addToCanvas")}
+            title={t("entity.addToCanvas")}
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -133,20 +136,20 @@ function DraggableImage({
         {/* Enlarge button */}
         <button
           type="button"
-          className="absolute bottom-1 left-1 p-1 rounded bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute bottom-1 start-1 p-1 rounded bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
           onClick={(e) => { e.stopPropagation(); onEnlarge(src) }}
-          aria-label="Enlarge image"
-          title="Enlarge"
+          aria-label={t("entity.enlargeImage")}
+          title={t("common.enlarge")}
         >
           <Maximize2 className="w-3 h-3" />
         </button>
         {onRequestDelete && !confirmingDelete && (
           <button
             type="button"
-            className="absolute top-1 right-1 p-1 rounded bg-black/60 hover:bg-red-500/90 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-1 end-1 p-1 rounded bg-black/60 hover:bg-red-500/90 text-white opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => { e.stopPropagation(); onRequestDelete() }}
-            aria-label="Delete image"
-            title="Delete"
+            aria-label={t("entity.deleteImage")}
+            title={t("common.delete")}
           >
             <Trash2 className="w-3 h-3" />
           </button>
@@ -216,6 +219,7 @@ function AssetGrid({
 }
 
 export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageModalProps) {
+  const t = useT()
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>("main")
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
@@ -269,7 +273,7 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
     })
     if (nodeId) {
       selectNode(nodeId)
-      toast.success("Image added to canvas")
+      toast.success(tx("entity.imageAddedToCanvas"))
       onClose()
     }
   }, [nodes, addNode, selectNode, onClose])
@@ -277,7 +281,7 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
   // Refine character image - generate 4 clean versions
   const handleRefine = useCallback(async () => {
     if (!mainImageUrl || !data) {
-      toast.error("No image to refine")
+      toast.error(tx("entity.noImageToRefine"))
       return
     }
 
@@ -293,7 +297,7 @@ Full body portrait, facing camera, neutral standing pose,
 clean white background, studio lighting, looking at viewer,
 centered composition, high quality, single character`
 
-      toast.info("Generating refined versions...")
+      toast.info(tx("entity.generatingRefined"))
 
       // Generate 4 variations
       const results: string[] = []
@@ -311,7 +315,7 @@ centered composition, high quality, single character`
                   resolve(job.output_data?.imageUrl ?? "")
                 } else if (job.status === "failed") {
                   clearInterval(interval)
-                  reject(new Error(job.error_message ?? "Failed"))
+                  reject(new Error(job.error_message ?? tx("common.failed")))
                 }
               } catch (err) {
                 clearInterval(interval)
@@ -330,20 +334,20 @@ centered composition, high quality, single character`
       }
 
       if (results.length === 0) {
-        throw new Error("Failed to generate any refined images")
+        throw new Error(tx("entity.noRefinedGenerated"))
       }
 
       setShowRefinePicker(true)
       setSelectedRefinedIndex(null)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown error"
+      const errorMessage = err instanceof Error ? err.message : tx("lib.unknownError")
       // Check for content moderation error (E005)
       if (errorMessage.includes("E005") || errorMessage.toLowerCase().includes("flagged as sensitive")) {
-        toast.error("Content moderation error", {
-          description: "The image was flagged by the AI provider's content filter. Try using a different image or adjusting the character's appearance.",
+        toast.error(tx("entity.moderationErrorTitle"), {
+          description: tx("entity.moderationErrorCharacterDesc"),
         })
       } else {
-        toast.error("Failed to refine character", {
+        toast.error(tx("entity.refineCharacterFailed"), {
           description: errorMessage,
         })
       }
@@ -391,27 +395,27 @@ centered composition, high quality, single character`
         })
         // Saved successfully
       } catch (err) {
-        toast.error("Failed to save refined image")
+        toast.error(tx("entity.saveRefinedFailed"))
       }
     }
 
     setShowRefinePicker(false)
     setRefinedResults([])
     setRefinementCompleted(true)
-    toast.success("Refined image selected")
+    toast.success(tx("entity.refinedSelected"))
   }, [data, characterNodeId, projectId, updateNodeData])
 
   // Generate all character assets (expressions, poses, lighting, angles)
   const handleGenerateAllAssets = useCallback(async () => {
     if (!mainImageUrl || !data) {
-      toast.error("No portrait available")
+      toast.error(tx("entity.noPortraitAvailable"))
       return
     }
     const imageUrl = mainImageUrl
 
     setGeneratingAllAssets(true)
     setRefinementCompleted(false)
-    toast.info("Generating all character assets...")
+    toast.info(tx("entity.generatingAllCharacterAssets"))
 
     const ASSET_TYPES = [
       { type: "angles" as const, variants: ["front", "side", "back"], names: ["Front View", "Side View", "Back View"], dataKey: "angles" },
@@ -458,7 +462,7 @@ centered composition, high quality, single character`
                     resolve(job.output_data?.imageUrl ?? "")
                   } else if (job.status === "failed") {
                     clearInterval(interval)
-                    reject(new Error(job.error_message ?? "Failed"))
+                    reject(new Error(job.error_message ?? tx("common.failed")))
                   }
                 } catch (err) {
                   clearInterval(interval)
@@ -481,10 +485,10 @@ centered composition, high quality, single character`
         }
       }
 
-      toast.success("All character assets generated!")
+      toast.success(tx("entity.allCharacterAssetsGenerated"))
     } catch (err) {
-      toast.error("Failed to generate some assets", {
-        description: err instanceof Error ? err.message : "Unknown error",
+      toast.error(tx("entity.someAssetsFailed"), {
+        description: err instanceof Error ? err.message : tx("lib.unknownError"),
       })
     } finally {
       setGeneratingAllAssets(false)
@@ -514,7 +518,7 @@ centered composition, high quality, single character`
       updateNodeData(characterNodeId, { [dataKey]: items })
     }
     setConfirmingAssetDelete(null)
-    toast.success("Asset deleted")
+    toast.success(tx("entity.assetDeleted"))
   }
 
   async function handleDeleteCharacter() {
@@ -527,11 +531,11 @@ centered composition, high quality, single character`
       }
       // Remove node from canvas
       deleteNode(characterNodeId)
-      toast.success(`Character "${data.characterName || "Unnamed"}" permanently deleted`)
+      toast.success(tx("entity.characterPermanentlyDeleted", { name: data.characterName || tx("cfgext.entUnnamed") }))
       onClose()
     } catch (err) {
-      toast.error("Failed to delete character", {
-        description: err instanceof Error ? err.message : "Unknown error",
+      toast.error(tx("entity.deleteCharacterFailed"), {
+        description: err instanceof Error ? err.message : tx("lib.unknownError"),
       })
     } finally {
       setDeletingCharacter(false)
@@ -541,7 +545,7 @@ centered composition, high quality, single character`
   const handleGenerateCustom = useCallback(async () => {
     if (!customPrompt.trim()) return
     if (!mainImageUrl || !data) {
-      toast.error("Generate or upload a main portrait first")
+      toast.error(tx("entity.mainPortraitFirst"))
       return
     }
 
@@ -560,7 +564,7 @@ centered composition, high quality, single character`
         characterNodeAspectRatio: data.defaultAssetAspectRatio,
       })
 
-      toast.info("Generating custom variation...")
+      toast.info(tx("entity.generatingCustomVariation"))
 
       const imageUrl = await new Promise<string>((resolve, reject) => {
         const interval = setInterval(async () => {
@@ -571,7 +575,7 @@ centered composition, high quality, single character`
               resolve(job.output_data?.imageUrl ?? "")
             } else if (job.status === "failed") {
               clearInterval(interval)
-              reject(new Error(job.error_message ?? "Failed"))
+              reject(new Error(job.error_message ?? tx("common.failed")))
             }
           } catch (err) {
             clearInterval(interval)
@@ -588,11 +592,11 @@ centered composition, high quality, single character`
 
       const updated = [...(data.customVariations ?? []), newVariation]
       updateNodeData(characterNodeId, { customVariations: updated })
-      toast.success("Custom variation generated")
+      toast.success(tx("entity.customVariationGenerated"))
       setCustomPrompt("")
     } catch (err) {
-      toast.error("Failed to generate custom variation", {
-        description: err instanceof Error ? err.message : "Unknown error",
+      toast.error(tx("entity.customVariationFailed"), {
+        description: err instanceof Error ? err.message : tx("lib.unknownError"),
       })
     } finally {
       setGenerating(false)
@@ -631,7 +635,7 @@ centered composition, high quality, single character`
           <div className="border-b px-6 py-4 flex items-center justify-between shrink-0">
             <div>
               <h2 className="text-lg font-semibold">
-                {data.characterName || "Unnamed Character"}
+                {data.characterName || t("entity.unnamedCharacter")}
               </h2>
               <p className="text-sm text-muted-foreground">
                 {data.style ?? "realistic"} | {data.gender ?? "other"}
@@ -642,7 +646,7 @@ centered composition, high quality, single character`
               {confirmingCharacterDelete ? (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-red-500 max-w-[260px]">
-                    Permanently delete {data.characterName || "this character"}? All assets will be lost. This cannot be undone.
+                    {t("entity.permanentDeleteConfirm", { name: data.characterName || t("entity.thisCharacter") })}
                   </span>
                   <Button
                     variant="ghost"
@@ -651,7 +655,7 @@ centered composition, high quality, single character`
                     onClick={() => setConfirmingCharacterDelete(false)}
                     disabled={deletingCharacter}
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                   <Button
                     variant="destructive"
@@ -660,11 +664,11 @@ centered composition, high quality, single character`
                     disabled={deletingCharacter}
                   >
                     {deletingCharacter ? (
-                      <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+                      <Loader2 className="w-4 h-4 animate-spin me-1.5" />
                     ) : (
-                      <Trash2 className="w-4 h-4 mr-1.5" />
+                      <Trash2 className="w-4 h-4 me-1.5" />
                     )}
-                    Delete Forever
+                    {t("entity.deleteForever")}
                   </Button>
                 </div>
               ) : (
@@ -674,11 +678,11 @@ centered composition, high quality, single character`
                   className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
                   onClick={() => setConfirmingCharacterDelete(true)}
                 >
-                  <Trash2 className="w-4 h-4 mr-1.5" />
-                  Delete Character
+                  <Trash2 className="w-4 h-4 me-1.5" />
+                  {t("entity.deleteCharacter")}
                 </Button>
               )}
-              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("common.close")}>
                 <X className="w-5 h-5" />
               </Button>
             </div>
@@ -700,30 +704,30 @@ centered composition, high quality, single character`
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 )}
               >
-                {tab.label}
+                {t(tab.labelKey)}
                 {tab.id === "expressions" && data.expressions.length > 0 && (
-                  <span className="ml-1 text-xs text-muted-foreground">({data.expressions.length})</span>
+                  <span className="ms-1 text-xs text-muted-foreground">({data.expressions.length})</span>
                 )}
                 {tab.id === "poses" && data.poses.length > 0 && (
-                  <span className="ml-1 text-xs text-muted-foreground">({data.poses.length})</span>
+                  <span className="ms-1 text-xs text-muted-foreground">({data.poses.length})</span>
                 )}
                 {tab.id === "lighting" && data.lightingVariations.length > 0 && (
-                  <span className="ml-1 text-xs text-muted-foreground">({data.lightingVariations.length})</span>
+                  <span className="ms-1 text-xs text-muted-foreground">({data.lightingVariations.length})</span>
                 )}
                 {tab.id === "angles" && (data.angles.length + (data.bodyAngles?.length ?? 0)) > 0 && (
-                  <span className="ml-1 text-xs text-muted-foreground">({data.angles.length + (data.bodyAngles?.length ?? 0)})</span>
+                  <span className="ms-1 text-xs text-muted-foreground">({data.angles.length + (data.bodyAngles?.length ?? 0)})</span>
                 )}
                 {tab.id === "sheets" && ((data.sheets?.length ?? 0) + (data.detailCloseups?.length ?? 0) + (data.outfitVariations?.length ?? 0)) > 0 && (
-                  <span className="ml-1 text-xs text-muted-foreground">({(data.sheets?.length ?? 0) + (data.detailCloseups?.length ?? 0) + (data.outfitVariations?.length ?? 0)})</span>
+                  <span className="ms-1 text-xs text-muted-foreground">({(data.sheets?.length ?? 0) + (data.detailCloseups?.length ?? 0) + (data.outfitVariations?.length ?? 0)})</span>
                 )}
                 {tab.id === "videos" && ((data.motions?.length ?? 0) + Object.values(data.referenceVideosByVariant ?? {}).reduce((n, a) => n + (a?.length ?? 0), 0)) > 0 && (
-                  <span className="ml-1 text-xs text-muted-foreground">({(data.motions?.length ?? 0) + Object.values(data.referenceVideosByVariant ?? {}).reduce((n, a) => n + (a?.length ?? 0), 0)})</span>
+                  <span className="ms-1 text-xs text-muted-foreground">({(data.motions?.length ?? 0) + Object.values(data.referenceVideosByVariant ?? {}).reduce((n, a) => n + (a?.length ?? 0), 0)})</span>
                 )}
                 {tab.id === "voice" && data.voice && (
-                  <span className="ml-1 text-xs text-muted-foreground">✓</span>
+                  <span className="ms-1 text-xs text-muted-foreground">✓</span>
                 )}
                 {tab.id === "custom" && (data.customVariations ?? []).length > 0 && (
-                  <span className="ml-1 text-xs text-muted-foreground">({(data.customVariations ?? []).length})</span>
+                  <span className="ms-1 text-xs text-muted-foreground">({(data.customVariations ?? []).length})</span>
                 )}
               </button>
             ))}
@@ -752,18 +756,18 @@ centered composition, high quality, single character`
                     >
                       {isRefining ? (
                         <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Refining... ({refinedResults.length}/4)
+                          <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                          {t("entity.refiningProgress", { n: refinedResults.length })}
                         </>
                       ) : (
                         <>
-                          <Sparkles className="w-4 h-4 mr-2" />
-                          Refine Character
+                          <Sparkles className="w-4 h-4 me-2" />
+                          {t("entity.refineCharacter")}
                         </>
                       )}
                     </Button>
                     <p className="text-xs text-muted-foreground text-center mt-1.5">
-                      Generate a clean portrait with studio lighting
+                      {t("entity.refineCharacterHint")}
                     </p>
 
                     {/* Prominent CTA after refinement */}
@@ -772,8 +776,8 @@ centered composition, high quality, single character`
                         <div className="flex items-center gap-3">
                           <Sparkles className="w-6 h-6 text-pink-400 shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-white">Character refined!</p>
-                            <p className="text-sm text-gray-400">Generate expressions, poses, lighting & angles</p>
+                            <p className="font-medium text-white">{t("entity.characterRefined")}</p>
+                            <p className="text-sm text-gray-400">{t("entity.characterRefinedNext")}</p>
                           </div>
                           <Button
                             onClick={handleGenerateAllAssets}
@@ -782,13 +786,13 @@ centered composition, high quality, single character`
                           >
                             {generatingAllAssets ? (
                               <>
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                Generating...
+                                <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                                {t("cfgext.entGenerating")}
                               </>
                             ) : (
                               <>
-                                <Sparkles className="w-4 h-4 mr-2" />
-                                Generate All Assets
+                                <Sparkles className="w-4 h-4 me-2" />
+                                {t("entity.generateAllAssets")}
                               </>
                             )}
                           </Button>
@@ -798,7 +802,7 @@ centered composition, high quality, single character`
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-12">
-                    No portrait generated yet. Generate or upload one from the config panel.
+                    {t("entity.noPortraitYet")}
                   </p>
                 )}
 
@@ -806,13 +810,13 @@ centered composition, high quality, single character`
 
                 {(data.generatedResults ?? []).length > 1 && (
                   <div>
-                    <h3 className="text-sm font-medium mb-3">Version History</h3>
+                    <h3 className="text-sm font-medium mb-3">{t("entity.versionHistory")}</h3>
                     <div className="grid grid-cols-4 gap-3">
                       {(data.generatedResults ?? []).map((r, i) => (
                         <DraggableImage
                           key={r.jobId ?? i}
                           src={r.url}
-                          label={`v${i + 1}`}
+                          label={t("entity.versionShort", { n: i + 1 })}
                           onEnlarge={setLightboxSrc}
                           onAddToCanvas={handleAddImageToCanvas}
                           onDragStarted={() => setIsDragging(true)}
@@ -832,7 +836,7 @@ centered composition, high quality, single character`
                 onAddToCanvas={handleAddImageToCanvas}
                 onDragStarted={() => setIsDragging(true)}
                 onDragEnded={() => setIsDragging(false)}
-                emptyMessage="No expressions generated yet. Generate them from the config panel."
+                emptyMessage={t("entity.emptyExpressions")}
                 confirmingIndex={confirmingAssetDelete}
                 onRequestDelete={setConfirmingAssetDelete}
                 onCancelDelete={() => setConfirmingAssetDelete(null)}
@@ -848,7 +852,7 @@ centered composition, high quality, single character`
                 onAddToCanvas={handleAddImageToCanvas}
                 onDragStarted={() => setIsDragging(true)}
                 onDragEnded={() => setIsDragging(false)}
-                emptyMessage="No poses generated yet. Generate them from the config panel."
+                emptyMessage={t("entity.emptyPoses")}
                 confirmingIndex={confirmingAssetDelete}
                 onRequestDelete={setConfirmingAssetDelete}
                 onCancelDelete={() => setConfirmingAssetDelete(null)}
@@ -864,7 +868,7 @@ centered composition, high quality, single character`
                 onAddToCanvas={handleAddImageToCanvas}
                 onDragStarted={() => setIsDragging(true)}
                 onDragEnded={() => setIsDragging(false)}
-                emptyMessage="No lighting variations generated yet. Generate them from the config panel."
+                emptyMessage={t("entity.emptyLighting")}
                 confirmingIndex={confirmingAssetDelete}
                 onRequestDelete={setConfirmingAssetDelete}
                 onCancelDelete={() => setConfirmingAssetDelete(null)}
@@ -876,14 +880,14 @@ centered composition, high quality, single character`
             {activeTab === "angles" && (
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-sm font-medium mb-3">Head</h3>
+                  <h3 className="text-sm font-medium mb-3">{t("entity.anglesHead")}</h3>
                   <AssetGrid
                     items={data.angles}
                     onEnlarge={setLightboxSrc}
                     onAddToCanvas={handleAddImageToCanvas}
                     onDragStarted={() => setIsDragging(true)}
                     onDragEnded={() => setIsDragging(false)}
-                    emptyMessage="No head angle views generated yet. Generate them from the config panel."
+                    emptyMessage={t("entity.emptyHeadAngles")}
                     confirmingIndex={confirmingAssetDelete}
                     onRequestDelete={setConfirmingAssetDelete}
                     onCancelDelete={() => setConfirmingAssetDelete(null)}
@@ -891,14 +895,14 @@ centered composition, high quality, single character`
                   />
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium mb-3">Body</h3>
+                  <h3 className="text-sm font-medium mb-3">{t("entity.anglesBody")}</h3>
                   <AssetGrid
                     items={data.bodyAngles ?? []}
                     onEnlarge={setLightboxSrc}
                     onAddToCanvas={handleAddImageToCanvas}
                     onDragStarted={() => setIsDragging(true)}
                     onDragEnded={() => setIsDragging(false)}
-                    emptyMessage="No body angle views generated yet. Generate them from the config panel."
+                    emptyMessage={t("entity.emptyBodyAngles")}
                   />
                 </div>
               </div>
@@ -908,7 +912,7 @@ centered composition, high quality, single character`
             {activeTab === "sheets" && (
               <AssetGrid
                 items={[
-                  ...((data.sheets ?? []).map((s) => ({ name: s.type ?? "Sheet", url: s.url }))),
+                  ...((data.sheets ?? []).map((s) => ({ name: s.type ?? t("entity.sheetFallbackName"), url: s.url }))),
                   ...(data.detailCloseups ?? []),
                   ...(data.outfitVariations ?? []),
                 ]}
@@ -916,7 +920,7 @@ centered composition, high quality, single character`
                 onAddToCanvas={handleAddImageToCanvas}
                 onDragStarted={() => setIsDragging(true)}
                 onDragEnded={() => setIsDragging(false)}
-                emptyMessage="No character sheets, detail closeups, or outfit variations yet."
+                emptyMessage={t("entity.emptySheets")}
               />
             )}
 
@@ -929,7 +933,7 @@ centered composition, high quality, single character`
                     (urls ?? []).map((url, i) => ({ name: `${variant} ${i + 1}`, url })),
                   ),
                 ]}
-                emptyMessage="No motion or reference videos yet."
+                emptyMessage={t("entity.emptyVideos")}
               />
             )}
 
@@ -955,7 +959,7 @@ centered composition, high quality, single character`
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-12">
-                    No voice selected for this character.
+                    {t("entity.noVoiceSelected")}
                   </p>
                 )}
               </div>
@@ -966,13 +970,13 @@ centered composition, high quality, single character`
               <div>
                 <div className="mb-6">
                   <label className="text-sm font-medium mb-2 block">
-                    Describe a new variation
+                    {t("entity.describeNewVariation")}
                   </label>
                   <div className="flex gap-2">
                     <Input
                       value={customPrompt}
                       onChange={(e) => setCustomPrompt(e.target.value)}
-                      placeholder="e.g., sitting at a computer, holding a sword, wearing a red dress"
+                      placeholder={t("entity.characterVariationPlaceholder")}
                       disabled={generating}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !generating && customPrompt.trim()) {
@@ -988,7 +992,7 @@ centered composition, high quality, single character`
                       {generating ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
-                        "Generate"
+                        t("common.generate")
                       )}
                     </Button>
                   </div>
@@ -996,7 +1000,7 @@ centered composition, high quality, single character`
 
                 {(data.customVariations ?? []).length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-12">
-                    No custom variations yet. Describe a pose, outfit, or scene above.
+                    {t("entity.noCustomVariationsCharacter")}
                   </p>
                 ) : (
                   <div className="grid grid-cols-3 gap-4">
@@ -1036,13 +1040,13 @@ centered composition, high quality, single character`
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Select Refined Image</h3>
-              <Button variant="ghost" size="icon" onClick={() => setShowRefinePicker(false)} aria-label="Close">
+              <h3 className="text-lg font-semibold">{t("entity.selectRefinedImage")}</h3>
+              <Button variant="ghost" size="icon" onClick={() => setShowRefinePicker(false)} aria-label={t("common.close")}>
                 <X className="w-5 h-5" />
               </Button>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
-              Click to select, use expand button to preview full size
+              {t("entity.selectRefinedHint")}
             </p>
             <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto">
               {refinedResults.map((url, i) => (
@@ -1058,7 +1062,7 @@ centered composition, high quality, single character`
                 >
                   <CachedImage
                     src={url}
-                    alt={`Refined ${i + 1}`}
+                    alt={t("entity.refinedAlt", { n: i + 1 })}
                     className="w-full h-36 object-cover rounded-lg"
                     thumbnail
                     thumbnailWidth={320}
@@ -1066,7 +1070,7 @@ centered composition, high quality, single character`
                   {/* Expand button */}
                   <button
                     type="button"
-                    className="absolute bottom-2 left-2 p-1.5 rounded-md bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute bottom-2 start-2 p-1.5 rounded-md bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => {
                       e.stopPropagation()
                       setRefineLightboxSrc(url)
@@ -1075,7 +1079,7 @@ centered composition, high quality, single character`
                     <Expand className="w-4 h-4" />
                   </button>
                   {selectedRefinedIndex === i && (
-                    <div className="absolute top-2 right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                    <div className="absolute top-2 end-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
                       <span className="text-primary-foreground text-xs font-bold">✓</span>
                     </div>
                   )}
@@ -1084,14 +1088,14 @@ centered composition, high quality, single character`
             </div>
             <div className="flex justify-end gap-2 mt-4">
               <Button variant="outline" onClick={() => setShowRefinePicker(false)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 onClick={() => selectedRefinedIndex !== null && handleSelectRefined(refinedResults[selectedRefinedIndex])}
                 disabled={selectedRefinedIndex === null}
                 className="bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600"
               >
-                Use This Image
+                {t("entity.useThisImage")}
               </Button>
             </div>
           </div>
@@ -1106,14 +1110,14 @@ centered composition, high quality, single character`
         >
           <button
             type="button"
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white"
+            className="absolute top-4 end-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white"
             onClick={() => setRefineLightboxSrc(null)}
           >
             <X className="w-6 h-6" />
           </button>
           <CachedImage
             src={refineLightboxSrc}
-            alt="Full size preview"
+            alt={t("entity.fullSizePreviewAlt")}
             className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
           />
         </div>

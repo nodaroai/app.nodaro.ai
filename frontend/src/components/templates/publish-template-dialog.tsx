@@ -468,7 +468,7 @@ export function PublishTemplateDialog({
             style={{ backgroundColor: "#ff0073" }}
           >
             {mutation.isPending && (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <Loader2 className="h-4 w-4 me-2 animate-spin" />
             )}
             {isUpdate ? t("pubTemplate.updateTitle") : t("pubTemplate.submitPublish")}
           </Button>

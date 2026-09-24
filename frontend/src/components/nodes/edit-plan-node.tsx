@@ -48,7 +48,7 @@ function ResultTreeModal({
             >
               {t("cfgext.scrapeCopyJson")}
             </button>
-            <button type="button" aria-label="Close" className="text-muted-foreground hover:text-foreground" onClick={onClose}>
+            <button type="button" aria-label={t("common.close")} className="text-muted-foreground hover:text-foreground" onClick={onClose}>
               <X className="w-5 h-5" />
             </button>
           </div>

@@ -13,6 +13,7 @@
 
 import { useMemo, useState } from "react"
 import { optimizedImageUrl } from "@/lib/image"
+import { useT, type TFunction } from "@/lib/i18n"
 import type { TutorialBodyProps } from "../tutorial-registry"
 import { deriveOneCharacterGraph, type Recipe, type RecipeBorrow, type RecipeSource } from "./one-character-recipes"
 import {
@@ -47,8 +48,8 @@ const DETAIL_ID = "occ-detail"
  *  the half second a larger cut takes to arrive. */
 const src = (url: string, width = 720) => optimizedImageUrl(url, { width, quality: 82 })
 
-function sourceRole(source: RecipeSource): string {
-  return SOURCE_ROLES[source.position] ?? (source.kind === "uploaded" ? "uploaded image" : "generated image")
+function sourceRole(source: RecipeSource, t: TFunction): string {
+  return t(SOURCE_ROLES[source.position] ?? (source.kind === "uploaded" ? "tut.uploadedImage" : "tut.generatedImage"))
 }
 
 /** A `{image:N}` / `{image:N:part}` chip: teal marks a whole source, pink a borrowed fragment. */
@@ -80,13 +81,14 @@ function PromptLine({ recipe }: { recipe: Recipe }) {
  *  qualifier borrows — or a blank, honestly-labelled panel when nothing in the
  *  source can stand for it (see the crop map). */
 function PartTile({ borrow }: { borrow: RecipeBorrow }) {
-  const crop = cropFor(borrow.qualifier)
+  const t = useT()
+  const crop = cropFor(borrow.qualifier, t)
   const url = borrow.source?.imageUrl
   return (
     <div className="occ-part">
       {crop.blank || !url ? (
         <div className="occ-crop occ-crop-blank" role="img" aria-label={`${borrow.token}: ${crop.caption}`}>
-          {crop.blank ? BLANK_TILE_LABEL : NOT_RUN}
+          {t(crop.blank ? BLANK_TILE_LABEL : NOT_RUN)}
         </div>
       ) : (
         <div
@@ -104,7 +106,8 @@ function PartTile({ borrow }: { borrow: RecipeBorrow }) {
 
 export default function OneCharacterBody({ nodes, edges, focus }: TutorialBodyProps) {
   const { step, focusStep } = focus
-  const graph = useMemo(() => deriveOneCharacterGraph(nodes, edges, RECIPE_ORDER), [nodes, edges])
+  const t = useT()
+  const graph = useMemo(() => deriveOneCharacterGraph(nodes, edges, RECIPE_ORDER, t), [nodes, edges, t])
   const { sources, recipes } = graph
   const count = recipes.length
 
@@ -114,7 +117,7 @@ export default function OneCharacterBody({ nodes, edges, focus }: TutorialBodyPr
   const [pick, setPick] = useState(1)
   const selected = Math.min(Math.max(pick, 1), Math.max(count, 1))
   const current = recipes[selected - 1]
-  const copy = current ? copyFor(current.key, current.index) : null
+  const copy = current ? copyFor(current.key, current.index, t) : null
 
   // Dimming is a RAIL gesture, and only a rail gesture: hovering a column
   // still focuses its step (the rail's counter moves) but must not quiet the
@@ -127,7 +130,7 @@ export default function OneCharacterBody({ nodes, edges, focus }: TutorialBodyPr
   })
 
   if (!current || !copy || sources.length === 0) {
-    return <div className="nd-state">This tutorial&rsquo;s workflow could not be read.</div>
+    return <div className="nd-state">{t("tut.workflowUnreadable")}</div>
   }
 
   const meta = [current.resolution, current.aspectRatio].filter(Boolean).join(" · ")
@@ -136,11 +139,11 @@ export default function OneCharacterBody({ nodes, edges, focus }: TutorialBodyPr
     <div className="occ">
       <header className="occ-band">
         <div>
-          <h2 className="occ-headline">{HEADLINE}</h2>
-          <p className="occ-subline">{SUBLINE}</p>
+          <h2 className="occ-headline">{t(HEADLINE)}</h2>
+          <p className="occ-subline">{t(SUBLINE)}</p>
         </div>
         <div className="nd-chips">
-          {[`${sources.length} sources`, `${count} recipes`, ...FACTS].map((f) => (
+          {[t("tut.sourcesCount", { n: sources.length }), t("tut.recipesCount", { n: count }), ...FACTS.map((f) => t(f))].map((f) => (
             <span key={f} className="nd-chip">
               {f}
             </span>
@@ -152,29 +155,29 @@ export default function OneCharacterBody({ nodes, edges, focus }: TutorialBodyPr
         {/* --- 1 · the two sources -------------------------------------------- */}
         <section className="occ-panel" {...columnState(STEP.sources)} onMouseEnter={() => focusStep(STEP.sources)}>
           <header className="occ-head">
-            <span className="occ-badge">IN</span>
+            <span className="occ-badge">{t("tut.badgeIn")}</span>
             <div className="occ-head-text">
-              <div className="occ-title">{IN_COLUMN.title}</div>
-              <div className="occ-sub">{IN_COLUMN.sub}</div>
+              <div className="occ-title">{t(IN_COLUMN.title)}</div>
+              <div className="occ-sub">{t(IN_COLUMN.sub)}</div>
             </div>
           </header>
           <div className="occ-panel-body occ-sources">
             {sources.map((s) => (
               <figure key={s.nodeId} className="occ-source">
                 {s.imageUrl ? (
-                  <img className="occ-source-img" src={src(s.imageUrl)} alt={`Source ${s.position}: ${sourceRole(s)}`} />
+                  <img className="occ-source-img" src={src(s.imageUrl)} alt={t("tut.sourceAlt", { n: s.position, role: sourceRole(s, t) })} />
                 ) : (
-                  <div className="occ-source-img occ-empty">{NOT_RUN}</div>
+                  <div className="occ-source-img occ-empty">{t(NOT_RUN)}</div>
                 )}
                 <figcaption className="occ-source-cap">
                   <TokenChip n={s.position} />
-                  <span className="occ-source-role">{sourceRole(s)}</span>
+                  <span className="occ-source-role">{sourceRole(s, t)}</span>
                 </figcaption>
               </figure>
             ))}
             <div className="occ-note">
-              <div className="occ-eyebrow occ-eyebrow-teal">{SAME_TWO.eyebrow}</div>
-              <p>{SAME_TWO.body}</p>
+              <div className="occ-eyebrow occ-eyebrow-teal">{t(SAME_TWO.eyebrow)}</div>
+              <p>{t(SAME_TWO.body)}</p>
             </div>
           </div>
         </section>
@@ -184,10 +187,10 @@ export default function OneCharacterBody({ nodes, edges, focus }: TutorialBodyPr
           <header className="occ-head">
             <span className="occ-badge occ-badge-tint">2</span>
             <div className="occ-head-text">
-              <div className="occ-title">{RECIPES_COLUMN.title}</div>
-              <div className="occ-sub">{RECIPES_COLUMN.sub}</div>
+              <div className="occ-title">{t(RECIPES_COLUMN.title)}</div>
+              <div className="occ-sub">{t(RECIPES_COLUMN.sub)}</div>
             </div>
-            <span className="occ-meta occ-meta-accent">{RECIPES_COLUMN.meta}</span>
+            <span className="occ-meta occ-meta-accent">{t(RECIPES_COLUMN.meta)}</span>
           </header>
 
           <div className="occ-rows">
@@ -206,7 +209,7 @@ export default function OneCharacterBody({ nodes, edges, focus }: TutorialBodyPr
                 <span className="occ-row-num">{r.index}</span>
                 <span className="occ-row-text">
                   <PromptLine recipe={r} />
-                  <span className="occ-row-name">{copyFor(r.key, r.index).name}</span>
+                  <span className="occ-row-name">{copyFor(r.key, r.index, t).name}</span>
                 </span>
               </button>
             ))}
@@ -214,7 +217,7 @@ export default function OneCharacterBody({ nodes, edges, focus }: TutorialBodyPr
 
           <div className="occ-panel-body occ-recipe-detail">
             <div className="occ-inset">
-              <div className="occ-eyebrow">{TAKES_EYEBROW}</div>
+              <div className="occ-eyebrow">{t(TAKES_EYEBROW)}</div>
               <ul className="occ-takes">
                 {current.borrows.map((b) => (
                   <li key={`${b.n}:${b.qualifier}`} className="occ-take">
@@ -224,7 +227,7 @@ export default function OneCharacterBody({ nodes, edges, focus }: TutorialBodyPr
                       <span className="occ-take-thumb occ-empty" />
                     )}
                     <TokenChip n={b.n} qualifier={b.qualifier} small />
-                    <span className="occ-take-note">{copy.notes[`${b.n}:${b.qualifier}`] ?? `${b.qualifier || "the whole image"} from source ${b.n}`}</span>
+                    <span className="occ-take-note">{copy.notes[`${b.n}:${b.qualifier}`] ?? t("tut.fromSource", { part: b.qualifier || t("tut.wholeImage"), n: b.n })}</span>
                   </li>
                 ))}
               </ul>
@@ -236,7 +239,7 @@ export default function OneCharacterBody({ nodes, edges, focus }: TutorialBodyPr
             </div>
 
             <div className="occ-noderow">
-              <span className="occ-eyebrow">{NODE_EYEBROW}</span>
+              <span className="occ-eyebrow">{t(NODE_EYEBROW)}</span>
               <span className="occ-noderow-label">{current.label}</span>
               {current.provider && <span className="occ-noderow-model">{current.provider}</span>}
             </div>
@@ -252,7 +255,7 @@ export default function OneCharacterBody({ nodes, edges, focus }: TutorialBodyPr
           aria-live="polite"
         >
           <header className="occ-head">
-            <span className="occ-badge occ-badge-accent">OUT</span>
+            <span className="occ-badge occ-badge-accent">{t("tut.badgeOut")}</span>
             <div className="occ-head-text">
               <div className="occ-title">{copy.outTitle}</div>
               <div className="occ-sub">{copy.outSub}</div>
@@ -262,13 +265,13 @@ export default function OneCharacterBody({ nodes, edges, focus }: TutorialBodyPr
 
           <div className="occ-panel-body occ-out">
             {current.resultUrl ? (
-              <img className="occ-hero" src={src(current.resultUrl, 1200)} alt={`Recipe ${current.index}: ${copy.name}`} />
+              <img className="occ-hero" src={src(current.resultUrl, 1200)} alt={t("tut.recipeAlt", { n: current.index, name: copy.name })} />
             ) : (
-              <div className="occ-hero occ-empty">{NOT_RUN}</div>
+              <div className="occ-hero occ-empty">{t(NOT_RUN)}</div>
             )}
 
             <div className="occ-rule">
-              <span className="occ-eyebrow">{ADDS_UP_EYEBROW}</span>
+              <span className="occ-eyebrow">{t(ADDS_UP_EYEBROW)}</span>
               <span className="occ-rule-line" />
             </div>
 
@@ -281,12 +284,12 @@ export default function OneCharacterBody({ nodes, edges, focus }: TutorialBodyPr
               </span>
               <div className="occ-part occ-part-result">
                 {current.resultUrl ? (
-                  <div className="occ-crop occ-crop-result" role="img" aria-label="The result" style={{ backgroundImage: `url(${src(current.resultUrl, 900)})` }} />
+                  <div className="occ-crop occ-crop-result" role="img" aria-label={t("tut.theResult")} style={{ backgroundImage: `url(${src(current.resultUrl, 900)})` }} />
                 ) : (
-                  <div className="occ-crop occ-crop-blank">{NOT_RUN}</div>
+                  <div className="occ-crop occ-crop-blank">{t(NOT_RUN)}</div>
                 )}
-                <span className="occ-result-chip">{RESULT_CHIP}</span>
-                <div className="occ-part-caption">{RESULT_CAPTION}</div>
+                <span className="occ-result-chip">{t(RESULT_CHIP)}</span>
+                <div className="occ-part-caption">{t(RESULT_CAPTION)}</div>
               </div>
             </div>
           </div>

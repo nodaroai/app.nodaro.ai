@@ -8,6 +8,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WebhookTriggerData, WebhookParam } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
 
 
 function buildHandles(params: ReadonlyArray<WebhookParam>) {
@@ -37,6 +38,7 @@ function buildHandles(params: ReadonlyArray<WebhookParam>) {
 }
 
 function WebhookTriggerNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as WebhookTriggerData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNodeInternals = useUpdateNodeInternals()
@@ -68,11 +70,11 @@ function WebhookTriggerNodeComponent({ id, data, selected }: NodeProps) {
       >
         <div className="p-3" style={{ minHeight: params.length > 1 ? `${params.length * 22 + 8}px` : undefined }}>
           <p className="text-sm text-muted-foreground line-clamp-2 break-all">
-            {nodeData.webhookUrl || "Configure webhook..."}
+            {nodeData.webhookUrl || t("node.configureWebhook")}
           </p>
           {params.length > 0 && (
             <p className="text-[10px] text-muted-foreground mt-1">
-              {params.length} param{params.length !== 1 ? "s" : ""}
+              {params.length === 1 ? t("node.paramCountOne", { n: params.length }) : t("node.paramCountMany", { n: params.length })}
             </p>
           )}
         </div>

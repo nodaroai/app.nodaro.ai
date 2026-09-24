@@ -3,6 +3,9 @@ import { Link } from "react-router-dom"
 import { Plus, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NodaroLogo } from "@/components/nodaro-logo"
+import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import type { RunSlot } from "./types"
 import { RunSlotItem, CompactSlotItem } from "./run-slot-item"
 
@@ -39,6 +42,8 @@ export function RunsSidebar({
 }) {
   const hasMultipleVersions = versions.length > 1
   const sidebarRef = useRef<HTMLDivElement>(null)
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
 
   // Arrow key navigation is handled by the global handler in use-run-slots.ts
 
@@ -48,12 +53,12 @@ export function RunsSidebar({
       <div
         ref={sidebarRef}
         tabIndex={-1}
-        className="w-[72px] h-full border-r border-border bg-card flex flex-col shrink-0 outline-none"
+        className="w-[72px] h-full border-e border-border bg-card flex flex-col shrink-0 outline-none"
       >
         {/* Collapsed header — logo only, matches presentation header height */}
         <div className="border-b border-border shrink-0" style={{ paddingTop: 'max(0.5rem, var(--safe-area-top))' }}>
           <div className="flex items-center justify-center h-11 md:h-14">
-            <Link to="/" title="Home" className="shrink-0">
+            <Link to="/" title={t("runner.home")} className="shrink-0">
               <NodaroLogo variant="icon" size="sm" />
             </Link>
           </div>
@@ -83,9 +88,9 @@ export function RunsSidebar({
           onClick={onClose}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClose() } }}
           className="border-t border-border shrink-0 flex items-center justify-center py-2 cursor-pointer hover:bg-muted/50 transition-colors"
-          title="Expand sidebar"
+          title={t("nav.expandSidebar")}
         >
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <ChevronRight className={cn("h-4 w-4 text-muted-foreground", isRtl && "rotate-180")} />
         </div>
       </div>
     )
@@ -95,14 +100,14 @@ export function RunsSidebar({
     <div
       ref={sidebarRef}
       tabIndex={-1}
-      className="w-full sm:w-72 h-full border-r border-border bg-card flex flex-col shrink-0 outline-none"
+      className="w-full sm:w-72 h-full border-e border-border bg-card flex flex-col shrink-0 outline-none"
     >
       <div className="border-b border-border shrink-0" style={{ paddingTop: 'max(0.5rem, var(--safe-area-top))' }}>
         <div className="flex items-center justify-between px-3 h-11 md:h-14">
-          <Link to="/" title="Home" className="shrink-0">
+          <Link to="/" title={t("runner.home")} className="shrink-0">
             <NodaroLogo size="sm" />
           </Link>
-          <Button variant="ghost" size="sm" onClick={onCreateNew} title="New run" className="h-8 w-8 p-0">
+          <Button variant="ghost" size="sm" onClick={onCreateNew} title={t("node.newRun")} className="h-8 w-8 p-0">
             <Plus className="h-4 w-4" />
           </Button>
         </div>
@@ -112,7 +117,7 @@ export function RunsSidebar({
       {hasMultipleVersions && (
         <div className="px-4 py-2 border-b border-border/50">
           <label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 block">
-            Run on version
+            {t("runner.runOnVersion")}
           </label>
           <select
             value={selectedVersion ?? ""}
@@ -122,10 +127,10 @@ export function RunsSidebar({
             }}
             className="w-full text-xs bg-background border border-border rounded px-2 py-1.5 text-foreground"
           >
-            <option value="">Latest (v{latestVersion})</option>
+            <option value="">{t("runner.latestVersionOption", { n: latestVersion })}</option>
             {versions.map((v) => (
               <option key={v.version} value={v.version}>
-                v{v.version}{v.version === latestVersion ? " (latest)" : ""}
+                v{v.version}{v.version === latestVersion ? ` ${t("runner.latestSuffix")}` : ""}
               </option>
             ))}
           </select>
@@ -148,12 +153,12 @@ export function RunsSidebar({
         {isLoadingRuns && (
           <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-[#ff0073]" />
-            Loading runs...
+            {t("runner.loadingRuns")}
           </div>
         )}
         {slots.length === 0 && !isLoadingRuns && (
           <div className="px-4 py-6 text-center text-xs text-muted-foreground">
-            Click + to create a new run
+            {t("runner.clickPlusNewRun")}
           </div>
         )}
       </div>
@@ -165,9 +170,9 @@ export function RunsSidebar({
         onClick={onClose}
         onKeyDown={(e) => { if (e.key === "Enter") onClose() }}
         className="border-t border-border shrink-0 flex items-center justify-center py-2 cursor-pointer hover:bg-muted/50 transition-colors"
-        title="Collapse sidebar"
+        title={t("runner.collapseSidebar")}
       >
-        <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+        <ChevronLeft className={cn("h-4 w-4 text-muted-foreground", isRtl && "rotate-180")} />
       </div>
     </div>
   )

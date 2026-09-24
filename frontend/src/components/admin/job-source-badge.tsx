@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 /**
  * Which surface created a job.
@@ -31,14 +32,14 @@ const TONE: Record<string, string> = {
 /** Human label for the coarse kind. Unknown kinds fall through to the raw
  *  value rather than "Unknown" — a source the backend emits but this file has
  *  not learned about should still be READABLE here. */
-const LABEL: Record<string, string> = {
-  mcp: "MCP",
-  web: "Web",
-  cli: "CLI",
-  sdk: "SDK",
-  app: "App",
-  api: "API",
-  internal: "Internal",
+const LABEL: Record<string, MessageKey> = {
+  mcp: "misc.sourceMcp",
+  web: "misc.sourceWeb",
+  cli: "misc.sourceCli",
+  sdk: "misc.sourceSdk",
+  app: "misc.sourceApp",
+  api: "misc.sourceApi",
+  internal: "misc.sourceInternal",
 }
 
 export interface JobSourceBadgeProps {
@@ -58,10 +59,11 @@ export interface JobSourceBadgeProps {
 }
 
 export function JobSourceBadge({ source, sourceDetail, appName, workflowExecutionId, className = "" }: JobSourceBadgeProps) {
+  const t = useT()
   const badges = []
 
   if (source) {
-    const label = LABEL[source] ?? source
+    const label = LABEL[source] ? t(LABEL[source]) : source
     const visibleDetail = (source === "app" && appName) || sourceDetail
     badges.push(
       <Badge
@@ -81,7 +83,7 @@ export function JobSourceBadge({ source, sourceDetail, appName, workflowExecutio
       >
         {label}
         {visibleDetail && (
-          <span className="ml-1 font-normal opacity-70 max-w-[14ch] truncate inline-block align-bottom">
+          <span className="ms-1 font-normal opacity-70 max-w-[14ch] truncate inline-block align-bottom">
             {visibleDetail}
           </span>
         )}
@@ -94,7 +96,7 @@ export function JobSourceBadge({ source, sourceDetail, appName, workflowExecutio
     // explicit em-dash rather than a guess — "unknown" is a usable answer,
     // a wrong label is not.
     badges.push(
-      <span key="none" className="text-xs text-muted-foreground" title="No source recorded (row predates source stamping on this path)">
+      <span key="none" className="text-xs text-muted-foreground" title={t("misc.noSourceRecorded")}>
         —
       </span>,
     )
@@ -102,8 +104,8 @@ export function JobSourceBadge({ source, sourceDetail, appName, workflowExecutio
 
   if (workflowExecutionId) {
     badges.push(
-      <Badge key="wf" variant="outline" className="text-xs" title={`Workflow execution ${workflowExecutionId}`}>
-        Workflow
+      <Badge key="wf" variant="outline" className="text-xs" title={t("misc.workflowExecutionTitle", { id: workflowExecutionId })}>
+        {t("apps.workflow")}
       </Badge>,
     )
   }

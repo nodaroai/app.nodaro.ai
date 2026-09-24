@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { MATERIALS as BASE_MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGORY_ORDER, getMaterialLabel, getMaterialPromptHint, type MaterialCategory } from "@nodaro/prompts"
 import { resolveEntityAspect, aspectRatioToNumber } from "@nodaro/shared"
 import { generateObjectAsset, removeObjectAsset } from "@/lib/api"
+import { tx, useT, type MessageKey } from "@/lib/i18n"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useObjectStudioJobs } from "./use-object-studio-jobs"
 import { PresetChips } from "../studio-shell/preset-chips"
@@ -45,10 +46,10 @@ const BUCKET_TO_COLUMN: Record<ObjectAssetBucket, "angles" | "materials" | "vari
   variations: "variations",
 }
 
-const BUCKET_LABEL: Record<ObjectAssetBucket, string> = {
-  angles: "angles",
-  materials: "materials",
-  variations: "variations",
+const BUCKET_LABEL: Record<ObjectAssetBucket, MessageKey> = {
+  angles: "studio.bucketAngles",
+  materials: "studio.bucketMaterials",
+  variations: "studio.bucketVariations",
 }
 
 interface ObjectAssetTabProps {
@@ -64,6 +65,7 @@ export function ObjectAssetTab({
   presets,
   iconLabel,
 }: ObjectAssetTabProps) {
+  const t = useT()
   const data = studio.stagedData
   const [customPrompt, setCustomPrompt] = useState("")
   // Fullscreen viewer: click an asset to open; ←/→ navigate, Esc closes.
@@ -72,7 +74,7 @@ export function ObjectAssetTab({
 
   useEffect(() => {
     jobs.onFailed((jobId) => {
-      toast.error(`Generation ${jobId.slice(0, 8)}… failed`)
+      toast.error(tx("studio.genFailedId", { id: jobId.slice(0, 8) }))
     })
   }, [jobs.onFailed])
 
@@ -129,7 +131,7 @@ export function ObjectAssetTab({
       // throw but do NOT toast (apiJson only throws), so without this the
       // "Generating…" card just vanished with no explanation — e.g. out of
       // credits, or a rejected variant. Mirrors the location precedent.
-      toast.error(e instanceof Error ? e.message : "Generation failed — try again.")
+      toast.error(e instanceof Error ? e.message : tx("studio.genFailedTryAgain"))
     }
   }
 
@@ -143,11 +145,11 @@ export function ObjectAssetTab({
     const existingNames = new Set(items.map((i) => i.name.toLowerCase()))
     const missing = presets.filter((p) => !existingNames.has(p.toLowerCase()))
     if (missing.length === 0) {
-      toast.info("All presets already generated")
+      toast.info(tx("studio.allPresetsGenerated"))
       return
     }
     if (missing.length >= 4) {
-      if (!window.confirm(`This will queue ${missing.length} generation jobs.`)) return
+      if (!window.confirm(tx("studio.confirmQueueJobs", { n: missing.length }))) return
     }
     for (const variant of missing) {
       // eslint-disable-next-line no-await-in-loop -- intentional sequential
@@ -160,7 +162,7 @@ export function ObjectAssetTab({
     const trimmed = customPrompt.trim()
     if (!trimmed) return
     if (trimmed.length > 2000) {
-      toast.error("Custom prompt is too long (max 2000 chars)")
+      toast.error(tx("studio.customPromptTooLong"))
       return
     }
     await fireGen(trimmed, true)
@@ -179,7 +181,7 @@ export function ObjectAssetTab({
       try {
         await removeObjectAsset(id, { column: BUCKET_TO_COLUMN[tabKind], url: target.url })
       } catch {
-        toast.error("Failed to delete asset — refresh to restore")
+        toast.error(tx("studio.deleteAssetFailed"))
       }
     }
   }
@@ -209,7 +211,7 @@ export function ObjectAssetTab({
           disabled={disabled}
           className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Generate All
+          {t("studio.generateAll")}
         </button>
       </div>
 
@@ -236,10 +238,10 @@ export function ObjectAssetTab({
                 e.stopPropagation()
                 void handleRemove(idx)
               }}
-              aria-label={`Remove ${item.name}`}
-              className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
+              aria-label={t("cfgshared.removeModel", { name: item.name })}
+              className="absolute top-1 end-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
             >
-              Remove
+              {t("common.remove")}
             </button>
           </div>
         ))}
@@ -249,12 +251,12 @@ export function ObjectAssetTab({
             className="aspect-square border border-[#1e293b] rounded bg-[#0e1117] flex flex-col items-center justify-center gap-2 text-[11px] text-slate-400"
           >
             <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
-            <span className="truncate max-w-full px-2">Generating {j.name}…</span>
+            <span className="truncate max-w-full px-2">{t("studio.generatingName", { name: j.name })}</span>
           </div>
         ))}
         {items.length === 0 && trackedForBucket.length === 0 && (
           <div className="col-span-full text-center text-[11px] text-slate-500 py-8 border border-dashed border-[#1e293b] rounded">
-            No {BUCKET_LABEL[tabKind]} variants yet — pick a preset below or enter a custom prompt.
+            {t("studio.noVariantsYet", { bucket: t(BUCKET_LABEL[tabKind]) })}
           </div>
         )}
       </div>
@@ -274,7 +276,7 @@ export function ObjectAssetTab({
           type="text"
           value={customPrompt}
           onChange={(e) => setCustomPrompt(e.target.value)}
-          placeholder="Custom prompt (free-form)"
+          placeholder={t("studio.customPromptPh")}
           disabled={disabled}
           className="flex-1 px-3 py-2 text-[12px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600 disabled:opacity-40"
           onKeyDown={(e) => {
@@ -292,7 +294,7 @@ export function ObjectAssetTab({
           disabled={customDisabled}
           className="px-4 py-2 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
         >
-          Generate
+          {t("common.generate")}
         </button>
       </div>
 
@@ -323,6 +325,7 @@ interface MaterialCatalogBrowserProps {
 }
 
 export function MaterialCatalogBrowser({ disabled, onPick }: MaterialCatalogBrowserProps) {
+  const t = useT()
   // The catalog as THIS deployment offers it — a pack may have removed or
   // reworded entries, and a pick here becomes a generation prompt directly.
   const MATERIALS = useCuratedEntries("materials", BASE_MATERIALS)
@@ -344,11 +347,10 @@ export function MaterialCatalogBrowser({ disabled, onPick }: MaterialCatalogBrow
       className="space-y-3 mt-2 pt-3 border-t border-[#1e293b]"
     >
       <h3 className="text-[11px] font-medium text-slate-300">
-        Browse Material catalog
+        {t("studio.browseMaterialCatalog")}
       </h3>
       <p className="text-[10px] text-slate-500">
-        Pick a material to generate a variant. Each pick fires a custom-prompt
-        generation seeded with the catalog's prompt hint.
+        {t("studio.materialCatalogHint")}
       </p>
       {MATERIAL_CATEGORY_ORDER.map((category) => {
         const entries = byCategory.get(category) ?? []

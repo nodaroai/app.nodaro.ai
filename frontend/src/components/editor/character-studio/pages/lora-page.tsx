@@ -34,10 +34,12 @@ import {
   startCharacterTraining,
   type TrainingStatus,
 } from "@/lib/api"
+import { tx, useT, type TFunction } from "@/lib/i18n"
 import type { CharacterNodeData } from "@/types/nodes"
 import type { StudioPageProps } from "../../studio-shell/types"
 import type { CharacterStudioState } from "../use-character-studio"
 import type { CharacterStudioJobs } from "../use-character-studio-jobs"
+import { formatDate, formatNumber } from "@/lib/i18n/format"
 
 const POLL_INTERVAL_MS = 8000
 const MIN_PHOTOS = 4
@@ -57,23 +59,23 @@ interface TrainingCandidate {
  * Returns the deduped candidate list (NOT capped at 20 here — the cap is the
  * backend's concern; the user sees every eligible image and the route slices).
  */
-function deriveCandidates(data: CharacterNodeData | null): TrainingCandidate[] {
+function deriveCandidates(data: CharacterNodeData | null, t: TFunction): TrainingCandidate[] {
   if (!data) return []
   const out: TrainingCandidate[] = []
   if (data.sourceImageUrl)
-    out.push({ url: data.sourceImageUrl, bucket: "Source", label: "source" })
+    out.push({ url: data.sourceImageUrl, bucket: t("inputcfg.source"), label: t("studio.sourceLower") })
   for (const r of data.referencePhotos ?? [])
-    if (r.url) out.push({ url: r.url, bucket: "Reference photos", label: r.kind ?? "ref" })
+    if (r.url) out.push({ url: r.url, bucket: t("studio.referencePhotosHeading"), label: r.kind ?? "ref" })
   for (const a of data.expressions ?? [])
-    if (a.url) out.push({ url: a.url, bucket: "Expressions", label: a.name ?? "expr" })
+    if (a.url) out.push({ url: a.url, bucket: t("studio.expressions"), label: a.name ?? "expr" })
   for (const a of data.poses ?? [])
-    if (a.url) out.push({ url: a.url, bucket: "Poses", label: a.name ?? "pose" })
+    if (a.url) out.push({ url: a.url, bucket: t("node.assetBadgePoses"), label: a.name ?? "pose" })
   for (const a of data.angles ?? [])
-    if (a.url) out.push({ url: a.url, bucket: "Head angles", label: a.name ?? "angle" })
+    if (a.url) out.push({ url: a.url, bucket: t("studio.lbHeadAngles"), label: a.name ?? "angle" })
   for (const a of data.bodyAngles ?? [])
-    if (a.url) out.push({ url: a.url, bucket: "Body angles", label: a.name ?? "body" })
+    if (a.url) out.push({ url: a.url, bucket: t("studio.lbBodyAngles"), label: a.name ?? "body" })
   for (const a of data.lightingVariations ?? [])
-    if (a.url) out.push({ url: a.url, bucket: "Lighting", label: a.name ?? "light" })
+    if (a.url) out.push({ url: a.url, bucket: t("paramcfg.lighting"), label: a.name ?? "light" })
 
   const seen = new Set<string>()
   return out.filter((c) => {
@@ -84,6 +86,7 @@ function deriveCandidates(data: CharacterNodeData | null): TrainingCandidate[] {
 }
 
 export function LoraPage({ state }: StudioPageProps<CharacterStudioState, CharacterStudioJobs>) {
+  const t = useT()
   const trainingEnabled = hasCredits()
   const data = state.staged
   const characterNodeId = state.nodeId
@@ -100,7 +103,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
   const [pollNonce, setPollNonce] = useState(0)
 
   // Candidate images (the 7 buckets, de-duped). Recomputed when staged changes.
-  const candidates = useMemo(() => deriveCandidates(data), [data])
+  const candidates = useMemo(() => deriveCandidates(data, t), [data, t])
 
   // Ephemeral, page-local selection: which candidate URLs to include in training.
   // Default = ALL selected. Immutable toggles (always copy the Set, never mutate).
@@ -188,7 +191,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
       // Send the curated selection. When everything is selected this is the
       // full set — backend treats a full/empty selection identically.
       await startCharacterTraining(data.characterDbId, selectedUrls)
-      toast.success("Training started — usually takes 15 minutes.")
+      toast.success(tx("studio.trainingStarted"))
       setTraining({
         status: "queued",
         trainingId: null,
@@ -212,14 +215,14 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
     if (!data?.characterDbId || busy) return
     if (
       !window.confirm(
-        "Remove the trained model? Generations will fall back to reference images.",
+        tx("studio.confirmRemoveTrainedModel"),
       )
     )
       return
     setBusy(true)
     try {
       await deleteCharacterLora(data.characterDbId)
-      toast.success("Trained model removed.")
+      toast.success(tx("studio.trainedModelRemoved"))
       setTraining({
         status: "untrained",
         trainingId: null,
@@ -266,16 +269,16 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
       {/* ── Status / actions header ─────────────────────────────────────── */}
       <section>
         <header className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-slate-200">High-fidelity model</h3>
+          <h3 className="text-sm font-semibold text-slate-200">{t("studio.highFidelityModel")}</h3>
           <span className="text-[11px] text-slate-500">
-            {CHARACTER_LORA_TRAINING_CREDITS.toLocaleString()} credits · ~15 min
+            {t("studio.loraCostEta", { credits: formatNumber(CHARACTER_LORA_TRAINING_CREDITS) })}
           </span>
         </header>
 
         {status === "succeeded" && (
           <div className="flex items-center gap-3 text-sm flex-wrap">
             <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-xs font-medium">
-              Trained
+              {t("studio.trained")}
             </span>
             {training?.triggerWord && (
               <span className="text-[11px] text-slate-500 font-mono">
@@ -284,7 +287,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
             )}
             <span className="text-slate-500 text-xs">
               {training?.trainedAt
-                ? `Trained ${new Date(training.trainedAt).toLocaleDateString()}`
+                ? t("studio.trainedOn", { date: formatDate(training.trainedAt) })
                 : ""}
             </span>
             <button
@@ -292,17 +295,17 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
               className="text-xs underline text-slate-500 hover:text-slate-300 disabled:opacity-40"
               disabled={busy || insufficientPhotos}
               onClick={handleStart}
-              title="Re-training replaces the current model with the selected images."
+              title={t("studio.retrainTitle")}
             >
-              Re-train
+              {t("studio.retrain")}
             </button>
             <button
               type="button"
-              className="text-xs underline text-slate-500 hover:text-red-400 ml-auto disabled:opacity-40"
+              className="text-xs underline text-slate-500 hover:text-red-400 ms-auto disabled:opacity-40"
               disabled={busy}
               onClick={handleRemove}
             >
-              Remove
+              {t("common.remove")}
             </button>
           </div>
         )}
@@ -310,14 +313,14 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
         {inFlight && (
           <div className="flex items-center gap-3 text-sm">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
-            <span className="text-slate-400">Training… (~15 min)</span>
+            <span className="text-slate-400">{t("studio.trainingEta")}</span>
             <button
               type="button"
-              className="text-xs underline text-slate-500 hover:text-red-400 ml-auto disabled:opacity-40"
+              className="text-xs underline text-slate-500 hover:text-red-400 ms-auto disabled:opacity-40"
               disabled={busy}
               onClick={handleRemove}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         )}
@@ -325,7 +328,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
         {status === "failed" && (
           <div className="flex flex-col gap-2 text-sm">
             <div className="text-red-400 text-xs">
-              Training failed: {training?.error ?? "Unknown error"}
+              {t("studio.trainingFailedWith", { error: training?.error ?? t("lib.unknownError") })}
             </div>
             <button
               type="button"
@@ -333,7 +336,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
               disabled={busy || insufficientPhotos}
               onClick={handleStart}
             >
-              Try again
+              {t("common.tryAgain")}
             </button>
           </div>
         )}
@@ -341,9 +344,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
         {(status === "untrained" || status === "cancelled") && (
           <div className="flex flex-col gap-2 text-sm">
             <p className="text-slate-500 text-xs">
-              Train a custom model on this character's references for the
-              highest-fidelity identity match in image generations. Choose which
-              images to include below.
+              {t("studio.loraExplainer")}
             </p>
             <div className="flex items-center gap-2 flex-wrap">
               <Button
@@ -355,12 +356,12 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
                 {busy ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  "Train high-fidelity model"
+                  t("studio.trainHighFidelityModel")
                 )}
               </Button>
               <span className="text-xs text-slate-500">
-                {selectedCount} / {MIN_PHOTOS} selected
-                {insufficientPhotos && " — select at least 4 images"}
+                {t("studio.nOfMaxSelectedSpaced", { n: selectedCount, max: MIN_PHOTOS })}
+                {insufficientPhotos && ` — ${t("studio.selectAtLeastImages", { n: MIN_PHOTOS })}`}
               </span>
             </div>
           </div>
@@ -371,12 +372,12 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
       <section className="border-t border-[#1e293b] pt-3">
         <div className="flex items-center justify-between mb-2">
           <div className="text-[9px] uppercase tracking-wide text-slate-500">
-            Training images
+            {t("studio.trainingImages")}
           </div>
           {candidates.length > 0 && (
             <div className="flex items-center gap-3 text-[10px]">
               <span className="text-slate-500">
-                {selectedCount} / {candidates.length} selected
+                {t("studio.nOfMaxSelectedSpaced", { n: selectedCount, max: candidates.length })}
               </span>
               <button
                 type="button"
@@ -384,7 +385,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
                 disabled={selectedCount === candidates.length}
                 onClick={selectAll}
               >
-                Select all
+                {t("studio.selectAll")}
               </button>
               <button
                 type="button"
@@ -392,7 +393,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
                 disabled={selectedCount === 0}
                 onClick={clearAll}
               >
-                Clear
+                {t("common.clear")}
               </button>
             </div>
           )}
@@ -400,8 +401,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
 
         {candidates.length === 0 ? (
           <p className="text-[11px] text-slate-500">
-            No reference images yet — add a portrait, reference photos, or generate
-            expressions / poses / angles first.
+            {t("studio.noReferenceImagesYet")}
           </p>
         ) : (
           <div className="space-y-3">
@@ -417,7 +417,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
                         type="button"
                         onClick={() => toggle(c.url)}
                         disabled={inFlight}
-                        title={`${c.label}${selected ? " — included" : " — excluded"}`}
+                        title={selected ? t("studio.labelIncluded", { label: c.label }) : t("studio.labelExcluded", { label: c.label })}
                         aria-pressed={selected}
                         className={`relative aspect-square overflow-hidden rounded border transition disabled:cursor-not-allowed disabled:opacity-60 ${
                           selected
@@ -432,7 +432,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
                           thumbnail
                         />
                         <span
-                          className={`absolute top-0.5 right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[8px] font-bold ${
+                          className={`absolute top-0.5 end-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[8px] font-bold ${
                             selected
                               ? "bg-[#3b82f6] text-white"
                               : "bg-[#0d1017]/80 text-slate-500 border border-[#334155]"

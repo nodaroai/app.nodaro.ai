@@ -5,8 +5,11 @@ import { toast } from "sonner"
 import { startCheckout, startLoadCheckout } from "@/lib/checkout"
 import { TOPUP_PACKAGES, type TopupPackage, creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "@/lib/pricing-data"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
+import { tx, useT } from "@/lib/i18n"
+import { formatNumber } from "@/lib/i18n/format"
 
 export function CreditTopup() {
+  const t = useT()
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [customUsd, setCustomUsd] = useState<string>("")
 
@@ -19,7 +22,7 @@ export function CreditTopup() {
     try {
       await startLoadCheckout(parsedUsd)
     } catch {
-      toast.error("Failed to open checkout")
+      toast.error(tx("pricing.failedOpenCheckout"))
     } finally {
       setLoadingId(null)
     }
@@ -30,7 +33,7 @@ export function CreditTopup() {
     try {
       await startCheckout({ priceId: pkg.priceId, mode: "payment" })
     } catch {
-      toast.error("Failed to open checkout")
+      toast.error(tx("pricing.failedOpenCheckout"))
     } finally {
       setLoadingId(null)
     }
@@ -40,7 +43,7 @@ export function CreditTopup() {
     <div className="space-y-3">
       <h3 className="text-sm font-medium flex items-center gap-2">
         <Plus className="h-4 w-4" />
-        Buy Credit Packs
+        {t("credits.buyPacksTitle")}
       </h3>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {TOPUP_PACKAGES.map((pkg) => (
@@ -59,16 +62,16 @@ export function CreditTopup() {
             )}
           >
             {pkg.popular && (
-              <span className="absolute -top-2 right-2 rounded-full bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white">
-                Popular
+              <span className="absolute -top-2 end-2 rounded-full bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white">
+                {t("pricing.popular")}
               </span>
             )}
             <Coins className="h-5 w-5 text-[#ff0073] mb-2" />
             <span className="text-lg font-bold">{creditUnits(pkg.credits)}</span>
-            <span className="text-xs text-muted-foreground">{creditUnitLabel("credits")}</span>
+            <span className="text-xs text-muted-foreground">{creditUnitLabel(t("credits.unit.other"))}</span>
             <span className="mt-2 text-sm font-semibold">${pkg.price}</span>
             <span className="text-[10px] text-muted-foreground">
-              ${(pkg.price / creditUnits(pkg.credits)).toFixed(4)} / {creditUnitLabel("credit")}
+              ${(pkg.price / creditUnits(pkg.credits)).toFixed(4)} / {creditUnitLabel(t("credits.unit.one"))}
             </span>
           </button>
         ))}
@@ -78,7 +81,7 @@ export function CreditTopup() {
           backend rate function (pricing-data.ts, sync-pinned). */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">Or load any amount:</span>
+          <span className="text-sm font-medium">{t("credits.orLoadAnyAmount")}</span>
           <div className="flex items-center gap-1">
             <span className="text-sm text-muted-foreground">$</span>
             <input
@@ -88,26 +91,26 @@ export function CreditTopup() {
               onChange={(e) => setCustomUsd(e.target.value.replace(/[^0-9]/g, ""))}
               placeholder={`${MIN_LOAD_USD}-${MAX_LOAD_USD}`}
               className="w-24 rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent px-2 py-1.5 text-sm focus:border-[#ff0073]/60 focus:outline-none"
-              aria-label="Load amount in dollars"
+              aria-label={t("credits.loadAmountAria")}
             />
           </div>
         </div>
         <span className="text-sm text-muted-foreground min-w-32">
           {customCredits !== null
-            ? `= ${creditUnits(customCredits).toLocaleString()} credits`
+            ? `= ${t("credits.shortByAmount", { n: formatNumber(creditUnits(customCredits)) })}`
             : customUsd
-              ? `$${MIN_LOAD_USD}–$${MAX_LOAD_USD}, whole dollars`
-              : "credits valid for 12 months"}
+              ? t("credits.loadRangeWholeDollars", { min: MIN_LOAD_USD, max: MAX_LOAD_USD })
+              : t("credits.validFor12Months")}
         </span>
         <button
           onClick={handleCustomLoad}
           disabled={customCredits === null || loadingId === "custom"}
           className={cn(
-            "ml-auto rounded-md bg-[#ff0073] px-4 py-1.5 text-sm font-medium text-white transition-opacity",
+            "ms-auto rounded-md bg-[#ff0073] px-4 py-1.5 text-sm font-medium text-white transition-opacity",
             (customCredits === null || loadingId === "custom") && "opacity-40 pointer-events-none",
           )}
         >
-          Load credits
+          {t("credits.loadCredits")}
         </button>
       </div>
     </div>

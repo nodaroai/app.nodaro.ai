@@ -14,6 +14,7 @@ import { isParameterPickerNode } from "@/lib/parameter-picker-types"
 import { inferPromptContext } from "@/lib/prompt-context"
 import { hasCredits } from "@/lib/edition"
 import { isMultiColumnList } from "@/lib/list-loop-migration"
+import { useT } from "@/lib/i18n"
 
 // Lazy-load the picker card: it pulls the full parameter-picker registry (~40
 // catalogs, incl. person.ts) which would otherwise bloat the public app-runner
@@ -78,6 +79,7 @@ function InputCardInner({
   variant,
 }: InputCardProps) {
   const label = getNodeLabel(node)
+  const t = useT()
   const data = node.data as Record<string, unknown>
   const effectiveMaxItems = Math.min((data.maxItems as number) ?? 10, DEFAULT_SYSTEM_MAX_FANOUT)
   const cardMeta = useWorkflowStore((s) => s.presentationSettings.cardMeta?.[node.id])
@@ -96,10 +98,10 @@ function InputCardInner({
       <button
         type="button"
         onClick={() => onOpenConfig?.(node)}
-        className="w-full text-left p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+        className="w-full text-start p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
       >
         <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">Click to configure</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{t("present.clickToConfigure")}</p>
       </button>
     )
   }
@@ -112,7 +114,7 @@ function InputCardInner({
         <TextInputCard
           label={label}
           value={textValue}
-          placeholder={(data.placeholder as string) ?? "Enter text..."}
+          placeholder={(data.placeholder as string) ?? t("present.enterTextPlaceholder")}
           onChange={(val) => {
             if (isFullscreen) {
               onUpdateInput(node.id, "text", val)

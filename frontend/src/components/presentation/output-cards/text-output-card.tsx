@@ -5,6 +5,7 @@ import { StatusBadge, GlassCard, GlassButton, UnhideBanner, resolveTextCardActio
 import { ActionMenu } from "./action-menu"
 import { ActionBar } from "./action-bar"
 import { shareMedia } from "./share-utils"
+import { useT } from "@/lib/i18n"
 
 interface TextOutputCardProps {
   label: string
@@ -15,6 +16,7 @@ interface TextOutputCardProps {
 }
 
 function TextOutputCardImpl({ label, status, text, nodeId, actions }: TextOutputCardProps) {
+  const t = useT()
   const bound = resolveTextCardActions(actions, nodeId)
   return (
     <GlassCard>
@@ -24,8 +26,8 @@ function TextOutputCardImpl({ label, status, text, nodeId, actions }: TextOutput
           <StatusBadge status={status} />
           {text && (
             <GlassButton
-              onClick={() => { navigator.clipboard.writeText(text); toast.success("Text copied") }}
-              title="Copy"
+              onClick={() => { navigator.clipboard.writeText(text); toast.success(t("node.textCopied")) }}
+              title={t("common.copy")}
             >
               <Copy className="w-3.5 h-3.5" />
             </GlassButton>
@@ -77,7 +79,7 @@ function TextOutputCardImpl({ label, status, text, nodeId, actions }: TextOutput
         <div className="flex flex-col items-center justify-center h-20 rounded-lg bg-muted/30 text-muted-foreground">
           <FileText className="w-8 h-8 mb-1 animate-pulse" />
           <span className="text-xs">
-            {status === "failed" ? "Generation failed" : "Awaiting generation"}
+            {status === "failed" ? t("present.generationFailed") : t("present.awaitingGeneration")}
           </span>
         </div>
       )}

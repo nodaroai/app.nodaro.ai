@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, type MessageKey } from "@/lib/i18n"
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { Position, type NodeProps, NodeResizer, NodeToolbar } from "@xyflow/react"
 import { StickyNote, Bold, Italic, AlignLeft, AlignCenter, AlignRight, List, ChevronDown, MoreHorizontal } from "lucide-react"
@@ -32,11 +32,11 @@ const TITLE_SIZE_PX: Record<StickyFontSize, number> = {
   xl: 30,
 }
 
-const FONT_SIZE_LABEL: Record<StickyFontSize, string> = {
-  sm: "Small",
-  base: "Paragraph",
-  lg: "Heading",
-  xl: "Display",
+const FONT_SIZE_LABEL: Record<StickyFontSize, MessageKey> = {
+  sm: "inputcfg.small",
+  base: "node.stickyParagraph",
+  lg: "node.stickyHeading",
+  xl: "node.stickyDisplay",
 }
 
 /** The toolbar control cycles the sizes; `sm` is reachable after `xl`. */
@@ -199,7 +199,7 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
               updateNodeData(id, { fontSize: nextFontSize(currentSize) })
             }}
           >
-            <span>{FONT_SIZE_LABEL[currentSize]}</span>
+            <span>{t(FONT_SIZE_LABEL[currentSize])}</span>
             <ChevronDown className="w-3 h-3" />
           </button>
 

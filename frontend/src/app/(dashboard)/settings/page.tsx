@@ -48,8 +48,10 @@ const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
 const VALID_TEMPLATE_KEYS = new Set(Object.keys(SYSTEM_PROMPT_TEMPLATES))
 
 import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 export default function SettingsPage() {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const { user, loading: authLoading } = useAuth()
   // "One designated account pays for this instance" — the only thing the
   // browser is told about the deployment payer (its identity is redacted from
@@ -392,7 +394,7 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          <ChevronRight className={cn("h-5 w-5 text-muted-foreground", isRtl && "rotate-180")} />
         </Link>
       )}
 
@@ -413,7 +415,7 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          <ChevronRight className={cn("h-5 w-5 text-muted-foreground", isRtl && "rotate-180")} />
         </Link>
       )}
 
@@ -514,9 +516,9 @@ export default function SettingsPage() {
             <SelectContent>
               {/* Each label shows the mode applied to itself, so the list is its
                   own preview — no need to open the editor to see the difference. */}
-              <SelectItem value="raw">{"{Subject}"}</SelectItem>
-              <SelectItem value="annotated">{"{Subject: a red fox}"}</SelectItem>
-              <SelectItem value="resolved">a red fox</SelectItem>
+              <SelectItem value="raw">{t("dash.varSampleRaw")}</SelectItem>
+              <SelectItem value="annotated">{t("dash.varSampleAnnotated")}</SelectItem>
+              <SelectItem value="resolved">{t("dash.varSampleResolved")}</SelectItem>
             </SelectContent>
           </Select>
         </div>

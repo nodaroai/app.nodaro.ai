@@ -47,7 +47,7 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
 
   const hasResult = status !== "running" && !!activeUrl && !imgError
 
-  const modeLabel = nodeData.mode === "last" ? "Last frame" : nodeData.mode === "timestamp" ? `@ ${nodeData.timestamp ?? 0}s` : "First frame"
+  const modeLabel = nodeData.mode === "last" ? t("node.lastFrame") : nodeData.mode === "timestamp" ? `@ ${nodeData.timestamp ?? 0}s` : t("node.firstFrame")
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedImageUrl"))
@@ -103,11 +103,11 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage src={activeUrl!} alt={t("node.extractedFrame")} className="w-full h-full object-cover rounded-md" thumbnail thumbnailWidth={320} onLoadDimensions={handleLoadDimensions} onError={() => setImgError(true)} />
               <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{modeLabel}</div>
               <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button type="button" aria-label="Expand" className="w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}><Expand className="w-3 h-3" /></button>
-                <button type="button" aria-label="Download" className="w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full" onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'frame'}.png`; a.click() }}><Download className="w-3 h-3" /></button>
-                <button type="button" aria-label={t("cfgshared.copyUrl")} className="w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full" onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }}><Link className="w-3 h-3" /></button>
+                <button type="button" aria-label={t("node.expand")} className="w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}><Expand className="w-3 h-3" /></button>
+                <button type="button" aria-label={t("common.download")} className="w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full" onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'frame'}.png`; a.click() }}><Download className="w-3 h-3" /></button>
+                <button type="button" aria-label={t("cfgshared.copyUrl")} className="w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full" onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, t("node.urlCopied")) }}><Link className="w-3 h-3" /></button>
                 {results.length > 0 && (
-                  <button type="button" aria-label="Remove" className="w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
+                  <button type="button" aria-label={t("common.remove")} className="w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
                 )}
               </div>
             </div>

@@ -13,6 +13,7 @@
 
 import { create } from "zustand"
 import { LANGUAGES, type LocaleId, type LocaleDirection, getLocaleDirection } from "@nodaro/shared"
+import { isOfferedLocale } from "./i18n/offered-locales"
 import { runtimeDefaultLocale } from "./runtime-config"
 import { surfaceLocaleDefault } from "./surface-selectors"
 
@@ -37,13 +38,21 @@ function matchSupportedLocale(tag: string | null | undefined): LocaleId | null {
   return isSupportedLocale(prefix) ? prefix : null
 }
 
+/**
+ * Browser detection lands only on an OFFERED locale (one whose chrome
+ * translation is complete — see `i18n/offered-locales.ts`). A German browser
+ * must not drop a first-time visitor into a language the menu doesn't even
+ * list: they would get English menus with German picker tiles and no idea
+ * why. Explicit choices (a saved preference, the operator's DEFAULT_LOCALE)
+ * keep the lenient `matchSupportedLocale` — they asked for it by name.
+ */
 function detectBrowserLocale(): LocaleId {
   if (typeof navigator === "undefined") return "en"
-  // navigator.languages is BCP-47 ordered by user preference; first supported wins.
+  // navigator.languages is BCP-47 ordered by user preference; first offered wins.
   const candidates = (navigator.languages ?? [navigator.language ?? "en"]) as string[]
   for (const tag of candidates) {
     const m = matchSupportedLocale(tag)
-    if (m) return m
+    if (m && isOfferedLocale(m)) return m
   }
   return "en"
 }

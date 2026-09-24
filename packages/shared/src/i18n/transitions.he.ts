@@ -4,14 +4,14 @@ const map: LocaleCatalogMap = {
   // ── Standard ──
   "auto": { label: "אוטומטי", description: "המודל בוחר את המעבר המתאים" },
   "none": { label: "ללא מעבר / חיתוך ישיר", description: "מעבר מיידי ללא אפקט" },
-  "cross-dissolve": { label: "דיסולב הצלבה", description: "מיזוג הדרגתי בין שתי הסצנות" },
+  "cross-dissolve": { label: "דיסולב מוצלב", description: "מיזוג הדרגתי בין שתי הסצנות" },
   "fade-to-black": { label: "דהייה לשחור", description: "חשיכה הדרגתית ואז הסצנה הבאה" },
   "fade-to-white": { label: "דהייה ללבן", description: "הבהרה עד לבן ואז הסצנה הבאה" },
   "snap-to-black": { label: "חיתוך לשחור", description: "חיתוך מיידי לשחור מלא לרגע, ואז השוט הבא" },
   "match-cut": { label: "חיתוך התאמה", description: "התאמת צורה או תנועה בין הסצנות" },
   "smash-cut": { label: "חיתוך חד", description: "חיתוך מפתיע בין סצנות מנוגדות" },
-  "iris": { label: "אירוס", description: "עיגול נסגר ונפתח על הסצנה החדשה" },
-  "wipe": { label: "מחיקה", description: "קו סורק את הפריים וחושף את הסצנה" },
+  "iris": { label: "איריס", description: "עיגול נסגר ונפתח על הסצנה החדשה" },
+  "wipe": { label: "ווייפ", description: "קו סורק את הפריים וחושף את הסצנה" },
   "roll-transition": { label: "סיבוב", description: "הפריים מסתובב 90-180 מעלות" },
   "seamless-match": { label: "התאמה חלקה", description: "חיתוך נסתר בתנועה וצבע תואמים" },
   "whip-pan": { label: "פאן מהיר", description: "המצלמה מסתובבת הצידה במהירות לכדי טשטוש, והשוט הבא ממשיך באותו כיוון" },
@@ -19,7 +19,7 @@ const map: LocaleCatalogMap = {
 
   // ── Time ──
   "fast-forward-day-night": { label: "הרצה מהירה (יום ← לילה)", description: "מעבר זמן מהיום ללילה באותה סצנה" },
-  "fast-forward-night-day": { label: "הרצה מהירה (לילה ← שחר)", description: "מעבר זמן מהלילה לשחר באותה סצנה" },
+  "fast-forward-night-day": { label: "הרצה מהירה (לילה ← יום)", description: "מעבר זמן מהלילה לשחר באותה סצנה" },
   "seasonal-shift": { label: "מעבר עונות", description: "אותה סצנה לאורך ארבע העונות" },
   "aging": { label: "הזדקנות", description: "הדמות מזדקנת מול המצלמה" },
   "rewind": { label: "הרצה לאחור", description: "הזמן מתהפך והתנועה נסוגה" },
@@ -50,7 +50,7 @@ const map: LocaleCatalogMap = {
   "origami-fold": { label: "קיפול אוריגמי", description: "הדמות מתקפלת כנייר וחושפת דמות חדשה" },
   "vortex-swirl": { label: "מערבולת", description: "הדמות נבלעת במערבולת ומתגלה כדמות חדשה" },
   "dream-ripple": { label: "גלי חלום", description: "גל מעגלי עובר ומגלה את הסצנה החדשה" },
-  "wireframe-morph": { label: "מורף מסגרת תיל", description: "הדמות מתפרקת לרשת גיאומטרית ומתגבשת מחדש" },
+  "wireframe-morph": { label: "מורף רשת קווים", description: "הדמות מתפרקת לרשת גיאומטרית ומתגבשת מחדש" },
   "polygon-shatter": { label: "התפוצצות פוליגונים", description: "הדמות מתפצלת לרסיסים גיאומטריים ומתגבשת" },
   "melt-down": { label: "הימסות ובנייה מחדש", description: "הדמות נמסה כשעווה ועולה מחדש" },
 
@@ -72,12 +72,12 @@ const map: LocaleCatalogMap = {
   "explosion-blast": { label: "גל פיצוץ", description: "פיצוץ סורק את הפריים וחושף את הסצנה החדשה" },
   "shockwave": { label: "גל הדף", description: "גל הדף מעוות את הפריים והסצנה משתנה" },
   "punch-into-camera": { label: "אגרוף למצלמה", description: "אגרוף פוגע בעדשה והסצנה משתנה" },
-  "debris-shower": { label: "מקלחת פסולת", description: "פסולת עוברת בפריים והסצנה משתנה מאחוריה" },
+  "debris-shower": { label: "מטר הריסות", description: "הריסות חולפות בפריים והסצנה משתנה מאחוריהן" },
   "gravity-flip": { label: "היפוך כבידה", description: "הכבידה מתהפכת והמצלמה מסתובבת 180 מעלות" },
   "building-explosion": { label: "פיצוץ מבנה", description: "מבנה מתפוצץ והסצנה נחשפת מבעד לעשן" },
   "vehicle-explosion": { label: "פיצוץ רכב", description: "רכב מתפוצץ, להבות מכסות את הפריים, והסצנה מתחלפת" },
   "jump-match": { label: "קפיצה תואמת", description: "הדמות קופצת ונוחתת בסצנה חדשה" },
-  "hand-swipe": { label: "מחיקת יד", description: "יד עוברת מול העדשה והסצנה משתנה" },
+  "hand-swipe": { label: "העברת יד", description: "יד עוברת מול העדשה והסצנה משתנה" },
   "action-relay": { label: "חיתוך על תנועה", description: "הדמות יוצאת מהפריים בתנועה וממשיכה אותה בסצנה החדשה" },
 
   // ── Light ──
@@ -95,8 +95,8 @@ const map: LocaleCatalogMap = {
   "vhs-rewind": { label: "הרצה לאחור VHS", description: "שיבוש טראקינג VHS ואפקט הרצת קלטת" },
   "datamosh": { label: "דאטאמוש", description: "וקטורי תנועה מחלחלים בין הסצנות" },
   "channel-flip": { label: "החלפת ערוץ", description: "הפרעות טלוויזיוניות עם רעש החלפת ערוצים" },
-  "hologram-flicker": { label: "מצמוץ הולוגרמה", description: "מצמוץ הולוגרמה מגלה את הסצנה החדשה" },
-  "display-wipe": { label: "מחיקת תצוגה", description: "הסצנה מתכווצת למסך קטן ואז מתרחבת" },
+  "hologram-flicker": { label: "הבהוב הולוגרמה", description: "הבהוב הולוגרמה מגלה את הסצנה החדשה" },
+  "display-wipe": { label: "ווייפ תצוגה", description: "הסצנה מתכווצת למסך קטן ואז מתרחבת" },
   "double-exposure": { label: "חשיפה כפולה", description: "שתי סצנות שקופות חופפות ואז הראשונה דוהה" },
 }
 

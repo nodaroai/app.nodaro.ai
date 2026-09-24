@@ -322,7 +322,7 @@ export default function AppsPage() {
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm">
-                  <Settings className="h-3.5 w-3.5 mr-1.5" />
+                  <Settings className="h-3.5 w-3.5 me-1.5" />
                   {t("apps.monetizationDefaults")}
                 </Button>
               </PopoverTrigger>
@@ -365,17 +365,17 @@ export default function AppsPage() {
           {/* Search (browse/favorites only) */}
           {showBrowse && (
             <div className="relative flex-1 min-w-[200px] max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder={t("apps.searchPlaceholder")}
-                className="pl-9 h-9"
+                className="ps-9 h-9"
               />
               {searchInput && (
                 <button
                   type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute end-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setSearchInput("")}
                 >
                   <X className="h-3.5 w-3.5" />
@@ -388,7 +388,7 @@ export default function AppsPage() {
           {showBrowse && (
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
               <SelectTrigger className="w-[160px] h-9">
-                <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />
+                <SlidersHorizontal className="h-3.5 w-3.5 me-1.5" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -684,9 +684,9 @@ function MyAppCard({
       <div className="flex items-start justify-between mb-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-foreground truncate">{app.name}</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">/app/{app.slug}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t("apps.appUrlPrefix")}{app.slug}</p>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+        <div className="flex items-center gap-1.5 shrink-0 ms-2">
           {/* Marketplace status badge */}
           <span
             className={cn(
@@ -757,14 +757,14 @@ function MyAppCard({
       <div className="flex items-center gap-1.5 flex-wrap">
         <a href={`/app/${app.slug}`} target="_blank" rel="noopener noreferrer">
           <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-            <ExternalLink className="h-3 w-3 mr-1" />
+            <ExternalLink className="h-3 w-3 me-1" />
             {t("apps.open")}
           </Button>
         </a>
         {app.projectId && (
           <Link to={`/projects/${app.projectId}/workflows/${app.workflowId}`}>
             <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-              <Workflow className="h-3 w-3 mr-1" />
+              <Workflow className="h-3 w-3 me-1" />
               {t("apps.workflow")}
             </Button>
           </Link>
@@ -775,7 +775,7 @@ function MyAppCard({
           className="h-7 px-2 text-xs"
           onClick={() => onCopyUrl(app.slug)}
         >
-          <Copy className="h-3 w-3 mr-1" />
+          <Copy className="h-3 w-3 me-1" />
           {t("apps.url")}
         </Button>
         <Button
@@ -785,12 +785,12 @@ function MyAppCard({
           onClick={() => setShowEmbed(!showEmbed)}
           title={t("apps.embedSettings")}
         >
-          <Code2 className="h-3 w-3 mr-1" />
+          <Code2 className="h-3 w-3 me-1" />
           {t("apps.embed")}
         </Button>
         <Link to={`/apps/${app.id}/analytics`}>
           <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-            <BarChart3 className="h-3 w-3 mr-1" />
+            <BarChart3 className="h-3 w-3 me-1" />
             {t("apps.analytics")}
           </Button>
         </Link>
@@ -801,7 +801,7 @@ function MyAppCard({
           onClick={onEdit}
           title={t("apps.editMiniAppSettingsTitle")}
         >
-          <Pencil className="h-3 w-3 mr-1" />
+          <Pencil className="h-3 w-3 me-1" />
           {t("apps.edit")}
         </Button>
         <Button
@@ -874,7 +874,7 @@ function MyAppCard({
               onClick={handleAddOrigin}
               disabled={!newOrigin.trim()}
             >
-              <Plus className="h-3 w-3 mr-1" />
+              <Plus className="h-3 w-3 me-1" />
               {t("apps.add")}
             </Button>
           </div>
@@ -886,7 +886,7 @@ function MyAppCard({
               className="h-7 px-2 text-xs w-full"
               onClick={() => onCopyEmbed(app.slug)}
             >
-              <Copy className="h-3 w-3 mr-1" />
+              <Copy className="h-3 w-3 me-1" />
               {t("apps.copyEmbedCode")}
             </Button>
           )}
@@ -1153,7 +1153,7 @@ function EditAppDialog({
             />
             {previewMediaUrl.trim() && (
               <p className="text-[11px] text-muted-foreground mt-1">
-                {t("apps.detectedType")} {detectMediaType(previewMediaUrl.trim()) ?? "image"}
+                {t("apps.detectedType")} {detectMediaType(previewMediaUrl.trim()) === "video" ? t("dash.mediaTypeVideo") : t("dash.mediaTypeImage")}
               </p>
             )}
           </div>
@@ -1188,7 +1188,7 @@ function EditAppDialog({
               </div>
 
               {monetizationEnabled && (
-                <div className="space-y-3 pl-1">
+                <div className="space-y-3 ps-1">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label className="text-xs">{t("apps.flatFee", { u: creditUnitLabel(t("credits.unitShort")) })}</Label>
@@ -1225,7 +1225,7 @@ function EditAppDialog({
                     onClick={handleLoadDefaults}
                     disabled={loadingDefaults}
                   >
-                    {loadingDefaults && <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />}
+                    {loadingDefaults && <Loader2 className="h-3 w-3 me-1.5 animate-spin" />}
                     {t("apps.useMyDefaults")}
                   </Button>
                 </div>
@@ -1240,7 +1240,7 @@ function EditAppDialog({
             className="w-full text-white hover:opacity-90"
             style={{ backgroundColor: "#ff0073" }}
           >
-            {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {isSaving && <Loader2 className="h-4 w-4 me-2 animate-spin" />}
             {t("apps.saveChanges")}
           </Button>
         </div>

@@ -14,6 +14,7 @@ import { VARIABLES_HANDLE_ID } from "@nodaro/shared"
 import type { SelectorNodeData } from "@/types/nodes"
 import { isValidSelectorConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { isVisualPickerType } from "@/lib/parameter-picker-types"
+import { useT } from "@/lib/i18n"
 
 /** Selector's `in` mirrors the list-consumer contract used by sort/filter/
  *  deduplicate — only list/json producers are accepted. `variables` mirrors
@@ -23,6 +24,7 @@ const ACCEPTS_IN        = (t: string) => isValidSelectorConnection("in",        
 const ACCEPTS_VARIABLES = (t: string) => isValidSelectorConnection("variables", t, isVisualPickerType)
 
 function SelectorNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SelectorNodeData
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -73,16 +75,16 @@ function SelectorNodeComponent({ id, data, selected }: NodeProps) {
           ) : hasResult ? (
             <div className="w-full rounded-md bg-muted/30 p-2">
               <p className="text-xs text-foreground/80">
-                {pickedTotal} picked · {restTotal} rest
+                {t("cfgext.selPickedRest", { picked: pickedTotal, rest: restTotal })}
               </p>
               <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                Mode: {mode}
+                {t("node.modeValue", { mode })}
               </span>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
               <FileText className="w-5 h-5" />
-              <span className="text-[10px] mt-0.5">Mode: {mode}</span>
+              <span className="text-[10px] mt-0.5">{t("node.modeValue", { mode })}</span>
             </div>
           )}
         </div>

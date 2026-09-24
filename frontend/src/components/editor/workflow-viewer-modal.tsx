@@ -17,6 +17,7 @@ import { nodeTypes } from "@/components/nodes"
 import { AnimatedFlowEdge } from "./animated-flow-edge"
 import { orderNodesParentFirst } from "./workflow-editor/group-coords"
 import { createClient } from "@/lib/supabase"
+import { useT, tx } from "@/lib/i18n"
 import { ZOOM_MIN, ZOOM_MAX } from "@/lib/zoom"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
@@ -34,6 +35,7 @@ function WorkflowViewerCanvas({
   workflowId,
   onClose,
 }: WorkflowViewerModalProps) {
+  const t = useT()
   const [nodes, setNodes] = useState<WorkflowNode[]>([])
   const [edges, setEdges] = useState<WorkflowEdge[]>([])
   const [workflowName, setWorkflowName] = useState("")
@@ -55,18 +57,18 @@ function WorkflowViewerCanvas({
         if (cancelled) return
 
         if (fetchError || !data) {
-          setError("Workflow not found")
+          setError(tx("editor.viewerNotFound"))
           setLoading(false)
           return
         }
 
-        setWorkflowName(data.name || "Untitled Workflow")
+        setWorkflowName(data.name || tx("cfgext.subwfUntitledWorkflow"))
         setNodes((data.nodes as unknown as WorkflowNode[]) ?? [])
         setEdges((data.edges as unknown as WorkflowEdge[]) ?? [])
         setLoading(false)
       } catch {
         if (!cancelled) {
-          setError("Failed to load workflow")
+          setError(tx("editor.viewerLoadFailed"))
           setLoading(false)
         }
       }
@@ -138,13 +140,13 @@ function WorkflowViewerCanvas({
       />
       <Controls showInteractive={false} />
       {/* Header bar */}
-      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 bg-background/90 backdrop-blur-sm border-b border-border dark:bg-[#121212]/90 dark:border-[#2D2D2D]">
+      <div className="absolute top-0 start-0 end-0 z-10 flex items-center justify-between px-4 py-3 bg-background/90 backdrop-blur-sm border-b border-border dark:bg-[#121212]/90 dark:border-[#2D2D2D]">
         <h2 className="text-sm font-medium text-white truncate">
           {workflowName}
         </h2>
         <button
           type="button"
-          aria-label="Close viewer"
+          aria-label={t("editor.closeViewer")}
           className="text-white/70 hover:text-white transition-colors"
           onClick={onClose}
         >

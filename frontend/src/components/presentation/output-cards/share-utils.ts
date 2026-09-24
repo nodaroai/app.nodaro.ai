@@ -1,4 +1,5 @@
 import { toast } from "sonner"
+import { tx } from "@/lib/i18n"
 import { copyUrl } from "./shared"
 
 export async function shareMedia(params: {
@@ -20,7 +21,7 @@ export async function shareMedia(params: {
       }
     }
     await navigator.clipboard.writeText(text)
-    toast.success("Text copied to clipboard")
+    toast.success(tx("present.textCopied"))
     return
   }
 

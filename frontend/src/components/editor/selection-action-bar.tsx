@@ -5,8 +5,10 @@ import { Play, CircleSlash, CircleCheck } from "lucide-react"
 import { useReactFlow, useViewport } from "@xyflow/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { RUN_BUTTON_GLASS_CLASS } from "@/lib/run-button-style"
+import { useT } from "@/lib/i18n"
 
 export function SelectionActionBar() {
+  const t = useT()
   const nodes = useWorkflowStore((s) => s.nodes)
   const runSelected = useWorkflowStore((s) => s.runSelected)
   const skipSelectedNodes = useWorkflowStore((s) => s.skipSelectedNodes)
@@ -82,7 +84,7 @@ export function SelectionActionBar() {
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed ${RUN_BUTTON_GLASS_CLASS}`}
       >
         <Play className="w-3.5 h-3.5" />
-        Run selected ({selectedCount})
+        {t("canvas.runSelectedCount", { n: selectedCount })}
       </button>
       <button
         type="button"
@@ -90,7 +92,7 @@ export function SelectionActionBar() {
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-zinc-600 text-white hover:bg-zinc-600/90 transition-colors"
       >
         {allSkipped ? <CircleCheck className="w-3.5 h-3.5" /> : <CircleSlash className="w-3.5 h-3.5" />}
-        {allSkipped ? `Unskip (${selectedCount})` : `Skip (${selectedCount})`}
+        {allSkipped ? t("canvas.unskipCount", { n: selectedCount }) : t("canvas.skipCount", { n: selectedCount })}
       </button>
     </div>
   )

@@ -56,7 +56,7 @@ export function StudioShell<S, J>({ config, state, jobs, hasCredits, header, act
       <div className="flex flex-1 overflow-hidden flex-col">
         {header}
         <div className="flex flex-1 overflow-hidden">
-          <div className="w-[140px] bg-[#090c12] border-r border-[#1e293b] flex flex-col py-3 shrink-0 overflow-y-auto">
+          <div className="w-[140px] bg-[#090c12] border-e border-[#1e293b] flex flex-col py-3 shrink-0 overflow-y-auto">
             {visibleGroups.map(({ group, pages }) => (
               <div key={group.label}>
                 <div className="px-3.5 pb-1.5 pt-2.5 text-[9px] uppercase tracking-widest text-slate-700 font-semibold">
@@ -96,7 +96,7 @@ function SideBtn<S, J>({ def, active, accentActive, badge, onClick }: { def: Stu
     >
       <span className="w-4 text-center">{def.icon}</span>
       {def.label}
-      {badge !== undefined && <span className="ml-auto text-[9px] bg-[#1e293b] rounded-full px-1.5">{badge}</span>}
+      {badge !== undefined && <span className="ms-auto text-[9px] bg-[#1e293b] rounded-full px-1.5">{badge}</span>}
     </button>
   )
 }

@@ -79,7 +79,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
               <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
                 <CachedImage
                   src={r.url}
-                  alt={`Result ${i + 1}`}
+                  alt={t("node.resultN", { n: i + 1 })}
                   className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
                     i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                   }`}
@@ -110,7 +110,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
         {activeUrl && status !== "running" && (
           <CachedImage
             src={activeUrl}
-            alt="Result"
+            alt={t("node.overlayResult")}
             className="w-full h-full object-cover rounded-xl"
             thumbnail={!useFull}
             thumbnailWidth={320}
@@ -174,15 +174,15 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
               <Pencil className="w-3.5 h-3.5" />
             </button>
             <button type="button" aria-label={t("node.expandPreview")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
+              onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title={t("node.fullscreen")}>
               <Expand className="w-3.5 h-3.5" />
             </button>
-            <button type="button" aria-label="Download" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'image'}.png`; a.click() }} title="Download">
+            <button type="button" aria-label={t("common.download")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'image'}.png`; a.click() }} title={t("common.download")}>
               <Download className="w-3.5 h-3.5" />
             </button>
             <button type="button" aria-label={t("cfgshared.copyUrl")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }} title={t("cfgshared.copyUrl")}>
+              onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, t("node.urlCopied")) }} title={t("cfgshared.copyUrl")}>
               <Link className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -191,8 +191,8 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
         {/* Bottom-right: settings */}
         {activeUrl && (
           <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button type="button" aria-label="Settings" className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
-              onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }} title="Settings">
+            <button type="button" aria-label={t("common.settings")} className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+              onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }} title={t("common.settings")}>
               <Settings className="w-3.5 h-3.5" />
             </button>
           </div>

@@ -313,7 +313,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
             <Input
               value={(d.tags || []).join(", ")}
               onChange={(e) => onUpdate({ tags: e.target.value.split(",").map((t) => t.trim()).filter(Boolean) })}
-              placeholder="tag1, tag2, tag3..."
+              placeholder={t("cfgext.socialTagsPlaceholder")}
               className="mt-1.5"
             />
           </div>

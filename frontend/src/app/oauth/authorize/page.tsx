@@ -303,7 +303,7 @@ export default function OAuthAuthorizePage() {
 
         <div className="flex flex-col gap-2">
           <Button onClick={handleAllow} disabled={submitting || switching}>
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : null}
             {t("oauth.allow")}
           </Button>
           <Button variant="outline" onClick={handleCancel} disabled={submitting || switching}>

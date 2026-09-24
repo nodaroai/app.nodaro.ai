@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { Loader2, Check, X } from "lucide-react"
 import { useTheme } from "next-themes"
 import FilerobotImageEditor, { TABS } from "react-filerobot-image-editor"
+import { useT, type TFunction } from "@/lib/i18n"
 
 interface FilerobotEditorModalProps {
   readonly imageUrl: string
@@ -18,19 +19,21 @@ const ALL_TABS = [TABS.ADJUST, TABS.ANNOTATE, TABS.FILTERS, TABS.FINETUNE, TABS.
  *  and the ratio-selector row is empty — matching the bug report ("I cannot
  *  change the ratio when cropping"). Mirrors the presets the MediaEditor
  *  upload flow shows. `ratio: 0` is Filerobot's convention for "original". */
-const CROP_PRESETS = [
-  { titleKey: "Original", descriptionKey: "Source ratio", ratio: 0 },
-  { titleKey: "Freeform", descriptionKey: "Any", ratio: "custom" as const },
-  { titleKey: "Square", descriptionKey: "1:1", ratio: 1 },
-  { titleKey: "Portrait", descriptionKey: "3:4", ratio: 3 / 4 },
-  { titleKey: "Landscape", descriptionKey: "4:3", ratio: 4 / 3 },
-  { titleKey: "Widescreen", descriptionKey: "16:9", ratio: 16 / 9 },
-  { titleKey: "Vertical", descriptionKey: "9:16", ratio: 9 / 16 },
-  { titleKey: "Cinematic", descriptionKey: "21:9", ratio: 21 / 9 },
-  { titleKey: "Classic", descriptionKey: "3:2", ratio: 3 / 2 },
-  { titleKey: "Tall", descriptionKey: "2:3", ratio: 2 / 3 },
-  { titleKey: "Ultra-wide", descriptionKey: "2.39:1", ratio: 2.39 },
-]
+function buildCropPresets(t: TFunction) {
+  return [
+    { titleKey: t("proccfg.original"), descriptionKey: t("mediaed.cropSourceRatio"), ratio: 0 },
+    { titleKey: t("mediaed.cropFreeform"), descriptionKey: t("mediaed.cropAny"), ratio: "custom" as const },
+    { titleKey: t("mediaed.cropSquare"), descriptionKey: "1:1", ratio: 1 },
+    { titleKey: t("mediaed.cropPortrait"), descriptionKey: "3:4", ratio: 3 / 4 },
+    { titleKey: t("mediaed.cropLandscape"), descriptionKey: "4:3", ratio: 4 / 3 },
+    { titleKey: t("mediaed.cropWidescreen"), descriptionKey: "16:9", ratio: 16 / 9 },
+    { titleKey: t("mediaed.cropVertical"), descriptionKey: "9:16", ratio: 9 / 16 },
+    { titleKey: t("mediaed.cropCinematic"), descriptionKey: "21:9", ratio: 21 / 9 },
+    { titleKey: t("mediaed.cropClassic"), descriptionKey: "3:2", ratio: 3 / 2 },
+    { titleKey: t("mediaed.cropTall"), descriptionKey: "2:3", ratio: 2 / 3 },
+    { titleKey: t("mediaed.cropUltraWide"), descriptionKey: "2.39:1", ratio: 2.39 },
+  ]
+}
 
 /** Build Filerobot palette using the actual @scaleflex/ui Color enum keys */
 function buildTheme(isDark: boolean) {
@@ -163,6 +166,7 @@ export function FilerobotEditorModal({
   onSaveComplete,
   onClose,
 }: FilerobotEditorModalProps) {
+  const t = useT()
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme !== "light"
 
@@ -191,6 +195,7 @@ export function FilerobotEditorModal({
   }, [designStateUrl])
 
   const theme = useMemo(() => buildTheme(isDark), [isDark])
+  const cropPresets = useMemo(() => buildCropPresets(t), [t])
 
   const handleSave = useCallback(
     async (imageData: { imageBase64?: string; mimeType?: string }, designState: unknown) => {
@@ -246,13 +251,13 @@ export function FilerobotEditorModal({
           {saveState === "saving" && (
             <>
               <Loader2 className="w-4 h-4 animate-spin text-white/70" />
-              <span className="text-xs text-white/70">Saving...</span>
+              <span className="text-xs text-white/70">{t("editor.saving")}</span>
             </>
           )}
           {saveState === "done" && (
             <>
               <Check className="w-4 h-4 text-green-400" />
-              <span className="text-xs text-green-400">Saved</span>
+              <span className="text-xs text-green-400">{t("common.saved")}</span>
             </>
           )}
         </div>
@@ -261,8 +266,8 @@ export function FilerobotEditorModal({
       {/* Our close button — replaces Filerobot's broken one (library bug: isResetted=false disables click) */}
       <button
         type="button"
-        aria-label="Close editor"
-        className="absolute top-2 right-2 z-[10001] w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 transition-colors"
+        aria-label={t("mediaed.closeEditor")}
+        className="absolute top-2 end-2 z-[10001] w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 transition-colors"
         onClick={() => hasChanges ? setShowCloseConfirm(true) : onClose()}
       >
         <X className={`w-5 h-5 ${isDark ? "text-white/70 hover:text-white" : "text-[#64748B] hover:text-[#1E293B]"}`} />
@@ -331,7 +336,7 @@ export function FilerobotEditorModal({
             tabsIds={ALL_TABS}
             defaultTabId={TABS.ADJUST}
             theme={theme}
-            translations={{ save: "Save & Close" }}
+            translations={{ save: t("mediaed.saveAndClose") }}
             savingPixelRatio={4}
             previewPixelRatio={window.devicePixelRatio || 1}
             avoidChangesNotSavedAlertOnLeave
@@ -339,7 +344,7 @@ export function FilerobotEditorModal({
             defaultSavedImageType="png"
             showBackButton={false}
             Crop={{
-              presetsItems: CROP_PRESETS,
+              presetsItems: cropPresets,
               autoResize: true,
             }}
             {...(loadedDesignState ? { loadableDesignState: loadedDesignState as Record<string, unknown> } : {})}
@@ -356,9 +361,9 @@ export function FilerobotEditorModal({
             className={`rounded-lg p-6 max-w-sm mx-4 shadow-xl border ${isDark ? "bg-[#1E1E1E] border-[#2D2D2D]" : "bg-white border-[#E2E8F0]"}`}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className={`text-sm font-medium mb-2 ${isDark ? "text-white" : "text-[#1E293B]"}`}>Discard changes?</h3>
+            <h3 className={`text-sm font-medium mb-2 ${isDark ? "text-white" : "text-[#1E293B]"}`}>{t("mediaed.discardChangesTitle")}</h3>
             <p className={`text-xs mb-4 ${isDark ? "text-white/60" : "text-[#64748B]"}`}>
-              Your edits haven&apos;t been saved. Closing will discard them.
+              {t("mediaed.discardBodyImage")}
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -366,7 +371,7 @@ export function FilerobotEditorModal({
                 className={`px-3 py-1.5 text-xs rounded-md transition-colors ${isDark ? "text-white/70 hover:text-white hover:bg-white/10" : "text-[#64748B] hover:text-[#1E293B] hover:bg-black/5"}`}
                 onClick={() => setShowCloseConfirm(false)}
               >
-                Continue editing
+                {t("mediaed.continueEditing")}
               </button>
               <button
                 type="button"
@@ -376,7 +381,7 @@ export function FilerobotEditorModal({
                   onClose()
                 }}
               >
-                Discard
+                {t("node.discard")}
               </button>
             </div>
           </div>

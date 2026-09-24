@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import type { ExposableField } from "@nodaro/shared"
 import { AspectRatioSelector } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { GlassCard } from "./output-cards/shared"
+import { useT } from "@/lib/i18n"
 
 interface FieldInputCardProps {
   field: ExposableField
@@ -33,6 +34,7 @@ function SelectField({
   allowedValues,
   readOnly,
 }: FieldInputCardProps) {
+  const t = useT()
   const options = allowedValues
     ? (field.options ?? []).filter((o) =>
         allowedValues.some((av) => String(av) === o.value),
@@ -56,7 +58,7 @@ function SelectField({
           className={cn("w-full", readOnly && "opacity-70 cursor-default")}
           aria-label={field.label}
         >
-          <SelectValue placeholder={`Select ${field.label.toLowerCase()}...`} />
+          <SelectValue placeholder={t("present.selectFieldPlaceholder", { label: field.label.toLowerCase() })} />
         </SelectTrigger>
         <SelectContent>
           {options.map((opt) => (
@@ -162,6 +164,7 @@ function TextField({
   onChange,
   readOnly,
 }: Omit<FieldInputCardProps, "allowedValues">) {
+  const t = useT()
   const strValue = String(value ?? "")
 
   return (
@@ -170,7 +173,7 @@ function TextField({
       <Textarea
         value={strValue}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={`Enter ${field.label.toLowerCase()}...`}
+        placeholder={t("present.enterFieldPlaceholder", { label: field.label.toLowerCase() })}
         readOnly={readOnly}
         className={cn(
           "min-h-[72px] resize-none",

@@ -3,6 +3,7 @@ import type { PipelineEntity } from "@/hooks/use-pipeline-entities"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { storyMomentLabel } from "@/lib/story-moment-labels"
+import { useT } from "@/lib/i18n"
 
 interface Props {
   entity: PipelineEntity
@@ -38,6 +39,7 @@ const STATUS_PILL_COLORS: Record<EntityStatus, string> = {
 }
 
 export function SceneCard({ entity, onApprove, onReject, disabled }: Props) {
+  const t = useT()
   const metadata = (entity.metadata ?? {}) as Record<string, unknown>
   const scene = (metadata.scene_node_data ?? {}) as SceneNodeData
   const status = entity.status
@@ -47,7 +49,7 @@ export function SceneCard({ entity, onApprove, onReject, disabled }: Props) {
       <div className="flex items-baseline justify-between gap-2">
         <div>
           <div className="text-xs uppercase text-zinc-500">
-            Scene {scene.scene_index ?? "?"} · {storyMomentLabel(scene.emotional_beat) || "?"}
+            {t("pipe.sceneNumber", { n: scene.scene_index ?? "?" })} · {storyMomentLabel(scene.emotional_beat, t) || "?"}
           </div>
           <div className="font-medium text-sm">{scene.description ?? "—"}</div>
         </div>
@@ -57,7 +59,7 @@ export function SceneCard({ entity, onApprove, onReject, disabled }: Props) {
       </div>
       {(scene.shots?.length ?? 0) > 0 && (
         <div className="text-xs text-zinc-600">
-          {scene.shots!.length} shots · {scene.duration_seconds ?? 0}s · {scene.video_model ?? "?"} ({scene.shot_input_mode ?? "?"})
+          {t("pipe.shotsCount", { n: scene.shots!.length })} · {scene.duration_seconds ?? 0}s · {scene.video_model ?? "?"} ({scene.shot_input_mode ?? "?"})
         </div>
       )}
       {(scene.shots?.length ?? 0) > 0 && (
@@ -78,10 +80,10 @@ export function SceneCard({ entity, onApprove, onReject, disabled }: Props) {
       {status === "awaiting_approval" && (
         <div className="flex gap-2">
           <Button size="sm" onClick={onApprove} disabled={disabled} className="flex-1">
-            Approve
+            {t("pipe.approve")}
           </Button>
           <Button size="sm" variant="outline" onClick={onReject} disabled={disabled} className="flex-1">
-            Reject
+            {t("cfgext.shmReject")}
           </Button>
         </div>
       )}

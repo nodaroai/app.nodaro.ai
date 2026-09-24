@@ -1303,7 +1303,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               <History className="w-4 h-4" />
               {t("nav.executions")}
               {activeJobCount > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 text-xs font-medium bg-[#ff0073] text-white rounded-full">
+                <span className="ms-1 px-1.5 py-0.5 text-xs font-medium bg-[#ff0073] text-white rounded-full">
                   {activeJobCount}
                 </span>
               )}
@@ -1351,18 +1351,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             />
             <div className="relative flex-1 min-w-0">
             <ReactFlowProvider>
-              <EditorErrorBoundary label="Canvas">
+              <EditorErrorBoundary label={t("editor.boundaryCanvas")}>
                 <WorkflowCanvas
                   sidebarVisible={sidebarVisible}
                   onToggleSidebar={() => setSidebarVisible((v) => !v)}
                 />
               </EditorErrorBoundary>
               <NodeToolbar visible={sidebarVisible} />
-              <EditorErrorBoundary label="Config panel">
+              <EditorErrorBoundary label={t("editor.boundaryConfigPanel")}>
                 <ConfigPanel />
               </EditorErrorBoundary>
               {selectedPipelineId && (
-                <EditorErrorBoundary label="Pipeline panel">
+                <EditorErrorBoundary label={t("editor.boundaryPipelinePanel")}>
                   <PipelinePanel
                     pipelineId={selectedPipelineId}
                     onClose={() => useWorkflowStore.setState({ selectedNodeId: null })}
@@ -1385,7 +1385,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                     className="rounded-full px-6 text-white"
                     style={{ backgroundColor: "#ff0073" }}
                   >
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <Loader2 className="w-4 h-4 me-2 animate-spin" />
                     {t("run.executingWorkflowBtn")}
                   </Button>
                   <DropdownMenu>
@@ -1404,7 +1404,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                       <DropdownMenuItem
                         onClick={() => withSingleDiscardConfirm(handleSingleNodeDiscard)}
                       >
-                        <Trash2 className="w-4 h-4 mr-2" />
+                        <Trash2 className="w-4 h-4 me-2" />
                         {t("run.discardMenu")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
@@ -1413,7 +1413,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                           handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, onExecutionStarted, onExecutionEnded, { skipConfirm: true });
                         })}
                       >
-                        <RotateCcw className="w-4 h-4 mr-2" />
+                        <RotateCcw className="w-4 h-4 me-2" />
                         {t("node.runInstead")}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -1427,7 +1427,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                     className="rounded-full px-5"
                     onClick={() => window.open(studioWorkflowUrl(useWorkflowStore.getState().workflowId ?? ""), "_blank", "noopener")}
                   >
-                    <ExternalLink className="w-4 h-4 mr-2" />
+                    <ExternalLink className="w-4 h-4 me-2" />
                     {t("run.openInStudio")}
                   </Button>
                   <Button
@@ -1435,7 +1435,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                     onClick={() => setRemixOpen(true)}
                     className={`rounded-full px-6 ${RUN_BUTTON_GLASS_CLASS}`}
                   >
-                    <Copy className="w-4 h-4 mr-2" />
+                    <Copy className="w-4 h-4 me-2" />
                     {t("run.cloneRemix")}
                   </Button>
                 </>
@@ -1449,7 +1449,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                     title={t("editor.notWritableReason")}
                     onClick={() => setRemixOpen(true)}
                   >
-                    <Copy className="w-4 h-4 mr-2" />
+                    <Copy className="w-4 h-4 me-2" />
                     {t("run.cloneRemix")}
                   </Button>
                 )}
@@ -1460,13 +1460,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                   className={`rounded-full px-6 ${RUN_BUTTON_GLASS_CLASS}`}
                 >
                   {hasCredits() && estimateLoading ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <Loader2 className="w-4 h-4 me-2 animate-spin" />
                   ) : (
-                    <Play className="w-4 h-4 mr-2" />
+                    <Play className="w-4 h-4 me-2" />
                   )}
                   {t("run.executeWorkflow")}
                   {hasCredits() && !estimateLoading && workflowCreditEstimate > 0 && (
-                    <span className="ml-2 opacity-80">
+                    <span className="ms-2 opacity-80">
                       {t("node.creditsSuffix", { n: creditUnits(workflowCreditEstimate), u: creditUnitLabel(t("credits.unitShort")) })}
                     </span>
                   )}

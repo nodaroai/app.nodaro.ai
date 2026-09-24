@@ -23,6 +23,7 @@ import { COPILOT_TIERS, DEFAULT_COPILOT_TIER, HEARTBEAT_INTERVAL_MS, TURN_CAPS, 
 import { resolveTurnBudget } from "./budget.js"
 import { buildSystemPrompt } from "./system-prompt.js"
 import { buildContextPreamble } from "./context-snapshot.js"
+import { withReplyLanguage } from "./reply-language.js"
 import { buildStudioPreamble } from "./studio-preamble.js"
 import { studioSkillTails } from "./studio-skill.js"
 import { copilotSurface } from "./surfaces.js"
@@ -73,6 +74,12 @@ export interface RunTurnInput {
   surface?: CopilotSurface
   /** What the person has selected in the editor, when the surface has a selection. */
   focus?: { shotId?: string } | null
+  /**
+   * The interface locale the composer was showing when the message was sent
+   * ("he", "en", …). Becomes one machine-authored reply-language line after
+   * the per-turn context; English or absent adds nothing.
+   */
+  locale?: string | null
   /** The thread's model ladder rung — resolved by the route from the thread row. */
   tier: CopilotModelTier
   /** Effective caps for this turn (admin overrides merged over the defaults). */
@@ -207,7 +214,7 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
     // verdict is reached here, before a token is spent, and the reservation
     // comes back untouched.
     if (typeof context !== "string" && context.available === false) throw new TurnVerdict(context.code)
-    const preamble = typeof context === "string" ? context : context.text
+    const preamble = withReplyLanguage(typeof context === "string" ? context : context.text, input.locale)
 
     const ctx: CopilotToolContext = {
       userId: input.userId,

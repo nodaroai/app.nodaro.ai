@@ -7,6 +7,7 @@
 
 import { useMemo } from "react"
 import { formatCreditUnits } from "@/lib/credit-units"
+import { useT } from "@/lib/i18n"
 import type { TutorialBodyProps } from "../tutorial-registry"
 import { nodeText, nodeMedia, nodeField } from "../derive-tutorial-data"
 import { TutorialVideo } from "../tutorial-video"
@@ -50,6 +51,7 @@ export default function WelcomeDemoBody({
   onRunNode,
 }: TutorialBodyProps) {
   const { step, focusStep } = focus
+  const t = useT()
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes])
   const node = (id: string) => byId.get(id)
 
@@ -72,8 +74,8 @@ export default function WelcomeDemoBody({
     <header className="wd-head">
       <span className="wd-badge">{String(n).padStart(2, "0")}</span>
       <div>
-        <div className="wd-title">{GROUP_TITLES[key].title}</div>
-        <div className="wd-sub">{GROUP_TITLES[key].sub}</div>
+        <div className="wd-title">{t(GROUP_TITLES[key].title)}</div>
+        <div className="wd-sub">{t(GROUP_TITLES[key].sub)}</div>
       </div>
     </header>
   )
@@ -87,7 +89,7 @@ export default function WelcomeDemoBody({
             <div className="wd-prompt">{nodeText(node(NODE_IDS.idea))}</div>
             <div className="wd-callout">
               <span className="wd-dot" />
-              <span>{IDEA_CALLOUT}</span>
+              <span>{t(IDEA_CALLOUT)}</span>
             </div>
           </div>
         </section>
@@ -97,12 +99,12 @@ export default function WelcomeDemoBody({
           <div className="wd-body">
             {nodeMedia(image) && (
               <div className="wd-media">
-                <img src={nodeMedia(image) as string} alt="Generated scene" />
+                <img src={nodeMedia(image) as string} alt={t("tut.generatedScene")} />
               </div>
             )}
             <Chips items={[label(imageModel), nodeField(image, "aspectRatio")]} />
             <button type="button" className="wd-run" onClick={onRunNode}>
-              <span className="wd-run-label">Run this node</span>
+              <span className="wd-run-label">{t("tut.runThisNode")}</span>
               {cost > 0 && <span className="wd-run-cost">{formatCreditUnits(cost)}</span>}
             </button>
           </div>
@@ -130,7 +132,7 @@ export default function WelcomeDemoBody({
               />
             )}
             <p className="wd-note">{nodeText(video)}</p>
-            <Chips items={[label(nodeField(video, "provider")), "start frame from 02"]} />
+            <Chips items={[label(nodeField(video, "provider")), t("tut.wdStartFrame")]} />
           </div>
         </section>
       </div>
@@ -141,26 +143,26 @@ export default function WelcomeDemoBody({
           <div className="wd-body">
             <div className="wd-columns">
               <div>
-                <div className="nd-eyebrow">Narration</div>
+                <div className="nd-eyebrow">{t("tut.narration")}</div>
                 <div className="wd-prompt" style={{ marginTop: 8 }}>
                   {nodeText(node(NODE_IDS.narration))}
                 </div>
               </div>
               <div>
-                <div className="nd-eyebrow">Voiceover</div>
+                <div className="nd-eyebrow">{t("tut.voiceover")}</div>
                 <div className="wd-card" style={{ marginTop: 8 }}>
                   <span className="wd-avatar">
                     {(nodeField(voice, "voiceDisplayName") ?? "V").slice(0, 1).toUpperCase()}
                   </span>
                   <div style={{ minWidth: 0 }}>
                     <div className="wd-voice-name">
-                      {nodeField(voice, "voiceDisplayName") ?? "Voiceover"}
+                      {nodeField(voice, "voiceDisplayName") ?? t("tut.voiceover")}
                     </div>
                     <div className="wd-voice-meta">{label(nodeField(voice, "provider"))}</div>
                     <Chips
                       items={[
-                        nodeField(voice, "speed") && `speed ${nodeField(voice, "speed")}`,
-                        nodeField(voice, "stability") && `stability ${nodeField(voice, "stability")}`,
+                        nodeField(voice, "speed") && t("tut.speedChip", { v: String(nodeField(voice, "speed")) }),
+                        nodeField(voice, "stability") && t("tut.stabilityChip", { v: String(nodeField(voice, "stability")) }),
                       ]}
                     />
                     {/* Naming the voice is not the same as hearing it, and this
@@ -169,7 +171,7 @@ export default function WelcomeDemoBody({
                       <div className="wd-voice-player">
                         <TutorialAudio
                           src={nodeMedia(voice) as string}
-                          label={nodeField(voice, "voiceDisplayName") ?? "voiceover"}
+                          label={nodeField(voice, "voiceDisplayName") ?? t("tut.voiceoverLabel")}
                         />
                       </div>
                     )}
@@ -188,13 +190,13 @@ export default function WelcomeDemoBody({
                 {FINAL_INPUTS.map((input) => (
                   <div key={input} className="wd-input">
                     <span className="wd-dot wd-dot--audio" />
-                    <span>{input}</span>
+                    <span>{t(input)}</span>
                   </div>
                 ))}
                 <Chips
                   items={[
-                    nodeField(final, "voiceoverVolume") && `voice ${nodeField(final, "voiceoverVolume")}%`,
-                    nodeField(final, "backgroundVolume") && `bed ${nodeField(final, "backgroundVolume")}%`,
+                    nodeField(final, "voiceoverVolume") && t("tut.voiceVolChip", { v: String(nodeField(final, "voiceoverVolume")) }),
+                    nodeField(final, "backgroundVolume") && t("tut.bedVolChip", { v: String(nodeField(final, "backgroundVolume")) }),
                   ]}
                 />
               </div>

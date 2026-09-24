@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 import type { Folder as FolderType, WorkflowMeta } from "@/hooks/use-projects-store"
 import { WorkflowCard } from "./workflow-card"
 
@@ -38,6 +40,8 @@ export function FolderItem({
 }: FolderItemProps) {
   const [open, setOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
 
   function handleDragOver(e: DragEvent) {
     if (e.dataTransfer.types.includes("application/x-workflow-id")) {
@@ -75,17 +79,17 @@ export function FolderItem({
         onDrop={handleDrop}
       >
         <button
-          className="flex items-center gap-1 flex-1 min-w-0 text-sm font-medium text-left"
+          className="flex items-center gap-1 flex-1 min-w-0 text-sm font-medium text-start"
           onClick={() => setOpen(!open)}
         >
           {open ? (
             <ChevronDown className="h-4 w-4 shrink-0" />
           ) : (
-            <ChevronRight className="h-4 w-4 shrink-0" />
+            <ChevronRight className={cn("h-4 w-4 shrink-0", isRtl && "rotate-180")} />
           )}
           <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span className="truncate">{folder.name}</span>
-          <span className="text-xs text-muted-foreground ml-1">
+          <span className="text-xs text-muted-foreground ms-1">
             ({workflows.length})
           </span>
         </button>
@@ -100,8 +104,8 @@ export function FolderItem({
                 onCreateWorkflow(folder.id)
                 setOpen(true)
               }}
-              aria-label={`New workflow in ${folder.name}`}
-              title="New workflow in folder"
+              aria-label={t("dash.newWorkflowIn", { name: folder.name })}
+              title={t("dash.newWorkflowInFolder")}
             >
               <Plus className="h-3.5 w-3.5" />
             </Button>
@@ -111,7 +115,7 @@ export function FolderItem({
                   variant="ghost"
                   size="sm"
                   className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
-                  aria-label={`Folder options for ${folder.name}`}
+                  aria-label={t("dash.folderOptionsFor", { name: folder.name })}
                 >
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </Button>
@@ -119,19 +123,19 @@ export function FolderItem({
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
                   onClick={() => {
-                    const name = prompt("Rename folder:", folder.name)
+                    const name = prompt(t("dash.renameFolderPrompt"), folder.name)
                     if (name) onRenameFolder(folder.id, name)
                   }}
                 >
-                  <Pencil className="h-3.5 w-3.5 mr-2" />
-                  Rename
+                  <Pencil className="h-3.5 w-3.5 me-2" />
+                  {t("common.rename")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-destructive"
                   onClick={() => onDeleteFolder(folder.id)}
                 >
-                  <Trash2 className="h-3.5 w-3.5 mr-2" />
-                  Delete
+                  <Trash2 className="h-3.5 w-3.5 me-2" />
+                  {t("common.delete")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -139,7 +143,7 @@ export function FolderItem({
         )}
       </div>
       {open && (
-        <div className="ml-6 mt-2">
+        <div className="ms-6 mt-2">
           {workflows.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {workflows.map((wf) => (
@@ -153,8 +157,8 @@ export function FolderItem({
               ))}
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground py-2 pl-2">
-              Empty folder. Drag workflows here or click + to create one.
+            <p className="text-xs text-muted-foreground py-2 ps-2">
+              {t("dash.emptyFolder")}
             </p>
           )}
         </div>

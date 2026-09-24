@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils"
 import { getAutoRecharge, updateAutoRecharge, type AutoRechargeConfig } from "@/lib/api"
 import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "@/lib/pricing-data"
 import { creditUnits } from "@/lib/credit-units"
+import { tx, useT } from "@/lib/i18n"
+import { formatNumber } from "@/lib/i18n/format"
 
 /**
  * Auto-recharge settings — "when my balance drops below X credits, load $Y".
@@ -21,6 +23,7 @@ import { creditUnits } from "@/lib/credit-units"
 const SAVE_DEBOUNCE_MS = 900
 
 export function AutoRechargeCard({ frameless = false }: { frameless?: boolean } = {}) {
+  const t = useT()
   const [config, setConfig] = useState<AutoRechargeConfig | null>(null)
   const [threshold, setThreshold] = useState("")
   const [amount, setAmount] = useState("")
@@ -62,7 +65,7 @@ export function AutoRechargeCard({ frameless = false }: { frameless?: boolean } 
       lastSavedRef.current = key
       setConfig((c) => (c ? { ...c, enabled: nextEnabled, failureCount: 0 } : c))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save auto-recharge")
+      toast.error(err instanceof Error ? err.message : tx("credits.autoRechargeSaveFailed"))
     } finally {
       setSaving(false)
     }
@@ -99,12 +102,12 @@ export function AutoRechargeCard({ frameless = false }: { frameless?: boolean } 
   if (!config) return null
 
   const statusText = saving
-    ? "Saving…"
+    ? t("common.saving")
     : enabled
       ? valuesValid
-        ? "Active — settings saved."
-        : `Enter a threshold (100–100,000) and an amount ($${MIN_LOAD_USD}–$${MAX_LOAD_USD}).`
-      : "Paused."
+        ? t("credits.autoRechargeActive")
+        : t("credits.autoRechargeEnterValues", { min: MIN_LOAD_USD, max: MAX_LOAD_USD })
+      : t("credits.autoRechargePaused")
 
   const inputStyle: React.CSSProperties = {
     background: "var(--blg-field-2)",
@@ -122,11 +125,11 @@ export function AutoRechargeCard({ frameless = false }: { frameless?: boolean } 
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 style={{ fontSize: 19, fontWeight: 700, color: "var(--blg-t1)", letterSpacing: "-0.01em" }}>
-            Auto-recharge
+            {t("credits.autoRecharge")}
           </h3>
           <p style={{ fontSize: 13.5, color: "var(--blg-t2-dim)", marginTop: 2 }}>
-            Tops up your <span style={{ color: "var(--blg-cyan-text)", fontWeight: 600 }}>top-up balance</span> when
-            the total drops low.
+            {t("credits.autoRechargeDescPrefix")} <span style={{ color: "var(--blg-cyan-text)", fontWeight: 600 }}>{t("credits.autoRechargeDescBalance")}</span>{" "}
+            {t("credits.autoRechargeDescSuffix")}
           </p>
         </div>
         <button
@@ -159,7 +162,7 @@ export function AutoRechargeCard({ frameless = false }: { frameless?: boolean } 
       </div>
 
       <div className="flex flex-wrap items-center gap-3" style={{ fontSize: 15.5, color: "var(--blg-t1-body)" }}>
-        <span>When my balance drops below</span>
+        <span>{t("credits.autoRechargeWhenBelow")}</span>
         <input
           type="text"
           inputMode="numeric"
@@ -167,9 +170,9 @@ export function AutoRechargeCard({ frameless = false }: { frameless?: boolean } 
           onChange={(e) => setThreshold(e.target.value.replace(/[^0-9]/g, ""))}
           placeholder="3000"
           style={{ ...inputStyle, width: 110 }}
-          aria-label="Threshold in credits"
+          aria-label={t("credits.thresholdInCreditsAria")}
         />
-        <span>credits, load</span>
+        <span>{t("credits.autoRechargeCreditsLoad")}</span>
         <span
           className="flex items-center gap-2"
           style={{ ...inputStyle, width: 110, display: "inline-flex" }}
@@ -181,12 +184,12 @@ export function AutoRechargeCard({ frameless = false }: { frameless?: boolean } 
             value={amount}
             onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))}
             placeholder={`${MIN_LOAD_USD}-${MAX_LOAD_USD}`}
-            aria-label="Recharge amount in dollars"
+            aria-label={t("credits.rechargeAmountAria")}
             style={{ background: "transparent", border: "none", outline: "none", color: "var(--blg-t1)", fontSize: 15, fontWeight: 600, width: "100%" }}
           />
         </span>
         {previewCredits !== null && (
-          <span style={{ color: "var(--blg-t2-dim)" }}>= {creditUnits(previewCredits).toLocaleString()} credits</span>
+          <span style={{ color: "var(--blg-t2-dim)" }}>= {t("credits.shortByAmount", { n: formatNumber(creditUnits(previewCredits)) })}</span>
         )}
       </div>
 
@@ -196,15 +199,14 @@ export function AutoRechargeCard({ frameless = false }: { frameless?: boolean } 
 
       {!config.hasSavedCard && (
         <p className="text-xs text-amber-600 dark:text-amber-400">
-          No saved card yet — make one credit load first and your card is saved
-          automatically for future recharges.
+          {t("credits.noSavedCard")}
         </p>
       )}
       {config.failureCount > 0 && (
         <p className="text-xs text-red-500">
           {config.failureCount >= 3
-            ? "Auto-recharge was disabled after 3 failed charges. Check your card, make a manual load, then re-enable."
-            : `Last charge attempt failed (${config.failureCount}/3). At 3 failures auto-recharge disables itself.`}
+            ? t("credits.autoRechargeDisabled")
+            : t("credits.autoRechargeLastFailed", { n: config.failureCount })}
         </p>
       )}
     </div>

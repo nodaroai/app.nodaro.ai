@@ -30,6 +30,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { EditableNodeLabel } from "./editable-node-label"
 import { referenceSheetCreditId } from "@nodaro/shared"
 import type { GeneratedResult, ReferenceSheetData } from "@/types/nodes"
+import { SHEET_TYPE_LABEL_KEYS, SHEET_SKIN_LABEL_KEYS } from "./node-quick-configs"
 
 function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
@@ -212,10 +213,10 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
                 {panelCount > 0 && (
                   <div
                     className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/50 backdrop-blur-sm border border-white/10 text-white/90 rounded-md text-[10px] font-medium"
-                    title={`${panelCount} clean panels available on the panels output`}
+                    title={t("node.nCleanPanelsAvailable", { n: panelCount })}
                   >
                     <LayoutGrid className="w-3 h-3" />
-                    {panelCount} panels
+                    {t("node.nPanels", { n: panelCount })}
                   </div>
                 )}
 
@@ -229,7 +230,7 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
                       e.stopPropagation()
                       setPreviewOpen(true)
                     }}
-                    title="Fullscreen"
+                    title={t("node.fullscreen")}
                   >
                     <Expand className="w-3.5 h-3.5" />
                   </button>
@@ -251,13 +252,13 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
                   </button>
                   <button
                     type="button"
-                    aria-label="Settings"
+                    aria-label={t("common.settings")}
                     className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
                     onClick={(e) => {
                       e.stopPropagation()
                       selectNode(isSettingsOpen ? null : id)
                     }}
-                    title="Settings"
+                    title={t("common.settings")}
                   >
                     <Settings className="w-3.5 h-3.5" />
                   </button>
@@ -269,9 +270,9 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
           {/* Bottom config summary — read-only; full editing in the config panel. */}
           <div className="shrink-0 px-2 py-1.5 border-t border-white/5 bg-black/20 flex items-center gap-2 text-[10px]">
             <span className="flex-1 truncate text-muted-foreground capitalize" title={`${nodeData.type} · ${nodeData.skin}`}>
-              {nodeData.type?.replace(/-/g, " ") ?? "full reference"}
+              {t(SHEET_TYPE_LABEL_KEYS[nodeData.type ?? "full-reference"] ?? "cfgext.refSheetTypeFullReference")}
             </span>
-            <span className="font-mono text-muted-foreground/80 shrink-0 capitalize">{nodeData.skin ?? "studio"}</span>
+            <span className="font-mono text-muted-foreground/80 shrink-0 capitalize">{t(SHEET_SKIN_LABEL_KEYS[nodeData.skin ?? "studio"] ?? "cfgext.refSheetSkinStudio")}</span>
           </div>
         </div>
       </BaseNode>

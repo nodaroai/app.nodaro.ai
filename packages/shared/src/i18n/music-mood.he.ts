@@ -19,7 +19,7 @@ const map: LocaleCatalogMap = {
 
   // -------------------- Emotions --------------------
   "happy": { label: "שמחה", description: "עליזה, בהירה" },
-  "joyful": { label: "שמחת לב", description: "סוערת, חגיגית" },
+  "joyful": { label: "צוהלת", description: "סוערת, חגיגית" },
   "euphoric": { label: "אופורית", description: "אקסטטית, נשגבת" },
   "melancholic": { label: "מלנכולית", description: "געגועית, מתוקה־מרה" },
   "sad": { label: "עצובה", description: "קודרת, מוכת יגון" },
@@ -29,13 +29,13 @@ const map: LocaleCatalogMap = {
   "defiant": { label: "מתריסה", description: "מורדת, מתנגדת" },
   "triumphant": { label: "מנצחת", description: "הרואית, מנצחת" },
   "victorious": { label: "ניצחון", description: "כובשת, המנונית" },
-  "tender": { label: "ענוגה", description: "רכה, חיבה" },
+  "tender": { label: "ענוגה", description: "רכה, מלאת חיבה" },
   "romantic": { label: "רומנטית", description: "אוהבת, חושנית" },
-  "haunting": { label: "רודפת", description: "מאיימת, נצחית" },
+  "haunting": { label: "מצמררת", description: "מצמררת, מהדהדת" },
   "mysterious": { label: "מסתורית", description: "חידתית, חשאית" },
   "menacing": { label: "מאיימת", description: "מאיימת, מבשרת רע" },
   "playful": { label: "שובבה", description: "מצחיקה, כיפית" },
-  "mischievous": { label: "שובבית", description: "ערמומית, קונדסית" },
+  "mischievous": { label: "קונדסית", description: "ערמומית, קונדסית" },
   "anxious": { label: "חרדה", description: "דרוכה, חוששת" },
   "fearful": { label: "מפוחדת", description: "פוחדת, מבוהלת" },
   "hopeful": { label: "מלאת תקווה", description: "מרוממת, שואפת" },
@@ -57,7 +57,7 @@ const map: LocaleCatalogMap = {
   "raw": { label: "גולמית", description: "ללא סינון, מחוספסת" },
   "dreamy": { label: "חלומית", description: "מעורפלת, סוריאליסטית" },
   "hypnotic": { label: "היפנוטית", description: "בלולאה, כמו טראנס" },
-  "dark": { label: "אפלה", description: "קודרת, מצללת" },
+  "dark": { label: "אפלה", description: "קודרת, אפלולית" },
   "gritty": { label: "מחוספסת", description: "גסה, עירונית" },
   "uplifting": { label: "מרוממת", description: "בהירה, מעודדת" },
   "tense": { label: "מתוחה", description: "מותחת" },
@@ -66,10 +66,10 @@ const map: LocaleCatalogMap = {
   "noir": { label: "נואר", description: "עשנה, קשוחה" },
   "vintage": { label: "וינטג'", description: "רטרו, מיושנת" },
   "futuristic": { label: "עתידנית", description: "מדע בדיוני, צופה פני עתיד" },
-  "suspenseful": { label: "מתח", description: "אימה, על קצה הבלימה" },
+  "suspenseful": { label: "מלאת מתח", description: "אימה, על קצה הכיסא" },
   "espionage": { label: "ריגול", description: "סרטי ריגול, פעולות חשאיות" },
   "cold": { label: "קרירה", description: "קפואה, מנותקת, חדה" },
-  "clandestine": { label: "חשאית", description: "סודית, צוללנית, מוסתרת" },
+  "clandestine": { label: "חשאית", description: "סודית, אפלולית, סמויה" },
 }
 
 export default map

@@ -28,6 +28,7 @@ import {
 } from "@/ee/components/billing/billing-styles"
 import { useT, tx } from "@/lib/i18n"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
+import { formatDate } from "@/lib/i18n/format"
 
 /**
  * MiniApp earnings — preserved from the previous billing page (self-hides
@@ -60,7 +61,7 @@ function EarningsSection() {
           <div key={stat.label}>
             <div style={{ ...statLabel, marginBottom: 6 }}>{stat.label}</div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>
-              {formatCredits(creditUnits(stat.value))} {creditUnitLabel()}
+              {formatCredits(creditUnits(stat.value))} {creditUnitLabel(t("credits.unitShort"))}
             </div>
           </div>
         ))}
@@ -82,11 +83,11 @@ function EarningsSection() {
               <div>
                 <span style={{ color: "var(--blg-t1-row)" }}>{item.appName}</span>
                 <span style={{ color: "var(--blg-t2-dim)", fontSize: 12.5, marginLeft: 10 }}>
-                  {new Date(item.createdAt).toLocaleDateString()}
+                  {formatDate(item.createdAt)}
                 </span>
               </div>
               <span style={{ color: "var(--blg-pos)", fontWeight: 500 }}>
-                +{formatCredits(creditUnits(item.totalEarned))} {creditUnitLabel()}
+                +{formatCredits(creditUnits(item.totalEarned))} {creditUnitLabel(t("credits.unitShort"))}
               </span>
             </div>
           ))}

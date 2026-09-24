@@ -138,7 +138,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
           {(isUploading || nodeData.isUploading) && (
             <div className="flex flex-col items-center gap-2 py-3">
               <Loader2 className="w-5 h-5 animate-spin text-[#38BDF8]" />
-              <p className="text-xs text-muted-foreground">Uploading...</p>
+              <p className="text-xs text-muted-foreground">{t("inputcfg.uploading")}</p>
               <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                 <div className="h-full bg-[#38BDF8] rounded-full animate-pulse" style={{ width: "60%" }} />
               </div>
@@ -163,7 +163,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                       <Music className="w-5 h-5 text-[#38BDF8]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-foreground truncate">{nodeData.filename || "Audio file"}</p>
+                      <p className="text-xs text-foreground truncate">{nodeData.filename || t("node.audioFile")}</p>
                       <div className="flex gap-2 text-[10px] text-muted-foreground/60 mt-0.5">
                         {nodeData.fileSize > 0 && <span>{formatBytes(nodeData.fileSize)}</span>}
                         {nodeData.metadata?.durationSeconds && nodeData.metadata.durationSeconds > 0 && (
@@ -179,7 +179,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                         e.stopPropagation()
                         handleClear()
                       }}
-                      title="Remove"
+                      title={t("common.remove")}
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -219,7 +219,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                     onDrop={handleDrop}
                   >
                     <Upload className="w-4 h-4" />
-                    <span className="text-xs">{isDragOver ? "Drop Audio" : "Choose Audio"}</span>
+                    <span className="text-xs">{isDragOver ? t("node.dropAudio") : t("inputcfg.chooseAudio")}</span>
                   </button>
                 </>
               )}
@@ -231,7 +231,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                   setMode("url")
                 }}
               >
-                or use URL
+                {t("node.orUseUrl")}
               </button>
             </>
           )}
@@ -273,7 +273,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                   setMode("upload")
                 }}
               >
-                or upload file
+                {t("node.orUploadFile")}
               </button>
             </>
           )}

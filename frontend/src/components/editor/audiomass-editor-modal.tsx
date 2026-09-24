@@ -3,6 +3,7 @@ import { useEffect, useCallback, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { X, Loader2, Check } from "lucide-react"
 import { runtimeAudiomassOrigin, runtimeAudiomassUrl } from "@/lib/runtime-config"
+import { useT } from "@/lib/i18n"
 
 /**
  * Read at RUNTIME, not inlined at build time — same reason as FreeCut (#767):
@@ -21,6 +22,7 @@ interface AudiomassEditorModalProps {
 }
 
 export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: AudiomassEditorModalProps) {
+  const t = useT()
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeLoaded, setIframeLoaded] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "done">("idle")
@@ -107,7 +109,7 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
     <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-12 bg-[#1a1a2e] border-b border-white/10 shrink-0">
-        <span className="text-sm font-medium text-white/80">Audio Editor</span>
+        <span className="text-sm font-medium text-white/80">{t("mediaed.audioEditorTitle")}</span>
         <button
           type="button"
           onClick={() => setShowCloseConfirm(true)}
@@ -133,7 +135,7 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
               src={audiomassUrl()}
               className="w-full h-full border-0"
               allow="autoplay"
-              title="Audiomass Audio Editor"
+              title={t("mediaed.audiomassFrameTitle")}
             />
           </>
         )}
@@ -145,12 +147,12 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
           {saveState === "saving" ? (
             <div className="flex items-center gap-3 text-white">
               <Loader2 className="w-6 h-6 animate-spin" />
-              <span>Saving edited audio...</span>
+              <span>{t("mediaed.savingAudio")}</span>
             </div>
           ) : (
             <div className="flex items-center gap-3 text-emerald-400">
               <Check className="w-6 h-6" />
-              <span>Saved</span>
+              <span>{t("common.saved")}</span>
             </div>
           )}
         </div>
@@ -160,22 +162,22 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
       {showCloseConfirm && (
         <div className="absolute inset-0 z-[10000] flex items-center justify-center bg-black/80">
           <div className="bg-[#1e1e2e] rounded-xl p-6 max-w-sm mx-4 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-2">Discard changes?</h3>
-            <p className="text-sm text-white/60 mb-6">Your edits will not be saved.</p>
+            <h3 className="text-lg font-semibold text-white mb-2">{t("mediaed.discardChangesTitle")}</h3>
+            <p className="text-sm text-white/60 mb-6">{t("mediaed.discardBodyAudio")}</p>
             <div className="flex gap-3 justify-end">
               <button
                 type="button"
                 onClick={() => setShowCloseConfirm(false)}
                 className="px-4 py-2 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors"
               >
-                Continue editing
+                {t("mediaed.continueEditing")}
               </button>
               <button
                 type="button"
                 onClick={onClose}
                 className="px-4 py-2 rounded-lg text-sm bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
               >
-                Discard
+                {t("node.discard")}
               </button>
             </div>
           </div>
@@ -188,12 +190,12 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
 
 /** No editor configured (`AUDIOMASS_URL=off`, or none set). Says so instead of framing nothing. */
 function EditorDisabled() {
+  const t = useT()
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-black p-8">
       <p className="max-w-md text-center text-white/60 text-xs leading-relaxed">
-        No audio editor is configured for this install. Set{" "}
-        <span className="font-mono">AUDIOMASS_URL</span> to your own AudioMass deployment
-        to enable editing.
+        {t("mediaed.noAudioEditorA")}{" "}
+        <span className="font-mono">AUDIOMASS_URL</span> {t("mediaed.noAudioEditorB")}
       </p>
     </div>
   )

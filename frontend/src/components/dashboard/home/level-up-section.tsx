@@ -24,6 +24,7 @@ import { useT } from "@/lib/i18n"
 import type { FlowTutorialItem, VideoTutorialItem } from "@/lib/api"
 import { EmptyLine, RowArrows, SectionTitle, SegmentedControl, SkeletonRow, ThemeSwitch } from "./home-section"
 import { HOME_QUIET_LINK, useRowScroller } from "./home-ui"
+import { formatDate } from "@/lib/i18n/format"
 
 // Lazy: pulls in the React Flow node registry + markdown — only when a flow
 // tutorial without a guided view opens its preview.
@@ -263,7 +264,7 @@ function ReleaseNotesCard({
         </span>
         {!Number.isNaN(published) && (
           <span className="mt-0.5 block text-[11px] text-[var(--home-muted)]">
-            {new Date(published).toLocaleDateString()}
+            {formatDate(published)}
           </span>
         )}
         {latest.highlights && (

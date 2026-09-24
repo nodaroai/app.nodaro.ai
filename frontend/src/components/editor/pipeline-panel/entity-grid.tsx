@@ -5,6 +5,15 @@ import { usePipelineEntities } from "@/hooks/use-pipeline-entities"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { EntityCard } from "./entity-card"
 import { Button } from "@/components/ui/button"
+import { useT, type MessageKey } from "@/lib/i18n"
+
+/** Singular / plural noun per entity kind for the "Your turn" sentence. */
+const ENTITY_NOUN_KEYS: Record<EntityType, readonly [MessageKey, MessageKey]> = {
+  character: ["pipe.entityNounCharacter", "pipe.entityNounCharacters"],
+  object: ["pipe.entityNounObject", "pipe.entityNounObjects"],
+  location: ["pipe.entityNounLocation", "pipe.entityNounLocations"],
+  scene: ["pipe.entityNounScene", "pipe.entityNounScenes"],
+}
 
 interface Props {
   pipelineId: string
@@ -20,6 +29,7 @@ interface Props {
 }
 
 export function EntityGrid({ pipelineId, entityType, title, mode }: Props) {
+  const t = useT()
   const { data, refetch } = usePipelineEntities(pipelineId, entityType)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState("")
@@ -63,11 +73,11 @@ export function EntityGrid({ pipelineId, entityType, title, mode }: Props) {
   const awaitingCount = data.filter((e) => e.status === "awaiting_approval").length
   const showYourTurn = (mode === "manual" || mode === "guided") && awaitingCount > 0
 
-  // Entity-type label, singularized for "1" / pluralized otherwise. Matches
-  // the surrounding panel's casual tone ("approve 1 character" reads natural,
-  // "approve 1 characters" doesn't).
-  const entityLabel =
-    awaitingCount === 1 ? entityType : `${entityType}s`
+  // Entity-type noun, singular for "1" / plural otherwise, from the dictionary
+  // so the sentence carries no untranslated enum word ("approve 1 character"
+  // reads natural, "approve 1 characters" doesn't).
+  const [singularKey, pluralKey] = ENTITY_NOUN_KEYS[entityType]
+  const entityLabel = t(awaitingCount === 1 ? singularKey : pluralKey)
 
   return (
     <div className="mb-4">
@@ -80,16 +90,16 @@ export function EntityGrid({ pipelineId, entityType, title, mode }: Props) {
           <ArrowDown className="w-4 h-4 text-amber-700 dark:text-amber-300 shrink-0 mt-0.5 animate-bounce" />
           <div className="text-sm">
             <span className="font-medium text-amber-900 dark:text-amber-200">
-              Your turn —
+              {t("pipe.yourTurnDash")}
             </span>{" "}
             <span className="text-amber-800 dark:text-amber-200">
-              review {awaitingCount} {entityLabel} below to continue.
+              {t("pipe.reviewBelowToContinue", { n: awaitingCount, entities: entityLabel })}
             </span>
           </div>
         </div>
       )}
       {data.length === 0 ? (
-        <div className="text-sm text-zinc-500 dark:text-zinc-400 italic">No entities yet</div>
+        <div className="text-sm text-zinc-500 dark:text-zinc-400 italic">{t("pipe.noEntitiesYet")}</div>
       ) : (
         <div className="grid grid-cols-2 gap-2">
           {data.map((entity) => (
@@ -108,13 +118,13 @@ export function EntityGrid({ pipelineId, entityType, title, mode }: Props) {
       )}
       {rejectingId && (
         <div className="mt-3 p-3 rounded border border-zinc-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
-          <div className="text-sm font-semibold mb-2">Reject with feedback</div>
+          <div className="text-sm font-semibold mb-2">{t("pipe.rejectWithFeedback")}</div>
           <textarea
             className="w-full rounded border border-zinc-300 dark:border-[#2D2D2D] bg-white dark:bg-[#121212] p-2 text-sm"
             rows={3}
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
-            placeholder="What should change?"
+            placeholder={t("pipe.whatShouldChange")}
           />
           <div className="flex gap-2 mt-2">
             <Button
@@ -122,7 +132,7 @@ export function EntityGrid({ pipelineId, entityType, title, mode }: Props) {
               onClick={() => handleReject(rejectingId)}
               disabled={!feedback.trim()}
             >
-              Submit
+              {t("pipe.submit")}
             </Button>
             <Button
               size="sm"
@@ -132,7 +142,7 @@ export function EntityGrid({ pipelineId, entityType, title, mode }: Props) {
                 setFeedback("")
               }}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         </div>

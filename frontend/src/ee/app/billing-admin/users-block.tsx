@@ -14,6 +14,7 @@ import {
 } from "@/ee/hooks/queries/use-deployment-billing"
 import { dateOrDash, orDash, parseWhole, unitsInputError, type DisplayUnit } from "./units"
 import { ListError } from "./list-error"
+import { formatNumber } from "@/lib/i18n/format"
 
 /**
  * Block 4 of the billing account's page — every user's allowance, and the
@@ -408,7 +409,7 @@ export function errorText(
   switch (reason) {
     case "not_whole_credits":
       return t("billingAdmin.errNotWholeCredits", {
-        rate: (unit?.rate ?? 1).toLocaleString(),
+        rate: formatNumber(unit?.rate ?? 1),
         unit: unit?.label ?? "",
       })
     case "zero":

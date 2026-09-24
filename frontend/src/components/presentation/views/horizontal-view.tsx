@@ -1,5 +1,6 @@
 import { useMemo } from "react"
 import { NodeSection } from "../node-section"
+import { useT } from "@/lib/i18n"
 import type { EditableViewProps } from "./types"
 
 interface HorizontalViewProps extends EditableViewProps {
@@ -32,6 +33,7 @@ export function HorizontalView({
   containerRef,
   handleDividerMouseDown,
 }: HorizontalViewProps) {
+  const t = useT()
   const leftColumnStyle = useMemo(() => ({
     width: `${splitRatio}%`,
     minWidth: '280px',
@@ -45,9 +47,9 @@ export function HorizontalView({
     <div className="flex-1 flex flex-col overflow-auto px-3 pt-3 md:px-6 md:pt-5 pb-20 md:pb-5">
       <div ref={containerRef} className="pres-horiz-container flex gap-0 flex-1 min-h-[400px] overflow-x-auto">
         {/* Inputs column — width overridden to 100% on mobile via CSS */}
-        <div className="pres-horiz-column flex flex-col overflow-y-auto md:pr-3" style={leftColumnStyle}>
+        <div className="pres-horiz-column flex flex-col overflow-y-auto md:pe-3" style={leftColumnStyle}>
           <NodeSection
-            label="Inputs"
+            label={t("preview.inputs")}
             nodes={orderedInputNodes}
             isEditing={isEditing}
             sensors={sensors}
@@ -89,9 +91,9 @@ export function HorizontalView({
         </div>
 
         {/* Outputs column — width overridden to 100% on mobile via CSS */}
-        <div className="pres-horiz-column flex flex-col overflow-y-auto md:pl-3" style={rightColumnStyle}>
+        <div className="pres-horiz-column flex flex-col overflow-y-auto md:ps-3" style={rightColumnStyle}>
           <NodeSection
-            label="Outputs"
+            label={t("preview.outputs")}
             nodes={orderedOutputNodes}
             isEditing={isEditing}
             sensors={sensors}

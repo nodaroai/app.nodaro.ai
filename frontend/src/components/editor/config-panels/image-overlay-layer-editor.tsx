@@ -4,6 +4,8 @@ import { useState, type ReactNode } from "react"
 import { ChevronDown, ChevronRight, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -50,6 +52,7 @@ function PctSlider({
  */
 function Section({ title, summary, defaultOpen = true, children }: { title: string; summary?: string; defaultOpen?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(defaultOpen)
+  const isRtl = useAppDir() === "rtl"
   return (
     <section className="rounded-md border border-border/60">
       <button
@@ -58,7 +61,7 @@ function Section({ title, summary, defaultOpen = true, children }: { title: stri
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        {open ? <ChevronDown className="w-3 h-3 text-muted-foreground" aria-hidden /> : <ChevronRight className="w-3 h-3 text-muted-foreground" aria-hidden />}
+        {open ? <ChevronDown className="w-3 h-3 text-muted-foreground" aria-hidden /> : <ChevronRight className={cn("w-3 h-3 text-muted-foreground", isRtl && "rotate-180")} aria-hidden />}
         <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</span>
         {!open && summary && <span className="ms-auto text-[10px] text-muted-foreground truncate">{summary}</span>}
       </button>

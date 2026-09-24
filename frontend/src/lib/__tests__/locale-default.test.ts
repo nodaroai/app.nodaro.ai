@@ -43,3 +43,46 @@ describe("resolveInitialLocale — deployment default locale (A3)", () => {
     expect(resolveInitialLocale()).toBe(detected)
   })
 })
+
+/**
+ * Browser detection may land only on an OFFERED locale (chrome translation
+ * complete — `lib/i18n/offered-locales.ts`). A German browser must not drop a
+ * first-time visitor into a language the menu does not list.
+ */
+describe("resolveInitialLocale — browser detection lands only on offered locales", () => {
+  function withBrowserLanguages(tags: readonly string[], run: () => void) {
+    const original = Object.getOwnPropertyDescriptor(window.navigator, "languages")
+    Object.defineProperty(window.navigator, "languages", { value: tags, configurable: true })
+    try {
+      run()
+    } finally {
+      if (original) Object.defineProperty(window.navigator, "languages", original)
+      else delete (window.navigator as { languages?: unknown }).languages
+    }
+  }
+
+  it("a German browser lands on English while the German chrome dictionary is a stub", () => {
+    withBrowserLanguages(["de-DE", "de"], () => {
+      expect(resolveInitialLocale()).toBe("en")
+    })
+  })
+
+  it("a Hebrew browser lands on Hebrew (offered), region code stripped", () => {
+    withBrowserLanguages(["he-IL"], () => {
+      expect(resolveInitialLocale()).toBe("he")
+    })
+  })
+
+  it("skips not-offered preferences and takes the first offered one", () => {
+    withBrowserLanguages(["fr-FR", "he", "en"], () => {
+      expect(resolveInitialLocale()).toBe("he")
+    })
+  })
+
+  it("a stored not-offered choice is still honoured — the gate never overrides a deliberate pick", () => {
+    window.localStorage.setItem(KEY, "de")
+    withBrowserLanguages(["en-US"], () => {
+      expect(resolveInitialLocale()).toBe("de")
+    })
+  })
+})

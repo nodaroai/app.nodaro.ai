@@ -1,4 +1,5 @@
 import type { ScraperActorId } from "@nodaro/shared"
+import { tx } from "@/lib/i18n"
 import type { WebScrapeNodeData } from "@/types/nodes"
 
 /**
@@ -66,8 +67,9 @@ export const WEB_SCRAPE_PEEK: Record<
     readonly linkField: string
     /** "index" renders 1./2./3.; otherwise the glyph for the item. */
     readonly glyph: (item: Record<string, unknown>, index: number) => string
-    /** What the count noun is — "results" for all but content-crawler. */
-    readonly countNoun: string
+    /** What the count noun is — "results" for all but content-crawler. An
+     *  identifier: the card renders it through its dictionary key. */
+    readonly countNoun: WebScrapeCountNoun
   }
 > = {
   "google-search": { field: "title", linkField: "url", glyph: (_i, idx) => `${idx + 1}.`, countNoun: "results" },
@@ -87,10 +89,13 @@ export const WEB_SCRAPE_PEEK: Record<
   },
 }
 
+/** The count nouns a scrape card can show (see WEB_SCRAPE_PEEK). */
+export type WebScrapeCountNoun = "results" | "pages"
+
 /** One truncated peek line for an item, from the actor's peek field. */
 export function webScrapePeekLine(actor: ScraperActorId, item: Record<string, unknown>): string {
   const raw = item[WEB_SCRAPE_PEEK[actor].field]
-  return typeof raw === "string" && raw.trim() ? raw.trim() : "(untitled)"
+  return typeof raw === "string" && raw.trim() ? raw.trim() : tx("node.untitledParen")
 }
 
 /**
@@ -219,12 +224,12 @@ export function deriveWebScrapeCardState(d: WebScrapeNodeData): WebScrapeCardSta
 export function relativeTime(ts: number | undefined, now: number = Date.now()): string {
   if (!ts) return ""
   const s = Math.max(0, Math.round((now - ts) / 1000))
-  if (s < 60) return `${s}s ago`
+  if (s < 60) return tx("node.secondsAgo", { n: s })
   const m = Math.round(s / 60)
-  if (m < 60) return `${m}m ago`
+  if (m < 60) return tx("time.minAgo", { n: m })
   const h = Math.round(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.round(h / 24)}d ago`
+  if (h < 24) return tx("time.hrAgo", { n: h })
+  return tx("time.dayAgo", { n: Math.round(h / 24) })
 }
 
 /** m:ss elapsed for the running state. */

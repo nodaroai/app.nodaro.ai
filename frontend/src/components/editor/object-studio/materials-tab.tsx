@@ -1,5 +1,6 @@
 import { OBJECT_MATERIAL_PRESETS } from "@nodaro/prompts"
 import { ObjectAssetTab } from "./object-asset-tab"
+import { useT } from "@/lib/i18n"
 import type { ObjectStudioState } from "./use-object-studio"
 
 /**
@@ -18,12 +19,13 @@ interface MaterialsTabProps {
 }
 
 export function MaterialsTab({ studio }: MaterialsTabProps) {
+  const t = useT()
   return (
     <ObjectAssetTab
       studio={studio}
       tabKind="materials"
       presets={OBJECT_MATERIAL_PRESETS}
-      iconLabel="🧪 Materials"
+      iconLabel={t("studio.materialsTabTitle")}
     />
   )
 }

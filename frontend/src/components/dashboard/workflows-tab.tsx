@@ -4,6 +4,7 @@ import { Plus, FolderPlus, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { WorkflowCard } from "./workflow-card"
 import { FolderItem } from "./folder-item"
@@ -34,6 +35,7 @@ export function WorkflowsTab({ projectId, readOnly }: WorkflowsTabProps) {
   const deleteFolder = useProjectsStore((s) => s.deleteFolder)
 
   const navigate = useNavigate()
+  const t = useT()
 
   const [rootDragOver, setRootDragOver] = useState(false)
   const [search, setSearch] = useState("")
@@ -65,7 +67,7 @@ export function WorkflowsTab({ projectId, readOnly }: WorkflowsTabProps) {
   }
 
   function handleNewFolder() {
-    const name = prompt("Folder name:")
+    const name = prompt(t("dash.folderNamePrompt"))
     if (name) {
       createFolder(projectId, name)
     }
@@ -98,22 +100,22 @@ export function WorkflowsTab({ projectId, readOnly }: WorkflowsTabProps) {
         {!readOnly && (
           <>
             <Button size="sm" onClick={handleNewWorkflow}>
-              <Plus className="h-4 w-4 mr-1" />
-              New Workflow
+              <Plus className="h-4 w-4 me-1" />
+              {t("dash.newWorkflow")}
             </Button>
             <Button size="sm" variant="outline" onClick={handleNewFolder}>
-              <FolderPlus className="h-4 w-4 mr-1" />
-              New Folder
+              <FolderPlus className="h-4 w-4 me-1" />
+              {t("dash.newFolder")}
             </Button>
           </>
         )}
-        <div className="relative flex-1 max-w-xs ml-auto">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <div className="relative flex-1 max-w-xs ms-auto">
+          <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search workflows..."
-            className="pl-8 h-8 text-sm"
+            placeholder={t("dash.searchWorkflows")}
+            className="ps-8 h-8 text-sm"
           />
         </div>
       </div>
@@ -148,7 +150,7 @@ export function WorkflowsTab({ projectId, readOnly }: WorkflowsTabProps) {
       >
         {rootDragOver && folders.length > 0 && rootWorkflows.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-1">
-            Drop here to move to root
+            {t("dash.dropToRoot")}
           </p>
         )}
         {rootWorkflows.length > 0 && (
@@ -168,13 +170,13 @@ export function WorkflowsTab({ projectId, readOnly }: WorkflowsTabProps) {
 
       {isSearching && filteredWorkflows.length === 0 && (
         <p className="text-sm text-muted-foreground py-8 text-center">
-          No workflows match "{search}"
+          {t("dash.noWorkflowsMatchQuery", { query: search })}
         </p>
       )}
 
       {!isSearching && workflows.length === 0 && folders.length === 0 && (
         <p className="text-sm text-muted-foreground py-8 text-center">
-          No workflows yet. Create one to get started.
+          {t("dash.noWorkflowsYetCreate")}
         </p>
       )}
     </div>

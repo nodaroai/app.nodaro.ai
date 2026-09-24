@@ -23,8 +23,10 @@ import {
   useHeygenAvatars,
   keylessCatalogHint,
   avatarSupportsV,
+  avatarStatus,
   avatarStatusLabel,
   deriveGenders,
+  genderLabel,
   hasGroupSegmentation,
   filterAvatars,
 } from "./heygen-catalog"
@@ -41,6 +43,7 @@ import { useVirtualGrid, rowItems } from "@/hooks/use-virtual-grid"
 import { useLazyMount } from "@/components/audio-player/use-lazy-mount"
 import { cn } from "@/lib/utils"
 import { KeylessNotice } from "./keyless-notice"
+import { useT } from "@/lib/i18n"
 
 // ---------------------------------------------------------------------------
 // Breakpoints — a 2-col grid at narrow, up to 4-col at wider panels.
@@ -81,13 +84,15 @@ const AvatarTile = memo(function AvatarTile({
   multiple = false,
   disabled = false,
 }: AvatarTileProps) {
+  const t = useT()
   const { ref, mounted } = useLazyMount("400px")
   const isVCapable = avatarSupportsV(avatar)
   // The account's own look that HeyGen is still building (or gave up on):
   // shown, labelled, not pickable.
-  const statusLabel = avatarStatusLabel(avatar)
-  const blocked = disabled || statusLabel !== null
-  const statusReason = statusLabel === "Failed" ? "HeyGen could not build this look" : "HeyGen is still building this look"
+  const status = avatarStatus(avatar)
+  const statusLabel = avatarStatusLabel(avatar, t)
+  const blocked = disabled || status !== null
+  const statusReason = status === "failed" ? t("heygen.lookBuildFailed") : t("heygen.lookStillBuilding")
 
   return (
     // The div wrapper acts as the IntersectionObserver root for lazy mount.
@@ -107,7 +112,7 @@ const AvatarTile = memo(function AvatarTile({
         onSelect(avatar)
       }}
       className={cn(
-        "relative group flex flex-col w-full overflow-hidden rounded-lg border text-left transition-colors",
+        "relative group flex flex-col w-full overflow-hidden rounded-lg border text-start transition-colors",
         blocked ? "cursor-not-allowed opacity-40" : "cursor-pointer",
         selected
           ? "border-[#ff0073] ring-1 ring-[#ff0073]/60 bg-[#ff0073]/5"
@@ -147,7 +152,7 @@ const AvatarTile = memo(function AvatarTile({
       {selected && (
         <span
           aria-hidden
-          className="absolute top-1.5 right-1.5 w-3 h-3 rounded-full bg-[#ff0073] border-2 border-white dark:border-[#1E1E1E] shadow-sm"
+          className="absolute top-1.5 end-1.5 w-3 h-3 rounded-full bg-[#ff0073] border-2 border-white dark:border-[#1E1E1E] shadow-sm"
         />
       )}
 
@@ -157,8 +162,8 @@ const AvatarTile = memo(function AvatarTile({
           aria-hidden
           data-testid="avatar-status-badge"
           className={cn(
-            "absolute bottom-[38px] left-1.5 px-1 py-0.5 rounded text-[8px] font-bold leading-none text-white shadow-sm",
-            statusLabel === "Failed" ? "bg-red-600/90" : "bg-amber-500/90",
+            "absolute bottom-[38px] start-1.5 px-1 py-0.5 rounded text-[8px] font-bold leading-none text-white shadow-sm",
+            status === "failed" ? "bg-red-600/90" : "bg-amber-500/90",
           )}
         >
           {statusLabel}
@@ -168,10 +173,10 @@ const AvatarTile = memo(function AvatarTile({
       {/* Avatar V eligibility badge — only shown when the catalog confirms V support */}
       {isVCapable && (
         <span
-          aria-label="Supports Avatar V"
-          title="Supports Avatar V"
+          aria-label={t("node.supportsAvatarV")}
+          title={t("node.supportsAvatarV")}
           className={cn(
-            "absolute top-1.5 left-1.5 flex items-center gap-0.5 px-1 py-0.5",
+            "absolute top-1.5 start-1.5 flex items-center gap-0.5 px-1 py-0.5",
             "rounded text-[8px] font-bold leading-none",
             "bg-violet-600/90 text-white shadow-sm",
           )}
@@ -227,6 +232,7 @@ export const AvatarPicker = memo(function AvatarPicker({
   max = 3,
   showKeysAction = true,
 }: AvatarPickerProps) {
+  const t = useT()
   // Query definition (key, staleTime, polling while the server is still
   // filling) is shared with every other catalog consumer — see
   // heygen-catalog.ts. `complete` is false while pages are still arriving;
@@ -319,7 +325,7 @@ export const AvatarPicker = memo(function AvatarPicker({
     return (
       <div className={cn("flex flex-col items-center gap-2 py-8 text-center", className)}>
         <AlertCircle className="size-8 text-destructive/60" />
-        <p className="text-sm text-muted-foreground">Failed to load avatars</p>
+        <p className="text-sm text-muted-foreground">{t("heygen.failedLoadAvatars")}</p>
       </div>
     )
   }
@@ -331,8 +337,8 @@ export const AvatarPicker = memo(function AvatarPicker({
     return (
       <KeylessNotice
         icon={User}
-        title="No HeyGen avatars"
-        hint={keylessCatalogHint("avatars")}
+        title={t("heygen.noAvatars")}
+        hint={keylessCatalogHint("avatars", t)}
         showAction={showKeysAction}
         className={className}
         testId="avatar-picker-empty"
@@ -348,28 +354,28 @@ export const AvatarPicker = memo(function AvatarPicker({
       {/* Controls row: search + gender + segment */}
       <div className="flex gap-2 flex-wrap">
         <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+          <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
           <Input
-            aria-label="Search avatars"
-            placeholder="Search avatars…"
+            aria-label={t("heygen.searchAvatars")}
+            placeholder={t("heygen.searchAvatarsPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="pl-8 h-8 text-xs"
+            className="ps-8 h-8 text-xs"
           />
         </div>
 
         <Select value={gender} onValueChange={setGender}>
           <SelectTrigger
-            aria-label="Filter by gender"
+            aria-label={t("heygen.filterByGender")}
             className="h-8 text-xs w-[90px] shrink-0"
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all" className="text-xs">All genders</SelectItem>
+            <SelectItem value="all" className="text-xs">{t("heygen.allGenders")}</SelectItem>
             {genders.map((g) => (
               <SelectItem key={g} value={g} className="text-xs capitalize">
-                {g.charAt(0).toUpperCase() + g.slice(1)}
+                {genderLabel(g, t) || t("heygen.unspecified")}
               </SelectItem>
             ))}
           </SelectContent>
@@ -381,15 +387,15 @@ export const AvatarPicker = memo(function AvatarPicker({
             onValueChange={(v) => setSegment(v as "all" | "stock" | "custom")}
           >
             <SelectTrigger
-              aria-label="Filter by type"
+              aria-label={t("heygen.filterByType")}
               className="h-8 text-xs w-[90px] shrink-0"
             >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all" className="text-xs">All types</SelectItem>
-              <SelectItem value="stock" className="text-xs">Stock</SelectItem>
-              <SelectItem value="custom" className="text-xs">Custom</SelectItem>
+              <SelectItem value="all" className="text-xs">{t("heygen.allTypes")}</SelectItem>
+              <SelectItem value="stock" className="text-xs">{t("heygen.stock")}</SelectItem>
+              <SelectItem value="custom" className="text-xs">{t("common.custom")}</SelectItem>
             </SelectContent>
           </Select>
         )}
@@ -409,7 +415,7 @@ export const AvatarPicker = memo(function AvatarPicker({
           )}
         >
           <Zap className="size-3" aria-hidden />
-          Supports Avatar V
+          {t("node.supportsAvatarV")}
         </Button>
       )}
 
@@ -422,20 +428,20 @@ export const AvatarPicker = memo(function AvatarPicker({
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-8 text-center">
             <p className="text-xs text-muted-foreground">
-              No avatars match your filters
+              {t("heygen.noAvatarsMatchFilters")}
             </p>
           </div>
         ) : (
           <div
             role={multiple ? "group" : "radiogroup"}
-            aria-label="HeyGen avatars"
+            aria-label={t("heygen.avatarsGroup")}
             ref={gridRef}
             style={{ height: totalSize, position: "relative" }}
           >
             {virtualRows.map((virtualRow) => (
               <div
                 key={virtualRow.key}
-                className="absolute top-0 left-0 w-full"
+                className="absolute top-0 start-0 w-full"
                 style={{
                   transform: `translateY(${virtualRow.start - scrollMargin}px)`,
                   display: "grid",
@@ -466,16 +472,18 @@ export const AvatarPicker = memo(function AvatarPicker({
 
       {/* Item count + (multi) selection cap + "still arriving" while the server fills */}
       {filtered.length > 0 && (
-        <p className="text-[10px] text-muted-foreground text-right px-0.5">
+        <p className="text-[10px] text-muted-foreground text-end px-0.5">
           {multiple && (
-            <span className={cn("mr-1.5", atCap && "text-[#ff0073]")}>
-              {selectedSet.size}/{max} selected
+            <span className={cn("me-1.5", atCap && "text-[#ff0073]")}>
+              {t("heygen.selectedOfMax", { selected: selectedSet.size, max })}
             </span>
           )}
-          {filtered.length} avatar{filtered.length !== 1 ? "s" : ""}
+          {filtered.length === 1
+            ? t("heygen.avatarCountOne", { n: filtered.length })
+            : t("heygen.avatarCount", { n: filtered.length })}
           {!complete && (
-            <span className="ml-1.5 text-muted-foreground/70" data-testid="avatar-picker-loading-more">
-              · loading more…
+            <span className="ms-1.5 text-muted-foreground/70" data-testid="avatar-picker-loading-more">
+              {t("heygen.loadingMore")}
             </span>
           )}
         </p>

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { queryKeys } from "@/lib/query-keys"
+import { useT, type TFunction } from "@/lib/i18n"
 import { OrgApiError, actOnJoinCode, getJoinCode } from "@/ee/lib/orgs-api"
 
 /**
@@ -22,13 +23,14 @@ import { OrgApiError, actOnJoinCode, getJoinCode } from "@/ee/lib/orgs-api"
  */
 export function JoinCodeCard({
   workspaceId,
-  workspaceWord = "workspace",
+  workspaceWord,
   disabled = false,
 }: {
   workspaceId: string
   workspaceWord?: string
   disabled?: boolean
 }) {
+  const t = useT()
   const queryClient = useQueryClient()
   const [copied, setCopied] = useState(false)
 
@@ -52,33 +54,33 @@ export function JoinCodeCard({
     window.setTimeout(() => setCopied(false), 2000)
   }, [code.data?.code])
 
-  const word = workspaceWord.toLowerCase()
+  const word = (workspaceWord ?? t("org.workspaceWord")).toLowerCase()
   const enabled = code.data?.enabled ?? false
 
   return (
     <Card className="space-y-4 p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="font-medium">Join code</h2>
+          <h2 className="font-medium">{t("org.joinCode")}</h2>
           <p className="text-sm text-muted-foreground">
-            Anyone who has the code can join this {word} as a member. Read it out, or write it on a board.
+            {t("org.joinCodeDesc", { word })}
           </p>
         </div>
         <Switch
           checked={enabled}
           disabled={disabled || act.isPending || code.isLoading}
           onCheckedChange={(next) => act.mutate(next ? "enable" : "disable")}
-          aria-label="Allow joining with a code"
+          aria-label={t("org.allowJoinWithCode")}
         />
       </div>
 
-      {code.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {code.isLoading && <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}
 
-      {code.error && <p className="text-sm text-muted-foreground">Could not load the join code.</p>}
+      {code.error && <p className="text-sm text-muted-foreground">{t("org.joinCodeLoadFailed")}</p>}
 
       {!code.isLoading && !code.error && !code.data && (
         <p className="text-sm text-muted-foreground">
-          No code yet. Turning this on will make one.
+          {t("org.noJoinCodeYet")}
         </p>
       )}
 
@@ -86,31 +88,31 @@ export function JoinCodeCard({
         <div className="space-y-3">
           <p
             className="select-all text-center font-mono text-2xl tracking-[0.35em]"
-            aria-label={`Join code ${code.data.code}`}
+            aria-label={t("org.joinCodeAria", { code: code.data.code })}
           >
             {format(code.data.code)}
           </p>
           <div className="flex flex-wrap justify-center gap-2">
             <Button size="sm" variant="outline" onClick={copy} disabled={disabled}>
-              {copied ? "Copied" : "Copy"}
+              {copied ? t("common.copied") : t("common.copy")}
             </Button>
             <Button size="sm" variant="outline" onClick={() => act.mutate("rotate")} disabled={disabled || act.isPending}>
-              New code
+              {t("org.newCode")}
             </Button>
           </div>
           <p className="text-center text-xs text-muted-foreground">
             {enabled
-              ? "Anyone with this code can join right now."
-              : "Joining is off — the code will not work until you turn it on."}
+              ? t("org.joinCodeActive")
+              : t("org.joinCodeInactive")}
           </p>
           <p className="text-center text-xs text-muted-foreground">
-            A new code stops the old one working immediately.
+            {t("org.newCodeWarning")}
           </p>
         </div>
       )}
 
       {act.error && (
-        <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{failureMessage(act.error)}</p>
+        <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{failureMessage(act.error, t)}</p>
       )}
     </Card>
   )
@@ -122,16 +124,16 @@ export function format(code: string): string {
   return `${code.slice(0, 4)}-${code.slice(4)}`
 }
 
-function failureMessage(error: unknown): string {
+function failureMessage(error: unknown, t: TFunction): string {
   const code = error instanceof OrgApiError ? error.code : "internal_error"
   switch (code) {
     case "insufficient_role":
-      return "You cannot change the join code for this workspace."
+      return t("org.joinCodeInsufficientRole")
     case "workspace_archived":
-      return "This workspace is archived, so its join code cannot change."
+      return t("org.joinCodeWorkspaceArchived")
     case "org_not_active":
-      return "This organization is not active."
+      return t("org.orgNotActive")
     default:
-      return "Something went wrong. Try again in a moment."
+      return t("org.somethingWrongTryAgain")
   }
 }

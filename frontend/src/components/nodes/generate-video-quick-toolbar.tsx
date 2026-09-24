@@ -207,7 +207,7 @@ export function GenerateVideoQuickToolbar({
             <button
               type="button"
               className="flex items-center gap-1 h-6 px-2 text-[10px] rounded-md whitespace-nowrap text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10"
-              title="Settings"
+              title={t("common.settings")}
             >
               <Settings2 className="w-3 h-3 opacity-70" />
               <span className="font-medium">{summary}</span>
@@ -223,7 +223,7 @@ export function GenerateVideoQuickToolbar({
             className="w-[240px] p-2 space-y-2 node-menu-surface"
             onClick={(e) => e.stopPropagation()}
           >
-            <ToolbarSetting label="Model" icon={<Sparkles className="w-3 h-3" />}>
+            <ToolbarSetting label={t("node.model")} icon={<Sparkles className="w-3 h-3" />}>
               <ModelSearchSelect disabled={isRunning}
                 value={currentProvider}
                 onChange={handleModelChange}
@@ -232,11 +232,11 @@ export function GenerateVideoQuickToolbar({
                 getTooltip={getVideoModelCapabilitiesTooltip}
                 triggerClassName={ghostPopoverTriggerClass}
                 contentClassName="node-menu-surface"
-                ariaLabel="Model"
+                ariaLabel={t("field.model")}
               />
             </ToolbarSetting>
             {aspectOptions.length > 0 && (
-              <ToolbarSetting label="Aspect" icon={<Ratio className="w-3 h-3" />}>
+              <ToolbarSetting label={t("node.aspect")} icon={<Ratio className="w-3 h-3" />}>
                 <Select disabled={isRunning} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
                   <SelectTrigger className={ghostPopoverTriggerClass}>
                     <SelectValue />
@@ -250,7 +250,7 @@ export function GenerateVideoQuickToolbar({
               </ToolbarSetting>
             )}
             {durationOptions.length > 0 && (
-              <ToolbarSetting label="Duration" icon={<Clock className="w-3 h-3" />}>
+              <ToolbarSetting label={t("field.duration")} icon={<Clock className="w-3 h-3" />}>
                 <Select
                   value={currentDuration !== undefined ? String(currentDuration) : ""}
                   onValueChange={handleDurationChange}
@@ -270,7 +270,7 @@ export function GenerateVideoQuickToolbar({
               </ToolbarSetting>
             )}
             {resolutionOptions && resolutionOptions.length > 0 && (
-              <ToolbarSetting label="Resolution" icon={<Maximize2 className="w-3 h-3" />}>
+              <ToolbarSetting label={t("field.resolution")} icon={<Maximize2 className="w-3 h-3" />}>
                 <Select disabled={isRunning} value={currentResolution} onValueChange={handleResolutionChange} onOpenChange={handleOpenChange}>
                   <SelectTrigger className={ghostPopoverTriggerClass}>
                     <SelectValue />
@@ -285,7 +285,7 @@ export function GenerateVideoQuickToolbar({
                 </Select>
               </ToolbarSetting>
             )}
-            <ToolbarSetting label="Versions" icon={<Copy className="w-3 h-3" />}>
+            <ToolbarSetting label={t("node.versions")} icon={<Copy className="w-3 h-3" />}>
               <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />

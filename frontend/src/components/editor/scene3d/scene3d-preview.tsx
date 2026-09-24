@@ -279,7 +279,7 @@ function Scene3DV1Preview({
           size="icon"
           variant="ghost"
           className="h-7 w-7 shrink-0"
-          aria-label={playing ? "Pause" : "Play"}
+          aria-label={playing ? t("common.pause") : t("common.play")}
           onClick={() => setPlaying(!playing)}
         >
           {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
@@ -290,7 +290,7 @@ function Scene3DV1Preview({
           max={lastFrame}
           step={1}
           value={frame}
-          aria-label="Scrub"
+          aria-label={t("scene3dcfg.scrub")}
           onChange={(e) => seek(Number.parseInt(e.target.value, 10))}
           className="w-full accent-[#ff0073]"
         />
@@ -321,7 +321,7 @@ function Scene3DV1Preview({
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <Boxes className="w-3 h-3" />
           <span>{t("cfgext.scene3dObjectCount", { count: objects.length })}</span>
-          {revisionId && <span className="ml-auto font-mono">rev {revisionId.slice(0, 8)}</span>}
+          {revisionId && <span className="ms-auto font-mono">{t("scene3dcfg.revShort", { id: revisionId.slice(0, 8) })}</span>}
         </div>
         <div className="max-h-40 overflow-y-auto flex flex-col gap-0.5">
           {objects.map((object) => {
@@ -336,7 +336,7 @@ function Scene3DV1Preview({
               >
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+                  className="flex items-center gap-1.5 flex-1 min-w-0 text-start"
                   aria-pressed={isSelected}
                   onClick={() => toggleSelected(object.id)}
                 >
@@ -354,12 +354,12 @@ function Scene3DV1Preview({
                   // Read-only still SHOWS the lock (it explains why the model
                   // left an object alone) — as a static badge, not a control.
                   isLocked && (
-                    <Lock role="img" aria-label={`${object.name} locked`} className="w-3 h-3 text-amber-500" />
+                    <Lock role="img" aria-label={t("scene3dcfg.objectLocked", { name: object.name })} className="w-3 h-3 text-amber-500" />
                   )
                 ) : (
                   <button
                     type="button"
-                    aria-label={isLocked ? `Unlock ${object.name}` : `Lock ${object.name}`}
+                    aria-label={isLocked ? t("scene3dcfg.unlockObject", { name: object.name }) : t("scene3dcfg.lockObject", { name: object.name })}
                     aria-pressed={isLocked}
                     className={isLocked ? "text-amber-500" : "text-muted-foreground/50 hover:text-muted-foreground"}
                     onClick={() => toggleLocked(object.id)}
@@ -428,7 +428,7 @@ function Scene3DV1Preview({
               <span className="text-[10px] text-muted-foreground">{t("cfgext.scene3dColor")}</span>
               <input
                 type="color"
-                aria-label={`${activeObjectView.name} color`}
+                aria-label={t("scene3dcfg.objectColor", { name: activeObjectView.name })}
                 value={activeObjectView.color}
                 disabled={editsDisabled}
                 onChange={(e) =>
@@ -459,7 +459,7 @@ function Scene3DV1Preview({
             <Scene3DVectorRow
               key={channel}
               label={t(channel === "position" ? "cfgext.scene3dPosition" : "cfgext.scene3dTarget")}
-              namePrefix="Camera"
+              namePrefix={t("cfgext.scene3dCamera")}
               vector={vector}
               disabled={editsDisabled}
               labelSuffix={modeBadge(mode)}
@@ -485,7 +485,7 @@ function Scene3DV1Preview({
             value={cameraSample?.focalLengthMm ?? baseCamera.focalLengthMm}
             step={1}
             disabled={editsDisabled}
-            ariaLabel="Camera focal length"
+            ariaLabel={t("scene3dcfg.cameraFocalLength")}
             onCommit={(next) => {
               if (!validPlan) return
               applyPoseEdit(
@@ -503,7 +503,7 @@ function Scene3DV1Preview({
           <span className="text-[10px] text-muted-foreground">{t("cfgext.scene3dBackdrop")}</span>
           <input
             type="color"
-            aria-label="Background color"
+            aria-label={t("scene3dcfg.backgroundColor")}
             value={background}
             disabled={editsDisabled}
             onChange={(e) => applyOperation(buildBackgroundOperation(e.target.value, background))}

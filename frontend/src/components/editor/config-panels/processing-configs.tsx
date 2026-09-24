@@ -2,6 +2,8 @@
 
 import { useLocalizeNodeLabel, useLocalizeHandleLabel } from "@/lib/i18n/labels"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { useState, useEffect, Suspense } from "react"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { ChevronDown, ChevronRight } from "lucide-react"
@@ -57,6 +59,7 @@ import { PlatformPreview } from "@/components/nodes/platform-preview"
 import { Textarea } from "@/components/ui/textarea"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
+import { formatNumber } from "@/lib/i18n/format"
 
 // Lazy — pulls @remotion/player + remotion (~63KB gz) out of the editor chunk;
 // only fetched when an Add Captions node's config panel is opened.
@@ -1983,6 +1986,7 @@ export function FadeVideoConfig({ data, onUpdate }: { data: FadeVideoData; onUpd
 
 export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVideoData>) {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const [showAdvanced, setShowAdvanced] = useState(false)
   const isDefault = data.codec === "h264" && (data.crf ?? 23) === 23 && data.resolution === "original" && data.audioBitrate === "128k"
 
@@ -1997,7 +2001,7 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
         onClick={() => setShowAdvanced((v) => !v)}
         className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
       >
-        {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className={cn("w-3 h-3", isRtl && "rotate-180")} />}
         {t("proccfg.advancedSettings")} {isDefault && t("proccfg.usingDefaults")}
       </button>
 
@@ -2337,7 +2341,7 @@ export function SocialMediaFormatConfig({ data, onUpdate, sources, fieldMappings
           {spec.maxDurationSeconds && (
             <div className="flex justify-between"><span>{t("proccfg.maxDuration")}</span><span className="font-medium text-foreground">{t("proccfg.s2", { n: spec.maxDurationSeconds })}</span></div>
           )}
-          <div className="flex justify-between"><span>{t("proccfg.textLimit")}</span><span className="font-medium text-foreground">{t("proccfg.chars", { count: spec.textLimit.toLocaleString() })}</span></div>
+          <div className="flex justify-between"><span>{t("proccfg.textLimit")}</span><span className="font-medium text-foreground">{t("proccfg.chars", { count: formatNumber(spec.textLimit) })}</span></div>
         </div>
       )}
 

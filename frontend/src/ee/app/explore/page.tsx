@@ -239,17 +239,17 @@ export default function ExplorePage() {
           {/* Search (browse only) */}
           {view === "browse" && (
             <div className="relative flex-1 min-w-[200px] max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder={t("explore.searchPlaceholder")}
-                className="pl-9 h-9"
+                className="ps-9 h-9"
               />
               {searchInput && (
                 <button
                   type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute end-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setSearchInput("")}
                 >
                   <X className="h-3.5 w-3.5" />
@@ -262,7 +262,7 @@ export default function ExplorePage() {
           {view === "browse" && (
             <Select value={sort} onValueChange={(v) => setSort(v as SortMode)}>
               <SelectTrigger className="w-[150px] h-9">
-                <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />
+                <SlidersHorizontal className="h-3.5 w-3.5 me-1.5" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

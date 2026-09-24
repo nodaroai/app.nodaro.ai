@@ -6,6 +6,7 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { formatCreditUnits } from "@/lib/credit-units"
 import { copyToClipboard } from "@/lib/utils"
 import { AiHelperButton } from "@/components/ui/ai-helper-button"
+import { useT } from "@/lib/i18n"
 
 export interface AssetCardItem {
   readonly name: string
@@ -61,6 +62,7 @@ interface AssetCardProps {
 }
 
 export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onRename, errored, costModel, onEnlarge, onDescriptionChange, onMotionDescriptionChange, onSuggestDescription, onInjectToCanvas, onSetAsDefault, isDefault, fallbackAspect }: AssetCardProps) {
+  const t = useT()
   const [refining, setRefining] = useState(false)
   const [prompt, setPrompt] = useState("")
   const cost = useModelCredits(costModel, 0)
@@ -114,19 +116,19 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
           <img src={optimizedImageUrl(item.url)} alt={item.name} className="w-full h-full object-cover object-top" />
         )}
         {errored && (
-          <span className="absolute inset-0 flex items-center justify-center text-red-400 text-xs bg-black/50">failed</span>
+          <span className="absolute inset-0 flex items-center justify-center text-red-400 text-xs bg-black/50">{t("studio.failedLower")}</span>
         )}
         {/* Top-left hover overlay: matches the pattern used by canvas nodes
             (upload-image-node, generate-image-node, …). Renders for both
             images AND videos — the Enlarge button on videos opens the
             lightbox in video mode, and Copy URL works equally well for
             either kind. */}
-        <div className="absolute top-1 left-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <div className="absolute top-1 start-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
           {onEnlarge && (
             <button
               type="button"
-              aria-label="Enlarge"
-              title="Enlarge"
+              aria-label={t("common.enlarge")}
+              title={t("common.enlarge")}
               className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => {
                 e.stopPropagation()
@@ -138,12 +140,12 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
           )}
           <button
             type="button"
-            aria-label="Copy URL"
-            title="Copy URL"
+            aria-label={t("cfgshared.copyUrl")}
+            title={t("cfgshared.copyUrl")}
             className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
             onClick={(e) => {
               e.stopPropagation()
-              copyToClipboard(item.url, "URL copied")
+              copyToClipboard(item.url, t("node.urlCopied"))
             }}
           >
             <LinkIcon className="w-3 h-3" />
@@ -157,7 +159,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
       {isDefault && (
         <span
           aria-hidden
-          className="absolute top-1 right-1 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-black/40 backdrop-blur-sm border border-yellow-400/50 text-yellow-400 shadow-sm pointer-events-none"
+          className="absolute top-1 end-1 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-black/40 backdrop-blur-sm border border-yellow-400/50 text-yellow-400 shadow-sm pointer-events-none"
         >
           <Star className="w-3 h-3" fill="currentColor" />
         </span>
@@ -168,7 +170,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
           {onSetAsDefault && (
             <button
               type="button"
-              title={isDefault ? "Default — click to unset" : "Set as default for this character node"}
+              title={isDefault ? t("studio.defaultClickToUnset") : t("studio.setAsDefaultForNode")}
               aria-pressed={isDefault}
               className={`flex items-center justify-center transition ${
                 isDefault ? "text-yellow-400" : "text-slate-500 hover:text-yellow-300"
@@ -181,7 +183,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
           {onInjectToCanvas && (
             <button
               type="button"
-              title="Add as node on canvas"
+              title={t("studio.addAsNodeOnCanvas")}
               className="flex items-center justify-center text-slate-500 hover:text-sky-300 transition"
               onClick={onInjectToCanvas}
             >
@@ -190,7 +192,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
           )}
           {onRegenerate && (
             <button
-              title={`regenerate same — replace${costLabel}`}
+              title={`${t("studio.regenerateReplaceTitle")}${costLabel}`}
               className="text-[11px] text-slate-500 hover:text-slate-200"
               onClick={() => onRegenerate("replace")}
             >
@@ -199,7 +201,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
           )}
           {onRegenerate && (
             <button
-              title={`add variation${costLabel}`}
+              title={`${t("studio.addVariationTitle")}${costLabel}`}
               className="text-[11px] text-slate-500 hover:text-slate-200"
               onClick={() => onRegenerate("add")}
             >
@@ -208,7 +210,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
           )}
           {onRefine && (
             <button
-              title={`img2img refine${costLabel}`}
+              title={`${t("studio.img2imgRefineTitle")}${costLabel}`}
               className="text-[11px] text-slate-500 hover:text-slate-200"
               onClick={() => setRefining((v) => !v)}
             >
@@ -216,7 +218,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
             </button>
           )}
           <button
-            title="delete"
+            title={t("studio.deleteLower")}
             className="text-[11px] text-slate-500 hover:text-red-400"
             onClick={onDelete}
           >
@@ -241,7 +243,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
             autoFocus
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="refine: e.g. same expression, more intense"
+            placeholder={t("studio.refinePh")}
             className="w-full text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
           />
           <div className="flex gap-1.5">
@@ -253,7 +255,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
                 setPrompt("")
               }}
             >
-              Replace{costLabel}
+              {t("common.replace")}{costLabel}
             </button>
             <button
               className="flex-1 text-[10px] bg-[#1e293b] text-slate-300 rounded px-2 py-1"
@@ -263,7 +265,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
                 setPrompt("")
               }}
             >
-              Add as new{costLabel}
+              {t("studio.addAsNew")}{costLabel}
             </button>
           </div>
         </div>
@@ -279,6 +281,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
  * Escape cancels. With no `onRename` it stays plain truncated text (original behavior).
  */
 function NameLabel({ name, onRename }: { name: string; onRename?: (newName: string) => void }) {
+  const t = useT()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(name)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -334,9 +337,9 @@ function NameLabel({ name, onRename }: { name: string; onRename?: (newName: stri
   return (
     <button
       type="button"
-      title="rename"
+      title={t("studio.renameLower")}
       onClick={beginEdit}
-      className="min-w-0 flex items-center gap-1 text-left group/name"
+      className="min-w-0 flex items-center gap-1 text-start group/name"
     >
       <span className="text-[11px] text-slate-300 truncate">{name}</span>
       <span className="text-[9px] text-slate-600 opacity-0 group-hover:opacity-100 group-hover/name:text-slate-300 transition shrink-0">✎</span>
@@ -363,15 +366,16 @@ function DescriptionRow({
   onMotionDescriptionChange?: (next: string) => void
   onSuggestDescription?: () => Promise<string>
 }) {
+  const t = useT()
   const [editing, setEditing] = useState(false)
   if (!editing) {
     return (
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="text-[10px] text-slate-500 hover:text-slate-300 italic line-clamp-2 w-full text-left"
+        className="text-[10px] text-slate-500 hover:text-slate-300 italic line-clamp-2 w-full text-start"
       >
-        {description || "click to add description"}
+        {description || t("studio.clickToAddDescription")}
       </button>
     )
   }
@@ -391,7 +395,7 @@ function DescriptionRow({
           <AiHelperButton
             onSuggest={onSuggestDescription}
             onReplace={(t) => onDescriptionChange?.(t)}
-            title="Suggest description"
+            title={t("studio.suggestDescription")}
           />
         )}
       </div>
@@ -399,7 +403,7 @@ function DescriptionRow({
         <textarea
           value={motionDescription}
           onChange={(e) => onMotionDescriptionChange(e.target.value)}
-          placeholder="motion description"
+          placeholder={t("studio.motionDescriptionLowerPh")}
           rows={1}
           maxLength={500}
           className="block w-full text-[10px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"

@@ -1,6 +1,7 @@
 import { useMemo } from "react"
 import type { SocialProviderInfo } from "@/lib/api"
 import type { SocialConnection } from "@/types/nodes"
+import { useT, type TFunction } from "@/lib/i18n"
 import { describeProvider } from "./platform-meta"
 
 /**
@@ -40,9 +41,9 @@ export interface IntegrationFilterResult {
   readonly isEmpty: boolean
 }
 
-function matchesQuery(provider: SocialProviderInfo, query: string): boolean {
+function matchesQuery(provider: SocialProviderInfo, query: string, t: TFunction): boolean {
   if (query === "") return true
-  return `${provider.label} ${describeProvider(provider)}`.toLowerCase().includes(query)
+  return `${provider.label} ${describeProvider(provider, t)}`.toLowerCase().includes(query)
 }
 
 function matchesTab(
@@ -67,6 +68,7 @@ export function useIntegrationFilter(
   tab: IntegrationTab,
   query: string,
 ): IntegrationFilterResult {
+  const t = useT()
   return useMemo(() => {
     const needle = query.trim().toLowerCase()
 
@@ -91,7 +93,7 @@ export function useIntegrationFilter(
         availableCount += 1
       }
 
-      if (!matchesQuery(provider, needle)) continue
+      if (!matchesQuery(provider, needle, t)) continue
       if (!matchesTab(provider, tab, own.length)) continue
 
       if (provider.available) {
@@ -115,5 +117,5 @@ export function useIntegrationFilter(
       availableCount,
       isEmpty: sorted.length === 0 && comingSoon.length === 0,
     }
-  }, [providers, connections, tab, query])
+  }, [providers, connections, tab, query, t])
 }

@@ -3,6 +3,8 @@
 
 import type { HeygenAvatar, HeygenVoice } from "@/lib/api"
 import { avatarIsUsable } from "@/components/heygen/heygen-catalog"
+import { tx } from "@/lib/i18n"
+import { formatNumber } from "@/lib/i18n/format"
 
 /**
  * HeyGen look names read "Cora Office 4" — the person, then the scene. The
@@ -105,7 +107,7 @@ function formatDuration(seconds: number): string {
 /** "148 chars · ~9s" — the script kicker's right-hand meta. */
 export function formatScriptMeta(script: string, voiceSpeed: number): string {
   const chars = script.length
-  const head = `${chars.toLocaleString("en-US")} chars`
+  const head = tx("node.nChars", { n: formatNumber(chars) })
   if (chars === 0) return head
   return `${head} · ~${formatDuration(estimateSpeechSeconds(chars, voiceSpeed))}`
 }

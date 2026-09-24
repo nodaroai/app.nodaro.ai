@@ -3,6 +3,7 @@
 import type { ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 
 /**
  * Phase 1D.2c follow-up — shared shell for the three critic-style alert
@@ -68,6 +69,7 @@ export function CriticBanner({
   dismissTestId,
   testId,
 }: CriticBannerProps) {
+  const t = useT()
   return (
     <div
       className={cn(
@@ -83,7 +85,7 @@ export function CriticBanner({
           size="sm"
           variant="ghost"
           onClick={onDismiss}
-          aria-label="Dismiss"
+          aria-label={t("pipe.dismiss")}
           data-testid={dismissTestId}
         >
           ×

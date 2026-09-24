@@ -1,5 +1,6 @@
 import { CreatureAssetTab } from "./creature-asset-tab"
 import type { CreatureStudioState } from "./use-creature-studio"
+import { useT } from "@/lib/i18n"
 
 /**
  * Variations tab — thin wrapper over `CreatureAssetTab` passing the
@@ -28,12 +29,13 @@ interface VariationsTabProps {
 }
 
 export function VariationsTab({ studio }: VariationsTabProps) {
+  const t = useT()
   return (
     <CreatureAssetTab
       studio={studio}
       tabKind="variations"
       presets={VARIATIONS_PRESETS}
-      iconLabel="✨ Variations"
+      iconLabel={t("creature.variationsTabTitle")}
     />
   )
 }

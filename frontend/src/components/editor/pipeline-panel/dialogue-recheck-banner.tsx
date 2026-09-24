@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { SubGateApprovalCard } from "./sub-gate-approval-card"
+import { useT } from "@/lib/i18n"
 
 /**
  * Mirrors `DialogueRecheckResult` from
@@ -39,29 +40,29 @@ interface Props {
  * component contributes the amber-themed Card styling + rebalance grid.
  */
 export function DialogueRecheckBanner({ pipelineId, rebalanceResult }: Props) {
+  const t = useT()
   const { rebalances, warnings } = rebalanceResult
 
   return (
     <SubGateApprovalCard
       pipelineId={pipelineId}
       gate="dialogue_recheck"
-      title="Dialogue duration recheck"
+      title={t("pipe.dialogueRecheckTitle")}
       description={
         <div className="text-xs text-amber-800/80 dark:text-amber-200/80">
-          Actual audio durations diverged from the shot-list estimate. Review
-          the proposed rebalance below.
+          {t("pipe.dialogueRecheckDesc")}
         </div>
       }
-      approveLabel="Approve rebalance"
-      rejectTitle="Reject rebalance"
-      rejectPlaceholder="What should change about the dialogue plan? (optional)"
+      approveLabel={t("pipe.approveRebalance")}
+      rejectTitle={t("pipe.rejectRebalance")}
+      rejectPlaceholder={t("pipe.dialoguePlanChangePlaceholder")}
       className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20"
       cardTestId="dialogue-recheck-banner"
       rejectButtonVariant="outline"
     >
       {rebalances.length === 0 && (
         <div className="text-sm text-amber-800 dark:text-amber-200">
-          No shot durations need adjustment.
+          {t("pipe.noShotDurationsAdjust")}
         </div>
       )}
       {rebalances.length > 0 && (
@@ -73,12 +74,12 @@ export function DialogueRecheckBanner({ pipelineId, rebalanceResult }: Props) {
               data-testid="dialogue-rebalance-entry"
             >
               <div className="min-w-0 truncate">
-                <span className="font-mono text-zinc-500">scene</span>{" "}
+                <span className="font-mono text-zinc-500">{t("pipe.sceneLower")}</span>{" "}
                 <span className="font-medium" title={entry.scene_entity_id}>
                   {entry.scene_entity_id.slice(0, 8)}
                 </span>
                 {" · "}
-                <span className="font-mono text-zinc-500">shot</span>{" "}
+                <span className="font-mono text-zinc-500">{t("pipe.shotLower")}</span>{" "}
                 <span className="font-medium">{entry.shot_id}</span>
               </div>
               <div className="flex items-center gap-2 shrink-0">

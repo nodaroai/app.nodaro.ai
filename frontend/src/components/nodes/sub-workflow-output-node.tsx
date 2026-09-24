@@ -84,7 +84,7 @@ function SubWorkflowOutputNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: PORT_COLOR[port.mediaType] ?? PORT_COLOR.any }} />
                   <span>{port.name}</span>
                   {port.id === nodeData.visibleOutputPortId && (
-                    <span className="text-[10px] text-[#ff0073]">(visible)</span>
+                    <span className="text-[10px] text-[#ff0073]">{t("node.visibleTag")}</span>
                   )}
                 </div>
               ))}
@@ -92,7 +92,7 @@ function SubWorkflowOutputNodeComponent({ id, data, selected }: NodeProps) {
           )}
           {visiblePort && (
             <p className="text-[10px] text-muted-foreground mt-1 opacity-60">
-              Preview: {visiblePort.name}
+              {t("node.previewValue", { name: visiblePort.name })}
             </p>
           )}
         </div>

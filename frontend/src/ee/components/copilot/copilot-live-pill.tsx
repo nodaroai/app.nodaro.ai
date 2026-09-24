@@ -14,8 +14,9 @@
  * up to read something.
  */
 import { useEffect, useState } from "react"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
 import type { CopilotActivity } from "@/ee/lib/copilot/types"
+import { useT } from "@/lib/i18n"
 
 interface CopilotLivePillProps {
   /** The step to name. The newest activity wins; before the first one, a default. */
@@ -29,6 +30,7 @@ function formatElapsed(ms: number): string {
 }
 
 export function CopilotLivePill({ activities, startedAt }: CopilotLivePillProps) {
+  const t = useT()
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export function CopilotLivePill({ activities, startedAt }: CopilotLivePillProps)
     return () => clearInterval(id)
   }, [startedAt])
 
-  const step = activities.length > 0 ? activities[activities.length - 1]!.label : S.stepStarting
+  const step = activities.length > 0 ? activities[activities.length - 1]!.label : t(K.stepStarting)
 
   return (
     <div className="self-start flex items-center gap-2.5 px-3 py-[7px] rounded-full bg-[var(--copilot-surface)] border border-border">

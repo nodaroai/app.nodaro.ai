@@ -74,6 +74,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useSidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from "./sidebar-context"
+import { formatDate, formatNumber } from "@/lib/i18n/format"
 
 const STORAGE_KEY = "nodaro-sidebar-collapsed"
 
@@ -188,7 +189,7 @@ function formatRenewalTime(periodEnd: string): string | null {
     return tx("nav.renewal.lessThanMinute")
   }
   if (daysLeft <= 14) return tx(daysLeft !== 1 ? "nav.renewal.days" : "nav.renewal.day", { n: daysLeft })
-  return new Date(periodEnd).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+  return formatDate(periodEnd, { month: "short", day: "numeric", year: "numeric" })
 }
 
 interface AppSidebarProps {
@@ -281,7 +282,7 @@ function CreditRow({
           {label}
         </span>
         <span style={{ fontSize: 14, fontWeight: 600, color: "var(--blg-t1)", fontVariantNumeric: "tabular-nums" }}>
-          {creditUnits(value).toLocaleString()}
+          {formatNumber(creditUnits(value))}
         </span>
       </div>
       <div style={{ height: 3, borderRadius: 2, background: "var(--blg-track)", overflow: "hidden" }}>
@@ -599,7 +600,7 @@ export function AppSidebar({
                     // The pair is one interpolated key, never a bare "X / Y":
                     // the operands invert under RTL and the line then lies.
                     <p className="text-zinc-500 dark:text-zinc-400">
-                      {t("credits.allowanceOfGranted", { granted: creditUnits(creditFigures.allowance.granted).toLocaleString() })}
+                      {t("credits.allowanceOfGranted", { granted: formatNumber(creditUnits(creditFigures.allowance.granted)) })}
                     </p>
                   ) : creditBalance.effectiveTier === "free" ? (
                     creditBalance.dailyLimit != null && (
@@ -638,7 +639,7 @@ export function AppSidebar({
             // (light values from the lite mock, dark = original constants).
             return (
               <div
-                className={cn("mx-2 mt-2 text-left", selfServe ? "cursor-pointer" : "cursor-default")}
+                className={cn("mx-2 mt-2 text-start", selfServe ? "cursor-pointer" : "cursor-default")}
                 style={{
                   border: "1px solid var(--blg-border-3)",
                   borderRadius: 14,
@@ -672,7 +673,7 @@ export function AppSidebar({
                         color: "var(--blg-t1)",
                       }}
                     >
-                      {creditFigures.unavailable ? "—" : creditUnits(creditFigures.headline).toLocaleString()}
+                      {creditFigures.unavailable ? "—" : formatNumber(creditUnits(creditFigures.headline))}
                     </span>
                     <span style={{ fontSize: 13, color: "var(--blg-t2-dim)" }}>{creditUnitLabel(t("nav.credits"))}</span>
                   </div>
@@ -758,7 +759,7 @@ export function AppSidebar({
                       <span className="relative">
                         <item.icon className="h-4 w-4" strokeWidth={1.5} />
                         {showBadge && (
-                          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500" />
+                          <span className="absolute -top-1 -end-1 h-2 w-2 rounded-full bg-red-500" />
                         )}
                       </span>
                     </Link>
@@ -959,8 +960,8 @@ export function AppSidebar({
                     aria-hidden
                     className={
                       updateAvailable
-                        ? "absolute -left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-red-500"
-                        : "absolute -left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[#ff0073]"
+                        ? "absolute -start-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-red-500"
+                        : "absolute -start-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[#ff0073]"
                     }
                   />
                 )}

@@ -146,7 +146,7 @@ export function SubWorkflowInputConfig({ data, onUpdate }: ConfigProps<SubWorkfl
       <div>
         <Label className="text-xs font-medium">{t("cfgext.subwfRouteId")}</Label>
         <div className="flex items-center gap-2 mt-1">
-          <Input
+          <Input dir="ltr"
             className="flex-1 h-8 text-xs font-mono"
             value={routeId}
             readOnly

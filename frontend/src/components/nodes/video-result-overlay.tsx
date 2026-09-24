@@ -105,7 +105,7 @@ function VideoResultOverlayComponent({
         </button>
         <button
           type="button"
-          aria-label="Download"
+          aria-label={t("common.download")}
           className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
           onClick={(e) => {
             e.stopPropagation()
@@ -123,7 +123,7 @@ function VideoResultOverlayComponent({
           className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
           onClick={(e) => {
             e.stopPropagation()
-            copyToClipboard(url, "URL copied")
+            copyToClipboard(url, t("node.urlCopied"))
           }}
         >
           <Link className="w-3.5 h-3.5" />
@@ -143,8 +143,8 @@ function VideoResultOverlayComponent({
       <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
         <SaveToLibraryButton url={url} type="video" />
         {onSettings && (
-          <button type="button" aria-label="Settings" className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
-            onClick={(e) => { e.stopPropagation(); onSettings() }} title="Settings">
+          <button type="button" aria-label={t("common.settings")} className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+            onClick={(e) => { e.stopPropagation(); onSettings() }} title={t("common.settings")}>
             <Settings className="w-3.5 h-3.5" />
           </button>
         )}

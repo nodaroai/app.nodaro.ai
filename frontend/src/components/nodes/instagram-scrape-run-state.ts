@@ -14,6 +14,7 @@ import {
 } from "@nodaro/shared"
 import type { InstagramScrapeNodeData } from "@/types/nodes"
 import { metaAdsFormatLabelKey } from "./meta-ads-scrape-run-state"
+import { formatDate } from "@/lib/i18n/format"
 
 /** The Instagram node reuses the Web Scrape #765 run-state machine. */
 export type InstagramScrapeCardState = WebScrapeCardState
@@ -61,7 +62,7 @@ export function instagramStat(item: Record<string, unknown>, key: "likesCount" |
 }
 export function instagramTimestampLabel(item: Record<string, unknown>): string {
   const t = typeof item.timestamp === "string" ? Date.parse(item.timestamp) : NaN
-  return Number.isNaN(t) ? "" : new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+  return Number.isNaN(t) ? "" : formatDate(t, { month: "short", day: "numeric" })
 }
 
 export function clampFeaturedIndex(stored: unknown, count: number): number {

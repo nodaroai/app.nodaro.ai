@@ -6,6 +6,7 @@ import {
   type WorkspaceState,
   type WorkspaceSummary,
 } from "@/lib/workspace-context"
+import { useOrgVocabulary } from "./use-org-vocabulary"
 
 /**
  * React bindings over the workspace seam, plus the vocabulary that renders
@@ -71,5 +72,5 @@ export const FALLBACK_VOCABULARY: Record<string, string> = Object.freeze({
 export function useVocabulary(orgId?: string | null): Record<string, string> {
   const { organizations, activeOrganization } = useWorkspace()
   const org = orgId ? (organizations.find((o) => o.id === orgId) ?? null) : activeOrganization
-  return org?.vocabulary ?? FALLBACK_VOCABULARY
+  return useOrgVocabulary(org?.vocabulary ?? FALLBACK_VOCABULARY)
 }

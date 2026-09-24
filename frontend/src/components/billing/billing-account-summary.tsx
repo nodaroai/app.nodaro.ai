@@ -4,6 +4,7 @@ import { useT, type MessageKey } from "@/lib/i18n"
 import { formatMoney } from "@/lib/format-money"
 import type { BillingAccount, MoneyAmount, UsageCategory } from "@/lib/billing-surface"
 import { serverUnitLabel } from "@/lib/credit-units"
+import { formatDate, formatDateTime, formatNumber, uiLocale } from "@/lib/i18n/format"
 
 const ACCENT = "#ff0073"
 
@@ -17,11 +18,11 @@ function categoryLabel(c: string): MessageKey { return CATEGORY_LABEL[c] ?? "usa
 function categoryIcon(c: string): typeof ImageIcon { return CATEGORY_ICON[c] ?? Layers }
 
 /** Rule 1: a null amount renders as an em-dash, never a fabricated 0. */
-function amountOrDash(n: number | null): string { return n == null ? "—" : n.toLocaleString() }
+function amountOrDash(n: number | null): string { return n == null ? "—" : formatNumber(n) }
 
 export function BillingAccountSummary({ account, className = "", consumptionOnly = false }: { account: BillingAccount; className?: string; consumptionOnly?: boolean }) {
   const t = useT()
-  const money = (m: MoneyAmount) => formatMoney(m)
+  const money = (m: MoneyAmount) => formatMoney(m, uiLocale())
   // The account's figures arrive in the display unit and carry it (`unit`);
   // the long-form word is the label when the provider's own id comes back.
   const unit = serverUnitLabel(account.unit, t("credits.unit.other"))
@@ -59,24 +60,24 @@ export function BillingAccountSummary({ account, className = "", consumptionOnly
             {account.balanceSource !== "external_wallet" && <div className="mt-1 text-xs text-muted-foreground">
               {account.allocated == null
                 ? t("usage.allowanceGrantedUnavailable")
-                : t("usage.allowanceOfGranted", { granted: account.allocated.toLocaleString(), unit })}
+                : t("usage.allowanceOfGranted", { granted: formatNumber(account.allocated), unit })}
             </div>}
           </div>
         )}
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-5">
           <div className="text-sm text-muted-foreground">{t("usage.spent")}</div>
           <div className="mt-1 text-3xl font-bold" style={{ color: ACCENT }}>
-            {totalForPct.toLocaleString()}
-            <span className="ml-2 text-base font-medium text-muted-foreground">{unit}</span>
+            {formatNumber(totalForPct)}
+            <span className="ms-2 text-base font-medium text-muted-foreground">{unit}</span>
           </div>
           {account.generations != null && (
             <div className="mt-1 text-xs text-muted-foreground">
-              {t("usage.generations")}: {account.generations.toLocaleString()}
+              {t("usage.generations")}: {formatNumber(account.generations)}
             </div>
           )}
           {account.periodStart && (
             <div className="mt-1 text-xs text-muted-foreground">
-              {t("usage.periodFrom", { date: new Date(account.periodStart).toLocaleDateString() })}
+              {t("usage.periodFrom", { date: formatDate(account.periodStart) })}
             </div>
           )}
         </div>
@@ -88,7 +89,7 @@ export function BillingAccountSummary({ account, className = "", consumptionOnly
           <div className="text-sm text-muted-foreground">{account.spent ? t("usage.spent") : t("usage.balance")}</div>
           <div className="mt-1 text-3xl font-bold" style={{ color: ACCENT }}>
             {account.spent ? amountOrDash(account.generations ?? account.balance) : amountOrDash(account.balance)}
-            {!account.spent && <span className="ml-2 text-base font-medium text-muted-foreground">{unit}</span>}
+            {!account.spent && <span className="ms-2 text-base font-medium text-muted-foreground">{unit}</span>}
           </div>
           {account.spent && (
             <div className="mt-1 text-sm font-medium">
@@ -98,7 +99,7 @@ export function BillingAccountSummary({ account, className = "", consumptionOnly
           )}
           {account.periodStart && (
             <div className="mt-1 text-xs text-muted-foreground">
-              {t("usage.periodFrom", { date: new Date(account.periodStart).toLocaleDateString() })}
+              {t("usage.periodFrom", { date: formatDate(account.periodStart) })}
             </div>
           )}
         </div>
@@ -112,7 +113,7 @@ export function BillingAccountSummary({ account, className = "", consumptionOnly
           </div>
           <div className="mt-1 text-3xl font-bold">
             {amountOrDash(account.balance)}
-            <span className="ml-2 text-base font-medium text-muted-foreground">{unit}</span>
+            <span className="ms-2 text-base font-medium text-muted-foreground">{unit}</span>
           </div>
           {account.reserveValue && (
             <div className="mt-1 text-sm font-medium">
@@ -121,7 +122,7 @@ export function BillingAccountSummary({ account, className = "", consumptionOnly
           )}
           {account.generations != null && (
             <div className="mt-1 text-xs text-muted-foreground">
-              {t("usage.generations")}: {account.generations.toLocaleString()}
+              {t("usage.generations")}: {formatNumber(account.generations)}
             </div>
           )}
         </div>
@@ -138,11 +139,11 @@ export function BillingAccountSummary({ account, className = "", consumptionOnly
               <span className="text-sm text-muted-foreground">{t("usage.dailyBlocked")}</span>
             ) : daily ? (
               <span className="text-sm text-muted-foreground">
-                {t("usage.dailyUsedOf", { used: daily.used.toLocaleString(), limit: daily.limit.toLocaleString() })}
+                {t("usage.dailyUsedOf", { used: formatNumber(daily.used), limit: formatNumber(daily.limit) })}
               </span>
             ) : account.dailyAllowance != null ? (
               <span className="text-sm text-muted-foreground">
-                {t("usage.dailyUsedOf", { used: "0", limit: account.dailyAllowance.toLocaleString() })}
+                {t("usage.dailyUsedOf", { used: "0", limit: formatNumber(account.dailyAllowance) })}
               </span>
             ) : (
               <span className="text-sm text-muted-foreground">{t("usage.dailyNone")}</span>
@@ -155,7 +156,7 @@ export function BillingAccountSummary({ account, className = "", consumptionOnly
                   style={{ width: `${Math.min(100, (daily.used / daily.limit) * 100)}%`, backgroundColor: ACCENT }} />
               </div>
               <div className="mt-2 text-xs text-muted-foreground">
-                {t("usage.dailyResets", { when: new Date(daily.resetsAt).toLocaleString() })}
+                {t("usage.dailyResets", { when: formatDateTime(daily.resetsAt) })}
               </div>
             </>
           )}

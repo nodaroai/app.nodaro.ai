@@ -2,6 +2,7 @@ import { Clock, Ruler, Ratio, Sliders } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { SceneNodeType, InputMode } from "@/types/nodes"
 import type { PromptContext } from "@/lib/prompt-context"
+import { useT } from "@/lib/i18n"
 import { PresentationTextInput } from "./shared"
 
 /** Only show prompt helper for text-type parameter nodes */
@@ -65,6 +66,7 @@ export function ParameterCard({
   minLines,
   promptHelper,
 }: ParameterCardProps) {
+  const t = useT()
   const field = getValueField(nodeType)
   const currentValue = isFullscreen
     ? (inputValues[nodeId]?.[field] as string ?? data[field] as string ?? "")
@@ -82,7 +84,7 @@ export function ParameterCard({
     <PresentationTextInput
       label={label}
       value={currentValue}
-      placeholder={`Enter ${label.toLowerCase()}...`}
+      placeholder={t("present.enterFieldPlaceholder", { label: label.toLowerCase() })}
       onChange={handleChange}
       readOnly={readOnly}
       mode={inputMode ?? "oneline"}

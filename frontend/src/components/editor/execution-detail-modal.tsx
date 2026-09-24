@@ -9,9 +9,13 @@ import { isCloud } from "@/lib/edition"
 import { useAuth } from "@/hooks/use-auth"
 import { formatCreditUnits, creditUnits } from "@/lib/credit-units"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import { type NodeState, formatNodeType } from "./execution-utils"
+import { formatDate } from "@/lib/i18n/format"
 
 const STATUS_COLORS: Record<string, string> = {
   completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
@@ -35,7 +39,7 @@ function getCostDisplayForModal(job: Job, showDollars: boolean): string {
   const estimated = job.credits
   if (actual == null && estimated == null) return "-"
   if (actual != null && estimated != null && actual !== estimated) {
-    return `${formatCreditUnits(actual)} (est. ${creditUnits(estimated)})`
+    return tx("exec.costWithEstimate", { actual: formatCreditUnits(actual), estimated: creditUnits(estimated) })
   }
   return formatCreditUnits(actual ?? estimated)
 }
@@ -104,6 +108,7 @@ function CriticOutputPreview({ outputData }: { outputData: Record<string, unknow
     ? (Object.entries(details.perMode).filter(([, v]) => v != null) as Array<[string, CriticPerModeEntry]>)
     : []
   const issues = details?.issues ?? []
+  const t = useT()
 
   return (
     <div className="rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D] p-4 space-y-4">
@@ -119,24 +124,24 @@ function CriticOutputPreview({ outputData }: { outputData: Record<string, unknow
               ? "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400"
               : "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400"
           }`}>
-            {approved ? "approved" : "rejected"}
+            {approved ? t("exec.criticApproved") : t("exec.criticRejected")}
           </span>
         )}
         {mode && (
           <span className="text-xs text-gray-500 dark:text-[#94A3B8]">
-            mode: {mode}
+            {t("exec.criticMode", { mode })}
           </span>
         )}
       </div>
       {feedback && (
         <div>
-          <div className="text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider mb-1">Feedback</div>
+          <div className="text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider mb-1">{t("node.feedback")}</div>
           <p className="text-sm text-gray-700 dark:text-[#E2E8F0] whitespace-pre-wrap break-words">{feedback}</p>
         </div>
       )}
       {perModeEntries.length > 0 && (
         <div>
-          <div className="text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider mb-1">Per-mode breakdown</div>
+          <div className="text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider mb-1">{t("exec.perModeBreakdown")}</div>
           <ul className="space-y-1">
             {perModeEntries.map(([m, r]) => (
               <li key={m} className="text-xs text-gray-700 dark:text-[#E2E8F0]">
@@ -150,7 +155,7 @@ function CriticOutputPreview({ outputData }: { outputData: Record<string, unknow
       )}
       {issues.length > 0 && (
         <div>
-          <div className="text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider mb-1">Issues</div>
+          <div className="text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider mb-1">{t("node.issues")}</div>
           <ul className="space-y-1">
             {issues.map((i, idx) => (
               <li key={idx} className="text-xs">
@@ -159,8 +164,8 @@ function CriticOutputPreview({ outputData }: { outputData: Record<string, unknow
                   i.severity === "warning" ? "text-orange-500 dark:text-orange-400" :
                   "text-gray-500 dark:text-[#94A3B8]"
                 }>[{i.severity}]</span>
-                <span className="ml-1 font-mono text-gray-700 dark:text-[#E2E8F0]">{i.category}:</span>
-                <span className="ml-1 text-gray-700 dark:text-[#E2E8F0]">{i.description}</span>
+                <span className="ms-1 font-mono text-gray-700 dark:text-[#E2E8F0]">{i.category}:</span>
+                <span className="ms-1 text-gray-700 dark:text-[#E2E8F0]">{i.description}</span>
               </li>
             ))}
           </ul>
@@ -193,11 +198,11 @@ function formatRelativeTime(dateString: string): string {
   const diffHours = Math.floor(diffMins / 60)
   const diffDays = Math.floor(diffHours / 24)
 
-  if (diffSecs < 60) return "just now"
-  if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? "s" : ""} ago`
-  if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`
-  if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`
-  return date.toLocaleDateString()
+  if (diffSecs < 60) return tx("time.justNow")
+  if (diffMins < 60) return diffMins === 1 ? tx("exec.minuteAgo") : tx("exec.minutesAgo", { n: diffMins })
+  if (diffHours < 24) return diffHours === 1 ? tx("exec.hourAgo") : tx("exec.hoursAgo", { n: diffHours })
+  if (diffDays < 7) return diffDays === 1 ? tx("exec.dayAgo") : tx("exec.daysAgo", { n: diffDays })
+  return formatDate(date)
 }
 
 function getValueType(value: unknown): string {
@@ -236,6 +241,8 @@ interface InputFieldProps {
 }
 
 function InputField({ name, value }: InputFieldProps) {
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const [expanded, setExpanded] = useState(false)
   const valueType = getValueType(value)
   const isUrl = typeof value === "string" && (value.startsWith("http://") || value.startsWith("https://"))
@@ -255,7 +262,7 @@ function InputField({ name, value }: InputFieldProps) {
                 <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
                   <CachedImage
                     src={url}
-                    alt={`Input ${idx + 1}`}
+                    alt={t("exec.inputAlt", { n: idx + 1 })}
                     className="w-10 h-10 rounded object-cover border border-gray-200 dark:border-[#2D2D2D] hover:border-[#ff0073] transition-colors"
                     thumbnail
                     thumbnailWidth={80}
@@ -270,7 +277,7 @@ function InputField({ name, value }: InputFieldProps) {
             <a href={value as string} target="_blank" rel="noopener noreferrer" className="inline-block mb-2">
               <CachedImage
                 src={value as string}
-                alt="Input"
+                alt={t("exec.input")}
                 className="w-10 h-10 rounded object-cover border border-gray-200 dark:border-[#2D2D2D] hover:border-[#ff0073] transition-colors"
                 thumbnail
                 thumbnailWidth={80}
@@ -287,9 +294,9 @@ function InputField({ name, value }: InputFieldProps) {
                   <button
                     type="button"
                     onClick={() => setExpanded(!expanded)}
-                    className="ml-2 text-[#ff0073] hover:underline"
+                    className="ms-2 text-[#ff0073] hover:underline"
                   >
-                    {expanded ? "Show less" : "Show more"}
+                    {expanded ? t("templates.readLess") : t("exec.showMore")}
                   </button>
                 </>
               ) : (
@@ -314,15 +321,15 @@ function InputField({ name, value }: InputFieldProps) {
             onClick={() => setExpanded(!expanded)}
             className="flex items-center gap-1 mt-2 text-xs text-gray-400 dark:text-[#64748B] hover:text-gray-600 dark:hover:text-[#94A3B8] transition-colors"
           >
-            {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-            More details
+            {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className={cn("w-3 h-3", isRtl && "rotate-180")} />}
+            {t("exec.moreDetails")}
           </button>
 
           {expanded && (
             <div className="mt-2 p-2 rounded bg-gray-100 dark:bg-[#0D0D0D] text-xs text-gray-500 dark:text-[#64748B] font-mono">
-              <div>type: {valueType}</div>
-              {Array.isArray(value) && <div>length: {value.length}</div>}
-              {isUrlList && <div>value type: file</div>}
+              <div>{t("exec.valueType", { type: valueType })}</div>
+              {Array.isArray(value) && <div>{t("exec.valueLength", { n: value.length })}</div>}
+              {isUrlList && <div>{t("exec.valueTypeFile")}</div>}
             </div>
           )}
         </div>
@@ -338,6 +345,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
   // the operator, so off-cloud it defaults on); `isAdmin` decides whether the
   // request is honoured — a non-admin on a shared instance never sees USD.
   const { isAdmin } = useAuth()
+  const t = useT()
   const dollars = showDollars && isAdmin
   const [inputTab, setInputTab] = useState<InputTabType>("form")
   const [outputTab, setOutputTab] = useState<OutputTabType>("preview")
@@ -404,7 +412,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                   {formatCreditUnits(state.creditsUsed)}
                 </div>
               )}
-              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]">
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("common.close")} className="text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]">
                 <X className="w-5 h-5" />
               </Button>
             </div>
@@ -417,20 +425,20 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
               <div className="space-y-6">
                 <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
                   <div className="px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Details</h3>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{t("common.details")}</h3>
                   </div>
                   <div className="p-4">
                     {state.nodeType && (
                       <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
                         <div className="flex items-start gap-3">
-                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Type</span>
+                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">{t("cost.col.type")}</span>
                           <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{state.nodeType}</span>
                         </div>
                       </div>
                     )}
                     <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
                       <div className="flex items-start gap-3">
-                        <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Status</span>
+                        <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">{t("exec.colStatus")}</span>
                         <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[state.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
                           {state.status}
                         </span>
@@ -439,7 +447,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                     {state.startedAt && (
                       <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
                         <div className="flex items-start gap-3">
-                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Started</span>
+                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">{t("exec.started")}</span>
                           <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{formatRelativeTime(state.startedAt)}</span>
                         </div>
                       </div>
@@ -447,7 +455,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                     {state.completedAt && (
                       <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
                         <div className="flex items-start gap-3">
-                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Completed</span>
+                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">{t("exec.statusCompleted")}</span>
                           <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{formatRelativeTime(state.completedAt)}</span>
                         </div>
                       </div>
@@ -455,7 +463,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                     {state.startedAt && state.completedAt && (
                       <div className="border-b border-gray-200 dark:border-[#2D2D2D] py-3">
                         <div className="flex items-start gap-3">
-                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Duration</span>
+                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">{t("exec.colDuration")}</span>
                           <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">{formatDuration(state.startedAt, state.completedAt)}</span>
                         </div>
                       </div>
@@ -463,7 +471,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                     {state.creditsUsed != null && state.creditsUsed > 0 && (
                       <div className="py-3">
                         <div className="flex items-start gap-3">
-                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Credits</span>
+                          <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">{t("exec.colCredits")}</span>
                           <span className="text-sm text-[#ff0073] font-mono">{formatCreditUnits(state.creditsUsed)}</span>
                         </div>
                       </div>
@@ -474,7 +482,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                 {state.inputs && Object.keys(state.inputs).length > 0 && (
                   <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Input</h3>
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{t("exec.input")}</h3>
                       <button
                         type="button"
                         onClick={() => handleCopyJson(JSON.stringify(state.inputs, null, 2))}
@@ -499,7 +507,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
               {/* Right Column - Output */}
               <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Output</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{t("node.output")}</h3>
                   <div role="tablist" className="flex items-center gap-1">
                     <button
                       type="button"
@@ -512,7 +520,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                           : "text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white"
                       }`}
                     >
-                      Preview
+                      {t("common.preview")}
                     </button>
                     <button
                       type="button"
@@ -534,22 +542,22 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                     <div>
                       {state.error ? (
                         <div className="rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 p-4">
-                          <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-1">Error</p>
+                          <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-1">{t("common.error")}</p>
                           <p className="text-sm text-red-500 dark:text-red-300/70">{state.error}</p>
                         </div>
                       ) : state.status === "running" ? (
                         <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
                           <Loader2 className="w-8 h-8 animate-spin text-[#ff0073] mb-3" />
-                          <p className="text-sm text-gray-500 dark:text-[#94A3B8]">Processing...</p>
+                          <p className="text-sm text-gray-500 dark:text-[#94A3B8]">{t("credits.processing")}</p>
                         </div>
                       ) : state.status === "pending" ? (
                         <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
                           <Clock className="w-8 h-8 text-blue-400 mb-3" />
-                          <p className="text-sm text-gray-500 dark:text-[#94A3B8]">Waiting to start...</p>
+                          <p className="text-sm text-gray-500 dark:text-[#94A3B8]">{t("exec.waitingToStart")}</p>
                         </div>
                       ) : state.status === "cancelled" ? (
                         <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
-                          <p className="text-sm text-gray-400 dark:text-[#64748B]">This node was cancelled.</p>
+                          <p className="text-sm text-gray-400 dark:text-[#64748B]">{t("exec.nodeCancelled")}</p>
                         </div>
                       ) : stateOutputUrl && isVideoUrl(stateOutputUrl) ? (
                         <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
@@ -557,7 +565,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                         </div>
                       ) : stateOutputUrl && isImageUrl(stateOutputUrl) ? (
                         <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
-                          <CachedImage src={stateOutputUrl} alt="Output" className="w-full max-h-[400px] object-contain" />
+                          <CachedImage src={stateOutputUrl} alt={t("node.output")} className="w-full max-h-[400px] object-contain" />
                         </div>
                       ) : stateOutputUrl && isAudioUrl(stateOutputUrl) ? (
                         <div className="rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D] p-6">
@@ -565,11 +573,11 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                         </div>
                       ) : stateOutputText ? (
                         <div className="rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D] p-4">
-                          <pre className="text-sm text-gray-700 dark:text-[#E2E8F0] whitespace-pre-wrap break-words">{stateOutputText}</pre>
+                          <pre dir="auto" className="text-sm text-gray-700 dark:text-[#E2E8F0] whitespace-pre-wrap break-words">{stateOutputText}</pre>
                         </div>
                       ) : (
                         <div className="flex items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
-                          <p className="text-sm text-gray-400 dark:text-[#64748B]">No output available</p>
+                          <p className="text-sm text-gray-400 dark:text-[#64748B]">{t("exec.noOutput")}</p>
                         </div>
                       )}
                     </div>
@@ -578,7 +586,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                       <button
                         type="button"
                         onClick={() => handleCopyJson(JSON.stringify(state, null, 2))}
-                        className="absolute top-2 right-2 p-1.5 rounded bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] transition-colors"
+                        className="absolute top-2 end-2 p-1.5 rounded bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] transition-colors"
                       >
                         {copiedJson ? (
                           <Check className="w-4 h-4 text-green-500 dark:text-green-400" />
@@ -635,7 +643,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
       onDeleted?.(job.id)
       onClose()
     } catch (error) {
-      toast.error("Failed to delete job")
+      toast.error(tx("exec.deleteJobFailed"))
     } finally {
       setIsDeleting(false)
     }
@@ -656,7 +664,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
           <div className="flex items-center gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Job</h2>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t("exec.job")}</h2>
                 <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[job.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
                   {job.status}
                 </span>
@@ -707,7 +715,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
               variant="ghost"
               size="icon"
               onClick={onClose}
-              aria-label="Close"
+              aria-label={t("common.close")}
               className="text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]"
             >
               <X className="w-5 h-5" />
@@ -721,7 +729,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
             {/* Left Column - Input */}
             <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Input</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{t("exec.input")}</h3>
                 <div role="tablist" className="flex items-center gap-1">
                   <button
                     type="button"
@@ -734,7 +742,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                         : "text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white"
                     }`}
                   >
-                    Form
+                    {t("exec.tabForm")}
                   </button>
                   <button
                     type="button"
@@ -760,7 +768,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                         <InputField key={key} name={key} value={value} />
                       ))
                     ) : (
-                      <p className="text-sm text-gray-400 dark:text-[#64748B]">No input parameters</p>
+                      <p className="text-sm text-gray-400 dark:text-[#64748B]">{t("exec.noInputParams")}</p>
                     )}
                   </div>
                 ) : (
@@ -768,7 +776,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                     <button
                       type="button"
                       onClick={() => handleCopyJson(JSON.stringify(job.input_data, null, 2))}
-                      className="absolute top-2 right-2 p-1.5 rounded bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] transition-colors"
+                      className="absolute top-2 end-2 p-1.5 rounded bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] transition-colors"
                     >
                       {copiedJson ? (
                         <Check className="w-4 h-4 text-green-500 dark:text-green-400" />
@@ -787,7 +795,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
             {/* Right Column - Output */}
             <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Output</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{t("node.output")}</h3>
                 <div role="tablist" className="flex items-center gap-1">
                   <button
                     type="button"
@@ -800,7 +808,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                         : "text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white"
                     }`}
                   >
-                    Preview
+                    {t("common.preview")}
                   </button>
                   <button
                     type="button"
@@ -837,7 +845,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                         ) : (
                           <CachedImage
                             src={outputUrl}
-                            alt="Output"
+                            alt={t("node.output")}
                             className="w-full max-h-[400px] object-contain cursor-pointer"
                             onClick={() => setLightboxOpen(true)}
                           />
@@ -846,14 +854,14 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                     ) : job.status === "processing" || job.status === "pending" || job.status === "queued" ? (
                       <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
                         <Loader2 className="w-8 h-8 animate-spin text-[#ff0073] mb-3" />
-                        <p className="text-sm text-gray-500 dark:text-[#94A3B8]">Processing...</p>
+                        <p className="text-sm text-gray-500 dark:text-[#94A3B8]">{t("credits.processing")}</p>
                         {job.progress > 0 && (
-                          <p className="text-xs text-gray-400 dark:text-[#64748B] mt-1">{job.progress}% complete</p>
+                          <p className="text-xs text-gray-400 dark:text-[#64748B] mt-1">{t("exec.percentComplete", { n: job.progress })}</p>
                         )}
                       </div>
                     ) : job.status === "failed" ? (
                       <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 p-4">
-                        <p className="text-sm text-red-600 dark:text-red-400 mb-2 font-medium">Job failed</p>
+                        <p className="text-sm text-red-600 dark:text-red-400 mb-2 font-medium">{t("run.jobFailed")}</p>
                         {job.error_message && (
                           <p className="text-xs text-red-500 dark:text-red-300/70 text-center">{job.error_message}</p>
                         )}
@@ -862,7 +870,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                       <CriticOutputPreview outputData={job.output_data!} />
                     ) : (
                       <div className="flex items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
-                        <p className="text-sm text-gray-400 dark:text-[#64748B]">No output available</p>
+                        <p className="text-sm text-gray-400 dark:text-[#64748B]">{t("exec.noOutput")}</p>
                       </div>
                     )}
                   </div>
@@ -871,7 +879,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                     <button
                       type="button"
                       onClick={() => handleCopyJson(JSON.stringify(job, null, 2))}
-                      className="absolute top-2 right-2 p-1.5 rounded bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] transition-colors"
+                      className="absolute top-2 end-2 p-1.5 rounded bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] transition-colors"
                     >
                       {copiedJson ? (
                         <Check className="w-4 h-4 text-green-500 dark:text-green-400" />
@@ -893,7 +901,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#1E1E1E]">
           <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-[#64748B]">
             {job.status === "completed" && job.started_at && job.completed_at && (
-              <span>Generated in {formatDuration(job.started_at, job.completed_at)}</span>
+              <span>{t("exec.generatedIn", { duration: formatDuration(job.started_at, job.completed_at) })}</span>
             )}
           </div>
 
@@ -906,11 +914,11 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
               className="border-gray-200 dark:border-[#2D2D2D] text-gray-600 dark:text-[#94A3B8] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-200 dark:hover:border-red-500/30"
             >
               {isDeleting ? (
-                <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                <Loader2 className="w-4 h-4 me-1.5 animate-spin" />
               ) : (
-                <Trash2 className="w-4 h-4 mr-1.5" />
+                <Trash2 className="w-4 h-4 me-1.5" />
               )}
-              Delete
+              {t("common.delete")}
             </Button>
 
             {outputUrl && (
@@ -920,8 +928,8 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                 onClick={handleDownload}
                 className="border-gray-200 dark:border-[#2D2D2D] text-gray-600 dark:text-[#94A3B8] hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]"
               >
-                <Download className="w-4 h-4 mr-1.5" />
-                Download
+                <Download className="w-4 h-4 me-1.5" />
+                {t("common.download")}
               </Button>
             )}
 
@@ -930,8 +938,8 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
               size="sm"
               className="border-gray-200 dark:border-[#2D2D2D] text-gray-600 dark:text-[#94A3B8] hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]"
             >
-              <Share2 className="w-4 h-4 mr-1.5" />
-              Share
+              <Share2 className="w-4 h-4 me-1.5" />
+              {t("common.share")}
             </Button>
 
             <Button
@@ -939,8 +947,8 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
               size="sm"
               className="border-gray-200 dark:border-[#2D2D2D] text-gray-600 dark:text-[#94A3B8] hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]"
             >
-              <Sliders className="w-4 h-4 mr-1.5" />
-              Tweak it
+              <Sliders className="w-4 h-4 me-1.5" />
+              {t("exec.tweakIt")}
             </Button>
           </div>
         </div>
@@ -956,8 +964,8 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
             variant="ghost"
             size="icon"
             onClick={() => setLightboxOpen(false)}
-            aria-label="Close fullscreen"
-            className="absolute top-4 right-4 text-white/70 hover:text-white hover:bg-white/10 z-10"
+            aria-label={t("exec.closeFullscreen")}
+            className="absolute top-4 end-4 text-white/70 hover:text-white hover:bg-white/10 z-10"
           >
             <X className="w-6 h-6" />
           </Button>
@@ -972,7 +980,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
           ) : (
             <img
               src={outputUrl}
-              alt="Output fullscreen"
+              alt={t("exec.outputFullscreenAlt")}
               className="max-w-[95vw] max-h-[95vh] object-contain"
               onClick={(e) => e.stopPropagation()}
             />

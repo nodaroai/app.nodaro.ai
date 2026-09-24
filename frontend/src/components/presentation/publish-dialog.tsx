@@ -30,19 +30,9 @@ import { APP_CATEGORIES, OUTPUT_TYPES, categoryLabel, outputTypeLabel } from "@/
 import { INPUT_FIELD_MAP, OUTPUT_FIELD_MAP } from "@nodaro/shared"
 import type { ExposedSetting, PresentationItem } from "@nodaro/shared"
 import { deriveSubWorkflowHandles } from "./derive-sub-workflow-handles"
-import { useT, type MessageKey } from "@/lib/i18n"
-
-// `frontend/src/components/presentation/view-mode-selector.tsx` is outside
-// this task's file list, so reuse a local mode→key lookup rather than adding
-// a `labelKey` field to its `VIEW_MODES` export.
-const VIEW_MODE_LABEL_KEY: Record<string, MessageKey> = {
-  horizontal: "viewMode.horizontal",
-  vertical: "viewMode.vertical",
-  gallery: "viewMode.gallery",
-  fullscreen: "viewMode.fullscreen",
-  compare: "viewMode.compare",
-  chat: "viewMode.chat",
-}
+import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 
 /** Extract unique node IDs from a PresentationItem list (recursive for groups). */
 function extractItemNodeIds(items: readonly PresentationItem[]): Set<string> {
@@ -65,6 +55,7 @@ interface PublishDialogProps {
 
 export function PublishDialog({ workflowId, presentationSettings, updatePresentationSettings, nodes }: PublishDialogProps) {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const [open, setOpen] = useState(false)
   const [publishName, setPublishName] = useState("")
   const [publishSlug, setPublishSlug] = useState("")
@@ -499,7 +490,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
-          <Rocket className="h-4 w-4 mr-1" />
+          <Rocket className="h-4 w-4 me-1" />
           {t("pubDialog.trigger")}
         </Button>
       </DialogTrigger>
@@ -537,7 +528,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                   window.open(`/app/${publishedSlug}`, "_blank")
                 }}
               >
-                <ExternalLink className="h-4 w-4 mr-1" />
+                <ExternalLink className="h-4 w-4 me-1" />
                 {publishType === "component" ? t("pubDialog.openComponent") : t("pubDialog.openMiniApp")}
               </Button>
             </>
@@ -576,7 +567,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
               <div>
                 <label className="text-sm font-medium mb-1 block">{t("pubDialog.urlSlugLabel")}</label>
                 <div className="flex items-center gap-1">
-                  <span className="text-xs text-muted-foreground shrink-0">/app/</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{t("apps.appUrlPrefix")}</span>
                   <Input
                     value={publishSlug}
                     onChange={(e) => setPublishSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
@@ -720,7 +711,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                   {showMarketplace ? (
                     <ChevronDown className="h-4 w-4 text-muted-foreground" />
                   ) : (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <ChevronRight className={cn("h-4 w-4 text-muted-foreground", isRtl && "rotate-180")} />
                   )}
                 </button>
 
@@ -855,7 +846,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                             key={mode}
                             type="button"
                             onClick={() => handleToggleMode(mode)}
-                            title={VIEW_MODE_LABEL_KEY[mode] ? t(VIEW_MODE_LABEL_KEY[mode]) : label}
+                            title={t(label)}
                             className={`flex items-center justify-center w-9 h-8 rounded-md border transition-colors ${
                               isActive
                                 ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
@@ -878,7 +869,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                       </SelectTrigger>
                       <SelectContent>
                         {VIEW_MODES.filter((m) => allowedSet.has(m.mode)).map(({ mode, label }) => (
-                          <SelectItem key={mode} value={mode}>{VIEW_MODE_LABEL_KEY[mode] ? t(VIEW_MODE_LABEL_KEY[mode]) : label}</SelectItem>
+                          <SelectItem key={mode} value={mode}>{t(label)}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -954,9 +945,9 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                 style={{ backgroundColor: "#ff0073" }}
               >
                 {publishing ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="h-4 w-4 me-2 animate-spin" />
                 ) : (
-                  <Rocket className="h-4 w-4 mr-2" />
+                  <Rocket className="h-4 w-4 me-2" />
                 )}
                 {publishType === "component" ? t("pubDialog.publishComponentTitle") : t("pubDialog.publishAppSubmit")}
               </Button>

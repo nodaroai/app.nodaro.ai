@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { ChevronDown, ChevronUp, Eye, EyeOff, Shapes } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 interface MGElement {
   id: string
@@ -16,10 +17,10 @@ interface MotionGraphicsPreviewProps {
   isGenerating?: boolean
 }
 
-const ELEMENT_LABELS: Record<string, string> = {
-  shape: "Shape",
-  text: "Text",
-  "svg-path": "SVG Path",
+const ELEMENT_LABELS: Record<string, MessageKey> = {
+  shape: "overlayKinds.shape",
+  text: "overlayKinds.text",
+  "svg-path": "preview.elemSvgPath",
 }
 
 function ElementEditor({
@@ -29,9 +30,11 @@ function ElementEditor({
   element: MGElement
   onChange: (updated: MGElement) => void
 }) {
+  const t = useT()
   const [expanded, setExpanded] = useState(false)
 
-  const label = ELEMENT_LABELS[element.type] ?? element.type
+  const labelKey = ELEMENT_LABELS[element.type]
+  const label = labelKey ? t(labelKey) : element.type
   const displayName = element.id || label
 
   return (
@@ -58,18 +61,18 @@ function ElementEditor({
           {element.type === "shape" && (
             <>
               <div className="grid grid-cols-2 gap-2">
-                <SliderField label="Width" value={element.width as number ?? 100} min={1} max={1920} step={1} onChange={(v) => onChange({ ...element, width: v })} />
-                <SliderField label="Height" value={element.height as number ?? 100} min={1} max={1080} step={1} onChange={(v) => onChange({ ...element, height: v })} />
+                <SliderField label={t("proccfg.overlay.width")} value={element.width as number ?? 100} min={1} max={1920} step={1} onChange={(v) => onChange({ ...element, width: v })} />
+                <SliderField label={t("preview.height")} value={element.height as number ?? 100} min={1} max={1080} step={1} onChange={(v) => onChange({ ...element, height: v })} />
               </div>
               {element.fill && (
-                <ColorField label="Fill" value={element.fill as string} onChange={(v) => onChange({ ...element, fill: v })} />
+                <ColorField label={t("overlayKinds.fill")} value={element.fill as string} onChange={(v) => onChange({ ...element, fill: v })} />
               )}
             </>
           )}
           {element.type === "text" && (
             <>
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] text-muted-foreground">Text</span>
+                <span className="text-[10px] text-muted-foreground">{t("overlayKinds.text")}</span>
                 <input
                   type="text"
                   value={element.text as string ?? ""}
@@ -77,26 +80,26 @@ function ElementEditor({
                   className="h-7 px-2 text-xs rounded border border-[var(--border-primary)] bg-transparent"
                 />
               </div>
-              <SliderField label="Font Size" value={element.fontSize as number ?? 42} min={8} max={200} step={1} onChange={(v) => onChange({ ...element, fontSize: v })} />
-              <ColorField label="Color" value={element.color as string ?? "#ffffff"} onChange={(v) => onChange({ ...element, color: v })} />
+              <SliderField label={t("proccfg.fontSize")} value={element.fontSize as number ?? 42} min={8} max={200} step={1} onChange={(v) => onChange({ ...element, fontSize: v })} />
+              <ColorField label={t("proccfg.color")} value={element.color as string ?? "#ffffff"} onChange={(v) => onChange({ ...element, color: v })} />
             </>
           )}
           {element.type === "svg-path" && (
             <>
-              <ColorField label="Stroke" value={element.stroke as string ?? "#ffffff"} onChange={(v) => onChange({ ...element, stroke: v })} />
-              <SliderField label="Stroke Width" value={element.strokeWidth as number ?? 2} min={0.5} max={10} step={0.5} onChange={(v) => onChange({ ...element, strokeWidth: v })} />
+              <ColorField label={t("preview.stroke")} value={element.stroke as string ?? "#ffffff"} onChange={(v) => onChange({ ...element, stroke: v })} />
+              <SliderField label={t("preview.strokeWidth")} value={element.strokeWidth as number ?? 2} min={0.5} max={10} step={0.5} onChange={(v) => onChange({ ...element, strokeWidth: v })} />
             </>
           )}
           {/* Animation timing */}
           <div className="mt-1 pt-1 border-t border-[var(--border-primary)]">
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Animation</span>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("preview.animation")}</span>
             <div className="grid grid-cols-2 gap-2 mt-1">
               <div className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-muted-foreground">Type</span>
+                <span className="text-[10px] text-muted-foreground">{t("cost.col.type")}</span>
                 <span className="text-[10px] font-medium">{(element.animation as Record<string, unknown>)?.type as string ?? "none"}</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-muted-foreground">Start</span>
+                <span className="text-[10px] text-muted-foreground">{t("paramcfg.timingStart")}</span>
                 <span className="text-[10px] font-medium">{(element.animation as Record<string, unknown>)?.startFrame as number ?? 0}f</span>
               </div>
             </div>
@@ -159,7 +162,7 @@ function ColorField({
         onChange={(e) => onChange(e.target.value)}
         className="h-6 w-6 rounded border border-[var(--border-primary)] cursor-pointer"
       />
-      <input
+      <input dir="ltr"
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -176,6 +179,7 @@ export function MotionGraphicsPreview({
   onRegenerate,
   isGenerating,
 }: MotionGraphicsPreviewProps) {
+  const t = useT()
   const [allElements, setAllElements] = useState<MGElement[]>(() => (motionPlan.elements as MGElement[]) ?? [])
   const [disabledElements, setDisabledElements] = useState<Set<number>>(new Set())
   const lastPlanRef = useRef<unknown>(motionPlan)
@@ -211,7 +215,7 @@ export function MotionGraphicsPreview({
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-[var(--text-primary)]">
-          Elements ({allElements.length})
+          {t("preview.elementsCount", { n: allElements.length })}
         </span>
         {onRegenerate && (
           <Button
@@ -221,7 +225,7 @@ export function MotionGraphicsPreview({
             onClick={onRegenerate}
             disabled={isGenerating}
           >
-            Regenerate
+            {t("common.regenerate")}
           </Button>
         )}
       </div>
@@ -233,7 +237,7 @@ export function MotionGraphicsPreview({
               type="button"
               className="mt-2 shrink-0"
               onClick={() => toggleElement(i)}
-              title={disabledElements.has(i) ? "Enable element" : "Disable element"}
+              title={disabledElements.has(i) ? t("preview.enableElement") : t("preview.disableElement")}
             >
               {disabledElements.has(i) ? (
                 <EyeOff className="w-3 h-3 text-muted-foreground/50" />
@@ -253,10 +257,12 @@ export function MotionGraphicsPreview({
 
       {motionPlan.exitAnimation != null && (
         <div className="mt-1 px-2 py-1.5 rounded border border-[var(--border-primary)] text-xs">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Exit Animation</span>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("preview.exitAnimation")}</span>
           <div className="text-[10px] mt-0.5">
-            {String((motionPlan.exitAnimation as Record<string, unknown>).type ?? "none")} at frame{" "}
-            {String((motionPlan.exitAnimation as Record<string, unknown>).startFrame ?? 0)}
+            {t("preview.exitAtFrame", {
+              type: String((motionPlan.exitAnimation as Record<string, unknown>).type ?? "none"),
+              frame: String((motionPlan.exitAnimation as Record<string, unknown>).startFrame ?? 0),
+            })}
           </div>
         </div>
       )}

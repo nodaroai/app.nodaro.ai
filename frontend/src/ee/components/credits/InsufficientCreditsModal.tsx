@@ -15,6 +15,7 @@ import { creditUnits } from "@/lib/credit-units"
 import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
 import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { useT } from "@/lib/i18n"
+import { formatNumber } from "@/lib/i18n/format"
 
 interface InsufficientCreditsModalProps {
   open: boolean
@@ -71,20 +72,20 @@ export function InsufficientCreditsModal({
           <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">{t("credits.currentBalanceLabel")}</p>
-              <p className="text-lg font-semibold font-mono">{creditUnits(available).toLocaleString()}</p>
+              <p className="text-lg font-semibold font-mono">{formatNumber(creditUnits(available))}</p>
             </div>
             {/* Logical end, not `right`: this pair mirrors under RTL and the
                 deployment this ships to is Hebrew-default. */}
             <div className="space-y-1 text-end">
               <p className="text-sm text-muted-foreground">{t("credits.requiredLabel")}</p>
-              <p className="text-lg font-semibold font-mono text-destructive">{creditUnits(required).toLocaleString()}</p>
+              <p className="text-lg font-semibold font-mono text-destructive">{formatNumber(creditUnits(required))}</p>
             </div>
           </div>
 
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">{t("credits.shortByLabel")}</span>
             <span className="font-medium font-mono">
-              {t("credits.shortByAmount", { n: creditUnits(shortage).toLocaleString() })}
+              {t("credits.shortByAmount", { n: formatNumber(creditUnits(shortage)) })}
             </span>
           </div>
 

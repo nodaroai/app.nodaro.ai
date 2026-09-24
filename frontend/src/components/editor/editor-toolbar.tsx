@@ -465,7 +465,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               >
                 <FileText className="h-4 w-4" />
                 {Object.keys(flowTemplates).length > 0 && (
-                  <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-[#ff0073] border-2 border-white dark:border-card" />
+                  <span className="absolute -top-1 -end-1 h-2.5 w-2.5 rounded-full bg-[#ff0073] border-2 border-white dark:border-card" />
                 )}
               </Button>
             </TooltipTrigger>

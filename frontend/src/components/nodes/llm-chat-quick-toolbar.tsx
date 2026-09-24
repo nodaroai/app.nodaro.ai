@@ -144,7 +144,7 @@ export function LlmChatQuickToolbar({
   // ReasoningEffortSelect, the config-panel counterpart) so wording can't drift.
   const effortLevels = availableReasoningEfforts(currentModel, data.advancedMode)
   const effortValue = data.reasoningEffort ?? AUTO_EFFORT
-  const effortLabel = data.reasoningEffort ? EFFORT_LABELS()[data.reasoningEffort] : "Auto"
+  const effortLabel = data.reasoningEffort ? EFFORT_LABELS()[data.reasoningEffort] : t("common.auto")
 
   const currentTemplateId = data.templateId ?? "custom"
   // Memoized to match the `modelEntry` precedent above — this toolbar is mounted
@@ -228,9 +228,9 @@ export function LlmChatQuickToolbar({
       {userTextTemplates.length > 0 && (
         <SelectGroup>
           <SelectLabel>{t("preset.myPresets")}</SelectLabel>
-          {userTextTemplates.map((t) => (
-            <SelectItem key={t.id} value={t.id} className="text-xs">
-              {t.label || "Untitled"}
+          {userTextTemplates.map((tpl) => (
+            <SelectItem key={tpl.id} value={tpl.id} className="text-xs">
+              {tpl.label || t("common.untitled")}
             </SelectItem>
           ))}
         </SelectGroup>
@@ -258,7 +258,7 @@ export function LlmChatQuickToolbar({
             <button
               type="button"
               className="flex items-center gap-1 h-6 px-2 text-[10px] rounded-md whitespace-nowrap text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10"
-              title="Settings"
+              title={t("common.settings")}
             >
               <Settings2 className="w-3 h-3 opacity-70" />
               <span className="font-medium">
@@ -268,7 +268,7 @@ export function LlmChatQuickToolbar({
             </button>
           </PopoverTrigger>
           <PopoverContent side="bottom" align="start" sideOffset={8} className="w-[240px] p-2 space-y-2 node-menu-surface" onClick={(e) => e.stopPropagation()}>
-            <ToolbarSetting label="Model" icon={<Sparkles className="w-3 h-3" />}>
+            <ToolbarSetting label={t("node.model")} icon={<Sparkles className="w-3 h-3" />}>
               <Select disabled={isRunning} value={currentModel} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
@@ -277,7 +277,7 @@ export function LlmChatQuickToolbar({
               </Select>
             </ToolbarSetting>
             {effortLevels.length > 0 && (
-              <ToolbarSetting label="Effort" icon={<Gauge className="w-3 h-3" />}>
+              <ToolbarSetting label={t("node.effort")} icon={<Gauge className="w-3 h-3" />}>
                 <Select disabled={isRunning} value={effortValue} onValueChange={handleEffortChange} onOpenChange={handleOpenChange}>
                   <SelectTrigger className={ghostPopoverTriggerClass}>
                     <SelectValue />
@@ -286,7 +286,7 @@ export function LlmChatQuickToolbar({
                 </Select>
               </ToolbarSetting>
             )}
-            <ToolbarSetting label="Preset" icon={<LayoutTemplate className="w-3 h-3" />}>
+            <ToolbarSetting label={t("txtcfg.preset")} icon={<LayoutTemplate className="w-3 h-3" />}>
               <Select disabled={isRunning} value={currentTemplateId} onValueChange={handleTemplateChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
@@ -294,7 +294,7 @@ export function LlmChatQuickToolbar({
                 {templateItems}
               </Select>
             </ToolbarSetting>
-            <ToolbarSetting label="Runs" icon={<Repeat2 className="w-3 h-3" />}>
+            <ToolbarSetting label={t("node.runs")} icon={<Repeat2 className="w-3 h-3" />}>
               <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />

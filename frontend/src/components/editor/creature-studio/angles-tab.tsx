@@ -1,5 +1,6 @@
 import { CreatureAssetTab } from "./creature-asset-tab"
 import type { CreatureStudioState } from "./use-creature-studio"
+import { useT } from "@/lib/i18n"
 
 /**
  * Angles tab — thin wrapper over `CreatureAssetTab` passing the `angles`
@@ -26,12 +27,13 @@ interface AnglesTabProps {
 }
 
 export function AnglesTab({ studio }: AnglesTabProps) {
+  const t = useT()
   return (
     <CreatureAssetTab
       studio={studio}
       tabKind="angles"
       presets={ANGLES_PRESETS}
-      iconLabel="📐 Angles"
+      iconLabel={t("creature.anglesTabTitle")}
     />
   )
 }

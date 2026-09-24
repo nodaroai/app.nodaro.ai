@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, type MessageKey } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo, useRef } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImagePlay, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Film, RotateCcw } from "lucide-react"
@@ -44,6 +44,15 @@ const MOTION_PREVIEW_ANIMATION: Record<StillToVideoData["motion"], string | unde
   "pan-left": "stv-pan-left 9s ease-in-out infinite alternate",
   "pan-right": "stv-pan-right 9s ease-in-out infinite alternate",
   "ken-burns": "stv-ken-burns 9s ease-in-out infinite",
+}
+
+/** Summary-line names — the same keys the config panel's MOTION_OPTIONS read.
+ *  "Ken Burns" is a proper noun in every locale; "none" has its own phrase. */
+const MOTION_LABEL_KEYS: Readonly<Record<Exclude<StillToVideoData["motion"], "none" | "ken-burns">, MessageKey>> = {
+  "zoom-in": "cfgext.slideZoomIn",
+  "zoom-out": "cfgext.slideZoomOut",
+  "pan-left": "cfgext.s2vPanLeft",
+  "pan-right": "cfgext.s2vPanRight",
 }
 
 /** Deterministic pseudo-waveform heights (30–90%), stable per audio URL —
@@ -155,8 +164,8 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   const motion = nodeData.motion ?? "none"
   const configuredAspect = ASPECT_TO_NUMBER[nodeData.aspectRatio ?? "16:9"] ?? 16 / 9
-  const motionLabel = motion === "none" ? "no motion" : `${motion} · ${nodeData.intensity ?? 3}`
-  const summaryLabel = `${nodeData.resolution ?? "1080p"} · ${fps}fps · ${nodeData.fit ?? "cover"}`
+  const motionLabel = motion === "none" ? t("node.noMotion") : `${motion === "ken-burns" ? "Ken Burns" : t(MOTION_LABEL_KEYS[motion])} · ${nodeData.intensity ?? 3}`
+  const summaryLabel = `${nodeData.resolution ?? "1080p"} · ${fps}fps · ${t(nodeData.fit === "contain" ? "cfgext.s2vFitContain" : "cfgext.s2vFitCover")}`
   const previewAnimation = MOTION_PREVIEW_ANIMATION[motion]
 
   const hasResult = status !== "running" && !!activeUrl && !videoError
@@ -214,15 +223,15 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 )}
                 <div className="absolute inset-x-0 bottom-0 px-2.5 py-2 flex flex-col gap-1 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
                   <div className="flex items-baseline justify-between">
-                    <span className="text-[11px] text-white">{isFinishing ? "Finishing" : "Encoding"}</span>
+                    <span className="text-[11px] text-white">{isFinishing ? t("node.finishing") : t("node.encoding")}</span>
                     <span className="text-[10px] font-mono" style={{ color: HANDLE_COLORS.video }}>{progressPct ?? 0}%</span>
                   </div>
                   <div className="h-1 rounded-full bg-white/20 overflow-hidden">
                     <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${progressPct ?? 0}%`, background: HANDLE_COLORS.video }} />
                   </div>
                   <div className="flex justify-between text-[9px] font-mono text-white/60">
-                    <span>{encodedFrames !== undefined && totalFrames ? `frame ${encodedFrames} / ${totalFrames}` : isFinishing ? "uploading" : " "}</span>
-                    <span>{etaSeconds !== undefined && !isFinishing ? `~${etaSeconds}s left` : " "}</span>
+                    <span>{encodedFrames !== undefined && totalFrames ? t("node.frameOfTotal", { n: encodedFrames, total: totalFrames }) : isFinishing ? t("node.uploadingStatus") : " "}</span>
+                    <span>{etaSeconds !== undefined && !isFinishing ? t("node.secondsLeft", { n: etaSeconds }) : " "}</span>
                   </div>
                 </div>
               </div>
@@ -287,9 +296,9 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
                           <span className="text-[10px] font-mono text-white">{audioDuration ? formatClipLength(audioDuration) : "…"}</span>
                         </>
                       ) : hasAudioEdge ? (
-                        <span className="text-[9px] font-mono text-white/70">audio sets the length</span>
+                        <span className="text-[9px] font-mono text-white/70">{t("node.audioSetsTheLength")}</span>
                       ) : (
-                        <span className="text-[9px] text-amber-300">Wire an audio track — it sets the length</span>
+                        <span className="text-[9px] text-amber-300">{t("node.wireAudioTrackSetsLength")}</span>
                       )}
                     </div>
                   </div>
@@ -299,16 +308,16 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   <div className="flex items-center gap-2">
                     <div className="flex flex-col items-center gap-1">
                       <div className="w-8 h-8 rounded-lg border border-dashed flex items-center justify-center" style={{ borderColor: HANDLE_COLORS.image }}><ImageIcon className="w-3.5 h-3.5" style={{ color: HANDLE_COLORS.image }} /></div>
-                      <span className="text-[8px] text-muted-foreground/60">image</span>
+                      <span className="text-[8px] text-muted-foreground/60">{t("node.captionImage")}</span>
                     </div>
                     <span className="text-xs text-muted-foreground/40 -mt-3">+</span>
                     <div className="flex flex-col items-center gap-1">
                       <div className="w-8 h-8 rounded-lg border border-dashed flex items-center justify-center" style={{ borderColor: HANDLE_COLORS.audio }}><Volume2 className="w-3.5 h-3.5" style={{ color: HANDLE_COLORS.audio }} /></div>
-                      <span className="text-[8px] text-muted-foreground/60">audio</span>
+                      <span className="text-[8px] text-muted-foreground/60">{t("node.captionAudio")}</span>
                     </div>
                   </div>
                   <span className="text-[10px] text-muted-foreground/70">{t("node.wireAnImageAndAn")}</span>
-                  <span className="text-[9px] font-mono text-muted-foreground/40">audio sets the length</span>
+                  <span className="text-[9px] font-mono text-muted-foreground/40">{t("node.audioSetsTheLength")}</span>
                 </div>
               )
             )}

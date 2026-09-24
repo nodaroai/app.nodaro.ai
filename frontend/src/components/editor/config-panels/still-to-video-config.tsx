@@ -218,7 +218,7 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
       <div className={cn("flex flex-col gap-2", fit !== "contain" && "opacity-40 pointer-events-none")}>
         <div className="flex items-center gap-2">
           <Label htmlFor="still-pad-color">{t("proccfg.padColor")}</Label>
-          <span className="px-1.5 py-0.5 rounded bg-muted text-[9px] font-mono text-muted-foreground">fit = contain</span>
+          <span className="px-1.5 py-0.5 rounded bg-muted text-[9px] font-mono text-muted-foreground">{t("cfgext.fitContainBadge")}</span>
         </div>
         <div className="flex items-center gap-2">
           <Input

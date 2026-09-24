@@ -2434,6 +2434,18 @@ html, body {
   direction: ltr;
 }
 
+/* Code reads left to right in every locale. Under <html dir="rtl"> a JSON
+   dump, a jq expression, a cURL line or an API key would otherwise lose its
+   braces, quotes and leading dots to the other side. `isolate` keeps an
+   inline <code> inside a Hebrew sentence from reordering the words around it.
+   An element that sets its own dir keeps it: prose shown in a <pre> (a node's
+   text output, a final prompt) carries dir="auto", so Hebrew text in it still
+   reads right to left. Guarded by rtl-direction-guards.test. */
+:where(pre, code, kbd, samp):not([dir]) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 
 
 /* Welcome credits popup: the soft pink radial glow at the top of the card. */

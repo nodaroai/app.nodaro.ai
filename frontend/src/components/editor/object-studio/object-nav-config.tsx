@@ -29,7 +29,7 @@ type J = ObjectStudioJobs
  * every list-bucket content page shows its asset-array `.length`.
  */
 export const OBJECT_STUDIO_NAV: StudioNavConfig<S, J> = {
-  accentActiveClassName: "text-[#22d3ee] bg-[#0e2730] border-r-2 border-[#22d3ee]",
+  accentActiveClassName: "text-[#22d3ee] bg-[#0e2730] border-e-2 border-[#22d3ee]",
   groups: [
     { label: "Resources", pages: [
       { key: "references", label: "References", icon: "📷", Component: ReferencesPage },

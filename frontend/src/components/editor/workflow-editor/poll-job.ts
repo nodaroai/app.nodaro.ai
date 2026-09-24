@@ -354,7 +354,7 @@ export function pollJobWithNodeUpdate(
           resolve("");
           return;
         }
-        guardedToast.info(`${label} started`, { description: `Job ID: ${jobId}` });
+        guardedToast.info(tx("run.jobStarted", { label }), { description: tx("run.jobIdLine", { id: jobId }) });
         updateNodeData(nodeId, { currentJobId: jobId });
 
         // Auto-fetch estimate for smooth progress if not provided
@@ -578,7 +578,7 @@ export function pollImageRefineToNode(
   return new Promise<string>((resolve, reject) => {
     apiCall()
       .then(({ jobId }) => {
-        guardedToast.info(`${label} started`, { description: `Job ID: ${jobId}` });
+        guardedToast.info(tx("run.jobStarted", { label }), { description: tx("run.jobIdLine", { id: jobId }) });
         updateNodeData(nodeId, { currentJobId: jobId });
 
         let pollFailures = 0;

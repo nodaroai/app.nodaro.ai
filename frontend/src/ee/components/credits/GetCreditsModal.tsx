@@ -18,6 +18,7 @@ import { toast } from "sonner"
 import { useT } from "@/lib/i18n"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
+import { formatNumber } from "@/lib/i18n/format"
 
 interface GetCreditsModalProps {
   open: boolean
@@ -142,7 +143,7 @@ export function GetCreditsModal({
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {t("pricing.creditsPerMoShort", { n: creditUnits(upTier.credits).toLocaleString() })}
+                          {t("pricing.creditsPerMoShort", { n: formatNumber(creditUnits(upTier.credits)) })}
                         </p>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
@@ -185,7 +186,7 @@ export function GetCreditsModal({
                     } ${loadingId === pkg.priceId ? "opacity-60 pointer-events-none" : ""}`}
                   >
                     {pkg.popular && (
-                      <span className="absolute -top-2 right-2 rounded-full bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white">
+                      <span className="absolute -top-2 end-2 rounded-full bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white">
                         {t("pricing.popular")}
                       </span>
                     )}

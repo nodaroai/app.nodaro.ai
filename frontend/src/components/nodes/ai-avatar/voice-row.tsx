@@ -43,7 +43,7 @@ export function VoiceRow({ voiceId, voiceName, onSelectVoice }: VoiceRowProps) {
     [voices, voiceId],
   )
   const described = voice ? describeVoice(voice) : undefined
-  const name = described?.name || voiceName?.trim() || (voiceId ? "Voice" : "")
+  const name = described?.name || voiceName?.trim() || (voiceId ? t("field.voice") : "")
   const meta = described?.meta ?? ""
   const { isPlaying, canPlay, toggle } = useVoicePreview(voice?.previewAudio)
   const [open, setOpen] = useState(false)
@@ -63,7 +63,7 @@ export function VoiceRow({ voiceId, voiceName, onSelectVoice }: VoiceRowProps) {
             className="nodrag nopan group/voice flex items-center gap-2.5 min-w-0 flex-1 text-left rounded-md -mx-1 px-1 py-0.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             onClick={stop}
             title={t("node.changeVoice")}
-            aria-label={voiceId ? `Voice: ${name}. Change voice` : "Choose a voice"}
+            aria-label={voiceId ? t("node.voiceNameChangeVoice", { name }) : t("node.chooseAVoice")}
             aria-expanded={open}
           >
             <span className="grid place-items-center w-7 h-7 rounded-md border border-border/60 bg-muted/40 text-muted-foreground shrink-0">
@@ -125,7 +125,7 @@ export function VoiceRow({ voiceId, voiceName, onSelectVoice }: VoiceRowProps) {
       <button
         type="button"
         aria-label={isPlaying ? t("cfgext.voicePausePreview") : t("cfgext.voicePlayPreview")}
-        title={canPlay ? (isPlaying ? t("node.pausePreview") : t("node.playPreview")) : "No preview available"}
+        title={canPlay ? (isPlaying ? t("node.pausePreview") : t("node.playPreview")) : t("preview.noPreview")}
         disabled={!canPlay}
         className={cn(
           "nodrag nopan grid place-items-center w-6 h-6 rounded-full border transition-colors shrink-0",

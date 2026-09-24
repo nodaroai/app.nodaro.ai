@@ -5,6 +5,9 @@ import { createPortal } from "react-dom"
 import { ChevronLeft, ChevronRight, X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useImageAspect } from "@/hooks/use-image-aspect"
+import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 
 interface LightboxItem {
   readonly url: string
@@ -74,6 +77,8 @@ export function MultiImageLightbox({ items, startIndex, onClose, actions }: Mult
   const aspect = useImageAspect(
     current && current.kind !== "video" && startIndex !== null ? current.url : null,
   )
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
 
   if (startIndex === null || total === 0) return null
   if (!current) return null
@@ -90,19 +95,19 @@ export function MultiImageLightbox({ items, startIndex, onClose, actions }: Mult
       {/* Close (top-right) */}
       <button
         type="button"
-        className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors cursor-pointer"
+        className="absolute top-4 end-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors cursor-pointer"
         onClick={(e) => {
           e.stopPropagation()
           onClose()
         }}
-        aria-label="Close"
+        aria-label={t("common.close")}
       >
         <X className="w-6 h-6" />
       </button>
 
       {/* Optional per-item actions (top-left). Buttons stopPropagation themselves. */}
       {actions && (
-        <div className="absolute top-4 left-4 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute top-4 start-4 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {actions(current)}
         </div>
       )}
@@ -111,14 +116,14 @@ export function MultiImageLightbox({ items, startIndex, onClose, actions }: Mult
       {total > 1 && (
         <button
           type="button"
-          className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors cursor-pointer"
+          className="absolute start-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors cursor-pointer"
           onClick={(e) => {
             e.stopPropagation()
             prev()
           }}
-          aria-label="Previous image"
+          aria-label={t("misc.previousImage")}
         >
-          <ChevronLeft className="w-6 h-6" />
+          <ChevronLeft className={cn("w-6 h-6", isRtl && "rotate-180")} />
         </button>
       )}
 
@@ -149,7 +154,7 @@ export function MultiImageLightbox({ items, startIndex, onClose, actions }: Mult
         >
           <CachedImage
             src={current.url}
-            alt={current.alt ?? "Preview"}
+            alt={current.alt ?? t("common.preview")}
             className="w-full h-full object-contain"
             noPlaceholder
           />
@@ -160,14 +165,14 @@ export function MultiImageLightbox({ items, startIndex, onClose, actions }: Mult
       {total > 1 && (
         <button
           type="button"
-          className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors cursor-pointer"
+          className="absolute end-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors cursor-pointer"
           onClick={(e) => {
             e.stopPropagation()
             next()
           }}
-          aria-label="Next image"
+          aria-label={t("misc.nextImage")}
         >
-          <ChevronRight className="w-6 h-6" />
+          <ChevronRight className={cn("w-6 h-6", isRtl && "rotate-180")} />
         </button>
       )}
 

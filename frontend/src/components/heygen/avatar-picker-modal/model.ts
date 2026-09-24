@@ -6,8 +6,10 @@
 // components render it.
 
 import type { HeygenAvatar } from "@/lib/api"
-import { avatarIsUsable, avatarSupportsV, normalizeGender } from "@/components/heygen/heygen-catalog"
+import { avatarIsUsable, avatarSupportsV, genderLabel, normalizeGender } from "@/components/heygen/heygen-catalog"
+import { tx, type TFunction } from "@/lib/i18n"
 import { personKeyOf, splitLookName } from "@/components/nodes/ai-avatar/catalog-helpers"
+import { formatNumber } from "@/lib/i18n/format"
 
 /** One presenter and every look of theirs, in catalog order. */
 export interface Person {
@@ -223,10 +225,15 @@ export function countOwnLooks(people: readonly Person[]): number {
   return people.reduce((n, p) => n + p.looks.filter((l) => l.ownership === "private").length, 0)
 }
 
-/** "12 people · 42 looks in view" */
-export function describeSelection(people: readonly Person[]): string {
+/** "12 people · 42 looks in view" — localized; a bare call reads the live locale. */
+export function describeSelection(people: readonly Person[], t: TFunction = tx): string {
   const looks = people.reduce((n, p) => n + p.looks.length, 0)
-  return `${people.length.toLocaleString("en-US")} ${people.length === 1 ? "person" : "people"} · ${looks.toLocaleString("en-US")} ${looks === 1 ? "look" : "looks"} in view`
+  const n = formatNumber(people.length)
+  const m = formatNumber(looks)
+  return t("heygen.selectionInView", {
+    people: people.length === 1 ? t("heygen.personOne", { n }) : t("heygen.peopleMany", { n }),
+    looks: looks === 1 ? t("heygen.looksCountOne", { n: m }) : t("heygen.looksCountMany", { n: m }),
+  })
 }
 
 /** Where the current avatar sits: its person and look — or the first person. */
@@ -243,8 +250,8 @@ export function locateLook(people: readonly Person[], avatarId: string | undefin
 
 /** "Female · Office" — gender, then the person's most common scene (the
  *  count of looks is the pill on the image, not repeated here). */
-export function personMeta(person: Person): string {
-  const gender = capitalize(person.gender === "unknown" ? "" : person.gender)
+export function personMeta(person: Person, t: TFunction = tx): string {
+  const gender = genderLabel(person.gender, t)
   const scene = dominantScene(person)
   return [gender, scene].filter(Boolean).join(" · ") || "—"
 }

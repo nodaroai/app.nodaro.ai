@@ -1,4 +1,5 @@
 import { memo, type ReactNode } from "react"
+import { useT } from "@/lib/i18n"
 import { Handle, Position, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Users, MapPin, Package, Film, Image as ImageIcon, Music } from "lucide-react"
 import type { SceneNodeFrontendData } from "@/types/nodes"
@@ -40,6 +41,7 @@ const RIGHT_HANDLES: ReadonlyArray<{ id: string; top: number; icon: ReactNode; c
 ]
 
 function SceneNodeImpl(props: NodeProps) {
+  const t = useT()
   const data = props.data as SceneNodeFrontendData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   // Phase 1C.2 — `useActiveSceneViewMode` consults the canvas-wide override
@@ -51,7 +53,7 @@ function SceneNodeImpl(props: NodeProps) {
   return (
     <div className="relative animate-fade-in-scale">
       <EditableNodeLabel
-        label={data.label || data.description || `Scene ${data.scene_index}`}
+        label={data.label || data.description || t("node.sceneN", { n: data.scene_index })}
         icon={<Clapperboard className="w-3.5 h-3.5" />}
         onSave={(newLabel) => updateNodeData(props.id, { label: newLabel })}
       />

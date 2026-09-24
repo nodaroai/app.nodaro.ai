@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from "react"
 import { pipelinesApi } from "@/lib/pipelines-api"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 
 /**
  * Phase 3 cinematic — AI DIRECTOR panel (mockup screens 3/8 — Autopilot rail).
@@ -15,11 +16,11 @@ export interface DirectorLine {
   text: string
 }
 
-const SUGGESTIONS = [
-  "+ Apply drone zoom to SH-01",
-  "+ Inject steam bursts FX to SH-01",
-  "+ Grade emerald light to SH-01",
-] as const
+const SUGGESTION_KEYS: readonly MessageKey[] = [
+  "pipe.cinemaSuggestDroneZoom",
+  "pipe.cinemaSuggestSteamFx",
+  "pipe.cinemaSuggestEmeraldGrade",
+]
 
 const LABEL = "font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground"
 
@@ -35,6 +36,7 @@ export function AiDirectorPanel({
   /** Autopilot mode — the director takes over, so the panel widens. */
   expanded?: boolean
 }) {
+  const t = useT()
   const [sent, setSent] = useState<string[]>([])
   const [draft, setDraft] = useState("")
   const [busy, setBusy] = useState(false)
@@ -56,7 +58,7 @@ export function AiDirectorPanel({
       await pipelinesApi.postChat(pipelineId, "script", msg)
     } catch (e) {
       // Chat only works in guided mode at the script gate; surface softly.
-      setErr(e instanceof Error ? e.message : "Director is busy")
+      setErr(e instanceof Error ? e.message : tx("pipe.cinemaDirectorBusy"))
     } finally {
       setBusy(false)
     }
@@ -64,7 +66,7 @@ export function AiDirectorPanel({
 
   return (
     <div
-      className={`flex shrink-0 flex-col border-l border-[#1d1d1d] bg-[#0a0a0a] transition-[width] duration-300 ${
+      className={`flex shrink-0 flex-col border-s border-[#1d1d1d] bg-[#0a0a0a] transition-[width] duration-300 ${
         expanded ? "w-[460px]" : "w-[340px]"
       }`}
     >
@@ -72,19 +74,19 @@ export function AiDirectorPanel({
         <div>
           <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-foreground">
             <span className={`h-2 w-2 rounded-full ${running ? "animate-pulse bg-[#ff0073]" : "bg-muted-foreground"}`} />
-            AI Director
+            {t("pipe.autonomyAiDirector")}
           </div>
-          <div className={LABEL}>Nodaro Spatial Copilot API</div>
+          <div className={LABEL}>{t("pipe.cinemaSpatialCopilot")}</div>
         </div>
         <span className="rounded border border-[#ff0073]/40 bg-[#ff0073]/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-[#ff0073]">
-          Auto Drive
+          {t("pipe.cinemaAutoDrive")}
         </span>
       </div>
 
       <div ref={feedRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         {sent.length === 0 && lines.length === 0 && (
           <p className="font-mono text-[10px] text-muted-foreground">
-            The director will narrate here as your film is built.
+            {t("pipe.cinemaDirectorWillNarrate")}
           </p>
         )}
 
@@ -92,18 +94,18 @@ export function AiDirectorPanel({
             engine's narration as director turns (chronology is approximate —
             the SSE feed is the authoritative director stream). */}
         {sent.map((m, i) => (
-          <div key={`s${i}`} className="ml-8 rounded-lg border border-sky-500/30 bg-sky-500/5 p-2">
-            <div className="mb-1 text-right font-mono text-[9px] font-bold uppercase tracking-wider text-sky-300">
-              You (writer-spec)
+          <div key={`s${i}`} className="ms-8 rounded-lg border border-sky-500/30 bg-sky-500/5 p-2">
+            <div className="mb-1 text-end font-mono text-[9px] font-bold uppercase tracking-wider text-sky-300">
+              {t("pipe.cinemaYouWriter")}
             </div>
-            <p className="text-right text-[11px] text-foreground">{m}</p>
+            <p className="text-end text-[11px] text-foreground">{m}</p>
           </div>
         ))}
 
         {lines.slice(-40).map((l, i) => (
-          <div key={`l${i}`} className="mr-4 rounded-lg border border-[#2a2a2a] bg-[#111] p-2">
+          <div key={`l${i}`} className="me-4 rounded-lg border border-[#2a2a2a] bg-[#111] p-2">
             <div className="mb-1 font-mono text-[9px] font-bold uppercase tracking-wider text-[#ff0073]">
-              ✦ Nodaro AI Director
+              ✦ {t("pipe.cinemaNodaroAiDirector")}
             </div>
             <p className="text-[11px] leading-relaxed text-foreground">{l.text}</p>
           </div>
@@ -114,21 +116,24 @@ export function AiDirectorPanel({
         <div className="mb-2 flex items-center gap-2">
           <span className="text-[#ff0073]">≡</span>
           <span className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-foreground">
-            Interactive Suggestions
+            {t("pipe.cinemaInteractiveSuggestions")}
           </span>
         </div>
         <div className="space-y-1.5">
-          {SUGGESTIONS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setDraft(s.replace(/^\+\s*/, ""))}
-              className="flex w-full items-center justify-between rounded-md border border-[#2a2a2a] bg-[#111] px-2 py-1.5 text-left font-mono text-[10px] uppercase tracking-wider text-foreground hover:border-[#ff0073]/50"
-            >
-              {s}
-              <span className="text-[#ff0073]">→</span>
-            </button>
-          ))}
+          {SUGGESTION_KEYS.map((k) => {
+            const s = t(k)
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setDraft(s.replace(/^\+\s*/, ""))}
+                className="flex w-full items-center justify-between rounded-md border border-[#2a2a2a] bg-[#111] px-2 py-1.5 text-start font-mono text-[10px] uppercase tracking-wider text-foreground hover:border-[#ff0073]/50"
+              >
+                {s}
+                <span className="text-[#ff0073]">→</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -141,7 +146,7 @@ export function AiDirectorPanel({
             onKeyDown={(e) => {
               if (e.key === "Enter") void send()
             }}
-            placeholder="Tell your Director… (@ to summon index)"
+            placeholder={t("pipe.cinemaTellDirectorPlaceholder")}
             className="flex-1 rounded-md border border-[#2a2a2a] bg-[#111] px-2 py-1.5 text-[11px] text-foreground outline-none focus:border-[#ff0073]"
           />
           <button
@@ -154,8 +159,8 @@ export function AiDirectorPanel({
           </button>
         </div>
         <div className="mt-1.5 flex items-center justify-between font-mono text-[9px] text-muted-foreground">
-          <span>Active Model: Kling 3.0</span>
-          <span>Type @ to inject cast</span>
+          <span>{t("pipe.cinemaActiveModel")}</span>
+          <span>{t("pipe.cinemaTypeAtToInject")}</span>
         </div>
       </div>
     </div>

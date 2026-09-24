@@ -102,7 +102,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex items-center justify-between">
                 <div className="font-medium truncate">{activeScript.title}</div>
                 <div className="text-muted-foreground shrink-0 ml-2">
-                  {sceneCount} scenes / {activeScript.totalDuration}s
+                  {t("node.scenesAndDuration", { n: sceneCount, seconds: activeScript.totalDuration })}
                 </div>
               </div>
 
@@ -120,7 +120,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                     <div className="w-full aspect-video rounded-sm overflow-hidden bg-muted/50 flex items-center justify-center text-muted-foreground/30">
                       {scene.imageStatus === "completed" && (scene.generatedImages ?? []).length > 0 ? (
-                        <CachedImage src={(scene.generatedImages ?? [])[scene.activeImageIndex ?? 0]?.url} alt={`Scene ${scene.sceneNumber}`} className="w-full h-full object-cover" thumbnail thumbnailWidth={120} />
+                        <CachedImage src={(scene.generatedImages ?? [])[scene.activeImageIndex ?? 0]?.url} alt={t("node.sceneN", { n: scene.sceneNumber })} className="w-full h-full object-cover" thumbnail thumbnailWidth={120} />
                       ) : scene.imageStatus === "running" ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
                       ) : (
@@ -139,7 +139,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex items-center justify-between text-[10px] text-muted-foreground/70 pt-0.5 border-t border-border/30">
                 <span className="flex items-center gap-1">
                   <Sparkles className="w-3 h-3" />
-                  Est. {creditUnits(totalEstimatedCredits)} credits
+                  {t("node.estCredits", { n: creditUnits(totalEstimatedCredits) })}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="flex items-center gap-0.5"><ImageIcon className="w-2.5 h-2.5" />{creditUnits(sceneCount * 5)}</span>
@@ -173,11 +173,11 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
                         activeScript.title,
                         "",
                         ...activeScript.scenes.map(
-                          (s) => `Scene ${s.sceneNumber} (${s.durationHint}s): ${s.action}`
+                          (s) => t("node.sceneCopyLine", { n: s.sceneNumber, seconds: s.durationHint, action: s.action })
                         ),
                       ].join("\n")
                     : ""
-                  copyToClipboard(scriptText, "Script copied")
+                  copyToClipboard(scriptText, t("node.scriptCopied"))
                 }}
               >
                 <Copy className="w-3 h-3" />
@@ -185,7 +185,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
               {results.length > 0 && (
                 <button
                   type="button"
-                  aria-label="Remove"
+                  aria-label={t("common.remove")}
                   className="w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -226,7 +226,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
               <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
                 <button
                   type="button"
-                  aria-label={`Result ${i + 1}`}
+                  aria-label={t("node.resultN", { n: i + 1 })}
                   className={`w-8 h-8 flex items-center justify-center rounded cursor-pointer transition-opacity ${
                     i === activeIndex
                       ? "opacity-100 ring-2 ring-primary bg-primary/20"
@@ -241,7 +241,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
                 </button>
                 <button
                   type="button"
-                  aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                  aria-label={t("common.remove")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(i)
@@ -256,7 +256,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
 
         <div className="flex justify-between text-muted-foreground">
           <span>{nodeData.provider}</span>
-          <span>{nodeData.sceneCount} scenes</span>
+          <span>{t("node.nScenes", { n: nodeData.sceneCount })}</span>
         </div>
       </div>
     </BaseNode>

@@ -18,6 +18,7 @@ import { Bot, Loader2 } from "lucide-react"
 import { SHORTCUTS, formatBinding, isMacPlatform, matchShortcut } from "@/lib/shortcuts"
 import { COPILOT_RAIL_WIDTH, COPILOT_TAB_WIDTH, copilotSurfaced, useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
 import { useIsMobile } from "@/hooks/use-is-mobile"
+import { useT } from "@/lib/i18n"
 
 /**
  * Resolved on first render rather than at module load: the `import()` factory
@@ -106,18 +107,19 @@ export function CopilotPanelSlot(props: CopilotPanelSlotProps) {
 
 /** The always-visible way back in when the rail is closed. */
 export function CopilotCollapsedTab() {
+  const t = useT()
   const openPanel = useCopilotUiStore((s) => s.openPanel)
   if (!copilotSurfaced()) return null
   return (
     <button
       type="button"
       onClick={openPanel}
-      title={`Copilot (${formatBinding(SHORTCUTS.copilot.bindings[0], isMacPlatform())})`}
+      title={t("editor.copilotTitle", { sc: formatBinding(SHORTCUTS.copilot.bindings[0], isMacPlatform()) })}
       style={{ width: COPILOT_TAB_WIDTH }}
       className="flex-none bg-[var(--copilot-panel)] border-e border-border flex flex-col items-center pt-4 gap-2.5 text-primary hover:bg-[var(--copilot-card)] transition-colors"
     >
       <Bot className="w-3.5 h-3.5" strokeWidth={1.8} />
-      <span className="[writing-mode:vertical-rl] text-[10px] tracking-[0.18em] font-semibold">COPILOT</span>
+      <span className="[writing-mode:vertical-rl] text-[10px] tracking-[0.18em] font-semibold">{t("editor.copilotTabLabel")}</span>
     </button>
   )
 }
@@ -138,6 +140,7 @@ function CopilotPanelFallback() {
  * anywhere in the editor without a second listener somewhere else.
  */
 export function CopilotToolbarButton() {
+  const t = useT()
   const open = useCopilotUiStore((s) => s.open)
   const togglePanel = useCopilotUiStore((s) => s.togglePanel)
 
@@ -159,7 +162,7 @@ export function CopilotToolbarButton() {
       type="button"
       onClick={togglePanel}
       aria-pressed={open}
-      title={`Copilot (${formatBinding(SHORTCUTS.copilot.bindings[0], isMacPlatform())})`}
+      title={t("editor.copilotTitle", { sc: formatBinding(SHORTCUTS.copilot.bindings[0], isMacPlatform()) })}
       className={`ms-auto me-2 self-center flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
         open
           ? "bg-primary/10 border border-primary/50 text-primary"
@@ -167,7 +170,7 @@ export function CopilotToolbarButton() {
       }`}
     >
       <Bot className="w-3.5 h-3.5" strokeWidth={1.8} />
-      Copilot
+      {t("editor.copilotName")}
     </button>
   )
 }

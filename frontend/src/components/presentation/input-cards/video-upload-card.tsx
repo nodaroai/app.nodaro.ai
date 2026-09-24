@@ -7,6 +7,7 @@ import { ActionMenu } from "../output-cards/action-menu"
 import { ActionBar } from "../output-cards/action-bar"
 import { shareMedia } from "../output-cards/share-utils"
 import { useMediaUpload, FileDropZone, UrlInputRow } from "./shared"
+import { useT } from "@/lib/i18n"
 
 interface VideoUploadCardProps {
   label: string
@@ -23,6 +24,7 @@ interface VideoUploadCardProps {
 export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput, readOnly, variant }: VideoUploadCardProps) {
   const media = useMediaUpload({ mimePrefix: "video/", nodeId, isFullscreen, inputValues, onUpdateInput, url })
   const [previewOpen, setPreviewOpen] = useState(false)
+  const t = useT()
 
   if (variant === "composer") {
     return (
@@ -40,15 +42,15 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); media.handleRemove() }}
-                  aria-label="Remove video"
-                  className="absolute -right-1.5 -top-1.5 rounded-full bg-background p-0.5 text-muted-foreground ring-1 ring-border hover:text-foreground"
+                  aria-label={t("node.removeVideo")}
+                  className="absolute -end-1.5 -top-1.5 rounded-full bg-background p-0.5 text-muted-foreground ring-1 ring-border hover:text-foreground"
                 >
                   <X className="size-3" />
                 </button>
               )}
             </div>
           ) : readOnly ? (
-            <span className="text-xs text-muted-foreground">No video</span>
+            <span className="text-xs text-muted-foreground">{t("present.noVideo")}</span>
           ) : (
             <FileDropZone
               isDragOver={media.isDragOver}
@@ -59,7 +61,7 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
               accept="video/*"
               fileInputRef={media.fileInputRef}
               onFileChange={media.handleFile}
-              label="Add video"
+              label={t("present.addVideo")}
               height="h-16"
               onShowUrl={() => media.setShowUrlInput(true)}
             />
@@ -94,20 +96,20 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
               />
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center group-hover:bg-black/60 group-hover:scale-110 transition-all duration-200">
-                  <Play className="w-7 h-7 text-white ml-1" fill="white" />
+                  <Play className="w-7 h-7 text-white ms-1" fill="white" />
                 </div>
               </div>
               {/* Desktop toolbar — top-right, visible on hover */}
               {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions */}
-              <div className="media-overlay-controls absolute top-2 right-2 hidden md:flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
-                <GlassButton onClick={() => downloadFile(media.effectiveUrl!, `${label.replace(/\s+/g, "-").toLowerCase()}.mp4`)} title="Download">
+              <div className="media-overlay-controls absolute top-2 end-2 hidden md:flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
+                <GlassButton onClick={() => downloadFile(media.effectiveUrl!, `${label.replace(/\s+/g, "-").toLowerCase()}.mp4`)} title={t("common.download")}>
                   <Download className="w-3.5 h-3.5" />
                 </GlassButton>
-                <GlassButton onClick={() => copyUrl(media.effectiveUrl!)} title="Copy URL">
+                <GlassButton onClick={() => copyUrl(media.effectiveUrl!)} title={t("cfgshared.copyUrl")}>
                   <Copy className="w-3.5 h-3.5" />
                 </GlassButton>
                 {!readOnly && (
-                  <GlassButton onClick={media.handleRemove} title="Remove">
+                  <GlassButton onClick={media.handleRemove} title={t("common.remove")}>
                     <X className="w-3.5 h-3.5" />
                   </GlassButton>
                 )}
@@ -127,7 +129,7 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
           </>
         ) : readOnly ? (
           <div className="flex items-center justify-center h-32 bg-muted/30 rounded-lg border border-border text-sm text-muted-foreground">
-            No video
+            {t("present.noVideo")}
           </div>
         ) : (
           <FileDropZone
@@ -139,7 +141,7 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
             accept="video/*"
             fileInputRef={media.fileInputRef}
             onFileChange={media.handleFile}
-            label="Drop video or click to upload"
+            label={t("present.dropVideoOrClick")}
             onShowUrl={() => media.setShowUrlInput(true)}
           />
         )}

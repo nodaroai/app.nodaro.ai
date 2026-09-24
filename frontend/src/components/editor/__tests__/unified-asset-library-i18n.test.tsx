@@ -68,7 +68,7 @@ describe("My Library modal in Hebrew", () => {
     expect(screen.getByText(translate("he", "assetlib.projectLabel"))).toBeTruthy()
     expect(screen.getByRole("button", { name: /דמויות/ })).toBeTruthy()
     expect(screen.getByRole("button", { name: /יצורים/ })).toBeTruthy()
-    expect(screen.getByRole("button", { name: /מקומות/ })).toBeTruthy()
+    expect(screen.getByRole("button", { name: /מיקומים/ })).toBeTruthy()
     for (const en of ["My Library", "Characters", "Objects/Props", "Creatures", "Locations", "Faces", "Images", "Videos", "Audio", "Project:"]) {
       expect(screen.queryByText(en), `raw English "${en}"`).toBeNull()
     }

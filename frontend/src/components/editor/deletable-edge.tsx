@@ -10,6 +10,7 @@ import {
 } from "@xyflow/react"
 import { X } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useT } from "@/lib/i18n"
 
 export const DeletableEdge: FC<EdgeProps<Edge>> = ({
   id,
@@ -24,6 +25,7 @@ export const DeletableEdge: FC<EdgeProps<Edge>> = ({
   selected,
 }) => {
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
+  const t = useT()
 
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -57,7 +59,7 @@ export const DeletableEdge: FC<EdgeProps<Edge>> = ({
               e.stopPropagation()
               deleteEdge(id)
             }}
-            aria-label="Delete connection"
+            aria-label={t("canvas.deleteConnection")}
           >
             <X className="h-3 w-3" />
           </button>

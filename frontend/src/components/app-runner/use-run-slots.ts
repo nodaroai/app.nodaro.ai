@@ -2,8 +2,9 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { getInputNodes, getOutputNodes } from "@/lib/presentation-utils"
+import { useT } from "@/lib/i18n"
 import { createAppRun, updateAppRunInputs, getAppRuns, deleteAppRun } from "@/lib/api"
-import type { RunSlot, RunSlotNodeState } from "./types"
+import type { NewRunAction, RunSlot, RunSlotNodeState } from "./types"
 import { ORIGINAL_SLOT_ID, makeEmptyInputs, makeSnapshotInputs, makeSnapshotNodeStates, toSlotStatus, dbStatusToSlotStatus } from "./types"
 import { isMediaUrl } from "./types"
 
@@ -70,6 +71,7 @@ interface UseRunSlotsOptions {
 }
 
 export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSidebar }: UseRunSlotsOptions) {
+  const t = useT()
   const [showHistory, setShowHistory] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [runsLoaded, setRunsLoaded] = useState(false)
@@ -125,7 +127,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
 
     return {
       id: ORIGINAL_SLOT_ID,
-      name: "Original",
+      name: t("runner.originalRun"),
       inputValues: snapshotInputs,
       nodeStates: snapshotStates,
       executionId: null,
@@ -137,7 +139,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
       version: app.version,
       thumbnailUrl,
     }
-  }, [app, inputNodes, outputNodes])
+  }, [app, inputNodes, outputNodes, t])
 
   // Merge original slot (always first) with user slots
   const allSlots = useMemo(() => {
@@ -491,7 +493,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     else if (isSlotFailed) handleRetry()
     else handleCreateNew()
   }, [isOriginal, isSlotIdle, isSlotFailed, handleClear, handleRetry, handleCreateNew])
-  const newRunLabel = isOriginal ? "New Run" : isSlotIdle ? "Clear" : isSlotFailed ? "Retry" : "New Run"
+  const newRunAction: NewRunAction = isOriginal ? "new" : isSlotIdle ? "clear" : isSlotFailed ? "retry" : "new"
 
   // Select slot
   const handleSelectSlot = useCallback((slotId: string) => {
@@ -617,7 +619,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     handleCloseSidebar,
 
     // Derived
-    newRunLabel,
+    newRunAction,
     isRunning,
     inputsReadOnlyValue,
     isLoadingRun,

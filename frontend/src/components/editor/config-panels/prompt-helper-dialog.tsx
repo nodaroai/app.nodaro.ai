@@ -31,6 +31,8 @@ import { LlmModelSelect } from "./llm-model-select"
 import { formatCreditUnits } from "@/lib/credit-units"
 import { ReasoningEffortSelect } from "./reasoning-effort-select"
 import { useT, tx } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 
 interface PromptHelperDialogProps {
@@ -153,6 +155,7 @@ export function PromptHelperDialog({
   onAccept,
 }: PromptHelperDialogProps) {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const localizeNode = useLocalizeNodeLabel()
   // Shared state
   const [llmModel, setLlmModel] = useState<string | undefined>(() => {
@@ -678,7 +681,7 @@ export function PromptHelperDialog({
                     className="text-xs resize-none"
                   />
                 ) : (
-                  <Textarea
+                  <Textarea dir="ltr"
                     rows={10}
                     value={buildJsonPrompt()}
                     readOnly
@@ -741,7 +744,7 @@ export function PromptHelperDialog({
                 onClick={() => setPhase("input")}
                 className="flex-shrink-0"
               >
-                <ArrowLeft className="w-3.5 h-3.5 me-1" />
+                <ArrowLeft className={cn("w-3.5 h-3.5 me-1", isRtl && "rotate-180")} />
                 {t("cfgext.phdReanalyze")}
                 <span className="ms-1 text-[10px] opacity-60">{formatCreditUnits(creditCost)}</span>
               </Button>
@@ -769,7 +772,7 @@ export function PromptHelperDialog({
                 onClick={() => setPhase("review")}
                 className="flex-shrink-0"
               >
-                <ArrowLeft className="w-3.5 h-3.5 me-1" />
+                <ArrowLeft className={cn("w-3.5 h-3.5 me-1", isRtl && "rotate-180")} />
                 {t("common.back")}
               </Button>
               <Button

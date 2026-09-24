@@ -8,6 +8,7 @@ import { LayoutGrid, List, Search, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DialogClose, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { useRovingRadiogroup } from "./use-roving-radiogroup"
+import { useT } from "@/lib/i18n"
 
 export type PickerView = "grid" | "list"
 
@@ -31,12 +32,13 @@ export const PickerHeader = forwardRef<HTMLInputElement, PickerHeaderProps>(func
   { subtitle, total, query, onQuery, view, onView },
   searchRef,
 ) {
+  const t = useT()
   const roving = useRovingRadiogroup(VIEWS.length, VIEWS.indexOf(view), (i) => onView(VIEWS[i]))
 
   return (
     <div className="flex shrink-0 items-center gap-4 border-b border-border/60 px-5 py-4">
       <div className="flex flex-col gap-[3px]">
-        <DialogTitle className="whitespace-nowrap text-[16px] font-semibold tracking-[-0.01em]">Choose an avatar</DialogTitle>
+        <DialogTitle className="whitespace-nowrap text-[16px] font-semibold tracking-[-0.01em]">{t("node.chooseAnAvatar")}</DialogTitle>
         <DialogDescription className="whitespace-nowrap text-[12px] text-muted-foreground" data-testid="avatar-picker-count">
           {subtitle}
         </DialogDescription>
@@ -49,22 +51,22 @@ export const PickerHeader = forwardRef<HTMLInputElement, PickerHeaderProps>(func
             type="search"
             value={query}
             onChange={(e) => onQuery(e.target.value)}
-            placeholder={`Search ${total} avatars by name, look or scene`}
-            aria-label="Search avatars"
+            placeholder={t("heygen.searchAvatarsByName", { total })}
+            aria-label={t("heygen.searchAvatars")}
             autoFocus
             className="min-w-0 flex-1 bg-transparent text-[13.5px] text-foreground placeholder:text-muted-foreground/70 outline-none [&::-webkit-search-cancel-button]:hidden"
           />
           <kbd className="rounded border border-border/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap">{searchShortcutLabel()}</kbd>
         </label>
       </div>
-      <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-muted/40 p-[3px]" role="radiogroup" aria-label="View">
+      <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-muted/40 p-[3px]" role="radiogroup" aria-label={t("common.view")}>
         {VIEWS.map((v, i) => (
           <button
             key={v}
             type="button"
             role="radio"
             aria-checked={view === v}
-            aria-label={v === "grid" ? "Grid" : "List"}
+            aria-label={v === "grid" ? t("cfgext.metaAdsViewGrid") : t("inputcfg.viewList")}
             onClick={() => onView(v)}
             {...roving(i)}
             className={cn(
@@ -73,12 +75,12 @@ export const PickerHeader = forwardRef<HTMLInputElement, PickerHeaderProps>(func
             )}
           >
             {v === "grid" ? <LayoutGrid className="size-3.5" aria-hidden /> : <List className="size-3.5" aria-hidden />}
-            {v === "grid" ? "Grid" : "List"}
+            {v === "grid" ? t("cfgext.metaAdsViewGrid") : t("inputcfg.viewList")}
           </button>
         ))}
       </div>
       <DialogClose asChild>
-        <button type="button" aria-label="Close" className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+        <button type="button" aria-label={t("common.close")} className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
           <X className="size-4" />
         </button>
       </DialogClose>

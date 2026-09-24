@@ -4,6 +4,7 @@ import { X, Upload } from "lucide-react"
 import { toast } from "sonner"
 import type { ReferencePhoto, ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { uploadImage } from "@/lib/api"
+import { tx, useT, type MessageKey } from "@/lib/i18n"
 
 /**
  * Reference Photos block — 7 named slots for raw reference photos that get
@@ -31,14 +32,13 @@ const SLOTS: ReadonlyArray<ReferencePhotoKind> = [
   "other",
 ]
 
-const SLOT_LABELS: Record<ReferencePhotoKind, string> = {
-  frontFace: "Face",
-  threeQuarterLeft: "3/4 L",
-  sideLeft: "Profile L",
-  sideRight: "Profile R",
-  threeQuarterRight: "3/4 R",
-  frontBody: "Body",
-  other: "+",
+const SLOT_LABEL_KEYS: Record<Exclude<ReferencePhotoKind, "other">, MessageKey> = {
+  frontFace: "assetlib.typeFace",
+  threeQuarterLeft: "studio.slotThreeQuarterLeft",
+  sideLeft: "studio.slotProfileLeft",
+  sideRight: "studio.slotProfileRight",
+  threeQuarterRight: "studio.slotThreeQuarterRight",
+  frontBody: "studio.slotBody",
 }
 
 interface ReferencePhotosBlockProps {
@@ -47,6 +47,7 @@ interface ReferencePhotosBlockProps {
 }
 
 export function ReferencePhotosBlock({ photos, onChange }: ReferencePhotosBlockProps) {
+  const t = useT()
   const [uploadingSlot, setUploadingSlot] = useState<ReferencePhotoKind | null>(null)
 
   // First photo per kind goes on its named slot; everything routed to "other"
@@ -67,7 +68,7 @@ export function ReferencePhotosBlock({ photos, onChange }: ReferencePhotosBlockP
       const filtered = slot === "other" ? photos : photos.filter((p) => p.kind !== slot)
       onChange([...filtered, { url, kind: slot }])
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed.")
+      toast.error(err instanceof Error ? err.message : tx("studio.uploadFailed"))
     } finally {
       setUploadingSlot(null)
     }
@@ -79,13 +80,13 @@ export function ReferencePhotosBlock({ photos, onChange }: ReferencePhotosBlockP
 
   return (
     <div className="space-y-2">
-      <div className="text-[9px] uppercase tracking-wide text-slate-500">Reference Photos</div>
+      <div className="text-[9px] uppercase tracking-wide text-slate-500">{t("studio.referencePhotosUpper")}</div>
       <div className="flex flex-wrap gap-1.5">
         {SLOTS.map((slot) => (
           <Slot
             key={slot}
             slot={slot}
-            label={SLOT_LABELS[slot]}
+            label={slot === "other" ? "+" : t(SLOT_LABEL_KEYS[slot])}
             photo={byKind.get(slot)}
             otherCount={slot === "other" ? otherPhotos.length : 0}
             uploading={uploadingSlot === slot}
@@ -95,7 +96,7 @@ export function ReferencePhotosBlock({ photos, onChange }: ReferencePhotosBlockP
         ))}
       </div>
       <div className="text-[9px] text-slate-500">
-        Click a slot to upload. Changing photos triggers re-generation prompts on next asset gen.
+        {t("studio.slotUploadHint")}
       </div>
     </div>
   )
@@ -118,6 +119,7 @@ function Slot({
   onUpload: (file: File) => void
   onRemove: (p: ReferencePhoto) => void
 }) {
+  const t = useT()
   return (
     <div className="relative group">
       {/* Invisible file input overlays the whole tile so the entire 64×64 area
@@ -127,7 +129,7 @@ function Slot({
         type="file"
         accept="image/*"
         className="absolute inset-0 opacity-0 cursor-pointer z-10"
-        aria-label={`Upload ${slot}`}
+        aria-label={t("studio.uploadSlot", { slot })}
         onChange={(e) => {
           const f = e.target.files?.[0]
           if (f) onUpload(f)
@@ -137,7 +139,7 @@ function Slot({
       />
       <button
         type="button"
-        aria-label={`${slot} slot`}
+        aria-label={t("studio.slotAria", { slot })}
         className="w-16 h-16 rounded-md border border-dashed border-[#334155] bg-[#13161f] flex items-center justify-center text-[10px] text-slate-500 overflow-hidden hover:border-[#3b82f6]/60"
       >
         {photo ? (
@@ -154,8 +156,8 @@ function Slot({
       {photo && (
         <button
           type="button"
-          aria-label={`Remove ${slot}`}
-          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/80 text-white text-[9px] flex items-center justify-center opacity-0 group-hover:opacity-100 z-20"
+          aria-label={t("cfgshared.removeModel", { name: slot })}
+          className="absolute -top-1 -end-1 w-4 h-4 rounded-full bg-black/80 text-white text-[9px] flex items-center justify-center opacity-0 group-hover:opacity-100 z-20"
           onClick={() => onRemove(photo)}
         >
           <X className="w-2 h-2" />

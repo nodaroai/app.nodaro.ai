@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Search, Folder, GitBranch, X, ExternalLink } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 import { useClickOutside } from "@/hooks/use-click-outside"
 import { createClient } from "@/lib/supabase"
 import { queryKeys } from "@/lib/query-keys"
@@ -37,6 +38,7 @@ interface SearchModalProps {
 }
 
 export function SearchModal({ open, onClose }: SearchModalProps) {
+  const t = useT()
   const projectDisplayName = useProjectDisplayName()
   const [query, setQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
@@ -232,8 +234,8 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
               setQuery(e.target.value)
               setSelectedIndex(0)
             }}
-            aria-label="Search projects and workflows"
-            placeholder="Search projects and workflows..."
+            aria-label={t("addnode.searchProjectsAria")}
+            placeholder={t("addnode.searchProjectsPlaceholder")}
             className={cn(
               "flex-1 bg-transparent border-none outline-none",
               "text-[#1E293B] dark:text-white",
@@ -254,11 +256,11 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
         <div className="max-h-[400px] overflow-y-auto">
           {loading ? (
             <div className="px-4 py-8 text-center text-[#94A3B8]">
-              Searching...
+              {t("addnode.searching")}
             </div>
           ) : allResults.length === 0 ? (
             <div className="px-4 py-8 text-center text-[#94A3B8]">
-              {query ? "No results found" : "Start typing to search..."}
+              {query ? t("addnode.noResultsFound") : t("addnode.startTyping")}
             </div>
           ) : (
             <>
@@ -266,7 +268,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
               {projects.length > 0 && (
                 <div className="py-2">
                   <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8]">
-                    Projects
+                    {t("nav.projects")}
                   </div>
                   {projects.map((project, idx) => {
                     const globalIndex = idx
@@ -276,7 +278,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                         type="button"
                         onClick={() => handleResultClick("project", project)}
                         className={cn(
-                          "w-full flex items-center gap-3 px-4 py-2.5 text-left",
+                          "w-full flex items-center gap-3 px-4 py-2.5 text-start",
                           "transition-colors",
                           globalIndex === selectedIndex
                             ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
@@ -305,7 +307,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
               {workflows.length > 0 && (
                 <div className="py-2 border-t border-[#E2E8F0] dark:border-[#2D2D2D]">
                   <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8]">
-                    Workflows
+                    {t("dash.workflows")}
                   </div>
                   {workflows.map((workflow, idx) => {
                     const globalIndex = projects.length + idx
@@ -315,7 +317,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                         type="button"
                         onClick={() => handleResultClick("workflow", workflow)}
                         className={cn(
-                          "w-full flex items-center gap-3 px-4 py-2.5 text-left",
+                          "w-full flex items-center gap-3 px-4 py-2.5 text-start",
                           "transition-colors",
                           globalIndex === selectedIndex
                             ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
@@ -329,7 +331,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                           </div>
                           {workflow.project_name && (
                             <div className="text-xs text-[#94A3B8] truncate">
-                              in {workflow.project_name}
+                              {t("addnode.inProject", { name: workflow.project_name })}
                             </div>
                           )}
                         </div>
@@ -350,19 +352,19 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
               <kbd className="px-1.5 py-0.5 bg-white dark:bg-[#252525] rounded border border-[#E2E8F0] dark:border-[#3D3D3D] font-mono">
                 ↑↓
               </kbd>
-              Navigate
+              {t("addnode.navigate")}
             </span>
             <span className="flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 bg-white dark:bg-[#252525] rounded border border-[#E2E8F0] dark:border-[#3D3D3D] font-mono">
                 Enter
               </kbd>
-              Open in new tab
+              {t("addnode.openInNewTab")}
             </span>
             <span className="flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 bg-white dark:bg-[#252525] rounded border border-[#E2E8F0] dark:border-[#3D3D3D] font-mono">
                 Esc
               </kbd>
-              Close
+              {t("addnode.close")}
             </span>
           </div>
         </div>

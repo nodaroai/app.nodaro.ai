@@ -61,7 +61,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
 
         {/* RemX badge */}
         {app.supportsRemix && (
-          <span className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/90 text-white font-medium">
+          <span className="absolute top-2 start-2 text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/90 text-white font-medium">
             RemX
           </span>
         )}
@@ -128,7 +128,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
       {/* Favorite button — after overlay in DOM so it receives clicks on hover */}
       <button
         type="button"
-        className="absolute top-2 right-2 z-10 p-1 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
+        className="absolute top-2 end-2 z-10 p-1 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
         onClick={(e) => {
           e.stopPropagation()
           onToggleFavorite(app.id)

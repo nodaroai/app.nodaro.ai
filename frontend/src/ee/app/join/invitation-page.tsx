@@ -4,7 +4,10 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/hooks/use-auth"
 import { hydrateWorkspaces, setActiveWorkspace } from "@/lib/workspace-context"
+import { tx, useT, type TFunction } from "@/lib/i18n"
+import { useOrgVocabulary } from "@/ee/hooks/use-org-vocabulary"
 import { OrgApiError, acceptInvitation, previewInvitation, type InvitationPreview } from "@/ee/lib/orgs-api"
+import { formatDate } from "@/lib/i18n/format"
 
 /**
  * `/join/:token` — where an invitation link lands.
@@ -26,6 +29,7 @@ import { OrgApiError, acceptInvitation, previewInvitation, type InvitationPrevie
 type Phase = "loading" | "ready" | "accepting" | "accepted" | "gone"
 
 export default function InvitationPage() {
+  const t = useT()
   const { token = "" } = useParams<{ token: string }>()
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
@@ -33,6 +37,7 @@ export default function InvitationPage() {
   const [phase, setPhase] = useState<Phase>("loading")
   const [preview, setPreview] = useState<InvitationPreview | null>(null)
   const [problem, setProblem] = useState<{ code: string; message: string } | null>(null)
+  const vocabulary = useOrgVocabulary(preview?.vocabulary)
 
   useEffect(() => {
     let cancelled = false
@@ -50,8 +55,8 @@ export default function InvitationPage() {
           code,
           message:
             code === "invitation_not_found"
-              ? "This invitation link is not valid. It may have been replaced by a newer one."
-              : "We could not load this invitation. Try again in a moment.",
+              ? tx("org.inviteLinkInvalid")
+              : tx("org.inviteLoadFailed"),
         })
         setPhase("gone")
       })
@@ -80,22 +85,22 @@ export default function InvitationPage() {
   }, [token, navigate, preview])
 
   const place = preview?.workspaceName
-    ? `${preview.workspaceName} at ${preview.orgName}`
-    : (preview?.orgName ?? "an organization")
+    ? t("org.workspaceAtOrg", { workspace: preview.workspaceName, org: preview.orgName })
+    : (preview?.orgName ?? t("org.anOrganization"))
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <Card className="w-full max-w-md p-8">
-        {phase === "loading" && <p className="text-sm text-muted-foreground">Loading the invitation…</p>}
+        {phase === "loading" && <p className="text-sm text-muted-foreground">{t("org.loadingInvitation")}</p>}
 
         {phase === "gone" && (
           <div className="space-y-4">
-            <h1 className="text-xl font-semibold">This invitation cannot be used</h1>
+            <h1 className="text-xl font-semibold">{t("org.invitationCannotBeUsed")}</h1>
             <p className="text-sm text-muted-foreground">
-              {problem?.message ?? goneMessage(preview)}
+              {problem?.message ?? goneMessage(preview, t)}
             </p>
             <Button asChild variant="outline" className="w-full">
-              <Link to="/">Go to Nodaro</Link>
+              <Link to="/">{t("org.goToNodaro")}</Link>
             </Button>
           </div>
         )}
@@ -104,14 +109,14 @@ export default function InvitationPage() {
           <div className="space-y-5">
             <div className="space-y-2">
               <h1 className="text-xl font-semibold">
-                {preview.inviterName ? `${preview.inviterName} invited you` : "You have been invited"}
+                {preview.inviterName ? t("org.inviterInvitedYou", { name: preview.inviterName }) : t("org.youHaveBeenInvited")}
               </h1>
               <p className="text-sm text-muted-foreground">
-                to join <span className="font-medium text-foreground">{place}</span>
-                {preview.workspaceName ? ` — a ${label(preview, "workspace").toLowerCase()}` : ""}.
+                {t("org.toJoin")} <span className="font-medium text-foreground">{place}</span>
+                {preview.workspaceName ? ` — ${t("org.aWorkspace", { workspace: (vocabulary.workspace ?? t("org.workspaceWord")).toLowerCase() })}` : ""}.
               </p>
               <p className="text-xs text-muted-foreground">
-                Sent to {preview.email}. Sign in with that address to accept.
+                {t("org.sentToEmail", { email: preview.email })}
               </p>
             </div>
 
@@ -121,27 +126,27 @@ export default function InvitationPage() {
 
             {authLoading ? (
               <Button disabled className="w-full">
-                Checking your session…
+                {t("org.checkingSession")}
               </Button>
             ) : user ? (
               <Button onClick={accept} disabled={phase !== "ready"} className="w-full">
-                {phase === "accepting" ? "Joining…" : `Join ${preview.workspaceName ?? preview.orgName}`}
+                {phase === "accepting" ? t("org.joining") : t("org.joinName", { name: preview.workspaceName ?? preview.orgName })}
               </Button>
             ) : (
               <div className="space-y-2">
                 {/* The token rides in the redirect so signing in returns here
                     rather than to a dashboard that says nothing about it. */}
                 <Button asChild className="w-full">
-                  <Link to={`/login?redirect=${encodeURIComponent(`/join/${token}`)}`}>Sign in to accept</Link>
+                  <Link to={`/login?redirect=${encodeURIComponent(`/join/${token}`)}`}>{t("org.signInToAccept")}</Link>
                 </Button>
                 <Button asChild variant="outline" className="w-full">
-                  <Link to={`/signup?redirect=${encodeURIComponent(`/join/${token}`)}`}>Create an account</Link>
+                  <Link to={`/signup?redirect=${encodeURIComponent(`/join/${token}`)}`}>{t("auth.createAccount")}</Link>
                 </Button>
               </div>
             )}
 
             <p className="text-center text-xs text-muted-foreground">
-              This invitation expires {new Date(preview.expiresAt).toLocaleDateString()}.
+              {t("org.invitationExpires", { date: formatDate(preview.expiresAt) })}
             </p>
           </div>
         )}
@@ -150,38 +155,34 @@ export default function InvitationPage() {
   )
 }
 
-function label(preview: InvitationPreview, concept: string): string {
-  return preview.vocabulary[concept] ?? "workspace"
-}
-
-function goneMessage(preview: InvitationPreview | null): string {
+function goneMessage(preview: InvitationPreview | null, t: TFunction): string {
   switch (preview?.state) {
     case "accepted":
-      return "This invitation has already been accepted. If that was you, sign in and you are already a member."
+      return t("org.inviteAlreadyAcceptedSignIn")
     case "revoked":
-      return "This invitation was withdrawn. Ask whoever invited you to send a new one."
+      return t("org.inviteWithdrawn")
     case "expired":
-      return "This invitation has expired. Ask whoever invited you to send a new one."
+      return t("org.inviteExpired")
     default:
-      return "This invitation link is not valid. It may have been replaced by a newer one."
+      return t("org.inviteLinkInvalid")
   }
 }
 
 function acceptFailureMessage(code: string, preview: InvitationPreview | null): string {
   switch (code) {
     case "email_mismatch":
-      return `This invitation was sent to ${preview?.email ?? "a different address"}. Sign in with that address to accept it.`
+      return tx("org.inviteEmailMismatch", { email: preview?.email ?? tx("org.aDifferentAddress") })
     case "invitation_expired":
-      return "This invitation has expired. Ask whoever invited you to send a new one."
+      return tx("org.inviteExpired")
     case "invitation_revoked":
-      return "This invitation was withdrawn. Ask whoever invited you to send a new one."
+      return tx("org.inviteWithdrawn")
     case "invitation_accepted":
-      return "This invitation has already been accepted — you are already a member."
+      return tx("org.inviteAlreadyAccepted")
     case "org_not_active":
-      return "That organization is not active yet. Try again once it has been approved."
+      return tx("org.orgNotActiveUntilApproved")
     case "invitation_not_found":
-      return "This invitation link is not valid. It may have been replaced by a newer one."
+      return tx("org.inviteLinkInvalid")
     default:
-      return "Something went wrong joining. Try again in a moment."
+      return tx("org.joinFailedGeneric")
   }
 }

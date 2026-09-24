@@ -2,7 +2,7 @@ import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
   "y2k": {
-    description: "טכנו-פופ של סוף שנות ה-90 ותחילת שנות ה-2000",
+    description: "פופ טכנולוגי של סוף שנות ה-90 ותחילת שנות ה-2000",
   },
   "cottagecore": {
     label: "Cottagecore",
@@ -30,7 +30,7 @@ const map: LocaleCatalogMap = {
   },
   "coquette": {
     label: "Coquette",
-    description: "סרטים, תחרה ורכות balletcore",
+    description: "פפיונים, תחרה ורכות balletcore",
   },
   "fairycore": {
     label: "Fairycore",
@@ -69,7 +69,7 @@ const map: LocaleCatalogMap = {
   },
   "angelcore": {
     label: "Angelcore",
-    description: "רכות כרובית של תחרה ונוצות",
+    description: "רכות מלאכית של תחרה ונוצות",
   },
   "hikecore": {
     label: "Hikecore",
@@ -106,10 +106,10 @@ const map: LocaleCatalogMap = {
   },
   "maximalism": {
     label: "מקסימליזם",
-    description: "תבניות מתנגשות של \"יותר זה יותר\"",
+    description: "תבניות מתנגשות של ״יותר זה יותר״",
   },
   "avant-garde": {
-    label: "Avant-Garde",
+    label: "אוונגרד",
     description: "אופנה פיסולית קונספטואלית",
   },
   "old-hollywood-glam": {
@@ -126,15 +126,15 @@ const map: LocaleCatalogMap = {
   },
   "casual-lived-in": {
     label: "קז'ואל / יומיומי",
-    description: "יומיומי לבוש ולא מסוגנן",
+    description: "יומיומי, משופשף ולא מסוגנן",
   },
   "effortless-cool": {
     label: "Cool ללא מאמץ",
     description: "טבעיות off-duty בסגנון French-girl",
   },
   "retro-90s": {
-    label: "רטרו 90s",
-    description: "שילוב של גראנג' ו-mall של שנות ה-90",
+    label: "רטרו שנות ה-90",
+    description: "שילוב גראנג' וקניון של שנות ה-90",
   },
   "weirdcore": {
     label: "Weirdcore",

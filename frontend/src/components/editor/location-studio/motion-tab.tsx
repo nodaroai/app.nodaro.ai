@@ -3,6 +3,7 @@ import { Check, Loader2, Maximize2 } from "lucide-react"
 import { toast } from "sonner"
 import { LOCATION_ATMOSPHERE_PROVIDERS, LOCATION_PRESET_TO_CATALOG, type LocationAtmosphereProvider } from "@nodaro/shared"
 import { generateLocationMotion, removeLocationAsset } from "@/lib/api"
+import { tx, useT } from "@/lib/i18n"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { useLocationStudioJobs } from "./use-location-studio-jobs"
@@ -52,6 +53,7 @@ interface MotionTabProps {
 }
 
 export function MotionTab({ studio }: MotionTabProps) {
+  const t = useT()
   const data = studio.stagedData
   const [customPrompt, setCustomPrompt] = useState("")
   const [provider, setProvider] = useState<LocationAtmosphereProvider>("kling")
@@ -67,7 +69,7 @@ export function MotionTab({ studio }: MotionTabProps) {
   // nothing to patch locally. Canvas refresh happens on next save / modal reopen.
   useEffect(() => {
     jobs.onFailed((jobId) => {
-      toast.error(`Motion generation ${jobId.slice(0, 8)}… failed`)
+      toast.error(tx("studio.motionGenFailed", { id: jobId.slice(0, 8) }))
     })
   }, [jobs.onFailed])
 
@@ -80,7 +82,7 @@ export function MotionTab({ studio }: MotionTabProps) {
   async function fireGen(motionPrompt: string): Promise<void> {
     if (!data) return
     if (!data.sourceImageUrl) {
-      toast.error("Approve a main image first")
+      toast.error(tx("studio.approveMainImageFirst"))
       return
     }
     const trimmed = motionPrompt.slice(0, 200)
@@ -116,7 +118,7 @@ export function MotionTab({ studio }: MotionTabProps) {
       jobs.abortJob(tempId)
       // `generateLocationMotion` (apiJson) THROWS without toasting — surface the
       // backend message so the optimistic card doesn't vanish unexplained.
-      toast.error(e instanceof Error ? e.message : "Failed to generate motion")
+      toast.error(e instanceof Error ? e.message : tx("studio.generateMotionFailed"))
     }
   }
 
@@ -130,7 +132,7 @@ export function MotionTab({ studio }: MotionTabProps) {
     const trimmed = customPrompt.trim()
     if (!trimmed) return
     if (trimmed.length > 2000) {
-      toast.error("Custom motion prompt is too long (max 2000 chars)")
+      toast.error(tx("studio.customMotionPromptTooLong"))
       return
     }
     await fireGen(trimmed)
@@ -149,7 +151,7 @@ export function MotionTab({ studio }: MotionTabProps) {
       try {
         await removeLocationAsset(id, { column: "atmosphere_motions", url: target.url })
       } catch {
-        toast.error("Failed to delete asset — refresh to restore")
+        toast.error(tx("studio.deleteAssetFailed"))
       }
     }
   }
@@ -190,7 +192,7 @@ export function MotionTab({ studio }: MotionTabProps) {
         ),
       )
       if (results.some((r) => r.status === "rejected")) {
-        toast.error("Failed to delete some assets — refresh to restore")
+        toast.error(tx("studio.deleteSomeAssetsFailed"))
       }
     }
   }
@@ -203,7 +205,7 @@ export function MotionTab({ studio }: MotionTabProps) {
   const createdNames = lowerNameSet(items)
   const busyNames = lowerNameSet(trackedMotions)
   const customDisabled = disabled || !customPrompt.trim()
-  const presetTooltip = noSourceImage ? "Approve a main image first" : undefined
+  const presetTooltip = noSourceImage ? t("studio.approveMainImageFirst") : undefined
 
   // Phase 2 #11 — Search/filter. Same shape as EnvironmentalAssetTab: hide
   // input until the grid is large enough to need it. Filter items by name,
@@ -235,7 +237,7 @@ export function MotionTab({ studio }: MotionTabProps) {
   return (
     <div className="space-y-4 max-w-4xl">
       <h2 className="text-[12px] font-medium text-slate-300">
-        🎬 Atmosphere Motion Clips
+        🎬 {t("studio.atmosphereMotionClips")}
       </h2>
 
       {noSourceImage && (
@@ -243,7 +245,7 @@ export function MotionTab({ studio }: MotionTabProps) {
           role="note"
           className="bg-[#1a1d27] border border-[#1e293b] text-slate-300 p-3 rounded text-[11px]"
         >
-          Approve a main image first — motion generation needs a source frame.
+          {t("studio.approveFirstNeedsSource")}
         </div>
       )}
 
@@ -253,8 +255,8 @@ export function MotionTab({ studio }: MotionTabProps) {
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search atmosphere motions…"
-            aria-label="Search atmosphere motions"
+            placeholder={t("studio.searchAtmosphereMotionsPh")}
+            aria-label={t("studio.searchAtmosphereMotions")}
             className="flex-1 px-3 py-1.5 text-[11px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600"
           />
           {q && (
@@ -263,7 +265,7 @@ export function MotionTab({ studio }: MotionTabProps) {
               onClick={() => setSearchQuery("")}
               className="text-[11px] text-slate-400 hover:text-slate-200"
             >
-              Clear
+              {t("common.clear")}
             </button>
           )}
         </div>
@@ -273,24 +275,24 @@ export function MotionTab({ studio }: MotionTabProps) {
       {isSelectionMode && (
         <div
           role="toolbar"
-          aria-label="Bulk actions"
+          aria-label={t("studio.bulkActions")}
           className="flex items-center justify-between gap-2 px-3 py-2 rounded bg-[#1a1d27] border border-[#1e293b] text-[11px] text-slate-300"
         >
-          <span>{selectedIdx.size} selected</span>
+          <span>{t("studio.nSelected", { n: selectedIdx.size })}</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={clearSelection}
               className="px-2 py-1 rounded text-slate-400 hover:bg-[#1e293b] hover:text-slate-200"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="button"
               onClick={() => void handleBulkDelete()}
               className="px-3 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-medium"
             >
-              Delete {selectedIdx.size}
+              {t("studio.deleteN", { n: selectedIdx.size })}
             </button>
           </div>
         </div>
@@ -336,22 +338,22 @@ export function MotionTab({ studio }: MotionTabProps) {
                   toggleSelected(originalIdx)
                 }}
                 onClick={(e) => e.stopPropagation()}
-                aria-label={`Select ${item.name}`}
+                aria-label={t("studio.selectNamed", { name: item.name })}
                 className={
-                  "absolute top-1 left-1 size-4 accent-[#22d3ee] cursor-pointer z-10 "
+                  "absolute top-1 start-1 size-4 accent-[#22d3ee] cursor-pointer z-10 "
                   + (isSelectionMode ? "opacity-100" : "opacity-0 group-hover:opacity-100")
                 }
               />
               {!isSelectionMode && (
-                <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 z-10">
+                <div className="absolute top-1 end-1 flex gap-1 opacity-0 group-hover:opacity-100 z-10">
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation()
                       setLightboxIndex(visibleItems.indexOf(item))
                     }}
-                    aria-label={`Enlarge ${item.name}`}
-                    title="Enlarge"
+                    aria-label={t("studio.enlargeNamed", { name: item.name })}
+                    title={t("common.enlarge")}
                     className="w-6 h-6 flex items-center justify-center rounded bg-black/60 text-white hover:bg-black/80"
                   >
                     <Maximize2 className="w-3 h-3" />
@@ -362,10 +364,10 @@ export function MotionTab({ studio }: MotionTabProps) {
                       e.stopPropagation()
                       void handleRemove(originalIdx)
                     }}
-                    aria-label={`Remove ${item.name}`}
+                    aria-label={t("cfgshared.removeModel", { name: item.name })}
                     className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80"
                   >
-                    Remove
+                    {t("common.remove")}
                   </button>
                 </div>
               )}
@@ -378,24 +380,23 @@ export function MotionTab({ studio }: MotionTabProps) {
             className="aspect-video border border-[#1e293b] rounded bg-[#0e1117] flex flex-col items-center justify-center gap-2 text-[11px] text-slate-400"
           >
             <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
-            <span className="truncate max-w-full px-2">Generating {j.name}…</span>
+            <span className="truncate max-w-full px-2">{t("studio.generatingName", { name: j.name })}</span>
           </div>
         ))}
         {!q && items.length === 0 && trackedMotions.length === 0 && (
           <div className="col-span-full text-center text-[11px] text-slate-500 py-8 border border-dashed border-[#1e293b] rounded">
-            No atmosphere motions yet — pick a preset below or enter a custom
-            motion prompt.
+            {t("studio.noAtmosphereMotionsYet")}
           </div>
         )}
         {zeroResults && (
           <div className="col-span-full text-center text-[11px] text-slate-500 py-6 border border-dashed border-[#1e293b] rounded">
-            No matches for &quot;{searchQuery.trim()}&quot;.{" "}
+            {t("studio.noMatchesFor", { q: searchQuery.trim() })}{" "}
             <button
               type="button"
               onClick={() => setSearchQuery("")}
               className="text-pink-400 hover:underline"
             >
-              Clear
+              {t("common.clear")}
             </button>
           </div>
         )}
@@ -404,7 +405,7 @@ export function MotionTab({ studio }: MotionTabProps) {
       {/* Provider picker */}
       <div className="flex items-center gap-2">
         <label htmlFor="motion-provider" className="text-[12px] text-slate-300">
-          Provider:
+          {t("studio.providerColon")}
         </label>
         <select
           id="motion-provider"
@@ -444,10 +445,10 @@ export function MotionTab({ studio }: MotionTabProps) {
                 disabled
                   ? presetTooltip
                   : st === "created"
-                    ? `${label} — already generated`
+                    ? t("studio.presetAlreadyGenerated", { name: label })
                     : st === "creating"
-                      ? `${label} — generating…`
-                      : `Generate ${label}`
+                      ? t("studio.presetGenerating", { name: label })
+                      : t("studio.generateNamed", { name: label })
               }
               onClick={() => handlePresetClick(p)}
               className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 inline-flex items-center gap-1.5 transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40 disabled:cursor-not-allowed data-[state=created]:text-emerald-300/80 data-[state=created]:border-emerald-700/40"
@@ -466,7 +467,7 @@ export function MotionTab({ studio }: MotionTabProps) {
           type="text"
           value={customPrompt}
           onChange={(e) => setCustomPrompt(e.target.value)}
-          placeholder="Custom motion prompt (free-form)"
+          placeholder={t("studio.customMotionPromptPh")}
           disabled={disabled}
           title={presetTooltip}
           className="flex-1 px-3 py-2 text-[12px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600 disabled:opacity-40"
@@ -486,7 +487,7 @@ export function MotionTab({ studio }: MotionTabProps) {
           title={presetTooltip}
           className="px-4 py-2 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
         >
-          Generate
+          {t("common.generate")}
         </button>
       </div>
 

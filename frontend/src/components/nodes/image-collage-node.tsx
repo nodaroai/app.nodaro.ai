@@ -161,7 +161,7 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
 
                 <CachedImage
                   src={activeUrl}
-                  alt="Collage"
+                  alt={t("node.collage")}
                   className="w-full h-full object-contain rounded-xl bg-black/20"
                   thumbnail
                   thumbnailWidth={640}
@@ -208,13 +208,13 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
                       e.stopPropagation()
                       setPreviewOpen(true)
                     }}
-                    title="Fullscreen"
+                    title={t("node.fullscreen")}
                   >
                     <Expand className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
-                    aria-label="Download"
+                    aria-label={t("common.download")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
@@ -223,7 +223,7 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
                       a.download = `${nodeData.label || "collage"}.png`
                       a.click()
                     }}
-                    title="Download"
+                    title={t("common.download")}
                   >
                     <Download className="w-3.5 h-3.5" />
                   </button>
@@ -233,7 +233,7 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
-                      copyToClipboard(activeUrl!, "URL copied")
+                      copyToClipboard(activeUrl!, t("node.urlCopied"))
                     }}
                     title={t("cfgshared.copyUrl")}
                   >

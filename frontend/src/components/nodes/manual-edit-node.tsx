@@ -154,9 +154,9 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
               onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth > 0) handleLoadDimensions({ width: v.videoWidth, height: v.videoHeight }) }}
             />
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{t("node.edited")}</div>
-            <button type="button" onClick={handleOpenEditor} className="absolute bottom-1 left-1 px-2 py-0.5 text-[10px] font-medium rounded bg-[#ff0073] text-white opacity-0 group-hover:opacity-100 transition-opacity">Re-edit</button>
+            <button type="button" onClick={handleOpenEditor} className="absolute bottom-1 left-1 px-2 py-0.5 text-[10px] font-medium rounded bg-[#ff0073] text-white opacity-0 group-hover:opacity-100 transition-opacity">{t("node.reEdit")}</button>
             {results.length > 0 && (
-              <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
+              <button type="button" aria-label={t("common.remove")} className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
             )}
           </div>
         )}
@@ -169,7 +169,7 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
             </div>
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{t("node.edited")}</div>
             {results.length > 0 && (
-              <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
+              <button type="button" aria-label={t("common.remove")} className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
             )}
           </div>
         )}
@@ -191,7 +191,7 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
             {connectedAssets.length > 0 ? (
               <>
                 <span className="text-[10px] text-muted-foreground">
-                  {connectedAssets.length} asset{connectedAssets.length !== 1 ? "s" : ""} connected
+                  {connectedAssets.length === 1 ? t("node.assetsConnectedOne", { n: connectedAssets.length }) : t("node.assetsConnectedMany", { n: connectedAssets.length })}
                 </span>
                 <button
                   type="button"
@@ -215,13 +215,13 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
                 ) : (
                   <video src={r.url} crossOrigin="anonymous" className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }} muted playsInline />
                 )}
-                <button type="button" aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
+                <button type="button" aria-label={t("common.remove")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
               </div>
             ))}
           </div>
         )}
         <p className="text-muted-foreground text-xs">
-          {connectedAssets.length > 0 ? `${connectedAssets.length} asset${connectedAssets.length !== 1 ? "s" : ""} — click to edit` : "Connect assets to edit"}
+          {connectedAssets.length > 0 ? t(connectedAssets.length === 1 ? "node.assetsClickToEditOne" : "node.assetsClickToEditMany", { n: connectedAssets.length }) : t("node.connectAssetsToEdit")}
         </p>
       </div>
     </BaseNode>

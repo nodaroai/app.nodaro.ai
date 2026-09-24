@@ -13,6 +13,7 @@ import { focusNodeInViewport } from "@/lib/focus-node-in-viewport"
 import { optimizedImageUrl } from "@/lib/image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useClickOutside } from "@/hooks/use-click-outside"
+import { useT } from "@/lib/i18n"
 import { type WorkflowNode } from "@/types/nodes"
 import { RatioIcon } from "./config-panels/aspect-ratio-selector"
 
@@ -110,6 +111,7 @@ function buildSearchHaystack(node: WorkflowNode): string {
 
 /** Workflow-scoped node search modal. Cmd/Ctrl+F opens it. */
 export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
+  const t = useT()
   const [query, setQuery] = useState("")
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -408,18 +410,18 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
               setQuery(e.target.value)
               setSelectedIndex(0)
             }}
-            placeholder="Search nodes — type, name, model, aspect ratio, prompt…"
-            aria-label="Search nodes in this workflow"
+            placeholder={t("addnode.nodeSearchPlaceholder")}
+            aria-label={t("addnode.nodeSearchAria")}
             className="flex-1 bg-transparent border-none outline-none text-base text-[#1E293B] dark:text-white placeholder:text-[#94A3B8]"
           />
           <span className="text-[10px] text-[#94A3B8] shrink-0 tabular-nums">
-            {hits.length} {hits.length === 1 ? "node" : "nodes"}
+            {hits.length} {hits.length === 1 ? t("addnode.unitNode") : t("addnode.unitNodes")}
           </span>
           <button
             type="button"
             onClick={onClose}
             className="p-1 rounded hover:bg-[#F1F5F9] dark:hover:bg-[#2D2D2D] transition-colors"
-            aria-label="Close"
+            aria-label={t("addnode.close")}
           >
             <X className="w-4 h-4 text-[#64748B]" />
           </button>
@@ -428,10 +430,10 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
         {/* Two-pane body: list on left, preview on right */}
         <div className="flex min-h-[420px] max-h-[65vh]">
           {/* Result list */}
-          <div ref={resultsRef} className="flex-1 min-w-0 overflow-y-auto py-1 border-r border-[#E2E8F0] dark:border-[#2D2D2D] node-menu-surface">
+          <div ref={resultsRef} className="flex-1 min-w-0 overflow-y-auto py-1 border-e border-[#E2E8F0] dark:border-[#2D2D2D] node-menu-surface">
             {hits.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-[#94A3B8]">
-                {query ? "No nodes match your search." : "This workflow has no nodes yet."}
+                {query ? t("addnode.noNodesMatch") : t("addnode.workflowNoNodes")}
               </div>
             ) : (
               hits.map((hit, i) => {
@@ -486,7 +488,7 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
                     <button
                       type="button"
                       onClick={() => focusNode(hit.node.id)}
-                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                      className="flex items-center gap-3 flex-1 min-w-0 text-start"
                     >
                     <div className="w-12 h-12 rounded-md bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden">
                       {hit.videoUrl ? (
@@ -527,10 +529,10 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
                         {isCanvasFocused && (
                           <span
                             className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-[#ff0073]/15 text-[#ff0073] font-semibold uppercase tracking-wide shrink-0 flex items-center gap-1"
-                            title="Currently focused on the canvas"
+                            title={t("addnode.focusedOnCanvas")}
                           >
                             <MapPin className="w-2.5 h-2.5" />
-                            Here
+                            {t("addnode.here")}
                           </span>
                         )}
                       </div>
@@ -595,11 +597,11 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-2 border-t border-[#E2E8F0] dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#1A1A1A]">
           <div className="flex items-center gap-4 text-[10px] text-[#94A3B8] flex-wrap">
-            <KbdHint keys={["↑", "↓"]} label="Navigate" />
-            <KbdHint keys={["Tab"]} label="Connectors" />
-            <KbdHint keys={["Enter"]} label="Focus / toggle" />
-            <KbdHint keys={["⌥", "←→"]} label="Move focus" />
-            <KbdHint keys={["Esc"]} label="Close" />
+            <KbdHint keys={["↑", "↓"]} label={t("addnode.navigate")} />
+            <KbdHint keys={["Tab"]} label={t("addnode.connectors")} />
+            <KbdHint keys={["Enter"]} label={t("addnode.focusToggle")} />
+            <KbdHint keys={["⌥", "←→"]} label={t("addnode.moveFocus")} />
+            <KbdHint keys={["Esc"]} label={t("addnode.close")} />
           </div>
         </div>
       </div>
@@ -711,9 +713,10 @@ function ConnectorGroup({
   readonly onToggle: (c: NodeConnector) => void
   readonly onExpandToggle: () => void
 }) {
+  const t = useT()
   const Arrow = dir === "from" ? ArrowLeft : ArrowRight
-  const dirLabel = dir === "from" ? "From" : "To"
-  const tip = dir === "from" ? "input from this node" : "output to this node"
+  const dirLabel = dir === "from" ? t("addnode.dirFrom") : t("addnode.dirTo")
+  const tip = dir === "from" ? t("addnode.tipInputFrom") : t("addnode.tipOutputTo")
   const color = group[0]?.color
   const typeIcon = handleTypeIcon(group[0]?.type)
 
@@ -775,8 +778,17 @@ function ConnectorGroup({
       connected: c.connected,
       focused: focusedKey === c.key,
       label: dirLabel,
-      title: `${c.connected ? "Disconnect" : "Connect"} — ${dirLabel.toLowerCase()} (${c.label}), ${tip}`,
-      ariaLabel: `${dirLabel} ${c.label}: ${c.connected ? "connected" : "not connected"}`,
+      title: t("addnode.connToggleTitle", {
+        action: t(c.connected ? "handle.disconnect" : "handle.connect"),
+        dir: dirLabel.toLowerCase(),
+        handle: c.label,
+        tip,
+      }),
+      ariaLabel: t("addnode.connToggleAria", {
+        dir: dirLabel,
+        handle: c.label,
+        state: t(c.connected ? "addnode.stateConnected" : "addnode.stateNotConnected"),
+      }),
       onClick: () => onToggle(c),
       leading: dirGlyphs,
     })
@@ -788,8 +800,12 @@ function ConnectorGroup({
       connected: connCount > 0,
       focused: group.some((c) => c.key === focusedKey),
       label: connCount > 0 ? `${dirLabel} · ${connCount}` : dirLabel,
-      title: `${dirLabel} — ${group.length} options (${tip})`,
-      ariaLabel: `${dirLabel}: ${group.length} connection options${connCount > 0 ? `, ${connCount} connected` : ""}`,
+      title: t("addnode.connSummaryTitle", { dir: dirLabel, n: group.length, tip }),
+      ariaLabel: t("addnode.connSummaryAria", {
+        dir: dirLabel,
+        n: group.length,
+        suffix: connCount > 0 ? t("addnode.connSummaryConnected", { n: connCount }) : "",
+      }),
       isExpander: true,
       onClick: onExpandToggle,
       caret: true,
@@ -798,7 +814,7 @@ function ConnectorGroup({
   }
 
   return (
-    <span className="flex items-center gap-1 flex-wrap rounded-full bg-black/[0.03] dark:bg-white/[0.04] pl-1.5 pr-0.5 py-0.5">
+    <span className="flex items-center gap-1 flex-wrap rounded-full bg-black/[0.03] dark:bg-white/[0.04] ps-1.5 pe-0.5 py-0.5">
       <span className="flex items-center gap-1 text-[10px] text-muted-foreground/80">
         {dirGlyphs}
         {dirLabel}
@@ -808,8 +824,17 @@ function ConnectorGroup({
           connected: c.connected,
           focused: focusedKey === c.key,
           label: c.label,
-          title: `${c.connected ? "Disconnect" : "Connect"} ${c.label} (${tip})`,
-          ariaLabel: `${c.connected ? "Disconnect" : "Connect"} ${c.label}, ${dirLabel.toLowerCase()} ${tip}`,
+          title: t("addnode.connHandleTitle", {
+            action: t(c.connected ? "handle.disconnect" : "handle.connect"),
+            handle: c.label,
+            tip,
+          }),
+          ariaLabel: t("addnode.connHandleAria", {
+            action: t(c.connected ? "handle.disconnect" : "handle.connect"),
+            handle: c.label,
+            dir: dirLabel.toLowerCase(),
+            tip,
+          }),
           onClick: () => onToggle(c),
           leading: (
             // Per-handle color (not the group header's) so a future mixed-type

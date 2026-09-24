@@ -6,6 +6,7 @@ import type { WorkflowNode } from "@/types/nodes"
 import { GlassCard } from "../output-cards/shared"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
 import type { PromptContext } from "@/lib/prompt-context"
+import { useT } from "@/lib/i18n"
 
 interface ListInputCardProps {
   node: WorkflowNode
@@ -26,6 +27,7 @@ export function ListInputCard({
   maxItems,
   promptHelper,
 }: ListInputCardProps) {
+  const t = useT()
   const items: string[] = useMemo(() => {
     if (isFullscreen) {
       const stored = inputValues[node.id]?.items
@@ -90,7 +92,7 @@ export function ListInputCard({
   )
 
   const atMax = items.length >= maxItems
-  const label = (node.data.label as string) || "List"
+  const label = (node.data.label as string) || t("present.listFallback")
 
   return (
     <GlassCard>
@@ -100,7 +102,7 @@ export function ListInputCard({
         </label>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-muted-foreground/70">
-            {items.length} of {maxItems} max
+            {t("present.ofMax", { n: items.length, max: maxItems })}
           </span>
           {!readOnly && (
             <button
@@ -108,7 +110,7 @@ export function ListInputCard({
               onClick={handleAdd}
               disabled={atMax}
               className="flex items-center justify-center w-6 h-6 rounded-md bg-[#ff0073] text-white transition-opacity duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
-              title="Add item"
+              title={t("present.addItem")}
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -120,7 +122,7 @@ export function ListInputCard({
         {items.map((item, index) => (
           <div key={index} className="flex gap-2">
             <div className="flex-1 flex flex-col gap-1">
-              <div className="flex items-center justify-between pl-1">
+              <div className="flex items-center justify-between ps-1">
                 <span className="text-[11px] text-muted-foreground/60">
                   #{index + 1}
                 </span>
@@ -139,7 +141,7 @@ export function ListInputCard({
                 value={item}
                 onChange={(e) => handleItemChange(index, e.target.value)}
                 readOnly={readOnly}
-                placeholder={`Item ${index + 1}...`}
+                placeholder={t("present.itemPlaceholder", { n: index + 1 })}
                 className={`w-full min-h-[56px] bg-muted/30 border border-border rounded-lg px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200${readOnly ? " opacity-70 cursor-default" : ""}`}
               />
             </div>
@@ -150,7 +152,7 @@ export function ListInputCard({
                   type="button"
                   onClick={() => handleRemove(index)}
                   className="hidden sm:flex items-start pt-6 shrink-0"
-                  title="Remove item"
+                  title={t("present.removeItem")}
                 >
                   <span className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 transition-colors">
                     <X className="w-3.5 h-3.5" />
@@ -162,7 +164,7 @@ export function ListInputCard({
                   onClick={() => handleRemove(index)}
                   className="sm:hidden self-end shrink-0 text-[11px] text-muted-foreground/50 hover:text-red-400 pb-1 transition-colors"
                 >
-                  Remove
+                  {t("common.remove")}
                 </button>
               </>
             )}
@@ -177,15 +179,15 @@ export function ListInputCard({
           onClick={handleAdd}
           className="sm:hidden w-full mt-3 py-2 border-2 border-dashed border-muted-foreground/20 rounded-lg text-xs text-muted-foreground/60 hover:border-[#ff0073]/40 hover:text-muted-foreground transition-colors"
         >
-          + Add Prompt
+          {t("present.addPrompt")}
         </button>
       )}
 
       {hasCredits() && (
         <div className="mt-3 px-3 py-2 rounded-md bg-[#ff007310] border border-[#ff007330] flex justify-between items-center">
-          <span className="text-xs text-[#ff0073]">Fan-out</span>
+          <span className="text-xs text-[#ff0073]">{t("present.fanOut")}</span>
           <span className="text-sm font-semibold text-[#ff0073]">
-            {items.length} {items.length === 1 ? "iteration" : "iterations"}
+            {items.length === 1 ? t("present.oneIteration") : t("present.iterations", { n: items.length })}
           </span>
         </div>
       )}

@@ -66,7 +66,7 @@ export function NodaroHeaderChip() {
       href="/integrations"
       onClick={(e) => e.stopPropagation()}
       className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#ff0073] text-white hover:bg-[#e0005f] transition-colors"
-      title="Requires nodaro.ai — connect your install (Integrations → nodaro.ai, or paste an API key from app.nodaro.ai → Settings → API)"
+      title={t("node.requiresNodaroConnect")}
     >
       {t("node.connectNodaro")}
     </a>

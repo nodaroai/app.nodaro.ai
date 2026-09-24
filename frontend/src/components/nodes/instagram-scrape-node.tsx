@@ -35,6 +35,7 @@ import {
   instagramVideoUrl,
   instagramVisibleIndexes,
 } from "./instagram-scrape-run-state"
+import { formatNumber } from "@/lib/i18n/format"
 
 const WIDTH = 440
 const MAX_THUMBS = 10
@@ -169,8 +170,8 @@ function FeaturedPost({ post }: { readonly post: Record<string, unknown> }) {
       <div className="flex items-center justify-between gap-2 text-[12.5px] font-bold text-[var(--meta-ads-text)]">
         <span className="truncate">@{instagramOwner(post) || "?"}</span>
         <span className="flex items-center gap-2.5 text-[var(--meta-ads-muted)]">
-          {likes !== null && <span className="flex items-center gap-1"><Heart className="h-3.5 w-3.5" />{likes.toLocaleString()}</span>}
-          {comments !== null && <span className="flex items-center gap-1"><MessageCircle className="h-3.5 w-3.5" />{comments.toLocaleString()}</span>}
+          {likes !== null && <span className="flex items-center gap-1"><Heart className="h-3.5 w-3.5" />{formatNumber(likes)}</span>}
+          {comments !== null && <span className="flex items-center gap-1"><MessageCircle className="h-3.5 w-3.5" />{formatNumber(comments)}</span>}
         </span>
       </div>
       {instagramCaption(post) && (

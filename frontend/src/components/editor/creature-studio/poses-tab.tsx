@@ -1,5 +1,6 @@
 import { CreatureAssetTab } from "./creature-asset-tab"
 import type { CreatureStudioState } from "./use-creature-studio"
+import { useT } from "@/lib/i18n"
 
 /**
  * Poses tab — thin wrapper over `CreatureAssetTab` passing the `poses`
@@ -34,12 +35,13 @@ interface PosesTabProps {
 }
 
 export function PosesTab({ studio }: PosesTabProps) {
+  const t = useT()
   return (
     <CreatureAssetTab
       studio={studio}
       tabKind="poses"
       presets={POSES_PRESETS}
-      iconLabel="🧍 Poses"
+      iconLabel={t("creature.posesTabTitle")}
     />
   )
 }

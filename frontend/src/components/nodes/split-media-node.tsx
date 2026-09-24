@@ -72,13 +72,13 @@ function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
                 onClick={(e) => { e.stopPropagation(); setShowDetails(v => !v) }}
               >
                 <LayoutGrid className="w-3 h-3" />
-                <span>{chunkCount} chunks</span>
+                <span>{t("node.nChunks", { n: chunkCount })}</span>
               </button>
               {showDetails && (
                 <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
                   {audioChunks.map((url, i) => (
                     <div key={`a-${i}`} className="flex flex-col gap-0.5" onClick={(e) => e.stopPropagation()}>
-                      <span className="text-[10px] text-muted-foreground">Chunk {i + 1}</span>
+                      <span className="text-[10px] text-muted-foreground">{t("proccfg.chunk", { n: i + 1 })}</span>
                       <WaveformAudioPlayer url={url} variant="mini" isInsideCanvas className="w-full" />
                     </div>
                   ))}
@@ -114,7 +114,7 @@ function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           <span className="text-xs text-muted-foreground">
-            Split · {nodeData.chunkDuration}s chunks
+            {t("node.splitSecondsChunks", { n: nodeData.chunkDuration })}
           </span>
         </div>
       </BaseNode>

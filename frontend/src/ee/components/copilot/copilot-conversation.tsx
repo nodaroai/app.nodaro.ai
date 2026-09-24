@@ -9,7 +9,7 @@
  * nothing is drawn twice.
  */
 import { useEffect, useRef, useState } from "react"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
 import { creditUnits } from "@/lib/credit-units"
 import { useT } from "@/lib/i18n"
 import { mentionDisplayName, splitWireMessage } from "@/ee/lib/copilot/mentions"
@@ -65,6 +65,7 @@ export function CopilotConversation({
 
   const persisted = new Set(messages.map((m) => m.turnId))
   const showLive = turn.status !== "idle" && (!turn.turnId || !persisted.has(turn.turnId))
+  const usedUnits = creditUnits(turn.creditsCharged)
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -91,7 +92,7 @@ export function CopilotConversation({
             <div className="text-[13px] leading-[1.6] text-foreground tracking-[-0.005em] whitespace-pre-wrap break-words">
               {turn.text}
               {streaming && (
-                <span className="inline-block w-0.5 h-[13px] bg-primary ml-0.5 -mb-0.5 animate-pulse" aria-hidden />
+                <span className="inline-block w-0.5 h-[13px] bg-primary ms-0.5 -mb-0.5 animate-pulse" aria-hidden />
               )}
             </div>
           )}
@@ -123,13 +124,13 @@ export function CopilotConversation({
 
       <CopilotRunSection userId={userId} nodeCount={nodeCount} onStopRun={onStopRun} />
 
-      {turn.status === "capped" && <div className="text-[11.5px] text-[var(--copilot-muted)] px-0.5">{S.capped}</div>}
-      {turn.status === "cancelled" && <div className="text-[11.5px] text-[var(--copilot-dim)] px-0.5">{S.cancelled}</div>}
+      {turn.status === "capped" && <div className="text-[11.5px] text-[var(--copilot-muted)] px-0.5">{t(K.capped)}</div>}
+      {turn.status === "cancelled" && <div className="text-[11.5px] text-[var(--copilot-dim)] px-0.5">{t(K.cancelled)}</div>}
       {turn.error && (
         <div className="flex items-center gap-2 text-[11.5px] text-[var(--copilot-fail)] px-0.5">
           <span className="min-w-0 break-words">{turn.error.message}</span>
-          <button type="button" onClick={onRetry} className="ml-auto underline whitespace-nowrap">
-            {S.errorRetry}
+          <button type="button" onClick={onRetry} className="ms-auto underline whitespace-nowrap">
+            {t(K.errorRetry)}
           </button>
         </div>
       )}
@@ -142,12 +143,15 @@ export function CopilotConversation({
               billing account instead of quoting a shortfall they cannot fix. */}
           {insufficient.code === "user_allowance_exceeded"
             ? t("credits.allowanceExceeded")
-            : `Not enough credits — this turn needs ${creditUnits(insufficient.required)}, you have ${creditUnits(insufficient.balance)}.`}
+            : t(K.notEnoughCredits, {
+                required: creditUnits(insufficient.required),
+                balance: creditUnits(insufficient.balance),
+              })}
         </div>
       )}
       {turn.creditsCharged !== null && turn.creditsCharged > 0 && (
         <div className="text-[11px] text-[var(--copilot-dim)] px-0.5 tabular-nums">
-          Used {S.usedCredits(turn.creditsCharged)}
+          {t(usedUnits === 1 ? K.usedTotalOne : K.usedTotalOther, { n: usedUnits })}
         </div>
       )}
 

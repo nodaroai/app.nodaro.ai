@@ -1,4 +1,5 @@
 import { Eye, EyeOff } from "lucide-react"
+import { useT } from "@/lib/i18n"
 
 interface HiddenNodesPillProps {
   count: number
@@ -7,6 +8,7 @@ interface HiddenNodesPillProps {
 }
 
 export function HiddenNodesPill({ count, isRevealing, onToggleReveal }: HiddenNodesPillProps) {
+  const t = useT()
   if (count === 0) return null
 
   return (
@@ -20,12 +22,12 @@ export function HiddenNodesPill({ count, isRevealing, onToggleReveal }: HiddenNo
       {isRevealing ? (
         <>
           <EyeOff className="w-3.5 h-3.5" />
-          Showing {count} hidden — Done
+          {t("present.showingHiddenDone", { n: count })}
         </>
       ) : (
         <>
           <Eye className="w-3.5 h-3.5" />
-          {count} hidden — Show all
+          {t("present.hiddenShowAll", { n: count })}
         </>
       )}
     </button>

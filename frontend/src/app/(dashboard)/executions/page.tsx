@@ -30,6 +30,8 @@ import {
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits } from "@/lib/edition"
 import { useT, type MessageKey, type TFunction } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { queryKeys } from "@/lib/query-keys"
 import { useGlobalExecutions } from "@/hooks/queries/use-execution-queries"
 import {
@@ -69,6 +71,7 @@ function statusLabel(status: string, t: TFunction): string {
 
 export default function ExecutionsPage() {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const { isAdmin } = useAuth()
   const qc = useQueryClient()
 
@@ -222,7 +225,7 @@ export default function ExecutionsPage() {
               aria-label={t("exec.prevPage")}
               className="h-8 w-8"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className={cn("w-4 h-4", isRtl && "rotate-180")} />
             </Button>
             <Button
               variant="outline"
@@ -232,7 +235,7 @@ export default function ExecutionsPage() {
               aria-label={t("exec.nextPage")}
               className="h-8 w-8"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className={cn("w-4 h-4", isRtl && "rotate-180")} />
             </Button>
           </div>
         </div>
@@ -263,33 +266,33 @@ export default function ExecutionsPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 dark:bg-[#121212]">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider w-8" />
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider w-8" />
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   {t("exec.colStatus")}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   {t("exec.colWorkflow")}
                 </th>
                 {showAll && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                     {t("exec.colOwner")}
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   {t("exec.colTrigger")}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   {t("exec.colProgress")}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   {t("exec.colDuration")}
                 </th>
                 {hasCredits() && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                     {t("exec.colCredits")}
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   {t("exec.colCreated")}
                 </th>
               </tr>
@@ -483,11 +486,11 @@ function GlobalExecutionRow({
               <table className="w-full">
                 <thead>
                   <tr>
-                    <th className="px-8 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colNode")}</th>
-                    <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colStatus")}</th>
-                    <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colDuration")}</th>
+                    <th className="px-8 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colNode")}</th>
+                    <th className="px-3 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colStatus")}</th>
+                    <th className="px-3 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colDuration")}</th>
                     {hasCredits() && (
-                      <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colCredits")}</th>
+                      <th className="px-3 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colCredits")}</th>
                     )}
                     <th className="px-3 py-2 w-8" />
                   </tr>
@@ -565,7 +568,7 @@ function GlobalExecutionRow({
                             className="hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors"
                             onClick={() => onNodeClick(`${nodeId}-iter-${idx}`, { ...state, jobId: jid, jobIds: undefined })}
                           >
-                            <td className="px-8 py-1 pl-14">
+                            <td className="px-8 py-1 ps-14">
                               <span className="text-[11px] text-gray-400">{t("exec.iteration", { n: idx + 1 })}</span>
                             </td>
                             <td className="px-3 py-1">

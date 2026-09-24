@@ -13,6 +13,8 @@
 import { useMemo, useState } from "react"
 import { nodeText, nodeMedia, nodeOutputText } from "../derive-tutorial-data"
 import { TutorialLightbox, useLightbox } from "../tutorial-lightbox"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { TutorialBodyProps } from "../tutorial-registry"
 import type { WorkflowNode } from "@/types/nodes"
 import { neighbours, parseSlides, type Slide } from "./autopilot-slides"
@@ -42,6 +44,8 @@ const hashtags = (t: string) => (t.match(/#[\w֐-׿]+/g) ?? []).join(" ")
 export default function AutopilotBody({ nodes }: TutorialBodyProps) {
   const [slide, setSlide] = useState(1)
   const lightbox = useLightbox()
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
 
   const byLabel = useMemo(() => {
     const map = new Map<string, WorkflowNode>()
@@ -105,8 +109,8 @@ export default function AutopilotBody({ nodes }: TutorialBodyProps) {
             style={{ backgroundImage: `url(${url})` }}
             role="button"
             tabIndex={0}
-            aria-label={`Open slide ${slide}`}
-            onClick={() => lightbox.show(url, `Slide ${slide}`)}
+            aria-label={t("tut.openSlide", { n: slide })}
+            onClick={() => lightbox.show(url, t("tut.slideN", { n: slide }))}
           />
         ) : (
           "—"
@@ -119,7 +123,7 @@ export default function AutopilotBody({ nodes }: TutorialBodyProps) {
               className="ap-post-mini-img"
               style={postUrl || images[0] ? { backgroundImage: `url(${postUrl ?? images[0]})` } : undefined}
             />
-            <span className="ap-live-text">live on instagram</span>
+            <span className="ap-live-text">{t("tut.liveOnInstagram")}</span>
           </div>
         )
       case "LLM Chat-Hook Generator":
@@ -135,13 +139,13 @@ export default function AutopilotBody({ nodes }: TutorialBodyProps) {
     <div className="ap">
       <header className="ap-headline">
         <div style={{ minWidth: 0 }}>
-          <h1>{HEADLINE}</h1>
-          <p className="ap-subline">{SUBLINE}</p>
+          <h1>{t(HEADLINE)}</h1>
+          <p className="ap-subline">{t(SUBLINE)}</p>
         </div>
         <div className="ap-headline-chips">
           {HEADLINE_CHIPS.map((c) => (
             <span key={c} className="nd-chip">
-              {c}
+              {t(c)}
             </span>
           ))}
         </div>
@@ -150,10 +154,10 @@ export default function AutopilotBody({ nodes }: TutorialBodyProps) {
       <div className="ap-hero">
         <section className="ap-card">
           <header className="ap-card-head">
-            <span className="ap-io-badge">{HERO.in.badge}</span>
+            <span className="ap-io-badge">{t(HERO.in.badge)}</span>
             <div>
-              <div className="ap-card-title">{HERO.in.title}</div>
-              <div className="ap-card-sub">{HERO.in.sub}</div>
+              <div className="ap-card-title">{t(HERO.in.title)}</div>
+              <div className="ap-card-sub">{t(HERO.in.sub)}</div>
             </div>
           </header>
           <div className="ap-card-body">
@@ -164,23 +168,23 @@ export default function AutopilotBody({ nodes }: TutorialBodyProps) {
         <div className="ap-connector">
           <span className="ap-connector-bar" />
           <span className="ap-connector-text">
-            {HERO.connector[0]}
+            {t(HERO.connector[0])}
             <br />
-            {HERO.connector[1]}
+            {t(HERO.connector[1])}
           </span>
         </div>
 
         <section className="ap-card ap-card--out">
           <header className="ap-card-head">
-            <span className="ap-io-badge ap-io-badge--out">{HERO.out.badge}</span>
+            <span className="ap-io-badge ap-io-badge--out">{t(HERO.out.badge)}</span>
             <div style={{ minWidth: 0 }}>
-              <div className="ap-card-title">{HERO.out.title}</div>
-              <div className="ap-card-sub">{HERO.out.sub}</div>
+              <div className="ap-card-title">{t(HERO.out.title)}</div>
+              <div className="ap-card-sub">{t(HERO.out.sub)}</div>
             </div>
             {postUrl && (
               <span className="ap-live">
                 <span className="ap-live-dot" />
-                published
+                {t("tut.published")}
               </span>
             )}
           </header>
@@ -191,20 +195,20 @@ export default function AutopilotBody({ nodes }: TutorialBodyProps) {
                 style={imageFor(slide) ? { backgroundImage: `url(${imageFor(slide)})` } : undefined}
                 role="button"
                 tabIndex={0}
-                aria-label={`Open slide ${slide}`}
+                aria-label={t("tut.openSlide", { n: slide })}
                 onClick={() => {
                   const url = imageFor(slide)
-                  if (url) lightbox.show(url, `Slide ${slide}`)
+                  if (url) lightbox.show(url, t("tut.slideN", { n: slide }))
                 }}
               />
-              <div className="ap-post-cap">{POST_CAPTION.replace("slide 1", `slide ${slide}`)}</div>
+              <div className="ap-post-cap">{t(POST_CAPTION, { n: slide })}</div>
             </div>
             <div className="ap-out-right">
               {count > 0 && (
                 <>
                   {/* All of them, not "the other nine": the strip is the index
                       of the carousel, and one of them is the traced slide. */}
-                  <div className="nd-eyebrow">All {count} slides</div>
+                  <div className="nd-eyebrow">{t("tut.allSlides", { n: count })}</div>
                   <div className="ap-thumbs" style={{ gridTemplateColumns: `repeat(${count}, 1fr)` }}>
                     {Array.from({ length: count }, (_, i) => i + 1).map((n) => (
                       <button
@@ -214,7 +218,7 @@ export default function AutopilotBody({ nodes }: TutorialBodyProps) {
                         data-active={n === slide}
                         style={imageFor(n) ? { backgroundImage: `url(${imageFor(n)})` } : undefined}
                         onClick={() => setSlide(n)}
-                        aria-label={`Follow slide ${n}`}
+                        aria-label={t("tut.followSlide", { n })}
                         aria-pressed={n === slide}
                       />
                     ))}
@@ -224,7 +228,7 @@ export default function AutopilotBody({ nodes }: TutorialBodyProps) {
               {hook && (
                 <>
                   <div className="nd-eyebrow" style={{ marginTop: 6 }}>
-                    {CAPTION_LABEL}
+                    {t(CAPTION_LABEL)}
                   </div>
                   <p className="ap-hook">{hook}</p>
                   {tags && <p className="ap-tags">{tags}</p>}
@@ -236,9 +240,9 @@ export default function AutopilotBody({ nodes }: TutorialBodyProps) {
       </div>
 
       <div className="ap-chain-head">
-        <h2>{CHAIN_HEADING.title}</h2>
+        <h2>{t(CHAIN_HEADING.title)}</h2>
         <p className="ap-chain-note">
-          Following slide {slide} — click any slide above to follow a different one.
+          {t("tut.followingSlide", { n: slide })}
         </p>
       </div>
 
@@ -249,12 +253,12 @@ export default function AutopilotBody({ nodes }: TutorialBodyProps) {
             <section className={`ap-step${i === STEPS.length - 1 ? " ap-step--last" : ""}`}>
               <div className="ap-step-top">
                 <span className="ap-step-badge">{step.n}</span>
-                <span className="ap-step-kind">{step.kind}</span>
+                <span className="ap-step-kind">{t(step.kind)}</span>
               </div>
-              <div className="ap-step-title">{step.title}</div>
-              <div className="ap-step-line">{step.line}</div>
+              <div className="ap-step-title">{t(step.title)}</div>
+              <div className="ap-step-line">{t(step.line)}</div>
               <div className="ap-preview">{previewFor(step.label)}</div>
-              <div className="ap-step-node">{step.label}</div>
+              <div className="ap-step-node">{localizeNode(step.label)}</div>
             </section>
           </span>
         ))}

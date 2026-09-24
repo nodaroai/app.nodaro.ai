@@ -1,6 +1,7 @@
 "use client"
 
 import { memo, useEffect, useRef } from "react"
+import { useT } from "@/lib/i18n"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Music, Volume2, Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -18,6 +19,7 @@ const HANDLES = [
 ] as const
 
 function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as ReferenceAudioData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const useFull = useFullResolution(id)
@@ -91,7 +93,7 @@ function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
             {status === "extracting" && <Loader2 className="w-2.5 h-2.5 animate-spin text-amber-500" />}
             {status === "failed" && <AlertCircle className="w-2.5 h-2.5 text-red-500" />}
             <span className="text-[9px] text-muted-foreground">
-              {nodeData.sourceType === "youtube" ? "YT" : "File"}
+              {nodeData.sourceType === "youtube" ? "YT" : t("node.sourceFile")}
             </span>
           </div>
         </div>

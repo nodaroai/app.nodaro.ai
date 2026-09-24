@@ -20,11 +20,13 @@ import {
   useHeygenAvatars,
   keylessCatalogHint,
   avatarSupportsV,
+  avatarStatus,
   avatarStatusLabel,
   filterAvatars,
 } from "@/components/heygen/heygen-catalog"
 import { pickFeaturedAvatars, splitLookName } from "./catalog-helpers"
 import { GHOST_BUTTON, KICKER, PINK_LINK } from "./styles"
+import { formatNumber } from "@/lib/i18n/format"
 
 /** How many looks the on-node row shows when nothing is searched. */
 export const FEATURED_AVATAR_COUNT = 5
@@ -62,9 +64,9 @@ interface LookTileProps {
 function LookTile({ avatar, selected, onPick }: LookTileProps) {
   const t = useT()
   const { person, scene } = splitLookName(avatar.name)
-  const statusLabel = avatarStatusLabel(avatar)
+  const statusLabel = avatarStatusLabel(avatar, t)
   const named = statusLabel
-    ? `${avatar.name} — ${statusLabel === "Failed" ? "HeyGen could not build this look" : "HeyGen is still building this look"}`
+    ? `${avatar.name} — ${avatarStatus(avatar) === "failed" ? t("node.heygenCouldNotBuildLook") : t("node.heygenStillBuildingLook")}`
     : avatar.name
   return (
     <button
@@ -106,7 +108,7 @@ function LookTile({ avatar, selected, onPick }: LookTileProps) {
             data-testid="avatar-status-badge"
             className={cn(
               "absolute bottom-1 left-1 px-1 py-0.5 rounded text-[8px] font-bold leading-none text-white",
-              statusLabel === "Failed" ? "bg-red-600/90" : "bg-amber-500/90",
+              avatarStatus(avatar) === "failed" ? "bg-red-600/90" : "bg-amber-500/90",
             )}
           >
             {statusLabel}
@@ -157,14 +159,14 @@ export function AvatarQuickPick({
   }, [])
 
   const countLabel = searching
-    ? `${matches.length.toLocaleString("en-US")}${complete ? "" : "+"} match${matches.length === 1 ? "" : "es"}${matches.length > SEARCH_RESULT_CAP ? ` · first ${SEARCH_RESULT_CAP} shown` : ""}`
+    ? `${t(matches.length === 1 ? "node.matchCountOne" : "node.matchCountMany", { n: `${formatNumber(matches.length)}${complete ? "" : "+"}` })}${matches.length > SEARCH_RESULT_CAP ? ` · ${t("node.firstNShown", { n: SEARCH_RESULT_CAP })}` : ""}`
     : null
 
   return (
     <div className="flex flex-col gap-3 h-full min-h-0 px-3.5 pt-3.5 pb-3" data-testid="ai-avatar-quick-pick">
       {/* Head: kicker — rule — search — Browse all — (✕) */}
       <div className="flex items-center gap-2.5 shrink-0">
-        <span className={KICKER}>{currentAvatarId ? "Change avatar" : "Start with an avatar"}</span>
+        <span className={KICKER}>{currentAvatarId ? t("node.changeAvatar") : t("node.startWithAnAvatar")}</span>
         <span className="flex-1 h-px bg-border/60 min-w-2" />
         {avatars.length > 0 && (
           // A div, not a <label>: the box also holds the Clear button, and a
@@ -184,7 +186,7 @@ export function AvatarQuickPick({
               value={query}
               onChange={handleQuery}
               onKeyDown={handleQueryKey}
-              placeholder="Search avatars…"
+              placeholder={t("node.phSearchAvatars")}
               aria-label={t("node.searchAvatars")}
               className="min-w-0 flex-1 bg-transparent text-[11px] text-foreground placeholder:text-muted-foreground/60 outline-none [&::-webkit-search-cancel-button]:hidden"
             />
@@ -202,7 +204,7 @@ export function AvatarQuickPick({
         )}
         {avatars.length > 0 && (
           <button type="button" className={PINK_LINK} onClick={handleBrowse}>
-            {t("node.browseAll")} {avatars.length.toLocaleString("en-US")}{complete ? "" : "+"} ›
+            {t("node.browseAll")} {formatNumber(avatars.length)}{complete ? "" : "+"} ›
           </button>
         )}
         {onCancel && (
@@ -241,13 +243,13 @@ export function AvatarQuickPick({
             compact
             icon={User}
             title={t("node.noHeygenAvatars")}
-            hint={keylessCatalogHint("avatars")}
+            hint={keylessCatalogHint("avatars", t)}
             testId="ai-avatar-quick-pick-empty"
           />
         ) : searching && shown.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-1.5 flex-1 text-center px-6" data-testid="ai-avatar-search-empty">
-            <p className="text-[11px] text-muted-foreground">No avatars match “{query.trim()}”</p>
-            <button type="button" className={PINK_LINK} onClick={handleBrowse}>Browse all with filters ›</button>
+            <p className="text-[11px] text-muted-foreground">{t("node.noAvatarsMatch", { query: query.trim() })}</p>
+            <button type="button" className={PINK_LINK} onClick={handleBrowse}>{t("node.browseAllWithFilters")}</button>
           </div>
         ) : searching ? (
           // Search results: same tiles, 5 per row, the next row peeking so the

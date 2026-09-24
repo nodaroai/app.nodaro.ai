@@ -161,7 +161,7 @@ export function Scene3DV2Preview({
           size="icon"
           variant="ghost"
           className="h-7 w-7 shrink-0"
-          aria-label={playing ? "Pause" : "Play"}
+          aria-label={playing ? t("common.pause") : t("common.play")}
           onClick={() => setPlaying(!playing)}
         >
           {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
@@ -172,7 +172,7 @@ export function Scene3DV2Preview({
           max={lastFrame}
           step={1}
           value={frame}
-          aria-label="Scrub"
+          aria-label={t("scene3dcfg.scrub")}
           onChange={(e) => seek(Number.parseInt(e.target.value, 10))}
           className="w-full accent-[#ff0073]"
         />
@@ -187,7 +187,7 @@ export function Scene3DV2Preview({
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <Film className="w-3 h-3" />
           <span>{V2_TEXT.shots}</span>
-          <span className="ml-auto">{V2_TEXT.bakedCamera}</span>
+          <span className="ms-auto">{V2_TEXT.bakedCamera}</span>
         </div>
         <div className="flex flex-wrap gap-1">
           {shots.map((shot) => (
@@ -204,7 +204,7 @@ export function Scene3DV2Preview({
               }`}
             >
               {shot.label}
-              <span className="ml-1 text-muted-foreground/60 tabular-nums">{shot.startFrame}</span>
+              <span className="ms-1 text-muted-foreground/60 tabular-nums">{shot.startFrame}</span>
             </button>
           ))}
         </div>
@@ -237,7 +237,7 @@ export function Scene3DV2Preview({
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <Boxes className="w-3 h-3" />
           <span>{V2_TEXT.entityCount(entities.length)}</span>
-          <span className="ml-auto font-mono">rev {plan.revisionId.slice(0, 8)}</span>
+          <span className="ms-auto font-mono">{t("scene3dcfg.revShort", { id: plan.revisionId.slice(0, 8) })}</span>
         </div>
         <div className="max-h-40 overflow-y-auto flex flex-col gap-0.5">
           {entities.map((entity) => {
@@ -247,13 +247,13 @@ export function Scene3DV2Preview({
               <div
                 key={entity.id}
                 style={{ paddingLeft: `${Math.min(entity.depth, 6) * 8 + 6}px` }}
-                className={`flex items-center gap-1.5 rounded pr-1.5 py-1 text-[11px] ${
+                className={`flex items-center gap-1.5 rounded pe-1.5 py-1 text-[11px] ${
                   isSelected ? "bg-[#ff0073]/10 border border-[#ff0073]/30" : "border border-transparent hover:bg-muted/40"
                 }`}
               >
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+                  className="flex items-center gap-1.5 flex-1 min-w-0 text-start"
                   aria-pressed={isSelected}
                   onClick={() => toggleSelected(entity.id)}
                 >
@@ -277,11 +277,11 @@ export function Scene3DV2Preview({
                   </button>
                 )}
                 {readOnly ? (
-                  isLocked && <Lock role="img" aria-label={`${entity.name} locked`} className="w-3 h-3 text-amber-500" />
+                  isLocked && <Lock role="img" aria-label={t("scene3dcfg.objectLocked", { name: entity.name })} className="w-3 h-3 text-amber-500" />
                 ) : (
                   <button
                     type="button"
-                    aria-label={isLocked ? `Unlock ${entity.name}` : `Lock ${entity.name}`}
+                    aria-label={isLocked ? t("scene3dcfg.unlockObject", { name: entity.name }) : t("scene3dcfg.lockObject", { name: entity.name })}
                     aria-pressed={isLocked}
                     className={isLocked ? "text-amber-500" : "text-muted-foreground/50 hover:text-muted-foreground"}
                     onClick={() => toggleLocked(entity.id)}
@@ -378,7 +378,7 @@ function EntityInspector({
             </span>
             <input
               type="color"
-              aria-label={`${entity.name} ${material.role} color`}
+              aria-label={t("scene3dcfg.materialColor", { name: entity.name, role: material.role })}
               value={material.color}
               disabled={!enabled || !entity.can.color}
               onChange={(e) => onEmit(buildEntityColorOperation(entity, material.role, e.target.value))}

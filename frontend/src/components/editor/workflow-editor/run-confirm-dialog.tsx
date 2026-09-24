@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import type { RunConfirmInfo } from "./types"
 import { creditUnits } from "@/lib/credit-units"
+import { useT } from "@/lib/i18n"
 
 interface UseRunConfirm {
   /** Resolves true to run, false to abort. Single-flight: a second call while a
@@ -29,6 +30,7 @@ interface UseRunConfirm {
  * `ExecutionContext`; the run handlers `await` it before any side effect.
  */
 export function useRunConfirm(): UseRunConfirm {
+  const t = useT()
   const [info, setInfo] = useState<RunConfirmInfo | null>(null)
   const resolverRef = useRef<((v: boolean) => void) | null>(null)
 
@@ -51,11 +53,15 @@ export function useRunConfirm(): UseRunConfirm {
 
   const open = info !== null
   const credits = info?.estimatedCredits ?? null
-  const nodeLabel = info ? `${info.nodeCount} node${info.nodeCount === 1 ? "" : "s"} will run.` : ""
+  const nodeLabel = info
+    ? info.nodeCount === 1
+      ? t("editor.runConfirmNodeOne", { n: info.nodeCount })
+      : t("editor.runConfirmNodes", { n: info.nodeCount })
+    : ""
   const title = info?.alwaysConfirm
-    ? "Run the entire workflow?"
-    : `This run will use ~${creditUnits(credits ?? 0)} credits`
-  const body = info?.alwaysConfirm && credits != null ? `${nodeLabel} Estimated ~${creditUnits(credits)} credits.` : nodeLabel
+    ? t("editor.runConfirmEntireTitle")
+    : t("editor.runConfirmCreditsTitle", { credits: creditUnits(credits ?? 0) })
+  const body = info?.alwaysConfirm && credits != null ? t("editor.runConfirmEstimated", { nodes: nodeLabel, credits: creditUnits(credits) }) : nodeLabel
 
   const dialog = (
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) settle(false) }}>
@@ -65,12 +71,12 @@ export function useRunConfirm(): UseRunConfirm {
           <AlertDialogDescription>{body}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel autoFocus onClick={() => settle(false)}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel autoFocus onClick={() => settle(false)}>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={() => settle(true)}
             className="bg-[#ff0073] text-white hover:bg-[#ff0073]/90"
           >
-            Run
+            {t("common.run")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
