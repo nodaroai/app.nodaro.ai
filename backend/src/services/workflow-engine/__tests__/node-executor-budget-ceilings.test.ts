@@ -207,8 +207,10 @@ describe("a node that declares no budget keeps today's ceilings EXACTLY", () => 
   }, 30_000)
 
   it("an apply-edl whose budget fits inside 90 minutes: the default ceilings too", async () => {
-    const node = applyEdlNode(5)
-    expect(applyEdlRenderBudgetMs(edl(5))).toBeLessThanOrEqual(NODE_TIMEOUT_MS)
+    // One minute of output: its dispatch-time budget (every chunk charged at the
+    // 4K30 liveness canvas) is ~55 min — inside NODE_TIMEOUT_MS.
+    const node = applyEdlNode(1)
+    expect(applyEdlRenderBudgetMs(edl(1))).toBeLessThanOrEqual(NODE_TIMEOUT_MS)
     db.jobRecord = { status: "processing", output_data: null, error_message: null, progress: 10 }
     const ctx = makeCtx()
     const { settled, done } = run(node, ctx)
@@ -221,7 +223,7 @@ describe("a node that declares no budget keeps today's ceilings EXACTLY", () => 
 })
 
 describe("an apply-edl node with a long EDL runs under its declared budget", () => {
-  // 25 one-minute cuts: one video chunk, a budget of ~3 hours.
+  // 25 one-minute cuts: one video chunk, a budget of several hours.
   const MINUTES = 25
 
   it("processing ceiling = the budget the worker's handler declares for the SAME payload; the run's cap grows by the excess", async () => {

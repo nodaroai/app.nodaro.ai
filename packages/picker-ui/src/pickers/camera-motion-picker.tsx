@@ -1,5 +1,6 @@
 "use client"
 
+import { LookArt } from "../look-previews/look-art"
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
 import { CAMERA_MOTIONS as BASE_CAMERA_MOTIONS, CAMERA_MOTION_CATEGORY_ORDER, CAMERA_MOTION_CATEGORY_LABELS, type CameraMotion, type CameraMotionCategory } from "@nodaro/prompts"
@@ -88,12 +89,12 @@ export const CameraMotionPicker = memo(function CameraMotionPicker({
                       : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                   )}
                 >
-                  <CameraMotionPreview motionId={motion.id} className="w-full aspect-square" />
+                  <LookArt pickerKey="camera-motion" id={motion.id} className="w-full aspect-square" width={240} fallback={<CameraMotionPreview motionId={motion.id} className="w-full aspect-square" />} />
                   <FitText
                     text={label}
                     className={cn(
                       "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center",
-                      selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
+                      selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                     )}
                   />
                 </button>

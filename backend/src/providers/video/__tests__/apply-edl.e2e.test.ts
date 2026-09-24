@@ -505,11 +505,12 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
     expect(Math.abs(d.audio - totalSec), `audio end ${JSON.stringify(d)}`).toBeLessThan(ONE_FRAME)
   }, 180_000)
 
-  // Past 200 segments the audio pass renders in slices of at most 100 (one audio
-  // graph over every segment grows ~N^3 in cost and its argv passes Linux's
-  // 128 KiB limit near 800). The slices are lossless PCM, joined sample-exactly
-  // and encoded to AAC once — so the audio still ends on the true total.
-  it("a >200-cut edit renders its audio in lossless slices joined once — every frame, audio on time (Track 0.14)", async () => {
+  // The audio pass renders in slices of at most AUDIO_FILTERGRAPH_MAX_SEGMENTS
+  // (an audio graph's cost grows with segments² × the source span it decodes;
+  // 180 one-minute cuts in one graph took 88.7 min). The slices are lossless PCM,
+  // joined sample-exactly and encoded to AAC once — so the audio still ends on
+  // the true total.
+  it("a 250-cut edit renders its audio in lossless slices joined once — every frame, audio on time (Track 0.14)", async () => {
     const edl: Edl = { version: 1, clock: "master", sources: MULTICAM_SOURCES, segments: alternatingCuts(250, 200) }
     ff.calls.length = 0
     ff.atConcat.length = 0
@@ -529,6 +530,36 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
     const d = await trackDetail(outputPath)
     expect(Number(d.vframes), `frames ${JSON.stringify(d)}`).toBe(expectedFrames(250, 200))
     expect(Math.abs(d.audio - 250 * 0.2), `audio end ${JSON.stringify(d)}`).toBeLessThan(ONE_FRAME)
+  }, 240_000)
+
+  // An AUDIO render past AUDIO_FILTERGRAPH_MAX_SEGMENTS is chunked too, and its
+  // chunks are the same lossless slices: joined sample-exactly and encoded to
+  // AAC ONCE. The old path encoded AAC per chunk and stream-copy concatenated
+  // them, so every seam carried the next chunk's encoder priming and the sound
+  // ran long by it.
+  // Half an AAC frame (1024 samples at 48 kHz = 21.3 ms). Measured: the
+  // lossless join ends exactly on the total; the old per-chunk AAC + stream-copy
+  // join ended one whole AAC frame long (50.021 s) on this very edit.
+  const AUDIO_END_TOLERANCE_SEC = 0.5 * 1024 / 48_000
+  it("a chunked audio-only render joins lossless slices and encodes AAC once — no priming at the seams", async () => {
+    const edl: Edl = { version: 1, clock: "master", sources: MULTICAM_SOURCES, segments: alternatingCuts(250, 200) }
+    const plan = resolveChunksForOutput(edl.segments, "audio")
+    expect(plan.length).toBeGreaterThan(1)
+    ff.calls.length = 0
+    const { outputPath, durationMs } = await render({ edl, output: "audio", quality: "final", jobId: "t-audio-chunked", checkpoint: false })
+    expect(durationMs).toBe(50_000)
+    // Every chunk is lossless PCM; exactly ONE spawn encodes AAC — the join —
+    // and nothing stream-copies audio chunks together.
+    expect(ff.calls.filter((a) => a.includes("pcm_f32le"))).toHaveLength(plan.length)
+    const aacSpawns = ff.calls.filter((a) => a.includes("aac"))
+    expect(aacSpawns).toHaveLength(1)
+    expect(aacSpawns[0]).toContain("concat")
+    expect(ff.calls.some((a) => a.some((x, i) => x === "-c" && a[i + 1] === "copy"))).toBe(false)
+    const ends = await probeStreamEnds(outputPath)
+    expect(ends.video.state).toBe("absent")
+    expect(ends.audio.state).toBe("measured")
+    const end = ends.audio.state === "measured" ? ends.audio.endSec : NaN
+    expect(Math.abs(end - 50), `audio end ${end}`).toBeLessThan(AUDIO_END_TOLERANCE_SEC)
   }, 240_000)
 
   // Resume safety. A checkpoint is found only under a hash of the exact command

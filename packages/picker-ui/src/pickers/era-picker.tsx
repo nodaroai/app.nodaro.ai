@@ -8,6 +8,7 @@ import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { useCuratedEntries } from "../curated.js"
+import { LookArt } from "../look-previews/look-art"
 
 interface EraPickerProps {
   readonly value: string
@@ -101,6 +102,7 @@ export const EraPicker = memo(function EraPicker({
                         : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                     )}
                   >
+                    <LookArt pickerKey="era" id={era.id} className="w-full aspect-[16/9] rounded-md mb-1" width={320} fallback={null} />
                     <FitText
                       text={label}
                       className={cn(

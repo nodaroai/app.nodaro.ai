@@ -12,6 +12,7 @@
  */
 export { cn } from "./lib/cn.js"
 export * from "./previews/index.js"
+export * from "./look-previews/index.js"
 export * from "./icons/index.js"
 export * from "./i18n.js"
 export * from "./curated.js"

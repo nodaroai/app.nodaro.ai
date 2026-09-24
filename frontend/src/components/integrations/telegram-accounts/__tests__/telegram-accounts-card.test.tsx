@@ -23,7 +23,7 @@ const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning:
 
 vi.mock("@/lib/api", () => ({
   listTelegramAccounts: () => api.list(),
-  getTelegramConsent: () => api.consent(),
+  getTelegramConsent: (locale: string) => api.consent(locale),
   disconnectTelegramAccount: (id: string) => api.disconnect(id),
   pauseTelegramAccount: (id: string) => api.pause(id),
   resumeTelegramAccount: (id: string) => api.resume(id),
@@ -37,6 +37,7 @@ vi.mock("@/lib/edition", () => ({ isCloud: () => true }))
 vi.mock("sonner", () => ({ toast: toastMock }))
 
 import { TelegramAccountsCard } from "../telegram-accounts-card"
+import { useLocaleStore } from "@/lib/locale-store"
 
 const ACTIVE = { id: "a1", label: "@radar", status: "active", statusReason: null, updatedAt: "2026-09-24T00:00:00.000Z" }
 const PAUSED = { ...ACTIVE, id: "a2", label: "@quiet", status: "paused" }
@@ -57,6 +58,7 @@ function apiError(code: string) {
 }
 
 beforeEach(() => {
+  useLocaleStore.setState({ locale: "en", dir: "ltr" })
   for (const fn of Object.values(api)) fn.mockReset()
   for (const fn of Object.values(toastMock)) fn.mockReset()
   api.list.mockResolvedValue({ accounts: [ACTIVE, PAUSED, REVOKED] })
@@ -154,6 +156,16 @@ describe("the connect wizard", () => {
       expect(api.start).toHaveBeenCalledWith({ method: "qr", apiId: "123456", apiHash: "b".repeat(32), consentVersion: "2026-09-24" }),
     )
     expect(await within(dialog).findByText(/scan with your phone/i)).toBeInTheDocument()
+  })
+
+  it("asks for the terms in the app's language", async () => {
+    useLocaleStore.setState({ locale: "he", dir: "rtl" })
+    api.consent.mockResolvedValue({ version: "2026-09-24", locale: "he", points: ["החשבון שלכם פועל."] })
+    renderCard()
+    fireEvent.click(await screen.findByRole("button", { name: /חיבור חשבון/ }))
+    const dialog = await screen.findByRole("dialog")
+    expect(await within(dialog).findByText("החשבון שלכם פועל.")).toBeInTheDocument()
+    expect(api.consent).toHaveBeenCalledWith("he")
   })
 
   it("closing the dialog mid-login cancels the attempt", async () => {

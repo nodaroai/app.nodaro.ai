@@ -74,7 +74,7 @@ export const RenderQualityPicker = memo(function RenderQualityPicker({
                 text={label}
                 className={cn(
                   "text-[11.5px] font-semibold leading-tight w-full",
-                  selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
+                  selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               />
               <span className="text-[10px] leading-snug text-muted-foreground line-clamp-2">

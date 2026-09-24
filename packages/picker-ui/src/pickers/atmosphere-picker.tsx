@@ -1,5 +1,6 @@
 "use client"
 
+import { LookArt } from "../look-previews/look-art"
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
 import { ATMOSPHERES as BASE_ATMOSPHERES } from "@nodaro/prompts"
@@ -77,12 +78,12 @@ export const AtmospherePicker = memo(function AtmospherePicker({
                     : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                 )}
               >
-                <AtmospherePreview atmosphereId={atmosphere.id} className="w-full aspect-square" />
+                <LookArt pickerKey="atmosphere" id={atmosphere.id} className="w-full aspect-square" width={240} fallback={<AtmospherePreview atmosphereId={atmosphere.id} className="w-full aspect-square" />} />
                 <FitText
                   text={label}
                   className={cn(
                     "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center",
-                    selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
+                    selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                   )}
                 />
               </button>

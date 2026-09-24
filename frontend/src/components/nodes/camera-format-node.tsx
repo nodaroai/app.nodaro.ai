@@ -7,7 +7,7 @@ import { getCameraFormat, getCameraFormatLabel } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { usePickerJsonConsumer } from "./use-picker-json-consumer"
 import { PICKER_CONSUMER_INPUT_HANDLES, PickerJsonHandleIcon, PickerUpdateButton } from "./picker-json-handle"
-import { CameraFormatPreview } from "@/lib/picker-ui"
+import { CameraFormatPreview, LookArt } from "@/lib/picker-ui"
 import type { CameraFormatData } from "@/types/nodes"
 
 function CameraFormatNodeComponent({ id, data, selected }: NodeProps) {
@@ -32,7 +32,7 @@ function CameraFormatNodeComponent({ id, data, selected }: NodeProps) {
       <p className="text-foreground text-sm font-medium">
         {getCameraFormatLabel(cameraFormatId)}
       </p>
-      <CameraFormatPreview cameraFormatId={cameraFormatId} className="w-full aspect-[16/9]" />
+      <LookArt pickerKey="camera-format" id={cameraFormatId} className="w-full aspect-[16/9]" width={640} fallback={<CameraFormatPreview cameraFormatId={cameraFormatId} className="w-full aspect-[16/9]" />} />
       {description && (
         <p className="text-muted-foreground text-[11px] leading-snug">
           {description}

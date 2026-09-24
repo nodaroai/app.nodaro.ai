@@ -111,12 +111,22 @@ services:
       PGRST_JWT_SECRET: ${SUPABASE_JWT_SECRET:-nodaro-community-default-jwt-secret-change-me-please}
 
   minio:
-    # MinIO publishes its images on quay.io. The Docker Hub repository minio/minio was
-    # withdrawn (pull access denied from 2026-09-12; https://hub.docker.com/v2/repositories/minio/minio/
-    # answers 404), which made every fresh community install and the nightly probe fail
-    # before the stack booted. Pinned to a release, not :latest, so an upstream change
-    # cannot break a self-hoster's next `docker compose pull` without a change here.
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    # MinIO no longer publishes a public server image: minio/minio on Docker Hub was
+    # withdrawn on 2026-09-12 and quay.io/minio/minio now refuses anonymous pulls
+    # (401). Either one makes every fresh install and the nightly probe fail before
+    # the stack boots. Chainguard builds the same server from source and publishes it
+    # for amd64 and arm64. The pin is the multi-arch INDEX digest (not a per-platform
+    # manifest, which would push Apple Silicon and ARM servers onto emulation), so an
+    # upstream change cannot reach a self-hoster's next `docker compose pull` without
+    # a change here. Chainguard's free tier promises only its current `latest`, so
+    # an old digest may one day stop resolving: `docker compose pull` then fails
+    # loudly (a pin never silently changes), and the fix is to re-pin to the
+    # current index digest. The image ships `mc`, which the healthcheck below uses.
+    image: cgr.dev/chainguard/minio@sha256:bd014394a80898e68c149f2311fdf8d5a2c2f3bb2c33b9327ae6d02b4b065ae1
+    # Root, as the earlier MinIO images ran. The Chainguard image defaults to an
+    # unprivileged user, which cannot write into a data volume an earlier install
+    # created as root: uploads then fail with "Insufficient permissions".
+    user: "0:0"
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:

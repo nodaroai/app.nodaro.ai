@@ -1,5 +1,6 @@
 "use client"
 
+import { LookArt } from "../look-previews/look-art"
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
 import { COLOR_LOOKS as BASE_COLOR_LOOKS, COLOR_LOOK_CATEGORY_ORDER, COLOR_LOOK_CATEGORY_LABELS, type ColorLook, type ColorLookCategory } from "@nodaro/prompts"
@@ -87,12 +88,12 @@ export const ColorLookPicker = memo(function ColorLookPicker({
                       : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                   )}
                 >
-                  <ColorLookPreview colorLookId={colorLook.id} className="w-full aspect-square" />
+                  <LookArt pickerKey="color-look" id={colorLook.id} className="w-full aspect-square" width={240} fallback={<ColorLookPreview colorLookId={colorLook.id} className="w-full aspect-square" />} />
                   <FitText
                     text={label}
                     className={cn(
                       "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center",
-                      selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
+                      selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                     )}
                   />
                 </button>

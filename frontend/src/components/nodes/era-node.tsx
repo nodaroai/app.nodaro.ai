@@ -5,6 +5,7 @@ import type { NodeProps } from "@xyflow/react"
 import { Hourglass } from "lucide-react"
 import { getEra, getEraLabel } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { LookArt } from "@/lib/picker-ui"
 import type { EraData } from "@/types/nodes"
 
 function EraNodeComponent({ id, data, selected }: NodeProps) {
@@ -17,6 +18,7 @@ function EraNodeComponent({ id, data, selected }: NodeProps) {
       <p className="text-foreground text-sm font-medium">
         {getEraLabel(eraId)}
       </p>
+      <LookArt pickerKey="era" id={eraId} className="w-full aspect-[16/9]" width={640} fallback={null} />
       {era?.description && (
         <p className="text-muted-foreground text-[11px] leading-snug line-clamp-3">
           {era.description}

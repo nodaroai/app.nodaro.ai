@@ -9272,9 +9272,14 @@ export interface TelegramAccountSummary {
   readonly updatedAt: string
 }
 
-/** The terms shown before connecting; `version` is sent back with the start. */
+/**
+ * The terms shown before connecting; `version` is sent back with the start.
+ * `locale` is the language the server actually served (it falls back to
+ * English for a language the terms are not written in).
+ */
 export interface TelegramConsent {
   readonly version: string
+  readonly locale?: string
   readonly points: readonly string[]
 }
 
@@ -9319,8 +9324,12 @@ export function listTelegramAccounts(): Promise<{ accounts: TelegramAccountSumma
   return apiRequest("/v1/telegram-accounts", "Failed to load Telegram accounts")
 }
 
-export function getTelegramConsent(): Promise<TelegramConsent> {
-  return apiRequest("/v1/telegram-accounts/consent", "Failed to load the Telegram terms")
+/** The terms in `locale` (the app's chosen language) when the server has them, else English. */
+export function getTelegramConsent(locale: string): Promise<TelegramConsent> {
+  return apiRequest(
+    `/v1/telegram-accounts/consent?locale=${encodeURIComponent(locale)}`,
+    "Failed to load the Telegram terms",
+  )
 }
 
 export function startTelegramLogin(

@@ -6,7 +6,7 @@ import type { NodeProps } from "@xyflow/react"
 import { Lightbulb } from "lucide-react"
 import { LIGHTING_CATEGORY_LABELS, LIGHTING_CATEGORY_ORDER, LIGHTING_FIELD_BY_CATEGORY, getLighting, getLightingLabel, type LightingCategory } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
-import { LightingPreview } from "@/lib/picker-ui"
+import { LightingPreview, LookArt } from "@/lib/picker-ui"
 import type { LightingData } from "@/types/nodes"
 
 interface EnabledEntry {
@@ -61,7 +61,7 @@ function LightingNodeComponent({ id, data, selected }: NodeProps) {
                   </span>
                   {getLightingLabel(entryId)}
                 </p>
-                <LightingPreview lightingId={entryId} className="w-full aspect-[16/9]" />
+                <LookArt pickerKey="lighting" id={entryId} className="w-full aspect-[16/9]" width={640} fallback={<LightingPreview lightingId={entryId} className="w-full aspect-[16/9]" />} />
                 {entry?.description && (
                   <p className="text-muted-foreground text-[11px] leading-snug">
                     {entry.description}
