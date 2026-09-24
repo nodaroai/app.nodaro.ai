@@ -6,17 +6,20 @@ import {
   composeTransitionHintFromConnections,
   getTransitionPromptHint,
 } from "../transitions.js"
+import { CHARACTER_FX_INTENSITIES } from "../character-fx.js"
 
 /**
  * Transition wording round 2 (2026-09-24, from the transition description A/B):
  *   - `aging` and `zoom-into-mouth` carry new bodies;
  *   - L1: a cut with position `full` renders no position clause;
- *   - L5: a hint folded into one shot's time window says "of this shot".
+ *   - L5: a hint folded into one shot's time window says "of this shot"
+ *     (and a non-cut's `full` "spans this entire shot").
  */
 
 const INSTANT_IDS = TRANSITIONS.filter((t) => t.instant).map((t) => t.id)
 const NON_INSTANT_IDS = TRANSITIONS.filter((t) => !t.instant && t.id !== "auto").map((t) => t.id)
 const FULL_CLAUSE = "the transition spans the entire clip"
+const FULL_SHOT_CLAUSE = "the transition spans this entire shot"
 const MATCH_CUT_BASE =
   "match cut (the final composition of the first shot matches the opening composition of the second shot " +
   "in shape, color, and motion, so the cut feels like a visual rhyme; " + INSTANT_CUT_CLAUSE + ")"
@@ -30,7 +33,7 @@ describe("approved row bodies", () => {
     expect(composeTransitionHintFromConnections("aging", [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
       "accelerated aging (the subject visibly ages forward - fine lines deepen into wrinkles, hair greys to silver, " +
         "posture settles - while the framing stays unchanged), the transition occurs in the middle of the clip, " +
-        "lasting approximately 1 second, with natural unhurried timing",
+        "lasting approximately 1 second, with natural timing",
     )
   })
 
@@ -88,17 +91,29 @@ describe("L5 — scope: shot says 'of this shot'", () => {
     expect(out).not.toContain("of the clip")
   })
 
-  it("every start/middle/end clause actually changes in a shot window (guard against a reword)", () => {
+  it("every non-auto position clause actually changes in a shot window (guard against a reword)", () => {
     for (const p of TRANSITION_POSITIONS.filter((p) => ["start", "middle", "end"].includes(p.id))) {
       expect(p.promptHint).toContain(" of the clip")
     }
+    expect(FULL_CLAUSE).toContain(" the entire clip")
+    for (const p of TRANSITION_POSITIONS.filter((p) => p.id !== "auto")) {
+      const out = composeTransitionHintFromConnections("whip-pan", [], [], { position: p.id }, "full", window)
+      expect(out).not.toContain("clip")
+    }
   })
 
-  it("full in a shot window is left as the catalog says it (non-cut) and dropped (cut)", () => {
+  it("full in a shot window spans this entire shot (non-cut) and is dropped (cut)", () => {
     expect(composeTransitionHintFromConnections("whip-pan", [], [], { position: "full" }, "full", window)).toMatch(
-      new RegExp(`, ${FULL_CLAUSE}$`),
+      new RegExp(`, ${FULL_SHOT_CLAUSE}$`),
     )
     expect(composeTransitionHintFromConnections("match-cut", [], [], { position: "full" }, "full", window)).toBe(MATCH_CUT_BASE)
+  })
+
+  it.each(NON_INSTANT_IDS)("non-cut %s + full: shot scope spans this entire shot, default scope the entire clip", (id) => {
+    const shot = composeTransitionHintFromConnections(id, [], [], { position: "full" }, "full", window)
+    const clip = composeTransitionHintFromConnections(id, [], [], { position: "full" })
+    expect(shot).toBe(clip.replace(FULL_CLAUSE, FULL_SHOT_CLAUSE))
+    expect(clip).toContain(`, ${FULL_CLAUSE}`)
   })
 
   it("a cut in a shot window", () => {
@@ -112,5 +127,22 @@ describe("L5 — scope: shot says 'of this shot'", () => {
     const plain = composeTransitionHintFromConnections(id, [], [], timing)
     expect(composeTransitionHintFromConnections(id, [], [], timing, "full", { scope: "clip" })).toBe(plain)
     if (plain) expect(plain).toContain("in the middle of the clip")
+  })
+})
+
+describe("intensity natural reads 'with natural timing' (transitions only)", () => {
+  it("renders on a non-cut, never 'unhurried'", () => {
+    expect(composeTransitionHintFromConnections("whip-pan", [], [], { intensity: "natural" })).toMatch(/, with natural timing$/)
+    for (const id of NON_INSTANT_IDS) {
+      expect(composeTransitionHintFromConnections(id, [], [], { intensity: "natural" })).not.toContain("unhurried")
+    }
+  })
+
+  it("is still dropped on a cut", () => {
+    expect(composeTransitionHintFromConnections("match-cut", [], [], { intensity: "natural" })).toBe(MATCH_CUT_BASE)
+  })
+
+  it("character-fx keeps its own 'with natural unhurried timing'", () => {
+    expect(CHARACTER_FX_INTENSITIES.find((o) => o.id === "natural")!.promptHint).toBe("with natural unhurried timing")
   })
 })

@@ -493,7 +493,7 @@ export const TRANSITION_DURATIONS = [
 export const TRANSITION_INTENSITIES = [
   { id: "auto",    label: "Auto",    description: "Let the model judge it",      promptHint: "", term: "" },
   { id: "subtle",  label: "Subtle",  description: "Restrained, minimal flourish", promptHint: "with subtle restrained energy and minimal flourish", term: "subtly" },
-  { id: "natural", label: "Natural", description: "Unhurried, unforced timing",  promptHint: "with natural unhurried timing", term: "at a natural pace" },
+  { id: "natural", label: "Natural", description: "Unhurried, unforced timing",  promptHint: "with natural timing", term: "at a natural pace" },
   { id: "dynamic", label: "Dynamic", description: "Assertive, energetic",        promptHint: "with dynamic energy and assertive flourish", term: "energetically" },
   { id: "crazy",   label: "Crazy",   description: "Extreme, wild, distorted",    promptHint: "with extreme exaggerated energy, wild flourishes, and dramatic distortion", term: "wildly exaggerated" },
 ] as const satisfies ReadonlyArray<TransitionTimingOption>
@@ -533,13 +533,16 @@ export interface TransitionHintOptions {
 /**
  * The position clauses for a shot window — DERIVED from `POSITION_CLAUSES`, so
  * the catalog stays the one source of the wording: every " of the clip" reads
- * " of this shot". A clause without that phrase (`full`'s "spans the entire
- * clip") is left as it is; `transitions-scope.test.ts` pins which rows change,
- * so a reword that drops "of the clip" fails loudly instead of quietly saying
+ * " of this shot", and `full`'s "the entire clip" reads "this entire shot".
+ * `transitions-scope.test.ts` pins that every non-auto row changes, so a
+ * reword that drops either phrase fails loudly instead of quietly saying
  * "clip" inside a shot window.
  */
 const SHOT_POSITION_CLAUSES: typeof POSITION_CLAUSES = Object.fromEntries(
-  Object.entries(POSITION_CLAUSES).map(([id, clause]) => [id, clause.replace(/ of the clip\b/g, " of this shot")]),
+  Object.entries(POSITION_CLAUSES).map(([id, clause]) => [
+    id,
+    clause.replace(/ of the clip\b/g, " of this shot").replace(/ the entire clip\b/g, " this entire shot"),
+  ]),
 ) as typeof POSITION_CLAUSES
 
 const DURATION_CLAUSES = clausesOf(TRANSITION_DURATIONS)
@@ -567,7 +570,8 @@ const INTENSITY_CLAUSES = clausesOf(TRANSITION_INTENSITIES)
  *   `renderTransitionBases`.
  * @param options `scope: "shot"` when the hint is folded into one shot's time
  *   window of a multi-shot prompt — the position clause then says "of this
- *   shot" instead of "of the clip". Omitted, the wording is the clip's.
+ *   shot" instead of "of the clip" (and `full`, on a non-cut, "spans this
+ *   entire shot"). Omitted, the wording is the clip's.
  */
 export function composeTransitionHintFromConnections(
   transitionId: string | ReadonlyArray<string> | undefined,
@@ -595,7 +599,7 @@ export function composeTransitionHintFromConnections(
     parts.push(clauses[timing.position])
   }
   // A cut has no duration and no performance: "lasting approximately 1
-  // second" or "with natural unhurried timing" on a match cut makes the model
+  // second" or "with natural timing" on a match cut makes the model
   // render a dissolve. Skipped only when EVERY picked id is instant — a mixed
   // pick still has a non-cut to time and shape.
   if (timing?.duration && timing.duration !== "auto" && !instant) {
