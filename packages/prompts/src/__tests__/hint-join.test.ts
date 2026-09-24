@@ -50,8 +50,9 @@ describe("sentence-style camera-motion hints compose cleanly", () => {
   })
 
   it("keeps a clause-style hint byte-identical to the pre-joiner output", () => {
-    expect(composeCameraMotionHintFromConnections("static", ["wide shot"], [])).toBe(
-      "locked off static camera, no camera movement, beginning with wide shot",
+    // roll-left kept its one-clause catalog wording through the Camera Motion Lab.
+    expect(composeCameraMotionHintFromConnections("roll-left", ["wide shot"], [])).toBe(
+      "camera rolls counterclockwise around the lens axis, beginning with wide shot",
     )
   })
 })

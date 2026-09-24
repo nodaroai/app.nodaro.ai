@@ -1501,6 +1501,21 @@ describe("apply_edl verb", () => {
     expect(received.body).toBeUndefined() // never dispatched
   })
 
+  it("refuses an edit over the 3-hour output cap, naming the length and the cap, never dispatching", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/apply-edl", { jobId: "j-long" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const longEdl = { ...validEdl, segments: [{ id: "seg1", inMs: 0, outMs: 200 * 60_000, video: "s1" }] }
+    const result = await callTool(server, "apply_edl", { edl: longEdl })
+
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toContain(
+      "the edit renders 200 minutes of output — over the 180-minute limit for one render",
+    )
+    expect(received.body).toBeUndefined() // never dispatched → nothing reserved
+  })
+
   it("does NOT register without workflows:execute scope", async () => {
     const server = buildServer()
     registerVerbs({ server, session: readOnlySession(), fastify: Fastify() })

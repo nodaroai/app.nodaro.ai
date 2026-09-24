@@ -1,0 +1,1162 @@
+{
+  "slug": "impossible-materials",
+  "name": "Impossible Materials",
+  "description": "One product photo in: six impossible versions of your exact product — ice, jewel glass, living moss, porcelain and gold, candy, lava — each in its own cinematic world, a 4K poster of all six, and a seamless reel where the product morphs from one material into the next and loops forever.",
+  "markdownDescription": "## Impossible Materials\n\nOne product photo in — six impossible versions of your exact product out, each in its own cinematic world, plus a 4K poster and a seamless morph reel that loops through every material.\n\n**Business use:** the \"what if it was made of…\" format is one of the most shared kinds of product content. Any brand — sneakers, bottles, headphones, furniture, packaging — gets six scroll-stopping posts, a print-ready poster and a looping reel from a single packshot, without a CGI studio.\n\n1. **Your product** — one clean photo, plus an optional Direction (materials, mood or palette you want).\n2. **Material Director** — reads your product and invents six materials that fight its nature (ice, jewel glass, living moss, porcelain and gold, candy, lava), each with its own colour, world, dramatic light and a physical moment caught mid-air.\n3. **Six impossible products** — rendered at 2K with your photo as the reference, so the silhouette and every seam stay yours.\n4. **The morph** — the Morph Director writes six transitions and Veo 3.1 animates each one from one material to the next, with the sound of the transformation; the last returns to the first, so the reel loops forever.\n5. **Your campaign** — Material Morph Reel (9:16, sound on) and Material Poster (4K, 4:5).\n",
+  "category": "campaign-concepts",
+  "outputTypes": [
+    "image",
+    "video"
+  ],
+  "tags": [
+    "campaign-concepts",
+    "material-swap",
+    "product",
+    "cgi",
+    "morph",
+    "loop",
+    "reel",
+    "poster"
+  ],
+  "complexity": "intermediate",
+  "estimatedCredits": 1410,
+  "nodeTypesUsed": [
+    "upload-image",
+    "text-prompt",
+    "llm-chat",
+    "split-text",
+    "selector",
+    "generate-image",
+    "image-collage",
+    "generate-video",
+    "combine-videos",
+    "sticky-note"
+  ],
+  "providersUsed": [
+    "claude-opus-4.8",
+    "claude-sonnet-4.6",
+    "gpt-image-2",
+    "veo3.1"
+  ],
+  "previewMediaUrl": "https://cdn.nodaro.ai/templates/76f2cd9e-14fc-46b8-b0e5-05b612825746/preview-911aa219c4da.jpg",
+  "previewMediaType": "image",
+  "tutorialCategorySlug": "workflows",
+  "tutorialSortOrder": 44,
+  "nodes": [
+    {
+      "id": "product",
+      "type": "upload-image",
+      "position": {
+        "x": 0,
+        "y": 520
+      },
+      "data": {
+        "label": "Product",
+        "url": "https://cdn.nodaro.ai/images/7a53a758-8c8c-4f77-aef5-d91d6d4bd250.png",
+        "r2Url": "https://cdn.nodaro.ai/images/7a53a758-8c8c-4f77-aef5-d91d6d4bd250.png",
+        "thumbnailUrl": "https://cdn.nodaro.ai/images/7a53a758-8c8c-4f77-aef5-d91d6d4bd250.png",
+        "assetId": "",
+        "filename": "retro-high-top.png",
+        "mimeType": "image/png",
+        "metadata": {
+          "width": 2048,
+          "height": 2048,
+          "format": "png"
+        },
+        "externalUrl": "",
+        "isUploading": false,
+        "uploadError": "",
+        "presentationInput": true,
+        "width": 324,
+        "height": 368
+      },
+      "width": 324,
+      "height": 368
+    },
+    {
+      "id": "direction",
+      "type": "text-prompt",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "data": {
+        "label": "Direction",
+        "text": "",
+        "variables": [],
+        "presentationInput": true,
+        "width": 324,
+        "height": 150
+      },
+      "width": 324,
+      "height": 150
+    },
+    {
+      "id": "director",
+      "type": "llm-chat",
+      "position": {
+        "x": 604,
+        "y": 166
+      },
+      "data": {
+        "label": "Material Director",
+        "llmModel": "claude-opus-4.8",
+        "templateId": "custom",
+        "temperature": 0.9,
+        "maxTokens": 8192,
+        "fieldMappings": {},
+        "userInput": "Direction from the user: {Direction || none given, choose freely}\n\nThe product is in the attached reference image. Write the six prompts now.",
+        "systemPrompt": "You are the material designer behind the most-shared \"what if it was made of...\" product images on the internet. You turn one ordinary product photo into six impossible objects so striking that people stop scrolling, save the post and send it to a friend.\n\nLOOK at the product in the reference image. Identify exactly what it is and every design detail that defines its silhouette.\n\nINVENT six impossible material versions of THIS exact product.\n\nHow to choose the six materials:\n- Tension first. Each material must fight the product's nature: its temperature, weight, softness, permanence or function. A sneaker made of ice is gripping because a shoe is warm and worn; a speaker made of moss because tech is sterile. Reject anything decorative or obvious (no gold plating, no denim, no wood grain, no plain metal, no plain plastic).\n- Six families, one each, in THIS order so every image can flow into the next: 1) frozen (glacier ice with trapped bubbles, frost, icicles); 2) glass or crystal in a vivid jewel colour (cobalt, amber, emerald or ruby blown glass, a prism crystal throwing rainbows); 3) living (moss with tiny mushrooms, coral, lichen, a blooming meadow); 4) precious and ancient (cracked porcelain mended with bright gold kintsugi, veined marble, verdigris bronze); 5) edible and playful in a loud candy colour (cherry-red gummy, electric-pink jelly, glossy dark chocolate, rainbow sprinkles); 6) raw elemental energy (cooling lava with molten glowing cracks, a thundercloud with lightning inside, neon plasma).\n- COLOUR. Every material brings its own bold, saturated colour. Never inherit the product's colour unless the material truly is that colour. Seen side by side, the six must read as six clearly different hues, like a rainbow of worlds: glacier cyan, jewel glass, living emerald, bone white with bright gold, candy red or pink, molten orange on black.\n- WORLD. Each material lives in its own cinematic world, the place where that material naturally exists, built as a real set with depth and atmosphere: a glowing blue glacier cave; a glassblower's furnace room lit orange; a primeval rainforest floor in morning mist; an ancient temple courtyard at golden hour; a candy land of syrup and sugar; a volcanic field at night with rivers of lava. Six radically different worlds; never a gallery, showroom, studio backdrop, plinth, pedestal or display case.\n- LIGHT. Dramatic, directional light that shows off the material's physics: backlight and caustics through ice and glass, god rays through mist, hard sun raking across texture, rim light on gloss, the object's own glow for lava, lightning or neon. Never flat or grey light.\n- MOMENT. Catch one physical behaviour mid-moment: a drop falling from melting ice, a rainbow caustic dancing on the ground, dew sliding down moss, a crack glowing with gold, gummy wobbling, a lava crack splitting open with sparks. Motion frozen in time is what makes it feel real.\n- If the user gave a direction (materials, mood, colours), follow it and fill the rest with these rules.\n\nNon-negotiable in every prompt: the product keeps its EXACT silhouette, proportions and construction (every panel, seam, lace, sole line, button, curve); only the material changes. Keep the product's own logos and markings, rendered in the new material; add no other text. Same camera angle as the reference photo; the whole product in frame, centered, large, filling about three quarters of the frame width with a little breathing room at the sides, in the same position in every image, so the six images line up perfectly with each other.\n\nFORMAT: exactly six prompts separated by a line containing only ===NEXT===. No numbering, no titles, no commentary before or after.\n\nWrite each prompt as one paragraph of 80 to 120 words, in this order: \"The exact [product] from the reference image, identical silhouette, proportions and every construction detail, same camera angle, the whole product in frame, centered and filling about three quarters of the frame width, made entirely of [material, with its colour, finish and inner detail]. [How the material reads on each major part.] [The physical behaviour caught mid-moment.] Set in [the world]. [The dramatic light and what it does to the material.] Hyper-real CGI product photograph, award-winning advertising image, vivid saturated colour, cinematic colour grading, medium-format camera, 85mm, shallow depth of field, micro-detail texture, vertical 9:16 frame. No people.\""
+      }
+    },
+    {
+      "id": "split_materials",
+      "type": "split-text",
+      "position": {
+        "x": 1144,
+        "y": 336
+      },
+      "data": {
+        "label": "Split Materials",
+        "separator": "custom",
+        "customSeparator": "===NEXT===",
+        "trimWhitespace": true,
+        "removeEmpty": true
+      }
+    },
+    {
+      "id": "morph_director",
+      "type": "llm-chat",
+      "position": {
+        "x": 3024,
+        "y": 166
+      },
+      "data": {
+        "label": "Morph Director",
+        "llmModel": "claude-sonnet-4.6",
+        "templateId": "custom",
+        "temperature": 0.7,
+        "maxTokens": 8192,
+        "fieldMappings": {},
+        "userInput": "The six material prompts, in order:\n\n{Material Director}\n\nWrite the six transition prompts now.",
+        "systemPrompt": "You direct seamless material-morph shots for a looping product reel. You receive six image prompts, in order. Each describes the same product in the same position and framing, made of a different material in a different world. A video model animates each shot from image N (the first frame) to image N+1 (the last frame).\n\nWrite SIX transition prompts, in this order: 1 into 2, 2 into 3, 3 into 4, 4 into 5, 5 into 6, and 6 back into 1 (the loop back to the start).\n\nEach transition prompt is 60 to 100 words, in this order:\n1. Camera: \"Locked-off static shot, the camera stays completely still. The [product] rests perfectly still at the centre of the frame, same position and size from the first frame to the last.\"\n2. The transformation as a physical process with a clear direction of travel: where it starts, how it spreads, and what material A physically does to become material B (frost blooms from the toe and the ice floods with cobalt blue as it hardens into glass; moss creeps up from the sole and swallows the glass; hairline cracks open across the porcelain and bleed molten light as it turns to lava). Make it feel satisfying and inevitable.\n3. The world behind transforms at the same time and in the same direction, from world A into world B, including the change of light and colour.\n4. Timing: \"The change begins in the first second and completes in the final half-second.\"\n5. Sound, on two short lines: \"SFX: [the crisp, satisfying sound of this exact transformation].\" and \"Ambient: [the quiet ambience of world B].\"\n\nFORMAT: exactly six prompts separated by a line containing only ===NEXT===. No numbering, no titles, no commentary before or after."
+      }
+    },
+    {
+      "id": "split_morphs",
+      "type": "split-text",
+      "position": {
+        "x": 3564,
+        "y": 336
+      },
+      "data": {
+        "label": "Split Morphs",
+        "separator": "custom",
+        "customSeparator": "===NEXT===",
+        "trimWhitespace": true,
+        "removeEmpty": true
+      }
+    },
+    {
+      "id": "reel",
+      "type": "combine-videos",
+      "position": {
+        "x": 5324,
+        "y": 2310
+      },
+      "data": {
+        "label": "Material Morph Reel",
+        "transition": "cut",
+        "transitionDuration": 0.5,
+        "audioMode": "crossfade",
+        "audioCrossfadeDuration": 0.3,
+        "trimEndFrames": 2,
+        "trimStartFrames": 1,
+        "smartCutFramesPrev": 8,
+        "smartCutFramesNext": 8,
+        "fieldMappings": {},
+        "presentationOutput": true
+      },
+      "width": 240,
+      "height": 427
+    },
+    {
+      "id": "poster",
+      "type": "image-collage",
+      "position": {
+        "x": 3214,
+        "y": 4347
+      },
+      "data": {
+        "label": "Material Poster",
+        "layout": "grid",
+        "resolution": "4K",
+        "aspectRatio": "4:5",
+        "gap": 16,
+        "backgroundColor": "#0e0e10",
+        "fieldMappings": {},
+        "presentationOutput": true
+      },
+      "width": 360,
+      "height": 450
+    },
+    {
+      "id": "pick_m1",
+      "type": "selector",
+      "position": {
+        "x": 1664,
+        "y": 1275
+      },
+      "data": {
+        "label": "Material 1 prompt",
+        "config": {
+          "mode": "item",
+          "itemIndex": "1"
+        }
+      }
+    },
+    {
+      "id": "mat_1",
+      "type": "generate-image",
+      "position": {
+        "x": 2464,
+        "y": 860
+      },
+      "data": {
+        "label": "Material 1",
+        "prompt": "",
+        "provider": "gpt-image-2",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "aspectRatio": "9:16",
+        "resolution": "2K",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      },
+      "width": 240,
+      "height": 427
+    },
+    {
+      "id": "pick_t1",
+      "type": "selector",
+      "position": {
+        "x": 4084,
+        "y": 1275
+      },
+      "data": {
+        "label": "Morph 1 prompt",
+        "config": {
+          "mode": "item",
+          "itemIndex": "1"
+        }
+      }
+    },
+    {
+      "id": "morph_1",
+      "type": "generate-video",
+      "position": {
+        "x": 4784,
+        "y": 860
+      },
+      "data": {
+        "label": "Morph 1",
+        "prompt": "",
+        "provider": "veo3.1",
+        "duration": 6,
+        "aspectRatio": "9:16",
+        "resolution": "1080p",
+        "generateAudio": true,
+        "negativePrompt": "",
+        "fieldMappings": {}
+      },
+      "width": 240,
+      "height": 427
+    },
+    {
+      "id": "pick_m2",
+      "type": "selector",
+      "position": {
+        "x": 1664,
+        "y": 1855
+      },
+      "data": {
+        "label": "Material 2 prompt",
+        "config": {
+          "mode": "item",
+          "itemIndex": "2"
+        }
+      }
+    },
+    {
+      "id": "mat_2",
+      "type": "generate-image",
+      "position": {
+        "x": 2464,
+        "y": 1440
+      },
+      "data": {
+        "label": "Material 2",
+        "prompt": "",
+        "provider": "gpt-image-2",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "aspectRatio": "9:16",
+        "resolution": "2K",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      },
+      "width": 240,
+      "height": 427
+    },
+    {
+      "id": "pick_t2",
+      "type": "selector",
+      "position": {
+        "x": 4084,
+        "y": 1855
+      },
+      "data": {
+        "label": "Morph 2 prompt",
+        "config": {
+          "mode": "item",
+          "itemIndex": "2"
+        }
+      }
+    },
+    {
+      "id": "morph_2",
+      "type": "generate-video",
+      "position": {
+        "x": 4784,
+        "y": 1440
+      },
+      "data": {
+        "label": "Morph 2",
+        "prompt": "",
+        "provider": "veo3.1",
+        "duration": 6,
+        "aspectRatio": "9:16",
+        "resolution": "1080p",
+        "generateAudio": true,
+        "negativePrompt": "",
+        "fieldMappings": {}
+      },
+      "width": 240,
+      "height": 427
+    },
+    {
+      "id": "pick_m3",
+      "type": "selector",
+      "position": {
+        "x": 1664,
+        "y": 2435
+      },
+      "data": {
+        "label": "Material 3 prompt",
+        "config": {
+          "mode": "item",
+          "itemIndex": "3"
+        }
+      }
+    },
+    {
+      "id": "mat_3",
+      "type": "generate-image",
+      "position": {
+        "x": 2464,
+        "y": 2020
+      },
+      "data": {
+        "label": "Material 3",
+        "prompt": "",
+        "provider": "gpt-image-2",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "aspectRatio": "9:16",
+        "resolution": "2K",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      },
+      "width": 240,
+      "height": 427
+    },
+    {
+      "id": "pick_t3",
+      "type": "selector",
+      "position": {
+        "x": 4084,
+        "y": 2435
+      },
+      "data": {
+        "label": "Morph 3 prompt",
+        "config": {
+          "mode": "item",
+          "itemIndex": "3"
+        }
+      }
+    },
+    {
+      "id": "morph_3",
+      "type": "generate-video",
+      "position": {
+        "x": 4784,
+        "y": 2020
+      },
+      "data": {
+        "label": "Morph 3",
+        "prompt": "",
+        "provider": "veo3.1",
+        "duration": 6,
+        "aspectRatio": "9:16",
+        "resolution": "1080p",
+        "generateAudio": true,
+        "negativePrompt": "",
+        "fieldMappings": {}
+      },
+      "width": 240,
+      "height": 427
+    },
+    {
+      "id": "pick_m4",
+      "type": "selector",
+      "position": {
+        "x": 1664,
+        "y": 3015
+      },
+      "data": {
+        "label": "Material 4 prompt",
+        "config": {
+          "mode": "item",
+          "itemIndex": "4"
+        }
+      }
+    },
+    {
+      "id": "mat_4",
+      "type": "generate-image",
+      "position": {
+        "x": 2464,
+        "y": 2600
+      },
+      "data": {
+        "label": "Material 4",
+        "prompt": "",
+        "provider": "gpt-image-2",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "aspectRatio": "9:16",
+        "resolution": "2K",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      },
+      "width": 240,
+      "height": 427
+    },
+    {
+      "id": "pick_t4",
+      "type": "selector",
+      "position": {
+        "x": 4084,
+        "y": 3015
+      },
+      "data": {
+        "label": "Morph 4 prompt",
+        "config": {
+          "mode": "item",
+          "itemIndex": "4"
+        }
+      }
+    },
+    {
+      "id": "morph_4",
+      "type": "generate-video",
+      "position": {
+        "x": 4784,
+        "y": 2600
+      },
+      "data": {
+        "label": "Morph 4",
+        "prompt": "",
+        "provider": "veo3.1",
+        "duration": 6,
+        "aspectRatio": "9:16",
+        "resolution": "1080p",
+        "generateAudio": true,
+        "negativePrompt": "",
+        "fieldMappings": {}
+      },
+      "width": 240,
+      "height": 427
+    },
+    {
+      "id": "pick_m5",
+      "type": "selector",
+      "position": {
+        "x": 1664,
+        "y": 3595
+      },
+      "data": {
+        "label": "Material 5 prompt",
+        "config": {
+          "mode": "item",
+          "itemIndex": "5"
+        }
+      }
+    },
+    {
+      "id": "mat_5",
+      "type": "generate-image",
+      "position": {
+        "x": 2464,
+        "y": 3180
+      },
+      "data": {
+        "label": "Material 5",
+        "prompt": "",
+        "provider": "gpt-image-2",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "aspectRatio": "9:16",
+        "resolution": "2K",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      },
+      "width": 240,
+      "height": 427
+    },
+    {
+      "id": "pick_t5",
+      "type": "selector",
+      "position": {
+        "x": 4084,
+        "y": 3595
+      },
+      "data": {
+        "label": "Morph 5 prompt",
+        "config": {
+          "mode": "item",
+          "itemIndex": "5"
+        }
+      }
+    },
+    {
+      "id": "morph_5",
+      "type": "generate-video",
+      "position": {
+        "x": 4784,
+        "y": 3180
+      },
+      "data": {
+        "label": "Morph 5",
+        "prompt": "",
+        "provider": "veo3.1",
+        "duration": 6,
+        "aspectRatio": "9:16",
+        "resolution": "1080p",
+        "generateAudio": true,
+        "negativePrompt": "",
+        "fieldMappings": {}
+      },
+      "width": 240,
+      "height": 427
+    },
+    {
+      "id": "pick_m6",
+      "type": "selector",
+      "position": {
+        "x": 1664,
+        "y": 4175
+      },
+      "data": {
+        "label": "Material 6 prompt",
+        "config": {
+          "mode": "item",
+          "itemIndex": "6"
+        }
+      }
+    },
+    {
+      "id": "mat_6",
+      "type": "generate-image",
+      "position": {
+        "x": 2464,
+        "y": 3760
+      },
+      "data": {
+        "label": "Material 6",
+        "prompt": "",
+        "provider": "gpt-image-2",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "aspectRatio": "9:16",
+        "resolution": "2K",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      },
+      "width": 240,
+      "height": 427
+    },
+    {
+      "id": "pick_t6",
+      "type": "selector",
+      "position": {
+        "x": 4084,
+        "y": 4175
+      },
+      "data": {
+        "label": "Morph 6 prompt",
+        "config": {
+          "mode": "item",
+          "itemIndex": "6"
+        }
+      }
+    },
+    {
+      "id": "morph_6",
+      "type": "generate-video",
+      "position": {
+        "x": 4784,
+        "y": 3760
+      },
+      "data": {
+        "label": "Morph 6",
+        "prompt": "",
+        "provider": "veo3.1",
+        "duration": 6,
+        "aspectRatio": "9:16",
+        "resolution": "1080p",
+        "generateAudio": true,
+        "negativePrompt": "",
+        "fieldMappings": {}
+      },
+      "width": 240,
+      "height": 427
+    },
+    {
+      "id": "note-intro",
+      "type": "sticky-note",
+      "position": {
+        "x": -1080,
+        "y": 0
+      },
+      "width": 900,
+      "height": 608,
+      "data": {
+        "label": "Impossible Materials",
+        "title": "Impossible Materials",
+        "text": "One product photo in: six impossible versions of your exact product, a 4K poster of all six and a morph reel that loops forever. The shape never changes, only the material does.\n\n1 · Your product. Upload one clean photo. Direction is optional: materials, a mood or a palette.\n2 · Material Director. Invents six materials that fight the product's nature, each in its own world. Split Materials cuts the answer into six prompts.",
+        "color": "#1e3a5f",
+        "textColor": "#ffffff",
+        "width": 900,
+        "height": 608,
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "left"
+      }
+    },
+    {
+      "id": "note-3",
+      "type": "sticky-note",
+      "position": {
+        "x": 1664,
+        "y": 0
+      },
+      "width": 1040,
+      "height": 150,
+      "data": {
+        "label": "3 · Six impossible products",
+        "title": "3 · Six impossible products",
+        "text": "Each prompt renders at 2K, 9:16, with your photo as the reference, so the silhouette and every seam stay yours. Only the material changes.",
+        "color": "#26221a",
+        "textColor": "#ffffff",
+        "width": 1040,
+        "height": 150,
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "left"
+      }
+    },
+    {
+      "id": "note-4",
+      "type": "sticky-note",
+      "position": {
+        "x": 4084,
+        "y": 0
+      },
+      "width": 940,
+      "height": 230,
+      "data": {
+        "label": "4 · The morph",
+        "title": "4 · The morph",
+        "text": "The Morph Director writes six transitions. Veo 3.1 animates each one from a material (first frame) to the next (last frame), with the sound of the change. The last returns to the first, so the reel loops.",
+        "color": "#26221a",
+        "textColor": "#ffffff",
+        "width": 940,
+        "height": 230,
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "left"
+      }
+    },
+    {
+      "id": "note-5",
+      "type": "sticky-note",
+      "position": {
+        "x": 5324,
+        "y": 0
+      },
+      "width": 620,
+      "height": 330,
+      "data": {
+        "label": "5 · Your campaign",
+        "title": "5 · Your campaign",
+        "text": "Material Morph Reel: 9:16 with sound, a seamless loop for Reels, TikTok and Shorts.\n\nMaterial Poster: all six in one 4K print, 4:5 for the feed.",
+        "color": "#26221a",
+        "textColor": "#ffffff",
+        "width": 620,
+        "height": 330,
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "left"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-product-director",
+      "source": "product",
+      "sourceHandle": "image",
+      "target": "director",
+      "targetHandle": "references"
+    },
+    {
+      "id": "e-direction-director",
+      "source": "direction",
+      "sourceHandle": "prompt",
+      "target": "director",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-director-split",
+      "source": "director",
+      "sourceHandle": "text",
+      "target": "split_materials",
+      "targetHandle": "text"
+    },
+    {
+      "id": "e-director-morphdir",
+      "source": "director",
+      "sourceHandle": "text",
+      "target": "morph_director",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-morphdir-split",
+      "source": "morph_director",
+      "sourceHandle": "text",
+      "target": "split_morphs",
+      "targetHandle": "text"
+    },
+    {
+      "id": "e-split-m1",
+      "source": "split_materials",
+      "sourceHandle": "out",
+      "target": "pick_m1",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-m1-img",
+      "source": "pick_m1",
+      "sourceHandle": "picked",
+      "target": "mat_1",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-prod-m1",
+      "source": "product",
+      "sourceHandle": "image",
+      "target": "mat_1",
+      "targetHandle": "references"
+    },
+    {
+      "id": "e-m1-poster",
+      "source": "mat_1",
+      "sourceHandle": "image",
+      "target": "poster",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-splitm-t1",
+      "source": "split_morphs",
+      "sourceHandle": "out",
+      "target": "pick_t1",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-t1-morph",
+      "source": "pick_t1",
+      "sourceHandle": "picked",
+      "target": "morph_1",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-m1-start1",
+      "source": "mat_1",
+      "sourceHandle": "image",
+      "target": "morph_1",
+      "targetHandle": "startFrame"
+    },
+    {
+      "id": "e-m2-end1",
+      "source": "mat_2",
+      "sourceHandle": "image",
+      "target": "morph_1",
+      "targetHandle": "endFrame"
+    },
+    {
+      "id": "e-split-m2",
+      "source": "split_materials",
+      "sourceHandle": "out",
+      "target": "pick_m2",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-m2-img",
+      "source": "pick_m2",
+      "sourceHandle": "picked",
+      "target": "mat_2",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-prod-m2",
+      "source": "product",
+      "sourceHandle": "image",
+      "target": "mat_2",
+      "targetHandle": "references"
+    },
+    {
+      "id": "e-m2-poster",
+      "source": "mat_2",
+      "sourceHandle": "image",
+      "target": "poster",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-splitm-t2",
+      "source": "split_morphs",
+      "sourceHandle": "out",
+      "target": "pick_t2",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-t2-morph",
+      "source": "pick_t2",
+      "sourceHandle": "picked",
+      "target": "morph_2",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-m2-start2",
+      "source": "mat_2",
+      "sourceHandle": "image",
+      "target": "morph_2",
+      "targetHandle": "startFrame"
+    },
+    {
+      "id": "e-m3-end2",
+      "source": "mat_3",
+      "sourceHandle": "image",
+      "target": "morph_2",
+      "targetHandle": "endFrame"
+    },
+    {
+      "id": "e-split-m3",
+      "source": "split_materials",
+      "sourceHandle": "out",
+      "target": "pick_m3",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-m3-img",
+      "source": "pick_m3",
+      "sourceHandle": "picked",
+      "target": "mat_3",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-prod-m3",
+      "source": "product",
+      "sourceHandle": "image",
+      "target": "mat_3",
+      "targetHandle": "references"
+    },
+    {
+      "id": "e-m3-poster",
+      "source": "mat_3",
+      "sourceHandle": "image",
+      "target": "poster",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-splitm-t3",
+      "source": "split_morphs",
+      "sourceHandle": "out",
+      "target": "pick_t3",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-t3-morph",
+      "source": "pick_t3",
+      "sourceHandle": "picked",
+      "target": "morph_3",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-m3-start3",
+      "source": "mat_3",
+      "sourceHandle": "image",
+      "target": "morph_3",
+      "targetHandle": "startFrame"
+    },
+    {
+      "id": "e-m4-end3",
+      "source": "mat_4",
+      "sourceHandle": "image",
+      "target": "morph_3",
+      "targetHandle": "endFrame"
+    },
+    {
+      "id": "e-split-m4",
+      "source": "split_materials",
+      "sourceHandle": "out",
+      "target": "pick_m4",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-m4-img",
+      "source": "pick_m4",
+      "sourceHandle": "picked",
+      "target": "mat_4",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-prod-m4",
+      "source": "product",
+      "sourceHandle": "image",
+      "target": "mat_4",
+      "targetHandle": "references"
+    },
+    {
+      "id": "e-m4-poster",
+      "source": "mat_4",
+      "sourceHandle": "image",
+      "target": "poster",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-splitm-t4",
+      "source": "split_morphs",
+      "sourceHandle": "out",
+      "target": "pick_t4",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-t4-morph",
+      "source": "pick_t4",
+      "sourceHandle": "picked",
+      "target": "morph_4",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-m4-start4",
+      "source": "mat_4",
+      "sourceHandle": "image",
+      "target": "morph_4",
+      "targetHandle": "startFrame"
+    },
+    {
+      "id": "e-m5-end4",
+      "source": "mat_5",
+      "sourceHandle": "image",
+      "target": "morph_4",
+      "targetHandle": "endFrame"
+    },
+    {
+      "id": "e-split-m5",
+      "source": "split_materials",
+      "sourceHandle": "out",
+      "target": "pick_m5",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-m5-img",
+      "source": "pick_m5",
+      "sourceHandle": "picked",
+      "target": "mat_5",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-prod-m5",
+      "source": "product",
+      "sourceHandle": "image",
+      "target": "mat_5",
+      "targetHandle": "references"
+    },
+    {
+      "id": "e-m5-poster",
+      "source": "mat_5",
+      "sourceHandle": "image",
+      "target": "poster",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-splitm-t5",
+      "source": "split_morphs",
+      "sourceHandle": "out",
+      "target": "pick_t5",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-t5-morph",
+      "source": "pick_t5",
+      "sourceHandle": "picked",
+      "target": "morph_5",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-m5-start5",
+      "source": "mat_5",
+      "sourceHandle": "image",
+      "target": "morph_5",
+      "targetHandle": "startFrame"
+    },
+    {
+      "id": "e-m6-end5",
+      "source": "mat_6",
+      "sourceHandle": "image",
+      "target": "morph_5",
+      "targetHandle": "endFrame"
+    },
+    {
+      "id": "e-split-m6",
+      "source": "split_materials",
+      "sourceHandle": "out",
+      "target": "pick_m6",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-m6-img",
+      "source": "pick_m6",
+      "sourceHandle": "picked",
+      "target": "mat_6",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-prod-m6",
+      "source": "product",
+      "sourceHandle": "image",
+      "target": "mat_6",
+      "targetHandle": "references"
+    },
+    {
+      "id": "e-m6-poster",
+      "source": "mat_6",
+      "sourceHandle": "image",
+      "target": "poster",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-splitm-t6",
+      "source": "split_morphs",
+      "sourceHandle": "out",
+      "target": "pick_t6",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-t6-morph",
+      "source": "pick_t6",
+      "sourceHandle": "picked",
+      "target": "morph_6",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "e-m6-start6",
+      "source": "mat_6",
+      "sourceHandle": "image",
+      "target": "morph_6",
+      "targetHandle": "startFrame"
+    },
+    {
+      "id": "e-m1-end6",
+      "source": "mat_1",
+      "sourceHandle": "image",
+      "target": "morph_6",
+      "targetHandle": "endFrame"
+    },
+    {
+      "id": "e-morph1-reel",
+      "source": "morph_1",
+      "sourceHandle": "video",
+      "target": "reel",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-morph2-reel",
+      "source": "morph_2",
+      "sourceHandle": "video",
+      "target": "reel",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-morph3-reel",
+      "source": "morph_3",
+      "sourceHandle": "video",
+      "target": "reel",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-morph4-reel",
+      "source": "morph_4",
+      "sourceHandle": "video",
+      "target": "reel",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-morph5-reel",
+      "source": "morph_5",
+      "sourceHandle": "video",
+      "target": "reel",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-morph6-reel",
+      "source": "morph_6",
+      "sourceHandle": "video",
+      "target": "reel",
+      "targetHandle": "in"
+    }
+  ],
+  "settings": {
+    "viewport": {
+      "x": 213,
+      "y": 60,
+      "zoom": 0.16
+    },
+    "presentationSettings": {
+      "cardMeta": {
+        "product": {
+          "title": "Your product",
+          "description": "One clean photo of the product — any angle, plain background is best."
+        },
+        "direction": {
+          "title": "Direction (optional)",
+          "description": "Materials, a mood or a palette you want — or leave empty and let the Material Director choose."
+        }
+      }
+    }
+  }
+}

@@ -208,6 +208,13 @@ export const queryKeys = {
     list: () => ["http-credentials", "list"] as const,
   },
 
+  // Connected Telegram accounts (Cloud, private plugin)
+  telegramAccounts: {
+    all: ["telegram-accounts"] as const,
+    list: () => ["telegram-accounts", "list"] as const,
+    consent: () => ["telegram-accounts", "consent"] as const,
+  },
+
   // Developer Apps (OAuth)
   developerApps: {
     all: ["developer-apps"] as const,

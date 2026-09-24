@@ -8,7 +8,8 @@ import { renderQueue } from "../../lib/render-queue.js"
 import { supabase } from "../../lib/supabase.js"
 import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS, probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
-import { applyEdl, applyEdlRenderBudgetMs } from "../../providers/video/apply-edl.js"
+import { applyEdl } from "../../providers/video/apply-edl.js"
+import { declaredJobBudgetMs } from "../../lib/job-budget.js"
 import { assembleNarratedVideo } from "../../providers/video/assemble-narrated-video.js"
 import { createImageCollage } from "../../providers/image/collage.js"
 import { createImageOverlay, type ImageOverlayParams } from "../../providers/image/overlay.js"
@@ -218,12 +219,12 @@ const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
 // fetches and probes — so "hung" means one thing to the heartbeat and to those
 // steps. Storage I/O and ffmpeg-slot waits have no ceiling to add and are the
 // stated residual (see `workers/pre-task-heartbeat.ts`).
-handleApplyEdl.livenessBudgetMs = (job) => {
-  const { edl, output } = job.data as { edl?: Edl; output?: "video" | "audio" }
-  return edl && Array.isArray(edl.segments) && Array.isArray(edl.sources)
-    ? applyEdlRenderBudgetMs(edl, { output: output === "audio" ? "audio" : "video" })
-    : undefined
-}
+//
+// Declared THROUGH the job-budget registry (`lib/job-budget.ts`), never
+// computed here: the workflow orchestrator sizes an apply-edl node's ceilings
+// from the same `declaredJobBudgetMs` call on the same payload (Track 0.11),
+// so the heartbeat and the DAG agree on how long this job may run.
+handleApplyEdl.livenessBudgetMs = (job) => declaredJobBudgetMs("apply-edl", job.data)
 
 const handleAssembleNarratedVideo: HandlerFn = async function handleAssembleNarratedVideo(job, ctx) {
   const { blocks, voiceVolume, clipAudioVolume, maxSlowdown, trimStartFrames, trimEndFrames } = job.data as {

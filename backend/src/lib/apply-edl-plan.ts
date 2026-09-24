@@ -17,6 +17,11 @@ import {
   validateEdl,
   edlDurationMs,
 } from "@nodaro/shared"
+import { APPLY_EDL_MAX_OUTPUT_MS } from "../providers/video/apply-edl-budget.js"
+
+/** Re-exported so every ingress reads the ONE cap (it lives in the budget
+ *  leaf, which also refuses to budget past it). */
+export { APPLY_EDL_MAX_OUTPUT_MS }
 
 /** Base credits per MINUTE of RENDERED output. Single source of truth for the
  *  per-minute rate: `STATIC_CREDIT_COSTS['apply-edl']` (ee/billing/credits.ts)
@@ -127,6 +132,22 @@ export interface ApplyEdlValidation {
 export function validateEffectiveEdl(edl: Edl, output: "video" | "audio"): ApplyEdlValidation {
   const base = validateEdl(edl)
   const issues = [...base.issues]
+
+  // The 3-hour cap (product decision 2026-09-24): one render may produce at
+  // most `APPLY_EDL_MAX_OUTPUT_MS` of output, measured exactly as the reserve
+  // is priced (`edlDurationMs`, overlaps subtracted). Refused HERE — before
+  // any credit is reserved, at every ingress — so no render's time budget can
+  // grow past that of a 180-minute output.
+  const outputMs = edlDurationMs(edl)
+  if (outputMs > APPLY_EDL_MAX_OUTPUT_MS) {
+    // Rounded UP to a tenth, so an edit a few ms over never reads as "180".
+    const over = Math.ceil(outputMs / 6_000) / 10
+    const cap = APPLY_EDL_MAX_OUTPUT_MS / 60_000
+    issues.push(
+      `the edit renders ${over} minutes of output — over the ${cap}-minute limit for one render; ` +
+        `split it into parts of at most ${cap} minutes`,
+    )
+  }
 
   // An unknown role is only a WARNING in the shared contract (a newer producer
   // may know more roles), but this executor knows exactly EDL_SOURCE_ROLES, and

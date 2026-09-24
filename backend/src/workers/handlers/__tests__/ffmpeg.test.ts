@@ -112,7 +112,8 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   cleanupWorkDir: mocks.mockCleanupWorkDir,
   probeVideoSource: mocks.mockProbeVideoSource,
   BROWSER_SAFE_VIDEO_ARGS: mocks.BROWSER_SAFE_VIDEO_ARGS,
-  // Real values: apply-edl composes its liveness budget from these at import.
+  // Real values (re-exported from the pure `ffmpeg-timeouts.ts`; apply-edl's
+  // liveness budget reads that leaf directly, so this mock cannot skew it).
   DEFAULT_FFMPEG_TIMEOUT_MS: 10 * 60 * 1000,
   DOWNLOAD_TIMEOUT_MS: 120_000,
   FFPROBE_TIMEOUT_MS: 120_000,
@@ -198,6 +199,7 @@ vi.mock("../../shared.js", () => ({
 
 import { ffmpegHandlers } from "../ffmpeg.js"
 import { applyEdlRenderBudgetMs } from "@/providers/video/apply-edl.js"
+import { BUDGETED_JOB_NAMES, declaredJobBudgetMs } from "@/lib/job-budget.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -775,6 +777,55 @@ describe("apply-edl handler liveness budget", () => {
   it("is the only ffmpeg handler that DECLARES a liveness budget (the others fit the default cap)", () => {
     const declaring = Object.entries(ffmpegHandlers).filter(([, h]) => typeof h.livenessBudgetMs === "function").map(([k]) => k)
     expect(declaring).toEqual(["apply-edl"])
+  })
+})
+
+// Podcast Track 0.11: the workflow orchestrator sizes an apply-edl node's
+// processing/poll ceilings (and the workflow's cap) from `declaredJobBudgetMs`
+// — the job-budget registry. The heartbeat beats for the handler's
+// `livenessBudgetMs`. If the two ever read the same job differently, the DAG
+// would cancel a render its worker still reports live (or wait on a hung one).
+// So: every handler that declares a budget must return EXACTLY the registry's
+// number for the same payload — including the payloads the DAG actually sends
+// (`jobId`, `usageLogId`, `quality`, `transcript` beside `edl` / `output`) and
+// the ones it cannot read — and every registered job name must be declared by
+// its handler (all budgeted job types are ffmpeg handlers today; a budgeted
+// type living in another handler map must be added to this check).
+describe("handler liveness budget ⇔ job-budget registry (the orchestrator's number)", () => {
+  const edl = (minutes: number, extra: Record<string, unknown> = {}) => ({
+    version: 1, clock: "master",
+    sources: [
+      { id: "A", url: "https://f.test/a.mp4", kind: "video" },
+      { id: "MIC", url: "https://f.test/mic.m4a", kind: "audio", role: "master-audio" },
+    ],
+    segments: Array.from({ length: minutes }, (_, i) => ({ id: `s${i}`, inMs: i * 60_000, outMs: (i + 1) * 60_000, video: "A" })),
+    ...extra,
+  })
+  const payloads: Array<Record<string, unknown>> = [
+    { edl: edl(180), output: "video", quality: "final", usageLogId: "u-1", transcript: "{}" },
+    { edl: edl(180), output: "audio", quality: "final" },
+    { edl: edl(45), quality: "proxy" },
+    { edl: edl(300), output: "bogus" },
+    { edl: { segments: "nope" } },
+    {},
+  ]
+
+  it("every declaring handler returns the registry's budget for the same payload", () => {
+    const declaring = Object.entries(ffmpegHandlers).filter(([, h]) => typeof h.livenessBudgetMs === "function")
+    expect(declaring.length).toBeGreaterThan(0)
+    for (const [name, handler] of declaring) {
+      for (const data of payloads) {
+        const job = makeJob(name, data)
+        expect(handler.livenessBudgetMs!(job as never), `${name} ${JSON.stringify(Object.keys(data))}`)
+          .toBe(declaredJobBudgetMs(name, job.data))
+      }
+    }
+  })
+
+  it("every registered job name is declared by its handler (no budget the heartbeat would not beat for)", () => {
+    for (const name of BUDGETED_JOB_NAMES) {
+      expect(typeof ffmpegHandlers[name]?.livenessBudgetMs, name).toBe("function")
+    }
   })
 })
 

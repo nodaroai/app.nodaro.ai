@@ -1,0 +1,330 @@
+{
+  "source": "Camera Motion Lab, 2026-08/09 — each injection approved on Seedance 2.5 from its family's base frame; the clip is the take that approved it.",
+  "unapproved": [
+    "auto",
+    "boom-down",
+    "boom-up"
+  ],
+  "approved": [
+    {
+      "id": "aerial",
+      "approvedClip": "https://cdn.nodaro.ai/videos/59bdf3a0-f40c-4e34-b102-45269c5c1605.mp4",
+      "injection": "The camera is airborne and sinks straight downward through the air, losing altitude like an aircraft lowering itself vertically. Its aim is completely fixed: the horizon line stays at exactly the same height across the frame from the first moment to the last, and the camera never dips or tips its view downward at all — what it points at does not change, only where it is in space.\nAs the camera drops in height, everything in view slides UPWARD through the frame together because the viewpoint is lower: whatever stands tall rises up the frame and grows, and more of what lies far below climbs into view from the bottom. This vertical sliding of the whole scene is the ONLY change; the angle of view is frozen.\nNo tilting, no dipping the aim down, no looking further down, no rotation, no forward travel — the horizon must remain pinned at its starting height while the camera simply loses altitude."
+    },
+    {
+      "id": "arc-left",
+      "approvedClip": "https://cdn.nodaro.ai/videos/92b0d528-994d-4107-a896-ea9598f5ad0c.mp4",
+      "injection": "slow camera arc around the subject through a partial arc, the background sliding to the left across the frame"
+    },
+    {
+      "id": "arc-right",
+      "approvedClip": "https://cdn.nodaro.ai/videos/2cbc3dc0-3a91-49dc-b466-28407e5e3ebb.mp4",
+      "injection": "The camera slowly moves sideways to the right while curving around the subject, continuously turning toward the subject to keep the same centered framing.\nThe camera maintains constant distance from the subject.\nAs the viewpoint changes, strong natural parallax is visible: nearby environmental elements shift right noticeably while distant background elements shift right more slowly.\nThe shot ends from a slightly different three-quarter viewing angle.\nNo zoom, no push-in, no pull-out."
+    },
+    {
+      "id": "birds-eye",
+      "approvedClip": "https://cdn.nodaro.ai/videos/d752038a-ce24-4bf8-b117-d2424c01c4ab.mp4",
+      "injection": "bird's eye view, direct overhead top-down shot looking straight down"
+    },
+    {
+      "id": "breathing",
+      "approvedClip": "https://cdn.nodaro.ai/videos/7552dffd-6028-4d89-8a2c-b7148efe5c0f.mp4",
+      "injection": "The camera breathes: it drifts gently FORWARD a small way, then eases back BACKWARD to about where it began, then forward again, in a slow continuous cycle that repeats several times across the shot, like the rise and fall of quiet breathing. Nothing new is added to the scene; only the viewpoint sways in and out.\nThis reversal is deliberate and is the whole point of the move. There is no pause and no hard stop at either end: the forward drift slows, turns over smoothly, and becomes the backward drift, then turns over again. The cycle is soft and rhythmic, never sharp.\nThe travel each way is small and the pace is slow and organic, never mechanical: the picture stays sharp with no motion blur, and it feels like a handheld operator quietly breathing behind the camera rather than a rig being driven.\nThe lens never changes: the focal length is fixed for the entire shot, so nothing is magnified. The image changes only because the camera has swayed to a slightly different place.\nThe gap between the camera and the subject accordingly shrinks a little, then opens a little, then shrinks again: the subject swells and settles gently in the frame in time with the cycle.\nEVERY part of the scene moves together with it, all of it expanding outward from the centre on each drift forward and contracting inward on each drift back, and the only difference between them is how fast: what is closest sways most, what is furthest hardly changes. It is one smooth continuous gradient across every depth. Nothing anywhere is frozen or static.\nNo zoom, no change of focal length, no sideways travel, no orbiting, no cuts."
+    },
+    {
+      "id": "crane-down",
+      "approvedClip": "https://cdn.nodaro.ai/videos/f80b8248-f74f-4448-988d-0f78a4c93b75.mp4",
+      "injection": "The camera is carried on the end of a long jib arm that swings it DOWNWARD and INWARD through a descending arc, so it drops steadily lower and at the same time closes in toward what lay beneath it. The scene itself is entirely unchanged; nothing in it moves, falls, appears or is added. Only the viewpoint travels.\nUnlike a straight vertical descent, the aim DOES change: as the camera drops it tips gradually upward, levelling out more and more, so that what was looked down upon from above is now met at its own level. The fall and the tilt happen together as one continuous sweeping arc.\nThe lens never changes: the focal length is fixed, so nothing is magnified.\nBecause the camera physically travels, there is STRONG parallax: EVERY part of the scene is in motion together, sliding upward and inward through the frame as the viewpoint drops and closes in, and the only difference between them is how fast. What is nearest the camera sweeps up and out of the top edge quickly, what is further back drifts more gently, and the most distant parts ease slowest of all. It is one smooth continuous gradient of speed across every depth. Nothing anywhere in the frame is frozen or static.\nThe shot ends on a low, close vantage, far below and ahead of where it began.\nNo zoom, no change of focal length, no sideways drift, no orbiting."
+    },
+    {
+      "id": "crane-up",
+      "approvedClip": "https://cdn.nodaro.ai/videos/e18f5347-7529-4f40-84b5-e7e1ecf186a4.mp4",
+      "injection": "The camera is carried on the end of a long jib arm that swings it UPWARD and OUTWARD through a rising arc, so it climbs steadily higher and at the same time draws back and away from where it started. The scene itself is entirely unchanged; nothing in it moves, falls, appears or is added. Only the viewpoint travels.\nUnlike a straight vertical lift, the aim DOES change: as the camera rises it tips gradually downward, angling more and more steeply so that what began level with it is now looked down upon from above. The rise and the tilt happen together as one continuous sweeping arc.\nThe lens never changes: the focal length is fixed, so nothing is magnified.\nBecause the camera physically travels, there is STRONG parallax: EVERY part of the scene is in motion together, sliding downward and outward through the frame as the viewpoint climbs and pulls back, and the only difference between them is how fast. What is nearest the camera sweeps down and out of the bottom edge quickly, what is further back drifts more gently, and the most distant parts ease slowest of all. It is one smooth continuous gradient of speed across every depth. Nothing anywhere in the frame is frozen or static.\nThe shot ends on a high, wide, elevated vantage looking down over the whole scene, far above and behind where it began.\nNo zoom, no change of focal length, no sideways drift, no orbiting."
+    },
+    {
+      "id": "crash-zoom-in",
+      "approvedClip": "https://cdn.nodaro.ai/videos/5d083a4a-ccb7-4347-a8bb-4a28d0f3e77a.mp4",
+      "injection": "The camera is locked to a tripod planted in one spot and never moves at all. Only the lens changes: its focal length rockets up in one violent instant, snapping the frame hard onto the subject.\nThe zoom is so abrupt that the image judders and smears with motion blur during the snap, and the magnification slams to a stop rather than easing in.\nBecause the camera body does not travel, the perspective of the scene never changes: there is NO parallax whatsoever, nothing slides past anything else, and the spatial relationship between near and distant elements stays exactly as it was.\nEverything in the frame simply explodes larger together at the same rate and the edges of the picture crop violently away, as if the photograph were being blown up from its centre in a single jolt.\nNo camera travel, no dolly, no push-in, no walking forward, no orbiting."
+    },
+    {
+      "id": "crash-zoom-out",
+      "approvedClip": "https://cdn.nodaro.ai/videos/f59de464-dd49-4651-8341-069ef04f66d8.mp4",
+      "injection": "The camera is locked to a tripod planted in one spot and never moves at all. Only the lens changes: its focal length drops away in one violent instant, snapping the frame wide open away from the subject.\nThe zoom is so abrupt that the image judders and smears with motion blur during the snap, and the widening slams to a stop rather than easing out.\nBecause the camera body does not travel, the perspective of the scene never changes: there is NO parallax whatsoever, nothing slides past anything else, and the spatial relationship between near and distant elements stays exactly as it was.\nEverything in the frame simply collapses smaller together at the same rate and a great deal more of the surroundings floods in from all four edges at once, as if the photograph were being shrunk towards its centre in a single jolt.\nNo camera travel, no dolly, no pull-back, no walking backward, no orbiting."
+    },
+    {
+      "id": "creep-in",
+      "approvedClip": "https://cdn.nodaro.ai/videos/18999856-69f6-4f02-ab3b-c3a1651f0e57.mp4",
+      "injection": "The camera creeps FORWARD almost imperceptibly slowly, edging deeper into the scene by the smallest amount and closing the distance to the subject only very slightly. Nothing new is added to the scene; the viewpoint simply inches forward.\nThe move is so gradual it is barely noticeable moment to moment: the picture stays completely sharp with no motion blur at all, the advance never accelerates, and only by comparing the end against the beginning is it clear the camera moved at all. It creates a slow, quiet, unsettling drift rather than any sense of momentum.\nThe lens never changes: the focal length is fixed for the entire shot, so nothing is magnified. The image changes only because the camera has crept to a slightly new place.\nThe gap between the camera and the subject SHRINKS very slightly and very steadily: the subject grows just a little larger in the frame across the whole shot.\nEVERY part of the scene is in motion together, all of it expanding outward from the centre of the frame by tiny degrees as the viewpoint edges forward, and the only difference between them is how fast: what is closest creeps outward most, what is furthest hardly changes at all. It is one smooth continuous gradient across every depth in the picture. Nothing anywhere is frozen or static, and nothing slides forward independently of the rest.\nNo zoom, no change of focal length, no sideways travel, no orbiting, no acceleration, no holding a constant distance."
+    },
+    {
+      "id": "creep-out",
+      "approvedClip": "https://cdn.nodaro.ai/videos/1ffe3a50-d720-4c47-8468-f664323e2529.mp4",
+      "injection": "The camera creeps BACKWARD almost imperceptibly slowly, easing away from the scene by the smallest amount and opening the distance to the subject only very slightly. Nothing new is added to the scene; the viewpoint simply inches back.\nThe move is so gradual it is barely noticeable moment to moment: the picture stays completely sharp with no motion blur at all, the retreat never accelerates, and only by comparing the end against the beginning is it clear the camera moved at all. It creates a slow, quiet, unsettling drift rather than any sense of momentum.\nThe lens never changes: the focal length is fixed for the entire shot, so nothing is shrunk optically. The image changes only because the camera has crept to a slightly new place.\nThe gap between the camera and the subject GROWS very slightly and very steadily: the subject becomes just a little smaller in the frame across the whole shot.\nEVERY part of the scene is in motion together, all of it contracting inward toward the centre of the frame by tiny degrees as the viewpoint edges back, and the only difference between them is how fast: what is closest creeps inward most, what is furthest hardly changes at all. It is one smooth continuous gradient across every depth in the picture. Nothing anywhere is frozen or static, and nothing slides backward independently of the rest.\nNo zoom, no change of focal length, no sideways travel, no orbiting, no acceleration, no holding a constant distance."
+    },
+    {
+      "id": "dolly-in",
+      "approvedClip": "https://cdn.nodaro.ai/videos/beb6409d-9d81-4921-a4c8-41c33a6e2ecd.mp4",
+      "injection": "The camera glides steadily FORWARD through the scene, physically travelling deeper into it and closing the distance to the subject. Nothing new is added to the scene; the viewpoint simply advances.\nThe lens never changes: the focal length is fixed for the entire shot, so nothing is magnified. The image changes only because the camera has moved to a new place.\nThe gap between the camera and the subject SHRINKS continuously: the subject grows steadily larger in the frame as the camera gets closer, and by the end it is much nearer and much bigger than at the start.\nEVERY part of the scene is in motion together, all of it expanding outward from the centre of the frame as the viewpoint advances, and the only difference between them is how fast: the closer something is to the camera the faster it grows and spreads toward the edges, and the further away it is the more gently and slowly it grows. It is one smooth continuous gradient of speed across every depth in the picture. Nothing anywhere in the frame is frozen or static, and nothing slides forward independently of the rest.\nNo zoom, no change of focal length, no sideways travel, no orbiting, no holding a constant distance, no following alongside."
+    },
+    {
+      "id": "dolly-out",
+      "approvedClip": "https://cdn.nodaro.ai/videos/5f82caed-6378-4b83-9721-9242ceff3f68.mp4",
+      "injection": "The camera glides steadily BACKWARD through the scene, physically retreating and opening up the distance to the subject. Nothing new is added to the scene; the viewpoint simply withdraws.\nThe lens never changes: the focal length is fixed for the entire shot, so nothing is shrunk optically. The image changes only because the camera has moved to a new place.\nThe gap between the camera and the subject GROWS continuously: the subject becomes steadily smaller in the frame as the camera pulls further away, and by the end it is much further off and much smaller than at the start.\nEVERY part of the scene is in motion together, all of it contracting inward toward the centre of the frame as the viewpoint retreats, and the only difference between them is how fast: the closer something is to the camera the faster it shrinks and slides in from the edges, and the further away it is the more gently and slowly it shrinks. It is one smooth continuous gradient of speed across every depth in the picture. Nothing anywhere in the frame is frozen or static, and nothing slides backward independently of the rest.\nNew foreground elements keep entering from behind the camera at the edges of the frame as it retreats.\nNo zoom, no change of focal length, no sideways travel, no orbiting, no holding a constant distance, no following alongside."
+    },
+    {
+      "id": "dolly-track",
+      "approvedClip": "https://cdn.nodaro.ai/videos/4b471ddf-9901-4ffe-9934-50f510fd3e5c.mp4",
+      "injection": "dolly on a parallel track alongside the subject, smooth lateral tracking with strong foreground parallax"
+    },
+    {
+      "id": "dolly-zoom",
+      "approvedClip": "https://cdn.nodaro.ai/videos/0e71f794-0f6c-4325-9aea-adca41784564.mp4",
+      "injection": "Two opposite things happen at once, in perfect balance, and the tension between them IS the shot.\nFIRST, the camera body travels steadily FORWARD, physically advancing deeper into the scene and closing the distance to the subject.\nSECOND, at exactly the same time and at exactly the matching rate, the lens widens: the focal length decreases continuously throughout the move.\nBecause the two exactly cancel each other, THE SUBJECT NEVER CHANGES SIZE. It stays locked at the same scale and the same position in the frame from the first moment to the last, as if pinned there, and nothing about it grows or shrinks.\nWhat changes instead is DEPTH. As the camera advances and the lens widens, everything behind the subject appears to travel away from it and settle further and further off, so the distance between the subject and the far background stretches open and keeps stretching. What was close behind the subject ends up looking far behind it. The space reads as progressively deeper and longer, as though it were being drawn out lengthwise, while the subject itself stays exactly as it was.\nThe frame stays perfectly upright and level throughout. The camera never rolls, never tilts, never turns; the horizontal and vertical lines of the scene stay horizontal and vertical the whole time.\nNo cuts, no sideways travel, no orbiting, no rolling, no rotation of the frame, no tilting, and above all no change in the size of the subject."
+    },
+    {
+      "id": "drone-follow",
+      "approvedClip": "https://cdn.nodaro.ai/videos/a36d0f48-d65d-41b7-910f-38d71ca7e5e1.mp4",
+      "injection": "aerial drone follow shot, elevated camera smoothly tracking the subject from above and behind"
+    },
+    {
+      "id": "dutch-angle",
+      "approvedClip": "https://cdn.nodaro.ai/videos/a9f87831-c35d-4995-b7e2-5f921d966139.mp4",
+      "injection": "The shot begins level, then the camera rolls a little way around its own lens axis and STOPS at a fixed cant, holding that tilted Dutch-angle framing for the rest of the shot. It is a single small settling roll into a tilt, not a continuous spin: the frame tips perhaps fifteen or twenty degrees off level and then stays there, canted and still, for an uneasy, tense feeling.\nOnly the roll axis is involved: the camera stays in the same position, does not travel, does not pan or tilt its aim up or down, and the lens does not change. The horizon starts level and ends clearly canted, then holds.\nBecause it is a pure roll, there is no parallax: the whole frame turns as one flat picture, near and far together.\nLife in the scene carries on gently while the framing holds its tilt.\nNo zoom, no travel, no continuous spinning, no returning to level once canted."
+    },
+    {
+      "id": "fly-over",
+      "approvedClip": "https://cdn.nodaro.ai/videos/86638280-7d0c-4f7a-8fc9-5f10f9554a0f.mp4",
+      "injection": "The camera flies steadily FORWARD through the air at a constant height, cruising ahead toward what lies in front of it without ever changing altitude. Its height stays exactly the same from start to finish — it does not descend, does not climb, does not dip its aim; it simply travels forward at cruising speed.\nBecause it moves forward, whatever lies ahead grows closer and sweeps toward the camera and past it on both sides, near things rushing by faster than far things. The horizon holds at exactly the same height in the frame the whole time.\nNo descending, no climbing, no tilting the aim, no rotation — only steady level forward flight at a fixed altitude."
+    },
+    {
+      "id": "flythrough",
+      "approvedClip": "https://cdn.nodaro.ai/videos/d95788b6-3a0a-4673-9bb3-99b7c29814c3.mp4",
+      "injection": "flythrough shot, camera moving forward through the environment, weaving through obstacles"
+    },
+    {
+      "id": "follow",
+      "approvedClip": "https://cdn.nodaro.ai/videos/21afeb8c-50b3-4e11-883b-c505ae189843.mp4",
+      "injection": "follow shot, camera trails the subject from behind at a constant distance"
+    },
+    {
+      "id": "gentle-drift",
+      "approvedClip": "https://cdn.nodaro.ai/videos/b8d23d14-5089-4f10-87a6-622a388d4edc.mp4",
+      "injection": "The camera drifts with an extremely slow, gentle, ambient floating motion, as if suspended and barely stirring in still air. There is no shake and no deliberate direction: it simply floats, drifting a tiny amount one way and then easing another, aimless and dreamlike.\nThe movement is minimal and continuous — the camera never sits perfectly still, but it never travels anywhere either; it hovers almost in place, wandering by only the smallest amounts, smooth and weightless throughout.\nThe pace is contemplative and calm, the drift so slow it is only just perceptible. The picture stays sharp; there is no motion blur.\nThe lens does not change and the framing stays broadly the same, resting loosely on the subject.\nNo zoom, no shake, no jitter, no deliberate directional move, no travel across the scene."
+    },
+    {
+      "id": "gimbal-walk",
+      "approvedClip": "https://cdn.nodaro.ai/videos/2043bafd-9332-4558-b43e-d26f7450e2ed.mp4",
+      "injection": "gimbal walk, smooth walking shot on a 3-axis gimbal with floating steady forward motion"
+    },
+    {
+      "id": "handheld",
+      "approvedClip": "https://cdn.nodaro.ai/videos/fc5fed73-856f-4c91-9653-b4f440f1fcb5.mp4",
+      "injection": "The camera is HANDHELD, held in an operator's hands rather than on any support, so it carries the constant small live motion of a real person holding it: a continuous gentle shake and wobble, tiny irregular drifts and corrections in every direction, a slight bob in time with breathing, never settling completely still even for a moment.\nThe motion is small and organic, never a large or deliberate move: the camera stays roughly where it is and keeps roughly the same framing, it simply never locks off. It does not travel toward anything, away from anything, or off to any side; it holds its position and only jitters around it. The unsteadiness is human and slightly random, not a smooth mechanical sway and not a rhythmic loop.\nThe lens does not change and the camera does not travel anywhere, orbit, or turn to a new direction; it just floats and jitters in place as if held.\nThe framing stays broadly the same across the shot, loosely on the subject, wandering by only small amounts.\nNo zoom, no deliberate camera move, no forward or backward travel, no rotation to a new angle, no smooth glide."
+    },
+    {
+      "id": "handheld-vlog",
+      "approvedClip": "https://cdn.nodaro.ai/videos/7ba3389b-7050-4405-a5d2-ecdac8b960f6.mp4",
+      "injection": "The camera is a casual handheld vlog camera, held at arm's length by the subject or a companion, with the loose, informal quality of someone filming themselves. It has clear handheld shake and small bobbing motion, but looser and more wandering than a careful operator: it drifts around a bit, reframes casually, bobs as if the holder is shifting their weight or gesturing.\nThe framing sits fairly close and personal, roughly on the subject, wandering by moderate amounts as a vlogger's arm naturally would — informal and lively, not locked or composed.\nThe motion has personality and looseness: more movement than a careful handheld, unpolished and spontaneous, but it stays broadly in place rather than travelling off anywhere.\nThe lens does not change; the camera does not glide smoothly (that would be a steadicam) and does not travel deliberately in any direction.\nNo zoom, no smooth stabilised glide, no deliberate directional move, no tripod stillness."
+    },
+    {
+      "id": "helicopter",
+      "approvedClip": "https://cdn.nodaro.ai/videos/556e857d-62a6-4e66-8c09-0b74741acaeb.mp4",
+      "injection": "helicopter shot, sweeping aerial movement banking around the scene"
+    },
+    {
+      "id": "lead",
+      "approvedClip": "https://cdn.nodaro.ai/videos/5f1279d0-caf6-4717-a470-66ad1bb286eb.mp4",
+      "injection": "lead shot, camera moves backward ahead of the advancing subject"
+    },
+    {
+      "id": "match-cut-zoom",
+      "approvedClip": "https://cdn.nodaro.ai/videos/054aa78a-19d8-47bf-b4ab-47939e0429d4.mp4",
+      "injection": "A match cut built on a zoom, in two shots joined by one hard cut.\nShot one: the camera is locked to a tripod and never travels; only the lens changes, its focal length rapidly increasing so the frame rushes in and closes tightly on a single round shape at the centre of the picture, until that circular shape fills almost the whole frame.\nAt the moment the round shape fills the frame there is one HARD CUT.\nShot two: a completely different place and time, but a round shape of the same size sits in exactly the same position at the centre of the frame, so the two shots lock together on that shape and the eye reads it as one continuous movement. The camera continues the same inward push for a moment before settling.\nThe two shots share only the shape and its position; the location, the light and everything else are entirely different.\nNo camera travel in either shot, no dolly, no orbiting."
+    },
+    {
+      "id": "orbit-360",
+      "approvedClip": "https://cdn.nodaro.ai/videos/097a7ef5-27b6-4de7-bbf9-655504ec795f.mp4",
+      "injection": "The camera moves sideways to the right while curving around the subject, continuously turning toward the subject to keep the same centered framing, and keeps travelling in the same direction without pausing until it has passed the subject's right side, then behind it, then its left side, and comes back to where it began.\nThe camera maintains constant distance and constant height from the subject throughout.\nAs the viewpoint changes, strong natural parallax is visible: nearby environmental elements sweep right past the frame edge while distant background elements shift right more slowly, and every part of the surroundings passes behind the subject in turn, until whatever was behind it at the start is behind it again at the end.\nThe shot ends on the exact same viewpoint and composition it started from, having circled the subject completely.\nNo zoom, no push-in, no pull-out, no reversal of direction."
+    },
+    {
+      "id": "orbit-left",
+      "approvedClip": "https://cdn.nodaro.ai/videos/eb857fea-b3e2-4eb0-b1b4-f6534dd2e00e.mp4",
+      "injection": "camera orbits around the subject in a circular path, the background sliding to the left across the frame"
+    },
+    {
+      "id": "orbit-right",
+      "approvedClip": "https://cdn.nodaro.ai/videos/ea4ba395-74e9-4fc6-b89a-959e655081df.mp4",
+      "injection": "camera orbits around the subject in a circular path, the background sliding to the right across the frame"
+    },
+    {
+      "id": "over-the-shoulder",
+      "approvedClip": "https://cdn.nodaro.ai/videos/6827388c-4226-4e0e-afbe-efd9022495b9.mp4",
+      "injection": "Over the shoulder shot: the camera is already framed past the near character's shoulder onto the second character from the very first frame, with no push-in or approach - the framing and distance stay constant throughout, at most a very small handheld-style settle. No camera travel toward or away from either character. No dialogue, no spoken words, no lip movement suggesting speech - completely silent, ambient sound only if any."
+    },
+    {
+      "id": "pan-left",
+      "approvedClip": "https://cdn.nodaro.ai/videos/c6c2e4b2-148b-4d16-9061-5e1c65dc322b.mp4",
+      "injection": "The camera stays in exactly the same position and slowly pivots on the spot, rotating its aim to the left like a head turning, sweeping across the scene.\nThe camera does not travel anywhere: its position, its height and its distance to everything in the scene all stay constant, and only its aiming direction changes.\nBecause the camera is rotating rather than moving, there is no parallax at all: near and distant elements slide across the frame together at the same rate, from left to right, with no shift between them.\nThe subject drifts out toward the right edge of the frame as the camera turns away, and new parts of the scene enter from the left.\nNo zoom, no push-in, no sideways travel, no orbiting."
+    },
+    {
+      "id": "pan-right",
+      "approvedClip": "https://cdn.nodaro.ai/videos/62b38623-2b5d-45e4-ba32-92d43132099c.mp4",
+      "injection": "The camera stays in exactly the same position and slowly pivots on the spot, rotating its aim to the right like a head turning, sweeping across the scene.\nThe camera does not travel anywhere: its position, its height and its distance to everything in the scene all stay constant, and only its aiming direction changes.\nBecause the camera is rotating rather than moving, there is no parallax at all: near and distant elements slide across the frame together at the same rate, from right to left, with no shift between them.\nThe subject drifts out toward the left edge of the frame as the camera turns away, and new parts of the scene enter from the right.\nNo zoom, no push-in, no sideways travel, no orbiting."
+    },
+    {
+      "id": "parallax",
+      "approvedClip": "https://cdn.nodaro.ai/videos/c6a97b45-ff45-48cb-b8be-37af726ff485.mp4",
+      "injection": "The camera makes a small, smooth sideways move that shows off the depth of the scene through parallax. It eases gently a short way across, staying at the same distance and keeping its aim forward.\nThe defining quality is a STRONG parallax gradient: the nearest foreground elements slide across noticeably and quickly, the mid-distance elements shift more gently, and the most distant elements barely move at all — one smooth continuous gradient of speed from near to far that makes the separation between the layers obvious. Nothing is frozen; everything shifts, just by very different amounts according to its distance.\nThe move is modest and ambient rather than a full travelling shot: a gentle reveal of depth, not a journey across the scene.\nThe lens does not change; the camera does not push in, pull back, rotate, or shake.\nNo zoom, no forward or backward travel, no rotation, no handheld shake."
+    },
+    {
+      "id": "pedestal-down",
+      "approvedClip": "https://cdn.nodaro.ai/videos/aa107622-04ed-4656-9202-fc46ef5f90b0.mp4",
+      "injection": "The camera is mounted on a column that lowers it straight DOWNWARD, and it descends vertically, sinking steadily lower. The scene itself is entirely unchanged; nothing in it moves, falls, appears or is added. Only the viewpoint descends.\nThe camera's aim never changes: it keeps pointing straight ahead at exactly the same angle for the entire shot, perfectly level, never tipping up or down as it sinks. Only its height changes.\nThe lens never changes either: the focal length is fixed, so nothing is magnified.\nBecause the camera physically travels downward, there is STRONG parallax: EVERY part of the scene is in motion together, all of it sliding upward through the frame as the viewpoint sinks, and the only difference between them is how fast. What is nearest the camera climbs and passes out of the top edge quickly, what is further back drifts up more gently, and the most distant parts ease up slowest of all. It is one smooth continuous gradient of speed across every depth. Nothing anywhere in the frame is frozen or static.\nWhatever lay below the bottom edge of the opening frame is revealed as the camera sinks to its level, entering from the bottom and settling into view.\nNo zoom, no change of focal length, no tilting, no tipping the aim downward, no forward or sideways travel."
+    },
+    {
+      "id": "pedestal-up",
+      "approvedClip": "https://cdn.nodaro.ai/videos/79df6cf3-fadf-42a3-afac-6b3c33a2e01e.mp4",
+      "injection": "The camera is mounted on a column that raises it straight UPWARD, and it rises vertically, climbing steadily higher. The scene itself is entirely unchanged; nothing in it moves, falls, appears or is added. Only the viewpoint ascends.\nThe camera's aim never changes: it keeps pointing straight ahead at exactly the same angle for the entire shot, perfectly level, never tipping up or down as it climbs. Only its height changes.\nThe lens never changes either: the focal length is fixed, so nothing is magnified.\nBecause the camera physically travels upward, there is STRONG parallax: EVERY part of the scene is in motion together, all of it sliding downward through the frame as the viewpoint climbs, and the only difference between them is how fast. What is nearest the camera sinks and passes out of the bottom edge quickly, what is further back drifts down more gently, and the most distant parts ease down slowest of all. It is one smooth continuous gradient of speed across every depth. Nothing anywhere in the frame is frozen or static.\nWhatever lay above the top edge of the opening frame is revealed as the camera reaches its height, entering from the top and settling into view.\nNo zoom, no change of focal length, no tilting, no tipping the aim upward, no forward or sideways travel."
+    },
+    {
+      "id": "phone-flip",
+      "approvedClip": "https://cdn.nodaro.ai/videos/884eb274-2c24-46ca-bf32-1e1833c7e1ba.mp4",
+      "injection": "A rapid flip-transition, functioning as a hard cut rather than a smooth continuous rotation: the entire frame snaps through one quick full rotation in a fraction of a second, with strong motion blur through the spin, then lands upright again immediately on a new framing of the scene. This is abrupt and near-instant, never a slow, smooth, or continuously spinning carousel-like rotation. No object, hand, phone, or UI element ever appears in the frame."
+    },
+    {
+      "id": "pov",
+      "approvedClip": "https://cdn.nodaro.ai/videos/9e4a0dcd-1ca9-4ec5-b65c-40ef2e543a0f.mp4",
+      "injection": "POV shot, first person perspective as seen through the subject's eyes. The viewpoint moves forward at a calm, unhurried walking pace — steady and gentle, never a fast rush or a vehicle-like travel speed. No body parts, hands or feet ever enter the frame; only the point of view itself drifts smoothly forward."
+    },
+    {
+      "id": "pov-walk",
+      "approvedClip": "https://cdn.nodaro.ai/videos/4c4460f7-15d8-473b-8316-e82cf4b77a9d.mp4",
+      "injection": "first-person POV walking shot, camera as the subject's eyes with natural head-bob as they walk forward"
+    },
+    {
+      "id": "pull-out",
+      "approvedClip": "https://cdn.nodaro.ai/videos/b30b9d5a-44f4-4f15-a9c3-e484ddb7d607.mp4",
+      "injection": "The camera pulls BACKWARD hard and fast, tearing away from the subject and opening up the distance in one decisive rush. Nothing new is added to the scene; the viewpoint simply withdraws.\nThe move is quick and forceful enough to be felt: the picture takes on a slight motion blur as it rushes back, and the retreat carries real momentum rather than drifting gently.\nThe lens never changes: the focal length is fixed for the entire shot, so nothing is shrunk optically. The image changes only because the camera has moved to a new place.\nThe gap between the camera and the subject GROWS rapidly: the subject shrinks quickly in the frame, and by the end it is far away and far smaller than at the start.\nEVERY part of the scene is in motion together, all of it contracting inward toward the centre of the frame as the viewpoint retreats, and the only difference between them is how fast: the closer something is to the camera the faster it shrinks and slides in from the edges, and the further away it is the more gently and slowly it shrinks. It is one smooth continuous gradient of speed across every depth in the picture. Nothing anywhere in the frame is frozen or static, and nothing slides backward independently of the rest.\nNew foreground elements keep entering from behind the camera at the edges of the frame as it retreats.\nNo zoom, no change of focal length, no sideways travel, no orbiting, no holding a constant distance, no following alongside."
+    },
+    {
+      "id": "push-in",
+      "approvedClip": "https://cdn.nodaro.ai/videos/390636f4-0e70-4dcb-a8ad-d1963089691e.mp4",
+      "injection": "The camera surges FORWARD hard and fast, driving deep into the scene and closing the distance to the subject in one assertive rush. Nothing new is added to the scene; the viewpoint simply advances.\nThe move is quick and forceful enough to be felt: the picture takes on a slight motion blur as it rushes in, and the advance carries real momentum rather than drifting gently.\nThe lens never changes: the focal length is fixed for the entire shot, so nothing is magnified. The image changes only because the camera has moved to a new place.\nThe gap between the camera and the subject SHRINKS rapidly: the subject swells quickly larger in the frame, and by the end it is far nearer and far bigger than at the start.\nEVERY part of the scene is in motion together, all of it expanding outward from the centre of the frame as the viewpoint advances, and the only difference between them is how fast: the closer something is to the camera the faster it grows and spreads toward the edges, and the further away it is the more gently and slowly it grows. It is one smooth continuous gradient of speed across every depth in the picture. Nothing anywhere in the frame is frozen or static, and nothing slides forward independently of the rest.\nNo zoom, no change of focal length, no sideways travel, no orbiting, no holding a constant distance, no following alongside."
+    },
+    {
+      "id": "push-pull",
+      "approvedClip": "https://cdn.nodaro.ai/videos/d7cdb4d4-f8ac-4e85-ba84-10f4510cff50.mp4",
+      "injection": "The camera drives decisively FORWARD a good distance, then reverses and pulls back BACKWARD past where it began, then drives forward again, in a deliberate push-and-pull cycle repeated across the shot. Nothing new is added to the scene; only the viewpoint swings in and out.\nThis reversal is deliberate and is the whole point of the move. Each stroke is firm and purposeful, with real travel behind it and a clear change of direction at each end, as if a rig were being driven in and hauled out again by hand. It is emphatic and mechanical, not gentle or organic, and the swing is far larger and more forceful than a quiet drift.\nThe lens never changes: the focal length is fixed for the entire shot, so nothing is magnified. The image changes only because the camera has travelled to a different place.\nThe gap between the camera and the subject accordingly closes sharply, opens up wide, then closes again: the subject looms noticeably larger, falls well back, and looms again in time with the cycle.\nEVERY part of the scene moves together with it, all of it expanding outward from the centre on each drive forward and rushing inward on each pull back, and the only difference between them is how fast: what is closest sweeps most, what is furthest shifts least. It is one smooth continuous gradient across every depth. Nothing anywhere is frozen or static.\nNo zoom, no change of focal length, no sideways travel, no orbiting, no cuts."
+    },
+    {
+      "id": "rack-focus",
+      "approvedClip": "https://cdn.nodaro.ai/videos/ffe2d73d-b1bd-4b25-a58c-ccd22aac023d.mp4",
+      "injection": "The camera itself never moves, never zooms and never changes its framing — it is completely locked in place for the whole shot. Only the lens's focus plane shifts. It starts sharply focused on the nearest element in the frame, with everything further back a soft out-of-focus blur. Then the focus pulls smoothly across to the far background, which becomes crisp and sharp, while the near foreground that was sharp a moment ago now falls out of focus and blurs instead. The two states — near-sharp/far-blurred, then near-blurred/far-sharp — must read as clearly opposite. No camera travel, no zoom, no change in composition — only which plane is sharp changes."
+    },
+    {
+      "id": "reveal",
+      "approvedClip": "https://cdn.nodaro.ai/videos/ecd5c9f2-048d-423b-bd9a-9ba0fd1e4d30.mp4",
+      "injection": "reveal shot, camera rises and tilts to gradually reveal the subject and wider scene"
+    },
+    {
+      "id": "roll-left",
+      "approvedClip": "https://cdn.nodaro.ai/videos/486eedf9-d8ff-4025-8238-aa7789a746b2.mp4",
+      "injection": "camera rolls counterclockwise around the lens axis"
+    },
+    {
+      "id": "roll-right",
+      "approvedClip": "https://cdn.nodaro.ai/videos/ee7eb921-0468-46ff-abb4-52f1a0f523bf.mp4",
+      "injection": "camera rolls clockwise around the lens axis"
+    },
+    {
+      "id": "ronin-glide",
+      "approvedClip": "https://cdn.nodaro.ai/videos/b408e6ae-0a9e-4a7b-a097-17f343245636.mp4",
+      "injection": "ronin gimbal glide, ultra-smooth floating tracking movement following the subject"
+    },
+    {
+      "id": "screen-tap",
+      "approvedClip": "https://cdn.nodaro.ai/videos/8d05b0e3-4129-468d-9c84-a48b11990ed8.mp4",
+      "injection": "An abrupt hard snap-cut transition: the camera instantly jumps to a new framing of the scene with no gradual movement in between, a fast decisive jolt rather than any smooth pan, push or travel. No object, hand, finger, or UI element ever appears in the frame. TikTok-native snap pacing."
+    },
+    {
+      "id": "serpentine",
+      "approvedClip": "https://cdn.nodaro.ai/videos/14a4f8f0-a831-49fa-8c20-b4e3236b89e5.mp4",
+      "injection": "serpentine tracking shot, camera weaves smoothly side to side while following the subject"
+    },
+    {
+      "id": "snorricam",
+      "approvedClip": "https://cdn.nodaro.ai/videos/bbe9c3f0-90e0-4196-ac0a-fe86bf815a0a.mp4",
+      "injection": "snorricam body-mounted shot, subject locked in frame while the world moves around them"
+    },
+    {
+      "id": "spin-360",
+      "approvedClip": "https://cdn.nodaro.ai/videos/185eaa23-39dd-44ef-aa2b-1b05ba6249cb.mp4",
+      "injection": "The camera rotates a FULL 360 degrees around its own lens axis in one continuous even spin, and keeps turning the same way without pausing until the picture has come all the way back to level exactly as it started. The horizon sweeps from level, round through fully sideways on one side, through completely upside-down, through fully sideways on the other side, and back to level — one complete unbroken revolution.\nOnly the roll axis is involved: the camera stays in exactly the same position, does not travel, does not pan or tilt its aim, and the lens does not change. It spins about the axis running straight out through the lens.\nBecause it is a pure roll, there is no parallax: the whole frame turns as one flat picture, near and far rotating together by the same amount.\nThe spin is smooth and continuous at an even speed, going round only once and ending back at level.\nNo zoom, no travel, no pan, no tilt of the aim, no reversal of the spin direction."
+    },
+    {
+      "id": "static",
+      "approvedClip": "https://cdn.nodaro.ai/videos/70ae8a77-6988-420d-b178-4a2778ac5821.mp4",
+      "injection": "The camera is locked on a solid tripod and does not move at all for the entire shot: it never travels, never rotates, never tilts, never changes focal length. The viewpoint is completely fixed and the framing stays exactly the same from the first frame to the last.\nLife within the scene carries on naturally, but the camera holds perfectly still throughout.\nNo camera movement of any kind, no drift, no sway, no zoom."
+    },
+    {
+      "id": "steadicam",
+      "approvedClip": "https://cdn.nodaro.ai/videos/69b117ef-4833-48cd-adb3-ebed7b72cf0f.mp4",
+      "injection": "The camera moves with the perfectly smooth, floating quality of a Steadicam or gimbal: it glides gently and continuously, with none of the shake, jitter or bob of a handheld rig. Every bit of movement is buttery, damped and stabilised, as if the camera were floating on air.\nThe motion is a slow, graceful drift through the scene — easing a little forward and around with fluid, gliding ease — always even and controlled, never abrupt, never trembling, never correcting.\nThe lens does not change. The framing stays loosely on the subject throughout, the glide being gentle enough that the composition holds.\nThe single defining quality is SMOOTHNESS: this is the opposite of handheld — no shake whatsoever, only silky stabilised floating motion.\nNo zoom, no jitter, no handheld shake, no abrupt moves."
+    },
+    {
+      "id": "tilt-down",
+      "approvedClip": "https://cdn.nodaro.ai/videos/50e198bc-7938-4134-bc18-0fa1909d1309.mp4",
+      "injection": "The camera is locked to a tripod head at a fixed point in space and pivots on that head, tilting its aim downward like a head lowering to look lower.\nThe camera's height stays exactly the same for the entire shot, and the tripod stays planted in the same spot: the lens sweeps downward while the camera body itself never rises, never lowers and never travels.\nBecause the camera is rotating rather than moving, there is no parallax at all: near and distant elements slide up the frame together at the same rate, with no shift between them.\nWhatever occupied the top of the opening frame slides up and out past the top edge, and whatever lay below the bottom edge is progressively revealed as the aim lowers.\nNo zoom, no push-in."
+    },
+    {
+      "id": "tilt-up",
+      "approvedClip": "https://cdn.nodaro.ai/videos/1b57ffc3-e9a9-4fb5-a4a6-9c37c308c187.mp4",
+      "injection": "The camera is locked to a tripod head at a fixed point in space and pivots on that head, tilting its aim upward like a head lifting to look higher.\nThe camera's height stays exactly the same for the entire shot, and the tripod stays planted in the same spot: the lens sweeps upward while the camera body itself never rises, never lowers and never travels.\nBecause the camera is rotating rather than moving, there is no parallax at all: near and distant elements slide down the frame together at the same rate, with no shift between them.\nWhatever occupied the bottom of the opening frame slides down and out past the bottom edge, and whatever lay above the top edge is progressively revealed as the aim rises.\nNo zoom, no push-in."
+    },
+    {
+      "id": "tracking-shot",
+      "approvedClip": "https://cdn.nodaro.ai/videos/efea057d-7779-464d-b79a-feaf5a8e2d76.mp4",
+      "injection": "tracking shot, camera moves alongside the subject keeping them in frame"
+    },
+    {
+      "id": "truck-left",
+      "approvedClip": "https://cdn.nodaro.ai/videos/ae8b0b19-8eee-4792-b176-7f20bfd5fdeb.mp4",
+      "injection": "The camera glides steadily SIDEWAYS to the left, physically travelling laterally across the scene while continuing to aim straight ahead in exactly the same direction the whole time. It never turns or pivots; its aim stays locked forward and only its position slides left.\nThe lens never changes: the focal length is fixed for the entire shot, so nothing is magnified. The camera is passing across the scene, not approaching or retreating.\nThe framing is NOT locked onto anything: nothing is kept centred or held in place. EVERY single thing visible in the opening frame, including whatever sits at its very centre, slides steadily to the right across the picture and eventually passes out past the right edge as the viewpoint travels on past it.\nThe only difference between them is how fast: whatever is closest to the camera sweeps across and off the right edge quickly, things further back drift right more gently, and the most distant parts ease right slowest of all. It is one smooth continuous gradient of speed across every depth. Nothing anywhere is frozen, and nothing travels along with the camera.\nNew elements keep entering from the left edge as the camera advances sideways past them.\nNo zoom, no change of focal length, no turning, no pivoting, no rotation of the aim, no forward or backward travel, no tracking or following."
+    },
+    {
+      "id": "truck-right",
+      "approvedClip": "https://cdn.nodaro.ai/videos/1d67760b-aeda-440f-90b8-a1cfa8d896dc.mp4",
+      "injection": "The camera glides steadily SIDEWAYS to the right, physically travelling laterally across the scene while continuing to aim straight ahead in exactly the same direction the whole time. It never turns or pivots; its aim stays locked forward and only its position slides right.\nThe lens never changes: the focal length is fixed for the entire shot, so nothing is magnified. The camera is passing across the scene, not approaching or retreating.\nThe framing is NOT locked onto anything: nothing is kept centred or held in place. EVERY single thing visible in the opening frame, including whatever sits at its very centre, slides steadily to the left across the picture and eventually passes out past the left edge as the viewpoint travels on past it.\nThe only difference between them is how fast: whatever is closest to the camera sweeps across and off the left edge quickly, things further back drift left more gently, and the most distant parts ease left slowest of all. It is one smooth continuous gradient of speed across every depth. Nothing anywhere is frozen, and nothing travels along with the camera.\nNew elements keep entering from the right edge as the camera advances sideways past them.\nNo zoom, no change of focal length, no turning, no pivoting, no rotation of the aim, no forward or backward travel, no tracking or following."
+    },
+    {
+      "id": "velocity-edit",
+      "approvedClip": "https://cdn.nodaro.ai/videos/d42f535f-365d-486d-b49d-a76ded3aabd5.mp4",
+      "injection": "rapid speed-ramped camera move with characteristic TikTok velocity-edit pacing, dynamic acceleration into and out of the shot"
+    },
+    {
+      "id": "whip-pan-left",
+      "approvedClip": "https://cdn.nodaro.ai/videos/f17d30d6-01ce-4344-a5ce-306d999fb5be.mp4",
+      "injection": "The camera stays in exactly the same position and whips violently fast on the spot, snapping its aim to the left in one abrupt blurred sweep across the scene.\nThe camera does not travel anywhere: its position, its height and its distance to everything in the scene all stay constant, and only its aiming direction changes.\nThe rotation is so fast that the whole frame smears into heavy horizontal motion blur and the scene becomes briefly unreadable mid-sweep.\nBecause the camera is rotating rather than moving, there is no parallax at all: near and distant elements streak across the frame together at the same rate, from left to right.\nThe subject is flung out past the right edge of the frame almost immediately.\nNo zoom, no push-in, no sideways travel, no orbiting."
+    },
+    {
+      "id": "whip-pan-right",
+      "approvedClip": "https://cdn.nodaro.ai/videos/5a104889-6151-494a-817c-dc8b714b5d1e.mp4",
+      "injection": "The camera stays in exactly the same position and whips violently fast on the spot, snapping its aim to the right in one abrupt blurred sweep across the scene.\nThe camera does not travel anywhere: its position, its height and its distance to everything in the scene all stay constant, and only its aiming direction changes.\nThe rotation is so fast that the whole frame smears into heavy horizontal motion blur and the scene becomes briefly unreadable mid-sweep.\nBecause the camera is rotating rather than moving, there is no parallax at all: near and distant elements streak across the frame together at the same rate, from right to left.\nThe subject is flung out past the left edge of the frame almost immediately.\nNo zoom, no push-in, no sideways travel, no orbiting."
+    },
+    {
+      "id": "worms-eye",
+      "approvedClip": "https://cdn.nodaro.ai/videos/79c953d9-1f94-4ba8-b769-89428450be1e.mp4",
+      "injection": "worm's eye view, extreme low angle looking up at the subject"
+    },
+    {
+      "id": "zoom-in",
+      "approvedClip": "https://cdn.nodaro.ai/videos/b9a01c72-a645-4698-b3c0-f3403707fbfd.mp4",
+      "injection": "The camera is locked to a tripod planted in one spot and never moves at all. Only the lens changes: its focal length slowly increases, magnifying the image so the frame closes in on the subject.\nBecause the camera body does not travel, the perspective of the scene never changes: there is NO parallax whatsoever, nothing slides past anything else, and the spatial relationship between near and distant elements stays exactly as it was.\nEverything in the frame simply grows larger together at the same rate and the edges of the picture crop away, as if the whole photograph were being enlarged from its centre.\nThe subject fills progressively more of the frame while the background behind it flattens and compresses.\nNo camera travel, no dolly, no push-in, no walking forward, no orbiting."
+    },
+    {
+      "id": "zoom-out",
+      "approvedClip": "https://cdn.nodaro.ai/videos/b44491ac-140c-4bce-aedb-d2dbdce5bd64.mp4",
+      "injection": "The camera is locked to a tripod planted in one spot and never moves at all. Only the lens changes: its focal length slowly decreases, widening the view so the frame opens out away from the subject.\nBecause the camera body does not travel, the perspective of the scene never changes: there is NO parallax whatsoever, nothing slides past anything else, and the spatial relationship between near and distant elements stays exactly as it was.\nEverything in the frame simply shrinks together at the same rate and more of the surroundings enters from all four edges, as if the whole photograph were being reduced towards its centre.\nThe subject fills progressively less of the frame while more and more of the wider environment is revealed around it.\nNo camera travel, no dolly, no pull-back, no walking backward, no orbiting."
+    }
+  ]
+}

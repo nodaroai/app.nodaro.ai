@@ -590,3 +590,33 @@ describe("executeSubWorkflow: character-motion pre-completion", () => {
     expect(text).toBe(editor)
   })
 })
+
+// Podcast Track 0.11: a long render inside an INLINE sub-workflow must grow the
+// PARENT execution's cap. The node executor adds a budgeted dispatch's excess
+// to the context it is handed (`addBudgetExcess(ctx, …)`, pinned in
+// node-executor-budget-ceilings.test.ts); that reaches the parent only if the
+// sub-workflow hands its inner nodes the parent's context OBJECT — not a copy.
+describe("executeSubWorkflow — inner nodes share the parent's context (budget excess reaches the parent cap)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("an inner node's budget excess lands on the parent's ctx", async () => {
+    const n = node("sw", "sub-workflow", { workflowId: "tighten-sub" })
+    mockSingle.mockResolvedValue({
+      data: { nodes: [node("cut", "apply-edl", { edl: "{}" })], edges: [] },
+      error: null,
+    })
+    const parent = ctx()
+    vi.mocked(executeNode).mockImplementationOnce(async (_node, _inputs, _edges, _nodes, _states, innerCtx) => {
+      expect(innerCtx).toBe(parent)
+      innerCtx.budgetExcessMs = (innerCtx.budgetExcessMs ?? 0) + 45 * 60_000
+      return { output: { videoUrl: "https://out.test/cut.mp4" } }
+    })
+
+    await executeSubWorkflow(n, {}, parent)
+
+    expect(vi.mocked(executeNode)).toHaveBeenCalledTimes(1)
+    expect(parent.budgetExcessMs).toBe(45 * 60_000)
+  })
+})

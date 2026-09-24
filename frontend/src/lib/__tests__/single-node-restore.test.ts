@@ -134,6 +134,8 @@ describe("collectRestorableSingleNodeJobs", () => {
   it("restoreMaxAgeMs widens only for long-running plugin types", () => {
     expect(restoreMaxAgeMs("generate-video-pro")).toBe(LONG_RUNNING_RESTORE_MAX_AGE_MS)
     expect(restoreMaxAgeMs("edit-video-pro")).toBe(LONG_RUNNING_RESTORE_MAX_AGE_MS)
+    // A long apply-edl render (Track 0.11 follow-up) is re-attached after a reload too.
+    expect(restoreMaxAgeMs("apply-edl")).toBe(LONG_RUNNING_RESTORE_MAX_AGE_MS)
     expect(restoreMaxAgeMs("generate-image")).toBe(SINGLE_NODE_RESTORE_MAX_AGE_MS)
     expect(restoreMaxAgeMs(undefined)).toBe(SINGLE_NODE_RESTORE_MAX_AGE_MS)
   })

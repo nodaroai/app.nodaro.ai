@@ -8209,6 +8209,25 @@ export async function executeComponent(params: {
   )
 }
 
+/** How long the SERVER waits on a component run: its base wait plus the
+ *  budget excess of the long renders the run's inner execution dispatched
+ *  (podcast Track 0.11). `budgetExcessMs` 0 = nothing budgeted dispatched
+ *  yet; `pendingBudgetedNodes` = the run may still dispatch one (absent from
+ *  an older server — read as false). */
+export interface ComponentWaitLimit {
+  budgetExcessMs: number
+  waitLimitMs: number
+  pendingBudgetedNodes?: boolean
+}
+
+export async function getComponentWaitLimit(jobId: string): Promise<ComponentWaitLimit> {
+  const { data } = await apiRequest<{ data: ComponentWaitLimit }>(
+    `/v1/component/execute/${encodeURIComponent(jobId)}/wait-limit`,
+    "Failed to read the component's wait limit",
+  )
+  return data
+}
+
 /** Estimate component credits with setting overrides. */
 export async function estimateComponentCredits(params: {
   appSlug: string
@@ -9231,4 +9250,121 @@ export async function deleteHttpCredential(id: string): Promise<{ deleted: boole
 /** The gate's one-click lock: bind the credential to exactly this address. */
 export function lockHttpCredential(id: string, url: string): Promise<{ data: HttpCredentialSummary }> {
   return updateHttpCredential(id, { boundUrl: url, boundMatch: "exact" })
+}
+
+// ---------------------------------------------------------------------------
+// Telegram accounts (Integrations → Telegram account). Cloud-only; the routes
+// are served by a private plugin, browser-session only, and — until general
+// availability — answer 404 to anyone the server does not offer them to, which
+// is how the card knows to stay hidden.
+// ---------------------------------------------------------------------------
+
+export type TelegramAccountStatus = "active" | "paused" | "revoked" | "disabled"
+
+export interface TelegramAccountSummary {
+  readonly id: string
+  readonly label: string | null
+  readonly status: TelegramAccountStatus | string
+  readonly statusReason: string | null
+  readonly firstName?: string
+  readonly username?: string
+  readonly connectedAt?: string
+  readonly updatedAt: string
+}
+
+/** The terms shown before connecting; `version` is sent back with the start. */
+export interface TelegramConsent {
+  readonly version: string
+  readonly points: readonly string[]
+}
+
+export type TelegramLoginFailure =
+  | "expired"
+  | "cancelled"
+  | "account_disabled"
+  | "too_many_accounts"
+  | "too_many_tries"
+  | "flood_wait"
+  | "rate_limited"
+  | "phone_invalid"
+  | "code_expired"
+  | "login_unavailable"
+  | "api_credentials_invalid"
+  | "network"
+  | "internal"
+
+export type TelegramLoginState =
+  | { readonly status: "pending"; readonly loginUrl: string; readonly expiresAt: number }
+  | {
+      readonly status: "code_sent"
+      readonly delivery: string
+      readonly nextDelivery?: string
+      readonly codeLength?: number
+      readonly timeoutSeconds?: number
+      readonly error?: "code_invalid"
+    }
+  | { readonly status: "needs_password"; readonly hint?: string; readonly error?: "password_invalid" }
+  | { readonly status: "done"; readonly account: { readonly id: string; readonly label: string | null } }
+  | { readonly status: "failed"; readonly reason: TelegramLoginFailure; readonly retryAfterSeconds?: number }
+
+export interface StartTelegramLoginInput {
+  readonly method: "qr" | "phone"
+  readonly apiId: string
+  readonly apiHash: string
+  readonly phone?: string
+  readonly consentVersion: string
+}
+
+export function listTelegramAccounts(): Promise<{ accounts: TelegramAccountSummary[] }> {
+  return apiRequest("/v1/telegram-accounts", "Failed to load Telegram accounts")
+}
+
+export function getTelegramConsent(): Promise<TelegramConsent> {
+  return apiRequest("/v1/telegram-accounts/consent", "Failed to load the Telegram terms")
+}
+
+export function startTelegramLogin(
+  input: StartTelegramLoginInput,
+): Promise<{ attemptId?: string; state: TelegramLoginState }> {
+  return apiRequest("/v1/telegram-accounts/login", "Failed to start connecting", {
+    method: "POST",
+    body: { ...input, consent: true },
+  })
+}
+
+export function pollTelegramLogin(attemptId: string): Promise<{ state: TelegramLoginState }> {
+  return apiRequest(`/v1/telegram-accounts/login/${encodeURIComponent(attemptId)}`, "Failed to check the connection")
+}
+
+export function submitTelegramLoginCode(attemptId: string, code: string): Promise<{ state: TelegramLoginState }> {
+  return apiRequest(`/v1/telegram-accounts/login/${encodeURIComponent(attemptId)}/code`, "Failed to send the code", {
+    method: "POST",
+    body: { code },
+  })
+}
+
+export function submitTelegramLoginPassword(attemptId: string, password: string): Promise<{ state: TelegramLoginState }> {
+  return apiRequest(`/v1/telegram-accounts/login/${encodeURIComponent(attemptId)}/password`, "Failed to send the password", {
+    method: "POST",
+    body: { password },
+  })
+}
+
+export async function cancelTelegramLogin(attemptId: string): Promise<void> {
+  const headers = await getAuthHeaders()
+  // Best effort: an attempt that already ended answers 404, which is the goal.
+  await fetch(`${API_BASE_URL}/v1/telegram-accounts/login/${encodeURIComponent(attemptId)}`, { method: "DELETE", headers })
+}
+
+/** `loggedOut: false` means the row is gone but Telegram could not be told — the owner ends it from Devices. */
+export function disconnectTelegramAccount(id: string): Promise<{ deleted: boolean; loggedOut: boolean }> {
+  return apiRequest(`/v1/telegram-accounts/${encodeURIComponent(id)}`, "Failed to disconnect the account", { method: "DELETE" })
+}
+
+export function pauseTelegramAccount(id: string): Promise<{ id: string; status: "paused" }> {
+  return apiRequest(`/v1/telegram-accounts/${encodeURIComponent(id)}/pause`, "Failed to pause the account", { method: "POST" })
+}
+
+export function resumeTelegramAccount(id: string): Promise<{ id: string; status: "active" }> {
+  return apiRequest(`/v1/telegram-accounts/${encodeURIComponent(id)}/resume`, "Failed to resume the account", { method: "POST" })
 }

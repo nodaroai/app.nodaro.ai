@@ -64,10 +64,21 @@
  *    at a 45-min ceiling; other slot-gated ffmpeg spawns at the 10-min
  *    default), not a derived bound. A handler that outgrows it declares a
  *    budget.
- *  - The DAG lane: the orchestrator cancels a node at `NODE_TIMEOUT_MS`
- *    regardless of any handler budget, so a long apply-edl inside a workflow
- *    is cancelled at 90 minutes while its worker keeps rendering. Pre-existing;
- *    `applyEdlRenderBudgetMs` is the number a per-node override would use.
+ *
+ * THE DAG LANE AGREES (podcast Track 0.11). The orchestrator no longer cancels
+ * a budgeted node at the flat `NODE_TIMEOUT_MS`: it reads the SAME declared
+ * budget this wrapper beats for (`declaredJobBudgetMs`, `lib/job-budget.ts` —
+ * the handler's `livenessBudgetMs` delegates to it) and holds the node's
+ * processing to `max(budget, NODE_TIMEOUT_MS)` — the same figure
+ * `effectiveHeartbeatMaxMs` beats for — growing the workflow's cap by the
+ * excess. So a long apply-edl inside a workflow is watched for exactly as long
+ * as its worker keeps it looking live: one number for both. Across a re-pick
+ * too (decided 2026-09-24): when the orchestrator is re-picked mid-render
+ * (deploy drain, crash + stall), its resume ADOPTS a budgeted row whose stamp
+ * THIS heartbeat keeps fresh — fresh meaning younger than the reconcile cron's
+ * own `pre-task` threshold (`cancelInFlightChildJobs`, `isLiveRenderRow`) —
+ * and polls it on the row's original clocks instead of cancelling it and
+ * re-rendering from zero. A stale or absent stamp still cancels + re-dispatches.
  *
  * Import note: `NODE_TIMEOUT_MS` is a pure constant from the workflow engine's
  * types module — no engine code is pulled into the worker by it.

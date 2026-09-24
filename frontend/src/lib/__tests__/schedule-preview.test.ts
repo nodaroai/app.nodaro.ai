@@ -53,6 +53,25 @@ describe("scheduleDayMarks — today on a 24-hour bar", () => {
 })
 
 describe("runs per day and the next runs", () => {
+  // The window is [now, now + 24 h). It once included both ends, so a run AT
+  // `now` was counted again a day later: an every-15-minutes schedule read 97
+  // at every quarter-hour minute (and the card test failed whenever CI ran it
+  // on one — a flaky gate on main).
+  it("counts the same runs at every minute of the day — a run at `now` is not counted twice", () => {
+    const every15: ScheduleRule[] = [{ id: "q", kind: "minutes", every: 15 }]
+    const daily9: ScheduleRule[] = [{ id: "d", kind: "days", every: 1, hour: 9, minute: 0 }]
+    const base = Date.parse("2026-09-24T00:00:00Z")
+    for (let m = 0; m < 1440; m++) {
+      const now = new Date(base + m * 60_000)
+      expect(scheduleRunsPerDay(every15, "UTC", now), now.toISOString()).toBe(96)
+      expect(scheduleRunsPerDay(daily9, "UTC", now), now.toISOString()).toBe(1)
+    }
+    // a `now` with seconds still reaches the minute 24 hours on: from 06:30:30
+    // the window ends at 06:30:29.999 tomorrow, so tomorrow's 06:30 run counts
+    // (a window a whole minute short would stop at 06:29 and read 95)
+    expect(scheduleRunsPerDay(every15, "UTC", at("2026-09-24T06:30:30Z"))).toBe(96)
+  })
+
   it("counts the next 24 hours", () => {
     expect(scheduleRunsPerDay(every20, "UTC", at("2026-07-01T06:30:00Z"))).toBe(72)
     expect(scheduleRunsPerDay([{ id: "a", kind: "days", every: 1, hour: 9, minute: 0 }], "UTC", at("2026-07-01T06:30:00Z"))).toBe(1)

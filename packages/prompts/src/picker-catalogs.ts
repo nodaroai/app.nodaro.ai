@@ -121,10 +121,10 @@ export interface PickerOption {
   readonly term: string
   /**
    * Transitions only: present (`true`) on a row whose mechanism is a CUT, so
-   * it takes no duration — see `Transition.instant` / `isInstantTransition`.
-   * A consumer that only reads this wire catalog (Studio builds the transition
-   * Duration lever from `getPickerCatalog("transition")`) hides that lever for
-   * such a row. Carried from the base catalog; a row a catalog pack ADDS has
+   * it takes no duration and no intensity — see `Transition.instant` /
+   * `isInstantTransition`. A consumer that only reads this wire catalog
+   * (Studio builds the transition Duration lever from
+   * `getPickerCatalog("transition")`) hides those levers for such a row. Carried from the base catalog; a row a catalog pack ADDS has
    * it only when the pack's own option says so, and absent means "has a
    * duration" — the safe reading, since the composer then behaves as before.
    */

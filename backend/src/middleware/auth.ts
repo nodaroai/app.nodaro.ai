@@ -1,5 +1,6 @@
-import { createHash, timingSafeEqual } from "node:crypto"
+import { createHash } from "node:crypto"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
+import { constantTimeEqualStr } from "../lib/constant-time.js"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { warmAdminCache } from "../lib/admin-check.js"
@@ -306,19 +307,6 @@ export function __isPublicRouteForTest(method: string, url: string): boolean {
 // ---------------------------------------------------------------------------
 // Auth hook registration
 // ---------------------------------------------------------------------------
-
-// Timing-safe comparison that never throws for mismatched lengths.
-function constantTimeEqualStr(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a, "utf8")
-  const bBuf = Buffer.from(b, "utf8")
-  if (aBuf.length !== bBuf.length) {
-    // Still compare against a buffer of the same length to avoid a short-circuit
-    // timing side channel. The result is discarded.
-    timingSafeEqual(aBuf, Buffer.alloc(aBuf.length))
-    return false
-  }
-  return timingSafeEqual(aBuf, bBuf)
-}
 
 export function registerAuthHook(app: FastifyInstance): void {
   app.addHook("preHandler", async (req: FastifyRequest, reply: FastifyReply) => {

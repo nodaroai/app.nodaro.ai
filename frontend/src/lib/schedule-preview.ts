@@ -51,10 +51,15 @@ export function scheduleDayMarks(rules: ReadonlyArray<ScheduleRule>, timezone: s
   })
 }
 
-/** How many times the schedule runs in the next 24 hours. */
+/** How many times the schedule runs in the next 24 hours — [now, now + 24 h).
+ *  `scheduleOccurrences` includes BOTH ends, so the window stops 1 ms short:
+ *  with `now + 24 h` itself included, a run at `now` was counted again a day
+ *  later (an every-15-minutes schedule read 97 runs at every :00/:15/:30/:45
+ *  minute, 96 otherwise). One millisecond — not a minute — so a `now` with
+ *  seconds still reaches the minute 24 hours on. */
 export function scheduleRunsPerDay(rules: ReadonlyArray<ScheduleRule>, timezone: string, now: Date): number {
   if (rules.length === 0) return 0
-  return scheduleOccurrences({ rules, timezone }, now, new Date(now.getTime() + DAY_MS), 5000).length
+  return scheduleOccurrences({ rules, timezone }, now, new Date(now.getTime() + DAY_MS - 1), 5000).length
 }
 
 /**

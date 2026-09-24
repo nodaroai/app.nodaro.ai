@@ -24,7 +24,7 @@
  * (`apply-edl-cache/<jobId>/chunk-<c>-<fingerprint>.…`, keyed by a hash of the
  * exact command — `sliceFingerprint`) is internal scratch: uploaded with NO
  * `trackUserId` so it never bills the user's storage quota, and best-effort
- * deleted once the final output exists.
+ * deleted once the final output exists or the render is cancelled.
  */
 import { createHash } from "node:crypto"
 import { promises as fs } from "node:fs"
@@ -40,15 +40,50 @@ import {
   createWorkDir,
   cleanupWorkDir,
   COMBINE_DELIVERY_CRF,
-  DEFAULT_FFMPEG_TIMEOUT_MS,
-  DOWNLOAD_TIMEOUT_MS,
-  FFPROBE_TIMEOUT_MS,
   ffmpegVersionLine,
 } from "./ffmpeg-utils.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
+import { JobCancelledError, throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { pickTargetResolution, pickTargetFps } from "./combine-videos.js"
+import {
+  audioMuxTimeoutMs,
+  audioSourceId,
+  boundaryOverlapSecs,
+  chunkOutputSec,
+  chunkRenderTimeoutMs,
+  referencedSourceIds,
+  resolveChunksForOutput,
+  secs,
+  type ChunkPlanOptions,
+} from "./apply-edl-budget.js"
 
-export interface ApplyEdlOptions {
+// The chunk plan and the liveness budget live in the pure leaf
+// `apply-edl-budget.ts` (the workflow orchestrator reads the budget without
+// importing this ffmpeg runtime). Re-exported so every existing import of them
+// from this module keeps working — one definition, two paths.
+export {
+  APPLY_EDL_CANVAS_PROBE_MS,
+  APPLY_EDL_PER_SOURCE_PREP_MS,
+  AUDIO_MUX_SECS_PER_OUTPUT_SEC,
+  CHUNK_RENDER_SECS_PER_OUTPUT_SEC,
+  CHUNK_RENDER_TIMEOUT_FLOOR_MS,
+  DEFAULT_CHUNK_THRESHOLD,
+  DEFAULT_MAX_SEGMENTS_PER_CHUNK,
+  VIDEO_FILTERGRAPH_MAX_SEGMENTS,
+  applyEdlRenderBudgetMs,
+  audioMuxTimeoutMs,
+  chunkOutputSec,
+  chunkRenderTimeoutMs,
+  planChunks,
+  referencedSourceIds,
+  resolveChunks,
+  resolveChunksForOutput,
+  type ChunkPlanOptions,
+} from "./apply-edl-budget.js"
+
+/** `maxSegmentsPerChunk` / `chunkThreshold` come from `ChunkPlanOptions`
+ *  (`apply-edl-budget.ts`) — the same options the liveness budget plans with. */
+export interface ApplyEdlOptions extends ChunkPlanOptions {
   readonly edl: Edl
   readonly output: "video" | "audio"
   readonly quality: "proxy" | "final"
@@ -56,15 +91,6 @@ export interface ApplyEdlOptions {
   readonly jobUserId?: string
   /** 0..1 render progress. */
   readonly onProgress?: (fraction: number) => void
-  /** Segments per render chunk (default 100; a VIDEO render is additionally
-   *  capped at `VIDEO_FILTERGRAPH_MAX_SEGMENTS`). A chunk is closed only at a
-   *  hard-cut boundary, so a long xfade run may exceed this. */
-  readonly maxSegmentsPerChunk?: number
-  /** At or below this many segments the whole edit renders in ONE pass with no
-   *  R2 checkpoint (default 200; a VIDEO render is capped lower at
-   *  `VIDEO_FILTERGRAPH_MAX_SEGMENTS`, so a video edit past that always chunks).
-   *  Lower it to force the chunked path (tests). */
-  readonly chunkThreshold?: number
   /** R2 checkpointing (default true). Off = pure-local render (unit tests with
    *  no storage). */
   readonly checkpoint?: boolean
@@ -76,31 +102,10 @@ export interface ApplyEdlResult {
   readonly durationMs: number
 }
 
-export const DEFAULT_MAX_SEGMENTS_PER_CHUNK = 100
-export const DEFAULT_CHUNK_THRESHOLD = 200
-
 /** Frames a grid cut reads PAST its window so `fps` yields at least the N frames
  *  the cumulative grid asks for (Track 0.14). Reading past the source end simply
  *  yields fewer frames — the `SOURCE_END_TOLERANCE_SEC` skew case, not a crash. */
 export const APPLY_EDL_GRID_READ_GUARD_FRAMES = 4
-
-/** Max segments in ONE video `filter_complex`. A single video graph SILENTLY
- *  DROPS FRAMES past ~45-60 segments on a cloud runner — measured on the CI
- *  runner with the production-pinned ffmpeg: 45 segments render all frames, 60
- *  drop ~74, 90 drop ~629, while the sample-exact AUDIO graph of the same depth
- *  is untouched. It is the weight of the per-segment picture chain
- *  (fps + scale + pad + trims), not the concat depth or a logic bug — the exact
- *  graph renders every frame locally and on the same binary under emulation, so
- *  it is a runner resource limit the graph must stay under. Every PURE-CUT video
- *  render is therefore chunked to at most this many segments per graph (a margin
- *  under the cliff) and the chunks stream-copy concat; the cumulative frame grid
- *  (`chunkStartSec`) keeps them continuous. ONE case is NOT bounded by this: a
- *  continuous CROSSFADE run has no hard cut to split on, so `planChunks` keeps it
- *  whole and a run longer than this stays a single graph — rare (the podcast
- *  templates cut hard), and no worse than before this cap. Audio-only graphs are
- *  unaffected and keep the larger `DEFAULT_*` sizes. Guarded by a frame-count
- *  e2e assertion. */
-export const VIDEO_FILTERGRAPH_MAX_SEGMENTS = 30
 
 /** Seconds of lead-in kept before each input's earliest read in a slice when it
  *  is seeked (`-ss`): the seek lands on the prior keyframe and decodes forward,
@@ -121,43 +126,7 @@ function gridHold(frames: number): string {
   return `tpad=stop_mode=clone:stop=-1,trim=start_frame=0:end_frame=${frames},setpts=round(N/FRAME_RATE/TB)`
 }
 
-/** Kill budget of option B's final step (join the lossless audio slices, encode
- *  AAC once, stream-copy the picture, mux) per second of output, floored at the
- *  default ffmpeg ceiling. AAC encodes far faster than real time; this is a
- *  ceiling for a hang, not an estimate. */
-export const AUDIO_MUX_SECS_PER_OUTPUT_SEC = 1
-export function audioMuxTimeoutMs(outputSec: number): number {
-  return Math.max(DEFAULT_FFMPEG_TIMEOUT_MS, Math.ceil(outputSec * AUDIO_MUX_SECS_PER_OUTPUT_SEC) * 1000)
-}
-
-/** ffmpeg kill budget per chunk: this many seconds of wall clock per second of
- *  output, with `CHUNK_RENDER_TIMEOUT_FLOOR_MS` as the floor — a hung encode
- *  is killed by its own spawn, not by anything watching from outside. */
-export const CHUNK_RENDER_SECS_PER_OUTPUT_SEC = 6
-export const CHUNK_RENDER_TIMEOUT_FLOOR_MS = 20 * 60_000
-
-const secs = (ms: number): number => ms / 1000
 const offsetOf = (s: EdlSource | undefined): number => s?.offsetMs ?? 0
-
-/** The overlap (seconds) at the boundary INTO `seg`, clamped PER-BOUNDARY to
- *  `0.9·min(adjacent)` (R5 silent-edit guard: never a global clamp). Only a
- *  `crossfade` segment-transition consumes time in phase 1 (layout xfades are
- *  phase 2). */
-function boundaryOverlapSecs(seg: EdlSegment, prev: EdlSegment): number {
-  const t = seg.transition
-  if (!t || t.type !== "crossfade") return 0
-  const d = t.durationMs ?? 0
-  if (d <= 0) return 0
-  const minAdj = Math.min(seg.outMs - seg.inMs, prev.outMs - prev.inMs)
-  return secs(Math.min(d, Math.floor(0.9 * minAdj)))
-}
-
-/** Resolve the source id that supplies a segment's SOUND (D19 audio doctrine). */
-function audioSourceId(edl: Edl, seg: EdlSegment, masterAudioId: string | undefined): string | undefined {
-  if (seg.audio) return seg.audio
-  if (masterAudioId) return masterAudioId
-  return seg.video
-}
 
 /** How far past a track's measured end a segment may reach before it is a
  *  refusal rather than rounding — see `assertSegmentsWithinSources` (a
@@ -754,140 +723,14 @@ export function sliceFingerprint(cmd: SliceCommand, edl: Edl, ffmpegVersion: str
     .slice(0, 16)
 }
 
-/** The chunk plan a render uses: ONE pass at or below the threshold, else
- *  slices closed at hard cuts. The render and its liveness budget both call
- *  this, so they cannot disagree about how many chunks there are. */
-export function resolveChunks(
-  segs: readonly EdlSegment[],
-  options: Pick<ApplyEdlOptions, "maxSegmentsPerChunk" | "chunkThreshold"> = {},
-): EdlSegment[][] {
-  const maxPerChunk = options.maxSegmentsPerChunk ?? DEFAULT_MAX_SEGMENTS_PER_CHUNK
-  const threshold = options.chunkThreshold ?? DEFAULT_CHUNK_THRESHOLD
-  return segs.length > threshold ? planChunks(segs, maxPerChunk) : [segs as EdlSegment[]]
-}
-
-/** The chunk plan for a given OUTPUT. A VIDEO render additionally caps every
- *  chunk (and the single-pass threshold) at `VIDEO_FILTERGRAPH_MAX_SEGMENTS`, so
- *  a pure-cut video `filter_complex` never grows wide enough to drop frames on a
- *  cloud runner (the one exception is a continuous crossfade run, which
- *  `planChunks` keeps whole — see that constant); an AUDIO render keeps the
- *  larger `DEFAULT_*` sizes. Both the render and its liveness budget call THIS,
- *  so they agree on how many chunks there are. The cap is a ceiling — an
- *  explicit smaller option still wins. */
-export function resolveChunksForOutput(
-  segs: readonly EdlSegment[],
-  output: "video" | "audio",
-  options: Pick<ApplyEdlOptions, "maxSegmentsPerChunk" | "chunkThreshold"> = {},
-): EdlSegment[][] {
-  if (output !== "video") return resolveChunks(segs, options)
-  const cap = VIDEO_FILTERGRAPH_MAX_SEGMENTS
-  return resolveChunks(segs, {
-    chunkThreshold: Math.min(options.chunkThreshold ?? DEFAULT_CHUNK_THRESHOLD, cap),
-    maxSegmentsPerChunk: Math.min(options.maxSegmentsPerChunk ?? DEFAULT_MAX_SEGMENTS_PER_CHUNK, cap),
-  })
-}
-
-/** The output seconds one chunk renders (D17: crossfade overlaps subtracted). */
-export function chunkOutputSec(segs: readonly EdlSegment[]): number {
-  return segs.reduce((acc, s, i) => acc + secs(s.outMs - s.inMs) - (i > 0 ? boundaryOverlapSecs(segs[i], segs[i - 1]) : 0), 0)
-}
-
-/** The ffmpeg kill budget `renderSlice` gives one chunk. */
-export function chunkRenderTimeoutMs(segs: readonly EdlSegment[]): number {
-  return Math.max(CHUNK_RENDER_TIMEOUT_FLOOR_MS, Math.ceil(chunkOutputSec(segs) * CHUNK_RENDER_SECS_PER_OUTPUT_SEC) * 1000)
-}
-
-/** Per referenced source, run in sequence before the first chunk: one fetch
- *  (`downloadFile`'s ceiling), then `hasAudioStream` (one ffprobe), then
- *  `probeStreamEnds` — its stream listing (one ffprobe) plus up to two per-track
- *  packet scans, each with the default ffmpeg watchdog. */
-export const APPLY_EDL_PER_SOURCE_PREP_MS =
-  DOWNLOAD_TIMEOUT_MS + 2 * FFPROBE_TIMEOUT_MS + 2 * DEFAULT_FFMPEG_TIMEOUT_MS
-
-/** Once per VIDEO render, before the first chunk: the picture-canvas probes —
- *  resolution, then fps, each run across every video source in parallel, each
- *  at the ffprobe ceiling. An audio-only render skips them. */
-export const APPLY_EDL_CANVAS_PROBE_MS = 2 * FFPROBE_TIMEOUT_MS
-
-/** The sources `applyEdl` downloads for this output — the picture source of
- *  each segment for a video render, and each segment's sound source
- *  (`audioSourceId`) always. The one read set the render and its budget share. */
-export function referencedSourceIds(edl: Edl, output: "video" | "audio"): Set<string> {
-  const masterAudioId = edl.sources.find((s) => s.role === "master-audio")?.id
-  const referenced = new Set<string>()
-  for (const seg of edl.segments) {
-    if (output === "video" && seg.video) referenced.add(seg.video)
-    const aId = audioSourceId(edl, seg, masterAudioId)
-    if (aId) referenced.add(aId)
-  }
-  return referenced
-}
-
-/**
- * The handler's liveness budget (`HandlerFn.livenessBudgetMs`): the sum of the
- * kill budgets of every BOUNDED step `applyEdl` runs for this EDL and output,
- * in the order it runs them — each referenced source's fetch + audio probe
- * (`referencedSourceIds`, the same read set the render uses), the canvas
- * probes (video only), every chunk's ffmpeg budget (`chunkRenderTimeoutMs`,
- * over `resolveChunksForOutput` — the same plan the render uses), and when
- * there is more than one chunk: the ffmpeg-build probe and the stream-copy
- * concat (default ceiling each), plus — for a video render — every slice of the
- * audio pass (`chunkRenderTimeoutMs` over the AUDIO plan) and the single
- * join/encode/mux step (`audioMuxTimeoutMs`) (option B). One number decides
- * "hung" for the heartbeat and for those steps.
- *
- * NOT in the sum, because they have no ceiling of their own to add: time
- * WAITING for an ffmpeg slot, and storage I/O (the R2 client has no request
- * timeout — chunk checkpoints, the 404-fallback download, and the deliverable
- * upload after the render). Those ride in the slack between a real render and
- * its kill budgets, plus the 30 minutes after the last beat; see the wrapper
- * doc (`workers/pre-task-heartbeat.ts`).
- */
-export function applyEdlRenderBudgetMs(
-  edl: Edl,
-  options: Pick<ApplyEdlOptions, "maxSegmentsPerChunk" | "chunkThreshold"> & { readonly output?: "video" | "audio" } = {},
-): number {
-  const output = options.output === "audio" ? "audio" : "video"
-  const chunks = resolveChunksForOutput(edl.segments, output, options)
-  const render = chunks.reduce((acc, chunk) => acc + chunkRenderTimeoutMs(chunk), 0)
-  const prep = referencedSourceIds(edl, output).size * APPLY_EDL_PER_SOURCE_PREP_MS
-    + (output === "video" ? APPLY_EDL_CANVAS_PROBE_MS : 0)
-  // A chunked render probes the ffmpeg build once (its resume keys hash it),
-  // then stream-copy concats the chunks.
-  const chunked = chunks.length > 1 ? 2 * DEFAULT_FFMPEG_TIMEOUT_MS : 0
-  // Multi-chunk VIDEO also renders the audio in slices of the AUDIO plan (each
-  // at its own kill budget) and joins/encodes/muxes them in one step (option
-  // B) — exactly the steps `applyEdl` runs in that case. Keep in lockstep.
-  const audioMux = output === "video" && chunks.length > 1
-    ? resolveChunksForOutput(edl.segments, "audio", options).reduce((acc, c) => acc + chunkRenderTimeoutMs(c), 0)
-      + audioMuxTimeoutMs(edlDurationMs(edl) / 1000)
-    : 0
-  return render + prep + chunked + audioMux
-}
-
-/** Split the timeline into contiguous slices closed ONLY at hard-cut boundaries
- *  (index i is a cut when segment i has no time-consuming transition). A run of
- *  xfaded segments stays whole even if it overshoots `maxPerChunk`. */
-export function planChunks(segs: readonly EdlSegment[], maxPerChunk: number): EdlSegment[][] {
-  const chunks: EdlSegment[][] = []
-  let current: EdlSegment[] = []
-  for (let i = 0; i < segs.length; i++) {
-    const isCutBoundary = i > 0 && boundaryOverlapSecs(segs[i], segs[i - 1]) === 0
-    if (isCutBoundary && current.length >= maxPerChunk) {
-      chunks.push(current)
-      current = []
-    }
-    current.push(segs[i])
-  }
-  if (current.length > 0) chunks.push(current)
-  return chunks
-}
-
 export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult> {
   const { edl, output, quality, jobId, jobUserId, onProgress, checkpoint = true } = options
   const wantVideo = output === "video"
   const workDir = await createWorkDir("apply-edl")
   const ext = wantVideo ? "mp4" : "m4a"
+  // Every checkpoint key this attempt uploaded or resumed — outside the `try`
+  // so a cancelled render can delete them too (see the catch).
+  const checkpointKeys: string[] = []
 
   try {
     // Which sources do we actually touch? Download each ONCE.
@@ -900,6 +743,8 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
     const sourceEnds = new Map<string, StreamEnds>()
     let dl = 0
     for (const id of referenced) {
+      // Cancellation boundary (see the chunk loop below).
+      await throwIfJobCancelled()
       const src = edl.sources.find((s) => s.id === id)
       if (!src) throw new Error(`apply-edl: segment references unknown source "${id}"`)
       const localPath = join(workDir, `src-${sourcePaths.size}.${src.kind === "audio" ? "m4a" : "mp4"}`)
@@ -970,12 +815,23 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
     const ffmpegVersion = useCheckpoint ? await ffmpegVersionLine() : ""
 
     const chunkPaths: string[] = []
-    const checkpointKeys: string[] = []
     // Running GLOBAL output position handed to each chunk so the cumulative
     // frame grid (Track 0.14) is continuous across chunk seams — advanced by
     // every chunk, resumed ones included, so a resume can't shift the grid.
     let chunkStartSec = 0
     for (let c = 0; c < chunks.length; c++) {
+      // Chunk boundary = cancellation boundary. A user cancel (or the
+      // orchestrator's `cancelJobAndThrow` on a timed-out / cancelled run)
+      // flips the row to `cancelled`; the video worker runs every handler
+      // inside `runWithJobCancellation`, so this throttled check sees it and
+      // throws `JobCancelledError` before the next chunk takes an ffmpeg slot —
+      // a cancelled multi-hour render stops within one chunk instead of
+      // rendering (and holding a slot) to the end. The chunk in flight finishes
+      // under its own kill budget. The checkpoints uploaded so far are keyed by
+      // this jobId, and a cancelled job is never resumed, so the catch below
+      // deletes them. Outside a worker context (tests, the characterization
+      // suite) this is a no-op.
+      await throwIfJobCancelled()
       const chunkPath = join(workDir, `chunk-${c}.${ext}`)
       const cmd = buildSliceCommand(edl, chunks[c], {
         output, quality, target, fps, chunkStartSec, masterAudioId, audioPresent, omitAudio: muxAudioSeparately,
@@ -1052,6 +908,8 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
       if (muxAudioSeparately) {
         const audioChunks = resolveChunksForOutput(edl.segments, "audio", options)
         for (let k = 0; k < audioChunks.length; k++) {
+          // Same cancellation boundary as the picture chunks.
+          await throwIfJobCancelled()
           const pcmPath = join(workDir, `audio-${k}.wav`)
           await renderSlice(edl, audioChunks[k], {
             output: "audio", audioCodec: "pcm", quality, target, fps, chunkStartSec: 0, masterAudioId, audioPresent, sourcePaths, outPath: pcmPath,
@@ -1061,6 +919,8 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
       }
       // Nothing reads the sources past this point.
       await Promise.all([...sourcePaths.values()].map((p) => fs.rm(p, { force: true })))
+      // Last boundary before the join (concat, then the mux's one AAC encode).
+      await throwIfJobCancelled()
 
       // For a video render the chunks are video-only, so concat into a picture
       // scratch file and mux the audio on below. For an audio render the chunks
@@ -1094,22 +954,34 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
     // The final output exists — only NOW has the checkpoint cache done its job
     // (a failure in the concat, the audio pass or the mux resumes every chunk
     // instead of re-rendering the whole picture). Best-effort delete.
-    if (checkpointKeys.length > 0) {
-      try {
-        const { deleteFromR2 } = await import("../../lib/storage.js")
-        await Promise.allSettled(checkpointKeys.map((k) => deleteFromR2(k)))
-      } catch {
-        /* cleanup is best-effort. NOTHING else deletes apply-edl-cache/ today (no
-           R2 lifecycle rule is configured): a job that dies after uploading but
-           before this line, or any checkpoint under an older key scheme, stays
-           until a lifecycle rule is added for the prefix. */
-      }
-    }
+    await deleteCheckpoints(checkpointKeys)
 
     onProgress?.(1)
     return { outputPath, durationMs: edlDurationMs(edl) }
   } catch (err) {
+    // A CANCELLED render is never resumed (the row is terminal, and the video
+    // worker does not retry a JobCancelledError), so its checkpoints are dead
+    // weight — delete them like the success path does. Any OTHER failure keeps
+    // them: BullMQ retries it under the SAME jobId and the retry resumes them.
+    if (err instanceof JobCancelledError) await deleteCheckpoints(checkpointKeys)
     await cleanupWorkDir(workDir)
     throw err
+  }
+}
+
+/**
+ * Best-effort delete of a render's R2 checkpoints. NOTHING else deletes
+ * apply-edl-cache/ today (no R2 lifecycle rule is configured): a job that
+ * fails for good after uploading (its last BullMQ attempt, or a worker that
+ * dies and is never retried), or any checkpoint under an older key scheme,
+ * stays until a lifecycle rule is added for the prefix.
+ */
+async function deleteCheckpoints(keys: readonly string[]): Promise<void> {
+  if (keys.length === 0) return
+  try {
+    const { deleteFromR2 } = await import("../../lib/storage.js")
+    await Promise.allSettled(keys.map((k) => deleteFromR2(k)))
+  } catch {
+    /* cleanup is best-effort */
   }
 }

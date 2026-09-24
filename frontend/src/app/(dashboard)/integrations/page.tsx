@@ -9,6 +9,7 @@ import { NodaroCloudCard } from "@/components/integrations/nodaro-cloud-card"
 import { ModelProvidersCard } from "@/components/integrations/model-providers-card"
 import { CredentialsCard } from "@/components/integrations/credentials-card"
 import { HeygenCatalogCard } from "@/components/integrations/heygen-catalog-card"
+import { TelegramAccountsCard } from "@/components/integrations/telegram-accounts/telegram-accounts-card"
 import {
   useIntegrationFilter,
   INTEGRATION_TABS,
@@ -180,6 +181,10 @@ export default function IntegrationsPage() {
           <CredentialsCard addOpen={addCredentialOpen} onAddOpenChange={setAddCredentialOpen} />
           <HeygenCatalogCard />
         </div>
+        {/* Renders nothing until the server says this caller has the feature
+            (Cloud, the private plugin loaded, and — before general
+            availability — the preview audience), so no card flashes in and out. */}
+        <TelegramAccountsCard />
       </div>
 
       {loading ? (

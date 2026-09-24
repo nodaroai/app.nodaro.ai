@@ -2123,6 +2123,22 @@ editor but are equally suited to external polling clients. `input_data` and
 private pre-watermark remux base are removed recursively for every caller,
 including administrators.
 
+### How long a component run may take
+
+`POST /v1/component/execute` answers `202 { jobId }` and runs the component in the
+background; poll that wrapper job like any other. The server gives the run 90 minutes,
+plus the time budget of any long render inside it (today: an Apply EDL final render,
+whose budget is sized from its edit). A client that polls with its own time limit can ask
+how long the server will wait:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/component/execute/:jobId/wait-limit` | `{ data: { budgetExcessMs, waitLimitMs, pendingBudgetedNodes } }` — `waitLimitMs` is the server's wait on this run (90 minutes + `budgetExcessMs`); `budgetExcessMs` is `0` until the run has started a long render. `pendingBudgetedNodes` is `true` while the run still has a long render it has not started yet (and while the run has not started at all), so a `0` excess does not yet mean "nothing long inside". Both can change while the run goes on, so ask again when `waitLimitMs` is reached. Owner-only (404 on a foreign or non-component job); `jobs:read` scope with an OAuth token. |
+
+The editor keeps its own 30-minute wait for a run with nothing long inside. When the run
+has started a long render it waits `waitLimitMs`; when a long render is still to come
+(`pendingBudgetedNodes`) it waits at least the server's 90 minutes, and asks again then.
+
 ### Video Pro segment estimates
 
 `POST /v1/credits/video-pro-estimate` accepts `provider`, `resolution`, `duration`, `aspectRatio`, `renderMethod`, `anchorMode`, `contextTailSec`, `planOnly`, and the Video Pro segment controls. It reads prices without creating a job or reserving credits.

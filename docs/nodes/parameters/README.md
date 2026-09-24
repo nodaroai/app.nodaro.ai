@@ -36,6 +36,10 @@ to hold on to; `compact` keeps the prompt short when many pickers feed one
 generation, or when the model already knows the trade vocabulary and the long
 form only dilutes it. `preText` / `postText` are appended in both modes.
 
+**Exception — Transition.** A transition is always written as its term followed by
+its description in parentheses, in both modes, because video models did not
+perform a transition from its term alone. See [Transition](./transition.md).
+
 **Where to set it.** Two places, same lever. On the canvas: hover (or select)
 any picker node — the control row at the top of the card carries a **Prompt
 hint** toggle on the left — `Full` / `Compact` — beside the existing Picks /

@@ -45,8 +45,11 @@ import type {
   NodeOutput,
   NodeExecutionState,
   OrchestratorContext,
+  AdoptedJobClocks,
 } from "./types.js"
 import { JOB_POLL_INTERVAL_MS, NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "./types.js"
+import { addBudgetExcess, declaredJobBudgetMs, nodeCeilings, type NodeCeilings } from "../../lib/job-budget.js"
+import { BudgetedDeadline, executionBudgetExcessMs } from "../../lib/execution-budget.js"
 import { isParkedJobStatus } from "../../lib/job-status.js"
 import { isSourceNode, isSkipNode } from "./execution-graph.js"
 import { cancelInFlightChildJobs } from "../../lib/reconcile/cancel-inflight-jobs.js"
@@ -1469,14 +1472,17 @@ async function executeWorkerNode(
   // so its §4.6 settle pass can tell an authored prompt field from a mapped one.
   authoredData?: Record<string, unknown>,
 ): Promise<ExecuteNodeResult> {
-  // 0. Adoption (audit A2): a prior orchestrator attempt's in-flight job for
-  // THIS node whose provider call already went out. Poll it to completion
-  // instead of creating a new job — a cancel+re-run would pay the provider a
-  // second time for the same content. The adopted job keeps its original
-  // credit reservation (committed on completion / refunded on failure by the
-  // normal lifecycle), and the reconcile system owns its terminal outcome if
-  // its worker is gone — so the poll below always sees a terminal status.
-  // Fan-out iterations are never adoptable (see cancelInFlightChildJobs).
+  // 0. Adoption: a prior orchestrator attempt's in-flight job for THIS node
+  // that must not be re-run — its provider call already went out (audit A2:
+  // a cancel+re-run would pay the provider a second time for the same
+  // content), or it is a budgeted render whose worker is still heartbeating
+  // (Track 0.11 follow-up: a re-run would restart hours of render from zero).
+  // Poll it to completion instead of creating a new job. The adopted job keeps
+  // its original credit reservation (committed on completion / refunded on
+  // failure by the normal lifecycle), and the reconcile system owns its
+  // terminal outcome if its worker is gone — so the poll below always sees a
+  // terminal status. Fan-out iterations are never adoptable (see
+  // cancelInFlightChildJobs).
   if (iterationIndex === undefined) {
     const adopted = ctx.adoptableJobs?.get(node.id)
     if (adopted) {
@@ -1485,7 +1491,15 @@ async function executeWorkerNode(
         `[orchestrator/resume] node ${node.id}: adopting in-flight job ${adopted.jobId} (provider already paid) — polling instead of re-running`,
       )
       ctx.onJobCreated?.(node.id, adopted.jobId)
-      return pollJobToCompletion(adopted.jobId, node.type, ctx, adopted.usageLogId, adopted.creditsReserved)
+      // Same ceilings the original dispatch had: the budget the adopted job's
+      // row declares (`cancelInFlightChildJobs` reads it through the registry).
+      // A live render's clocks also start where the original dispatch's did
+      // (`adopted.clocks`), so no re-pick hands it a fresh budget.
+      const adoptedCeilings = nodeCeilings(adopted.budgetMs)
+      addBudgetExcess(ctx, adoptedCeilings.excessMs)
+      return pollJobToCompletion(
+        adopted.jobId, node.type, ctx, adopted.usageLogId, adopted.creditsReserved, adoptedCeilings, adopted.clocks,
+      )
     }
   }
 
@@ -1758,8 +1772,17 @@ async function executeWorkerNode(
   const queue = queueName === "video-render" ? renderQueue : videoQueue
   await queue.add(jobName, enrichedPayload, { priority: 10 })
 
-  // 6. Poll for job completion
-  return pollJobToCompletion(jobId, node.type, ctx, usageLogId, creditsUsed)
+  // 6. Poll for job completion — under ceilings sized by the budget this job
+  // declares (podcast Track 0.11). `declaredJobBudgetMs` is the SAME call the
+  // worker's handler makes for its liveness budget, on the SAME payload, so the
+  // orchestrator and the heartbeat agree on how long this job may legitimately
+  // run. No declared budget → today's 90-minute ceilings, untouched context.
+  // The excess also grows the execution's cap (`workflowCapMs`), summed across
+  // every budgeted dispatch of the run (fan-out iterations and inline
+  // sub-workflow nodes included — they share this context).
+  const ceilings = nodeCeilings(declaredJobBudgetMs(jobName, enrichedPayload))
+  addBudgetExcess(ctx, ceilings.excessMs)
+  return pollJobToCompletion(jobId, node.type, ctx, usageLogId, creditsUsed, ceilings)
 }
 
 // ---------------------------------------------------------------------------
@@ -1934,16 +1957,24 @@ async function cancelJobAndThrow(
   throw new Error((jobRecord?.error_message as string) || reason)
 }
 
+/** Today's ceilings — what every job that declares no budget polls under. */
+const DEFAULT_NODE_CEILINGS: NodeCeilings = nodeCeilings()
+
 async function pollJobToCompletion(
   jobId: string,
   nodeType: string,
   ctx: OrchestratorContext,
   usageLogId?: string,
   creditsUsed?: number,
+  ceilings: NodeCeilings = DEFAULT_NODE_CEILINGS,
+  /** An ADOPTED live render's original start (see `AdoptedJobClocks`): both
+   *  clocks count from the row, not from this call. Omitted → today's clocks
+   *  (dispatch = now, processing = first poll that sees `processing`). */
+  clocks?: AdoptedJobClocks,
 ): Promise<ExecuteNodeResult> {
-  let processingStartTime: number | null = null
+  let processingStartTime: number | null = clocks?.processingStartedAtMs ?? null
   let pollCycle = 0
-  const pollStartTime = Date.now()
+  const pollStartTime = clocks?.dispatchedAtMs ?? Date.now()
   // A `pending_review` row is parked on a HUMAN, not on a worker (spec
   // 2026-09-03-job-policy-hook-design §6.3). Both clocks below must stop while
   // it is: without this, 90 minutes of review reaches `cancelJobAndThrow`,
@@ -1967,9 +1998,11 @@ async function pollJobToCompletion(
 
     // Absolute timeout — prevents infinite polling when job never leaves "pending"
     // (e.g. worker down, queue full). Safety net beyond NODE_TIMEOUT_MS which only
-    // starts counting after the worker picks up the job.
-    if (Date.now() - pollStartTime - heldSoFar() > POLL_ABSOLUTE_TIMEOUT_MS) {
-      return await cancelJobAndThrow(jobId, usageLogId, `Poll timeout: job did not complete within ${POLL_ABSOLUTE_TIMEOUT_MS / 1000}s (may still be pending in queue)`, nodeType, creditsUsed)
+    // starts counting after the worker picks up the job. Both clocks are
+    // `POLL_ABSOLUTE_TIMEOUT_MS` / `NODE_TIMEOUT_MS` plus the job's declared
+    // budget excess (`ceilings`, 0 for a job that declares none).
+    if (Date.now() - pollStartTime - heldSoFar() > ceilings.pollAbsoluteMs) {
+      return await cancelJobAndThrow(jobId, usageLogId, `Poll timeout: job did not complete within ${ceilings.pollAbsoluteMs / 1000}s (may still be pending in queue)`, nodeType, creditsUsed)
     }
 
     // Periodically re-check execution status from DB so mid-level cancellation
@@ -2076,17 +2109,25 @@ async function pollJobToCompletion(
     // Queue wait time is bounded by the workflow-level timeout (WORKFLOW_TIMEOUT_MS).
     if (
       processingStartTime !== null &&
-      Date.now() - processingStartTime - (heldMs - heldBeforeProcessingMs) > NODE_TIMEOUT_MS
+      Date.now() - processingStartTime - (heldMs - heldBeforeProcessingMs) > ceilings.processingMs
     ) {
-      return await cancelJobAndThrow(jobId, usageLogId, `Node timeout after ${NODE_TIMEOUT_MS / 1000}s of processing`, nodeType, creditsUsed)
+      return await cancelJobAndThrow(jobId, usageLogId, `Node timeout after ${ceilings.processingMs / 1000}s of processing`, nodeType, creditsUsed)
     }
 
     // Deploy drain (SIGTERM): abort the wait so worker.close() returns inside
     // the drain window instead of sitting on a 90-minute node poll. THROW —
     // never cancelJobAndThrow: the child job is running in the video worker's
-    // own process, is recoverable, and cancelling it here would refund a live
-    // provider call. The orchestrator's BullMQ job is requeued (attempt not
-    // spent) and `reconcileNodeStatesFromJobs` picks the child up on resume.
+    // own process, and cancelling it HERE would refund a live provider call.
+    // The orchestrator's BullMQ job is requeued (attempt not spent). What the
+    // resume then does with the child depends on its row, NOT on this throw:
+    // one that finished meanwhile is picked up by `reconcileNodeStatesFromJobs`;
+    // one still in flight WITH `provider_task_id` is adopted and re-polled
+    // (`cancelInFlightChildJobs`); a BUDGETED render (apply-edl) whose worker
+    // is still heartbeating is adopted too, and polled on its original clocks —
+    // the render never restarts because the orchestrator did. Any other job
+    // still in flight WITHOUT a provider task (a short ffmpeg job, or a render
+    // whose heartbeat went stale) is cancelled + refunded and the node
+    // re-dispatched under a NEW jobId.
     if (isWorkerDraining()) throw new DrainAbortError()
 
     // Wait before next poll
@@ -2102,7 +2143,18 @@ const COMPONENT_POLL_INTERVAL_MS = 3_000 // 3 seconds
 // Audit A4: aligned with POLL_ABSOLUTE_TIMEOUT_MS (90 min) — the inner
 // execution is allowed 90 minutes of work, so a 30-min parent wait failed the
 // parent while the inner run kept executing AND kept charging.
+// Track 0.11: the BASE wait. An inner execution that dispatched a long render
+// (apply-edl) grows it by that execution's budget excess, exactly as the inner
+// run's own clocks grew (`BudgetedDeadline` below).
 const COMPONENT_TIMEOUT_MS = POLL_ABSOLUTE_TIMEOUT_MS
+
+/** The inner execution a component wrapper job runs — stamped on the wrapper's
+ *  `input_data._executionId` by the component route right after it starts it. */
+async function componentInnerExecutionId(wrapperJobId: string): Promise<string | undefined> {
+  const { data } = await supabase.from("jobs").select("input_data").eq("id", wrapperJobId).maybeSingle()
+  const id = (data?.input_data as Record<string, unknown> | null | undefined)?._executionId
+  return typeof id === "string" ? id : undefined
+}
 
 async function executeComponentNode(
   node: SimpleNode,
@@ -2194,9 +2246,17 @@ async function executeComponentNode(
   // Surface the wrapper jobId so the orchestrator can track it
   if (ctx.onJobCreated) ctx.onJobCreated(node.id, jobId)
 
-  // Poll wrapper job
+  // Poll wrapper job. The wait is COMPONENT_TIMEOUT_MS plus the inner
+  // execution's budget excess (Track 0.11), looked up from the database only
+  // once the base is spent — so a component with nothing budgeted inside times
+  // out exactly as before, and one whose inner run renders for hours is not
+  // abandoned (and its inner run cancelled) at minute 90.
+  const deadline = new BudgetedDeadline(COMPONENT_TIMEOUT_MS, async () => {
+    const innerId = await componentInnerExecutionId(jobId)
+    return innerId ? executionBudgetExcessMs(innerId) : 0
+  })
   const startTime = Date.now()
-  while (Date.now() - startTime < COMPONENT_TIMEOUT_MS) {
+  while (!(await deadline.reached(Date.now() - startTime))) {
     if (ctx.cancelled) throw new Error("Component execution cancelled")
 
     const { data: job } = await supabase
@@ -2209,6 +2269,13 @@ async function executeComponentNode(
 
     if (job.status === "completed") {
       const outputData = (job.output_data ?? {}) as Record<string, string>
+      // The component node's excess is its inner execution's: the parent's cap
+      // grows by it exactly as it would for a long render dispatched directly.
+      const innerId = (job.output_data as Record<string, unknown> | null)?._executionId
+      addBudgetExcess(
+        ctx,
+        Math.max(deadline.excessMs, typeof innerId === "string" ? await executionBudgetExcessMs(innerId) : 0),
+      )
       // credits_actual on the wrapper job = the inner execution's
       // total_credits_used (set by component-execute.ts on completion). This is
       // a SEPARATE workflow_executions row, so surfacing it here is the ONLY
@@ -2248,6 +2315,9 @@ async function executeComponentNode(
       .maybeSingle()
     const innerExecutionId = (wrapperRow?.input_data as Record<string, unknown> | null)?._executionId
     if (typeof innerExecutionId === "string") {
+      // No `adoptLiveBudgetedRenders`: the parent has given up, so an inner
+      // render that is still running is cancelled (it stops at its next chunk
+      // boundary), not kept alive for a resume that will never come.
       await cancelInFlightChildJobs(innerExecutionId)
       await supabase
         .from("workflow_executions")
@@ -2263,7 +2333,7 @@ async function executeComponentNode(
       .from("jobs")
       .update({
         status: "failed",
-        error_message: `Component execution timed out after ${COMPONENT_TIMEOUT_MS / 60000} minutes`,
+        error_message: `Component execution timed out after ${Math.round(deadline.limitMs / 60000)} minutes`,
         completed_at: new Date().toISOString(),
       })
       .eq("id", jobId)
@@ -2276,7 +2346,7 @@ async function executeComponentNode(
     console.warn(`[node-executor] component-timeout cleanup failed for ${jobId}:`, err)
   }
 
-  throw new Error(`Component execution timed out after ${COMPONENT_TIMEOUT_MS / 60000} minutes`)
+  throw new Error(`Component execution timed out after ${Math.round(deadline.limitMs / 60000)} minutes`)
 }
 
 function sleep(ms: number): Promise<void> {

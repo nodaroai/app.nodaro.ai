@@ -42,7 +42,14 @@ import type { ZodError, ZodType } from "zod"
 import type { AudioFxPreset, PresetSettings, SurroundDirection } from "@nodaro/shared"
 import type { PluginScene3DEngine, PluginStageToolkit } from "./scene3d-contract.js"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared"
+import type {
+  PluginAccountSecretsToolkit,
+  PluginDaemon,
+  PluginDaemonClientToolkit,
+  PluginRedisLeaseToolkit,
+} from "./daemon-contract.js"
 export type * from "./scene3d-contract.js"
+export type * from "./daemon-contract.js"
 
 // ============================================================================
 // Job / handler shapes
@@ -1925,6 +1932,17 @@ export interface PluginToolkit {
    * the host; the plugin only ever asks for a URL.
    */
   billing?: PluginBillingToolkit
+  /**
+   * The generic account-secret store (`plugin_account_secrets`). Its
+   * decrypting members exist only in the daemon host's toolkit — see
+   * `PluginAccountSecretsToolkit`. ADDITIVE-OPTIONAL — `?.`-guard it.
+   */
+  accountSecrets?: PluginAccountSecretsToolkit
+  /**
+   * The API side of the internal hop to a hosted daemon. ADDITIVE-OPTIONAL —
+   * `?.`-guard it.
+   */
+  daemons?: PluginDaemonClientToolkit
 }
 
 /**
@@ -1984,6 +2002,12 @@ export interface PluginRedisToolkit {
     /** Remaining TTL in seconds; negative when absent or unexpiring. */
     ttl(key: string): Promise<number>
   }
+  /**
+   * Single-holder leases (`SET NX PX` + compare-and-extend/delete) — the one
+   * shape `kv` cannot express atomically. ADDITIVE-OPTIONAL (no
+   * CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  lease?: PluginRedisLeaseToolkit
 }
 
 /**
@@ -2617,6 +2641,12 @@ export interface NodaroPrivatePlugin {
    * write wins per named member.
    */
   services?(tk: PluginToolkit): Partial<PluginServices>
+  /**
+   * Additive: long-lived processes, run only by the daemon host
+   * (`plugin-daemons.ts`) — see `PluginDaemon`. The host passes its own
+   * toolkit, the one whose `accountSecrets` can decrypt.
+   */
+  daemons?(tk: PluginToolkit): PluginDaemon[]
 }
 
 export interface PrivatePluginsModule {

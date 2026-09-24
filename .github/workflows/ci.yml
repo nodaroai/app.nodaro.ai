@@ -888,6 +888,44 @@ jobs:
           echo "---------------------"
           kill $BACKEND_PID 2>/dev/null || true
           exit 1
+      - name: Boot the plugin daemon host and probe its door
+        # dist/plugin-daemons.js is its own entry point (its own service, or
+        # start.sh with PLUGIN_DAEMONS_IN_CONTAINER=true), so the server boot
+        # above proves nothing about it. community -> exits 0 on its own.
+        # cloud (no private package here, PRIVATE_MODULES=optional) -> binds,
+        # answers /health with zero daemons instead of crash-looping, refuses
+        # every other route without the internal secret, and exits 0 on SIGTERM.
+        env:
+          NODE_ENV: production
+          PLUGIN_DAEMONS_PORT: 9100
+        run: |
+          cd backend
+          node dist/plugin-daemons.js > /tmp/plugin-daemons.log 2>&1 &
+          PID=$!
+          fail() { echo "FAIL: $1"; echo "---- daemon host log ----"; cat /tmp/plugin-daemons.log; kill $PID 2>/dev/null || true; exit 1; }
+          if [ "$EDITION" = "community" ]; then
+            for i in $(seq 1 30); do
+              if ! kill -0 $PID 2>/dev/null; then
+                if wait $PID; then echo "Daemon host exited cleanly on community after ${i}s"; exit 0; fi
+                fail "daemon host exited non-zero on community"
+              fi
+              sleep 1
+            done
+            fail "daemon host did not exit on community within 30s"
+          fi
+          for i in $(seq 1 45); do
+            if curl -sf http://127.0.0.1:9100/health > /dev/null 2>&1; then
+              echo "Daemon host answered /health after ${i}s"
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:9100/any/route)
+              [ "$STATUS" = "401" ] || fail "a route without the internal secret answered $STATUS (expected 401)"
+              kill -TERM $PID
+              if wait $PID; then echo "Daemon host drained and exited 0 on SIGTERM"; exit 0; fi
+              fail "daemon host did not exit 0 on SIGTERM"
+            fi
+            kill -0 $PID 2>/dev/null || fail "daemon host exited prematurely (startup crash)"
+            sleep 1
+          done
+          fail "daemon host did not answer /health within 45s"
 
   migrate:
     name: Push Database Migrations
