@@ -88,7 +88,7 @@ export const MusicMoodPicker = memo(function MusicMoodPicker({
   const anyVisible = filtered.some((s) => s.entries.length > 0)
 
   return (
-    <div className={cn("flex flex-col gap-3", className)}>
+    <div className={cn("@container flex flex-col gap-3", className)}>
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
@@ -96,7 +96,7 @@ export const MusicMoodPicker = memo(function MusicMoodPicker({
           placeholder="Search energy, emotion, vibe"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="pl-8 h-8 text-xs"
+          className="pl-8 h-9 text-[13px]"
         />
       </div>
 
@@ -114,6 +114,7 @@ export const MusicMoodPicker = memo(function MusicMoodPicker({
           <SoundDimensionSection
             key={key}
             label={label}
+            art={{ catalogId: "music-mood", field: key }}
             entries={entries}
             selectedIds={multi.selectedIds}
             maxSelected={maxSelected}

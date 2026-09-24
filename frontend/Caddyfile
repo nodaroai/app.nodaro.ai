@@ -197,6 +197,22 @@
 		header Cache-Control "no-store"
 		file_server
 	}
+	# Picker artwork (frontend/public/picker-art). Every image name carries a
+	# content hash (tools/picker-art/build.mts), so it is safe to cache forever.
+	# No SPA fallback here: a missing file must 404, not answer with index.html.
+	# Only an existing, hashed image gets the long cache; a miss is no-store so
+	# neither the browser nor the CDN in front keeps a 404 across a deploy.
+	handle /picker-art/* {
+		root * /app/frontend/dist
+		@picker_art_hashed {
+			file
+			path_regexp \.[0-9a-f]{8}\.webp$
+		}
+		header @picker_art_hashed Cache-Control "public, max-age=31536000, immutable"
+		@picker_art_missing not file
+		header @picker_art_missing Cache-Control "no-store"
+		file_server
+	}
 	handle {
 		# zstd + gzip: Caddy negotiates the best supported encoding per request.
 		# zstd shaves ~15-25% more off JS/CSS than gzip alone.

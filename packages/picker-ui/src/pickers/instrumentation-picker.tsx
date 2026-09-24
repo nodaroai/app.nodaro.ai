@@ -104,7 +104,7 @@ export const InstrumentationPicker = memo(function InstrumentationPicker({
     filteredSingingStyles.length > 0
 
   return (
-    <div className={cn("flex flex-col gap-3", className)}>
+    <div className={cn("@container flex flex-col gap-3", className)}>
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
@@ -112,7 +112,7 @@ export const InstrumentationPicker = memo(function InstrumentationPicker({
           placeholder="Search instruments, production, vocals, style"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="pl-8 h-8 text-xs"
+          className="pl-8 h-9 text-[13px]"
         />
       </div>
 
@@ -125,6 +125,8 @@ export const InstrumentationPicker = memo(function InstrumentationPicker({
       {(!query || filteredInstrumentEntries.length > 0) && (
         <SoundTabbedSection
           label="Instruments"
+          art={{ catalogId: "instrumentation", field: "instruments" }}
+          searching={query.length > 0}
           entries={filteredInstrumentEntries}
           groupOrder={INSTRUMENT_CATEGORY_ORDER as ReadonlyArray<string>}
           groupLabels={INSTRUMENT_CATEGORY_LABELS as Readonly<Record<string, string>>}
@@ -154,6 +156,7 @@ export const InstrumentationPicker = memo(function InstrumentationPicker({
       {(!query || filteredProduction.length > 0) && (
         <SoundDimensionSection
           label="Production"
+          art={{ catalogId: "instrumentation", field: "production" }}
           entries={filteredProduction}
           selectedIds={productionCurrent ? [productionCurrent] : []}
           checked={productionChecked}
@@ -176,6 +179,7 @@ export const InstrumentationPicker = memo(function InstrumentationPicker({
       {(!query || filteredVocal.length > 0) && (
         <SoundDimensionSection
           label="Vocal Presence"
+          art={{ catalogId: "instrumentation", field: "vocalPresence" }}
           entries={filteredVocal}
           selectedIds={vocalIds}
           maxSelected={MAX_VOCAL_PRESENCE}
@@ -221,6 +225,7 @@ export const InstrumentationPicker = memo(function InstrumentationPicker({
       {(!query || filteredSingingStyles.length > 0) && (
         <SoundDimensionSection
           label="Singing Style"
+          art={{ catalogId: "instrumentation", field: "singingStyle" }}
           entries={filteredSingingStyles}
           selectedIds={styleIds}
           maxSelected={MAX_SINGING_STYLES}

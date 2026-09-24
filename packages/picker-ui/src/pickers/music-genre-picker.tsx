@@ -102,13 +102,25 @@ export const MusicGenrePicker = memo(function MusicGenrePicker({
   const subgenreChecked = value.subgenre !== undefined && value.subgenre !== ""
   const eraChecked = value.era !== undefined && value.era !== ""
 
+  // Subgenre picks belong to ONE genre (the data model and the prompt hint
+  // both assume it). With none or several genres picked, the section stays
+  // visible and says why it is empty; a curated genre with no subgenres left
+  // hides it, as before.
+  const subgenreEmptyText = query
+    ? undefined
+    : genreIds.length === 0
+      ? "Pick a genre above to see its subgenres"
+      : genreIds.length > 1
+        ? "Subgenres work with a single genre"
+        : undefined
+
   const anyVisible =
     filteredGenreEntries.length > 0 ||
     filteredSubgenres.length > 0 ||
     filteredEras.length > 0
 
   return (
-    <div className={cn("flex flex-col gap-3", className)}>
+    <div className={cn("@container flex flex-col gap-3", className)}>
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
@@ -116,7 +128,7 @@ export const MusicGenrePicker = memo(function MusicGenrePicker({
           placeholder="Search genre, subgenre, era"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="pl-8 h-8 text-xs"
+          className="pl-8 h-9 text-[13px]"
         />
       </div>
 
@@ -129,6 +141,8 @@ export const MusicGenrePicker = memo(function MusicGenrePicker({
       {(!query || filteredGenreEntries.length > 0) && (
         <SoundTabbedSection
           label="Genre"
+          art={{ catalogId: "music-genre", field: "genre" }}
+          searching={query.length > 0}
           entries={filteredGenreEntries}
           groupOrder={MUSIC_GENRE_CATEGORY_ORDER as ReadonlyArray<string>}
           groupLabels={MUSIC_GENRE_CATEGORY_LABELS as Readonly<Record<string, string>>}
@@ -170,10 +184,26 @@ export const MusicGenrePicker = memo(function MusicGenrePicker({
         />
       )}
 
+      {subgenreEmptyText !== undefined && (
+        <SoundDimensionSection
+          label="Subgenre"
+          art={{ catalogId: "music-genre", field: "subgenre" }}
+          entries={[]}
+          selectedIds={[]}
+          checked={false}
+          resolveLabel={resolveLabel}
+          resolveDescription={resolveDescription}
+          onToggle={() => {}}
+          onPick={() => {}}
+          emptyState={subgenreEmptyText}
+        />
+      )}
+
       {/* Subgenre only meaningful when exactly one genre is picked. */}
       {currentGenre && allSubgenres.length > 0 && (!query || filteredSubgenres.length > 0) && (
         <SoundDimensionSection
           label="Subgenre"
+          art={{ catalogId: "music-genre", field: "subgenre" }}
           entries={filteredSubgenres}
           selectedIds={value.subgenre ? [value.subgenre] : []}
           checked={subgenreChecked}
@@ -196,6 +226,7 @@ export const MusicGenrePicker = memo(function MusicGenrePicker({
       {(!query || filteredEras.length > 0) && (
         <SoundDimensionSection
           label="Era"
+          art={{ catalogId: "music-genre", field: "era" }}
           entries={filteredEras}
           selectedIds={value.era ? [value.era] : []}
           checked={eraChecked}

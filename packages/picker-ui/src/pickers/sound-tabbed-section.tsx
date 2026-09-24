@@ -1,10 +1,11 @@
 "use client"
 
 import { memo, useId, useMemo, useState } from "react"
-import { Switch } from "../ui/switch"
-import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
+import { getSoundArt, type SoundArtRef } from "../icons/sound-art"
 import { MultiPickBadge } from "./multi-pick-ui"
+import { SoundArtTile } from "./sound-art-tile"
+import { SOUND_GRID_CLASS, SOUND_SECTION_CLASS, SoundSectionHeader } from "./sound-dimension-section"
 
 export interface TabbedEntry {
   readonly id: string
@@ -16,11 +17,18 @@ export interface TabbedEntry {
 
 export interface SoundTabbedSectionProps {
   readonly label: string
+  /** Which catalog dimension these tiles belong to — resolves each tile's picture. */
+  readonly art: SoundArtRef
   readonly entries: ReadonlyArray<TabbedEntry>
   /** Tab order. Tabs with no entries (after search filter) hide. */
   readonly groupOrder: ReadonlyArray<string>
   /** Tab labels keyed by group key. */
   readonly groupLabels: Readonly<Record<string, string>>
+  /**
+   * The parent is filtering by a search query: drop the tab row and list every
+   * group that still has a match, each under its own small heading.
+   */
+  readonly searching?: boolean
   readonly selectedIds: ReadonlyArray<string>
   readonly maxSelected?: number
   readonly isMultiData?: boolean
@@ -34,20 +42,21 @@ export interface SoundTabbedSectionProps {
 }
 
 /**
- * Tabbed dimension section: large branded headline + Switch toggle, then a
- * horizontal tab row filtering a tile grid below. Mirrors PersonPicker's
- * TabbedEntryGrid for sound dimensions (genre by category, instruments by
- * family). Pink dot indicator on tabs with picks; numeric count badge in
- * multi-mode.
+ * Tabbed dimension section: pink headline + Switch toggle, then a tab row
+ * filtering a grid of picture tiles (genre by category, instruments by
+ * family). Pink count badge on tabs with picks (dot in single mode). While the
+ * parent is searching, the tabs give way to every matching group.
  *
  * Search is handled by the parent — pass already-filtered entries; this
  * component does NOT filter further.
  */
 export const SoundTabbedSection = memo(function SoundTabbedSection({
   label,
+  art,
   entries,
   groupOrder,
   groupLabels,
+  searching = false,
   selectedIds,
   maxSelected = 1,
   isMultiData = false,
@@ -94,40 +103,71 @@ export const SoundTabbedSection = memo(function SoundTabbedSection({
   const effectiveActive = visibleGroups.includes(activeGroup)
     ? activeGroup
     : visibleGroups[0] ?? ""
-  const activeEntries = byGroup.get(effectiveActive) ?? []
+
+  const renderGrid = (group: string) => (
+    <div
+      role={multi ? "group" : "radiogroup"}
+      aria-label={`${label} — ${groupLabels[group] ?? group}`}
+      className={cn(SOUND_GRID_CLASS, "transition-opacity", !checked && "opacity-40")}
+    >
+      {(byGroup.get(group) ?? []).map((entry) => {
+        const selectedIdx = selectedIds.indexOf(entry.id)
+        const selected = checked && selectedIdx >= 0
+        return (
+          <SoundArtTile
+            key={entry.id}
+            label={resolveLabel(entry.id, entry.label)}
+            description={resolveDescription(entry.id, entry.description)}
+            art={getSoundArt(art, entry.id)}
+            selected={selected}
+            checked={checked}
+            sectionLabel={label}
+            multi={multi}
+            onPick={() => onPick(entry.id)}
+            badge={
+              multi && selected && onActivateMulti && onDemoteToSingle ? (
+                <MultiPickBadge
+                  mode={isMultiData ? "multi" : "single"}
+                  index={selectedIdx}
+                  maxSelected={maxSelected}
+                  onActivate={() => onActivateMulti(entry.id)}
+                  onDemote={() => onDemoteToSingle(entry.id)}
+                  className="top-1.5 right-1.5"
+                />
+              ) : undefined
+            }
+          />
+        )
+      })}
+    </div>
+  )
 
   return (
-    <div className="flex flex-col gap-2 border-t-[3px] border-border/40">
-      <div className="flex items-center justify-between gap-2 px-0.5 mt-5">
-        <label
-          htmlFor={switchId}
-          className={cn(
-            "text-[18px] font-semibold uppercase tracking-wide select-none cursor-pointer transition-colors",
-            checked ? "text-[#ff0073]" : "text-muted-foreground/60",
-          )}
-        >
-          {label}
-          {multi && checked && (
-            <span className="ml-2 text-[10px] font-normal normal-case tracking-normal text-muted-foreground">
-              pick up to {maxSelected}
-            </span>
-          )}
-        </label>
-        <Switch
-          id={switchId}
-          checked={checked}
-          onCheckedChange={(next) => onToggle(next)}
-          aria-label={`Enable ${label}`}
-        />
-      </div>
+    <div className={SOUND_SECTION_CLASS}>
+      <SoundSectionHeader
+        label={label}
+        switchId={switchId}
+        maxSelected={maxSelected}
+        checked={checked}
+        onToggle={onToggle}
+      />
 
-      {visibleGroups.length > 0 && (
+      {searching ? (
+        visibleGroups.map((g) => (
+          <div key={g} className="flex flex-col gap-2">
+            <div className="font-mono text-[10px] uppercase tracking-[.08em] text-[#6b6b75] dark:text-[#9a9aa6]">
+              {groupLabels[g] ?? g}
+            </div>
+            {renderGrid(g)}
+          </div>
+        ))
+      ) : visibleGroups.length > 0 ? (
         <>
           <div
             role="tablist"
             aria-label={`${label} categories`}
             className={cn(
-              "flex flex-wrap gap-x-3 gap-y-1 border-b border-gray-200 dark:border-[#2D2D2D] transition-opacity",
+              "flex flex-wrap gap-x-3.5 gap-y-0.5 border-b border-[#ececf1] transition-opacity dark:border-white/[.07]",
               !checked && "opacity-40",
             )}
           >
@@ -143,89 +183,33 @@ export const SoundTabbedSection = memo(function SoundTabbedSection({
                   aria-selected={active}
                   onClick={() => setActiveGroup(g)}
                   className={cn(
-                    "relative -mb-px inline-flex items-center gap-1.5 px-1 pt-1 pb-1.5 text-[11px] font-medium transition-colors border-b-2 whitespace-nowrap",
+                    "relative -mb-px inline-flex items-center gap-[5px] whitespace-nowrap border-b-2 pt-1 pb-2 text-[11px] font-medium transition-colors @min-[520px]:text-[12px]",
                     active
                       ? "border-[#ff0073] text-[#ff0073]"
                       : hasPick
-                      ? "border-transparent text-[#ff0073]/80 hover:border-[#ff0073]/40 hover:text-[#ff0073]"
-                      : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40",
+                        ? "border-transparent text-[#ff0073] hover:border-[#ff0073]/40"
+                        : "border-transparent text-[#6b6b75] hover:text-foreground dark:text-[#9a9aa6]",
                   )}
                 >
                   <span>{groupLabels[g] ?? g}</span>
                   {multi && count > 0 && (
                     <span
-                      className="inline-flex items-center justify-center min-w-[15px] h-[15px] px-[4px] rounded-full bg-[#ff0073] text-white text-[9px] font-semibold leading-none"
+                      className="inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-[#ff0073] px-1 text-[9px] font-semibold leading-none text-white"
                       aria-label={`${count} selected`}
                     >
                       {count}
                     </span>
                   )}
                   {!multi && hasPick && !active && (
-                    <span
-                      className="inline-block size-1.5 rounded-full bg-[#ff0073]"
-                      aria-hidden="true"
-                    />
+                    <span className="inline-block size-1.5 rounded-full bg-[#ff0073]" aria-hidden="true" />
                   )}
                 </button>
               )
             })}
           </div>
-
-          <div
-            role={multi ? "group" : "radiogroup"}
-            aria-label={`${label} — ${groupLabels[effectiveActive] ?? effectiveActive}`}
-            className={cn(
-              "grid grid-cols-3 gap-1.5 transition-opacity",
-              !checked && "opacity-40",
-            )}
-          >
-            {activeEntries.map((entry) => {
-              const selectedIdx = selectedIds.indexOf(entry.id)
-              const selected = checked && selectedIdx >= 0
-              const entryLabel = resolveLabel(entry.id, entry.label)
-              const entryDescription = resolveDescription(entry.id, entry.description)
-              return (
-                <div key={entry.id} className="relative">
-                  <button
-                    type="button"
-                    role={multi ? "checkbox" : "radio"}
-                    aria-checked={selected}
-                    title={
-                      checked
-                        ? entryDescription
-                        : `${entryDescription} (toggle on ${label} to pick)`
-                    }
-                    onClick={() => onPick(entry.id)}
-                    className={cn(
-                      "w-full flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer",
-                      selected
-                        ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
-                        : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
-                    )}
-                  >
-                    <FitText
-                      text={entryLabel}
-                      className={cn(
-                        "text-[11px] font-medium leading-tight max-w-full",
-                        selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
-                      )}
-                    />
-                  </button>
-                  {multi && selected && onActivateMulti && onDemoteToSingle && (
-                    <MultiPickBadge
-                      mode={isMultiData ? "multi" : "single"}
-                      index={selectedIdx}
-                      maxSelected={maxSelected}
-                      onActivate={() => onActivateMulti(entry.id)}
-                      onDemote={() => onDemoteToSingle(entry.id)}
-                    />
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          {renderGrid(effectiveActive)}
         </>
-      )}
+      ) : null}
     </div>
   )
 })
