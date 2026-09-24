@@ -14,13 +14,15 @@
  * trimmed to the SAME master-time windows and joined with the SAME boundaries,
  * so picture and sound stay locked.
  *
- * Long edits (> `chunkThreshold` segments) render in chunks split ONLY at
- * hard-cut boundaries (an xfade cannot straddle a chunk), each checkpointed to
- * R2 so a worker restart resumes instead of re-rendering, then joined with a
- * stream-copy concat. A VIDEO render also caps every graph at
- * `VIDEO_FILTERGRAPH_MAX_SEGMENTS`; once it is chunked, its chunks carry picture
- * only and the audio is rendered in lossless slices, joined, encoded to AAC
- * once and muxed on (no encoder priming at any seam). The checkpoint cache
+ * Long edits render in chunks split ONLY at hard-cut boundaries (an xfade
+ * cannot straddle a chunk), at most `VIDEO_FILTERGRAPH_MAX_SEGMENTS` segments
+ * per picture graph and `AUDIO_FILTERGRAPH_MAX_SEGMENTS` per sound graph. A
+ * chunked VIDEO render's chunks carry picture only, each checkpointed to R2 so
+ * a worker restart resumes instead of re-rendering, joined with a stream-copy
+ * concat; its audio is rendered in lossless slices, joined, encoded to AAC once
+ * and muxed on. A chunked AUDIO render's chunks ARE such lossless slices,
+ * joined and encoded to AAC once. So no seam ever carries encoder priming. The
+ * checkpoint cache
  * (`apply-edl-cache/<jobId>/chunk-<c>-<fingerprint>.…`, keyed by a hash of the
  * exact command — `sliceFingerprint`) is internal scratch: uploaded with NO
  * `trackUserId` so it never bills the user's storage quota, and best-effort
@@ -77,19 +79,23 @@ export {
   canvasPixelFactor,
   chunkBudgetMs,
   chunkDecodeSpanSec,
-  DEFAULT_CHUNK_THRESHOLD,
-  DEFAULT_MAX_SEGMENTS_PER_CHUNK,
+  AUDIO_FILTERGRAPH_MAX_SEGMENTS,
   VIDEO_FILTERGRAPH_MAX_SEGMENTS,
+  WIDE_SLICE_FLOOR_MS,
+  WIDE_SLICE_SECS_PER_OUTPUT_SEC,
   applyEdlRenderBudgetMs,
   audioMuxTimeoutMs,
   chunkOutputSec,
   chunkRenderTimeoutMs,
   planChunks,
   referencedSourceIds,
-  resolveChunks,
   resolveChunksForOutput,
   type ChunkPlanOptions,
 } from "./apply-edl-budget.js"
+
+/** The one AAC delivery encode: a single-pass render's inline audio, option B's
+ *  mux and a chunked audio render's join all produce the same stream. */
+const AAC_DELIVERY_ARGS = ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2"] as const
 
 /** `maxSegmentsPerChunk` / `chunkThreshold` come from `ChunkPlanOptions`
  *  (`apply-edl-budget.ts`) — the same options the liveness budget plans with. */
@@ -298,8 +304,9 @@ export interface SliceOptions {
    *  (option B). A single-chunk render keeps its audio (no seam). */
   readonly omitAudio?: boolean
   /** Audio codec for an AUDIO slice: `aac` (a deliverable) or `pcm` — lossless
-   *  32-bit float in RF64/WAV, for the slices of option B's audio pass, which
-   *  join sample-exactly and are encoded to AAC ONCE (no per-seam priming). */
+   *  32-bit float in RF64/WAV, for the slices of option B's audio pass and the
+   *  chunks of a chunked audio render, which join sample-exactly and are
+   *  encoded to AAC ONCE (no per-seam priming). */
   readonly audioCodec?: "aac" | "pcm"
 }
 
@@ -662,14 +669,14 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
       "-crf", proxy ? "26" : COMBINE_DELIVERY_CRF,
       "-pix_fmt", "yuv420p",
     )
-    if (emitAudio) outputArgs.push("-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2")
+    if (emitAudio) outputArgs.push(...AAC_DELIVERY_ARGS)
     else outputArgs.push("-an")
     outputArgs.push("-movflags", "+faststart")
   } else if (audioCodec === "pcm") {
     // RF64 keeps a multi-hour f32 stereo slice past WAV's 4 GiB header limit.
     outputArgs.push("-map", audioOutLabel!, "-c:a", "pcm_f32le", "-ar", "48000", "-ac", "2", "-rf64", "auto")
   } else {
-    outputArgs.push("-map", audioOutLabel!, "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2")
+    outputArgs.push("-map", audioOutLabel!, ...AAC_DELIVERY_ARGS)
   }
 
   // Explicit longer timeout: the default 10-min per-spawn would kill a long
@@ -809,12 +816,17 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
     }
 
     const chunks = resolveChunksForOutput(edl.segments, output, options)
-    // A multi-chunk VIDEO render renders its chunks WITHOUT audio and muxes one
-    // continuous audio track on at the end (option B) — never per-chunk AAC,
-    // whose stream-copy concat injects encoder priming at every seam. A
-    // single-chunk render (or an audio render) keeps its audio inline.
+    // A multi-chunk render never encodes AAC per chunk: a stream-copy concat of
+    // AAC chunks injects encoder priming at every seam. A VIDEO render renders
+    // its chunks WITHOUT audio and muxes one continuous audio track on at the
+    // end (option B); an AUDIO render renders its chunks as lossless PCM, joined
+    // and encoded to AAC once. A single-chunk render keeps its audio inline.
     const muxAudioSeparately = wantVideo && chunks.length > 1
-    const useCheckpoint = checkpoint && chunks.length > 1
+    const pcmChunks = !wantVideo && chunks.length > 1
+    // Only picture chunks are checkpointed. A sound slice is capped at
+    // AUDIO_FILTERGRAPH_MAX_SEGMENTS and re-renders in seconds, while its PCM
+    // (~23 MB per minute) would cost more to upload and fetch back than that.
+    const useCheckpoint = checkpoint && muxAudioSeparately
     // Resume keys hash the exact command, including the ffmpeg build.
     const ffmpegVersion = useCheckpoint ? await ffmpegVersionLine() : ""
 
@@ -836,9 +848,10 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
       // deletes them. Outside a worker context (tests, the characterization
       // suite) this is a no-op.
       await throwIfJobCancelled()
-      const chunkPath = join(workDir, `chunk-${c}.${ext}`)
+      const chunkPath = join(workDir, `chunk-${c}.${pcmChunks ? "wav" : ext}`)
       const cmd = buildSliceCommand(edl, chunks[c], {
         output, quality, target, fps, chunkStartSec, masterAudioId, audioPresent, omitAudio: muxAudioSeparately,
+        ...(pcmChunks ? { audioCodec: "pcm" as const } : {}),
       })
       // The key is the command's fingerprint, so a checkpoint rendered for a
       // different plan (other chunk boundaries, grid position, width cap,
@@ -870,7 +883,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
             const { uploadFileWithKeyToR2 } = await import("../../lib/storage.js")
             // No trackUserId: this is internal render scratch, not a
             // deliverable, so it must never count against the user's quota.
-            await uploadFileWithKeyToR2(chunkPath, key, wantVideo ? "video/mp4" : "audio/mp4", undefined)
+            await uploadFileWithKeyToR2(chunkPath, key, "video/mp4", undefined)
           } catch {
             /* checkpoint upload best-effort — a restart just re-renders */
           }
@@ -883,7 +896,8 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
     }
 
     // Single chunk → it IS the output. Multiple chunks (all joined at hard
-    // cuts) → concat-demuxer stream-copy.
+    // cuts) → a concat-demuxer join: stream-copy for picture chunks, one AAC
+    // encode for an audio render's lossless chunks.
     //
     // Scratch disk: the steps below are ordered so every file dies at its LAST
     // read — a 3-hour two-camera 1080p render holds ~15 GB of sources, ~10 GB of
@@ -897,17 +911,16 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
     if (chunkPaths.length === 1) {
       outputPath = chunkPaths[0]
     } else {
-      // Option B: ONE continuous audio track over the whole timeline, encoded
-      // to AAC once. It is rendered in slices of the audio plan (one pass up
-      // to DEFAULT_CHUNK_THRESHOLD segments, else at most
-      // DEFAULT_MAX_SEGMENTS_PER_CHUNK per slice, split only at hard cuts so an
-      // acrossfade is never cut): one audio graph over every segment grows
-      // ~N^3 in cost (it blew its own kill budget from ~300-460 segments on
-      // the pinned ffmpeg). Only the video chunks are checkpointed — a retry
-      // re-runs this pass, which is cheap once each slice seeks to its window.
-      // Each slice is lossless PCM, so joining them is sample-exact and adds no
-      // encoder priming; the single AAC encode happens in the mux, which
-      // stream-copies the picture.
+      // Option B (a chunked VIDEO render): ONE continuous audio track over the
+      // whole timeline, encoded to AAC once. It is rendered in slices of the
+      // audio plan — at most AUDIO_FILTERGRAPH_MAX_SEGMENTS each, split only at
+      // hard cuts so an acrossfade is never cut (a slice's cost grows with
+      // segments² × the source span it decodes; see that constant). Only the
+      // video chunks are checkpointed — a retry re-runs this pass, which is
+      // cheap at that width. Each slice is lossless PCM, so joining them is
+      // sample-exact and adds no encoder priming; the single AAC encode happens
+      // in the mux, which stream-copies the picture. (A chunked AUDIO render's
+      // chunks already are such slices.)
       const pcmPaths: string[] = []
       if (muxAudioSeparately) {
         const audioChunks = resolveChunksForOutput(edl.segments, "audio", options)
@@ -923,35 +936,38 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
       }
       // Nothing reads the sources past this point.
       await Promise.all([...sourcePaths.values()].map((p) => fs.rm(p, { force: true })))
-      // Last boundary before the join (concat, then the mux's one AAC encode).
+      // Last boundary before the join (and its one AAC encode).
       await throwIfJobCancelled()
 
-      // For a video render the chunks are video-only, so concat into a picture
-      // scratch file and mux the audio on below. For an audio render the chunks
-      // ARE the output.
-      const concatPath = muxAudioSeparately ? join(workDir, `video.${ext}`) : join(workDir, `output.${ext}`)
       const listPath = join(workDir, "chunks.txt")
       await writeList(listPath, chunkPaths)
-      await runFfmpeg(["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", concatPath])
-      // The chunks now live in `concatPath` (and in R2 for a resume).
-      await Promise.all(chunkPaths.map((p) => fs.rm(p, { force: true })))
-
-      if (muxAudioSeparately) {
+      outputPath = join(workDir, `output.${ext}`)
+      if (pcmChunks) {
+        // A chunked AUDIO render: join the lossless chunks sample-exactly and
+        // encode AAC once — that is the output.
+        await runFfmpeg(
+          ["-y", "-f", "concat", "-safe", "0", "-i", listPath, ...AAC_DELIVERY_ARGS, "-movflags", "+faststart", outputPath],
+          audioMuxTimeoutMs(edlDurationMs(edl) / 1000),
+        )
+        await Promise.all(chunkPaths.map((p) => fs.rm(p, { force: true })))
+      } else {
+        // A chunked VIDEO render: its chunks are picture-only — concat them into
+        // a picture scratch file, then mux the audio on.
+        const concatPath = join(workDir, `video.${ext}`)
+        await runFfmpeg(["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", concatPath])
+        // The chunks now live in `concatPath` (and in R2 for a resume).
+        await Promise.all(chunkPaths.map((p) => fs.rm(p, { force: true })))
         const audioListPath = join(workDir, "audio-chunks.txt")
         await writeList(audioListPath, pcmPaths)
-        outputPath = join(workDir, `output.${ext}`)
         await runFfmpeg(
           [
             "-y", "-i", concatPath, "-f", "concat", "-safe", "0", "-i", audioListPath,
-            "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
-            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+            "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", ...AAC_DELIVERY_ARGS,
             "-movflags", "+faststart", outputPath,
           ],
           audioMuxTimeoutMs(edlDurationMs(edl) / 1000),
         )
         await Promise.all([...pcmPaths, concatPath].map((p) => fs.rm(p, { force: true })))
-      } else {
-        outputPath = concatPath
       }
     }
 
