@@ -8209,6 +8209,25 @@ export async function executeComponent(params: {
   )
 }
 
+/** How long the SERVER waits on a component run: its base wait plus the
+ *  budget excess of the long renders the run's inner execution dispatched
+ *  (podcast Track 0.11). `budgetExcessMs` 0 = nothing budgeted dispatched
+ *  yet; `pendingBudgetedNodes` = the run may still dispatch one (absent from
+ *  an older server — read as false). */
+export interface ComponentWaitLimit {
+  budgetExcessMs: number
+  waitLimitMs: number
+  pendingBudgetedNodes?: boolean
+}
+
+export async function getComponentWaitLimit(jobId: string): Promise<ComponentWaitLimit> {
+  const { data } = await apiRequest<{ data: ComponentWaitLimit }>(
+    `/v1/component/execute/${encodeURIComponent(jobId)}/wait-limit`,
+    "Failed to read the component's wait limit",
+  )
+  return data
+}
+
 /** Estimate component credits with setting overrides. */
 export async function estimateComponentCredits(params: {
   appSlug: string

@@ -113,6 +113,86 @@ export async function executionBudgetExcessMs(
   return total
 }
 
+/** Execution statuses in which the orchestrator may still dispatch a job. */
+const DISPATCHING_EXECUTION_STATUSES: ReadonlySet<string> = new Set(["pending", "running"])
+/** Node statuses after which a node dispatches nothing more. */
+const SETTLED_NODE_STATUSES: ReadonlySet<string> = new Set(["completed", "failed", "skipped"])
+const BUDGETED_NODE_TYPES: ReadonlySet<string> = new Set(BUDGETED_JOB_NAMES)
+
+interface NodeStateRow extends NodeStateJobRefs {
+  status?: unknown
+  nodeType?: unknown
+}
+
+/**
+ * Whether `executionId` may STILL dispatch a budgeted job — a node whose type
+ * declares a budget (`BUDGETED_JOB_NAMES`; every name is also its node type)
+ * that has not settled, in an execution that is still `pending`/`running`, or
+ * the same inside an unsettled component node's inner execution, recursively.
+ *
+ * WHY. `executionBudgetExcessMs` sees a long render only once its job row
+ * carries the EDL — after dispatch. A clock that asks BEFORE that (the editor's
+ * component wait, at its 30-minute mark, while the run is still transcribing)
+ * would read "nothing budgeted" and give up on a run the server keeps waiting
+ * on. This is the other half of the answer: "not dispatched YET".
+ *
+ * Read from `node_states`, which the orchestrator initialises with every
+ * executable node's `nodeType` when the run starts. Unknown is answered `true`
+ * — the upper bound, the safe side for a clock deciding whether to abandon a
+ * run: an execution the orchestrator has not picked up yet (`pending`, no node
+ * states), and a failed read. `true` only ever lets a client wait up to the
+ * server's own base wait, never past it.
+ *
+ * STATED RESIDUALS (answered `false`): a component node that has not dispatched
+ * its wrapper yet (its inner run does not exist, and its app is not resolved
+ * here), and a budgeted node inside an inline sub-workflow (not a top-level
+ * node state).
+ */
+export async function executionMayDispatchBudgetedJob(
+  executionId: string,
+  depth = 0,
+  visited: Set<string> = new Set(),
+): Promise<boolean> {
+  if (!executionId || visited.has(executionId) || depth > MAX_COMPONENT_DEPTH) return false
+  visited.add(executionId)
+  try {
+    const { data: exec, error } = await supabase
+      .from("workflow_executions")
+      .select("status, node_states")
+      .eq("id", executionId)
+      .maybeSingle()
+    if (error) return true
+    if (!exec) return false
+    if (!DISPATCHING_EXECUTION_STATUSES.has(exec.status as string)) return false
+    const states = exec.node_states as Record<string, NodeStateRow | null> | null | undefined
+    // Not picked up yet: the node states (and so the node types) are unknown.
+    if (exec.status === "pending" || !states) return true
+
+    const unsettled: Record<string, NodeStateRow> = {}
+    for (const [id, st] of Object.entries(states)) {
+      if (!st || SETTLED_NODE_STATUSES.has(st.status as string)) continue
+      if (typeof st.nodeType === "string" && BUDGETED_NODE_TYPES.has(st.nodeType)) return true
+      unsettled[id] = st
+    }
+
+    const ids = jobIdsOf(unsettled)
+    if (ids.length === 0) return false
+    const { data: wrappers, error: wrapErr } = await supabase
+      .from("jobs")
+      .select("input_data")
+      .in("id", ids)
+      .eq("provider", "component")
+    if (wrapErr) return true
+    for (const w of (wrappers ?? []) as Array<{ input_data?: Record<string, unknown> | null }>) {
+      const inner = w.input_data?._executionId
+      if (typeof inner === "string" && (await executionMayDispatchBudgetedJob(inner, depth + 1, visited))) return true
+    }
+    return false
+  } catch {
+    return true
+  }
+}
+
 /**
  * A wait whose limit is `baseMs` plus a budget excess looked up ONLY once the
  * limit is reached — and again each time the grown limit is reached, since an

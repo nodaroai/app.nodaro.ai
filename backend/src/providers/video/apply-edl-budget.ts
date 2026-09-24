@@ -39,6 +39,23 @@ export interface ChunkPlanOptions {
 export const DEFAULT_MAX_SEGMENTS_PER_CHUNK = 100
 export const DEFAULT_CHUNK_THRESHOLD = 200
 
+/**
+ * The longest OUTPUT one apply-edl render may produce: 180 minutes (product
+ * decision 2026-09-24 — the 3-hour cap the podcast Phase-2 plan's F4 set on
+ * apply-edl). THE one constant for it:
+ *  - every ingress refuses a longer edit with a 400 naming both lengths
+ *    (`validateEffectiveEdl` in `lib/apply-edl-plan.ts` — the REST route,
+ *    the DAG payload-builder and the MCP verb all call it, before any credit
+ *    is reserved);
+ *  - the job's declared budget refuses to size one (`applyEdlJobBudgetMs`
+ *    below), so a payload that reached a worker WITHOUT passing ingress can
+ *    never be budgeted past a 180-minute output — it gets the default
+ *    ceilings instead.
+ * Measured on the rendered output (`edlDurationMs`, crossfade overlaps
+ * subtracted) — the same length the per-minute reserve is priced on.
+ */
+export const APPLY_EDL_MAX_OUTPUT_MS = 180 * 60_000
+
 /** Max segments in ONE video `filter_complex`. A single video graph SILENTLY
  *  DROPS FRAMES past ~45-60 segments on a cloud runner — measured on the CI
  *  runner with the production-pinned ffmpeg: 45 segments render all frames, 60
@@ -233,11 +250,16 @@ export function planChunks(segs: readonly EdlSegment[], maxPerChunk: number): Ed
  * `livenessBudgetMs` and the orchestrator's node ceilings both reach it
  * through `declaredJobBudgetMs` (`lib/job-budget.ts`), so they cannot read the
  * same job two ways (e.g. one defaulting a missing `output` to audio).
+ *
+ * Defensive clamp: an EDL whose output exceeds `APPLY_EDL_MAX_OUTPUT_MS` never
+ * passes ingress, so one here bypassed it (a stale row, a future lane that
+ * forgot the check). It declares NO budget — every reader falls back to its
+ * default ceiling — so no job can ever be budgeted beyond a 180-minute output.
  */
 export function applyEdlJobBudgetMs(data: unknown): number | undefined {
   if (!data || typeof data !== "object") return undefined
   const { edl, output } = data as { edl?: Edl; output?: unknown }
-  return edl && Array.isArray(edl.segments) && Array.isArray(edl.sources)
-    ? applyEdlRenderBudgetMs(edl, { output: output === "audio" ? "audio" : "video" })
-    : undefined
+  if (!edl || !Array.isArray(edl.segments) || !Array.isArray(edl.sources)) return undefined
+  if (edlDurationMs(edl) > APPLY_EDL_MAX_OUTPUT_MS) return undefined
+  return applyEdlRenderBudgetMs(edl, { output: output === "audio" ? "audio" : "video" })
 }

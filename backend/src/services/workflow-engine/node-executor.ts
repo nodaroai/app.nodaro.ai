@@ -45,6 +45,7 @@ import type {
   NodeOutput,
   NodeExecutionState,
   OrchestratorContext,
+  AdoptedJobClocks,
 } from "./types.js"
 import { JOB_POLL_INTERVAL_MS, NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "./types.js"
 import { addBudgetExcess, declaredJobBudgetMs, nodeCeilings, type NodeCeilings } from "../../lib/job-budget.js"
@@ -1471,14 +1472,17 @@ async function executeWorkerNode(
   // so its §4.6 settle pass can tell an authored prompt field from a mapped one.
   authoredData?: Record<string, unknown>,
 ): Promise<ExecuteNodeResult> {
-  // 0. Adoption (audit A2): a prior orchestrator attempt's in-flight job for
-  // THIS node whose provider call already went out. Poll it to completion
-  // instead of creating a new job — a cancel+re-run would pay the provider a
-  // second time for the same content. The adopted job keeps its original
-  // credit reservation (committed on completion / refunded on failure by the
-  // normal lifecycle), and the reconcile system owns its terminal outcome if
-  // its worker is gone — so the poll below always sees a terminal status.
-  // Fan-out iterations are never adoptable (see cancelInFlightChildJobs).
+  // 0. Adoption: a prior orchestrator attempt's in-flight job for THIS node
+  // that must not be re-run — its provider call already went out (audit A2:
+  // a cancel+re-run would pay the provider a second time for the same
+  // content), or it is a budgeted render whose worker is still heartbeating
+  // (Track 0.11 follow-up: a re-run would restart hours of render from zero).
+  // Poll it to completion instead of creating a new job. The adopted job keeps
+  // its original credit reservation (committed on completion / refunded on
+  // failure by the normal lifecycle), and the reconcile system owns its
+  // terminal outcome if its worker is gone — so the poll below always sees a
+  // terminal status. Fan-out iterations are never adoptable (see
+  // cancelInFlightChildJobs).
   if (iterationIndex === undefined) {
     const adopted = ctx.adoptableJobs?.get(node.id)
     if (adopted) {
@@ -1489,9 +1493,13 @@ async function executeWorkerNode(
       ctx.onJobCreated?.(node.id, adopted.jobId)
       // Same ceilings the original dispatch had: the budget the adopted job's
       // row declares (`cancelInFlightChildJobs` reads it through the registry).
+      // A live render's clocks also start where the original dispatch's did
+      // (`adopted.clocks`), so no re-pick hands it a fresh budget.
       const adoptedCeilings = nodeCeilings(adopted.budgetMs)
       addBudgetExcess(ctx, adoptedCeilings.excessMs)
-      return pollJobToCompletion(adopted.jobId, node.type, ctx, adopted.usageLogId, adopted.creditsReserved, adoptedCeilings)
+      return pollJobToCompletion(
+        adopted.jobId, node.type, ctx, adopted.usageLogId, adopted.creditsReserved, adoptedCeilings, adopted.clocks,
+      )
     }
   }
 
@@ -1959,10 +1967,14 @@ async function pollJobToCompletion(
   usageLogId?: string,
   creditsUsed?: number,
   ceilings: NodeCeilings = DEFAULT_NODE_CEILINGS,
+  /** An ADOPTED live render's original start (see `AdoptedJobClocks`): both
+   *  clocks count from the row, not from this call. Omitted → today's clocks
+   *  (dispatch = now, processing = first poll that sees `processing`). */
+  clocks?: AdoptedJobClocks,
 ): Promise<ExecuteNodeResult> {
-  let processingStartTime: number | null = null
+  let processingStartTime: number | null = clocks?.processingStartedAtMs ?? null
   let pollCycle = 0
-  const pollStartTime = Date.now()
+  const pollStartTime = clocks?.dispatchedAtMs ?? Date.now()
   // A `pending_review` row is parked on a HUMAN, not on a worker (spec
   // 2026-09-03-job-policy-hook-design §6.3). Both clocks below must stop while
   // it is: without this, 90 minutes of review reaches `cancelJobAndThrow`,
@@ -2110,12 +2122,12 @@ async function pollJobToCompletion(
     // resume then does with the child depends on its row, NOT on this throw:
     // one that finished meanwhile is picked up by `reconcileNodeStatesFromJobs`;
     // one still in flight WITH `provider_task_id` is adopted and re-polled
-    // (`cancelInFlightChildJobs`); one still in flight WITHOUT it — every local
-    // ffmpeg job, apply-edl included — is cancelled + refunded and the node
-    // re-dispatched under a NEW jobId. For a long apply-edl render that means a
-    // restart from zero: its R2 checkpoints are keyed by the old jobId, and the
-    // old render stops at its next chunk boundary once its row is cancelled.
-    // Stated residual (podcast Track 0.11), not handled here.
+    // (`cancelInFlightChildJobs`); a BUDGETED render (apply-edl) whose worker
+    // is still heartbeating is adopted too, and polled on its original clocks —
+    // the render never restarts because the orchestrator did. Any other job
+    // still in flight WITHOUT a provider task (a short ffmpeg job, or a render
+    // whose heartbeat went stale) is cancelled + refunded and the node
+    // re-dispatched under a NEW jobId.
     if (isWorkerDraining()) throw new DrainAbortError()
 
     // Wait before next poll
@@ -2303,6 +2315,9 @@ async function executeComponentNode(
       .maybeSingle()
     const innerExecutionId = (wrapperRow?.input_data as Record<string, unknown> | null)?._executionId
     if (typeof innerExecutionId === "string") {
+      // No `adoptLiveBudgetedRenders`: the parent has given up, so an inner
+      // render that is still running is cancelled (it stops at its next chunk
+      // boundary), not kept alive for a resume that will never come.
       await cancelInFlightChildJobs(innerExecutionId)
       await supabase
         .from("workflow_executions")

@@ -228,7 +228,9 @@ Per-node timeout is 90 minutes; per-workflow is 120 minutes. A node
 whose job declares its own time budget (today: Apply EDL, sized from
 the edit it renders) is held to that budget instead, and the run's
 limit grows by the same amount — so only runs containing a long render
-may run longer. Sub-workflows (referenced via the `sub-workflow` node
+may run longer. If the orchestrator restarts mid-run, a budgeted node
+whose worker is still alive is re-attached rather than re-run, on the
+clock it started with. Sub-workflows (referenced via the `sub-workflow` node
 type) execute recursively with a depth limit of 5 and cycle detection.
 
 ## 6. Auth model — three modes

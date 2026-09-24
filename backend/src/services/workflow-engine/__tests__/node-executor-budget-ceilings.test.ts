@@ -308,6 +308,57 @@ describe("an ADOPTED in-flight job (orchestrator resume) polls under the budget 
     await done
     expect(settled[0].ok).toBe(true)
   }, 30_000)
+
+  // Track 0.11 follow-up: a LIVE render re-attached on a resume is timed from
+  // its row (`clocks`), so a re-pick never grants a fresh budget — without it,
+  // an orchestrator that re-picked every hour would wait on the render forever.
+  it("a live render adopted 100 minutes into a 3-hour budget times out ~80 minutes later — not 3 hours later", async () => {
+    const budget = 3 * 60 * MINUTE
+    const now = Date.now()
+    db.jobRecord = { status: "processing", output_data: null, error_message: null, progress: 50 }
+    const clocks = { dispatchedAtMs: now - 101 * MINUTE, processingStartedAtMs: now - 100 * MINUTE }
+    const ctx = makeCtx({ adoptableJobs: new Map([["cut", { jobId: JOB_ID, budgetMs: budget, clocks }]]) })
+    const { settled, done } = run(applyEdlNode(25), ctx)
+
+    // 178 min since dispatch, 177 since pickup: inside the budget.
+    await advance(77 * MINUTE)
+    expect(settled).toHaveLength(0)
+    expect(mockVideoAdd).not.toHaveBeenCalled()
+
+    // 181 min since dispatch: the ORIGINAL budget is spent.
+    await advance(3 * MINUTE)
+    await done
+    expect(settled[0].ok).toBe(false)
+    expect((settled[0].value as Error).message).toMatch(timeoutNaming(budget))
+    expect(cancelled()).toHaveLength(1)
+  }, 30_000)
+
+  it("a render adopted AFTER its budget is spent is cancelled on the first tick (as it would have been without the re-pick)", async () => {
+    const budget = 3 * 60 * MINUTE
+    const now = Date.now()
+    db.jobRecord = { status: "processing", output_data: null, error_message: null, progress: 90 }
+    const clocks = { dispatchedAtMs: now - 190 * MINUTE, processingStartedAtMs: now - 185 * MINUTE }
+    const ctx = makeCtx({ adoptableJobs: new Map([["cut", { jobId: JOB_ID, budgetMs: budget, clocks }]]) })
+    const { settled, done } = run(applyEdlNode(25), ctx)
+    await advance(1 * MINUTE)
+    await done
+    expect((settled[0].value as Error).message).toMatch(timeoutNaming(budget))
+  }, 30_000)
+
+  it("the processing clock alone also counts from the original pickup", async () => {
+    const budget = 3 * 60 * MINUTE
+    const now = Date.now()
+    db.jobRecord = { status: "processing", output_data: null, error_message: null, progress: 50 }
+    // Dispatch clock unknown (falls back to now): only the pickup is on the row.
+    const clocks = { processingStartedAtMs: now - 170 * MINUTE }
+    const ctx = makeCtx({ adoptableJobs: new Map([["cut", { jobId: JOB_ID, budgetMs: budget, clocks }]]) })
+    const { settled, done } = run(applyEdlNode(25), ctx)
+    await advance(9 * MINUTE)
+    expect(settled).toHaveLength(0)
+    await advance(2 * MINUTE)
+    await done
+    expect((settled[0].value as Error).message).toBe(`Node timeout after ${budget / 1000}s of processing`)
+  }, 30_000)
 })
 
 describe("every registered budgeted job is dispatched under its node type's own name", () => {

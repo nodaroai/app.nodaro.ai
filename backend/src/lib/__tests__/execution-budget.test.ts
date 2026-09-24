@@ -17,6 +17,10 @@ const db = vi.hoisted(() => ({
   jobsById: new Map<string, Record<string, unknown>>(),
   queries: [] as string[],
   failJobs: false,
+  /** workflow_executions.status by id (default "running"). */
+  execStatus: new Map<string, string>(),
+  /** The workflow_executions read answers an error. */
+  failExec: false,
 }))
 
 vi.mock("../supabase.js", () => {
@@ -31,7 +35,11 @@ vi.mock("../supabase.js", () => {
       db.queries.push(`${table}:${columns}`)
       if (table === "workflow_executions") {
         const id = filters["eq:id"] as string
-        return { data: db.nodeStates.has(id) ? { node_states: db.nodeStates.get(id) } : null, error: null }
+        if (db.failExec) return { data: null, error: { message: "db down" } }
+        return {
+          data: db.nodeStates.has(id) ? { node_states: db.nodeStates.get(id), status: db.execStatus.get(id) ?? "running" } : null,
+          error: null,
+        }
       }
       if (db.failJobs) throw new Error("db down")
       if (filters["eq:workflow_execution_id"] !== undefined) {
@@ -54,7 +62,7 @@ vi.mock("../supabase.js", () => {
   return { supabase: { from: (t: string) => builder(t) } }
 })
 
-import { BudgetedDeadline, executionBudgetExcessMs } from "../execution-budget.js"
+import { BudgetedDeadline, executionBudgetExcessMs, executionMayDispatchBudgetedJob } from "../execution-budget.js"
 import { budgetExcessMs, declaredJobBudgetMs } from "../job-budget.js"
 
 const MIN = 60_000
@@ -73,6 +81,7 @@ const excessOf = (row: ReturnType<typeof applyEdlRow>) => budgetExcessMs(declare
 
 beforeEach(() => {
   db.childJobs.clear(); db.nodeStates.clear(); db.jobsById.clear(); db.queries.length = 0; db.failJobs = false
+  db.execStatus.clear(); db.failExec = false
 })
 
 describe("executionBudgetExcessMs", () => {
@@ -122,6 +131,69 @@ describe("executionBudgetExcessMs", () => {
     db.failJobs = true
     db.nodeStates.set("exec-1", {})
     expect(await executionBudgetExcessMs("exec-1")).toBe(0)
+  })
+})
+
+// The other half of the answer an outside clock needs: a long render the run
+// has NOT dispatched yet has no job row, so the excess cannot see it. A clock
+// that asks at minute 30 while the run is still transcribing must not read
+// "nothing budgeted" and give up on a render that starts at minute 40.
+describe("executionMayDispatchBudgetedJob — a long render the run has not reached yet", () => {
+  it("a budgeted node that has not settled, in a running execution → true (pending or dispatched)", async () => {
+    db.nodeStates.set("e", { t: { status: "running", nodeType: "transcribe" }, cut: { status: "pending", nodeType: "apply-edl" } })
+    expect(await executionMayDispatchBudgetedJob("e")).toBe(true)
+    db.nodeStates.set("e", { cut: { status: "running", nodeType: "apply-edl", jobId: "j" } })
+    expect(await executionMayDispatchBudgetedJob("e")).toBe(true)
+  })
+
+  it("every budgeted node settled (completed / failed / skipped) → false", async () => {
+    for (const status of ["completed", "failed", "skipped"]) {
+      db.nodeStates.set("e", { t: { status: "running", nodeType: "transcribe" }, cut: { status, nodeType: "apply-edl" } })
+      expect(await executionMayDispatchBudgetedJob("e"), status).toBe(false)
+    }
+  })
+
+  it("nothing budgeted in the run → false", async () => {
+    db.nodeStates.set("e", { a: { status: "pending", nodeType: "generate-image" }, b: { status: "running", nodeType: "llm-chat" } })
+    expect(await executionMayDispatchBudgetedJob("e")).toBe(false)
+  })
+
+  it("an execution that is over dispatches nothing, whatever its node states say → false", async () => {
+    for (const status of ["completed", "failed", "cancelled", "timed_out", "stopping", "discarded"]) {
+      db.nodeStates.set("e", { cut: { status: "pending", nodeType: "apply-edl" } })
+      db.execStatus.set("e", status)
+      expect(await executionMayDispatchBudgetedJob("e"), status).toBe(false)
+    }
+  })
+
+  it("not picked up yet (pending, no node states) → true: unknown is the upper bound", async () => {
+    db.nodeStates.set("e", null as unknown as Record<string, unknown>)
+    db.execStatus.set("e", "pending")
+    expect(await executionMayDispatchBudgetedJob("e")).toBe(true)
+  })
+
+  it("no execution row → false; a failed read → true (unknown)", async () => {
+    expect(await executionMayDispatchBudgetedJob("missing")).toBe(false)
+    db.failExec = true
+    expect(await executionMayDispatchBudgetedJob("e")).toBe(true)
+  })
+
+  it("follows an UNSETTLED component node into its inner execution, recursively", async () => {
+    db.nodeStates.set("outer", { comp: { status: "running", nodeType: "Tighten", jobId: "wrap-1" } })
+    db.jobsById.set("wrap-1", { provider: "component", input_data: { _executionId: "inner" } })
+    db.nodeStates.set("inner", { comp2: { status: "running", nodeType: "Cut", jobIds: ["wrap-2"] } })
+    db.jobsById.set("wrap-2", { provider: "component", input_data: { _executionId: "deep" } })
+    db.nodeStates.set("deep", { cut: { status: "pending", nodeType: "apply-edl" } })
+    expect(await executionMayDispatchBudgetedJob("outer")).toBe(true)
+    // …and not into a settled one (it dispatches nothing more).
+    db.nodeStates.set("outer", { comp: { status: "completed", nodeType: "Tighten", jobId: "wrap-1" } })
+    expect(await executionMayDispatchBudgetedJob("outer")).toBe(false)
+  })
+
+  it("survives a cycle", async () => {
+    db.nodeStates.set("a", { c: { status: "running", nodeType: "X", jobId: "w" } })
+    db.jobsById.set("w", { provider: "component", input_data: { _executionId: "a" } })
+    expect(await executionMayDispatchBudgetedJob("a")).toBe(false)
   })
 })
 

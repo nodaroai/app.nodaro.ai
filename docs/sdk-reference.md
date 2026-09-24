@@ -5079,9 +5079,13 @@ applyEdl(input: ApplyEdlInput): Promise<EditJobResult>
 | `crossfadeMs` | `number` | no | Default crossfade on boundaries without an explicit transition; `0` = hard cuts. Default `0`. |
 | `workflowId` | `string` | no | Execution-history display. |
 
-The EDL is validated at ingress — an unresolvable source or a picture-less
-segment on a video edit throws a `NodaroError` (status 400,
-`code: "invalid_edl"`) before any credits are reserved.
+The EDL is validated at ingress — an unresolvable source, a picture-less
+segment on a video edit, or an edit longer than **180 minutes of output**
+(the per-render limit, measured on the crossfade-compressed length) throws a
+`NodaroError` (status 400, `code: "invalid_edl"`) before any credits are
+reserved. Its `message` names the problem, e.g. `EDL failed validation: the
+edit renders 200 minutes of output — over the 180-minute limit for one render;
+split it into parts of at most 180 minutes`.
 
 #### `editPlan(input)`
 

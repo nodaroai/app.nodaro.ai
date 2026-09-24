@@ -3067,7 +3067,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "naming a `sources[].id`; a video render needs a `video` source on every segment). " +
         "Media resolves from each source's `url`; `sources` optionally overrides those URLs " +
         "positionally, in the EDL's `sources` order. `output`: `video` (default) or `audio`. " +
-        "An optional `transcript` is remapped through the cut. A malformed EDL is rejected " +
+        "An optional `transcript` is remapped through the cut. At most 180 minutes of output per " +
+        "render. A malformed or over-long EDL is rejected " +
         "up front naming the offending segment and rule, so you can fix and retry. Returns a " +
         "job_id — poll `get_job` for the rendered file. Priced per rendered minute.",
       inputSchema: {

@@ -71,13 +71,14 @@
  * the handler's `livenessBudgetMs` delegates to it) and holds the node's
  * processing to `max(budget, NODE_TIMEOUT_MS)` — the same figure
  * `effectiveHeartbeatMaxMs` beats for — growing the workflow's cap by the
- * excess. So, within ONE orchestrator attempt, a long apply-edl inside a
- * workflow is watched for exactly as long as its worker keeps it looking live:
- * one number for both. Not across a re-pick: if the orchestrator is re-picked
- * mid-render (deploy drain, crash + stall), its resume cancels + refunds the
- * render's row — apply-edl sets no `provider_task_id`, so it is not adoptable
- * (`cancelInFlightChildJobs`) — however fresh this heartbeat is, and re-renders
- * the node from zero under a new jobId. A stated residual (Track 0.11).
+ * excess. So a long apply-edl inside a workflow is watched for exactly as long
+ * as its worker keeps it looking live: one number for both. Across a re-pick
+ * too (decided 2026-09-24): when the orchestrator is re-picked mid-render
+ * (deploy drain, crash + stall), its resume ADOPTS a budgeted row whose stamp
+ * THIS heartbeat keeps fresh — fresh meaning younger than the reconcile cron's
+ * own `pre-task` threshold (`cancelInFlightChildJobs`, `isLiveRenderRow`) —
+ * and polls it on the row's original clocks instead of cancelling it and
+ * re-rendering from zero. A stale or absent stamp still cancels + re-dispatches.
  *
  * Import note: `NODE_TIMEOUT_MS` is a pure constant from the workflow engine's
  * types module — no engine code is pulled into the worker by it.

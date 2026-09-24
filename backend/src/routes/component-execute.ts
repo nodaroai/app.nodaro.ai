@@ -9,13 +9,14 @@ import { buildCreditModelIdentifier, resolveTopazUpscale } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { collectComponentOutputs } from "./_collect-component-outputs.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
-import { BudgetedDeadline, executionBudgetExcessMs } from "../lib/execution-budget.js"
+import { BudgetedDeadline, executionBudgetExcessMs, executionMayDispatchBudgetedJob } from "../lib/execution-budget.js"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isBillingContext, shouldRefuseDegradedRunFor, type BillingContext } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { requireScope } from "../lib/scopes.js"
 
 
 const bodySchema = z.object({
@@ -365,5 +366,55 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ estimatedCredits: total })
+  })
+
+  // ── How long this component run may take (podcast Track 0.11 follow-up) ──
+  // The server waits POLL_ABSOLUTE_TIMEOUT_MS on the inner execution, grown by
+  // that execution's budget excess (the long renders it dispatched — the SAME
+  // figure the background wait above and the parent DAG's component node read,
+  // `executionBudgetExcessMs`). The editor's client-side component executor
+  // asks for it once its own 30-minute wait is spent, so a component that
+  // renders for hours is not abandoned by the browser while the server keeps
+  // it running (decision 2026-09-24: "the editor's component executor waits as
+  // long as the server allows"). Read lazily — only then — so a component with
+  // nothing budgeted never pays for the lookup more than once. It also says
+  // whether the run may still dispatch a long render it has not reached yet
+  // (`pendingBudgetedNodes`), so the editor waits the server's base for it.
+  const waitLimitParams = z.object({ jobId: z.string().uuid() })
+
+  app.get("/v1/component/execute/:jobId/wait-limit", async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!req.userId) {
+      return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "jobs:read")
+      if (err) return reply.status(err.statusCode).send(err.body)
+    }
+    const params = waitLimitParams.safeParse(req.params)
+    if (!params.success) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "jobId must be a UUID" } })
+    }
+    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
+    let query = supabase.from("jobs").select("provider, input_data").eq("id", params.data.jobId)
+    if (!isAdmin) query = query.eq("user_id", req.userId)
+    const { data: wrapper } = await query.maybeSingle()
+    // Only a component WRAPPER has an inner execution; any other job (or one
+    // that is not the caller's) is simply not found.
+    if (!wrapper || wrapper.provider !== "component") {
+      return reply.status(404).send({ error: { code: "not_found", message: "Component run not found" } })
+    }
+    const inner = (wrapper.input_data as Record<string, unknown> | null)?._executionId
+    // `pendingBudgetedNodes`: the run may STILL dispatch a long render (one is
+    // in its graph and has not settled). The excess only counts renders
+    // already dispatched, so without this a client asking while the run is
+    // still in its early steps would read "nothing budgeted" and give up on a
+    // run the server keeps waiting on. No inner run stamped → false (a wrapper
+    // with no inner run has nothing to wait for).
+    const [budgetExcessMs, pendingBudgetedNodes] = typeof inner === "string"
+      ? await Promise.all([executionBudgetExcessMs(inner), executionMayDispatchBudgetedJob(inner)])
+      : [0, false]
+    return reply.send({
+      data: { budgetExcessMs, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS + budgetExcessMs, pendingBudgetedNodes },
+    })
   })
 }

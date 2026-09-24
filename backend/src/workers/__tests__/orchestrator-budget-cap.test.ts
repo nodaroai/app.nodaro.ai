@@ -114,6 +114,7 @@ vi.mock("@/lib/execution-budget.js", () => ({
 }))
 
 import { runOrchestratorJob, cleanupStaleExecutions } from "../orchestrator-worker.js"
+import { cancelInFlightChildJobs } from "@/lib/reconcile/cancel-inflight-jobs.js"
 
 /** Two chained worker nodes → two levels, so the cap is checked between them. */
 function makeJob(): Job<WorkflowExecutionJob> {
@@ -207,5 +208,28 @@ describe("orchestrator boot sweep — abandon threshold grows by the run's exces
     await cleanupStaleExecutions()
     expect(mocks.budgetReads).toEqual([])
     expect(mocks.executionWrites).toHaveLength(0)
+  })
+})
+
+describe("orchestrator resume — a live budgeted render is re-attached, not restarted (Track 0.11 follow-up)", () => {
+  beforeEach(() => mocks.reset())
+
+  it("the resume asks cancelInFlightChildJobs to adopt live renders, and hands its adoptions to the node executor", async () => {
+    const adopted = {
+      jobId: "j-render",
+      budgetMs: 4 * 60 * MIN,
+      clocks: { dispatchedAtMs: Date.now() - 61 * MIN, processingStartedAtMs: Date.now() - 60 * MIN },
+    }
+    vi.mocked(cancelInFlightChildJobs).mockResolvedValueOnce({ cancelled: 0, adoptable: new Map([["cut", adopted]]) })
+    let seen: OrchestratorContext["adoptableJobs"]
+    mocks.setExecuteNodeImpl(async (nodeId, ctx) => {
+      if (nodeId === "cut") seen = (ctx as unknown as OrchestratorContext).adoptableJobs
+      return { output: { text: "x" }, creditsUsed: 0 }
+    })
+
+    await runOrchestratorJob(makeJob(), "tok")
+
+    expect(cancelInFlightChildJobs).toHaveBeenCalledWith("exec-1", { adoptLiveBudgetedRenders: true })
+    expect(seen?.get("cut")).toEqual(adopted)
   })
 })

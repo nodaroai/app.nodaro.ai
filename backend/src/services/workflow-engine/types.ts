@@ -438,6 +438,19 @@ export interface ResolvedInputs {
 // Execution context passed to orchestrator internals
 // ---------------------------------------------------------------------------
 
+/** Where an ADOPTED job's poll clocks start (podcast Track 0.11 follow-up).
+ *  A live budgeted render re-attached on an orchestrator resume is timed from
+ *  its row, not from the adoption: the poll-absolute clock from the original
+ *  dispatch (`jobs.created_at`), the processing clock from the worker's pickup
+ *  (`jobs.started_at`). A resume therefore never grants a fresh budget — a
+ *  render adopted after its budget is spent times out on the first tick, as
+ *  it would have without the re-pick. Absent fields fall back to today's
+ *  "now" / first-seen-processing. */
+export interface AdoptedJobClocks {
+  readonly dispatchedAtMs?: number
+  readonly processingStartedAtMs?: number
+}
+
 export interface OrchestratorContext {
   executionId: string
   workflowId: string
@@ -483,12 +496,20 @@ export interface OrchestratorContext {
   budgetExcessMs?: number
   /** Node IDs that have upload-* ancestors — their jobs should be force_private */
   uploadDescendantIds?: Set<string>
-  /** In-flight child jobs from a prior (crashed) orchestrator attempt whose
-   *  provider call already went out — the node executor ADOPTS these (polls
-   *  the existing job) instead of creating a new job + paying the provider a
-   *  second time (audit A2). Keyed by owning node id; populated on re-pick by
+  /** In-flight child jobs from a prior (crashed) orchestrator attempt that the
+   *  node executor ADOPTS (polls the existing job) instead of creating a new
+   *  one: a provider job whose call already went out (audit A2 — no second
+   *  provider charge), or a budgeted render whose worker is still heartbeating
+   *  (Track 0.11 follow-up — the render never restarts; `clocks` carry its
+   *  original start). Keyed by owning node id; populated on re-pick by
    *  cancelInFlightChildJobs. */
-  adoptableJobs?: Map<string, { jobId: string; usageLogId?: string; creditsReserved?: number; budgetMs?: number }>
+  adoptableJobs?: Map<string, {
+    jobId: string
+    usageLogId?: string
+    creditsReserved?: number
+    budgetMs?: number
+    clocks?: AdoptedJobClocks
+  }>
   /** Whether this execution is running a published app (affects free-tier app credit allowance) */
   isAppRun?: boolean
   /** Pool-aware spend-surface mode (D1 v2): true when the run was triggered

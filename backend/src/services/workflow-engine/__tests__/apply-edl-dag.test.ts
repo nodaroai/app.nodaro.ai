@@ -66,6 +66,16 @@ describe("apply-edl payload builder", () => {
     expect(() => buildPayload(node, JOB_ID, inputs, "usage-1")).toThrow(/apply-edl: invalid EDL/)
   })
 
+  it("refuses an edit over the 3-hour output cap at build time — before the executor reserves anything", () => {
+    // buildPayload runs before the node executor's reservation step, and its
+    // throw deletes the placeholder row: a refused EDL reserves nothing.
+    const node: SimpleNode = { id: "ae4", type: "apply-edl", data: { output: "video" } }
+    const long = { ...EDL, segments: [{ id: "s0", inMs: 0, outMs: 181 * 60_000, video: "A", audio: "A" }] }
+    expect(() => buildPayload(node, JOB_ID, { edl: JSON.stringify(long) }, "usage-1")).toThrow(
+      /apply-edl: invalid EDL — the edit renders 181 minutes of output — over the 180-minute limit for one render/,
+    )
+  })
+
   it("carries the transcript through to the payload for remap", () => {
     const node: SimpleNode = { id: "ae4", type: "apply-edl", data: {} }
     const inputs: ResolvedInputs = { edl: JSON.stringify(EDL), transcript: JSON.stringify(TRANSCRIPT) }
