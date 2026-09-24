@@ -2045,6 +2045,7 @@ export const en = {
   "templates.inspector.copy": "Copy",
   "templates.inspector.copied": "Copied",
   "templates.inspector.empty": "This node has no text to show.",
+  "templates.inspector.receivedFrom": "{label} · from {source}",
   "templates.loadingCanvas": "Loading canvas…",
   "templates.notFound": "This template is no longer available.",
   "templates.signInToClone": "Sign in to clone a template.",

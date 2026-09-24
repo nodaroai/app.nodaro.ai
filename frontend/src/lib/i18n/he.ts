@@ -2026,6 +2026,7 @@ export const he: ChromeDict = {
   "templates.inspector.copy": "העתקה",
   "templates.inspector.copied": "הועתק",
   "templates.inspector.empty": "לצומת הזה אין טקסט להצגה.",
+  "templates.inspector.receivedFrom": "{label} · מתוך {source}",
   "templates.loadingCanvas": "טוען קנבס…",
   "templates.notFound": "התבנית הזו כבר לא זמינה.",
   "templates.signInToClone": "יש להתחבר כדי לשכפל תבנית.",

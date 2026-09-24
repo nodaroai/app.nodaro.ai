@@ -5,8 +5,9 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { ListTree, FileText, Braces, Variable } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { TextItemsPreview, textItems } from "./text-items-preview"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import { VARIABLES_HANDLE_ID } from "@nodaro/shared"
@@ -35,6 +36,8 @@ function SelectorNodeComponent({ id, data, selected }: NodeProps) {
   const hasResult =
     status === "completed" &&
     (nodeData.pickedResults !== undefined || nodeData.restResults !== undefined)
+  // The picked channel, read the way every downstream extractor reads it.
+  const picked = textItems(nodeData.__pickedResults ?? nodeData.pickedResults)
 
   return (
     <div className="relative" style={{ maxWidth: "220px" }}>
@@ -65,7 +68,9 @@ function SelectorNodeComponent({ id, data, selected }: NodeProps) {
         ]}
       >
         <div className="flex flex-col gap-1">
-          {hasResult ? (
+          {picked.length > 0 ? (
+            <TextItemsPreview items={picked} summary={`${pickedTotal} picked · ${restTotal} rest · Mode: ${mode}`} />
+          ) : hasResult ? (
             <div className="w-full rounded-md bg-muted/30 p-2">
               <p className="text-xs text-foreground/80">
                 {pickedTotal} picked · {restTotal} rest
