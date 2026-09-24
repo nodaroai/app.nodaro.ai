@@ -9,6 +9,7 @@ import { buildCreditModelIdentifier, resolveTopazUpscale } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { collectComponentOutputs } from "./_collect-component-outputs.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
+import { BudgetedDeadline, executionBudgetExcessMs } from "../lib/execution-budget.js"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -208,8 +209,14 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
           .update({ input_data: { ...wrapperInput, _executionId: result.executionId } })
           .eq("id", wrapperJob.id)
 
+        // The wait is POLL_ABSOLUTE_TIMEOUT_MS plus the inner execution's
+        // budget excess (podcast Track 0.11) — the inner run's own cap grows by
+        // the excess of any long render it dispatches, so this wait must too.
+        // Looked up only once the base is spent: a component with nothing
+        // budgeted inside times out exactly as before.
+        const deadline = new BudgetedDeadline(POLL_ABSOLUTE_TIMEOUT_MS, () => executionBudgetExcessMs(result.executionId))
         const startTime = Date.now()
-        while (Date.now() - startTime < POLL_ABSOLUTE_TIMEOUT_MS) {
+        while (!(await deadline.reached(Date.now() - startTime))) {
           // Poll status + progress counts to propagate progress to wrapper job
           const { data: exec } = await supabase
             .from("workflow_executions")

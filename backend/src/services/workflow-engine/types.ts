@@ -472,6 +472,15 @@ export interface OrchestratorContext {
    *  sum: sibling holds overlap in wall-clock time, so summing would
    *  over-credit a fan-out. */
   maxChildHeldMs?: number
+  /** Σ over this execution's budgeted dispatches of how far each declared
+   *  budget reaches past `NODE_TIMEOUT_MS` (podcast Track 0.11 —
+   *  `lib/job-budget.ts`). The orchestrator's cap is `WORKFLOW_TIMEOUT_MS`
+   *  plus this (`workflowCapMs`). Grown by `addBudgetExcess`: at dispatch of a
+   *  node whose job declares a budget (apply-edl), on adopting such a job, and
+   *  when a component node's inner execution finishes (its own summed excess).
+   *  Inline sub-workflows share this context, so their long nodes count too.
+   *  Undefined (= 0) for a run with nothing budgeted — today's 120 minutes. */
+  budgetExcessMs?: number
   /** Node IDs that have upload-* ancestors — their jobs should be force_private */
   uploadDescendantIds?: Set<string>
   /** In-flight child jobs from a prior (crashed) orchestrator attempt whose
@@ -479,7 +488,7 @@ export interface OrchestratorContext {
    *  the existing job) instead of creating a new job + paying the provider a
    *  second time (audit A2). Keyed by owning node id; populated on re-pick by
    *  cancelInFlightChildJobs. */
-  adoptableJobs?: Map<string, { jobId: string; usageLogId?: string; creditsReserved?: number }>
+  adoptableJobs?: Map<string, { jobId: string; usageLogId?: string; creditsReserved?: number; budgetMs?: number }>
   /** Whether this execution is running a published app (affects free-tier app credit allowance) */
   isAppRun?: boolean
   /** Pool-aware spend-surface mode (D1 v2): true when the run was triggered
@@ -516,7 +525,12 @@ export interface OrchestratorContext {
  *  ~60min at MAX_POLL_ATTEMPTS_LIP_SYNC_LONG=360 × 10s cap) plus 30-min
  *  headroom. Without this, lip-sync nodes time out the orchestrator before
  *  the upstream completes, and the workflow_execution row stays `failed`
- *  even when reconcile later recovers the underlying job. */
+ *  even when reconcile later recovers the underlying job.
+ *
+ *  The DEFAULT: a node whose job declares a budget (apply-edl — a final render
+ *  of a long episode is hours of ffmpeg) is held to that budget instead, and
+ *  the execution's cap grows by the same excess (`lib/job-budget.ts ::
+ *  nodeCeilings` / `workflowCapMs`, podcast Track 0.11). */
 export const NODE_TIMEOUT_MS = 90 * 60 * 1000 // 90 minutes
 
 /** Max time for an entire workflow execution (ms). Sized to cover a
@@ -526,14 +540,20 @@ export const NODE_TIMEOUT_MS = 90 * 60 * 1000 // 90 minutes
  *  per-node ceiling. This is the EXECUTION ceiling only —
  *  it no longer mirrors the BullMQ `lockDuration`, which is short and
  *  auto-renewed (ORCHESTRATOR_LOCK_MS in orchestrator-worker.ts). Shrinking
- *  the lock does NOT shrink how long an execution may run. */
+ *  the lock does NOT shrink how long an execution may run.
+ *
+ *  The cap for a run with nothing budgeted. A run that dispatched long renders
+ *  gets this plus the sum of their excesses (`OrchestratorContext.
+ *  budgetExcessMs`, `lib/job-budget.ts :: workflowCapMs`). */
 export const WORKFLOW_TIMEOUT_MS = 120 * 60 * 1000 // 120 minutes
 
 /** Polling interval for checking job completion (ms) */
 export const JOB_POLL_INTERVAL_MS = 3_000 // 3 seconds
 
 /** Absolute max time a single poll loop can run, including queue wait (ms).
- *  Safety net — even if the job stays "pending" forever (worker down), we bail out. */
+ *  Safety net — even if the job stays "pending" forever (worker down), we bail out.
+ *  Grows by a budgeted node's excess exactly like `NODE_TIMEOUT_MS`
+ *  (`lib/job-budget.ts :: nodeCeilings`). */
 export const POLL_ABSOLUTE_TIMEOUT_MS = 90 * 60 * 1000 // 90 minutes
 
 /** Max depth for sub-workflow nesting */

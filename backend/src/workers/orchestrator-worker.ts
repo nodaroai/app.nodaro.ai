@@ -61,7 +61,8 @@ import type {
   ResolvedInputs,
   OrchestratorContext,
 } from "../services/workflow-engine/types.js"
-import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
+import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs, workflowCapMs } from "../lib/job-budget.js"
+import { executionBudgetExcessMs } from "../lib/execution-budget.js"
 import { filterCloneNodes, PARAMETER_NODE_TYPES, migrateEdgeOutputMode, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, planFanOut, type FanOutPlan, decodeProviderItem, calculateMonetizationMarkup, resolveEffectiveTier } from "@nodaro/shared"
 import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts"
 import { applyInputOverridesToNodes } from "./apply-input-overrides.js"
@@ -100,9 +101,11 @@ export function getParallelismLimit(tier: string | undefined): number {
  *      will re-pick the orchestration job within `stalledInterval` and
  *      another worker will resume it. We only mark as failed if the
  *      execution has been "running" for much longer than any job could
- *      reasonably take (safety net for truly abandoned rows).
+ *      reasonably take (safety net for truly abandoned rows): 4 hours
+ *      (`STALE_EXECUTION_THRESHOLD_MS`, `lib/job-budget.ts` — shared with the
+ *      90-s cron), plus the budget excess of any long render the run
+ *      dispatched (Track 0.11), so both sweeps draw the line in the same place.
  */
-const STALE_EXECUTION_THRESHOLD_MS = 4 * 60 * 60 * 1000 // 4 hours
 
 /** Cap per-restart sweep so a large backlog (e.g., several hundred stuck
  *  rows after a prolonged outage) doesn't hold up worker startup. Each row
@@ -270,9 +273,12 @@ export async function cleanupStaleExecutions(): Promise<void> {
     // For non-null started_at, only abandon when past the >4h threshold —
     // otherwise let BullMQ's stalled-job retry pick it back up.
     const startedAt = row.started_at ? new Date(row.started_at).getTime() : 0
+    // The run's budget excess is read only once the base threshold is passed,
+    // so a run with nothing budgeted is judged exactly as before.
     const isAbandonable =
       startedAt === 0 ||
-      (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS)
+      (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS &&
+        now - startedAt > staleExecutionThresholdMs(await executionBudgetExcessMs(row.id, states)))
 
     if (isAbandonable) {
       await tryTerminalWrite(
@@ -1027,7 +1033,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // review is failed at the execution level even though every node-level
       // clock was correctly frozen. MAX across children, not sum — sibling
       // holds overlap in wall-clock time.
-      if (Date.now() - startTime - (ctx.maxChildHeldMs ?? 0) > WORKFLOW_TIMEOUT_MS) {
+      //
+      // The cap is WORKFLOW_TIMEOUT_MS plus the summed budget excess of every
+      // long render this run has dispatched (Track 0.11 — `ctx.budgetExcessMs`,
+      // grown by the node executor at dispatch). A run with nothing budgeted
+      // keeps 120 minutes exactly.
+      if (Date.now() - startTime - (ctx.maxChildHeldMs ?? 0) > workflowCapMs(ctx.budgetExcessMs)) {
         await failExecution(executionId, "Workflow execution timed out", nodeStates)
         return
       }

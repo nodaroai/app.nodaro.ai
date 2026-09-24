@@ -1,5 +1,6 @@
 import { supabase } from "../supabase.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
+import { declaredJobBudgetMs } from "../job-budget.js"
 
 /** An in-flight child job a re-picked orchestrator should ADOPT (resume
  *  polling) instead of cancel+re-run — the provider call already went out
@@ -8,6 +9,16 @@ export interface AdoptableChildJob {
   jobId: string
   usageLogId?: string
   creditsReserved?: number
+  /** The budget the job's row declares (`lib/job-budget.ts`, read off
+   *  `job_type` + `input_data` exactly as the orchestrator read the dispatched
+   *  payload), so the adopting poll runs under the ceilings the original
+   *  dispatch had. Undefined → the default ceilings. NOTE: no budgeted job
+   *  type reaches this today — apply-edl (the only one) never sets
+   *  `provider_task_id`, so its in-flight row takes the class-1 branch below
+   *  (cancelled + refunded, re-dispatched from zero under a new jobId). A
+   *  stated residual (podcast Track 0.11); this field is ready for a budgeted
+   *  type that does become adoptable. */
+  budgetMs?: number
 }
 
 export interface NeutralizeResult {
@@ -70,7 +81,7 @@ export async function cancelInFlightChildJobs(executionId: string): Promise<Neut
   const result: NeutralizeResult = { cancelled: 0, adoptable: new Map() }
   const { data: inFlight, error: selErr } = await supabase
     .from("jobs")
-    .select("id, input_data, provider_task_id, usage_log_id, credits")
+    .select("id, input_data, provider_task_id, usage_log_id, credits, job_type")
     .eq("workflow_execution_id", executionId)
     .in("status", ["pending", "processing"])
 
@@ -100,6 +111,7 @@ export async function cancelInFlightChildJobs(executionId: string): Promise<Neut
         jobId: id,
         usageLogId: typeof row.usage_log_id === "string" ? row.usage_log_id : undefined,
         creditsReserved: typeof row.credits === "number" ? row.credits : undefined,
+        budgetMs: typeof row.job_type === "string" ? declaredJobBudgetMs(row.job_type, prevInput) : undefined,
       })
       continue
     }

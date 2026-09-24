@@ -11,6 +11,11 @@ import { isIP } from "node:net"
 import { config } from "../../lib/config.js"
 import { safeFetch, isPrivateOrReservedIP } from "../../lib/safe-fetch.js"
 import { csvFields } from "./ffprobe-csv.js"
+import { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_TIMEOUT_MS, FFPROBE_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
+
+// The ceilings live in a dependency-free leaf (see its header); re-exported so
+// every existing `ffmpeg-utils.js` import keeps working.
+export { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_TIMEOUT_MS, FFPROBE_TIMEOUT_MS }
 
 export async function downloadFile(url: string, dest: string, opts: { maxBytes?: number } = {}): Promise<void> {
   // safeFetch: callers include media-process which streams user-supplied
@@ -106,22 +111,6 @@ export async function withFfmpegSlot<T>(fn: () => Promise<T>, signal?: AbortSign
     release()
   }
 }
-
-// Hard ceiling so a hung ffmpeg can't hold its slot forever and starve the
-// FIFO queue. (It once had to stay below a 15-min BullMQ lockDuration; the
-// video worker's lock is 5 min now and BullMQ renews it while the processor
-// runs, so the lock no longer constrains this.) Exported so a handler that
-// budgets its own liveness (`HandlerFn.livenessBudgetMs`) can count the
-// spawns it makes at the default ceiling with the same number.
-export const DEFAULT_FFMPEG_TIMEOUT_MS = 10 * 60 * 1000
-
-/** Wall-clock ceiling `downloadFile` gives one fetch (safeFetch's timeout).
- *  NOT a bound on the R2-origin 404 fallback inside it, which goes through the
- *  storage client — that client has no request timeout. */
-export const DOWNLOAD_TIMEOUT_MS = 120_000
-
-/** Wall-clock ceiling of one `runFfprobe` call (its execFile watchdog). */
-export const FFPROBE_TIMEOUT_MS = 120_000
 
 /**
  * How much of ffmpeg's output a failure message carries.

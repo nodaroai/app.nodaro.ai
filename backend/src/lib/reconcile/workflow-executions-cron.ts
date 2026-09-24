@@ -48,6 +48,8 @@ import { updateExecutionWithRetry } from "../execution-writes.js"
 import { redactProviderDetail } from "../provider-error-detail.js"
 import { getRuntimeEnv, scopeToRuntimeEnv } from "../runtime-env.js"
 import type { NodeExecutionState } from "../../services/workflow-engine/types.js"
+import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs } from "../job-budget.js"
+import { executionBudgetExcessMs } from "../execution-budget.js"
 
 /** Every queued-or-running BullMQ state for the orchestration queue — defined
  *  in the Redis-free leaf `../orchestration-queue-config.js` so
@@ -71,12 +73,15 @@ const TICK_INTERVAL_MS = 90_000
  */
 const BACKOFF_FROM_START_MS = 120_000
 
-/**
- * Absolute abandon threshold — 4 hours. Mirrors the constant in
- * `orchestrator-worker.ts::cleanupStaleExecutions`. Executions running
- * longer than this with no completed-state inference are marked failed.
+/*
+ * Absolute abandon threshold — `STALE_EXECUTION_THRESHOLD_MS` (4 hours,
+ * `lib/job-budget.ts`), the SAME constant `orchestrator-worker.ts ::
+ * cleanupStaleExecutions` uses. Executions running longer than it with no
+ * completed-state inference are marked failed — plus the budget excess of
+ * any long render the run dispatched (Track 0.11): this branch runs BEFORE
+ * the queue-liveness gate below, so without the excess it would write
+ * "abandoned" onto a live run whose cap legitimately passed 4 hours.
  */
-const STALE_EXECUTION_THRESHOLD_MS = 4 * 60 * 60 * 1000
 
 /**
  * Per-tick scan cap. We don't want one degenerate workflow to monopolize
@@ -337,9 +342,13 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
     // immediately abandonable so the user can re-run. Non-null started_at
     // requires the >4h threshold to avoid racing a healthy orchestrator.
     const startedAt = row.started_at ? new Date(row.started_at).getTime() : 0
+    // The run's budget excess (Track 0.11) is read only once the base
+    // threshold has passed, so an execution with nothing budgeted costs no
+    // extra query and is judged exactly as before.
     const isAbandonable =
       startedAt === 0 ||
-      (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS)
+      (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS &&
+        now - startedAt > staleExecutionThresholdMs(await executionBudgetExcessMs(row.id, states)))
 
     if (isAbandonable) {
       await tryTerminalWrite(
