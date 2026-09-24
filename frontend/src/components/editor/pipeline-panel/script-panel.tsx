@@ -33,7 +33,7 @@ import { Loader2, Minus, Plus, Sparkles } from "lucide-react"
 import type { JsonPatch, ShowrunnerPlan } from "@nodaro/shared"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import {
-  STORY_MOMENT_LABELS,
+  STORY_MOMENT_LABEL_KEYS,
   storyMomentLabel,
 } from "@/lib/story-moment-labels"
 import { Button } from "@/components/ui/button"
@@ -47,6 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { useT, tx } from "@/lib/i18n"
 
 // Mirrors EMOTIONAL_BEAT in packages/shared/src/pipeline-types.ts. Duplicated
 // here rather than imported because the shared module only exports it as a
@@ -67,7 +68,6 @@ type EmotionalBeat = (typeof EMOTIONAL_BEAT_VALUES)[number]
 
 const DURATION_TOLERANCE = 0.1 // ±10% per spec line 25
 const REGEN_PULSE_MS = 1200    // Phase 2: how long the post-regen ring pulse lingers
-const REGEN_COST_LABEL = "~3 credits"
 
 type SceneSpec = ShowrunnerPlan["scenes"][number]
 
@@ -87,6 +87,7 @@ interface Props {
 }
 
 export function ScriptPanel({ pipelineId, plan, userEdits, onApprove }: Props) {
+  const t = useT()
   const qc = useQueryClient()
   const [activeSceneIdx, setActiveSceneIdx] = useState(0)
   const [editedScenes, setEditedScenes] = useState<Set<number>>(new Set())
@@ -134,7 +135,7 @@ export function ScriptPanel({ pipelineId, plan, userEdits, onApprove }: Props) {
       onApprove?.()
     },
     onError: (err) =>
-      toast.error(err instanceof Error ? err.message : "Failed to approve"),
+      toast.error(err instanceof Error ? err.message : tx("pipe.failedToApprove")),
   })
 
   const regenMutation = useMutation({
@@ -168,7 +169,7 @@ export function ScriptPanel({ pipelineId, plan, userEdits, onApprove }: Props) {
       setRegeneratingSceneIdx(null)
       const message = err instanceof Error ? err.message : "Regen failed"
       const code = extractBackendErrorCode(message)
-      const inline = code ? humanizeRegenError(code) : "Couldn't regenerate. Try again."
+      const inline = code ? humanizeRegenError(code) : tx("pipe.couldntRegenerate")
       setRegenError({ sceneIdx: vars.sceneIndex, message: inline })
     },
   })
@@ -224,7 +225,7 @@ export function ScriptPanel({ pipelineId, plan, userEdits, onApprove }: Props) {
           return next
         })
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Save failed"
+        const message = err instanceof Error ? err.message : tx("editor.saveFailed")
         const code = extractBackendErrorCode(message)
         if (code) {
           setFieldErrors((prev) => ({
@@ -308,13 +309,12 @@ export function ScriptPanel({ pipelineId, plan, userEdits, onApprove }: Props) {
             onClick={() => approveMutation.mutate()}
             disabled={!durationOk || approveMutation.isPending}
           >
-            {approveMutation.isPending ? "Approving…" : "Approve plan"}
+            {approveMutation.isPending ? t("pipe.approving") : t("pipe.approvePlan")}
           </Button>
         </div>
         {!durationOk && (
           <p className="mt-2 text-xs text-amber-600 dark:text-amber-500">
-            Adjust scene durations to within ±10% of the {targetDuration}s
-            target before approving.
+            {t("pipe.adjustDurations", { target: targetDuration })}
           </p>
         )}
       </div>
@@ -340,10 +340,11 @@ function SceneNavigator({
   regeneratingIdx,
   onSelect,
 }: SceneNavigatorProps) {
+  const t = useT()
   return (
     <div className="mb-4">
       <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Scenes
+        {t("pipe.stageScenes")}
       </div>
       <div className="flex flex-wrap gap-1.5" role="tablist">
         {Array.from({ length: sceneCount }, (_, idx) => {
@@ -356,8 +357,8 @@ function SceneNavigator({
               type="button"
               role="tab"
               aria-selected={isActive}
-              aria-label={`Scene ${idx + 1}${isEdited ? " (edited)" : ""}${
-                isRegenerating ? " (regenerating)" : ""
+              aria-label={`${t("pipe.sceneNumber", { n: idx + 1 })}${isEdited ? t("pipe.editedSuffix") : ""}${
+                isRegenerating ? t("pipe.regeneratingSuffix") : ""
               }`}
               onClick={() => onSelect(idx)}
               className={cn(
@@ -422,6 +423,7 @@ function SceneEditor({
   recentlyRegenerated,
   onRegenerate,
 }: SceneEditorProps) {
+  const t = useT()
   const [description, setDescription] = useState(scene.description)
   const [duration, setDuration] = useState(scene.duration_seconds)
   const [emotionalBeat, setEmotionalBeat] = useState<EmotionalBeat>(
@@ -471,10 +473,10 @@ function SceneEditor({
     >
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">
-          Scene {sceneIdx + 1}
+          {t("pipe.sceneNumber", { n: sceneIdx + 1 })}
         </h3>
         <Badge variant="outline" className="text-xs">
-          {storyMomentLabel(scene.emotional_beat)}
+          {storyMomentLabel(scene.emotional_beat, t)}
         </Badge>
       </div>
 
@@ -484,7 +486,7 @@ function SceneEditor({
           htmlFor={descriptionKey}
           className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground"
         >
-          Action
+          {t("scriptcfg.sceneAction")}
         </label>
         <Textarea
           id={descriptionKey}
@@ -514,7 +516,7 @@ function SceneEditor({
       {scene.dialogue.length > 0 && (
         <div className="mb-4">
           <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Dialogue
+            {t("audiocfg.mergeRoleDialogue")}
           </label>
           <div className="space-y-2">
             {scene.dialogue.map((d, dialogueIdx) => {
@@ -562,7 +564,7 @@ function SceneEditor({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Duration
+            {t("field.duration")}
           </label>
           <div className="flex items-center gap-2">
             <Button
@@ -581,7 +583,7 @@ function SceneEditor({
                 )
               }}
               disabled={saving || isRegenerating || duration <= 1}
-              aria-label="Decrease duration"
+              aria-label={t("pipe.decreaseDuration")}
             >
               <Minus className="h-3 w-3" />
             </Button>
@@ -603,7 +605,7 @@ function SceneEditor({
                 )
               }}
               disabled={saving || isRegenerating}
-              aria-label="Increase duration"
+              aria-label={t("pipe.increaseDuration")}
             >
               <Plus className="h-3 w-3" />
             </Button>
@@ -617,7 +619,7 @@ function SceneEditor({
 
         <div>
           <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Story moment
+            {t("pipe.storyMoment")}
           </label>
           <Select
             value={emotionalBeat}
@@ -642,7 +644,7 @@ function SceneEditor({
             <SelectContent>
               {EMOTIONAL_BEAT_VALUES.map((v) => (
                 <SelectItem key={v} value={v}>
-                  {STORY_MOMENT_LABELS[v]}
+                  {t(STORY_MOMENT_LABEL_KEYS[v])}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -660,7 +662,7 @@ function SceneEditor({
         {!showFeedbackPanel && (
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-muted-foreground">
-              {REGEN_COST_LABEL}
+              {t("pipe.regenCostLabel")}
             </span>
             <Button
               type="button"
@@ -672,8 +674,8 @@ function SceneEditor({
               }}
               disabled={saving}
             >
-              <Sparkles className="mr-1.5 h-3 w-3" aria-hidden="true" />
-              Regenerate scene
+              <Sparkles className="me-1.5 h-3 w-3" aria-hidden="true" />
+              {t("pipe.regenerateScene")}
             </Button>
           </div>
         )}
@@ -686,21 +688,21 @@ function SceneEditor({
                 data-testid="regen-prior-edits-warning"
                 className="text-xs text-amber-700 dark:text-amber-400"
               >
-                This scene has unsaved edits that will be replaced.
+                {t("pipe.sceneUnsavedEditsReplaced")}
               </p>
             )}
             <label
               htmlFor={`scene-${sceneIdx}-feedback`}
               className="block text-xs font-medium uppercase tracking-wide text-muted-foreground"
             >
-              What should change?
+              {t("pipe.whatShouldChange")}
             </label>
             <Textarea
               id={`scene-${sceneIdx}-feedback`}
               data-testid="regen-feedback-textarea"
               value={feedbackText}
               onChange={(e) => setFeedbackText(e.target.value)}
-              placeholder='e.g. "make it more tense" or "shorter — 4 seconds"'
+              placeholder={t("pipe.regenFeedbackPlaceholder")}
               disabled={isRegenerating}
               rows={3}
               autoFocus
@@ -725,7 +727,7 @@ function SceneEditor({
                 }}
                 disabled={isRegenerating}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 type="button"
@@ -736,15 +738,15 @@ function SceneEditor({
                 {isRegenerating ? (
                   <>
                     <Loader2
-                      className="mr-1.5 h-3 w-3 animate-spin"
+                      className="me-1.5 h-3 w-3 animate-spin"
                       aria-hidden="true"
                     />
-                    Regenerating…
+                    {t("cfgext.sceneRegenerating")}
                   </>
                 ) : (
                   <>
-                    <Sparkles className="mr-1.5 h-3 w-3" aria-hidden="true" />
-                    Regenerate · {REGEN_COST_LABEL}
+                    <Sparkles className="me-1.5 h-3 w-3" aria-hidden="true" />
+                    {t("pipe.regenerateWithCost", { cost: t("pipe.regenCostLabel") })}
                   </>
                 )}
               </Button>
@@ -765,13 +767,14 @@ interface DurationMeterProps {
 }
 
 function DurationMeter({ total, target, ok }: DurationMeterProps) {
+  const t = useT()
   const fillPct =
     target > 0 ? Math.min(100, (total / target) * 100) : 0
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between text-xs">
         <span className="font-medium text-muted-foreground">
-          Total duration
+          {t("pipe.totalDuration")}
         </span>
         <span
           className={cn(
@@ -781,7 +784,7 @@ function DurationMeter({ total, target, ok }: DurationMeterProps) {
               : "text-amber-600 dark:text-amber-500",
           )}
         >
-          {total}s / {target}s target
+          {t("pipe.durationVsTarget", { total, target })}
         </span>
       </div>
       <div
@@ -820,17 +823,17 @@ function extractBackendErrorCode(message: string): string | null {
 function humanizeErrorCode(code: string): string {
   switch (code) {
     case "schema_invalid":
-      return "Invalid value for this field"
+      return tx("pipe.errInvalidValue")
     case "patch_path_not_editable":
-      return "This field isn't editable yet"
+      return tx("pipe.errFieldNotEditable")
     case "patch_invalid":
-      return "Invalid edit — please refresh the panel"
+      return tx("pipe.errPatchInvalid")
     case "stage_not_awaiting":
-      return "Script already approved — refresh the panel"
+      return tx("pipe.errScriptApprovedRefresh")
     case "stage_not_editable":
-      return "Inline edits aren't available for this stage"
+      return tx("pipe.errStageNotEditable")
     case "reference_integrity_failed":
-      return "Edit would break a downstream reference"
+      return tx("pipe.errReferenceIntegrity")
     default:
       return code
   }
@@ -839,17 +842,17 @@ function humanizeErrorCode(code: string): string {
 function humanizeRegenError(code: string): string {
   switch (code) {
     case "roster_ref_invalid":
-      return "The regenerated scene referenced a missing cast/location/object. Try clearer feedback."
+      return tx("pipe.regenErrRosterRef")
     case "scene_index_out_of_range":
-      return "Scene no longer exists — refresh the panel."
+      return tx("pipe.regenErrSceneGone")
     case "stage_not_awaiting":
-      return "Script already approved — refresh the panel."
+      return tx("pipe.regenErrScriptApproved")
     case "plan_not_available":
-      return "Plan not loaded — refresh the panel."
+      return tx("pipe.regenErrPlanNotLoaded")
     case "llm_unavailable":
-      return "AI couldn't be reached. Try again in a moment."
+      return tx("pipe.regenErrLlmUnavailable")
     case "validation_error":
-      return "Feedback was rejected — try rephrasing."
+      return tx("pipe.regenErrValidation")
     default:
       return code
   }

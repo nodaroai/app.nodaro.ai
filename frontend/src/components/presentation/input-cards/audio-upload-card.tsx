@@ -6,6 +6,7 @@ import { ActionMenu } from "../output-cards/action-menu"
 import { ActionBar } from "../output-cards/action-bar"
 import { shareMedia } from "../output-cards/share-utils"
 import { useMediaUpload, FileDropZone, UrlInputRow } from "./shared"
+import { useT } from "@/lib/i18n"
 
 interface AudioUploadCardProps {
   label: string
@@ -21,6 +22,7 @@ interface AudioUploadCardProps {
 
 export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput, readOnly, variant }: AudioUploadCardProps) {
   const media = useMediaUpload({ mimePrefix: "audio/", nodeId, isFullscreen, inputValues, onUpdateInput, url })
+  const t = useT()
 
   if (variant === "composer") {
     return (
@@ -34,7 +36,7 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
                 <button
                   type="button"
                   onClick={media.handleRemove}
-                  aria-label="Remove audio"
+                  aria-label={t("proccfg.removeAudio")}
                   className="shrink-0 rounded-full bg-background p-0.5 text-muted-foreground ring-1 ring-border hover:text-foreground"
                 >
                   <X className="size-3" />
@@ -42,7 +44,7 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
               )}
             </div>
           ) : readOnly ? (
-            <span className="text-xs text-muted-foreground">No audio</span>
+            <span className="text-xs text-muted-foreground">{t("present.noAudio")}</span>
           ) : (
             <FileDropZone
               isDragOver={media.isDragOver}
@@ -53,7 +55,7 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
               accept="audio/*"
               fileInputRef={media.fileInputRef}
               onFileChange={media.handleFile}
-              label="Add audio"
+              label={t("present.addAudio")}
               height="h-16"
               onShowUrl={() => media.setShowUrlInput(true)}
             />
@@ -81,10 +83,10 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
                 <WaveformAudioPlayer url={media.effectiveUrl} variant="compact" className="flex-1" />
                 {/* Desktop inline actions */}
                 <div className="hidden md:flex gap-1.5 flex-shrink-0">
-                  <GlassButton onClick={() => downloadFile(media.effectiveUrl!, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title="Download">
+                  <GlassButton onClick={() => downloadFile(media.effectiveUrl!, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title={t("common.download")}>
                     <Download className="w-3.5 h-3.5" />
                   </GlassButton>
-                  <GlassButton onClick={() => copyUrl(media.effectiveUrl!)} title="Copy URL">
+                  <GlassButton onClick={() => copyUrl(media.effectiveUrl!)} title={t("cfgshared.copyUrl")}>
                     <Copy className="w-3.5 h-3.5" />
                   </GlassButton>
                   <ActionMenu
@@ -94,8 +96,8 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
                 </div>
               </div>
               {!readOnly && (
-                <div className="media-overlay-controls absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <GlassButton onClick={media.handleRemove} title="Remove">
+                <div className="media-overlay-controls absolute top-1.5 end-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <GlassButton onClick={media.handleRemove} title={t("common.remove")}>
                     <X className="w-3.5 h-3.5" />
                   </GlassButton>
                 </div>
@@ -111,7 +113,7 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
           </>
         ) : readOnly ? (
           <div className="flex items-center justify-center h-24 bg-muted/30 rounded-lg border border-border text-sm text-muted-foreground">
-            No audio
+            {t("present.noAudio")}
           </div>
         ) : (
           <FileDropZone
@@ -123,7 +125,7 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
             accept="audio/*"
             fileInputRef={media.fileInputRef}
             onFileChange={media.handleFile}
-            label="Upload audio"
+            label={t("present.uploadAudio")}
             height="h-24"
             onShowUrl={() => media.setShowUrlInput(true)}
           />

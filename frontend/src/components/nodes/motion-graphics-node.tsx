@@ -78,7 +78,7 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex items-center justify-center h-16 rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
             <div className="text-center">
               <div className="text-sm font-medium text-[#ff0073]">
-                {isLottiePlan ? `Lottie · ${lottieLayerCount} layers` : `${elementCount} elements`}
+                {isLottiePlan ? `Lottie · ${t("node.layerCountMany", { n: lottieLayerCount })}` : t("node.nElements", { n: elementCount })}
               </div>
               <div className="text-[10px] text-muted-foreground">{nodeData.durationSeconds}s</div>
             </div>
@@ -108,7 +108,7 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
         <div className="text-muted-foreground text-[10px] line-clamp-1">
           {nodeData.motionPrompt?.trim()
             ? nodeData.motionPrompt
-            : "No prompt set"}
+            : t("node.noPromptSet")}
         </div>
       </div>
     </BaseNode>

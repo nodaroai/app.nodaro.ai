@@ -4,6 +4,7 @@ import type { ExposableField } from "@nodaro/shared"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
+import { useT } from "@/lib/i18n"
 
 interface RestrictPopoverProps {
   field: ExposableField
@@ -12,6 +13,7 @@ interface RestrictPopoverProps {
 }
 
 export function RestrictPopover({ field, allowedValues, onUpdate }: RestrictPopoverProps) {
+  const t = useT()
   const options = field.options
   if (!options || options.length === 0) return null
 
@@ -59,8 +61,8 @@ export function RestrictPopover({ field, allowedValues, onUpdate }: RestrictPopo
   }
 
   const label = allChecked
-    ? "Restrict (all)"
-    : `Restrict (${checkedCount}/${total})`
+    ? t("present.restrictAll")
+    : t("present.restrictCount", { n: checkedCount, total })
 
   return (
     <Popover>
@@ -72,7 +74,7 @@ export function RestrictPopover({ field, allowedValues, onUpdate }: RestrictPopo
       </PopoverTrigger>
       <PopoverContent align="start" className="w-56 p-3">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-foreground">Allowed values</span>
+          <span className="text-xs font-medium text-foreground">{t("present.allowedValues")}</span>
           <div className="flex gap-1">
             <Button
               variant="ghost"
@@ -81,7 +83,7 @@ export function RestrictPopover({ field, allowedValues, onUpdate }: RestrictPopo
               disabled={allChecked}
               className="text-xs h-5 px-1.5"
             >
-              Select All
+              {t("present.selectAll")}
             </Button>
             <Button
               variant="ghost"
@@ -90,7 +92,7 @@ export function RestrictPopover({ field, allowedValues, onUpdate }: RestrictPopo
               disabled={checkedCount <= 1}
               className="text-xs h-5 px-1.5"
             >
-              Clear All
+              {t("present.clearAll")}
             </Button>
           </div>
         </div>

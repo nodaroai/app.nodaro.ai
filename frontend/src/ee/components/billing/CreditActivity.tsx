@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react"
 import { Loader2 } from "lucide-react"
 import type { TransactionRecord } from "@/lib/api"
+import { useT, type MessageKey, type TFunction } from "@/lib/i18n"
 import {
   MONO_FONT,
   PINK,
@@ -40,11 +41,17 @@ const TAG_COLORS: Record<ActivitySource, { color: string; background: string }> 
   Refund: { color: "var(--blg-tag-neutral-text)", background: "var(--blg-tag-neutral-bg)" },
 }
 
+const SOURCE_LABEL_KEYS: Record<ActivitySource, MessageKey> = {
+  Subscription: "billing.sourceSubscription",
+  "Top-up": "billing.sourceTopup",
+  Refund: "billing.sourceRefund",
+}
+
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
-function toActivityRow(tx: TransactionRecord): ActivityRow {
+function toActivityRow(tx: TransactionRecord, t: TFunction): ActivityRow {
   // The declared union is "subscription" | "topup", but refund rows can come
   // through the same feed — widen before comparing so tsc allows the check.
   const type: string = tx.type
@@ -53,10 +60,10 @@ function toActivityRow(tx: TransactionRecord): ActivityRow {
     type === "subscription" ? "Subscription" : isRefund ? "Refund" : "Top-up"
   const description =
     type === "subscription"
-      ? `${capitalize(tx.tier ?? "Subscription")} plan`
+      ? t("billing.tierPlan", { tier: capitalize(tx.tier ?? t("billing.sourceSubscription")) })
       : isRefund
-        ? "Credit refund"
-        : "Credit top-up"
+        ? t("billing.creditRefund")
+        : t("billing.creditTopup")
   const credits = Math.abs(tx.credits_granted)
   const negative = isRefund || tx.credits_granted < 0
   return {
@@ -96,21 +103,22 @@ const bodyRow: CSSProperties = {
 }
 
 export function CreditActivity({ transactions, loading }: CreditActivityProps) {
+  const t = useT()
   const rows = [...transactions]
     .sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     )
     .slice(0, MAX_ROWS)
-    .map(toActivityRow)
+    .map((record) => toActivityRow(record, t))
 
   return (
     <section style={sectionCard}>
-      <h2 style={{ ...sectionTitle, margin: "0 0 18px" }}>Credit Activity</h2>
+      <h2 style={{ ...sectionTitle, margin: "0 0 18px" }}>{t("billing.creditActivity")}</h2>
       <div style={headerCell}>
-        <span>DESCRIPTION</span>
-        <span>SOURCE</span>
-        <span>DATE</span>
-        <span style={{ textAlign: "right" }}>AMOUNT</span>
+        <span>{t("billing.colDescription")}</span>
+        <span>{t("billing.colSource")}</span>
+        <span>{t("billing.colDate")}</span>
+        <span style={{ textAlign: "right" }}>{t("billing.colAmount")}</span>
       </div>
       {loading ? (
         <div className="flex h-16 items-center justify-center">
@@ -118,7 +126,7 @@ export function CreditActivity({ transactions, loading }: CreditActivityProps) {
         </div>
       ) : rows.length === 0 ? (
         <p style={{ fontSize: 13, color: "var(--blg-t2-mute)", margin: "14px 4px 0" }}>
-          No transactions yet.
+          {t("billing.noTransactions")}
         </p>
       ) : (
         rows.map((row) => (
@@ -132,7 +140,7 @@ export function CreditActivity({ transactions, loading }: CreditActivityProps) {
                   rel="noreferrer"
                   style={{ marginLeft: 10, fontSize: 12, fontWeight: 600, color: PINK, textDecoration: "underline", textUnderlineOffset: 3 }}
                 >
-                  Receipt ↗
+                  {t("billing.receiptLink")}
                 </a>
               )}
             </span>
@@ -147,7 +155,7 @@ export function CreditActivity({ transactions, loading }: CreditActivityProps) {
                 padding: "4px 11px",
               }}
             >
-              {row.source}
+              {t(SOURCE_LABEL_KEYS[row.source])}
             </span>
             <span
               style={{ color: "var(--blg-t2-dim)", fontFamily: MONO_FONT, fontSize: 12.5 }}

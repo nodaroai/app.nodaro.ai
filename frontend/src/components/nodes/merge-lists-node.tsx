@@ -11,10 +11,12 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { MergeListsNodeData } from "@/types/nodes"
 import { isValidMergeListsConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
+import { useT } from "@/lib/i18n"
 
 const ACCEPTS_IN = (t: string) => isValidMergeListsConnection("in", t)
 
 function MergeListsNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as MergeListsNodeData
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -56,17 +58,17 @@ function MergeListsNodeComponent({ id, data, selected }: NodeProps) {
           {hasResult ? (
             <div className="w-full rounded-md bg-muted/30 p-2">
               <p className="text-xs text-foreground/80">
-                {itemCount} item{itemCount === 1 ? "" : "s"} merged
+                {itemCount === 1 ? t("node.itemsMergedOne", { n: itemCount }) : t("node.itemsMergedMany", { n: itemCount })}
               </p>
               <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                {dedupeOn ? "Deduplicated" : "Raw concat"}
+                {dedupeOn ? t("node.deduplicated") : t("node.rawConcat")}
               </span>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
               <FileText className="w-5 h-5" />
               <span className="text-[10px] mt-0.5">
-                {dedupeOn ? "Deduplicated" : "Raw concat"}
+                {dedupeOn ? t("node.deduplicated") : t("node.rawConcat")}
               </span>
             </div>
           )}

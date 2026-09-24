@@ -24,6 +24,7 @@ import { CinemaTopBar, FlowGraphModal } from "@/components/pipeline/cinema-top-b
 import { AiDirectorPanel } from "@/components/pipeline/ai-director-panel"
 import { ReelPipeline } from "@/components/pipeline/reel-pipeline"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { formatNumber } from "@/lib/i18n/format"
 
 /**
  * Phase 0.x — the standalone "pipeline" tracer with per-stage CONTROL.
@@ -123,7 +124,7 @@ function buildEntityMedia(entities: Record<string, EntityCard>): FilmMediaItem[]
       if (c.entityType !== type || !c.mainAssetUrl) continue
       out.push({ url: c.mainAssetUrl, label: c.entityKey, kind: mediaKind(c.mainAssetUrl) })
       c.variants.forEach((u, i) =>
-        out.push({ url: u, label: `${c.entityKey} · variant ${i + 1}`, kind: mediaKind(u) }),
+        out.push({ url: u, label: tx("misc.pipelineVariantN", { name: c.entityKey, n: i + 1 }), kind: mediaKind(u) }),
       )
     }
   }
@@ -199,20 +200,20 @@ function describeEvent(evt: PipelineEvent): string | null {
   const v = (k: string) => (r[k] == null ? "" : String(r[k]))
   switch (evt.type as string) {
     case "pipeline:status":
-      return `Pipeline ${v("status")}`
+      return tx("misc.pipelineStatusEvent", { status: v("status") })
     case "stage:status":
       return `${STAGE_LABELS[v("stageName")] ? tx(STAGE_LABELS[v("stageName")]) : v("stageName")} ${v("status")}`
     case "stage:progress":
-      return (v("message") || `Working on ${v("stageName")}...`).replace(
+      return (v("message") || tx("pipe.workingOn", { stage: v("stageName") })).replace(
         /\s*\([\d.]+\s*[KMG]?B so far\)/i,
         "",
       )
     case "entity:status":
       return `${v("entityType")} "${v("entityKey")}" ${v("status")}`
     case "entity:variant:added":
-      return `Variant ${v("variantKey")} ready`
+      return tx("misc.pipelineVariantReady", { key: v("variantKey") })
     case "scene:status":
-      return `Scene ${v("sceneIndex")} ${v("status")}`
+      return `${tx("pipe.sceneNumber", { n: v("sceneIndex") })} ${v("status")}`
     case "pipeline:warning":
       return `! ${v("message") || v("code")}`
     case "pipeline:completed":
@@ -286,7 +287,7 @@ function parseScreenplay(output: unknown): Screenplay | null {
         }
       }
       scenes.push({
-        heading: `Scene ${idx}${loc}${beat}`,
+        heading: `${tx("pipe.sceneNumber", { n: String(idx) })}${loc}${beat}`,
         description: typeof sc.description === "string" ? sc.description : "",
         narration: typeof sc.narration === "string" ? sc.narration : undefined,
         dialogue,
@@ -407,7 +408,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
                   type="button"
                   onClick={() => setAutonomy(k)}
                   aria-pressed={active}
-                  className={`rounded-md border p-2 text-left transition-colors ${
+                  className={`rounded-md border p-2 text-start transition-colors ${
                     active
                       ? "border-[#ff0073] bg-[#ff0073]/10"
                       : "bg-card hover:border-[#ff0073]/50"
@@ -431,7 +432,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
               type="button"
               onClick={() => setStyleId("")}
               aria-pressed={styleId === ""}
-              className={`rounded-md border p-1.5 text-left transition-colors ${
+              className={`rounded-md border p-1.5 text-start transition-colors ${
                 styleId === ""
                   ? "border-[#ff0073] bg-[#ff0073]/10"
                   : "bg-card hover:border-[#ff0073]/50"
@@ -453,7 +454,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
                   onClick={() => setStyleId(s.id)}
                   aria-pressed={active}
                   title={s.description}
-                  className={`rounded-md border p-1.5 text-left transition-colors ${
+                  className={`rounded-md border p-1.5 text-start transition-colors ${
                     active
                       ? "border-[#ff0073] bg-[#ff0073]/10"
                       : "bg-card hover:border-[#ff0073]/50"
@@ -521,10 +522,10 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
         <div className="mt-3 flex items-baseline justify-between rounded-md border border-dashed bg-card/50 px-3 py-2">
           <span className="text-xs text-muted-foreground">{t("pipe.estimatedCost")}</span>
           <span className="text-sm text-foreground">
-            ≈ {creditUnits(cost.totalCredits).toLocaleString()} credits{" "}
+            ≈ {formatNumber(creditUnits(cost.totalCredits))} {t("credits.unit.other")}{" "}
             <span className="text-xs text-muted-foreground">
-              ({cost.shotCount} shots · ~{creditUnits(cost.creditsPerSecond)}/s
-              {cost.modelKnown ? "" : " · Auto"})
+              ({t("misc.pipeShotsRate", { n: cost.shotCount, rate: creditUnits(cost.creditsPerSecond) })}
+              {cost.modelKnown ? "" : ` · ${t("common.auto")}`})
             </span>
           </span>
         </div>
@@ -550,7 +551,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
                 key={p.id}
                 type="button"
                 onClick={() => onOpen(p.id)}
-                className="flex w-full items-center justify-between gap-3 rounded-md border bg-card px-3 py-2 text-left text-sm hover:border-[#ff0073]"
+                className="flex w-full items-center justify-between gap-3 rounded-md border bg-card px-3 py-2 text-start text-sm hover:border-[#ff0073]"
               >
                 <span className="truncate text-foreground">
                   {p.input_prompt || t("pipe.untitledFilm")}
@@ -841,7 +842,7 @@ function EntityDescGate({
                     onReuse(card.entityId, item.url)
                     setReuseOpen(false)
                   }}
-                  className="w-20 shrink-0 text-left disabled:opacity-50"
+                  className="w-20 shrink-0 text-start disabled:opacity-50"
                   title={item.name}
                 >
                   <img
@@ -1072,12 +1073,12 @@ function EntityImage({
         ) : (
           <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
             {card.status === "failed"
-              ? "failed"
+              ? t("studio.failedLower")
               : card.status === "skipped"
-                ? "skipped"
+                ? t("misc.pipelineSkipped")
                 : card.status === "pending_description"
-                  ? "awaiting choice"
-                  : "generating…"}
+                  ? t("misc.pipelineAwaitingChoice")
+                  : t("pipe.generatingEllipsis")}
           </div>
         )}
       </div>
@@ -1360,7 +1361,7 @@ function Lightbox({
             type="button"
             onClick={() => go(-1)}
             aria-label={t("pipe.previous")}
-            className="absolute left-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-3xl leading-none text-white hover:bg-white/20"
+            className="absolute start-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-3xl leading-none text-white hover:bg-white/20"
           >
             ‹
           </button>
@@ -1385,7 +1386,7 @@ function Lightbox({
             type="button"
             onClick={() => go(1)}
             aria-label={t("pipe.next")}
-            className="absolute right-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-3xl leading-none text-white hover:bg-white/20"
+            className="absolute end-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-3xl leading-none text-white hover:bg-white/20"
           >
             ›
           </button>
@@ -1533,7 +1534,7 @@ function PipelineSession({ pipelineId }: { pipelineId: string }) {
         setSceneMedia(
           timeline.scenes.map((s, i) => ({
             url: s.compositeUrl,
-            label: `Scene ${i + 1}`,
+            label: tx("pipe.sceneNumber", { n: i + 1 }),
             kind: "video" as const,
           })),
         )
@@ -1718,7 +1719,7 @@ function PipelineSession({ pipelineId }: { pipelineId: string }) {
       const s = (evt as unknown as { status?: string }).status
       if (s) setStatus(s)
       if (s === "completed") void loadTimeline()
-      else if (s === "failed" || s === "cancelled") setError(`Pipeline ${s}`)
+      else if (s === "failed" || s === "cancelled") setError(tx(s === "failed" ? "misc.pipelineFailed" : "misc.pipelineCancelled"))
       void refreshGate()
       void loadPipeline()
     }
@@ -1872,7 +1873,7 @@ function PipelineSession({ pipelineId }: { pipelineId: string }) {
                 <button
                   type="button"
                   onClick={() => setSelectedStage(null)}
-                  className="mb-4 flex w-full items-center gap-3 rounded-md border border-[#ff0073]/40 bg-[#ff0073]/5 px-3 py-2.5 text-left text-sm hover:bg-[#ff0073]/10"
+                  className="mb-4 flex w-full items-center gap-3 rounded-md border border-[#ff0073]/40 bg-[#ff0073]/5 px-3 py-2.5 text-start text-sm hover:bg-[#ff0073]/10"
                 >
                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#ff0073]" />
                   <span className="text-foreground">
@@ -1990,8 +1991,7 @@ npm run pipeline-worker:dev
                   <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
                     <span>{t("pipe.animatingShots")}</span>
                     <span className="tabular-nums">
-                      {animateProgress.shotsDone} / {animateProgress.totalShots} shots (
-                      {animateProgress.percent}%)
+                      {t("misc.pipeShotsProgress", { done: animateProgress.shotsDone, total: animateProgress.totalShots, percent: animateProgress.percent })}
                     </span>
                   </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--border-primary)]">
@@ -2006,7 +2006,7 @@ npm run pipeline-worker:dev
                   <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
                     <span>{t("pipe.renderingScenes")}</span>
                     <span className="tabular-nums">
-                      {completedScenes} / {totalScenes} ready ({sceneProgressPct}%)
+                      {t("misc.pipeReadyProgress", { done: completedScenes, total: totalScenes, percent: sceneProgressPct })}
                     </span>
                   </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--border-primary)]">

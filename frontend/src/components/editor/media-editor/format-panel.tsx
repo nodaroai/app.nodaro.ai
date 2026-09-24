@@ -2,6 +2,8 @@
 import { useState } from "react"
 import { ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 import {
   IMAGE_FORMAT_OPTIONS,
   VIDEO_FORMAT_OPTIONS,
@@ -22,6 +24,8 @@ export function FormatPanel({
   onFormatChange,
   originalFormat,
 }: FormatPanelProps) {
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const [open, setOpen] = useState(false)
 
   const options =
@@ -39,11 +43,11 @@ export function FormatPanel({
         className="flex items-center gap-1 w-full px-1 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
         <ChevronRight
-          className={cn("w-3 h-3 transition-transform", open && "rotate-90")}
+          className={cn("w-3 h-3 transition-transform", open ? "rotate-90" : isRtl && "rotate-180")}
         />
-        Advanced
+        {t("mediaed.advanced")}
         {format && (
-          <span className="ml-auto text-[#ff0073] text-[10px]">
+          <span className="ms-auto text-[#ff0073] text-[10px]">
             &rarr; {format.toUpperCase()}
           </span>
         )}
@@ -51,7 +55,7 @@ export function FormatPanel({
 
       {open && (
         <div className="pb-2 px-1">
-          <div className="text-[11px] text-muted-foreground mb-1.5">Output Format</div>
+          <div className="text-[11px] text-muted-foreground mb-1.5">{t("cfgext.aiAvOutputFormat")}</div>
           <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
@@ -63,7 +67,7 @@ export function FormatPanel({
                   : "border-border/40 text-muted-foreground hover:border-border",
               )}
             >
-              Original ({originalFormat.toUpperCase()})
+              {t("proccfg.original")} ({originalFormat.toUpperCase()})
             </button>
             {options
               .filter((o) => o.value !== originalFormat)

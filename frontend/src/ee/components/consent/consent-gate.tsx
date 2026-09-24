@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { tx, useT } from "@/lib/i18n"
 import { fetchConsentState, grantConsent, declineConsent, SOURCE_APP } from "./consent-api"
 
 type View = "hidden" | "card" | "confirmed"
@@ -16,6 +17,7 @@ type View = "hidden" | "card" | "confirmed"
  * already counted the show, so it re-appears next time per the cadence.
  */
 export function ConsentGate() {
+  const t = useT()
   const [view, setView] = useState<View>("hidden")
   const [body, setBody] = useState("")
   const [note, setNote] = useState("")
@@ -43,10 +45,10 @@ export function ConsentGate() {
     try {
       if (kind === "grant") {
         await grantConsent(SOURCE_APP)
-        setNote("You're on the list — thanks!")
+        setNote(tx("consent.onTheList"))
       } else {
         await declineConsent()
-        setNote("No problem. We won't email you.")
+        setNote(tx("consent.noProblem"))
       }
       setView("confirmed")
       closeTimer.current = setTimeout(() => setView("hidden"), 2200)
@@ -62,27 +64,27 @@ export function ConsentGate() {
   return (
     <div
       role="dialog"
-      aria-label="Email updates"
-      className="fixed bottom-5 right-5 z-50 w-[372px] max-w-[calc(100vw-2.5rem)] rounded-2xl border bg-card text-card-foreground shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-300"
+      aria-label={t("consent.emailUpdatesAria")}
+      className="fixed bottom-5 end-5 z-50 w-[372px] max-w-[calc(100vw-2.5rem)] rounded-2xl border bg-card text-card-foreground shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-300"
     >
       {view === "card" ? (
         <div className="p-5">
           <button
             type="button"
-            aria-label="Dismiss"
+            aria-label={t("consent.dismiss")}
             onClick={() => setView("hidden")}
-            className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="absolute end-3 top-3 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <X className="h-4 w-4" />
           </button>
-          <h2 className="pr-6 text-base font-semibold">Want product updates?</h2>
+          <h2 className="pe-6 text-base font-semibold">{t("consent.wantUpdates")}</h2>
           <p className="mt-1.5 text-sm text-muted-foreground">{body}</p>
           <div className="mt-4 flex items-center gap-2">
             <Button onClick={() => answer("grant")} disabled={pending} className="flex-1">
-              Yes, keep me posted
+              {t("consent.yesKeepMePosted")}
             </Button>
             <Button variant="ghost" onClick={() => answer("decline")} disabled={pending}>
-              No thanks
+              {t("consent.noThanks")}
             </Button>
           </div>
         </div>

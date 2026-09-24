@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { pipelinesApi } from "@/lib/pipelines-api"
+import { useT } from "@/lib/i18n"
 
 interface Props {
   readonly pipelineId: string
@@ -33,6 +34,7 @@ const TERMINAL_STATUSES: ReadonlySet<string> = new Set([
  * next checkpoint and unspent credits are refunded — this is irreversible.
  */
 export function ForkButton({ pipelineId, pipelineStatus, onForked }: Props) {
+  const t = useT()
   const [confirming, setConfirming] = useState(false)
   const [working, setWorking] = useState(false)
   const [errMsg, setErrMsg] = useState<string | null>(null)
@@ -63,17 +65,15 @@ export function ForkButton({ pipelineId, pipelineStatus, onForked }: Props) {
         onClick={() => setConfirming(true)}
         data-testid="fork-pipeline-trigger"
       >
-        Fork pipeline
+        {t("pipe.forkPipeline")}
       </Button>
       <Dialog open={confirming} onOpenChange={(o) => !o && setConfirming(false)}>
         <DialogContent data-testid="fork-pipeline-dialog">
           <DialogHeader>
-            <DialogTitle>Fork this pipeline?</DialogTitle>
+            <DialogTitle>{t("pipe.forkThisPipeline")}</DialogTitle>
             <DialogDescription>
-              Forking takes the canvas off the pipeline&apos;s hands. The engine stops at
-              the next checkpoint and unspent credits are refunded.{" "}
-              <strong>This cannot be undone.</strong> You can keep editing the canvas
-              freely after forking.
+              {t("pipe.forkDescPre")}{" "}
+              <strong>{t("pipe.cannotBeUndone")}</strong> {t("pipe.forkDescPost")}
             </DialogDescription>
           </DialogHeader>
           {errMsg && (
@@ -87,7 +87,7 @@ export function ForkButton({ pipelineId, pipelineStatus, onForked }: Props) {
               onClick={() => setConfirming(false)}
               disabled={working}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -95,7 +95,7 @@ export function ForkButton({ pipelineId, pipelineStatus, onForked }: Props) {
               disabled={working}
               data-testid="fork-pipeline-confirm"
             >
-              {working ? "Forking…" : "Fork"}
+              {working ? t("pipe.forking") : t("pipe.fork")}
             </Button>
           </DialogFooter>
         </DialogContent>

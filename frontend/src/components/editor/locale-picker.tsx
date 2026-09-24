@@ -6,17 +6,20 @@ import { LANGUAGES, type LocaleId } from "@nodaro/shared"
 import { useLocaleStore } from "@/lib/locale-store"
 import { useAuth } from "@/hooks/use-auth"
 import { useUpdatePreferredLocaleMutation } from "@/hooks/queries/use-user-settings-queries"
+import { languageMenuRows, useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 
 /**
- * Compact globe + short-code button that opens a dropdown of all supported
- * languages. Lives inside parameter-node config panels next to the picker
- * grid. Optimistic local update + persisted to user profile via PATCH
- * /v1/user/settings.
+ * Compact globe + short-code button that opens a dropdown of the offered
+ * languages (same gate as the sidebar switcher — it writes the same store, so
+ * it must not offer a language the sidebar hides). Lives inside
+ * parameter-node config panels next to the picker grid. Optimistic local
+ * update + persisted to user profile via PATCH /v1/user/settings.
  */
 function LocalePickerComponent({ className }: { readonly className?: string }) {
+  const t = useT()
   const locale = useLocaleStore((s) => s.locale)
   const setLocale = useLocaleStore((s) => s.setLocale)
   const { user } = useAuth()
@@ -39,8 +42,8 @@ function LocalePickerComponent({ className }: { readonly className?: string }) {
           type="button"
           variant="ghost"
           size="sm"
-          aria-label="Pick picker language"
-          title={`Picker language: ${current.englishName}`}
+          aria-label={t("lang.pickerPick")}
+          title={`${t("lang.pickerLabel")}: ${current.englishName}`}
           className={cn(
             "h-7 px-2 gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground",
             className,
@@ -56,10 +59,10 @@ function LocalePickerComponent({ className }: { readonly className?: string }) {
         sideOffset={4}
       >
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1.5 select-none">
-          Picker language
+          {t("lang.pickerLabel")}
         </div>
         <div className="flex flex-col gap-0.5">
-          {LANGUAGES.map((lang) => {
+          {languageMenuRows(locale).map((lang) => {
             const selected = lang.id === locale
             return (
               <button
@@ -67,7 +70,7 @@ function LocalePickerComponent({ className }: { readonly className?: string }) {
                 type="button"
                 onClick={() => handlePick(lang.id)}
                 className={cn(
-                  "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-muted/60 cursor-pointer transition-colors text-left",
+                  "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-muted/60 cursor-pointer transition-colors text-start",
                   selected && "bg-muted/40",
                 )}
                 dir={lang.dir}

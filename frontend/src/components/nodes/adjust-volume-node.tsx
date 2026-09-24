@@ -71,7 +71,7 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
           <div className="relative group">
             <video src={activeUrl} crossOrigin="anonymous" controls className="w-full rounded-md max-h-28 object-contain bg-black" />
             {results.length > 0 && (
-              <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
+              <button type="button" aria-label={t("common.remove")} className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
             )}
           </div>
         )}
@@ -113,12 +113,12 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
                 }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); const urlUpdate = isVideoOutput ? { generatedVideoUrl: r.url } : { generatedAudioUrl: r.url }; updateNodeData(id, { activeResultIndex: i, ...urlUpdate }) } }}>
                   {isVideoOutput ? <Video className="w-4 h-4" /> : <AudioLines className="w-4 h-4" />}
                 </div>
-                <button type="button" aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
+                <button type="button" aria-label={t("common.remove")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
               </div>
             ))}
           </div>
         )}
-        <p className="text-muted-foreground">{nodeData.volume}%{nodeData.normalize ? " (normalized)" : ""}</p>
+        <p className="text-muted-foreground">{nodeData.volume}%{nodeData.normalize ? ` ${t("node.normalized")}` : ""}</p>
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="adjust-volume" handleId="in" type="target" position={Position.Left} label="Media" color={FFMPEG_COLORS.media} icon={<AudioLines />} side="left" top="calc(100% - 24px)" accepts={ACCEPTS_MEDIA} />

@@ -7,6 +7,7 @@ import { TrimPanel } from "./trim-panel"
 import { FormatPanel } from "./format-panel"
 import { ASPECT_RATIO_OPTIONS, type MediaEditorState } from "./utils"
 import type { useMediaEditor } from "./use-media-editor"
+import { useT } from "@/lib/i18n"
 
 type MediaEditorReturn = ReturnType<typeof useMediaEditor>
 
@@ -15,6 +16,7 @@ interface MediaEditorModalProps {
 }
 
 export function MediaEditorModal({ editor }: MediaEditorModalProps) {
+  const t = useT()
   const {
     isOpen,
     currentFile,
@@ -81,10 +83,10 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
 
   const title =
     mediaType === "image"
-      ? "Adjust Image"
+      ? t("mediaed.adjustImage")
       : mediaType === "video"
-        ? "Adjust Video"
-        : "Adjust Audio"
+        ? t("mediaed.adjustVideo")
+        : t("mediaed.adjustAudio")
 
   const originalFormat =
     currentFile.file.name.split(".").pop()?.toLowerCase() ??
@@ -119,7 +121,7 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
             <h2 className="text-sm font-semibold text-white">{title}</h2>
             {isMultiFile && (
               <span className="text-[11px] text-white/40 bg-white/8 px-2 py-0.5 rounded-full">
-                {currentIndex + 1} of {totalFiles}
+                {t("mediaed.fileIndex", { current: currentIndex + 1, total: totalFiles })}
               </span>
             )}
             {/* Output info chips */}
@@ -145,7 +147,7 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
           {isConverting ? (
             <div className="flex flex-col items-center justify-center py-16 gap-4">
               <Loader2 className="w-10 h-10 animate-spin text-[#ff0073]" />
-              <span className="text-sm text-white/60">Converting video...</span>
+              <span className="text-sm text-white/60">{t("mediaed.convertingVideo")}</span>
             </div>
           ) : (
             <div className="space-y-5">
@@ -177,7 +179,7 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
 
               {(mediaType === "image" || mediaType === "video") && (
                 <div>
-                  <div className="text-xs text-white/50 mb-2">Aspect Ratio</div>
+                  <div className="text-xs text-white/50 mb-2">{t("field.aspectRatio")}</div>
                   <AspectRatioSelector
                     options={ASPECT_RATIO_OPTIONS}
                     value={editorState.aspectRatio}
@@ -204,7 +206,7 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
             disabled={isProcessing || isConverting}
             className="px-4 py-2 text-sm text-white/50 border border-white/20 rounded-lg hover:text-white hover:border-white/40 transition-colors disabled:opacity-40"
           >
-            Reset
+            {t("common.reset")}
           </button>
           <div className="flex items-center gap-3">
             <button
@@ -213,7 +215,7 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
               disabled={isProcessing}
               className="px-4 py-2 text-sm text-white border border-white/20 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-40"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
 
             {isMultiFile && !isLastFile && allSameType && (
@@ -223,8 +225,8 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
                 disabled={isProcessing || isConverting}
                 className="px-4 py-2 text-sm text-[#ff0073] border border-[#ff0073]/50 rounded-lg hover:bg-[#ff0073]/10 transition-colors disabled:opacity-40"
               >
-                {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin inline mr-1.5" />}
-                Apply & Upload All
+                {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin inline me-1.5" />}
+                {t("mediaed.applyUploadAll")}
               </button>
             )}
 
@@ -234,8 +236,8 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
               disabled={isProcessing || isConverting}
               className="px-5 py-2 text-sm text-white bg-[#ff0073] rounded-lg hover:bg-[#ff0073]/80 transition-colors disabled:opacity-40 font-medium"
             >
-              {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin inline mr-1.5" />}
-              {isMultiFile && !isLastFile ? "Upload \u2192" : "Upload"}
+              {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin inline me-1.5" />}
+              {isMultiFile && !isLastFile ? `${t("common.upload")} \u2192` : t("common.upload")}
             </button>
           </div>
         </div>

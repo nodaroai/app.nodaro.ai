@@ -375,7 +375,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                 {r.thumbnailUrl ? (
                   <CachedImage
                     src={r.thumbnailUrl}
-                    alt={`Result ${i + 1}`}
+                    alt={t("node.resultN", { n: i + 1 })}
                     className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
                       i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                     }`}
@@ -624,7 +624,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground/60">
             <Users className="w-8 h-8" />
             <span className="text-[10px] text-center">
-              {needsVideoInput ? "Connect video + audio" : needsBothInputs ? "Connect image or video + audio" : "Connect portrait image + audio"}
+              {needsVideoInput ? t("node.connectVideoPlusAudio") : needsBothInputs ? t("node.connectImageOrVideoPlusAudio") : t("node.connectPortraitPlusAudio")}
             </span>
           </div>
         )}

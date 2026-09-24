@@ -7,6 +7,7 @@
 
 import { nodeMedia, nodeField } from "../derive-tutorial-data"
 import { nodePicks } from "./person-node-picks"
+import { tx, type TFunction } from "@/lib/i18n"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 export interface SunoInput {
@@ -87,26 +88,37 @@ export function deriveSunoRuns(nodes: WorkflowNode[], edges: WorkflowEdge[]): Su
   })
 }
 
-/** What changed between two consecutive runs, in the reader's terms. */
-export function describeChange(previous: SunoRun | undefined, run: SunoRun): string {
-  if (!previous) return "The starting point — every option picked from a dropdown."
+/**
+ * What changed between two consecutive runs, in the reader's terms. `nameOf`
+ * names a style-node family inside the sentence — the body passes the node's
+ * localized label; the default is the node type in plain words. `t` defaults
+ * to the live locale for non-render callers.
+ */
+export function describeChange(
+  previous: SunoRun | undefined,
+  run: SunoRun,
+  t: TFunction = tx,
+  nameOf: (kind: string) => string = (kind) => kind.replace(/-/g, " "),
+): string {
+  if (!previous) return t("tut.sunoChangeStart")
 
   const before = new Set(previous.inputs.map((i) => i.kind))
   const after = new Set(run.inputs.map((i) => i.kind))
   const added = [...after].filter((k) => !before.has(k))
   const removed = [...before].filter((k) => !after.has(k))
 
-  const pretty = (kind: string) => kind.replace(/-/g, " ")
-  if (added.length) return `Added ${added.map(pretty).join(" and ")}.`
-  if (removed.length) return `Dropped ${removed.map(pretty).join(" and ")}.`
+  // "a and b and c", joined the way each language joins a list.
+  const both = (kinds: string[]) => kinds.map(nameOf).reduce((a, b) => t("tut.listAnd", { a, b }))
+  if (added.length) return t("tut.sunoChangeAdded", { names: both(added) })
+  if (removed.length) return t("tut.sunoChangeDropped", { names: both(removed) })
   if (run.instrumental !== previous.instrumental) {
-    return run.instrumental ? "Switched to instrumental — no vocals." : "Vocals back on."
+    return run.instrumental ? t("tut.sunoChangeInstrumental") : t("tut.sunoChangeVocals")
   }
 
   const changed = run.inputs.filter((input) => {
     const other = previous.inputs.find((p) => p.kind === input.kind)
     return other && other.picks.join("|") !== input.picks.join("|")
   })
-  if (changed.length) return `Changed ${changed.map((c) => pretty(c.kind)).join(", ")}.`
-  return "Same options, generated again."
+  if (changed.length) return t("tut.sunoChangeChanged", { names: changed.map((c) => nameOf(c.kind)).join(", ") })
+  return t("tut.sunoChangeSame")
 }

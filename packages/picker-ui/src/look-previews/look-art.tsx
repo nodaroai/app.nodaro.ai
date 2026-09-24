@@ -5,6 +5,7 @@ import { cn } from "../lib/cn"
 import { optimizedImageUrl } from "../prompt-editor/lib/image"
 import { cdnVideoUrl, isVideoPreview } from "./media-url"
 import { useLookPreviewUrl } from "./registry"
+import { useEffectiveLookPreviewStyle } from "./preview-style"
 
 interface LookArtProps {
   /** The picker (node type) whose preview set to read, e.g. "style", "framing". */
@@ -77,9 +78,15 @@ function prefersReducedMotion(): boolean {
  * (`sizes`), which then fetches the smallest `srcset` candidate that covers the
  * box at the screen's pixel density. A clip render (camera motion) shows a
  * still frame and plays a small silent encode while the pointer is over it.
+ *
+ * Under an "illustration" scope (LookPreviewStyleProvider) the drawn fallback
+ * shows instead — unless there is none (`fallback={null}`), then the render
+ * stays: a picker with nothing to draw never goes blank.
  */
 export const LookArt = memo(function LookArt({ pickerKey, id, className, width = 240, fallback }: LookArtProps) {
-  const url = useLookPreviewUrl(pickerKey, id)
+  const registeredUrl = useLookPreviewUrl(pickerKey, id)
+  const illustrated = useEffectiveLookPreviewStyle(pickerKey) === "illustration" && fallback !== null && fallback !== undefined
+  const url = illustrated ? undefined : registeredUrl
   // Keyed by URL, so moving to another option retries instead of sticking to the fallback.
   const [failedUrl, setFailedUrl] = useState<string | undefined>(undefined)
   // A clip plays only while the pointer is over THIS render. Hover is reset

@@ -8,9 +8,10 @@
  */
 import { useEffect, useState } from "react"
 import { X } from "lucide-react"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
 import { Switch } from "@/components/ui/switch"
+import { useT, type MessageKey } from "@/lib/i18n"
 import { CopilotMemoriesButton } from "./copilot-memories"
 import type { CopilotModelTier, CopilotRunMode } from "@/ee/lib/copilot/types"
 
@@ -24,18 +25,20 @@ interface CopilotHeaderProps {
   }) => void
 }
 
-/** The ladder's three rungs — names for people, hints for honesty. */
-const TIER_UI: Array<{ tier: CopilotModelTier; label: string; hint: string }> = [
-  { tier: "economy", label: S.tierEconomy, hint: S.tierHintEconomy },
-  { tier: "standard", label: S.tierStandard, hint: S.tierHintStandard },
-  { tier: "premium", label: S.tierPremium, hint: S.tierHintPremium },
+/** The ladder's three rungs — names for people, hints for honesty. Keys, resolved at render. */
+const TIER_UI: ReadonlyArray<{ tier: CopilotModelTier; labelKey: MessageKey; hintKey: MessageKey }> = [
+  { tier: "economy", labelKey: K.tierEconomy, hintKey: K.tierHintEconomy },
+  { tier: "standard", labelKey: K.tierStandard, hintKey: K.tierHintStandard },
+  { tier: "premium", labelKey: K.tierPremium, hintKey: K.tierHintPremium },
 ]
 
 export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps) {
+  const t = useT()
   const runMode = useCopilotStore((s) => s.runMode)
   const allowPublishing = useCopilotStore((s) => s.allowPublishing)
   const modelTier = useCopilotStore((s) => s.modelTier)
   const autoRunLimit = useCopilotStore((s) => s.autoRunLimit)
+  const activeTier = TIER_UI.find((row) => row.tier === modelTier)
   const [draftLimit, setDraftLimit] = useState(String(autoRunLimit))
 
   useEffect(() => {
@@ -57,13 +60,13 @@ export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps)
     <div className="flex-none px-3.5 py-3 border-b border-border flex flex-col gap-2.5">
       <div className="flex items-center gap-2">
         <span className="w-[7px] h-[7px] rounded-[2px] bg-primary" aria-hidden />
-        <span className="text-[13.5px] font-semibold text-foreground tracking-[-0.01em]">{S.title}</span>
-        <div className="ml-auto flex items-center gap-1.5">
+        <span className="text-[13.5px] font-semibold text-foreground tracking-[-0.01em]">{t(K.title)}</span>
+        <div className="ms-auto flex items-center gap-1.5">
           <CopilotMemoriesButton />
           <button
             type="button"
             onClick={onClose}
-            aria-label={S.close}
+            aria-label={t(K.close)}
             className="w-[26px] h-[26px] rounded-[7px] border border-border text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center transition-colors"
           >
             <X className="w-3 h-3" strokeWidth={2.2} />
@@ -72,7 +75,7 @@ export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps)
       </div>
 
       <div className="flex items-center gap-2">
-        <div role="radiogroup" aria-label="Run mode" className="flex p-0.5 bg-[var(--copilot-card)] border border-border rounded-lg">
+        <div role="radiogroup" aria-label={t(K.runModeLabel)} className="flex p-0.5 bg-[var(--copilot-card)] border border-border rounded-lg">
           {(["ask", "auto"] as const).map((mode) => (
             <button
               key={mode}
@@ -86,7 +89,7 @@ export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps)
                   : "text-[var(--copilot-muted)] hover:text-foreground"
               }`}
             >
-              {mode === "ask" ? S.modeAsk : S.modeAuto}
+              {t(mode === "ask" ? K.modeAsk : K.modeAuto)}
             </button>
           ))}
         </div>
@@ -96,9 +99,9 @@ export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps)
             runMode === "auto" ? "opacity-100" : "opacity-45"
           }`}
         >
-          <span className="text-[11.5px] text-[var(--copilot-dim)]">{S.ceilingPrefix}</span>
+          <span className="text-[11.5px] text-[var(--copilot-dim)]">{t(K.ceilingPrefix)}</span>
           <input
-            aria-label={S.ceilingLabel}
+            aria-label={t(K.ceilingLabel)}
             inputMode="numeric"
             value={draftLimit}
             onChange={(e) => setDraftLimit(e.target.value.replace(/[^\d]/g, ""))}
@@ -109,24 +112,24 @@ export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps)
             size={Math.max(2, draftLimit.length)}
             className="bg-transparent border-none outline-none text-xs font-semibold text-foreground tabular-nums w-[4ch] text-center focus:ring-0"
           />
-          <span className="text-[11.5px] text-[var(--copilot-dim)]">{S.ceilingSuffix}</span>
+          <span className="text-[11.5px] text-[var(--copilot-dim)]">{t(K.ceilingSuffix)}</span>
         </div>
 
-        <span className="ml-auto text-[11px] text-[var(--copilot-dim)] whitespace-nowrap">
-          {runMode === "auto" ? S.modeHintAuto : S.modeHintAsk}
+        <span className="ms-auto text-[11px] text-[var(--copilot-dim)] whitespace-nowrap">
+          {t(runMode === "auto" ? K.modeHintAuto : K.modeHintAsk)}
         </span>
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="text-[11px] text-[var(--copilot-dim)]">{S.tierLabel}</span>
-        <div role="radiogroup" aria-label={S.tierLabel} className="flex p-0.5 bg-[var(--copilot-card)] border border-border rounded-lg">
-          {TIER_UI.map(({ tier, label, hint }) => (
+        <span className="text-[11px] text-[var(--copilot-dim)]">{t(K.tierLabel)}</span>
+        <div role="radiogroup" aria-label={t(K.tierLabel)} className="flex p-0.5 bg-[var(--copilot-card)] border border-border rounded-lg">
+          {TIER_UI.map(({ tier, labelKey, hintKey }) => (
             <button
               key={tier}
               type="button"
               role="radio"
               aria-checked={modelTier === tier}
-              title={hint}
+              title={t(hintKey)}
               onClick={() => modelTier !== tier && onChangeSettings({ modelTier: tier })}
               className={`px-2.5 py-[4px] rounded-md text-[11.5px] font-medium transition-colors ${
                 modelTier === tier
@@ -134,12 +137,12 @@ export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps)
                   : "text-[var(--copilot-muted)] hover:text-foreground"
               }`}
             >
-              {label}
+              {t(labelKey)}
             </button>
           ))}
         </div>
-        <span className="ml-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap truncate max-w-[45%]">
-          {TIER_UI.find((t) => t.tier === modelTier)?.hint}
+        <span className="ms-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap truncate max-w-[45%]">
+          {activeTier ? t(activeTier.hintKey) : null}
         </span>
       </div>
 
@@ -150,15 +153,15 @@ export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps)
           label — the Switch carries its own accessible name. */}
       <div className="flex items-center gap-3">
         <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-          <span className="text-[11.5px] text-foreground leading-tight">{S.allowPublishing}</span>
+          <span className="text-[11.5px] text-foreground leading-tight">{t(K.allowPublishing)}</span>
           <span className="text-[10.5px] text-[var(--copilot-dim)] leading-tight">
-            {allowPublishing ? S.allowPublishingOn : S.allowPublishingOff}
+            {t(allowPublishing ? K.allowPublishingOn : K.allowPublishingOff)}
           </span>
         </div>
         <Switch
           checked={allowPublishing}
           onCheckedChange={(v: boolean) => onChangeSettings({ allowPublishing: v })}
-          aria-label={S.allowPublishing}
+          aria-label={t(K.allowPublishing)}
           className="flex-none"
         />
       </div>

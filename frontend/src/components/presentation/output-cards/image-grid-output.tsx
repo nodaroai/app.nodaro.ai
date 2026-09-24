@@ -1,4 +1,5 @@
 import { CachedImage } from "@/components/ui/cached-image"
+import { useT } from "@/lib/i18n"
 import { IterationProgress, type GalleryOutputProps } from "./shared"
 
 interface ImageGridOutputProps extends GalleryOutputProps {
@@ -13,6 +14,7 @@ export function ImageGridOutput({
   onOpenMedia,
   columns,
 }: ImageGridOutputProps) {
+  const t = useT()
   return (
     <div>
       <IterationProgress status={status} iterationTotal={iterationTotal} iterationCompleted={iterationCompleted} />
@@ -25,12 +27,12 @@ export function ImageGridOutput({
           >
             <CachedImage
               src={url}
-              alt={`Result ${i + 1}`}
+              alt={t("present.resultN", { n: i + 1 })}
               className="w-full h-full object-cover"
               thumbnail
               thumbnailWidth={240}
             />
-            <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 bg-gradient-to-t from-black/50 text-white text-[9px]">
+            <div className="absolute bottom-0 start-0 end-0 px-1.5 py-0.5 bg-gradient-to-t from-black/50 text-white text-[9px]">
               #{i + 1}
             </div>
           </div>

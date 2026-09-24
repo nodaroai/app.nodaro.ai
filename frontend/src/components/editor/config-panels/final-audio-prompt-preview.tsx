@@ -119,7 +119,7 @@ export function FinalAudioPromptPreview({
             <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
               {f.label}
             </div>
-            <pre className="whitespace-pre-wrap text-[11px] leading-snug font-mono text-foreground">
+            <pre dir="auto" className="whitespace-pre-wrap text-[11px] leading-snug font-mono text-foreground">
               {f.text}
             </pre>
           </div>
@@ -129,7 +129,7 @@ export function FinalAudioPromptPreview({
           <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
             {preview.label}
           </div>
-          <pre className="whitespace-pre-wrap text-[11px] leading-snug font-mono text-foreground">
+          <pre dir="auto" className="whitespace-pre-wrap text-[11px] leading-snug font-mono text-foreground">
             {preview.final}
           </pre>
           {preview.warnings.length > 0 && (

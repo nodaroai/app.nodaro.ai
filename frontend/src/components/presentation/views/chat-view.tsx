@@ -6,6 +6,7 @@ import { creditUnitLabel } from "@/lib/credit-units"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { getNodeLabel, getOutputType } from "@/lib/presentation-utils"
+import { useT } from "@/lib/i18n"
 import { type RunSlot, type RunSlotNodeState } from "@/components/app-runner/types"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import type { OutputStatus } from "../output-cards/shared"
@@ -81,6 +82,7 @@ export function ChatView({
   const nodes = usePresentationStore((s) => s.nodes)
   const edges = usePresentationStore((s) => s.edges)
   const inputValues = usePresentationStore((s) => s.inputValues)
+  const t = useT()
 
   const slots = runSlots?.slots ?? []
   const messages = getThreadMessages(slots)
@@ -154,7 +156,7 @@ export function ChatView({
         <div className="max-w-5xl mx-auto flex flex-col gap-3">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center py-16 sm:py-24">
-              <h2 className="text-2xl font-semibold text-foreground mb-2">{appName || "Run this app"}</h2>
+              <h2 className="text-2xl font-semibold text-foreground mb-2">{appName || t("present.runThisApp")}</h2>
               {appDescription && <p className="text-muted-foreground max-w-md">{appDescription}</p>}
             </div>
           ) : (
@@ -240,6 +242,8 @@ function ChatMessage({
   stepsExpanded,
   onToggleSteps,
 }: ChatMessageProps) {
+  // `t` is taken below by the prompt-text map parameter.
+  const tr = useT()
   // Memoized: the graph is stable and slot.nodeStates keeps its identity for a
   // terminal message (fan-out skip-guard), so only the running message recomputes.
   const chips = useMemo(
@@ -280,8 +284,8 @@ function ChatMessage({
     <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
       <div className="flex flex-col gap-3 md:flex-row md:gap-5">
         {/* INPUT (left) */}
-        <div className="flex min-w-0 flex-col gap-2 md:w-2/5 md:border-r md:border-border md:pr-5">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Input</span>
+        <div className="flex min-w-0 flex-col gap-2 md:w-2/5 md:border-e md:border-border md:pe-5">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{tr("present.inputLabel")}</span>
           {promptTexts.map((t, i) => (
             <p key={i} className="whitespace-pre-wrap break-words text-sm text-foreground line-clamp-[8]">{t}</p>
           ))}
@@ -293,7 +297,7 @@ function ChatMessage({
                   type="button"
                   onClick={() => openResult(node.id)}
                   className="h-14 w-14 overflow-hidden rounded-md bg-muted/40"
-                  title="View"
+                  title={tr("common.view")}
                 >
                   {node.type === "upload-video" ? (
                     <video src={url} className="h-full w-full object-cover" muted playsInline />
@@ -323,7 +327,7 @@ function ChatMessage({
         {/* OUTPUT (right) */}
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Output</span>
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{tr("present.outputLabel")}</span>
             {slot.creditsUsed > 0 && <span className="text-[10px] text-muted-foreground">{slot.creditsUsed} cr</span>}
           </div>
           <div className="grid gap-2">
@@ -351,7 +355,7 @@ function ChatMessage({
             <div className="flex flex-wrap gap-1.5">
               {chips.map((c) => (
                 <span key={c.nodeId} className={`inline-flex items-center text-[11px] px-2 py-0.5 rounded-full border ${chipClass(c.status)}`}>
-                  {c.status === "running" && <Loader2 className="h-2.5 w-2.5 animate-spin mr-1" />}
+                  {c.status === "running" && <Loader2 className="h-2.5 w-2.5 animate-spin me-1" />}
                   {c.label}
                   {c.status === "completed" ? " ✓" : c.status === "failed" ? " ✕" : ""}
                 </span>
@@ -362,21 +366,21 @@ function ChatMessage({
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
             {isRunning && (
               <button type="button" onClick={onStop} className="inline-flex items-center gap-1 text-red-600 hover:text-red-700">
-                <Square className="h-3 w-3" fill="currentColor" /> Stop
+                <Square className="h-3 w-3" fill="currentColor" /> {tr("common.stop")}
               </button>
             )}
             <button type="button" onClick={onReuse} className="inline-flex items-center gap-1 hover:text-foreground">
-              <RotateCcw className="h-3 w-3" /> Re-use inputs
+              <RotateCcw className="h-3 w-3" /> {tr("present.reuseInputs")}
             </button>
             {chips.length > 1 && (
               <button type="button" onClick={onToggleSteps} className="inline-flex items-center gap-1 hover:text-foreground">
                 {stepsExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                {stepsExpanded ? "Hide steps" : "See steps"}
+                {stepsExpanded ? tr("present.hideSteps") : tr("present.seeSteps")}
               </button>
             )}
             {isDone && downloadUrl && (
               <a href={downloadUrl} download className="inline-flex items-center gap-1 hover:text-foreground">
-                <Download className="h-3 w-3" /> Download
+                <Download className="h-3 w-3" /> {tr("common.download")}
               </a>
             )}
           </div>

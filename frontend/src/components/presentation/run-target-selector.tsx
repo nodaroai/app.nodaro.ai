@@ -16,6 +16,7 @@ import type { WorkflowNode } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { getNodeLabel } from "@/lib/presentation-utils"
 import { discoverRoutes } from "@/lib/sub-workflow-utils"
+import { useT } from "@/lib/i18n"
 
 interface RunTargetSelectorProps {
   nodes: WorkflowNode[]
@@ -24,6 +25,7 @@ interface RunTargetSelectorProps {
 }
 
 export function RunTargetSelector({ nodes, presentationSettings, onUpdate }: RunTargetSelectorProps) {
+  const t = useT()
   const subWorkflowNodes = useMemo(
     () => nodes.filter((n) => n.type === "sub-workflow"),
     [nodes],
@@ -71,13 +73,13 @@ export function RunTargetSelector({ nodes, presentationSettings, onUpdate }: Run
   return (
     <Select value={currentValue} onValueChange={handleChange} disabled={!onUpdate}>
       <SelectTrigger className="w-[180px] h-8 text-xs">
-        <SelectValue placeholder="Run target" />
+        <SelectValue placeholder={t("runner.runTarget")} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="workflow">Entire Workflow</SelectItem>
+        <SelectItem value="workflow">{t("present.entireWorkflow")}</SelectItem>
         {routes.map((route) => (
           <SelectItem key={`route:${route.routeId}`} value={`route:${route.routeId}`}>
-            Route: {getNodeLabel(route.inputNode)}
+            {t("present.routePrefix", { name: getNodeLabel(route.inputNode) })}
           </SelectItem>
         ))}
         {subWorkflowNodes.map((node) => (

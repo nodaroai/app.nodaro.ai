@@ -18,7 +18,7 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
   const nodeData = data as TeleporterNodeData
   const partnerType = variant === "send" ? "teleport-receive" : "teleport-send"
   const Icon = variant === "send" ? Send : Download
-  const typeLabel = variant === "send" ? "SEND" : "RECV"
+  const typeLabel = variant === "send" ? t("node.teleportSend") : t("node.teleportRecv")
   const JumpIcon = variant === "send" ? ArrowRight : ArrowLeft
 
   const isHighlighted = useWorkflowStore((s) => {

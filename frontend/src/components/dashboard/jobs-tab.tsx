@@ -1,9 +1,12 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
+
 export function JobsTab() {
+  const t = useT()
   return (
     <div className="text-sm text-muted-foreground py-8 text-center">
-      Job history coming soon. Workflow executions will appear here.
+      {t("dash.jobsComingSoon")}
     </div>
   )
 }

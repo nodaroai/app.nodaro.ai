@@ -148,7 +148,7 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
           {audioIgnored && (
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 text-amber-600 text-[10px] leading-tight">
               <Film className="w-3 h-3 shrink-0" />
-              <span>Video wins — audio input ignored</span>
+              <span>{t("node.videoWinsAudioIgnored")}</span>
             </div>
           )}
 

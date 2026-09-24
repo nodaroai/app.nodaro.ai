@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits, isMultiUser } from "@/lib/edition"
+import { useT } from "@/lib/i18n"
 import { STUDIO_MODAL_Z } from "../studio-shell/studio-modal-z"
 import { getCharacter } from "@/lib/api"
 import type { CharacterNodeData } from "@/types/nodes"
@@ -187,6 +188,7 @@ function StudioModalBody({
   errored: Set<string>
   onClose: () => void
 }) {
+  const t = useT()
   const { isAdmin } = useAuth()
   const [showPublish, setShowPublish] = useState(false)
   const portrait = usePortraitCandidates(studio)
@@ -213,12 +215,12 @@ function StudioModalBody({
           )}
           <div>
             <div className="text-[13px] font-semibold text-slate-200">
-              {studio.staged.characterName || "Unnamed character"}
+              {studio.staged.characterName || t("studio.unnamedCharacter")}
             </div>
             <div className="text-[10px] text-slate-500">
-              {studio.staged.style} · {studio.staged.gender} · {counts.expr} expr · {counts.poses} poses ·{" "}
-              {counts.motions} motions
-              {errored.size > 0 && <span className="text-[#ef4444]"> · {errored.size} failed</span>}
+              {studio.staged.style} · {studio.staged.gender} ·{" "}
+              {t("studio.assetCounts", { expr: counts.expr, poses: counts.poses, motions: counts.motions })}
+              {errored.size > 0 && <span className="text-[#ef4444]"> · {t("exec.failedNodes", { n: errored.size })}</span>}
             </div>
           </div>
         </div>
@@ -238,20 +240,20 @@ function StudioModalBody({
                       onClick={() => setShowPublish(true)}
                     >
                       <Upload className="h-3.5 w-3.5" />
-                      Share to community
+                      {t("studio.shareToCommunity")}
                     </Button>
                   </span>
                 </TooltipTrigger>
                 {!studio.staged.characterDbId && (
                   <TooltipContent side="bottom">
-                    Generate an appearance to save the character first
+                    {t("studio.genAppearanceFirstCharacter")}
                   </TooltipContent>
                 )}
               </Tooltip>
             </TooltipProvider>
           )}
           <button onClick={onClose} className="text-[10px] bg-[#1e293b] rounded px-3 py-1.5 text-slate-400">
-            ✕ Close
+            ✕ {t("common.close")}
           </button>
         </div>
       </div>
@@ -280,13 +282,14 @@ function StudioModalBody({
 }
 
 function SaveIndicator({ status }: { status: SaveStatus }) {
+  const t = useT()
   if (status === "idle") return null
   const { dot, text } =
     status === "saving"
-      ? { dot: "bg-amber-500 animate-pulse", text: "Saving…" }
+      ? { dot: "bg-amber-500 animate-pulse", text: t("common.saving") }
       : status === "saved"
-        ? { dot: "bg-emerald-500", text: "Saved" }
-        : { dot: "bg-red-500", text: "Save failed" }
+        ? { dot: "bg-emerald-500", text: t("common.saved") }
+        : { dot: "bg-red-500", text: t("editor.saveFailed") }
   return (
     <span className="flex items-center gap-1.5 text-[10px] text-slate-400">
       <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />

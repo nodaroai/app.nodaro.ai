@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button"
 import { getAuthHeaders } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
 import { creditUnits } from "@/lib/credit-units"
+import { useT, tx } from "@/lib/i18n"
 import { NodaroScopeDialog, type NodaroProviderPrefs } from "./nodaro-scope-dialog"
+import { formatNumber } from "@/lib/i18n/format"
 
 /**
  * A stored post-connect destination is only ever a same-origin path. Reject
@@ -62,6 +64,7 @@ export function NodaroCloudCard() {
   /** Editor path held until the routing-choice dialog closes (see the
    *  ?nodaro=connected effect) — navigating first would skip the dialog. */
   const pendingEditorReturnRef = useRef<string | null>(null)
+  const t = useT()
 
   const refresh = useCallback(async () => {
     try {
@@ -111,7 +114,7 @@ export function NodaroCloudCard() {
     if (from === "editor" && isSafeReturnPath(storedReturn)) {
       pendingEditorReturnRef.current = storedReturn
     }
-    toast.success("Connected to nodaro.ai!")
+    toast.success(tx("integ.connectedTo", { name: "nodaro.ai" }))
     // The post-connect choice (4b): a fresh OAuth connection asks how it
     // should route, same as a pasted key.
     setScopeDialogOpen(true)
@@ -136,11 +139,11 @@ export function NodaroCloudCard() {
         | { authorizeUrl?: string; error?: { message?: string } }
         | null
       if (!res.ok || !data?.authorizeUrl) {
-        throw new Error(data?.error?.message ?? "Failed to start the connect flow")
+        throw new Error(data?.error?.message ?? tx("integ.connectStartFailed"))
       }
       window.location.href = data.authorizeUrl
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to start the connect flow")
+      toast.error(err instanceof Error ? err.message : tx("integ.connectStartFailed"))
       setConnecting(false)
     }
   }, [])
@@ -154,11 +157,11 @@ export function NodaroCloudCard() {
         headers,
       })
       if (!res.ok) throw new Error(`status ${res.status}`)
-      toast.success("Disconnected from nodaro.ai")
+      toast.success(tx("integ.disconnectedFrom", { name: "nodaro.ai" }))
       invalidateNodaroConnectionCache()
       await refresh()
     } catch {
-      toast.error("Failed to disconnect")
+      toast.error(tx("integ.toastDisconnectFailed"))
     } finally {
       setDisconnecting(false)
     }
@@ -184,18 +187,18 @@ export function NodaroCloudCard() {
             {connected && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                Connected
+                {t("integ.connected")}
               </span>
             )}
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {connected
               ? viaEnvKey
-                ? "This instance generates with nodaro.ai models through NODARO_API_KEY in its .env — billed to that account. Remove the key and restart to disconnect."
+                ? t("integ.cloudDescEnvKey")
                 : viaAppKey
-                  ? "This instance generates with nodaro.ai models through an API key added in this app — billed to that account. Change or remove it under Model providers below."
-                  : "This instance generates with nodaro.ai models through your connected account."
-              : "Generate with nodaro.ai models — 1,500 free credits, no credit card. Or set NODARO_API_KEY in .env."}
+                  ? t("integ.cloudDescAppKey")
+                  : t("integ.cloudDescConnected")
+              : t("integ.cloudDescNotConnected")}
           </p>
         </div>
       </div>
@@ -203,7 +206,7 @@ export function NodaroCloudCard() {
       {loading ? (
         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Checking connection…
+          {t("integ.checkingConnection")}
         </div>
       ) : connected ? (
         <div className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 dark:bg-[#252525] p-3">
@@ -211,21 +214,21 @@ export function NodaroCloudCard() {
             {totalCredits !== null ? (
               <>
                 <span className="block text-sm font-semibold text-gray-900 dark:text-white">
-                  {creditUnits(totalCredits).toLocaleString()} credits
+                  {t("integ.cloudCreditsCount", { n: formatNumber(creditUnits(totalCredits)) })}
                 </span>
                 <span className="block text-[11px] text-gray-500 dark:text-gray-400">
-                  Cloud account balance
+                  {t("integ.cloudAccountBalance")}
                 </span>
               </>
             ) : (
               <span className="block text-sm text-gray-600 dark:text-gray-300">
-                Balance unavailable right now
+                {t("integ.balanceUnavailable")}
               </span>
             )}
           </div>
           {viaEnvKey || viaAppKey ? (
             <span className="shrink-0 text-[11px] font-mono text-gray-500 dark:text-gray-400">
-              {viaEnvKey ? "via NODARO_API_KEY" : "via API key"}
+              {viaEnvKey ? t("integ.viaEnvKey") : t("integ.viaApiKey")}
             </span>
           ) : (
             <Button
@@ -236,11 +239,11 @@ export function NodaroCloudCard() {
               className="shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
             >
               {disconnecting ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin me-1.5" />
               ) : (
-                <Unlink className="h-3.5 w-3.5 mr-1.5" />
+                <Unlink className="h-3.5 w-3.5 me-1.5" />
               )}
-              Disconnect
+              {t("integ.disconnect")}
             </Button>
           )}
         </div>
@@ -250,8 +253,8 @@ export function NodaroCloudCard() {
           disabled={connecting}
           className="w-full sm:w-auto sm:self-start bg-[#ff0073] hover:bg-[#e0005f] text-white"
         >
-          {connecting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-          Connect
+          {connecting && <Loader2 className="h-4 w-4 animate-spin me-2" />}
+          {t("integ.connect")}
         </Button>
       )}
       {/* The 4b routing choice. Rendered HERE too — the setup page has its

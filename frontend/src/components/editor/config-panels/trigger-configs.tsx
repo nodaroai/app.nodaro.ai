@@ -65,7 +65,7 @@ export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTrig
         <Label>{t("utilcfg.webhookUrl")}</Label>
         {hasToken ? (
           <div className="flex items-center gap-2 mt-1">
-            <Input
+            <Input dir="ltr"
               value={webhookUrl}
               readOnly
               className="text-xs font-mono bg-muted/30"

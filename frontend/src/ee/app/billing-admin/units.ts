@@ -13,6 +13,8 @@
  * throws the quotient away.
  */
 
+import { formatDate, formatNumber } from "@/lib/i18n/format"
+
 /** The deployment's display unit, exactly as `/overview` reports it. `null`
  *  means the profile carries no unit trio — the server refuses every `units`
  *  input in that state, so the page must too. */
@@ -81,7 +83,7 @@ export function dollarsInputError(raw: string, min: number, max: number): "inval
  * a missing read into a refusal on screen. A real 0 still renders as "0".
  */
 export function orDash(v: number | null | undefined): string {
-  return v == null ? "—" : v.toLocaleString()
+  return v == null ? "—" : formatNumber(v)
 }
 
 /** Whole-number parse for a validated input (call only after the matching
@@ -96,13 +98,13 @@ export function parseWhole(raw: string): number {
  * The `orDash` rule one type over: a timestamp the server did not send is
  * "unknown", and inventing "now" for it (which is what an unguarded
  * `new Date(undefined)` degrades to via `Invalid Date`) states a fact nobody
- * has. Localized by the browser, never formatted by hand — the page is
- * Hebrew-first and a hard-coded order would be wrong in one of the two.
+ * has. Localized to the language chosen in the app, never formatted by hand —
+ * the page is Hebrew-first and a hard-coded order would be wrong in one of the two.
  */
 export function dateOrDash(iso: string | null | undefined): string {
   if (!iso) return "—"
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? "—" : formatDate(d)
 }
 
 /**

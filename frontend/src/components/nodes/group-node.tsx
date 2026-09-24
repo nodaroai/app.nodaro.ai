@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, tx } from "@/lib/i18n"
 import { memo, useCallback, useMemo, useState } from "react"
 import {
   NodeResizer,
@@ -126,7 +126,7 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
   useStaleHandleCleanup(id, types)
 
   const commitLabel = useCallback(() => {
-    const next = labelDraft.trim() || "New group"
+    const next = labelDraft.trim() || tx("node.newGroup")
     updateNodeData(id, { label: next })
     setEditing(false)
   }, [id, labelDraft, updateNodeData])

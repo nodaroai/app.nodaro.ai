@@ -5,6 +5,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useResultGenerationSettings } from "@/hooks/use-result-generation-settings"
 import { ResultSettingsInfo, type ResultSummaryRow } from "./result-settings-info"
 import type { GeneratedResult, ImageCollageData } from "@/types/nodes"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 interface ImageCollageResultInfoProps {
   readonly nodeId: string
@@ -14,7 +15,7 @@ interface ImageCollageResultInfoProps {
   readonly data: ImageCollageData
 }
 
-const LAYOUT_LABEL: Record<string, string> = { smart: "Smart", grid: "Grid" }
+const LAYOUT_LABEL_KEY: Record<string, MessageKey> = { smart: "node.layoutSmart", grid: "node.layoutGrid" }
 
 /**
  * Hover-revealed pill at the bottom-right of an Image Collage result — the
@@ -25,6 +26,7 @@ const LAYOUT_LABEL: Record<string, string> = { smart: "Smart", grid: "Grid" }
  * collage has no prompt.
  */
 export function ImageCollageResultInfo({ nodeId, result, data }: ImageCollageResultInfoProps) {
+  const t = useT()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const jobId = result?.jobId && result.jobId.length > 0 ? result.jobId : undefined
   const { data: settings, isLoading } = useResultGenerationSettings(jobId)
@@ -35,22 +37,22 @@ export function ImageCollageResultInfo({ nodeId, result, data }: ImageCollageRes
   const layoutRaw = settings?.layout ?? data.layout
   const aspect = settings?.aspectRatio ?? data.aspectRatio
   const resolution = settings?.resolution ?? data.resolution
-  const layout = layoutRaw ? (LAYOUT_LABEL[layoutRaw] ?? layoutRaw) : undefined
+  const layout = layoutRaw ? (LAYOUT_LABEL_KEY[layoutRaw] ? t(LAYOUT_LABEL_KEY[layoutRaw]) : layoutRaw) : undefined
   // `numbered` is only PERSISTED when it was on (the route omits it when off),
   // so an absent key on a real job means "not numbered" — never fall through to
   // the node's live toggle for it, or an old un-numbered result would show a
   // "Numbered" token the moment the switch is flipped. The node-config fallback
   // is reserved for legacy/purged jobs with no settings at all.
   const numbered = settings ? settings.numbered === true : data.numbered === true
-  const summary = [layout, aspect, resolution, numbered ? "Numbered" : undefined]
+  const summary = [layout, aspect, resolution, numbered ? t("node.numbered") : undefined]
     .filter(Boolean)
     .join(" · ")
 
   const rows: ResultSummaryRow[] = []
-  if (layout) rows.push({ label: "Layout", value: layout })
-  if (aspect) rows.push({ label: "Aspect", value: aspect })
-  if (resolution) rows.push({ label: "Resolution", value: resolution })
-  if (numbered) rows.push({ label: "Numbered", value: "On" })
+  if (layout) rows.push({ label: t("proccfg.layout"), value: layout })
+  if (aspect) rows.push({ label: t("node.aspect"), value: aspect })
+  if (resolution) rows.push({ label: t("field.resolution"), value: resolution })
+  if (numbered) rows.push({ label: t("node.numbered"), value: t("node.on") })
 
   return (
     <ResultSettingsInfo
@@ -68,7 +70,7 @@ export function ImageCollageResultInfo({ nodeId, result, data }: ImageCollageRes
         if (settings.resolution !== undefined) patch.resolution = settings.resolution
         if (settings.numbered !== undefined) patch.numbered = settings.numbered
         updateNodeData(nodeId, patch)
-        toast.success("Applied settings")
+        toast.success(t("node.appliedSettings"))
       }}
     />
   )

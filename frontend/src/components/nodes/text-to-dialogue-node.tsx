@@ -39,7 +39,7 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
 
   const dialogue = nodeData.dialogue ?? []
   const uniqueVoices = new Set(dialogue.map((l) => l.voice))
-  const summary = `${dialogue.length} line${dialogue.length !== 1 ? "s" : ""}, ${uniqueVoices.size} speaker${uniqueVoices.size !== 1 ? "s" : ""}`
+  const summary = `${t(dialogue.length === 1 ? "node.lineCountOne" : "node.lineCountMany", { n: dialogue.length })}, ${t(uniqueVoices.size === 1 ? "node.speakerCountOne" : "node.speakerCountMany", { n: uniqueVoices.size })}`
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))
@@ -72,7 +72,7 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
               <button
                 key={`${r.jobId}-${i}`}
                 type="button"
-                aria-label={`Result ${i + 1}`}
+                aria-label={t("node.resultN", { n: i + 1 })}
                 className={`w-10 h-10 flex items-center justify-center rounded-lg cursor-pointer transition-all ${
                   i === activeIndex
                     ? "ring-2 ring-[#ff0073] bg-[#ff0073]/20"

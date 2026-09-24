@@ -30,7 +30,10 @@ import { CopilotApiError, createCopilotThread } from "@/ee/lib/copilot/api"
 import { COPILOT_MESSAGE_MAX_CHARS } from "@/ee/lib/copilot/constants"
 import { activeMentionQuery, buildWireMessage, insertMentionName, variantSuffix } from "@/ee/lib/copilot/mentions"
 import { useCopilotMentions } from "@/ee/lib/copilot/use-copilot-mentions"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
+import { tx, useT, type MessageKey } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { CopilotAttachButton } from "./copilot-attach-button"
 import { CopilotMentionPicker, MENTION_LIST_ID, MentionThumb, safeThumbUrl } from "./copilot-mention-picker"
 import { CopilotMentionModal } from "./copilot-mention-modal"
@@ -50,11 +53,12 @@ const DOCK_BOTTOM_PX = 24
 /** So the last row of workflow cards does not end flush against the glass. */
 const DOCK_GAP_PX = 16
 
-const SUGGESTIONS: ReadonlyArray<{ text: string; dot: string }> = [
-  { text: "Product shot workflow", dot: "var(--copilot-mention)" },
-  { text: "Ad creatives for my brand", dot: "var(--primary)" },
-  { text: "Script → narrated video", dot: "var(--copilot-ok)" },
-  { text: "Character set", dot: "#818CF8" },
+/** Keys, resolved at render — and what a click builds from is that same resolved text. */
+const SUGGESTIONS: ReadonlyArray<{ textKey: MessageKey; dot: string }> = [
+  { textKey: K.chipProductShot, dot: "var(--copilot-mention)" },
+  { textKey: K.chipAdCreatives, dot: "var(--primary)" },
+  { textKey: K.chipScriptVideo, dot: "var(--copilot-ok)" },
+  { textKey: K.chipCharacterSet, dot: "#818CF8" },
 ]
 
 /**
@@ -83,6 +87,8 @@ function readCollapsed(): boolean {
 }
 
 export default function CopilotHomeComposer() {
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const navigate = useNavigate()
   const openPanel = useCopilotUiStore((s) => s.openPanel)
   const { user } = useAuth()
@@ -233,7 +239,7 @@ export default function CopilotHomeComposer() {
     // message is checked for real before anything is spent.
     const wire = buildWireMessage(body, mentions)
     if (wire.length > COPILOT_MESSAGE_MAX_CHARS) {
-      setError(S.homeTooLong)
+      setError(tx(K.homeTooLong))
       return
     }
     setBuilding(true)
@@ -257,7 +263,7 @@ export default function CopilotHomeComposer() {
       // copilot conversations" is the case this exists for. The rate limiter's
       // is an internal detail ("Limit: 5 per 60s") and gets our sentence.
       setError(
-        err instanceof CopilotApiError && err.code !== "rate_limit_exceeded" ? err.message : S.homeBuildFailed,
+        err instanceof CopilotApiError && err.code !== "rate_limit_exceeded" ? err.message : tx(K.homeBuildFailed),
       )
       setBuilding(false)
     }
@@ -289,7 +295,7 @@ export default function CopilotHomeComposer() {
                   setBrowserTab(tab)
                   setQuery(null)
                 }}
-                insetClassName="left-0 right-0"
+                insetClassName="start-0 end-0"
                 loading={mentionsLoading}
                 fileTotal={fileTotal}
                 hasMoreFiles={hasMoreFiles}
@@ -327,16 +333,16 @@ export default function CopilotHomeComposer() {
             <div className={`rounded-2xl px-3 pt-3 pb-2.5 flex flex-col gap-2.5 ${GLASS}`}>
               <div className="flex items-center gap-2.5">
                 <Bot className="w-3.5 h-3.5 text-primary" strokeWidth={1.7} />
-                <span className="text-[12.5px] font-semibold text-foreground">{S.title}</span>
+                <span className="text-[12.5px] font-semibold text-foreground">{t(K.title)}</span>
                 <span className="text-[11.5px] text-[var(--copilot-dim)] hidden sm:inline truncate">
-                  {S.homeTagline}
+                  {t(K.homeTagline)}
                 </span>
                 <button
                   type="button"
                   onClick={() => setDock(true)}
-                  aria-label={S.homeCollapse}
-                  title={`${S.homeCollapse} (${shortcutLabel})`}
-                  className="ml-auto w-[26px] h-[26px] flex-none rounded-[7px] border border-border bg-[var(--copilot-surface)] text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center transition-colors"
+                  aria-label={t(K.homeCollapse)}
+                  title={`${t(K.homeCollapse)} (${shortcutLabel})`}
+                  className="ms-auto w-[26px] h-[26px] flex-none rounded-[7px] border border-border bg-[var(--copilot-surface)] text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center transition-colors"
                 >
                   <X className="w-[11px] h-[11px]" strokeWidth={2.2} />
                 </button>
@@ -347,13 +353,13 @@ export default function CopilotHomeComposer() {
                   {mentions.map((mention) => (
                     <span
                       key={`${mention.kind}:${mention.id}`}
-                      className="inline-flex items-center gap-1.5 pl-1 pr-1.5 py-[3px] rounded-[7px] text-[11.5px] text-foreground whitespace-nowrap bg-[var(--copilot-mention)]/10 border border-[var(--copilot-mention)]/40"
+                      className="inline-flex items-center gap-1.5 ps-1 pe-1.5 py-[3px] rounded-[7px] text-[11.5px] text-foreground whitespace-nowrap bg-[var(--copilot-mention)]/10 border border-[var(--copilot-mention)]/40"
                     >
                       {safeThumbUrl(mention.imageUrl) ? (
                         <button
                           type="button"
-                          aria-label={S.pickerPreviewOf(mention.name)}
-                          title={S.pickerPreviewOf(mention.name)}
+                          aria-label={t(K.pickerPreviewOf, { name: mention.name })}
+                          title={t(K.pickerPreviewOf, { name: mention.name })}
                           onClick={() => setChipPreview(mention)}
                           className="inline-flex items-center gap-1.5 cursor-zoom-in"
                         >
@@ -368,7 +374,7 @@ export default function CopilotHomeComposer() {
                       )}
                       <button
                         type="button"
-                        aria-label={`Remove ${mention.name}`}
+                        aria-label={t(K.removeMention, { name: mention.name })}
                         onClick={() => {
                           setMentions((prev) => prev.filter((m) => m.id !== mention.id))
                           // "…or remove a mention" is the advice the length
@@ -397,7 +403,7 @@ export default function CopilotHomeComposer() {
                   type="button"
                   onClick={openPicker}
                   disabled={building}
-                  aria-label={S.mention}
+                  aria-label={t(K.mention)}
                   className="w-[26px] h-[26px] flex-none rounded-[7px] border border-border bg-[var(--copilot-surface)] text-[var(--copilot-muted)] hover:text-[var(--copilot-mention)] flex items-center justify-center transition-colors disabled:opacity-50"
                 >
                   <AtSign className="w-3 h-3" strokeWidth={2} />
@@ -423,8 +429,8 @@ export default function CopilotHomeComposer() {
                   value={prompt}
                   disabled={building}
                   maxLength={promptLimit}
-                  placeholder={S.homePlaceholder}
-                  aria-label={S.homePlaceholder}
+                  placeholder={t(K.homePlaceholder)}
+                  aria-label={t(K.homePlaceholder)}
                   // Focus never leaves the box while the picker is open, so
                   // the combobox wiring is what tells a screen reader a list
                   // appeared and which row the arrow keys are on.
@@ -460,8 +466,8 @@ export default function CopilotHomeComposer() {
                   className="flex items-center gap-1.5 px-4 py-2 rounded-[9px] bg-primary text-primary-foreground text-[12.5px] font-semibold whitespace-nowrap disabled:opacity-50 transition-opacity"
                 >
                   {building ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                  {S.homeBuild}
-                  {!building && <ArrowRight className="w-3 h-3" strokeWidth={2.4} />}
+                  {t(K.homeBuild)}
+                  {!building && <ArrowRight className={cn("w-3 h-3", isRtl && "rotate-180")} strokeWidth={2.4} />}
                 </button>
               </form>
 
@@ -476,16 +482,16 @@ export default function CopilotHomeComposer() {
                   Below `sm` they wrap to three rows and the dock swallows a
                   third of a phone screen, so there they are dropped. */}
               <div className="hidden sm:flex gap-1.5 flex-wrap">
-                {SUGGESTIONS.map(({ text, dot }) => (
+                {SUGGESTIONS.map(({ textKey, dot }) => (
                   <button
-                    key={text}
+                    key={textKey}
                     type="button"
                     disabled={building}
-                    onClick={() => void build(text)}
+                    onClick={() => void build(t(textKey))}
                     className="flex items-center gap-[7px] px-2.5 py-[5px] rounded-full border border-border bg-[var(--copilot-surface)] text-[11.5px] text-[var(--copilot-muted)] whitespace-nowrap hover:text-foreground transition-colors disabled:opacity-50"
                   >
                     <span className="w-1 h-1 rounded-full" style={{ background: dot }} aria-hidden />
-                    {text}
+                    {t(textKey)}
                   </button>
                 ))}
               </div>
@@ -503,16 +509,17 @@ export default function CopilotHomeComposer() {
  * no state in which the Copilot is gone from this page.
  */
 function CollapsedPill({ shortcut, onOpen }: { shortcut: string; onOpen: () => void }) {
+  const t = useT()
   return (
     <button
       type="button"
       onClick={onOpen}
-      aria-label={S.homeExpand}
-      title={`${S.title} (${shortcut})`}
+      aria-label={t(K.homeExpand)}
+      title={`${t(K.title)} (${shortcut})`}
       className={`pointer-events-auto mx-auto flex items-center gap-2.5 px-4 py-2.5 rounded-full ${GLASS}`}
     >
       <Bot className="w-3.5 h-3.5 text-primary" strokeWidth={1.7} />
-      <span className="text-[12.5px] font-semibold text-foreground">{S.title}</span>
+      <span className="text-[12.5px] font-semibold text-foreground">{t(K.title)}</span>
       <span className="font-mono text-[11px] text-[var(--copilot-dim)]">{shortcut}</span>
     </button>
   )

@@ -28,6 +28,7 @@ import { useVoiceClones, useDeleteVoiceClone } from "@/hooks/use-voice-clones"
 import { toast } from "sonner"
 import { useT, tx } from "@/lib/i18n"
 import type { TtsProvider } from "@nodaro/shared"
+import { formatDate } from "@/lib/i18n/format"
 
 /** Library-voice model verification, threaded so the TTS config can snap to
  *  a provider the voice IS verified for (preview-fidelity guard). Uses the
@@ -769,7 +770,7 @@ function MyVoicesTab({
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {t("apiTok.created", { date: new Date(clone.createdAt).toLocaleDateString() })}
+                      {t("apiTok.created", { date: formatDate(clone.createdAt) })}
                     </div>
                   </div>
                   <Button

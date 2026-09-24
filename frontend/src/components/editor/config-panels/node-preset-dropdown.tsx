@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils"
 import { NODE_TITLE_TYPOGRAPHY } from "@/lib/node-title-style"
 import { toast } from "sonner"
 import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 import { useLocalizePresetGroup, useLocalizePresetCopy } from "@/lib/i18n/labels"
 
 /** Asset/entity nodes are DB-backed (own galleries) — no config preset applies. Gated by category
@@ -136,6 +137,7 @@ interface InnerProps extends PresetDropdownProps {
 
 function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, zoom = 1, className, onOpenChange }: InnerProps) {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const localizePresetGroup = useLocalizePresetGroup()
   const localizeCopy = useLocalizePresetCopy()
   // Display name for a merged preset: factory copy is localized, user names are
@@ -516,7 +518,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                               className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-start hover:bg-accent"
                               onClick={() => toggleCollapsed(g.id)}
                             >
-                              {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
+                              {isCollapsed ? <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 opacity-70", isRtl && "rotate-180")} /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
                               {isCollapsed ? <Folder className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />}
                               <span className="truncate text-sm font-medium">{g.name}</span>
                               <span className="ms-auto text-[11px] text-muted-foreground">{node.presets.length}</span>
@@ -562,7 +564,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                               className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-start hover:bg-accent"
                               onClick={() => toggleCollapsed(folderKey)}
                             >
-                              {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
+                              {isCollapsed ? <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 opacity-70", isRtl && "rotate-180")} /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
                               {isCollapsed ? <Folder className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />}
                               <span className="truncate text-sm font-medium">{localizePresetGroup(g.group ?? "")}</span>
                               <span className="ms-auto text-[11px] text-muted-foreground">{g.presets.length}</span>

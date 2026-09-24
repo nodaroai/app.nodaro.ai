@@ -3,6 +3,7 @@ import { usePipelineEntities } from "@/hooks/use-pipeline-entities"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { SceneCard } from "./scene-card"
 import { Button } from "@/components/ui/button"
+import { useT } from "@/lib/i18n"
 
 interface Props {
   pipelineId: string
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function SceneGrid({ pipelineId, title }: Props) {
+  const t = useT()
   const { data, refetch } = usePipelineEntities(pipelineId, "scene")
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState("")
@@ -44,7 +46,7 @@ export function SceneGrid({ pipelineId, title }: Props) {
     <div className="mb-4">
       <div className="text-xs uppercase text-zinc-500 mb-2">{title}</div>
       {data.length === 0 ? (
-        <div className="text-sm text-zinc-500 italic">No scenes yet</div>
+        <div className="text-sm text-zinc-500 italic">{t("pipe.noScenesYet")}</div>
       ) : (
         <div className="flex flex-col gap-2">
           {data.map((entity) => (
@@ -60,17 +62,17 @@ export function SceneGrid({ pipelineId, title }: Props) {
       )}
       {rejectingId && (
         <div className="mt-3 p-3 rounded border border-zinc-200 bg-white">
-          <div className="text-sm font-semibold mb-2">Reject scene with feedback</div>
+          <div className="text-sm font-semibold mb-2">{t("pipe.rejectSceneWithFeedback")}</div>
           <textarea
             className="w-full rounded border border-zinc-300 p-2 text-sm"
             rows={3}
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
-            placeholder="What should change in this scene's shot list?"
+            placeholder={t("pipe.sceneShotListChangePlaceholder")}
           />
           <div className="flex gap-2 mt-2">
             <Button size="sm" onClick={() => handleReject(rejectingId)} disabled={!feedback.trim()}>
-              Submit
+              {t("pipe.submit")}
             </Button>
             <Button
               size="sm"
@@ -80,7 +82,7 @@ export function SceneGrid({ pipelineId, title }: Props) {
                 setFeedback("")
               }}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         </div>

@@ -78,15 +78,15 @@ export function GenerateVideoResultInfo({
   // result whose provider never produced audio.
   const recordedAudio = settings?.generateAudio
   const model = videoModelLabelFor(provider)
-  const durationLabel = typeof duration === "number" ? (duration === VIDEO_DURATION_AUTO ? "Auto" : `${duration}s`) : undefined
+  const durationLabel = typeof duration === "number" ? (duration === VIDEO_DURATION_AUTO ? t("common.auto") : `${duration}s`) : undefined
   const summary = [model, aspect, resolution, durationLabel].filter(Boolean).join(" · ")
 
-  const rows: ResultSummaryRow[] = [{ label: "Model", value: model }]
-  if (aspect) rows.push({ label: "Aspect", value: aspect })
-  if (resolution) rows.push({ label: "Resolution", value: resolution })
-  if (durationLabel) rows.push({ label: "Duration", value: durationLabel })
+  const rows: ResultSummaryRow[] = [{ label: t("field.model"), value: model }]
+  if (aspect) rows.push({ label: t("node.aspect"), value: aspect })
+  if (resolution) rows.push({ label: t("field.resolution"), value: resolution })
+  if (durationLabel) rows.push({ label: t("field.duration"), value: durationLabel })
   if (typeof recordedAudio === "boolean")
-    rows.push({ label: "Audio", value: recordedAudio ? "On" : "Off" })
+    rows.push({ label: t("field.audio"), value: recordedAudio ? t("node.on") : t("node.off") })
 
   const audioIcon =
     typeof recordedAudio === "boolean" ? (
@@ -108,7 +108,7 @@ export function GenerateVideoResultInfo({
       onApply={(includePrompt) => {
         if (!settings) return
         updateNodeData(nodeId, buildAppliedConfigPatch(settings, { includePrompt }))
-        toast.success(includePrompt ? "Applied settings + prompt" : "Applied settings")
+        toast.success(includePrompt ? t("node.appliedSettingsAndPrompt") : t("node.appliedSettings"))
       }}
     />
   )

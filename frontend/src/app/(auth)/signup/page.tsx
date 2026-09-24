@@ -99,7 +99,7 @@ export default function SignupPage() {
               </Button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-3 text-left">
+            <form onSubmit={handleSubmit} className="space-y-3 text-start">
               <Input
                 type="email"
                 value={email}

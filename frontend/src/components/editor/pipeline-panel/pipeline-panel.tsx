@@ -32,17 +32,20 @@ import { ChatPanel } from "./chat/chat-panel"
 import { creditUnits } from "@/lib/credit-units"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 
-/** Human-readable label for each pipeline stage (ordered). */
-const STAGE_LABELS: Record<PipelineStageName, string> = {
-  script: "1. Script",
-  characters: "2. Characters",
-  objects: "3. Objects",
-  locations: "4. Locations",
-  shot_list: "5. Shot List",
-  scene_images: "6. Scene Images",
-  animate_audio_edit: "7. Animate & Audio",
-  post_merge: "8. Final Merge",
+/** Dictionary key of the human-readable label for each pipeline stage (ordered). */
+const STAGE_LABEL_KEYS: Record<PipelineStageName, MessageKey> = {
+  script: "pipe.stageLabelScript",
+  characters: "pipe.stageLabelCharacters",
+  objects: "pipe.stageLabelObjects",
+  locations: "pipe.stageLabelLocations",
+  shot_list: "pipe.stageLabelShotList",
+  scene_images: "pipe.stageLabelSceneImages",
+  animate_audio_edit: "pipe.stageLabelAnimateAudio",
+  post_merge: "pipe.stageLabelPostMerge",
 }
 
 /**
@@ -78,6 +81,8 @@ interface Props {
 }
 
 export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Props) {
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const [rejectMode, setRejectMode] = useState(false)
   const [feedback, setFeedback] = useState("")
   // Phase 1B.4 — local "dismissed" flag for the drift banner. Clears on the
@@ -366,7 +371,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
   }
 
   async function handleCancel() {
-    if (!confirm("Cancel this pipeline run? Unspent credits will be refunded.")) return
+    if (!confirm(tx("pipe.cancelRunConfirm"))) return
     await pipelinesApi.cancel(pipelineId)
     void pipelineQuery.refetch()
   }
@@ -381,11 +386,11 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
     setBranchingStage(stage)
     try {
       const result = await pipelinesApi.branch(pipelineId, stage)
-      toast.success(`Re-run started from "${STAGE_LABELS[stage]}". New pipeline: ${result.pipelineId.slice(0, 8)}…`)
+      toast.success(tx("pipe.rerunStarted", { stage: tx(STAGE_LABEL_KEYS[stage]), id: result.pipelineId.slice(0, 8) }))
       onNavigateToPipeline?.(result.pipelineId)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      toast.error(`Failed to branch pipeline: ${message}`)
+      toast.error(tx("pipe.branchFailed", { message }))
     } finally {
       setBranchingStage(null)
     }
@@ -532,8 +537,8 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
     <aside className="fixed end-0 top-0 h-full w-[420px] border-s border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50 dark:bg-[#121212] p-4 overflow-y-auto z-40">
       <div className="flex items-center justify-between mb-4 gap-2">
         <div className="min-w-0">
-          <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">Pipeline</div>
-          <div className="font-semibold truncate">{pipeline?.status ?? "loading..."}</div>
+          <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">{t("pipe.pipelineHeading")}</div>
+          <div className="font-semibold truncate">{pipeline?.status ?? t("pipe.loadingLower")}</div>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
           {/* Phase 1D.2a §4.5 — Auto/Guided mode badge. Visible while the
@@ -546,7 +551,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
               className="bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-950 dark:border-amber-700 dark:text-amber-300"
               data-testid="mode-badge-auto"
             >
-              Auto Mode
+              {t("pipe.autoModeBadge")}
             </Badge>
           )}
           {pipeline?.mode === "guided" && (
@@ -555,7 +560,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
               className="bg-pink-50 border-pink-300 text-[#ff0073] dark:bg-pink-950 dark:border-pink-700 dark:text-[#ff66ad]"
               data-testid="mode-badge-guided"
             >
-              Guided
+              {t("cfgext.genModeGuided")}
             </Badge>
           )}
           <ModeSwitchButton
@@ -584,16 +589,16 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
       {pipeline?.branched_from_pipeline_id && (
         <div className="text-xs text-muted-foreground mb-3 flex items-center gap-1 flex-wrap"
           data-testid="branch-lineage-breadcrumb">
-          <ArrowLeft className="w-3 h-3 shrink-0" />
-          <span>Branched from</span>
+          <ArrowLeft className={cn("w-3 h-3 shrink-0", isRtl && "rotate-180")} />
+          <span>{t("pipe.branchedFrom")}</span>
           <button
             className="underline hover:text-foreground transition-colors"
             onClick={() => onNavigateToPipeline?.(pipeline.branched_from_pipeline_id!)}
           >
-            original pipeline
+            {t("pipe.originalPipeline")}
           </button>
           <span className="text-muted-foreground/70">
-            (at {pipeline.branched_from_stage})
+            {t("pipe.branchedAtStage", { stage: pipeline.branched_from_stage ?? "" })}
           </span>
         </div>
       )}
@@ -710,13 +715,13 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
                 onClick={() => setRejectMode(true)}
                 className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
               >
-                Regenerate all
+                {t("pipe.regenerateAll")}
               </button>
             </div>
           </>
         ) : (
           <StageRow
-            stageLabel="1. Script"
+            stageLabel={t("pipe.stageLabelScript")}
             status={status}
             output={plan}
             onApprove={handleApprove}
@@ -741,7 +746,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           <EntityGrid
             pipelineId={pipelineId}
             entityType="object"
-            title="3. Objects"
+            title={t("pipe.stageLabelObjects")}
             mode={pipeline?.mode ?? undefined}
           />
         )}
@@ -749,12 +754,12 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           <EntityGrid
             pipelineId={pipelineId}
             entityType="location"
-            title="4. Locations"
+            title={t("pipe.stageLabelLocations")}
             mode={pipeline?.mode ?? undefined}
           />
         )}
         {pipeline?.current_stage === "shot_list" && (
-          <SceneGrid pipelineId={pipelineId} title="5. Shot List" />
+          <SceneGrid pipelineId={pipelineId} title={t("pipe.stageLabelShotList")} />
         )}
         {/* Stage-level batch-approval gate for the entity stages. characters/
             objects/locations pause at `awaiting_approval` after all variants
@@ -765,7 +770,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           entityStageQuery.data?.status === "awaiting_approval" &&
           pipeline?.mode !== "auto" && (
             <StageApproveBar
-              stageLabel={STAGE_LABELS[entityStageName]}
+              stageLabel={t(STAGE_LABEL_KEYS[entityStageName])}
               onApprove={() => handleApproveStage(entityStageName)}
             />
           )}
@@ -779,7 +784,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           sceneImagesStageQuery.data?.status === "awaiting_approval" &&
           pipeline?.mode !== "auto" && (
             <StageApproveBar
-              stageLabel={STAGE_LABELS.scene_images}
+              stageLabel={t(STAGE_LABEL_KEYS.scene_images)}
               onApprove={() => handleApproveStage("scene_images")}
             />
           )}
@@ -787,7 +792,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           animateStageQuery.data?.status === "awaiting_approval" &&
           pipeline?.mode !== "auto" && (
             <StageApproveBar
-              stageLabel={STAGE_LABELS.animate_audio_edit}
+              stageLabel={t(STAGE_LABEL_KEYS.animate_audio_edit)}
               onApprove={() => handleApproveStage("animate_audio_edit")}
             />
           )}
@@ -795,7 +800,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           postMergeStageQuery.data?.status === "awaiting_approval" &&
           pipeline?.mode !== "auto" && (
             <StageApproveBar
-              stageLabel={STAGE_LABELS.post_merge}
+              stageLabel={t(STAGE_LABEL_KEYS.post_merge)}
               onApprove={() => handleApproveStage("post_merge")}
             />
           )}
@@ -816,10 +821,10 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
             data-testid="critic-failure-surface"
           >
             <div className="text-sm font-medium text-red-700 dark:text-red-300">
-              Auto Mode failed: {pipeline.failure_reason}
+              {t("pipe.autoModeFailed", { reason: pipeline.failure_reason })}
             </div>
             <div className="text-xs text-red-600 dark:text-red-400 mt-1">
-              See stage details for the specific blocking critic.
+              {t("pipe.seeStageDetails")}
             </div>
           </div>
         )}
@@ -829,14 +834,14 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           any stage without having to re-input the original story prompt. */}
       {pipeline?.status === "completed" && (
         <div className="mt-4">
-          <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400 mb-2">Re-run from stage</div>
+          <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400 mb-2">{t("pipe.rerunFromStage")}</div>
           <div className="space-y-1" data-testid="rerun-stages-list">
             {PIPELINE_STAGE_NAMES.map((stageName) => (
               <div
                 key={stageName}
                 className="flex items-center justify-between rounded border border-zinc-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] px-3 py-2"
               >
-                <span className="text-sm">{STAGE_LABELS[stageName]}</span>
+                <span className="text-sm">{t(STAGE_LABEL_KEYS[stageName])}</span>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -844,7 +849,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
                   disabled={branchingStage !== null}
                   data-testid={`rerun-btn-${stageName}`}
                 >
-                  {branchingStage === stageName ? "Branching…" : "Re-run from here"}
+                  {branchingStage === stageName ? t("pipe.branching") : t("pipe.rerunFromHere")}
                 </Button>
               </div>
             ))}
@@ -875,30 +880,32 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
 
       {rejectMode && (
         <div className="mt-4 p-3 rounded border border-zinc-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
-          <div className="text-sm font-semibold mb-2">Reject with feedback</div>
+          <div className="text-sm font-semibold mb-2">{t("pipe.rejectWithFeedback")}</div>
           <textarea
             className="w-full rounded border border-zinc-300 dark:border-[#2D2D2D] bg-white dark:bg-[#121212] p-2 text-sm"
             rows={4}
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
-            placeholder="What should the Showrunner change?"
+            placeholder={t("pipe.showrunnerChangePlaceholder")}
           />
           <div className="flex gap-2 mt-2">
-            <Button size="sm" onClick={handleReject} disabled={!feedback.trim()}>Submit</Button>
-            <Button size="sm" variant="outline" onClick={() => setRejectMode(false)}>Cancel</Button>
+            <Button size="sm" onClick={handleReject} disabled={!feedback.trim()}>{t("pipe.submit")}</Button>
+            <Button size="sm" variant="outline" onClick={() => setRejectMode(false)}>{t("common.cancel")}</Button>
           </div>
         </div>
       )}
 
       <div className="mt-6 text-xs text-zinc-500 dark:text-zinc-400">
-        Estimated cost: {pipeline?.upfront_credit_estimate != null ? creditUnits(pipeline.upfront_credit_estimate) : "—"} credits ·
-        Spent: {creditUnits(pipeline?.spent_credits ?? 0)}
+        {t("pipe.costSummary", {
+          estimate: pipeline?.upfront_credit_estimate != null ? creditUnits(pipeline.upfront_credit_estimate) : "—",
+          spent: creditUnits(pipeline?.spent_credits ?? 0),
+        })}
       </div>
 
       <div className="mt-4">
         <Button size="sm" variant="outline" onClick={handleCancel}
           disabled={pipeline?.status === "completed" || pipeline?.status === "failed" || pipeline?.status === "cancelled"}>
-          Cancel run
+          {t("pipe.cancelRun")}
         </Button>
       </div>
     </aside>

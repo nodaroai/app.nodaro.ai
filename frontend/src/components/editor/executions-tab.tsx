@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button"
 import { listWorkflowExecutions, cancelWorkflowExecution, stopWorkflowExecution, getJobs, getJobStatus, type WorkflowExecution, type Job } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import {
   Tooltip,
   TooltipContent,
@@ -30,6 +33,8 @@ interface ExecutionsTabProps {
 
 export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps) {
   const qc = useQueryClient()
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const [cursor, setCursor] = useState<string | undefined>()
   const [prevCursors, setPrevCursors] = useState<string[]>([])
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -100,9 +105,9 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
     try {
       await cancelWorkflowExecution(execId)
       qc.invalidateQueries({ queryKey: ["workflow-executions", workflowId] })
-      toast.info("Execution cancelled")
+      toast.info(tx("exec.cancelled"))
     } catch {
-      toast.error("Failed to cancel execution")
+      toast.error(tx("exec.cancelFailed"))
     } finally {
       setCancellingId(null)
     }
@@ -113,16 +118,16 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
     try {
       await stopWorkflowExecution(execId)
       qc.invalidateQueries({ queryKey: ["workflow-executions", workflowId] })
-      toast.info("Will stop after current node finishes")
+      toast.info(tx("run.willStopAfterCurrent"))
     } catch {
-      toast.error("Failed to stop execution")
+      toast.error(tx("run.failedToStop"))
     }
   }
 
   if (!workflowId) {
     return (
       <div className={`flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
-        <p className="text-sm text-gray-500 dark:text-[#94A3B8]">Save the workflow to see execution history.</p>
+        <p className="text-sm text-gray-500 dark:text-[#94A3B8]">{t("exec.saveToSeeHistory")}</p>
       </div>
     )
   }
@@ -131,7 +136,7 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
     return (
       <div className={`flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
         <Loader2 className="w-8 h-8 animate-spin text-[#ff0073] mb-4" />
-        <p className="text-sm text-gray-500 dark:text-[#94A3B8]">Loading executions...</p>
+        <p className="text-sm text-gray-500 dark:text-[#94A3B8]">{t("exec.loading")}</p>
       </div>
     )
   }
@@ -140,11 +145,11 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
     return (
       <div className={`flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
         <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
-        <h3 className="text-lg font-semibold text-gray-700 dark:text-[#E2E8F0] mb-2">Failed to load executions</h3>
+        <h3 className="text-lg font-semibold text-gray-700 dark:text-[#E2E8F0] mb-2">{t("exec.failedToLoad")}</h3>
         <p className="text-sm text-gray-500 dark:text-[#94A3B8] mb-4">{error.message}</p>
         <Button onClick={handleRefresh} variant="outline">
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Retry
+          <RefreshCw className="w-4 h-4 me-2" />
+          {t("common.retry")}
         </Button>
       </div>
     )
@@ -155,7 +160,7 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
       {/* Toolbar */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-[#E2E8F0]">
-          Execution History
+          {t("exec.historyTitle")}
         </h2>
         <div className="flex items-center gap-2">
           <Button
@@ -165,8 +170,8 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
             disabled={loading}
             className="dark:border-[#2D2D2D] dark:hover:bg-[#2D2D2D]"
           >
-            <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-            Refresh
+            <RefreshCw className={`w-4 h-4 me-1.5 ${loading ? "animate-spin" : ""}`} />
+            {t("common.refresh")}
           </Button>
           <div className="flex items-center gap-1">
             <Button
@@ -174,20 +179,20 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
               size="icon"
               onClick={handlePrev}
               disabled={prevCursors.length === 0 || loading}
-              aria-label="Previous page"
+              aria-label={t("exec.prevPage")}
               className="h-8 w-8 dark:border-[#2D2D2D] dark:hover:bg-[#2D2D2D]"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className={cn("w-4 h-4", isRtl && "rotate-180")} />
             </Button>
             <Button
               variant="outline"
               size="icon"
               onClick={handleNext}
               disabled={!nextCursor || loading}
-              aria-label="Next page"
+              aria-label={t("exec.nextPage")}
               className="h-8 w-8 dark:border-[#2D2D2D] dark:hover:bg-[#2D2D2D]"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className={cn("w-4 h-4", isRtl && "rotate-180")} />
             </Button>
           </div>
         </div>
@@ -199,35 +204,35 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 dark:bg-[#121212]">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider w-8" />
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Status
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider w-8" />
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  {t("exec.colStatus")}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Trigger
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  {t("exec.colTrigger")}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Progress
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  {t("exec.colProgress")}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Duration
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  {t("exec.colDuration")}
                 </th>
                 {hasCredits() && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                    Credits
+                  <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                    {t("exec.colCredits")}
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Created
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  {t("exec.colCreated")}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider w-20" />
+                <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider w-20" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-[#2D2D2D]">
               {executions.length === 0 ? (
                 <tr>
                   <td colSpan={hasCredits() ? 8 : 7} className="px-4 py-12 text-center text-gray-500 dark:text-[#94A3B8]">
-                    No executions yet. Run the workflow to see history here.
+                    {t("exec.emptyHint")}
                   </td>
                 </tr>
               ) : (
@@ -293,6 +298,7 @@ const JOB_STATUS_COLORS: Record<string, string> = {
 
 function RecentActivity() {
   const qc = useQueryClient()
+  const t = useT()
   const [expanded, setExpanded] = useState(false)
   const [jobCursor, setJobCursor] = useState<string | undefined>()
   const [selectedJob, setSelectedJob] = useState<Job | null>(null)
@@ -310,7 +316,7 @@ function RecentActivity() {
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors"
+        className="w-full flex items-center gap-2 px-4 py-3 text-start hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors"
       >
         {expanded ? (
           <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -319,10 +325,10 @@ function RecentActivity() {
         )}
         <Activity className="w-4 h-4 text-gray-400" />
         <span className="text-sm font-semibold text-gray-700 dark:text-[#E2E8F0]">
-          Recent Activity
+          {t("exec.recentActivity")}
         </span>
         <span className="text-xs text-gray-400 dark:text-[#64748B]">
-          All jobs across workflows
+          {t("exec.allJobsAcross")}
         </span>
       </button>
 
@@ -334,29 +340,29 @@ function RecentActivity() {
             </div>
           ) : jobs.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-gray-500 dark:text-[#94A3B8]">
-              No recent jobs found.
+              {t("exec.noRecentJobs")}
             </div>
           ) : (
             <>
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-[#121212]">
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                      Type
+                    <th className="px-4 py-2 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                      {t("cost.col.type")}
                     </th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                      Status
+                    <th className="px-4 py-2 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                      {t("exec.colStatus")}
                     </th>
                     {hasCredits() && (
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                        Credits
+                      <th className="px-4 py-2 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                        {t("exec.colCredits")}
                       </th>
                     )}
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                      Duration
+                    <th className="px-4 py-2 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                      {t("exec.colDuration")}
                     </th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                      Created
+                    <th className="px-4 py-2 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                      {t("exec.colCreated")}
                     </th>
                   </tr>
                 </thead>
@@ -375,9 +381,9 @@ function RecentActivity() {
                     disabled={jobsLoading}
                   >
                     {jobsLoading ? (
-                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                      <Loader2 className="w-4 h-4 me-1.5 animate-spin" />
                     ) : null}
-                    Load more
+                    {t("apps.analytics.loadMore")}
                   </Button>
                 </div>
               )}
@@ -399,7 +405,8 @@ function RecentActivity() {
 }
 
 function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
-  const label = job.job_type ? (JOB_TYPE_LABELS[job.job_type] ?? job.job_type) : "Job"
+  const t = useT()
+  const label = job.job_type ? (JOB_TYPE_LABELS[job.job_type] ?? job.job_type) : t("exec.job")
   const credits = job.credits ?? 0
 
   return (
@@ -461,6 +468,7 @@ function ExecutionRow({
   onStopAfterCurrent: (id: string, e: React.MouseEvent) => void
   onNodeClick: (nodeId: string, state: NodeState) => void
 }) {
+  const t = useT()
   const completed = exec.completedNodes ?? 0
   const failed = exec.failedNodes ?? 0
   const total = exec.totalNodes ?? 0
@@ -499,7 +507,7 @@ function ExecutionRow({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <AlertCircle className="w-3.5 h-3.5 text-red-400 ml-1.5 inline" />
+                  <AlertCircle className="w-3.5 h-3.5 text-red-400 ms-1.5 inline" />
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-xs">
                   <p className="text-xs">{exec.errorMessage}</p>
@@ -518,7 +526,7 @@ function ExecutionRow({
             </span>
             {failed > 0 && (
               <span className="text-xs text-red-500 font-medium">
-                ({failed} failed)
+                ({t("exec.failedNodes", { n: failed })})
               </span>
             )}
             {total > 0 && (
@@ -534,7 +542,7 @@ function ExecutionRow({
             )}
             {showFinalizingHint && (
               <span className="text-[10px] text-gray-500 dark:text-[#94A3B8] italic">
-                finalizing…
+                {t("exec.finalizing")}
               </span>
             )}
           </div>
@@ -573,7 +581,7 @@ function ExecutionRow({
                       className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
                       onClick={(e) => onCancel(exec.id, e)}
                       disabled={cancellingId === exec.id}
-                      aria-label="Cancel execution"
+                      aria-label={t("exec.cancelExecutionAria")}
                     >
                       {cancellingId === exec.id ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -583,7 +591,7 @@ function ExecutionRow({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="left">
-                    <p>Cancel now</p>
+                    <p>{t("exec.cancelNow")}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -596,7 +604,7 @@ function ExecutionRow({
                         size="icon"
                         className="h-7 w-7 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-500/10"
                         onClick={(e) => onStopAfterCurrent(exec.id, e)}
-                        aria-label="Stop after current node"
+                        aria-label={t("run.stopAfterCurrentMenu")}
                       >
                         <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
                           <rect x="2" y="3" width="4" height="10" rx="1" />
@@ -605,7 +613,7 @@ function ExecutionRow({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="left">
-                      <p>Stop after current node</p>
+                      <p>{t("run.stopAfterCurrentMenu")}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -621,11 +629,11 @@ function ExecutionRow({
               <table className="w-full">
                 <thead>
                   <tr>
-                    <th className="px-8 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">Node</th>
-                    <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">Status</th>
-                    <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">Duration</th>
+                    <th className="px-8 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.nodeColumn")}</th>
+                    <th className="px-3 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colStatus")}</th>
+                    <th className="px-3 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colDuration")}</th>
                     {hasCredits() && (
-                      <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">Credits</th>
+                      <th className="px-3 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colCredits")}</th>
                     )}
                     <th className="px-3 py-2 w-8" />
                   </tr>
@@ -664,7 +672,7 @@ function ExecutionRow({
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <AlertCircle className="w-3 h-3 text-red-400 ml-1 inline" />
+                                    <AlertCircle className="w-3 h-3 text-red-400 ms-1 inline" />
                                   </TooltipTrigger>
                                   <TooltipContent side="right" className="max-w-xs">
                                     <p className="text-xs">{state.error}</p>
@@ -701,9 +709,9 @@ function ExecutionRow({
                             className="hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors"
                             onClick={() => onNodeClick(`${nodeId}-iter-${idx}`, { ...state, jobId: jid, jobIds: undefined })}
                           >
-                            <td className="px-8 py-1 pl-14">
+                            <td className="px-8 py-1 ps-14">
                               <span className="text-[11px] text-gray-400 dark:text-[#64748B]">
-                                Iteration {idx + 1}
+                                {t("exec.iteration", { n: idx + 1 })}
                               </span>
                             </td>
                             <td className="px-3 py-1" />

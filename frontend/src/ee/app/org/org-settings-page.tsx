@@ -11,8 +11,11 @@ import { Switch } from "@/components/ui/switch"
 import { queryKeys } from "@/lib/query-keys"
 import { hydrateWorkspaces } from "@/lib/workspace-context"
 import { useWorkspace } from "@/ee/hooks/use-workspace"
-import { pluralize } from "@/ee/lib/pluralize"
+import { useOrgVocabulary } from "@/ee/hooks/use-org-vocabulary"
+import { pluralWorkspaceWord } from "@/ee/lib/org-vocabulary"
+import { useT, type MessageKey, type TFunction } from "@/lib/i18n"
 import { OrgApiError, getOrganization, updateOrganization } from "@/ee/lib/orgs-api"
+import { ORG_STATUS_KEYS } from "./org-overview-page"
 
 /**
  * `/org/:slug/settings` — the name, the defaults, and who may join.
@@ -48,60 +51,65 @@ import { OrgApiError, getOrganization, updateOrganization } from "@/ee/lib/orgs-
 interface BooleanSetting {
   key: keyof OrgSettings
   /** Asked of the administrator, and answered by the switch beside it. */
-  question: string
+  questionKey: MessageKey
   /** What being on means, in the same voice as the question. */
-  whenYes: string
+  whenYesKey: MessageKey
   /** What being off means. Never "the opposite of the above" — spell it out. */
-  whenNo: string
+  whenNoKey: MessageKey
 }
 
 const BOOLEAN_SETTINGS: readonly BooleanSetting[] = [
   {
     key: "members_can_create_projects",
-    question: "Can members start their own projects?",
-    whenYes: "Members create projects wherever they need them.",
-    whenNo: "Work happens inside the places you create.",
+    questionKey: "org.setCreateProjectsQ",
+    whenYesKey: "org.setCreateProjectsYes",
+    whenNoKey: "org.setCreateProjectsNo",
   },
   {
     key: "personal_space_enabled",
-    question: "Do members keep a personal space?",
-    whenYes: "Members keep their own work, separate from the organization's.",
-    whenNo: "Everything a member makes belongs to the organization.",
+    questionKey: "org.setPersonalSpaceQ",
+    whenYesKey: "org.setPersonalSpaceYes",
+    whenNoKey: "org.setPersonalSpaceNo",
   },
   {
     key: "workspace_admins_can_invite",
-    question: "Can workspace administrators invite new people?",
-    whenYes: "A teacher can add a student without asking an administrator.",
-    whenNo: "Only organization administrators bring people in.",
+    questionKey: "org.setWsAdminsInviteQ",
+    whenYesKey: "org.setWsAdminsInviteYes",
+    whenNoKey: "org.setWsAdminsInviteNo",
   },
   {
     key: "collaborators_can_invite",
-    question: "Can collaborators invite further collaborators?",
-    whenYes: "Anyone given access can pass it on.",
-    whenNo: "Sharing stays with the person who owns the work.",
+    questionKey: "org.setCollabInviteQ",
+    whenYesKey: "org.setCollabInviteYes",
+    whenNoKey: "org.setCollabInviteNo",
   },
   {
     key: "policy_survives_suspension",
-    question: "Do the organization's rules still apply while it is suspended?",
-    whenYes: "Members stay subject to these settings for as long as the suspension lasts.",
-    whenNo: "Members work independently, without the organization's limits, until it resumes.",
+    questionKey: "org.setPolicySuspendedQ",
+    whenYesKey: "org.setPolicySuspendedYes",
+    whenNoKey: "org.setPolicySuspendedNo",
   },
   {
     key: "member_caps_enabled",
-    question: "Are there per-member spending limits?",
-    whenYes: "Each member has their own limit. Takes effect once billing is enabled for organizations.",
-    whenNo: "Members spend from the organization's budget with no individual limit.",
+    questionKey: "org.setMemberCapsQ",
+    whenYesKey: "org.setMemberCapsYes",
+    whenNoKey: "org.setMemberCapsNo",
   },
 ]
 
 export default function OrgSettingsPage() {
+  const t = useT()
   const { slug = "" } = useParams<{ slug: string }>()
   const queryClient = useQueryClient()
   const { organizations, status: membershipStatus } = useWorkspace()
 
   const membership = organizations.find((o) => o.slug === slug) ?? null
   const orgId = membership?.id ?? ""
-  const workspaceWord = membership?.vocabulary.workspace ?? "Workspace"
+  const vocabulary = useOrgVocabulary(membership?.vocabulary)
+  const vocabularyWord = vocabulary.workspace
+  const workspaceWord = vocabularyWord ?? t("org.workspaceWord")
+  // The organization's own word, pluralized; without one, the plural comes from the dictionary.
+  const workspacesWord = pluralWorkspaceWord(vocabulary, t)
   const canManage = membership?.role === "owner" || membership?.role === "admin"
 
   const org = useQuery({
@@ -157,28 +165,28 @@ export default function OrgSettingsPage() {
   })
 
   if (membershipStatus === "idle" || membershipStatus === "loading") {
-    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+    return <div className="p-6 text-sm text-muted-foreground">{t("common.loading")}</div>
   }
 
   if (!membership || !canManage) {
     return (
       <div className="mx-auto max-w-xl p-6">
         <Card className="space-y-4 p-8">
-          <h1 className="text-xl font-semibold">{membership ? "Not available to you" : "Organization not found"}</h1>
+          <h1 className="text-xl font-semibold">{membership ? t("org.notAvailableToYou") : t("org.orgNotFound")}</h1>
           <p className="text-sm text-muted-foreground">
             {membership
-              ? "Only an owner or an administrator can change these."
-              : "This organization does not exist, or you are not a member of it."}
+              ? t("org.settingsOwnerAdminOnly")
+              : t("org.orgMissingOrNotMember")}
           </p>
           <Button asChild variant="outline">
-            <Link to={membership ? `/org/${slug}` : "/"}>Back</Link>
+            <Link to={membership ? `/org/${slug}` : "/"}>{t("common.back")}</Link>
           </Button>
         </Card>
       </div>
     )
   }
 
-  if (org.isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+  if (org.isLoading) return <div className="p-6 text-sm text-muted-foreground">{t("common.loading")}</div>
 
   const stored: OrgSettings = org.data?.settings ?? {}
   const value = <K extends keyof OrgSettings>(key: K): OrgSettings[K] => edited[key] ?? stored[key]
@@ -193,7 +201,7 @@ export default function OrgSettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold">Settings</h1>
+        <h1 className="text-2xl font-semibold">{t("common.settings")}</h1>
         <Link to={`/org/${slug}`} className="text-sm text-muted-foreground hover:underline">
           {membership.name}
         </Link>
@@ -201,13 +209,15 @@ export default function OrgSettingsPage() {
 
       {!isActive && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-muted-foreground">
-          Nothing can be changed while this organization is {membership.status}.
+          {t("org.nothingChangesWhileStatus", {
+            status: ORG_STATUS_KEYS[membership.status] ? t(ORG_STATUS_KEYS[membership.status]) : membership.status,
+          })}
         </p>
       )}
 
       <Card className="space-y-4 p-6">
         <div className="space-y-2">
-          <Label htmlFor="org-name">Name</Label>
+          <Label htmlFor="org-name">{t("common.name")}</Label>
           <Input
             id="org-name"
             value={name}
@@ -222,28 +232,28 @@ export default function OrgSettingsPage() {
       </Card>
 
       <Card className="space-y-5 p-6">
-        <h2 className="font-medium">What people can do</h2>
+        <h2 className="font-medium">{t("org.whatPeopleCanDo")}</h2>
 
         <div className="space-y-2">
-          <Label htmlFor="admin-access">What may administrators do with a member&apos;s work?</Label>
+          <Label htmlFor="admin-access">{t("org.adminAccessQ")}</Label>
           <Select
             value={value("admin_access") ?? ""}
             onValueChange={(v) => set("admin_access", v as GrantedAccess)}
             disabled={!isActive || save.isPending}
           >
             <SelectTrigger id="admin-access">
-              <SelectValue placeholder="The default for this kind of organization" />
+              <SelectValue placeholder={t("org.defaultForKind")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="view">See it</SelectItem>
-              <SelectItem value="edit">See and change it</SelectItem>
+              <SelectItem value="view">{t("org.accessView")}</SelectItem>
+              <SelectItem value="edit">{t("org.accessEdit")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="shared-access">
-            What may members do with work shared to a {workspaceWord.toLowerCase()}?
+            {t("org.memberAccessSharedQ", { workspace: workspaceWord.toLowerCase() })}
           </Label>
           <Select
             value={value("member_access_to_shared") ?? ""}
@@ -251,28 +261,28 @@ export default function OrgSettingsPage() {
             disabled={!isActive || save.isPending}
           >
             <SelectTrigger id="shared-access">
-              <SelectValue placeholder="The default for this kind of organization" />
+              <SelectValue placeholder={t("org.defaultForKind")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="view">See it</SelectItem>
-              <SelectItem value="edit">See and change it</SelectItem>
+              <SelectItem value="view">{t("org.accessView")}</SelectItem>
+              <SelectItem value="edit">{t("org.accessEdit")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="default-visibility">Where does new work start?</Label>
+          <Label htmlFor="default-visibility">{t("org.newWorkVisibilityQ")}</Label>
           <Select
             value={value("default_workflow_visibility") ?? ""}
             onValueChange={(v) => set("default_workflow_visibility", v as WorkflowVisibility)}
             disabled={!isActive || save.isPending}
           >
             <SelectTrigger id="default-visibility">
-              <SelectValue placeholder="The default for this kind of organization" />
+              <SelectValue placeholder={t("org.defaultForKind")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="private">Private to whoever made it</SelectItem>
-              <SelectItem value="workspace">Visible to the {workspaceWord.toLowerCase()}</SelectItem>
+              <SelectItem value="private">{t("org.visibilityPrivate")}</SelectItem>
+              <SelectItem value="workspace">{t("org.visibilityWorkspace", { workspace: workspaceWord.toLowerCase() })}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -287,16 +297,16 @@ export default function OrgSettingsPage() {
           return (
             <div key={setting.key} className="flex items-start justify-between gap-4">
               <div className="space-y-1">
-                <Label htmlFor={`setting-${setting.key}`}>{setting.question}</Label>
+                <Label htmlFor={`setting-${setting.key}`}>{t(setting.questionKey)}</Label>
                 <div className="text-xs">
                   <p className={emphasis(true)}>
-                    <span className="font-medium">Yes</span> — {setting.whenYes}
+                    <span className="font-medium">{t("common.yes")}</span> — {t(setting.whenYesKey)}
                   </p>
                   <p className={emphasis(false)}>
-                    <span className="font-medium">No</span> — {setting.whenNo}
+                    <span className="font-medium">{t("common.no")}</span> — {t(setting.whenNoKey)}
                   </p>
                   {chosen === undefined && (
-                    <p className="text-foreground">Following the default for this kind of organization.</p>
+                    <p className="text-foreground">{t("org.followingDefault")}</p>
                   )}
                 </div>
               </div>
@@ -305,7 +315,7 @@ export default function OrgSettingsPage() {
                 checked={on}
                 onCheckedChange={(next) => set(setting.key, next as never)}
                 disabled={!isActive || save.isPending}
-                aria-label={setting.question}
+                aria-label={t(setting.questionKey)}
               />
             </div>
           )
@@ -314,14 +324,14 @@ export default function OrgSettingsPage() {
 
       <Card className="space-y-3 p-6">
         <div>
-          <h2 className="font-medium">Who may join with a code</h2>
+          <h2 className="font-medium">{t("org.whoMayJoinWithCode")}</h2>
           <p className="text-sm text-muted-foreground">
-            Leave empty to admit anyone with a code. List domains to admit only those addresses — one per line.
+            {t("org.allowedDomainsHint")}
           </p>
         </div>
         <Input
           id="allowed-domains"
-          aria-label="Allowed email domains"
+          aria-label={t("org.allowedDomainsAria")}
           value={domainsText}
           onChange={(e) => {
             setDirty(true)
@@ -333,31 +343,31 @@ export default function OrgSettingsPage() {
       </Card>
 
       {save.error && (
-        <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{failureMessage(save.error)}</p>
+        <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{failureMessage(save.error, t)}</p>
       )}
 
       <div className="flex justify-end gap-2">
         <Button asChild variant="outline">
-          <Link to={`/org/${slug}/workspaces`}>{pluralize(workspaceWord)}</Link>
+          <Link to={`/org/${slug}/workspaces`}>{workspacesWord}</Link>
         </Button>
         <Button onClick={() => save.mutate()} disabled={!isActive || save.isPending || !hasChanges}>
-          {save.isPending ? "Saving…" : "Save"}
+          {save.isPending ? t("common.saving") : t("common.save")}
         </Button>
       </div>
     </div>
   )
 }
 
-function failureMessage(error: unknown): string {
+function failureMessage(error: unknown, t: TFunction): string {
   const code = error instanceof OrgApiError ? error.code : "internal_error"
   switch (code) {
     case "insufficient_role":
-      return "You cannot change these settings."
+      return t("org.cannotChangeSettings")
     case "org_not_active":
-      return "This organization is not active."
+      return t("org.orgNotActive")
     case "validation_error":
-      return error instanceof OrgApiError ? error.message : "One of these values was refused."
+      return error instanceof OrgApiError ? error.message : t("org.valueRefused")
     default:
-      return "Something went wrong saving. Try again in a moment."
+      return t("org.saveFailedGeneric")
   }
 }

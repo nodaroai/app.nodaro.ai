@@ -48,7 +48,7 @@ export interface StudioGroupDef<S = unknown, J = unknown> {
 /** Tailwind classes applied to the ACTIVE sidebar item. Defaults to character-blue
  *  (see {@link DEFAULT_STUDIO_ACCENT_ACTIVE}); object/location/creature studios can
  *  override with their own accent so the shell isn't hardcoded to one entity. */
-export const DEFAULT_STUDIO_ACCENT_ACTIVE = "text-[#3b82f6] bg-[#1a2744] border-r-2 border-[#3b82f6]"
+export const DEFAULT_STUDIO_ACCENT_ACTIVE = "text-[#3b82f6] bg-[#1a2744] border-e-2 border-[#3b82f6]"
 
 export interface StudioNavConfig<S = unknown, J = unknown> {
   groups: StudioGroupDef<S, J>[]

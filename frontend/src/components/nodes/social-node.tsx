@@ -65,7 +65,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col items-center gap-2">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               <NodeJobProgress progress={nodeData.currentJobProgress} />
-              <span className="text-[11px] text-muted-foreground">Publishing...</span>
+              <span className="text-[11px] text-muted-foreground">{t("node.publishing")}</span>
             </div>
           )}
 
@@ -105,11 +105,11 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
               <span className="text-[11px]">
                 {nodeData.caption
                   ? nodeData.caption.slice(0, 50) + (nodeData.caption.length > 50 ? "..." : "")
-                  : `Post to ${PLATFORM_LABELS[platform]}`}
+                  : t("node.postToPlatform", { platform: PLATFORM_LABELS[platform] })}
               </span>
               {nodeData.action === "post-carousel" && listTotal && listTotal > 0 && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground">
-                  {listTotal} item{listTotal === 1 ? "" : "s"}
+                  {listTotal === 1 ? t("inputcfg.itemOne", { n: listTotal }) : t("inputcfg.items2", { n: listTotal })}
                 </span>
               )}
             </div>

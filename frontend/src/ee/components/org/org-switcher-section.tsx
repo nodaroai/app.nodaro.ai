@@ -8,7 +8,9 @@ import {
 import { cn } from "@/lib/utils"
 import { hasOrganizations } from "@/lib/edition"
 import { useWorkspace } from "@/ee/hooks/use-workspace"
-import { pluralize } from "@/ee/lib/pluralize"
+import { localizeVocabulary, pluralWorkspaceWord } from "@/ee/lib/org-vocabulary"
+import { useLocaleStore } from "@/lib/locale-store"
+import { useT } from "@/lib/i18n"
 
 /**
  * Switching between the personal space and the workspaces someone belongs
@@ -33,7 +35,9 @@ import { pluralize } from "@/ee/lib/pluralize"
  * not gone, and the work inside them is what someone is usually looking for.
  */
 export function OrgSwitcherSection() {
+  const t = useT()
   const { organizations, workspaces, activeWorkspaceId, status, setActiveWorkspace } = useWorkspace()
+  const locale = useLocaleStore((s) => s.locale)
 
   if (!hasOrganizations()) return null
   if (status === "idle" || status === "loading") return null
@@ -45,22 +49,23 @@ export function OrgSwitcherSection() {
       <DropdownMenuSeparator />
       {!belongsToNone && (
         <>
-          <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+          <DropdownMenuLabel>{t("org.workspacesLabel")}</DropdownMenuLabel>
           <DropdownMenuItem className="px-3" onSelect={() => setActiveWorkspace(null)}>
             <User className="size-4" />
-            <span className="flex-1">Personal</span>
-            {activeWorkspaceId === null && <Check className="size-4" aria-label="Selected" />}
+            <span className="flex-1">{t("org.personal")}</span>
+            {activeWorkspaceId === null && <Check className="size-4" aria-label={t("canvas.edgeModeSelected")} />}
           </DropdownMenuItem>
         </>
       )}
 
       {organizations.map((org) => {
         const own = workspaces.filter((w) => w.orgId === org.id)
+        const vocabulary = localizeVocabulary(org.vocabulary, locale)
         return (
           <div key={org.id}>
             <DropdownMenuLabel className="pt-2 text-xs font-normal text-muted-foreground">
               {org.name}
-              {org.status === "pending" && " · awaiting approval"}
+              {org.status === "pending" && ` · ${t("org.awaitingApproval")}`}
             </DropdownMenuLabel>
 
             {/* The organization's own word, so a school says "classes". One
@@ -68,7 +73,11 @@ export function OrgSwitcherSection() {
                 whitespace nodes either side and split the string. */}
             {own.length === 0 && (
               <DropdownMenuItem disabled className="px-3 text-xs text-muted-foreground">
-                {`No ${pluralize(org.vocabulary.workspace ?? "workspace").toLowerCase()} yet`}
+                {t("org.noPluralYet", {
+                  plural: vocabulary.workspace
+                    ? pluralWorkspaceWord(vocabulary, t).toLowerCase()
+                    : t("org.workspacesWord"),
+                })}
               </DropdownMenuItem>
             )}
 
@@ -80,9 +89,9 @@ export function OrgSwitcherSection() {
               >
                 <span className={cn("flex-1 truncate", workspace.archived && "text-muted-foreground")}>
                   {workspace.name}
-                  {workspace.archived && " · archived"}
+                  {workspace.archived && ` · ${t("org.archivedLower")}`}
                 </span>
-                {activeWorkspaceId === workspace.id && <Check className="size-4" aria-label="Selected" />}
+                {activeWorkspaceId === workspace.id && <Check className="size-4" aria-label={t("canvas.edgeModeSelected")} />}
               </DropdownMenuItem>
             ))}
           </div>
@@ -93,12 +102,12 @@ export function OrgSwitcherSection() {
       <DropdownMenuItem asChild className="px-3">
         <Link to="/org/new">
           <Plus className="size-4" />
-          <span>Create organization</span>
+          <span>{t("org.createOrganization")}</span>
         </Link>
       </DropdownMenuItem>
       <DropdownMenuItem asChild className="px-3">
         <Link to="/join">
-          <span className="pl-6">Join with a code</span>
+          <span className="ps-6">{t("org.joinWithCode")}</span>
         </Link>
       </DropdownMenuItem>
     </>

@@ -22,22 +22,31 @@ import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import type { GalleryItem } from "@/hooks/queries/use-gallery-queries"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { uiLocale } from "@/lib/i18n/format"
 
 type FilterType = "all" | "image" | "video" | "audio"
 
-const FILTERS: readonly { readonly value: FilterType; readonly label: string; readonly icon: React.ComponentType<{ className?: string }> | null }[] = [
-  { value: "all", label: "All", icon: null },
-  { value: "image", label: "Images", icon: ImageIcon },
-  { value: "video", label: "Videos", icon: Video },
-  { value: "audio", label: "Audio", icon: Music },
+const FILTERS: readonly { readonly value: FilterType; readonly labelKey: MessageKey; readonly icon: React.ComponentType<{ className?: string }> | null }[] = [
+  { value: "all", labelKey: "common.all", icon: null },
+  { value: "image", labelKey: "assetlib.tabImages", icon: ImageIcon },
+  { value: "video", labelKey: "assetlib.tabVideos", icon: Video },
+  { value: "audio", labelKey: "assetlib.tabAudio", icon: Music },
 ]
 
 const REPORT_REASONS = [
-  { value: "inappropriate", label: "Inappropriate content" },
-  { value: "copyright", label: "Copyright violation" },
-  { value: "spam", label: "Spam" },
-  { value: "other", label: "Other" },
+  { value: "inappropriate", labelKey: "gallery.reasonInappropriate" },
+  { value: "copyright", labelKey: "gallery.reasonCopyright" },
+  { value: "spam", labelKey: "gallery.reasonSpam" },
+  { value: "other", labelKey: "cat.other" },
 ] as const
+
+const TYPE_LABEL_KEY: Record<"image" | "video" | "audio", MessageKey> = {
+  image: "common.image",
+  video: "common.video",
+  audio: "out.audio",
+}
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr)
@@ -46,22 +55,23 @@ function formatDate(dateStr: string): string {
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-  if (diffHours < 1) return "Just now"
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  if (diffHours < 1) return tx("time.justNow")
+  if (diffHours < 24) return tx("time.hrAgo", { n: diffHours })
+  if (diffDays < 7) return tx("time.dayAgo", { n: diffDays })
+  return date.toLocaleDateString(uiLocale(), { month: "short", day: "numeric" })
 }
 
 function TypeBadge({ type }: { readonly type: "image" | "video" | "audio" }) {
+  const t = useT()
   const config = {
-    image: { label: "Image", className: "bg-purple-500/10 text-purple-600 dark:text-purple-400" },
-    video: { label: "Video", className: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
-    audio: { label: "Audio", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+    image: { className: "bg-purple-500/10 text-purple-600 dark:text-purple-400" },
+    video: { className: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
+    audio: { className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
   }
-  const { label, className } = config[type]
+  const { className } = config[type]
   return (
     <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", className)}>
-      {label}
+      {t(TYPE_LABEL_KEY[type])}
     </span>
   )
 }
@@ -213,11 +223,12 @@ function VideoCard({ item, children, priority }: { readonly item: GalleryItem; r
 
 function CopyPromptButton({ prompt }: { readonly prompt: string }) {
   const [copied, setCopied] = useState(false)
+  const t = useT()
 
   async function handleCopy() {
     await navigator.clipboard.writeText(prompt)
     setCopied(true)
-    toast.success("Prompt copied to clipboard")
+    toast.success(tx("gallery.promptCopied"))
     setTimeout(() => setCopied(false), 2000)
   }
 
@@ -231,7 +242,7 @@ function CopyPromptButton({ prompt }: { readonly prompt: string }) {
       ) : (
         <Copy className="h-3.5 w-3.5" />
       )}
-      {copied ? "Copied" : "Copy Prompt"}
+      {copied ? t("common.copied") : t("gallery.copyPrompt")}
     </button>
   )
 }
@@ -261,6 +272,7 @@ const GalleryGridCard = memo(function GalleryGridCard({
   onReport,
   onDelete,
 }: GalleryGridCardProps) {
+  const t = useT()
   const overlay = (
     <>
       {/* Overlay */}
@@ -274,12 +286,12 @@ const GalleryGridCard = memo(function GalleryGridCard({
       </div>
 
       {/* Action buttons (top-right corner on hover) */}
-      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
+      <div className="absolute top-2 end-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
         {showFavorite && (
           <button
             onClick={(e) => onToggleFavorite(item, e)}
             className="rounded-full bg-black/50 p-1.5 hover:bg-black/70 transition-colors"
-            title={isFavorited ? "Remove from favorites" : "Add to favorites"}
+            title={isFavorited ? t("templates.unfavorite") : t("templates.favorite")}
           >
             <Heart className={cn("h-3.5 w-3.5", isFavorited ? "text-[#ff0073] fill-[#ff0073]" : "text-white")} />
           </button>
@@ -291,7 +303,7 @@ const GalleryGridCard = memo(function GalleryGridCard({
           <button
             onClick={(e) => onReport(item, e)}
             className="rounded-full bg-black/50 p-1.5 hover:bg-black/70 transition-colors"
-            title="Report"
+            title={t("gallery.report")}
           >
             <Flag className="h-3.5 w-3.5 text-white" />
           </button>
@@ -300,7 +312,7 @@ const GalleryGridCard = memo(function GalleryGridCard({
           <button
             onClick={(e) => onDelete(item, e)}
             className="rounded-full bg-red-500/70 p-1.5 hover:bg-red-500/90 transition-colors"
-            title="Remove from gallery"
+            title={t("gallery.removeFromGallery")}
           >
             <Trash2 className="h-3.5 w-3.5 text-white" />
           </button>
@@ -312,7 +324,7 @@ const GalleryGridCard = memo(function GalleryGridCard({
   return (
     <div
       role="button"
-      aria-label={`View ${item.type} item`}
+      aria-label={t("gallery.viewItem", { type: t(TYPE_LABEL_KEY[item.type]) })}
       tabIndex={0}
       className="group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all cursor-pointer"
       onClick={() => onSelect(index)}
@@ -343,6 +355,8 @@ const GalleryGridCard = memo(function GalleryGridCard({
 
 export default function GalleryPage() {
   const { user, isAdmin } = useAuth()
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const location = useLocation()
   const isEmbedded = location.pathname.startsWith("/_")
   const [filter, setFilter] = useState<FilterType>("all")
@@ -427,12 +441,12 @@ export default function GalleryPage() {
         reason: reportReason,
         details: reportDetails || undefined,
       })
-      toast.success("Report submitted. Thank you!")
+      toast.success(tx("gallery.reportSubmitted"))
       setReportItem(null)
       setReportDetails("")
       setReportReason("inappropriate")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to submit report")
+      toast.error(err instanceof Error ? err.message : tx("gallery.reportFailed"))
     }
   }
 
@@ -440,11 +454,11 @@ export default function GalleryPage() {
     if (!deleteItem || !user?.id) return
     try {
       await deleteMutation.mutateAsync({ itemId: deleteItem.id, userId: user.id })
-      toast.success("Item removed from gallery")
+      toast.success(tx("gallery.itemRemoved"))
       setDeleteItem(null)
       setSelectedIndex(null)
     } catch {
-      toast.error("Failed to remove item from gallery")
+      toast.error(tx("gallery.removeFailed"))
     }
   }
 
@@ -536,14 +550,14 @@ export default function GalleryPage() {
   const handleToggleFavorite = useCallback(async (item: GalleryItem, e?: React.MouseEvent) => {
     e?.stopPropagation()
     if (!user) {
-      toast.error("Sign in to save favorites")
+      toast.error(tx("gallery.signInToFavorite"))
       return
     }
     try {
       const result = await favoriteMutation.mutateAsync({ jobId: item.id })
-      toast.success(result.favorited ? "Added to favorites" : "Removed from favorites")
+      toast.success(result.favorited ? tx("gallery.addedToFavorites") : tx("gallery.removedFromFavorites"))
     } catch {
-      toast.error("Failed to update favorite")
+      toast.error(tx("gallery.favoriteFailed"))
     }
   }, [user, favoriteMutation])
 
@@ -574,8 +588,8 @@ export default function GalleryPage() {
               to="/projects"
               className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              <ArrowLeft className="h-4 w-4" />
-              Back to app
+              <ArrowLeft className={cn("h-4 w-4", isRtl && "rotate-180")} />
+              {t("gallery.backToApp")}
             </Link>
             <Link to="/" className="flex items-center">
               <NodaroLogo size="md" />
@@ -588,17 +602,17 @@ export default function GalleryPage() {
       {/* Hero */}
       <section className="py-12 text-center">
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-          Community Gallery
+          {t("gallery.title")}
         </h1>
         <p className="mt-3 text-muted-foreground max-w-xl mx-auto">
-          Explore what people are creating with Nodaro
+          {t("gallery.subtitle")}
         </p>
       </section>
 
       {/* Filter Tabs */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-center gap-3">
         <div className="flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-800 p-1 bg-card w-fit">
-          {FILTERS.map(({ value, label, icon: Icon }) => (
+          {FILTERS.map(({ value, labelKey, icon: Icon }) => (
             <button
               key={value}
               className={cn(
@@ -610,7 +624,7 @@ export default function GalleryPage() {
               onClick={() => setFilter(value)}
             >
               {Icon && <Icon className="h-3.5 w-3.5" />}
-              {label}
+              {t(labelKey)}
             </button>
           ))}
         </div>
@@ -619,14 +633,14 @@ export default function GalleryPage() {
             <div className="flex items-center gap-2">
               <Switch id="my-items" checked={myItemsOnly} onCheckedChange={toggleMyItems} />
               <Label htmlFor="my-items" className="text-sm text-muted-foreground cursor-pointer select-none">
-                My items
+                {t("gallery.myItems")}
               </Label>
             </div>
             <div className="flex items-center gap-2">
               <Switch id="favorites" checked={favoritesOnly} onCheckedChange={toggleFavorites} />
               <Label htmlFor="favorites" className="text-sm text-muted-foreground cursor-pointer select-none flex items-center gap-1">
                 <Heart className="h-3.5 w-3.5" />
-                Favorites
+                {t("explore.favorites")}
               </Label>
             </div>
           </div>
@@ -641,8 +655,8 @@ export default function GalleryPage() {
           </div>
         ) : items.length === 0 ? (
           <div className="text-center py-24 text-muted-foreground">
-            <p className="text-lg">No items yet</p>
-            <p className="text-sm mt-1">Be the first to create something!</p>
+            <p className="text-lg">{t("gallery.noItemsYet")}</p>
+            <p className="text-sm mt-1">{t("gallery.beFirst")}</p>
           </div>
         ) : (
           <>
@@ -653,7 +667,7 @@ export default function GalleryPage() {
               {virtualRows.map((virtualRow) => (
                 <div
                   key={virtualRow.key}
-                  className="absolute top-0 left-0 w-full"
+                  className="absolute top-0 start-0 w-full"
                   style={{
                     transform: `translateY(${virtualRow.start - scrollMargin}px)`,
                     display: "grid",
@@ -688,7 +702,7 @@ export default function GalleryPage() {
 
             {!hasMore && items.length > 0 && (
               <p className="text-center text-sm text-muted-foreground py-8">
-                You've reached the end
+                {t("gallery.reachedEnd")}
               </p>
             )}
           </>
@@ -702,11 +716,11 @@ export default function GalleryPage() {
         <DialogContent
           showCloseButton={false}
           className={cn(
-            "p-0 overflow-hidden gap-0 top-0 left-0 translate-x-0 translate-y-0 max-w-full h-[100dvh] w-full rounded-none border-0",
-            !isFullscreen && "sm:top-[50%] sm:left-[50%] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-3xl sm:h-auto sm:rounded-lg sm:border",
+            "p-0 overflow-hidden gap-0 top-0 start-0 translate-x-0 translate-y-0 max-w-full h-[100dvh] w-full rounded-none border-0",
+            !isFullscreen && "sm:top-[50%] sm:start-[50%] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-3xl sm:h-auto sm:rounded-lg sm:border",
           )}
         >
-          <DialogTitle className="sr-only">Preview</DialogTitle>
+          <DialogTitle className="sr-only">{t("common.preview")}</DialogTitle>
           {selectedItem && selectedIndex !== null && (
             <div className="flex flex-col h-full sm:h-auto">
               {/* Media section with swipe support */}
@@ -730,25 +744,25 @@ export default function GalleryPage() {
 
                 {/* Left/Right arrows — fixed to viewport center on mobile, absolute to media center on desktop */}
                 {selectedIndex > 0 && (
-                  <button onClick={goToPrev} className="fixed sm:absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-20 sm:z-10" aria-label="Previous">
-                    <ChevronLeft className="h-6 w-6 text-white" />
+                  <button onClick={goToPrev} className="fixed sm:absolute start-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-20 sm:z-10" aria-label={t("common.previous")}>
+                    <ChevronLeft className={cn("h-6 w-6 text-white", isRtl && "rotate-180")} />
                   </button>
                 )}
                 {selectedIndex < totalCount - 1 && (
-                  <button onClick={goToNext} className="fixed sm:absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-20 sm:z-10" aria-label="Next">
-                    <ChevronRight className="h-6 w-6 text-white" />
+                  <button onClick={goToNext} className="fixed sm:absolute end-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-20 sm:z-10" aria-label={t("common.next")}>
+                    <ChevronRight className={cn("h-6 w-6 text-white", isRtl && "rotate-180")} />
                   </button>
                 )}
 
                 {/* Top-right buttons: download, fullscreen, close */}
-                <div className="absolute top-2 right-2 flex gap-2 z-10">
-                  <button onClick={handleDownload} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Download">
+                <div className="absolute top-2 end-2 flex gap-2 z-10">
+                  <button onClick={handleDownload} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label={t("common.download")}>
                     <Download className="h-4 w-4 text-white" />
                   </button>
-                  <button onClick={() => setIsFullscreen((v) => !v)} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+                  <button onClick={() => setIsFullscreen((v) => !v)} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label={isFullscreen ? t("common.exitFullscreen") : t("common.fullscreen")}>
                     {isFullscreen ? <Minimize2 className="h-4 w-4 text-white" /> : <Maximize2 className="h-4 w-4 text-white" />}
                   </button>
-                  <button onClick={() => { setIsFullscreen(false); setSelectedIndex(null) }} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Close">
+                  <button onClick={() => { setIsFullscreen(false); setSelectedIndex(null) }} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label={t("common.close")}>
                     <X className="h-4 w-4 text-white" />
                   </button>
                 </div>
@@ -781,28 +795,28 @@ export default function GalleryPage() {
                             ? "border-[#ff0073] text-[#ff0073] hover:bg-[#ff0073]/10"
                             : "border-zinc-200 dark:border-zinc-700 text-muted-foreground hover:text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800",
                         )}
-                        title={favoritesSet.has(selectedItem.id) ? "Remove from favorites" : "Add to favorites"}
+                        title={favoritesSet.has(selectedItem.id) ? t("templates.unfavorite") : t("templates.favorite")}
                       >
                         <Heart className={cn("h-3.5 w-3.5", favoritesSet.has(selectedItem.id) && "fill-current")} />
-                        <span className="hidden sm:inline">{favoritesSet.has(selectedItem.id) ? "Favorited" : "Favorite"}</span>
+                        <span className="hidden sm:inline">{favoritesSet.has(selectedItem.id) ? t("gallery.favorited") : t("preview.favorite")}</span>
                       </button>
                     )}
                     <button
                       onClick={() => openReportDialog(selectedItem)}
                       className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-zinc-700 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                      title="Report"
+                      title={t("gallery.report")}
                     >
                       <Flag className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Report</span>
+                      <span className="hidden sm:inline">{t("gallery.report")}</span>
                     </button>
                     {isAdmin && (
                       <button
                         onClick={() => openDeleteDialog(selectedItem)}
                         className="inline-flex items-center gap-1.5 rounded-md border border-red-300 dark:border-red-800 px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                        title="Remove from gallery"
+                        title={t("gallery.removeFromGallery")}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Remove</span>
+                        <span className="hidden sm:inline">{t("common.remove")}</span>
                       </button>
                     )}
                     <span className="text-xs text-muted-foreground">
@@ -815,7 +829,7 @@ export default function GalleryPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Prompt
+                        {t("node.prompt")}
                       </span>
                       <CopyPromptButton prompt={selectedItem.prompt} />
                     </div>
@@ -834,15 +848,15 @@ export default function GalleryPage() {
       {/* Report Dialog */}
       <Dialog open={reportItem !== null} onOpenChange={(open) => !open && setReportItem(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Report Content</DialogTitle>
+          <DialogTitle>{t("gallery.reportContent")}</DialogTitle>
           {reportItem && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Why are you reporting this item?
+                {t("gallery.reportWhy")}
               </p>
 
               <div className="space-y-2">
-                {REPORT_REASONS.map(({ value, label }) => (
+                {REPORT_REASONS.map(({ value, labelKey }) => (
                   <label
                     key={value}
                     className={cn(
@@ -860,7 +874,7 @@ export default function GalleryPage() {
                       onChange={() => setReportReason(value)}
                       className="accent-[#ff0073]"
                     />
-                    <span className="text-sm">{label}</span>
+                    <span className="text-sm">{t(labelKey)}</span>
                   </label>
                 ))}
               </div>
@@ -868,7 +882,7 @@ export default function GalleryPage() {
               <textarea
                 value={reportDetails}
                 onChange={(e) => setReportDetails(e.target.value)}
-                placeholder="Additional details (optional)"
+                placeholder={t("gallery.reportDetailsPlaceholder")}
                 maxLength={1000}
                 rows={3}
                 className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#ff0073]/30 resize-none"
@@ -881,7 +895,7 @@ export default function GalleryPage() {
                   onClick={() => setReportItem(null)}
                   disabled={reportMutation.isPending}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
                 <Button
                   size="sm"
@@ -892,7 +906,7 @@ export default function GalleryPage() {
                   {reportMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    "Submit Report"
+                    t("gallery.submitReport")
                   )}
                 </Button>
               </div>
@@ -904,10 +918,10 @@ export default function GalleryPage() {
       {/* Admin Delete Confirmation Dialog */}
       <Dialog open={deleteItem !== null} onOpenChange={(open) => !open && setDeleteItem(null)}>
         <DialogContent className="sm:max-w-sm">
-          <DialogTitle>Remove from Gallery</DialogTitle>
+          <DialogTitle>{t("gallery.removeFromGalleryTitle")}</DialogTitle>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              This will hide the item from the public gallery. The original job and files will not be deleted.
+              {t("gallery.removeDesc")}
             </p>
             <div className="flex justify-end gap-2">
               <Button
@@ -916,7 +930,7 @@ export default function GalleryPage() {
                 onClick={() => setDeleteItem(null)}
                 disabled={deleteMutation.isPending}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 size="sm"
@@ -927,7 +941,7 @@ export default function GalleryPage() {
                 {deleteMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  "Remove"
+                  t("common.remove")
                 )}
               </Button>
             </div>

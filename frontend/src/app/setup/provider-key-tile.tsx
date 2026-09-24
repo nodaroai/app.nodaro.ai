@@ -1,6 +1,7 @@
 import { useState } from "react"
 import type { ProviderTile } from "@/lib/provider-tiles"
 import { useProviderKeyEditor } from "@/lib/use-provider-key-editor"
+import { useT } from "@/lib/i18n"
 
 /**
  * One Install-health provider tile with its paste field.
@@ -31,6 +32,7 @@ export function ProviderKeyTile({ tile, onChanged }: Props) {
   const { phase, value, error, busy } = editor
   const inputId = `provider-key-${tile.id}`
   const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
+  const t = useT()
   const stateColor = tile.present ? "#166534" : FAINT
 
   return (
@@ -70,7 +72,7 @@ export function ProviderKeyTile({ tile, onChanged }: Props) {
 
       {!tile.cloudCovered && tile.id !== "nodaro" && !tile.present && (
         <span style={{ fontFamily: MONO, fontSize: 10.5, color: MUTED }}>
-          own key needed — connecting nodaro.ai does not cover this
+          {t("setup.ownKeyNeeded")}
         </span>
       )}
 
@@ -79,12 +81,12 @@ export function ProviderKeyTile({ tile, onChanged }: Props) {
           <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
             {(tile.editable || tile.canReplaceEnv) && (
               <button type="button" onClick={editor.startEditing} style={linkButton}>
-                {tile.canReplaceEnv ? "REPLACE .ENV KEY →" : tile.present ? "CHANGE KEY →" : "PASTE KEY →"}
+                {tile.canReplaceEnv ? t("setup.replaceEnvKey") : tile.present ? t("setup.changeKey") : t("setup.pasteKey")}
               </button>
             )}
             {tile.present && tile.source === "app" && (
               <button type="button" onClick={() => void editor.remove()} disabled={busy} style={{ ...linkButton, color: "#b60a43" }}>
-                {phase === "removing" ? "REMOVING…" : "REMOVE"}
+                {phase === "removing" ? t("setup.removing") : t("setup.remove")}
               </button>
             )}
             {tile.canDisable && (
@@ -94,11 +96,11 @@ export function ProviderKeyTile({ tile, onChanged }: Props) {
                 disabled={busy}
                 style={{ ...linkButton, color: tile.disabled ? "#16a34a" : MUTED }}
               >
-                {tile.disabled ? "ENABLE" : "DISABLE"}
+                {tile.disabled ? t("setup.enable") : t("setup.disable")}
               </button>
             )}
             {tile.whereToGet && !tile.present && (
-              <span style={{ fontFamily: MONO, fontSize: 10.5, color: FAINT }}>get one at {tile.whereToGet}</span>
+              <span style={{ fontFamily: MONO, fontSize: 10.5, color: FAINT }}>{t("integ.getOneAt", { url: tile.whereToGet })}</span>
             )}
           </div>
         ) : (
@@ -123,7 +125,7 @@ export function ProviderKeyTile({ tile, onChanged }: Props) {
               type="password"
               autoComplete="off"
               spellCheck={false}
-              placeholder={`paste your ${tile.name} key`}
+              placeholder={t("setup.pasteYourKey", { name: tile.name })}
               value={value}
               onChange={(e) => editor.setValue(e.target.value)}
               disabled={busy}
@@ -153,16 +155,16 @@ export function ProviderKeyTile({ tile, onChanged }: Props) {
                 opacity: busy ? 0.75 : 1,
               }}
             >
-              {phase === "saving" ? "Saving…" : "Save"}
+              {phase === "saving" ? t("common.saving") : t("common.save")}
             </button>
             <button type="button" disabled={busy} onClick={editor.cancel} style={linkButton}>
-              CANCEL
+              {t("setup.cancel")}
             </button>
           </form>
         )
       ) : tile.source === "env" ? (
         <span style={{ fontFamily: MONO, fontSize: 10.5, color: MUTED }}>
-          set by the environment — remove {tile.env} from .env (or use Replace) to manage it here
+          {t("setup.setByEnv", { env: tile.env })}
         </span>
       ) : null}
 

@@ -17,7 +17,7 @@ export function SortHeader<TField extends string>({
 }) {
   const Icon = !active ? ArrowUpDown : dir === "asc" ? ArrowUp : ArrowDown
   return (
-    <th className={`px-4 py-2 font-medium ${align === "right" ? "text-right" : "text-left"}`}>
+    <th className={`px-4 py-2 font-medium ${align === "right" ? "text-end" : "text-start"}`}>
       <button
         type="button"
         onClick={() => onSort(field)}

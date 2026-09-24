@@ -1,5 +1,6 @@
 import { OBJECT_VARIATION_PRESETS } from "@nodaro/prompts"
 import { ObjectAssetTab } from "./object-asset-tab"
+import { useT } from "@/lib/i18n"
 import type { ObjectStudioState } from "./use-object-studio"
 
 /**
@@ -12,12 +13,13 @@ interface VariationsTabProps {
 }
 
 export function VariationsTab({ studio }: VariationsTabProps) {
+  const t = useT()
   return (
     <ObjectAssetTab
       studio={studio}
       tabKind="variations"
       presets={OBJECT_VARIATION_PRESETS}
-      iconLabel="✨ Variations"
+      iconLabel={t("studio.variationsTabTitle")}
     />
   )
 }

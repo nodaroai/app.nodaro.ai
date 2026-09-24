@@ -10,6 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { useT } from "@/lib/i18n"
 
 interface DeleteConfirmationDialogProps {
   readonly isOpen: boolean
@@ -35,21 +36,22 @@ export function DeleteConfirmationDialog({
   isOpen,
   onClose,
   onConfirm,
-  title = "Delete this version?",
-  description = "This action cannot be undone. The generated result will be permanently removed.",
+  title,
+  description,
   className,
   overlayClassName,
-  confirmLabel = "Delete",
+  confirmLabel,
 }: DeleteConfirmationDialogProps) {
+  const t = useT()
   return (
     <AlertDialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
       <AlertDialogContent className={className} overlayClassName={overlayClassName}>
         <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
+          <AlertDialogTitle>{title ?? t("misc.deleteVersionTitle")}</AlertDialogTitle>
+          <AlertDialogDescription>{description ?? t("misc.deleteVersionDesc")}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onClose}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel onClick={onClose}>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             onClick={() => {
@@ -57,7 +59,7 @@ export function DeleteConfirmationDialog({
               onClose()
             }}
           >
-            {confirmLabel}
+            {confirmLabel ?? t("common.delete")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

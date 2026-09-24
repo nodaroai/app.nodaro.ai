@@ -5,6 +5,7 @@ import type { NodeProps } from "@xyflow/react"
 import { Aperture } from "lucide-react"
 import { getLens, getLensLabel } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { LookPreviewStyleSwitch } from "./look-preview-style"
 import { usePickerJsonConsumer } from "./use-picker-json-consumer"
 import { PICKER_CONSUMER_INPUT_HANDLES, PickerJsonHandleIcon, PickerUpdateButton } from "./picker-json-handle"
 import { LensPreview, LookArt } from "@/lib/picker-ui"
@@ -29,9 +30,12 @@ function LensNodeComponent({ id, data, selected }: NodeProps) {
       extraHandleIcons={<PickerJsonHandleIcon nodeId={id} nodeType="lens" />}
       headerSlot={isConnected && !nodeData.autoApplyInjected ? <PickerUpdateButton hasPending={hasPending} onApply={apply} /> : null}
     >
-      <p className="text-foreground text-sm font-medium">
-        {getLensLabel(lensId)}
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-foreground text-sm font-medium min-w-0">
+          {getLensLabel(lensId)}
+        </p>
+        <LookPreviewStyleSwitch pickerKey="lens" />
+      </div>
       <LookArt pickerKey="lens" id={lensId} className="w-full aspect-[16/9]" width={640} fallback={<LensPreview lensId={lensId} variant="hybrid" className="w-full aspect-[16/9]" />} />
       {description && (
         <p className="text-muted-foreground text-[11px] leading-snug">

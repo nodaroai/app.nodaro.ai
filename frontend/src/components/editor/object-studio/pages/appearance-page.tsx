@@ -1,5 +1,6 @@
 import { useContext, useState } from "react"
 import { optimizedImageUrl } from "@/lib/image"
+import { useT } from "@/lib/i18n"
 import type { StudioPageProps } from "../../studio-shell/types"
 import { UpstreamPickerBanner } from "../upstream-picker-banner"
 import type { ObjectStudioJobs } from "../use-object-studio-jobs"
@@ -39,6 +40,7 @@ import { ObjectCandidatesContext } from "../object-candidates-context"
  */
 
 export function AppearancePage({ state }: StudioPageProps<ObjectStudioState, ObjectStudioJobs>) {
+  const t = useT()
   const studio = state
   const data = studio.stagedData
   const [count, setCount] = useState<1 | 2 | 4>(1)
@@ -80,40 +82,40 @@ export function AppearancePage({ state }: StudioPageProps<ObjectStudioState, Obj
 
         {/* Main image preview */}
         <section>
-          <h2 className="text-[12px] font-medium text-slate-300 mb-2">Main image</h2>
+          <h2 className="text-[12px] font-medium text-slate-300 mb-2">{t("studio.mainImage")}</h2>
           {data.sourceImageUrl ? (
             <img
               src={optimizedImageUrl(data.sourceImageUrl, { width: 800 })}
-              alt={data.objectName || "Object"}
+              alt={data.objectName || t("field.object")}
               loading="lazy"
               className="w-full max-h-[400px] object-contain rounded border border-[#1e293b]"
             />
           ) : (
             <div className="aspect-video bg-[#1a1d27] rounded border border-[#1e293b] flex items-center justify-center text-[11px] text-slate-500">
-              No main image yet — generate candidates below
+              {t("studio.noMainImageYet")}
             </div>
           )}
         </section>
 
         {/* Identity form */}
         <section className="space-y-3">
-          <h2 className="text-[12px] font-medium text-slate-300">Identity</h2>
+          <h2 className="text-[12px] font-medium text-slate-300">{t("studio.identity")}</h2>
           <label className="block">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Name</span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider">{t("common.name")}</span>
             <input
               type="text"
               value={data.objectName || ""}
               onChange={(e) => studio.patch({ objectName: e.target.value })}
-              placeholder="e.g. Glowing rune sword"
+              placeholder={t("studio.objectNamePh")}
               className="w-full mt-1 px-3 py-2 text-[12px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600"
             />
           </label>
           <label className="block">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Description</span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider">{t("common.description")}</span>
             <textarea
               value={data.description || ""}
               onChange={(e) => studio.patch({ description: e.target.value })}
-              placeholder="Optional — describe form, material, details"
+              placeholder={t("studio.objectDescriptionPh")}
               rows={3}
               className="w-full mt-1 px-3 py-2 text-[12px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600 resize-y"
             />
@@ -123,8 +125,8 @@ export function AppearancePage({ state }: StudioPageProps<ObjectStudioState, Obj
         {/* Generate */}
         <section>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-slate-400">Candidates:</span>
-            <div className="flex gap-1" role="group" aria-label="Candidate count">
+            <span className="text-[11px] text-slate-400">{t("studio.candidatesColon")}</span>
+            <div className="flex gap-1" role="group" aria-label={t("studio.candidateCount")}>
               {([1, 2, 4] as const).map((n) => (
                 <button
                   key={n}
@@ -145,14 +147,16 @@ export function AppearancePage({ state }: StudioPageProps<ObjectStudioState, Obj
               type="button"
               onClick={() => void cands.generate(count)}
               disabled={generateDisabled}
-              className="ml-auto px-4 py-1.5 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
+              className="ms-auto px-4 py-1.5 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
             >
-              Generate
+              {t("common.generate")}
             </button>
           </div>
           {cands.tracked.length > 0 && (
             <div className="mt-2 text-[10px] text-slate-500">
-              Generating {cands.tracked.length} candidate{cands.tracked.length === 1 ? "" : "s"}…
+              {cands.tracked.length === 1
+                ? t("studio.generatingCandidatesOne", { n: 1 })
+                : t("studio.generatingCandidatesMany", { n: cands.tracked.length })}
             </div>
           )}
         </section>
@@ -160,13 +164,13 @@ export function AppearancePage({ state }: StudioPageProps<ObjectStudioState, Obj
         {/* Candidates grid */}
         {cands.candidates.length > 0 && (
           <section>
-            <h2 className="text-[12px] font-medium text-slate-300 mb-2">Candidates</h2>
+            <h2 className="text-[12px] font-medium text-slate-300 mb-2">{t("cfgext.reduceTabCandidates")}</h2>
             <div className="grid grid-cols-2 gap-3">
               {cands.candidates.map((c) => (
                 <div key={c.jobId} className="border border-[#1e293b] rounded p-2 bg-[#0e1117]">
                   <img
                     src={optimizedImageUrl(c.url, { width: 512 })}
-                    alt="candidate"
+                    alt={t("studio.candidateAlt")}
                     loading="lazy"
                     className="w-full aspect-square object-cover rounded"
                   />
@@ -177,12 +181,12 @@ export function AppearancePage({ state }: StudioPageProps<ObjectStudioState, Obj
                       disabled={approveDiscardDisabled}
                       title={
                         mainImageGenPending
-                          ? "Wait for in-flight candidate generations to finish"
+                          ? t("studio.waitForCandidates")
                           : undefined
                       }
                       className="flex-1 text-[11px] px-2 py-1 rounded bg-[#22d3ee] hover:bg-[#22d3ee]/90 disabled:opacity-40 disabled:cursor-not-allowed text-slate-900 font-medium"
                     >
-                      {studio.isApprovingMainImage ? "Approving…" : "Approve"}
+                      {studio.isApprovingMainImage ? t("studio.approving") : t("pipe.approve")}
                     </button>
                     <button
                       type="button"
@@ -190,12 +194,12 @@ export function AppearancePage({ state }: StudioPageProps<ObjectStudioState, Obj
                       disabled={approveDiscardDisabled}
                       title={
                         mainImageGenPending
-                          ? "Wait for in-flight candidate generations to finish"
+                          ? t("studio.waitForCandidates")
                           : undefined
                       }
                       className="text-[11px] px-2 py-1 rounded bg-[#1a1d27] hover:bg-[#1e293b] disabled:opacity-40 disabled:cursor-not-allowed text-slate-400"
                     >
-                      Discard
+                      {t("node.discard")}
                     </button>
                   </div>
                 </div>
@@ -207,9 +211,9 @@ export function AppearancePage({ state }: StudioPageProps<ObjectStudioState, Obj
         {/* Canonical description (LLM-authored, read-only display) */}
         {data.canonicalDescription && (
           <section className="text-[11px] bg-[#0e1117] border border-[#1e293b] p-3 rounded">
-            <div className="font-medium text-slate-300 mb-1">Canonical description</div>
+            <div className="font-medium text-slate-300 mb-1">{t("studio.canonicalDescription")}</div>
             <div className="text-slate-400 italic">{data.canonicalDescription}</div>
-            <div className="text-[9px] text-slate-600 mt-1">Auto-generated when you approved the main image.</div>
+            <div className="text-[9px] text-slate-600 mt-1">{t("studio.autoGeneratedOnApprove")}</div>
           </section>
         )}
       </div>

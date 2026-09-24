@@ -15,12 +15,15 @@
 // ceiling to add; they are the stated residual, not part of this sum.
 import { describe, it, expect } from "vitest"
 import type { Edl, EdlSegment } from "@nodaro/shared"
+import { edlDurationMs, validateEdl } from "@nodaro/shared"
+import { boundaryOverlapSecs, type PlanSegment } from "../apply-edl-budget.js"
 import {
   applyEdlRenderBudgetMs,
   audioMuxTimeoutMs,
   chunkRenderTimeoutMs,
   planChunks,
   referencedSourceIds,
+  splitInsideCrossfadeRun,
   resolveChunksForOutput,
   APPLY_EDL_CANVAS_PROBE_MS,
   APPLY_EDL_PER_SOURCE_PREP_MS,
@@ -102,22 +105,20 @@ function crossfadeRun(n: number, segMs: number, xfadeMs: number): Edl {
   return { version: 1, clock: "master", sources: [{ id: "A", url: "https://f.test/a.mp4", kind: "video" }], segments } as unknown as Edl
 }
 
-// The one slice the caps cannot bound: a continuous crossfade run is never
-// split (no hard cut to close a chunk at), so it renders as ONE graph of any
-// width, and its cost grows faster than linearly with that width (review of
-// #1623 on the pinned 8.1.2: 300 × 200 ms all-crossfade audio ran past a
-// 120 s limit with 16 of 45 s rendered). Until such runs are split (plan B2)
-// it keeps production's former limit as a floor, on its own output — never
-// killed where production rendered the same graph (see WIDE_SLICE_FLOOR_MS for
-// the one mixed audio-only residual).
-describe("a slice wider than its cap (a crossfade run) keeps production's former limit as a floor", () => {
+// The one slice the caps cannot always bound: a crossfade run whose segments
+// are too short for their crossfades to take a cut (`splitInsideCrossfadeRun`)
+// renders as ONE graph of any width, and its cost grows faster than linearly
+// with that width (review of #1623 on the pinned 8.1.2: 300 × 200 ms
+// all-crossfade audio ran past a 120 s limit with 16 of 45 s rendered). It
+// keeps production's former limit as a floor, on its own output.
+describe("a slice wider than its cap (an unsplittable crossfade run) keeps production's former limit as a floor", () => {
   const prodLimitMs = (edl: Edl) => Math.max(20 * MIN, Math.ceil(chunkOutputSec(edl.segments) * 6) * 1000)
   it("the floor IS production's former per-chunk limit: max(20 min, 6 × output)", () => {
     expect(WIDE_SLICE_FLOOR_MS).toBe(20 * MIN)
     expect(WIDE_SLICE_SECS_PER_OUTPUT_SEC).toBe(6)
   })
-  it.each(["video", "audio"] as const)("an all-crossfade %s edit stays one wide graph", (output) => {
-    const run = crossfadeRun(300, 200, 50)
+  it.each(["video", "audio"] as const)("a %s run of 1 s segments under 0.9 s crossfades (the most a 1 s clip allows) cannot be cut and stays one graph", (output) => {
+    const run = crossfadeRun(300, 1000, 900)
     expect(resolveChunksForOutput(run.segments, output).map((c) => c.length)).toEqual([300])
   })
   it.each([
@@ -139,10 +140,179 @@ describe("a slice wider than its cap (a crossfade run) keeps production's former
     expect(chunkRenderTimeoutMs(hardCuts, hardCuts.segments, VIDEO_ONLY, HD30)).toBeLessThan(WIDE_SLICE_FLOOR_MS)
   })
   it("the liveness budget carries the floor too — the render and its hung-detector agree", () => {
-    const run = crossfadeRun(300, 200, 50)
+    const run = crossfadeRun(300, 1000, 900)
     expect(applyEdlRenderBudgetMs(run, { output: "audio" }))
       .toBe(chunkRenderTimeoutMs(run, run.segments, AUDIO_ONLY, LIVENESS_CANVAS) + referencedSourceIds(run, "audio").size * APPLY_EDL_PER_SOURCE_PREP_MS)
     expect(applyEdlRenderBudgetMs(run, { output: "audio" })).toBeGreaterThanOrEqual(prodLimitMs(run))
+  })
+})
+
+// Plan B2: a crossfade run past the cap is closed by cutting one of its
+// segments in two at an invisible hard cut, so no graph is wider than its cap
+// and the kill budget stays linear. Nothing about the output may move: every
+// crossfade keeps its exact overlap, the length is unchanged, and the two
+// halves read the whole segment's source time between them.
+describe("a crossfade run past the cap is cut inside one of its segments (B2)", () => {
+  const baseId = (id: string) => id.replace(/~[12]$/, "")
+  const flatten = (chunks: readonly (readonly PlanSegment[])[]) => chunks.flat()
+
+  it.each(["video", "audio"] as const)("no %s graph is wider than its cap for a 300-segment all-crossfade edit", (output) => {
+    const run = crossfadeRun(300, 200, 50)
+    const plan = resolveChunksForOutput(run.segments, output)
+    expect(plan.length).toBeGreaterThan(1)
+    for (const c of plan) expect(c.length).toBeLessThanOrEqual(30)
+  })
+
+  it.each([
+    [300, 200, 50], [300, 200, 90], [120, 2000, 1500], [90, 617, 300], [61, 33, 20], [400, 150, 50],
+  ] as const)("keeps every crossfade's exact overlap and the total length (%i × %i ms, %i ms crossfades)", (n, segMs, xfadeMs) => {
+    const run = crossfadeRun(n, segMs, xfadeMs)
+    const original = run.segments
+    const overlapInto = new Map(original.map((s, i) => [s.id, i > 0 ? boundaryOverlapSecs(s, original[i - 1]) : 0]))
+    const plan = resolveChunksForOutput(original, "video")
+    const flat = flatten(plan)
+    for (let k = 1; k < flat.length; k++) {
+      const [a, b] = [flat[k - 1], flat[k]]
+      if (b.splitLeadMs) {
+        // The new cut: the two halves of ONE segment, a hard cut between them.
+        expect(baseId(a.id)).toBe(baseId(b.id))
+        expect(boundaryOverlapSecs(b, a)).toBe(0)
+      } else {
+        expect(boundaryOverlapSecs(b, a)).toBe(overlapInto.get(baseId(b.id)))
+      }
+    }
+    const planned = plan.reduce((acc, c) => acc + chunkOutputSec(c), 0)
+    expect(planned).toBeCloseTo(edlDurationMs(run) / 1000, 9)
+  })
+
+  it("the two halves cover the segment's source time exactly, and the tail's picture lead is its head", () => {
+    const run = crossfadeRun(300, 200, 50)
+    const flat = flatten(resolveChunksForOutput(run.segments, "video"))
+    const byId = new Map(run.segments.map((s) => [s.id, s]))
+    const tails = flat.filter((s) => s.splitLeadMs)
+    expect(tails.length).toBeGreaterThan(0)
+    for (const tail of tails) {
+      const head = flat[flat.indexOf(tail) - 1]
+      const whole = byId.get(baseId(tail.id))!
+      expect([head.inMs, head.outMs, tail.inMs, tail.outMs]).toEqual([whole.inMs, tail.inMs, head.outMs, whole.outMs])
+      expect(tail.splitLeadMs).toBe(head.outMs - head.inMs)
+      expect(head.transition).toEqual(whole.transition)
+      expect(tail.transition).toBeUndefined()
+      expect([head.video, tail.video]).toEqual([whole.video, whole.video])
+    }
+  })
+
+  it("every chunk after the first opens with the tail of a cut (a hard cut) — never mid-dissolve", () => {
+    const plan = resolveChunksForOutput(crossfadeRun(300, 200, 50).segments, "audio")
+    for (const c of plan.slice(1)) {
+      expect(c[0].splitLeadMs).toBeGreaterThan(0)
+      expect(c[0].transition).toBeUndefined()
+    }
+  })
+
+  it("the head is the shortest that keeps its crossfade in — the tail's picture re-reads it", () => {
+    const [prev, seg, next] = crossfadeRun(3, 200, 50).segments
+    const split = splitInsideCrossfadeRun(prev, seg, next)!
+    const x = split.head.outMs - split.head.inMs
+    expect(boundaryOverlapSecs(split.head, prev)).toBe(boundaryOverlapSecs(seg, prev))
+    expect(boundaryOverlapSecs({ ...split.head, outMs: split.head.outMs - 1 }, prev)).toBeLessThan(boundaryOverlapSecs(seg, prev))
+    expect(x).toBe(56) // floor(0.9 × 56) = 50
+  })
+
+  it("refuses a cut that would shrink either crossfade", () => {
+    const [prev, seg, next] = crossfadeRun(3, 1000, 900).segments // 900 ms each side of a 1 s segment
+    expect(splitInsideCrossfadeRun(prev, seg, next)).toBeUndefined()
+  })
+
+  it("an edit with no crossfade plans exactly as before — picture checkpoints keep their resume keys", () => {
+    for (const n of [31, 90, 250]) {
+      const plan = resolveChunksForOutput(cuts(n, 1).segments, "video")
+      expect(plan.flat().some((s) => (s as PlanSegment).splitLeadMs)).toBe(false)
+      expect(plan.map((c) => c.length)).toEqual(chunksOf(cuts(n, 1), "video").map((c) => c.length))
+    }
+  })
+
+  it("the liveness budget is the SAME split plan's chunk budgets — linear again, no floor", () => {
+    const run = crossfadeRun(300, 200, 50)
+    const plan = resolveChunksForOutput(run.segments, "audio")
+    const slices = plan.reduce((acc, c) => acc + chunkRenderTimeoutMs(run, c, AUDIO_ONLY, LIVENESS_CANVAS), 0)
+    const prep = referencedSourceIds(run, "audio").size * APPLY_EDL_PER_SOURCE_PREP_MS
+    expect(applyEdlRenderBudgetMs(run, { output: "audio" })).toBe(slices + prep + audioMuxTimeoutMs(edlDurationMs(run) / 1000))
+    for (const c of plan) expect(chunkRenderTimeoutMs(run, c, AUDIO_ONLY, LIVENESS_CANVAS)).toBeLessThan(WIDE_SLICE_FLOOR_MS)
+  })
+
+  // Review of #1630: a greedy planner that only tried a cut in slot 30 left
+  // 31–33-segment graphs — when a run started right after slot 29, or when the
+  // slot-30 segment was too short to cut. A full chunk now closes at the latest
+  // hard cut or cuttable run segment within the cap.
+  it("a run that starts at slot 30 opens a fresh chunk — never a head in slot 31", () => {
+    const segments = [
+      ...cuts(29, 1).segments,
+      ...crossfadeRun(40, 1000, 300).segments.map((s, k) => ({ ...s, id: `r${k}`, inMs: 29_000 + k * 1000, outMs: 30_000 + k * 1000 })),
+    ] as EdlSegment[]
+    for (const output of ["video", "audio"] as const) {
+      for (const c of resolveChunksForOutput(segments, output)) expect(c.length).toBeLessThanOrEqual(30)
+    }
+  })
+
+  it("a slot-30 segment too short to cut sends the cut back to an earlier run segment", () => {
+    // Every 30th segment is a 1 s clip under 800 ms crossfades both sides
+    // (uncuttable: each half would need 889 ms); the rest are 3 s clips that can.
+    const segments = Array.from({ length: 120 }, (_, i) => {
+      const len = i % 30 === 29 ? 1000 : 3000
+      return { id: `m${i}`, inMs: 0, outMs: len, video: "A", ...(i > 0 ? { transition: { type: "crossfade" as const, durationMs: 800 } } : {}) }
+    }) as EdlSegment[]
+    for (const c of resolveChunksForOutput(segments, "video")) expect(c.length).toBeLessThanOrEqual(30)
+  })
+
+  // A seeded sweep over mixed edits (hard cuts, crossfade runs, short and long
+  // clips, small and near-maximal crossfades): whenever a run could be cut, no
+  // chunk is wider than 30, and every invariant of the split holds.
+  it("seeded sweep: the cap holds whenever a cut exists, and nothing about the edit moves", () => {
+    let seed = 20260924
+    const rnd = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296 }
+    for (let e = 0; e < 300; e++) {
+      const n = 20 + Math.floor(rnd() * 220)
+      // Crossfades clamped to 0.9 × the shorter neighbour, as the node's Default
+      // crossfade is and as validateEdl requires: only a valid edit reaches a render.
+      const lens = Array.from({ length: n }, () => [120, 400, 1000, 2500, 6000][Math.floor(rnd() * 5)])
+      const segments = lens.map((len, i) => {
+        const want = rnd() < 0.7 ? [30, 100, 300, 800, 5000][Math.floor(rnd() * 5)] : 0
+        const xfade = i > 0 ? Math.min(want, Math.floor(0.9 * Math.min(len, lens[i - 1]))) : 0
+        return { id: `z${i}`, inMs: 0, outMs: len, video: "A", ...(xfade > 0 ? { transition: { type: "crossfade" as const, durationMs: xfade } } : {}) }
+      }) as EdlSegment[]
+      const edl = { version: 1, clock: "master", sources: [{ id: "A", url: "https://f.test/a.mp4", kind: "video" }], segments } as unknown as Edl
+      expect(validateEdl(edl).issues).toEqual([])
+      const overlapInto = new Map(segments.map((s, i) => [s.id, i > 0 ? boundaryOverlapSecs(s, segments[i - 1]) : 0]))
+      for (const output of ["video", "audio"] as const) {
+        const plan = resolveChunksForOutput(segments, output)
+        const flat = plan.flat()
+        for (let k = 1; k < flat.length; k++) {
+          const [a, b] = [flat[k - 1], flat[k]]
+          if (b.splitLeadMs) expect(boundaryOverlapSecs(b, a)).toBe(0)
+          else expect(boundaryOverlapSecs(b, a)).toBe(overlapInto.get(baseId(b.id)))
+        }
+        expect(plan.reduce((acc, c) => acc + chunkOutputSec(c), 0)).toBeCloseTo(edlDurationMs(edl) / 1000, 6)
+        for (const c of plan) {
+          if (c.length <= 30) continue
+          // Wider only if no segment of its trailing run up to slot 30 could close it.
+          for (let k = 1; k < 30; k++) {
+            const seg = c[k]
+            if (boundaryOverlapSecs(seg, c[k - 1]) === 0) throw new Error(`chunk of ${c.length} had a hard cut at slot ${k + 1}`)
+            expect(splitInsideCrossfadeRun(c[k - 1], seg, c[k + 1])).toBeUndefined()
+          }
+        }
+      }
+    }
+  })
+
+  it("the tail's picture re-read is in its decode span; its sound is not", () => {
+    const [prev, seg, next] = crossfadeRun(3, 2000, 500).segments
+    const { tail } = splitInsideCrossfadeRun(prev, seg, next)!
+    const e = crossfadeRun(3, 2000, 500)
+    const picture = chunkDecodeSpanSec(e, [tail], VIDEO_ONLY).videoSec
+    const sound = chunkDecodeSpanSec(e, [tail], AUDIO_ONLY).audioSec
+    expect(picture - sound).toBeCloseTo(tail.splitLeadMs! / 1000, 9)
   })
 })
 

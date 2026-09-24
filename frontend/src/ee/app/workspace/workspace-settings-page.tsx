@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { queryKeys } from "@/lib/query-keys"
 import { useVocabulary } from "@/ee/hooks/use-workspace"
 import { JoinCodeCard } from "@/ee/components/org/join-code-card"
+import { useT, type TFunction } from "@/lib/i18n"
 import { OrgApiError, getWorkspace, updateWorkspace } from "@/ee/lib/orgs-api"
 
 /**
@@ -22,10 +23,11 @@ import { OrgApiError, getWorkspace, updateWorkspace } from "@/ee/lib/orgs-api"
  * nothing about archiving at all.
  */
 export default function WorkspaceSettingsPage() {
+  const t = useT()
   const { id = "" } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const vocabulary = useVocabulary()
-  const workspaceWord = vocabulary.workspace ?? "Workspace"
+  const workspaceWord = vocabulary.workspace ?? t("org.workspaceWord")
 
   const workspace = useQuery({
     queryKey: queryKeys.orgs.workspace(id),
@@ -53,21 +55,21 @@ export default function WorkspaceSettingsPage() {
     },
   })
 
-  if (workspace.isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+  if (workspace.isLoading) return <div className="p-6 text-sm text-muted-foreground">{t("common.loading")}</div>
 
   if (workspace.error || !workspace.data) {
     const code = workspace.error instanceof OrgApiError ? workspace.error.code : "internal_error"
     return (
       <div className="mx-auto max-w-xl p-6">
         <Card className="space-y-4 p-8">
-          <h1 className="text-xl font-semibold">Not available</h1>
+          <h1 className="text-xl font-semibold">{t("org.notAvailable")}</h1>
           <p className="text-sm text-muted-foreground">
             {code === "member_suspended"
-              ? "You cannot open this while your membership is suspended."
-              : `This ${workspaceWord.toLowerCase()} does not exist, or you are not a member of it.`}
+              ? t("org.suspendedCannotOpenShort")
+              : t("org.workspaceMissingOrNotMember", { workspace: workspaceWord.toLowerCase() })}
           </p>
           <Button asChild variant="outline">
-            <Link to="/">Back to your work</Link>
+            <Link to="/">{t("org.backToYourWork")}</Link>
           </Button>
         </Card>
       </div>
@@ -81,7 +83,7 @@ export default function WorkspaceSettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold">Settings</h1>
+        <h1 className="text-2xl font-semibold">{t("common.settings")}</h1>
         <Link to={`/w/${id}`} className="text-sm text-muted-foreground hover:underline">
           {data.name}
         </Link>
@@ -89,19 +91,19 @@ export default function WorkspaceSettingsPage() {
 
       {!isAdmin && (
         <p className="rounded-md border p-3 text-sm text-muted-foreground">
-          Only an administrator of this {workspaceWord.toLowerCase()} can change these.
+          {t("org.onlyAdminCanChange", { workspace: workspaceWord.toLowerCase() })}
         </p>
       )}
 
       {data.archived && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-muted-foreground">
-          This {workspaceWord.toLowerCase()} is archived. Nothing can be changed until it is reopened.
+          {t("org.archivedNothingChanges", { workspace: workspaceWord.toLowerCase() })}
         </p>
       )}
 
       <Card className="space-y-4 p-6">
         <div className="space-y-2">
-          <Label htmlFor="ws-name">Name</Label>
+          <Label htmlFor="ws-name">{t("common.name")}</Label>
           <Input
             id="ws-name"
             value={name}
@@ -115,7 +117,7 @@ export default function WorkspaceSettingsPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="ws-description">Description</Label>
+          <Label htmlFor="ws-description">{t("common.description")}</Label>
           <Textarea
             id="ws-description"
             value={description}
@@ -130,12 +132,12 @@ export default function WorkspaceSettingsPage() {
         </div>
 
         {save.error && (
-          <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{saveFailureMessage(save.error)}</p>
+          <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{saveFailureMessage(save.error, t)}</p>
         )}
 
         <div className="flex justify-end">
           <Button onClick={() => save.mutate()} disabled={locked || save.isPending || !dirty || name.trim().length === 0}>
-            {save.isPending ? "Saving…" : "Save"}
+            {save.isPending ? t("common.saving") : t("common.save")}
           </Button>
         </div>
       </Card>
@@ -145,20 +147,20 @@ export default function WorkspaceSettingsPage() {
   )
 }
 
-function saveFailureMessage(error: unknown): string {
+function saveFailureMessage(error: unknown, t: TFunction): string {
   const code = error instanceof OrgApiError ? error.code : "internal_error"
   switch (code) {
     case "insufficient_role":
-      return "You cannot change these settings."
+      return t("org.cannotChangeSettings")
     case "workspace_archived":
-      return "This workspace is archived, so nothing can be changed."
+      return t("org.workspaceArchivedNoChanges")
     case "org_not_active":
-      return "This organization is not active."
+      return t("org.orgNotActive")
     case "name_taken":
-      return "Another workspace in this organization already uses that address."
+      return t("org.workspaceNameTaken")
     case "validation_error":
-      return error instanceof OrgApiError ? error.message : "That change was refused."
+      return error instanceof OrgApiError ? error.message : t("org.changeRefused")
     default:
-      return "Something went wrong saving. Try again in a moment."
+      return t("org.saveFailedGeneric")
   }
 }

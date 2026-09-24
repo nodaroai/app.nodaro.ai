@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { DEFAULT_SECTIONS, SHEET_SKINS, SHEET_TYPES, SHEET_ASPECTS, planSheetGeneration, type ReferenceSheet, type SheetAspect, type SheetFlavour, type SheetSection, type SheetSkin, type SheetType } from "@nodaro/shared"
 import { generateReferenceSheet, getJobStatusLean } from "@/lib/api"
-import { tx } from "@/lib/i18n"
+import { useT, tx } from "@/lib/i18n"
 import type { SheetTabAdapter } from "./sheet-tab-adapter"
 import { CharacterSheetPanel } from "./character-sheet-panel"
 import { SheetGallery } from "./sheet-gallery"
@@ -42,6 +42,7 @@ interface ReferenceSheetTabProps {
 
 /** Classic chip UI (object/location). Character uses CharacterSheetPanel. */
 function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: ReferenceSheetTabProps) {
+  const tr = useT()
   const staged = adapter.getStaged(studio)
 
   const [type, setType] = useState<SheetType>("full-reference")
@@ -81,27 +82,27 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
       if (job.status === "completed") {
         const out = job.output_data as { imageUrl?: string; panelUrls?: string[] } | undefined
         if (out?.imageUrl) return { imageUrl: out.imageUrl, panelUrls: out.panelUrls ?? [] }
-        throw new Error("Sheet completed without an image URL")
+        throw new Error(tx("entity.sheetNoImageUrl"))
       }
       // A held job is parked on a human reviewer and will outlive this bound by
       // hours. Break out NOW with the truth instead of falling through to
       // "timed out" (a lie) or an empty panel that never fills.
       if (job.status === "pending_review") throw new Error(tx("sheet.panelAwaitingReview"))
       if (job.status === "failed" || job.status === "cancelled") {
-        throw new Error(job.error_message ?? `sheet ${job.status}`)
+        throw new Error(job.error_message ?? tx("entity.sheetStatusFallback", { status: job.status }))
       }
     }
-    throw new Error("sheet generation timed out")
+    throw new Error(tx("entity.sheetTimedOut"))
   }
 
   async function onGenerate(): Promise<void> {
     if (!sourceImageUrl) {
-      toast.error("Approve a main image first")
+      toast.error(tx("entity.approveMainImageFirst"))
       return
     }
     setStatus("generating")
     setResultUrl(null)
-    setProgressLine("Preparing…")
+    setProgressLine(tx("entity.sheetPreparing"))
     try {
       const dbId = await adapter.ensureSaved(studio)
 
@@ -121,7 +122,7 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
       const total = missing.length
       for (let i = 0; i < total; i++) {
         const req = missing[i]
-        setProgressLine(`Generating panels ${i + 1}/${total} — ${req.variant}…`)
+        setProgressLine(tx("entity.sheetGeneratingPanels", { i: i + 1, total, variant: req.variant }))
         // eslint-disable-next-line no-await-in-loop -- panels generated sequentially so the credit guard isn't slammed
         const { jobId } = await adapter.generateAsset(dbId, {
           ...req,
@@ -133,7 +134,7 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
       }
 
       // Stage B — compose the sheet from the (now complete) entity buckets.
-      setProgressLine(total > 0 ? `Composing sheet… (${total} panels)` : "Composing sheet…")
+      setProgressLine(total > 0 ? tx("entity.sheetComposingPanels", { n: total }) : tx("entity.sheetComposing"))
       const { jobId } = await generateReferenceSheet({
         type,
         skin,
@@ -162,17 +163,17 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
 
       setStatus("done")
       setProgressLine("")
-      toast.success("Reference sheet generated")
+      toast.success(tx("entity.sheetGenerated"))
     } catch (e) {
       setStatus("error")
       setProgressLine("")
-      toast.error(e instanceof Error ? e.message : "Sheet generation failed")
+      toast.error(e instanceof Error ? e.message : tx("entity.sheetGenerationFailed"))
     }
   }
 
   function onSetThumbnail(url: string, label: string): void {
     adapter.setThumbnail(studio, url, label)
-    toast.success("Set as node thumbnail")
+    toast.success(tx("entity.setAsNodeThumbnail"))
   }
 
   const chip = (active: boolean) =>
@@ -187,7 +188,7 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
     <div className="space-y-5 max-w-4xl">
       {/* Type picker */}
       <div className="space-y-1.5">
-        <div className="text-[9px] uppercase tracking-widest text-slate-600">Sheet type</div>
+        <div className="text-[9px] uppercase tracking-widest text-slate-600">{tr("cfgext.refSheetSheetType")}</div>
         <div className="flex flex-wrap gap-2">
           {SHEET_TYPES.map((t) => (
             <button
@@ -206,7 +207,7 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
 
       {/* Skin picker */}
       <div className="space-y-1.5">
-        <div className="text-[9px] uppercase tracking-widest text-slate-600">Skin</div>
+        <div className="text-[9px] uppercase tracking-widest text-slate-600">{tr("cfgext.refSheetSkinLabel")}</div>
         <div className="flex flex-wrap gap-2">
           {SHEET_SKINS.map((s) => (
             <button
@@ -226,7 +227,7 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
       {/* Aspect + text toggles */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="space-y-1.5">
-          <div className="text-[9px] uppercase tracking-widest text-slate-600">Aspect</div>
+          <div className="text-[9px] uppercase tracking-widest text-slate-600">{tr("cfgext.refSheetAspectLabel")}</div>
           <div className="flex gap-2">
             {SHEET_ASPECTS.map((a) => (
               <button
@@ -250,7 +251,7 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
             disabled={isGenerating}
             style={{ accentColor: accent }}
           />
-          Title / metadata
+          {tr("entity.sheetTitleMetadata")}
         </label>
         <label className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
           <input
@@ -260,7 +261,7 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
             disabled={isGenerating}
             style={{ accentColor: accent }}
           />
-          Panel labels
+          {tr("cfgext.refSheetPanelLabels")}
         </label>
       </div>
 
@@ -273,10 +274,10 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
           className="px-4 py-2 text-[12px] rounded text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ backgroundColor: accent }}
         >
-          {isGenerating ? "Generating…" : "Generate sheet"}
+          {isGenerating ? tr("common.generating") : tr("entity.generateSheet")}
         </button>
         {!sourceImageUrl && (
-          <span className="text-[11px] text-amber-300">Approve a main image first</span>
+          <span className="text-[11px] text-amber-300">{tr("entity.approveMainImageFirst")}</span>
         )}
         {isGenerating && progressLine && (
           <span className="text-[11px] text-slate-400">{progressLine}</span>

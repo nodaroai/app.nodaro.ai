@@ -1,4 +1,5 @@
 import { ImageAssetTab } from "./expressions-tab"
+import { tx, useT } from "@/lib/i18n"
 import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"
 
@@ -23,6 +24,7 @@ export function PosesTab({
   jobs: CharacterStudioJobs
   onSwitchToAppearance?: () => void
 }) {
+  const t = useT()
   return (
     <ImageAssetTab
       state={state}
@@ -30,10 +32,10 @@ export function PosesTab({
       assetType="poses"
       arrayField="poses"
       presets={POSE_PRESETS}
-      title="Poses"
-      description="Body posture and stance reference images"
+      title={t("node.assetBadgePoses")}
+      description={t("studio.posesDescription")}
       onImport={() => {
-        const url = window.prompt("Paste an image URL to import as a pose:")?.trim()
+        const url = window.prompt(tx("studio.pasteImageUrlPose"))?.trim()
         if (url) state.patch({ poses: [...state.staged.poses, { name: "imported", url }] })
       }}
       onSwitchToAppearance={onSwitchToAppearance}

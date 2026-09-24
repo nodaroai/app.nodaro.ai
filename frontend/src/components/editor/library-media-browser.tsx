@@ -14,6 +14,7 @@ import {
   Plus,
 } from "lucide-react"
 import { toast } from "sonner"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/hooks/use-auth"
 import {
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-grid"
+import { uiLocale } from "@/lib/i18n/format"
 
 // ============================================================
 // Types
@@ -37,11 +39,11 @@ import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-
 
 type FilterType = "all" | "image" | "video" | "audio"
 
-const FILTER_OPTIONS: ReadonlyArray<{ value: FilterType; label: string }> = [
-  { value: "all", label: "All" },
-  { value: "image", label: "Images" },
-  { value: "video", label: "Videos" },
-  { value: "audio", label: "Audio" },
+const FILTER_OPTIONS: ReadonlyArray<{ value: FilterType; labelKey: MessageKey }> = [
+  { value: "all", labelKey: "assetlib.tabAll" },
+  { value: "image", labelKey: "assetlib.tabImages" },
+  { value: "video", labelKey: "assetlib.tabVideos" },
+  { value: "audio", labelKey: "assetlib.tabAudio" },
 ]
 
 export interface LibraryMediaBrowserProps {
@@ -77,7 +79,7 @@ function formatBytes(bytes: number): string {
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(uiLocale(), {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -127,6 +129,7 @@ export function LibraryMediaBrowser({
   hideChrome,
   owned,
 }: LibraryMediaBrowserProps) {
+  const t = useT()
   const { user, isAdmin } = useAuth()
   const queryClient = useQueryClient()
   const [filterType, setFilterType] = useState<FilterType>("all")
@@ -182,7 +185,7 @@ export function LibraryMediaBrowser({
       await removeMutation.mutateAsync({ assetId: asset.id, userId: user.id })
       setConfirmDeleteId(null)
     } catch {
-      toast.error("Failed to remove from library")
+      toast.error(tx("assetlib.removeFailed"))
     } finally {
       setDeletingId(null)
     }
@@ -205,7 +208,7 @@ export function LibraryMediaBrowser({
       await promoteToLibrary(asset.id, user.id)
       queryClient.invalidateQueries({ queryKey: queryKeys.library.all })
     } catch {
-      toast.error("Failed to save to library")
+      toast.error(tx("assetlib.saveFailed"))
     }
   }, [user?.id, queryClient])
 
@@ -215,7 +218,7 @@ export function LibraryMediaBrowser({
       await demoteFromLibrary(asset.id, user.id)
       queryClient.invalidateQueries({ queryKey: queryKeys.library.all })
     } catch {
-      toast.error("Failed to remove from library")
+      toast.error(tx("assetlib.removeFailed"))
     }
   }, [user?.id, queryClient])
 
@@ -263,15 +266,15 @@ export function LibraryMediaBrowser({
       {!hideChrome && (
       <div className="px-5 py-3 border-b border-border space-y-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
           <input
             ref={searchRef}
             type="text"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            aria-label="Search files"
-            placeholder="Search by filename..."
-            className="w-full pl-9 pr-3 py-2 text-sm bg-muted/30 border border-border rounded-lg outline-none focus:border-[#ff0073]/50 transition-colors placeholder:text-muted-foreground/40"
+            aria-label={t("assetlib.searchFiles")}
+            placeholder={t("assetlib.searchByFilename")}
+            className="w-full ps-9 pe-3 py-2 text-sm bg-muted/30 border border-border rounded-lg outline-none focus:border-[#ff0073]/50 transition-colors placeholder:text-muted-foreground/40"
           />
         </div>
 
@@ -287,7 +290,7 @@ export function LibraryMediaBrowser({
                   : "bg-muted/50 text-muted-foreground hover:bg-muted"
               }`}
             >
-              {opt.label}
+              {t(opt.labelKey)}
             </button>
           ))}
         </div>
@@ -299,14 +302,14 @@ export function LibraryMediaBrowser({
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Loading assets...</p>
+            <p className="text-sm text-muted-foreground">{t("assetlib.loading")}</p>
           </div>
         ) : assets.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <FileQuestion className="w-10 h-10 text-muted-foreground/30" />
-            <p className="text-sm text-muted-foreground">No files found</p>
+            <p className="text-sm text-muted-foreground">{t("lib.noFiles")}</p>
             <p className="text-xs text-muted-foreground/60">
-              Upload files via Upload Image, Video, or Audio nodes
+              {t("assetlib.uploadHint")}
             </p>
           </div>
         ) : (
@@ -316,7 +319,7 @@ export function LibraryMediaBrowser({
               {virtualRows.map((virtualRow) => (
                 <div
                   key={virtualRow.key}
-                  className="absolute top-0 left-0 w-full"
+                  className="absolute top-0 start-0 w-full"
                   style={{
                     transform: `translateY(${virtualRow.start - scrollMargin}px)`,
                     display: "grid",
@@ -358,10 +361,10 @@ export function LibraryMediaBrowser({
                   {loadingMore ? (
                     <span className="flex items-center gap-2">
                       <Loader2 className="w-3 h-3 animate-spin" />
-                      Loading...
+                      {t("common.loading")}
                     </span>
                   ) : (
-                    "Load More"
+                    t("lib.loadMore")
                   )}
                 </button>
               </div>
@@ -374,7 +377,7 @@ export function LibraryMediaBrowser({
       {!hideChrome && (
       <div className="px-5 py-3 border-t border-border flex items-center justify-between">
         <p className="text-xs text-muted-foreground/60">
-          {assets.length} file{assets.length !== 1 ? "s" : ""}
+          {assets.length === 1 ? t("assetlib.fileCountOne", { n: assets.length }) : t("assetlib.fileCount", { n: assets.length })}
         </p>
         {footerHint}
       </div>
@@ -428,6 +431,7 @@ const AssetCard = memo(function AssetCard({
   onDemote,
   onPreview,
 }: AssetCardProps) {
+  const t = useT()
   return (
     <div className="group relative rounded-lg border border-border bg-muted/20 overflow-hidden hover:border-[#ff0073]/30 transition-colors">
       {/* Thumbnail area */}
@@ -492,16 +496,16 @@ const AssetCard = memo(function AssetCard({
 
         {/* Type badge */}
         <span
-          className={`absolute top-1.5 left-1.5 px-1.5 py-0.5 text-[10px] font-medium rounded ${typeBadgeColor(asset.type)}`}
+          className={`absolute top-1.5 start-1.5 px-1.5 py-0.5 text-[10px] font-medium rounded ${typeBadgeColor(asset.type)}`}
         >
           {asset.type}
         </span>
 
         {/* Shared library badge */}
         {asset.isLibraryItem && (
-          <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-[#ff0073]/20 text-[#ff0073] flex items-center gap-0.5">
+          <span className="absolute top-1.5 end-1.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-[#ff0073]/20 text-[#ff0073] flex items-center gap-0.5">
             <Globe className="w-3 h-3" />
-            Shared
+            {t("assetlib.sharedBadge")}
           </span>
         )}
 
@@ -515,7 +519,7 @@ const AssetCard = memo(function AssetCard({
                 onAddToCanvas(asset)
               }}
               className="w-8 h-8 rounded-lg bg-[#ff0073]/80 hover:bg-[#ff0073] flex items-center justify-center text-white transition-colors"
-              title="Add to canvas"
+              title={t("assetlib.addToCanvasTitle")}
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -527,7 +531,7 @@ const AssetCard = memo(function AssetCard({
               onDownload(asset)
             }}
             className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
-            title="Download"
+            title={t("common.download")}
           >
             <Download className="w-4 h-4" />
           </button>
@@ -542,7 +546,7 @@ const AssetCard = memo(function AssetCard({
                 disabled={isDeleting}
                 className="px-2 py-1 text-[10px] font-medium rounded bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
               >
-                {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : "Remove"}
+                {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : t("common.remove")}
               </button>
               <button
                 type="button"
@@ -552,7 +556,7 @@ const AssetCard = memo(function AssetCard({
                 }}
                 className="px-2 py-1 text-[10px] font-medium rounded bg-white/20 text-white hover:bg-white/30 transition-colors"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           ) : (
@@ -563,7 +567,7 @@ const AssetCard = memo(function AssetCard({
                 onConfirmDelete(asset)
               }}
               className="w-8 h-8 rounded-lg bg-white/20 hover:bg-red-500/80 flex items-center justify-center text-white transition-colors"
-              title="Remove from library"
+              title={t("assetlib.removeFromLibrary")}
             >
               <BookmarkMinus className="w-4 h-4" />
             </button>
@@ -598,7 +602,7 @@ const AssetCard = memo(function AssetCard({
                 className="w-full px-2 py-1 text-[10px] font-medium rounded bg-muted/50 hover:bg-muted text-muted-foreground flex items-center justify-center gap-1 transition-colors"
               >
                 <Globe className="w-3 h-3" />
-                Remove from Shared
+                {t("assetlib.removeFromShared")}
               </button>
             ) : (
               <button
@@ -610,7 +614,7 @@ const AssetCard = memo(function AssetCard({
                 className="w-full px-2 py-1 text-[10px] font-medium rounded bg-[#ff0073]/10 hover:bg-[#ff0073]/20 text-[#ff0073] flex items-center justify-center gap-1 transition-colors"
               >
                 <Globe className="w-3 h-3" />
-                Add to Shared Library
+                {t("assetlib.addToSharedLibrary")}
               </button>
             )}
           </div>

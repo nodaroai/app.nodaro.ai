@@ -3,6 +3,7 @@
 import type { PipelineDriftSummary } from "@nodaro/shared"
 import { Button } from "@/components/ui/button"
 import { CriticBanner } from "./_critic-banner"
+import { useT } from "@/lib/i18n"
 
 interface Props {
   readonly drift: PipelineDriftSummary | null
@@ -28,6 +29,7 @@ interface Props {
  * Each banner now owns only its specific header content + body + CTAs.
  */
 export function DriftBanner({ drift, onFork, onDismiss }: Props) {
+  const t = useT()
   if (!drift) return null
   const driftedCount = drift.driftedEntityIds.length
   return (
@@ -37,12 +39,14 @@ export function DriftBanner({ drift, onFork, onDismiss }: Props) {
       onDismiss={onDismiss}
       header={
         <div className="font-medium text-amber-900 dark:text-amber-200">
-          Canvas drift detected at{" "}
+          {t("pipe.canvasDriftAt")}{" "}
           <span className="font-mono">{drift.stageName}</span>
           {driftedCount > 0 && (
             <span className="text-amber-700 dark:text-amber-300">
               {" — "}
-              {driftedCount} affected entit{driftedCount === 1 ? "y" : "ies"}
+              {driftedCount === 1
+                ? t("pipe.affectedEntityOne", { n: driftedCount })
+                : t("pipe.affectedEntities", { n: driftedCount })}
             </span>
           )}
         </div>
@@ -50,7 +54,7 @@ export function DriftBanner({ drift, onFork, onDismiss }: Props) {
       actions={
         onFork ? (
           <Button size="sm" variant="destructive" onClick={onFork}>
-            Fork pipeline
+            {t("pipe.forkPipeline")}
           </Button>
         ) : undefined
       }

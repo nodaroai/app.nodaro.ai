@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { useT } from "@/lib/i18n"
 import {
   IMAGE_GEN_MODELS,
   getAspectRatiosForModel,
@@ -22,6 +23,7 @@ import type { GenerateImageData } from "@/types/nodes"
  * updateNodeData. `modelOptions` is the shared IMAGE_GEN_MODELS list.
  */
 export function useGenerateImageStripModel(nodeId: string, data: GenerateImageData) {
+  const t = useT()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
 
@@ -35,7 +37,7 @@ export function useGenerateImageStripModel(nodeId: string, data: GenerateImageDa
     () => IMAGE_GEN_MODELS.find((m) => m.value === currentProvider),
     [currentProvider],
   )
-  const modelLabel = isMulti ? `${providers.length} models` : modelEntry?.label ?? currentProvider
+  const modelLabel = isMulti ? t("node.nModels", { n: providers.length }) : modelEntry?.label ?? currentProvider
   // Short-form label for the compact pill (drops vendor prefix, fits ~8 chars).
   const modelShort = useMemo(() => {
     if (isMulti) return `${providers.length}M`

@@ -43,7 +43,7 @@ function ResultTreeModal({
             <ScanSearch className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-medium">{t("node.videoAnalysis")}</span>
             <span className="text-xs text-muted-foreground tabular-nums">
-              {result.scenes.length} scenes · {result.slots.length} slots · {result.meta.durationSec.toFixed(1)}s
+              {t("node.scenesSlotsDuration", { scenes: result.scenes.length, slots: result.slots.length, seconds: result.meta.durationSec.toFixed(1) })}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -54,7 +54,7 @@ function ResultTreeModal({
             >
               {t("cfgext.scrapeCopyJson")}
             </button>
-            <button type="button" aria-label="Close" className="text-muted-foreground hover:text-foreground" onClick={onClose}>
+            <button type="button" aria-label={t("common.close")} className="text-muted-foreground hover:text-foreground" onClick={onClose}>
               <X className="w-5 h-5" />
             </button>
           </div>

@@ -3,6 +3,7 @@ import { hasCredits } from "@/lib/edition"
 import { Keyboard } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Kbd } from "@/components/ui/kbd"
+import { useT } from "@/lib/i18n"
 import {
   SHORTCUTS,
   SHORTCUT_CATEGORIES,
@@ -17,6 +18,7 @@ interface ShortcutsHelpModalProps {
 }
 
 export function ShortcutsHelpModal({ open, onOpenChange }: ShortcutsHelpModalProps) {
+  const t = useT()
   const isMac = isMacPlatform()
   // `hidden` is a static property, but two shortcuts only exist on some
   // deployments. ⌘J has been listed here on every build including community,
@@ -33,7 +35,7 @@ export function ShortcutsHelpModal({ open, onOpenChange }: ShortcutsHelpModalPro
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Keyboard className="h-4 w-4 text-[#ff0073]" />
-            Keyboard shortcuts
+            {t("ctb.keyboardShortcuts")}
           </DialogTitle>
         </DialogHeader>
 

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { useT, tx } from "@/lib/i18n"
 
 interface Props {
   pipelineId: string
@@ -38,6 +39,7 @@ interface Props {
  *                      EntityGrid fall-back is used end-to-end
  */
 export function CharactersPanel({ pipelineId, plan, mode }: Props) {
+  const t = useT()
   const { data: entities, refetch } = usePipelineEntities(pipelineId, "character")
 
   // Stable sort by entity_key so the order matches the cast roster in `plan`,
@@ -68,7 +70,7 @@ export function CharactersPanel({ pipelineId, plan, mode }: Props) {
       <EntityGrid
         pipelineId={pipelineId}
         entityType="character"
-        title="2. Characters"
+        title={t("pipe.stageLabelCharacters")}
         mode={mode}
       />
     )
@@ -87,20 +89,20 @@ export function CharactersPanel({ pipelineId, plan, mode }: Props) {
     <div className="mb-4" data-testid="characters-panel">
       <div className="flex items-baseline justify-between mb-2">
         <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
-          2. Characters
+          {t("pipe.stageLabelCharacters")}
         </div>
         <div className="text-[10px] uppercase tracking-wider text-sky-700 dark:text-sky-300 font-semibold">
-          Step A · Description
+          {t("pipe.stepADescription")}
         </div>
       </div>
 
       {/* Progress summary — one line, deliberately compact. */}
       <div className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-        Character {approvedCount + skippedCount + 1} of {totalCount}
+        {t("pipe.characterNofM", { n: approvedCount + skippedCount + 1, total: totalCount })}
         {(approvedCount > 0 || skippedCount > 0) && (
-          <span className="ml-1">
-            ({approvedCount} approved
-            {skippedCount > 0 && `, ${skippedCount} skipped`})
+          <span className="ms-1">
+            ({t("pipe.nApproved", { n: approvedCount })}
+            {skippedCount > 0 && t("pipe.nSkippedSuffix", { n: skippedCount })})
           </span>
         )}
       </div>
@@ -140,6 +142,7 @@ interface StepACardProps {
 }
 
 function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
+  const t = useT()
   const metadata = (entity.metadata ?? {}) as Record<string, unknown>
   const name = (metadata.name as string | undefined) ?? entity.entity_key
   const role = metadata.role as string | undefined
@@ -183,7 +186,7 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
         await onResolved()
       } else {
         const msg = err instanceof Error ? err.message : String(err)
-        toast.error(`Couldn't approve description: ${msg}`)
+        toast.error(tx("pipe.approveDescriptionFailed", { msg }))
       }
     } finally {
       setBusy(null)
@@ -211,7 +214,7 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
         await onResolved()
       } else {
         const msg = err instanceof Error ? err.message : String(err)
-        toast.error(`Upload failed: ${msg}`)
+        toast.error(tx("pipe.uploadFailedMsg", { msg }))
       }
     } finally {
       setBusy(null)
@@ -231,7 +234,7 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
         await onResolved()
       } else {
         const msg = err instanceof Error ? err.message : String(err)
-        toast.error(`Couldn't skip character: ${msg}`)
+        toast.error(tx("pipe.skipCharacterFailed", { msg }))
       }
     } finally {
       setBusy(null)
@@ -256,27 +259,27 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
           variant="outline"
           className="shrink-0 bg-sky-50 border-sky-300 text-sky-800 dark:bg-sky-950 dark:border-sky-700 dark:text-sky-300"
         >
-          pending description
+          {t("pipe.pendingDescription")}
         </Badge>
       </div>
 
       <div>
         <label className="text-xs text-zinc-500 dark:text-zinc-400 mb-1 block">
-          Visual description
+          {t("pipe.visualDescription")}
         </label>
         <Textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={5}
           className="text-sm resize-y min-h-[110px]"
-          placeholder="Describe how this character should look in the portrait."
+          placeholder={t("pipe.characterLookPlaceholder")}
           disabled={busy !== null}
           data-testid="step-a-description"
         />
         <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
           {isEdited
-            ? "Saving your edits — approve to generate the portrait."
-            : "LLM-suggested description. Edit or approve as-is."}
+            ? t("pipe.savingEditsApprove")
+            : t("pipe.llmSuggestedDescription")}
         </div>
       </div>
 
@@ -290,10 +293,10 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
         >
           <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-800 dark:text-amber-200">
-            <span className="font-medium">{name}</span> appears in{" "}
-            {sceneRefs.length === 1 ? "scene" : "scenes"}{" "}
-            {sceneRefs.join(", ")}. Skipping leaves those scenes without a
-            character portrait reference.
+            <span className="font-medium">{name}</span>{" "}
+            {sceneRefs.length === 1
+              ? t("pipe.appearsInScene", { scenes: sceneRefs.join(", ") })
+              : t("pipe.appearsInScenes", { scenes: sceneRefs.join(", ") })}
           </div>
         </div>
       )}
@@ -306,8 +309,8 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
           data-testid="step-a-approve"
           className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
         >
-          {busy === "approve" && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
-          {isEdited ? "Save & Approve" : "Approve"}
+          {busy === "approve" && <Loader2 className="w-3 h-3 me-1 animate-spin" />}
+          {isEdited ? t("pipe.saveAndApprove") : t("pipe.approve")}
         </Button>
         <Button
           size="sm"
@@ -317,11 +320,11 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
           data-testid="step-a-upload"
         >
           {busy === "upload" ? (
-            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+            <Loader2 className="w-3 h-3 me-1 animate-spin" />
           ) : (
-            <Upload className="w-3 h-3 mr-1" />
+            <Upload className="w-3 h-3 me-1" />
           )}
-          Upload image
+          {t("cfgext.aiAvUploadImage")}
         </Button>
         {!skipConfirm ? (
           <Button
@@ -339,7 +342,7 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
             data-testid="step-a-skip"
             className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
           >
-            Skip
+            {t("pipe.skip")}
           </Button>
         ) : (
           <>
@@ -350,7 +353,7 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
               disabled={busy !== null}
               data-testid="step-a-skip-cancel"
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               size="sm"
@@ -363,8 +366,8 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
                 "dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-950",
               )}
             >
-              {busy === "skip" && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
-              Skip anyway
+              {busy === "skip" && <Loader2 className="w-3 h-3 me-1 animate-spin" />}
+              {t("pipe.skipAnyway")}
             </Button>
           </>
         )}

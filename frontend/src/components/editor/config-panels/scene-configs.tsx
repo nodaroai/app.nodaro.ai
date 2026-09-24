@@ -254,11 +254,11 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="first_frame">first_frame</SelectItem>
-                <SelectItem value="text_to_video">text_to_video</SelectItem>
-                <SelectItem value="video_continuation">video_continuation</SelectItem>
-                <SelectItem value="frame_interpolation">frame_interpolation</SelectItem>
-                <SelectItem value="camera_path">camera_path</SelectItem>
+                <SelectItem value="first_frame">{t("cfgext.sceneShotFirstFrame")}</SelectItem>
+                <SelectItem value="text_to_video">{t("cfgext.sceneShotTextToVideo")}</SelectItem>
+                <SelectItem value="video_continuation">{t("cfgext.sceneShotVideoContinuation")}</SelectItem>
+                <SelectItem value="frame_interpolation">{t("cfgext.sceneShotFrameInterpolation")}</SelectItem>
+                <SelectItem value="camera_path">{t("cfgext.sceneShotCameraPath")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -312,11 +312,11 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="hard_cut">hard_cut</SelectItem>
-                <SelectItem value="match_cut">match_cut</SelectItem>
-                <SelectItem value="dissolve">dissolve</SelectItem>
-                <SelectItem value="fade_in">fade_in</SelectItem>
-                <SelectItem value="fade_out">fade_out</SelectItem>
+                <SelectItem value="hard_cut">{t("cfgext.sceneCutHardCut")}</SelectItem>
+                <SelectItem value="match_cut">{t("cfgext.sceneCutMatchCut")}</SelectItem>
+                <SelectItem value="dissolve">{t("cfgext.sceneCutDissolve")}</SelectItem>
+                <SelectItem value="fade_in">{t("cfgext.sceneCutFadeIn")}</SelectItem>
+                <SelectItem value="fade_out">{t("cfgext.sceneCutFadeOut")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -528,7 +528,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                   >
                     {t("cfgext.sceneParametersJson")}
                   </Label>
-                  <Textarea
+                  <Textarea dir="ltr"
                     id={`cam-params-${shot.shot_id}`}
                     value={
                       cameraParamsRaw[shot.shot_id] ??

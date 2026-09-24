@@ -3,6 +3,7 @@ import { formatCreditUnits } from "@/lib/credit-units"
 import { optimizedImageUrl } from "@/lib/image"
 import { X } from "lucide-react"
 import { useMediaAspectRatio } from "../studio-shell/use-media-aspect"
+import { useT } from "@/lib/i18n"
 
 export type CandidateCount = 1 | 2 | 4
 
@@ -33,14 +34,18 @@ export function PortraitCandidateGrid({
   cost,
   busy,
 }: PortraitCandidateGridProps) {
+  const t = useT()
   const [count, setCount] = useState<CandidateCount>(1)
   const totalCost = cost * count
-  const generateLabel = count === 1 ? `Generate · ${formatCreditUnits(totalCost)}` : `Generate ${count} · ${formatCreditUnits(totalCost)}`
+  const generateLabel =
+    count === 1
+      ? t("studio.generateWithCost", { cost: formatCreditUnits(totalCost) })
+      : t("studio.generateCountWithCost", { n: count, cost: formatCreditUnits(totalCost) })
 
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <span className="text-[9px] uppercase tracking-wide text-slate-500">Candidates</span>
+        <span className="text-[9px] uppercase tracking-wide text-slate-500">{t("cfgext.reduceTabCandidates")}</span>
         <div className="flex gap-1">
           {COUNTS.map((c) => (
             <button
@@ -62,7 +67,7 @@ export function PortraitCandidateGrid({
           type="button"
           disabled={busy}
           onClick={() => onGenerate(count)}
-          className="ml-auto text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5 disabled:opacity-40"
+          className="ms-auto text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5 disabled:opacity-40"
         >
           {generateLabel}
         </button>
@@ -92,6 +97,7 @@ function CandidateCard({
   onApprove: () => void
   onCancel: () => void
 }) {
+  const t = useT()
   const done = candidate.status === "completed" && candidate.url
   // Size to the candidate's real aspect (portraits default 3:4 but the node's
   // aspect override may make them 9:16/16:9) so they aren't cropped.
@@ -101,21 +107,21 @@ function CandidateCard({
       {done ? (
         <button
           type="button"
-          aria-label={`Approve candidate ${candidate.jobId}`}
+          aria-label={t("studio.approveCandidateAria", { id: candidate.jobId })}
           onClick={onApprove}
           className="block w-full h-full"
         >
-          <img src={optimizedImageUrl(candidate.url)} alt={`candidate ${candidate.jobId}`} className="w-full h-full object-cover object-top" />
+          <img src={optimizedImageUrl(candidate.url)} alt={t("studio.candidateAltId", { id: candidate.jobId })} className="w-full h-full object-cover object-top" />
           <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] py-1 text-center">
-            Click to approve
+            {t("studio.clickToApprove")}
           </div>
         </button>
       ) : (
         <div className="w-full h-full flex flex-col items-center justify-center">
           {candidate.status === "failed" ? (
-            <span className="text-red-400 text-[10px]">failed</span>
+            <span className="text-red-400 text-[10px]">{t("studio.failedLower")}</span>
           ) : candidate.status === "cancelled" ? (
-            <span className="text-slate-500 text-[10px]">cancelled</span>
+            <span className="text-slate-500 text-[10px]">{t("studio.cancelledLower")}</span>
           ) : (
             <>
               <div className="text-[10px] text-slate-400 mb-1">{candidate.status}</div>
@@ -125,9 +131,9 @@ function CandidateCard({
           {(candidate.status === "pending" || candidate.status === "running") && (
             <button
               type="button"
-              aria-label="Cancel candidate"
+              aria-label={t("studio.cancelCandidate")}
               onClick={onCancel}
-              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center"
+              className="absolute top-1 end-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center"
             >
               <X className="w-2.5 h-2.5" />
             </button>

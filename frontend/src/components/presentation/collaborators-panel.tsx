@@ -20,6 +20,7 @@ import {
   type CollaboratorRole,
   type WorkflowAccessInfo,
 } from "@/lib/api"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 
 /**
  * People with access to one workflow, and the workspace-wide switch beside
@@ -42,9 +43,9 @@ interface CollaboratorsPanelProps {
   onVisibilityChanged?: () => void
 }
 
-const ROLE_LABEL: Record<CollaboratorRole, string> = {
-  viewer: "Can view",
-  editor: "Can edit",
+const ROLE_LABEL: Record<CollaboratorRole, MessageKey> = {
+  viewer: "present.canView",
+  editor: "present.canEdit",
 }
 
 export function CollaboratorsPanel({
@@ -53,6 +54,7 @@ export function CollaboratorsPanel({
   onVisibilityChanged,
 }: CollaboratorsPanelProps) {
   const queryClient = useQueryClient()
+  const t = useT()
   const [email, setEmail] = useState("")
   const [role, setRole] = useState<CollaboratorRole>("viewer")
 
@@ -73,34 +75,34 @@ export function CollaboratorsPanel({
     onSuccess: () => {
       setEmail("")
       invalidate()
-      toast.success("Shared")
+      toast.success(tx("present.sharedToast"))
     },
     // The server's message is the useful one here: "no account with that
     // address", "already has access", "that is the owner". Replacing it with a
     // generic failure would throw away the only part the person can act on.
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not share"),
+    onError: (err) => toast.error(err instanceof Error ? err.message : tx("present.couldNotShare")),
   })
 
   const changeRole = useMutation({
     mutationFn: (v: { userId: string; role: CollaboratorRole }) =>
       updateWorkflowCollaborator(workflowId, v.userId, v.role),
     onSuccess: invalidate,
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not change the role"),
+    onError: (err) => toast.error(err instanceof Error ? err.message : tx("present.couldNotChangeRole")),
   })
 
   const remove = useMutation({
     mutationFn: (userId: string) => removeWorkflowCollaborator(workflowId, userId),
     onSuccess: invalidate,
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not remove access"),
+    onError: (err) => toast.error(err instanceof Error ? err.message : tx("present.couldNotRemoveAccess")),
   })
 
   const setVisibility = useMutation({
     mutationFn: (v: "private" | "workspace") => setWorkflowVisibility(workflowId, v),
     onSuccess: () => {
       onVisibilityChanged?.()
-      toast.success("Updated")
+      toast.success(tx("common.updated"))
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not update"),
+    onError: (err) => toast.error(err instanceof Error ? err.message : tx("present.couldNotUpdate")),
   })
 
   const collaborators = data?.data ?? []
@@ -118,7 +120,7 @@ export function CollaboratorsPanel({
           a personal workflow has nothing to be visible to. */}
       {access.workspaceId !== null && access.canChangeVisibility && (
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">Everyone in this workspace</label>
+          <label className="text-sm font-medium">{t("present.everyoneInThisWorkspace")}</label>
           <Select
             value={access.visibility}
             onValueChange={(v) => setVisibility.mutate(v as "private" | "workspace")}
@@ -128,21 +130,21 @@ export function CollaboratorsPanel({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="private">Only people I share it with</SelectItem>
-              <SelectItem value="workspace">Everyone in the workspace</SelectItem>
+              <SelectItem value="private">{t("present.onlyPeopleIShareWith")}</SelectItem>
+              <SelectItem value="workspace">{t("present.everyoneInWorkspace")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
       )}
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">People with access</label>
+        <label className="text-sm font-medium">{t("present.peopleWithAccess")}</label>
 
         {canShare && (
           <div className="flex gap-2">
             <Input
               type="email"
-              placeholder="Email address"
+              placeholder={t("present.emailPlaceholder")}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => {
@@ -155,8 +157,8 @@ export function CollaboratorsPanel({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="viewer">{ROLE_LABEL.viewer}</SelectItem>
-                <SelectItem value="editor">{ROLE_LABEL.editor}</SelectItem>
+                <SelectItem value="viewer">{t(ROLE_LABEL.viewer)}</SelectItem>
+                <SelectItem value="editor">{t(ROLE_LABEL.editor)}</SelectItem>
               </SelectContent>
             </Select>
             <Button
@@ -164,7 +166,7 @@ export function CollaboratorsPanel({
               className="shrink-0"
               onClick={() => add.mutate()}
               disabled={!email.trim() || add.isPending}
-              aria-label="Share with this person"
+              aria-label={t("present.shareWithPerson")}
             >
               {add.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -178,11 +180,11 @@ export function CollaboratorsPanel({
         {isLoading ? (
           <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Loading
+            {t("common.loading")}
           </div>
         ) : collaborators.length === 0 ? (
           <p className="py-1 text-sm text-muted-foreground">
-            Nobody yet. Add someone by email to share this workflow with them.
+            {t("present.nobodyYet")}
           </p>
         ) : (
           <ul className="space-y-1">
@@ -210,7 +212,7 @@ export function CollaboratorsPanel({
                     {(c.name ?? "?").slice(0, 1).toUpperCase()}
                   </div>
                 )}
-                <span className="min-w-0 flex-1 truncate text-sm">{c.name ?? "Someone"}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{c.name ?? t("present.someone")}</span>
                 {canShare ? (
                   <>
                     <Select
@@ -223,8 +225,8 @@ export function CollaboratorsPanel({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="viewer">{ROLE_LABEL.viewer}</SelectItem>
-                        <SelectItem value="editor">{ROLE_LABEL.editor}</SelectItem>
+                        <SelectItem value="viewer">{t(ROLE_LABEL.viewer)}</SelectItem>
+                        <SelectItem value="editor">{t(ROLE_LABEL.editor)}</SelectItem>
                       </SelectContent>
                     </Select>
                     <Button
@@ -232,14 +234,14 @@ export function CollaboratorsPanel({
                       size="icon"
                       className="h-8 w-8 shrink-0"
                       onClick={() => remove.mutate(c.userId)}
-                      aria-label={`Remove ${c.name ?? "this person"}`}
+                      aria-label={t("present.removeNamed", { name: c.name ?? t("present.thisPerson") })}
                     >
                       <X className="h-4 w-4" />
                     </Button>
                   </>
                 ) : (
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {ROLE_LABEL[c.role]}
+                    {t(ROLE_LABEL[c.role])}
                   </span>
                 )}
               </li>

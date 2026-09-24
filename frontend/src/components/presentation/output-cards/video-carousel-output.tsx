@@ -27,7 +27,7 @@ export function VideoCarouselOutput({
         )}
         {/* Counter */}
         {filtered.length > 0 && (
-          <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded pointer-events-none">
+          <div className="absolute top-2 end-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded pointer-events-none">
             {activeIndex + 1} / {filtered.length}
           </div>
         )}
@@ -37,14 +37,14 @@ export function VideoCarouselOutput({
             <button
               onClick={() => setActiveIndex(Math.max(0, activeIndex - 1))}
               disabled={activeIndex === 0}
-              className="absolute left-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-card/80 border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
+              className="absolute start-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-card/80 border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
             >
               &#8249;
             </button>
             <button
               onClick={() => setActiveIndex(Math.min(filtered.length - 1, activeIndex + 1))}
               disabled={activeIndex === filtered.length - 1}
-              className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-card/80 border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
+              className="absolute end-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-card/80 border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
             >
               &#8250;
             </button>

@@ -13,6 +13,7 @@ import { HandleWithPopover } from "./handle-with-popover"
 import { RunNodeButton } from "./run-node-button"
 import { HintModeToggle, readHintMode, useHintModeSetter, type HintMode } from "./hint-mode-toggle"
 import { useAutoMeasureForZoom } from "./use-auto-measure-for-zoom"
+import { NodeLookPreviewStyleScope } from "./look-preview-style"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
 import { getPickerOutputMeta } from "@/lib/picker-handles"
@@ -308,7 +309,12 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
               )}
               aria-hidden={displayMode === "prompt" || undefined}
             >
-              {children}
+              {/* Every look picture in the body follows this node's saved
+                  real / illustration choice; the switch beside the option
+                  title writes it (hidden until hover, like the mode row). */}
+              <NodeLookPreviewStyleScope nodeId={id} nodeType={node?.type} data={data} reveal={selected ? "always" : "hover"}>
+                {children}
+              </NodeLookPreviewStyleScope>
             </div>
             {(displayMode === "prompt" || displayMode === "both") && (
               // `width: 0; min-width: 100%` makes the prompt take the

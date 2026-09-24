@@ -15,6 +15,7 @@ import { getPickerCatalog, type PickerDimension } from "@nodaro/prompts"
 import { getModel } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { nodeMedia } from "../derive-tutorial-data"
+import { tx, type TFunction } from "@/lib/i18n"
 
 type NodeData = Record<string, unknown>
 
@@ -127,14 +128,20 @@ function readDriver(node: WorkflowNode): EditDriver | null {
  * capability, so it gets said out loud ("STYLE x2") rather than being flattened
  * into a single name.
  */
-function driverEyebrow(drivers: EditDriver[], node: WorkflowNode, prompt: string): string {
-  if (drivers.length === 0) return prompt ? "PROMPT" : typeAsEyebrow(node.type)
+function driverEyebrow(
+  drivers: EditDriver[],
+  node: WorkflowNode,
+  prompt: string,
+  t: TFunction,
+  nameOf: (name: string) => string,
+): string {
+  if (drivers.length === 0) return prompt ? t("tut.promptEyebrow") : typeAsEyebrow(node.type)
 
   const kinds = [...new Set(drivers.map((d) => d.kind))]
   if (kinds.length === 1 && drivers.length > 1) {
-    return `${kinds[0].toUpperCase()} x${drivers.length}`
+    return `${nameOf(kinds[0]).toUpperCase()} x${drivers.length}`
   }
-  return kinds.map((k) => k.toUpperCase()).join(" + ")
+  return kinds.map((k) => nameOf(k).toUpperCase()).join(" + ")
 }
 
 /** Settings the original is worth being described by. Missing ones drop out. */
@@ -178,6 +185,9 @@ export function deriveEditFanOut(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
   order: readonly string[] = [],
+  t: TFunction = tx,
+  /** Names a picker in the eyebrow — the body passes the localized node label. */
+  nameOf: (name: string) => string = (name) => name,
 ): EditFanOut {
   const hub = findHub(nodes, edges)
   if (!hub) return { base: null, critic: null, edits: [] }
@@ -238,8 +248,8 @@ export function deriveEditFanOut(
     return {
       nodeId: node.id,
       index: i + 1,
-      nodeLabel: str(data.label) ?? `Edit ${i + 1}`,
-      driverKind: driverEyebrow(drivers, node, prompt),
+      nodeLabel: str(data.label) ?? t("tut.editN", { n: i + 1 }),
+      driverKind: driverEyebrow(drivers, node, prompt, t, nameOf),
       driverValue: drivers.length > 0 ? drivers.map((d) => d.value).join(" + ") : prompt,
       drivers,
       prompt,

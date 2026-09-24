@@ -6,6 +6,7 @@ import type { NodeProps } from "@xyflow/react"
 import { Lightbulb } from "lucide-react"
 import { LIGHTING_CATEGORY_LABELS, LIGHTING_CATEGORY_ORDER, LIGHTING_FIELD_BY_CATEGORY, getLighting, getLightingLabel, type LightingCategory } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { LookPreviewStyleSwitch } from "./look-preview-style"
 import { LightingPreview, LookArt } from "@/lib/picker-ui"
 import type { LightingData } from "@/types/nodes"
 
@@ -51,16 +52,20 @@ function LightingNodeComponent({ id, data, selected }: NodeProps) {
             rowGap: "1.25rem",
           }}
         >
-          {enabled.map(({ category, entryId }) => {
+          {enabled.map(({ category, entryId }, index) => {
             const entry = getLighting(entryId)
             return (
               <div key={category} className="flex flex-col gap-1">
-                <p className="text-foreground text-sm font-medium">
-                  <span className="text-muted-foreground text-[11px] uppercase tracking-wider mr-1">
-                    {LIGHTING_CATEGORY_LABELS[category]}:
-                  </span>
-                  {getLightingLabel(entryId)}
-                </p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-foreground text-sm font-medium min-w-0">
+                    <span className="text-muted-foreground text-[11px] uppercase tracking-wider mr-1">
+                      {LIGHTING_CATEGORY_LABELS[category]}:
+                    </span>
+                    {getLightingLabel(entryId)}
+                  </p>
+                  {/* One switch per node, on the first entry's title. */}
+                  {index === 0 && <LookPreviewStyleSwitch pickerKey="lighting" />}
+                </div>
                 <LookArt pickerKey="lighting" id={entryId} className="w-full aspect-[16/9]" width={640} fallback={<LightingPreview lightingId={entryId} className="w-full aspect-[16/9]" />} />
                 {entry?.description && (
                   <p className="text-muted-foreground text-[11px] leading-snug">

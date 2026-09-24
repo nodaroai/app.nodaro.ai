@@ -16,6 +16,7 @@ import { useGenerateImageStripModel } from "./use-generate-image-strip-model"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import { useNodeVisuallyCompact } from "@/lib/node-visual-compact"
 import type { GenerateImageData } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
 
 interface GenerateImageQuickToolbarProps {
   readonly nodeId: string
@@ -53,6 +54,7 @@ export function GenerateImageQuickToolbar({
   isRunning,
   onAnyOpenChange,
 }: GenerateImageQuickToolbarProps) {
+  const t = useT()
   // Collapse to the single summary pill when the node is visually compact.
   // Shared threshold (`useNodeVisuallyCompact`) with the typed-handle labels,
   // so the toolbar and the pip labels switch modes at the exact same
@@ -176,7 +178,7 @@ export function GenerateImageQuickToolbar({
             <button
               type="button"
               className="flex items-center gap-1 h-6 px-2 text-[10px] rounded-md whitespace-nowrap text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10"
-              title="Settings"
+              title={t("common.settings")}
             >
               <Settings2 className="w-3 h-3 opacity-70" />
               <span className="font-medium">{summary}</span>
@@ -192,10 +194,10 @@ export function GenerateImageQuickToolbar({
             className="w-[240px] p-2 space-y-2 node-menu-surface"
             onClick={(e) => e.stopPropagation()}
           >
-            <ToolbarSetting label="Model" icon={<Sparkles className="w-3 h-3" />}>
+            <ToolbarSetting label={t("node.model")} icon={<Sparkles className="w-3 h-3" />}>
               {isMulti ? (
                 <span className="text-xs text-muted-foreground italic px-2">
-                  Multi-provider — open node settings to edit
+                  {t("node.multiProviderOpenNodeSettings")}
                 </span>
               ) : (
                 <ModelSearchSelect disabled={isRunning}
@@ -205,12 +207,12 @@ export function GenerateImageQuickToolbar({
                   options={IMAGE_GEN_MODELS}
                   triggerClassName={ghostPopoverTriggerClass}
                   contentClassName="node-menu-surface"
-                  ariaLabel="Model"
+                  ariaLabel={t("field.model")}
                 />
               )}
             </ToolbarSetting>
             {aspectOptions.length > 0 && (
-              <ToolbarSetting label="Aspect" icon={<Ratio className="w-3 h-3" />}>
+              <ToolbarSetting label={t("node.aspect")} icon={<Ratio className="w-3 h-3" />}>
                 <Select disabled={isRunning} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
                   <SelectTrigger className={ghostPopoverTriggerClass}>
                     <SelectValue />
@@ -224,7 +226,7 @@ export function GenerateImageQuickToolbar({
               </ToolbarSetting>
             )}
             {resolutionOptions && resolutionOptions.length > 0 && (
-              <ToolbarSetting label="Resolution" icon={<Maximize2 className="w-3 h-3" />}>
+              <ToolbarSetting label={t("field.resolution")} icon={<Maximize2 className="w-3 h-3" />}>
                 <Select disabled={isRunning} value={currentResolution} onValueChange={handleResolutionChange} onOpenChange={handleOpenChange}>
                   <SelectTrigger className={ghostPopoverTriggerClass}>
                     <SelectValue />
@@ -239,7 +241,7 @@ export function GenerateImageQuickToolbar({
                 </Select>
               </ToolbarSetting>
             )}
-            <ToolbarSetting label="Versions" icon={<Copy className="w-3 h-3" />}>
+            <ToolbarSetting label={t("node.versions")} icon={<Copy className="w-3 h-3" />}>
               <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />

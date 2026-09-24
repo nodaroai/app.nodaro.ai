@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useT } from "@/lib/i18n"
 
 interface UnsavedChangesDialogProps {
   readonly open: boolean
@@ -23,24 +24,25 @@ export function UnsavedChangesDialog({
   onDiscard,
   onCancel,
 }: UnsavedChangesDialogProps) {
+  const t = useT()
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onCancel() }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Unsaved Changes</DialogTitle>
+          <DialogTitle>{t("editor.unsavedChangesTitle")}</DialogTitle>
           <DialogDescription>
-            You have unsaved changes. Do you want to save before leaving?
+            {t("editor.unsavedChangesBody")}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex-row gap-2 sm:justify-end">
           <Button variant="ghost" onClick={onDiscard}>
-            Don&apos;t Save
+            {t("editor.dontSave")}
           </Button>
           <Button variant="outline" onClick={onCancel}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button onClick={onSave}>
-            Save
+            {t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

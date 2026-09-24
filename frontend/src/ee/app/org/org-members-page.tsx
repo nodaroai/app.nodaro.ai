@@ -8,7 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { queryKeys } from "@/lib/query-keys"
 import { useWorkspace } from "@/ee/hooks/use-workspace"
+import { useOrgVocabulary } from "@/ee/hooks/use-org-vocabulary"
 import { InviteMembersDialog } from "@/ee/components/org/invite-members-dialog"
+import { useT, type TFunction } from "@/lib/i18n"
 import {
   OrgApiError,
   listInvitations,
@@ -21,6 +23,8 @@ import {
   type InvitationView,
   type OrgMemberView,
 } from "@/ee/lib/orgs-api"
+import { ORG_STATUS_KEYS } from "./org-overview-page"
+import { formatDate } from "@/lib/i18n/format"
 
 /**
  * `/org/:slug/members` — who is in the organization, and who has been asked.
@@ -35,6 +39,7 @@ import {
  * someone hunting for a menu that was never there.
  */
 export default function OrgMembersPage() {
+  const t = useT()
   const { slug = "" } = useParams<{ slug: string }>()
   const queryClient = useQueryClient()
   const { organizations, status: membershipStatus } = useWorkspace()
@@ -42,7 +47,7 @@ export default function OrgMembersPage() {
 
   const membership = organizations.find((o) => o.slug === slug) ?? null
   const orgId = membership?.id ?? ""
-  const vocabulary = membership?.vocabulary ?? {}
+  const vocabulary = useOrgVocabulary(membership?.vocabulary)
   const isOwner = membership?.role === "owner"
   const canManage = isOwner || membership?.role === "admin"
 
@@ -90,21 +95,21 @@ export default function OrgMembersPage() {
   const resend = useMutation({ mutationFn: (id: string) => resendInvitation(id), onSuccess: refresh })
 
   if (membershipStatus === "idle" || membershipStatus === "loading") {
-    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+    return <div className="p-6 text-sm text-muted-foreground">{t("common.loading")}</div>
   }
 
   if (!membership || !canManage) {
     return (
       <div className="mx-auto max-w-xl p-6">
         <Card className="space-y-4 p-8">
-          <h1 className="text-xl font-semibold">{membership ? "Not available to you" : "Organization not found"}</h1>
+          <h1 className="text-xl font-semibold">{membership ? t("org.notAvailableToYou") : t("org.orgNotFound")}</h1>
           <p className="text-sm text-muted-foreground">
             {membership
-              ? "Only an owner or an administrator can see who is in an organization."
-              : "This organization does not exist, or you are not a member of it."}
+              ? t("org.membersOwnerAdminOnly")
+              : t("org.orgMissingOrNotMember")}
           </p>
           <Button asChild variant="outline">
-            <Link to={membership ? `/org/${slug}` : "/"}>Back</Link>
+            <Link to={membership ? `/org/${slug}` : "/"}>{t("common.back")}</Link>
           </Button>
         </Card>
       </div>
@@ -117,39 +122,41 @@ export default function OrgMembersPage() {
     <div className="mx-auto max-w-4xl space-y-6 p-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">People</h1>
+          <h1 className="text-2xl font-semibold">{t("org.people")}</h1>
           <Link to={`/org/${slug}`} className="text-sm text-muted-foreground hover:underline">
             {membership.name}
           </Link>
         </div>
         <Button onClick={() => setInviting(true)} disabled={membership.status !== "active"}>
-          Invite people
+          {t("org.invitePeople")}
         </Button>
       </header>
 
       {membership.status !== "active" && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-muted-foreground">
-          Nobody can be invited or changed while this organization is {membership.status}.
+          {t("org.nobodyInvitedWhileStatus", {
+            status: ORG_STATUS_KEYS[membership.status] ? t(ORG_STATUS_KEYS[membership.status]) : membership.status,
+          })}
         </p>
       )}
 
       {mutationError && (
         <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-          {actionFailureMessage(mutationError)}
+          {actionFailureMessage(mutationError, t)}
         </p>
       )}
 
       <Tabs defaultValue="members">
         <TabsList>
-          <TabsTrigger value="members">Members</TabsTrigger>
+          <TabsTrigger value="members">{t("org.members")}</TabsTrigger>
           <TabsTrigger value="invitations">
-            Invited{(invitations.data?.data.length ?? 0) > 0 ? ` (${invitations.data?.data.length})` : ""}
+            {t("org.invited")}{(invitations.data?.data.length ?? 0) > 0 ? ` (${invitations.data?.data.length})` : ""}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="members" className="pt-4">
-          {members.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-          {members.error && <p className="text-sm text-muted-foreground">Could not load the members.</p>}
+          {members.isLoading && <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}
+          {members.error && <p className="text-sm text-muted-foreground">{t("org.membersLoadFailed")}</p>}
           {members.data && (
             <ul className="divide-y rounded-md border">
               {members.data.data.map((member) => (
@@ -168,9 +175,9 @@ export default function OrgMembersPage() {
         </TabsContent>
 
         <TabsContent value="invitations" className="pt-4">
-          {invitations.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {invitations.isLoading && <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}
           {invitations.data?.data.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nobody is waiting on an invitation.</p>
+            <p className="text-sm text-muted-foreground">{t("org.noPendingInvitations")}</p>
           )}
           {(invitations.data?.data.length ?? 0) > 0 && (
             <ul className="divide-y rounded-md border">
@@ -216,6 +223,7 @@ function MemberRow({
   onPatch: (input: { role?: "admin" | "member"; status?: "active" | "suspended" }) => void
   onRemove: () => void
 }) {
+  const t = useT()
   // The owner's row is inert: ownership moves by transfer, and the database
   // refuses anything else. Greying it out says why; hiding the controls would
   // leave someone hunting for a menu that was never there.
@@ -229,23 +237,23 @@ function MemberRow({
       </div>
 
       {member.status === "suspended" && (
-        <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">Suspended</span>
+        <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">{t("devApps.statusSuspended")}</span>
       )}
 
       {member.role === "owner" ? (
-        <span className="text-xs text-muted-foreground">{vocabulary.org_owner ?? "Owner"} · by transfer only</span>
+        <span className="text-xs text-muted-foreground">{vocabulary.org_owner ?? t("exec.colOwner")} · {t("org.byTransferOnly")}</span>
       ) : (
         <Select
           value={member.role}
           onValueChange={(role) => onPatch({ role: role as "admin" | "member" })}
           disabled={locked}
         >
-          <SelectTrigger className="w-40" aria-label={`Role for ${member.displayName ?? member.email ?? member.userId}`}>
+          <SelectTrigger className="w-40" aria-label={t("org.roleFor", { name: member.displayName ?? member.email ?? member.userId })}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="member">{vocabulary.workspace_member ?? "Member"}</SelectItem>
-            <SelectItem value="admin">{vocabulary.org_admin ?? "Admin"}</SelectItem>
+            <SelectItem value="member">{vocabulary.workspace_member ?? t("org.roleMember")}</SelectItem>
+            <SelectItem value="admin">{vocabulary.org_admin ?? t("org.roleAdmin")}</SelectItem>
           </SelectContent>
         </Select>
       )}
@@ -256,10 +264,10 @@ function MemberRow({
           variant="outline"
           onClick={() => onPatch({ status: member.status === "suspended" ? "active" : "suspended" })}
         >
-          {member.status === "suspended" ? "Reinstate" : "Suspend"}
+          {member.status === "suspended" ? t("org.reinstate") : t("org.suspend")}
         </Button>
         <Button size="sm" variant="ghost" onClick={onRemove}>
-          Remove
+          {t("common.remove")}
         </Button>
       </div>
     </li>
@@ -277,39 +285,40 @@ function InvitationRow({
   onRevoke: () => void
   busy: boolean
 }) {
+  const t = useT()
   return (
     <li className="flex flex-wrap items-center gap-3 p-3">
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm">{invitation.email}</p>
         <p className="text-xs text-muted-foreground">
-          Expires {new Date(invitation.expiresAt).toLocaleDateString()}
-          {invitation.orgRole === "admin" ? " · as an admin" : ""}
+          {t("org.expiresOn", { date: formatDate(invitation.expiresAt) })}
+          {invitation.orgRole === "admin" ? ` · ${t("org.asAnAdmin")}` : ""}
         </p>
       </div>
       <Button size="sm" variant="outline" onClick={onResend} disabled={busy}>
-        Resend
+        {t("org.resend")}
       </Button>
       <Button size="sm" variant="ghost" onClick={onRevoke} disabled={busy}>
-        Revoke
+        {t("billingAdmin.integrationsRevoke")}
       </Button>
     </li>
   )
 }
 
-function actionFailureMessage(error: unknown): string {
+function actionFailureMessage(error: unknown, t: TFunction): string {
   const code = error instanceof OrgApiError ? error.code : "internal_error"
   switch (code) {
     case "insufficient_role":
-      return "You cannot make that change."
+      return t("org.cannotMakeChange")
     case "org_not_active":
-      return "This organization is not active, so nothing here can be changed."
+      return t("org.orgNotActiveNoChanges")
     case "validation_error":
-      return error instanceof OrgApiError ? error.message : "That change was refused."
+      return error instanceof OrgApiError ? error.message : t("org.changeRefused")
     case "invitation_accepted":
-      return "That invitation has already been accepted."
+      return t("org.invitationAlreadyAccepted")
     case "not_found":
-      return "That person is no longer here. Reload to see the current list."
+      return t("org.personGone")
     default:
-      return "Something went wrong. Try again in a moment."
+      return t("org.somethingWrongTryAgain")
   }
 }

@@ -16,7 +16,10 @@
  *
  * Long edits render in chunks split ONLY at hard-cut boundaries (an xfade
  * cannot straddle a chunk), at most `VIDEO_FILTERGRAPH_MAX_SEGMENTS` segments
- * per picture graph and `AUDIO_FILTERGRAPH_MAX_SEGMENTS` per sound graph. A
+ * per picture graph and `AUDIO_FILTERGRAPH_MAX_SEGMENTS` per sound graph; a
+ * crossfade run past that is closed at a hard cut made INSIDE one of its
+ * segments (`planChunks`), whose second half keeps the whole segment's
+ * picture frame phase (`PlanSegment.splitLeadMs`). A
  * chunked VIDEO render's chunks carry picture only, each checkpointed to R2 so
  * a worker restart resumes instead of re-rendering, joined with a stream-copy
  * concat; its audio is rendered in lossless slices, joined, encoded to AAC once
@@ -58,6 +61,7 @@ import {
   secs,
   INPUT_SEEK_MARGIN_SEC,
   type ChunkPlanOptions,
+  type PlanSegment,
 } from "./apply-edl-budget.js"
 
 // The chunk plan and the liveness budget live in the pure leaf
@@ -90,7 +94,9 @@ export {
   planChunks,
   referencedSourceIds,
   resolveChunksForOutput,
+  splitInsideCrossfadeRun,
   type ChunkPlanOptions,
+  type PlanSegment,
 } from "./apply-edl-budget.js"
 
 /** The one AAC delivery encode: a single-pass render's inline audio, option B's
@@ -337,7 +343,7 @@ export interface SliceCommand {
  * boundaries may be cut or crossfade) through a single filter_complex.
  * `audioPresent` maps a source id to whether its file carries an audio stream.
  */
-export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: SliceOptions): SliceCommand {
+export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: SliceOptions): SliceCommand {
   const { output, target, fps, chunkStartSec, masterAudioId, audioPresent, omitAudio, audioCodec = "aac" } = opts
   const wantVideo = output === "video"
   const emitAudio = !omitAudio // audio-only renders never pass omitAudio
@@ -391,16 +397,22 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
   // place of a real one), and a cut-only chunk's end could miss the next
   // chunk's start by a frame — a one-frame A/V step per such seam. A cut's
   // start IS the previous end (the same integer), so the counts telescope.
-  const intervals: Array<{ readonly startF: number; readonly endF: number; readonly overlapSec: number }> = []
+  const intervals: Array<{ readonly startF: number; readonly endF: number; readonly endSec: number; readonly overlapSec: number; readonly leadFrames: number }> = []
   {
     let prefix = 0
     let prevEndF = Math.round(chunkStartSec * fps)
     segs.forEach((seg, i) => {
       const overlapSec = i > 0 ? boundaryOverlapSecs(seg, segs[i - 1]) : 0
-      const startF = overlapSec > 0 ? Math.round((chunkStartSec + (prefix - overlapSec)) * fps) : prevEndF
+      const startSec = chunkStartSec + (prefix - overlapSec)
+      const startF = overlapSec > 0 ? Math.round(startSec * fps) : prevEndF
       prefix = prefix + secs(seg.outMs - seg.inMs) - overlapSec
-      const endF = Math.round((chunkStartSec + prefix) * fps)
-      intervals.push({ startF, endF, overlapSec })
+      const endSec = chunkStartSec + prefix
+      const endF = Math.round(endSec * fps)
+      // A split tail (`PlanSegment.splitLeadMs`) is read from its whole
+      // segment's start, so its frames are that segment's frames from here on:
+      // skip the ones its head, in the previous chunk, already rendered.
+      const leadFrames = seg.splitLeadMs ? Math.max(0, startF - Math.round((startSec - secs(seg.splitLeadMs)) * fps)) : 0
+      intervals.push({ startF, endF, endSec, overlapSec, leadFrames })
       prevEndF = endF
     })
   }
@@ -434,10 +446,16 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
     const chunkStartF = Math.round(chunkStartSec * fps)
     let accEndF = chunkStartF
     let started = false
-    intervals.forEach(({ startF, endF, overlapSec }) => {
+    intervals.forEach(({ startF, endF, endSec, overlapSec }, i) => {
       const frames = Math.max(0, endF - startF)
       const covered = Math.max(0, accEndF - startF) // frames of this segment the picture already holds
-      if (started && overlapSec > 0 && covered >= 1 && covered < frames) {
+      // A split head wholly inside the crossfade into it still blends — one pass
+      // blends exactly those frames — when its segment goes on past them: its
+      // tail (next chunk, `PlanSegment.splitTailMs`) holds a frame of its own on
+      // the grid. `endSec` is the next chunk's start, bit for bit (one arithmetic).
+      const tailMs = segs[i]!.splitTailMs ?? 0
+      const blendsWhole = tailMs > 0 && covered === frames && Math.round((endSec + secs(tailMs)) * fps) > endF
+      if (started && overlapSec > 0 && covered >= 1 && (covered < frames || blendsWhole)) {
         xfPlan.push({ frames, join: "xfade", xfFrames: covered, offsetFrames: startF - chunkStartF })
         accEndF = endF
       } else if (frames - covered > 0) {
@@ -457,12 +475,13 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
     `pad=${target.width}:${target.height}:(ow-iw)/2:(oh-ih)/2:color=black`
 
   // Where each segment reads, on its source's own clock (master − offsetMs).
-  const videoReadOf = (seg: EdlSegment) => {
+  const videoReadOf = (seg: PlanSegment) => {
     const vs = edl.sources.find((s) => s.id === seg.video)!
     // max(0): unreachable in a render — assertSegmentsWithinSources refuses a
     // pre-origin read first; kept so a direct builder call never asks for
-    // negative source time.
-    const start = Math.max(0, secs(seg.inMs - offsetOf(vs)))
+    // negative source time. A split tail reads from its whole segment's start
+    // (`splitLeadMs` earlier) so its picture keeps that segment's frame phase.
+    const start = Math.max(0, secs(seg.inMs - (seg.splitLeadMs ?? 0) - offsetOf(vs)))
     return { id: vs.id, start, end: Math.max(start, secs(seg.outMs - offsetOf(vs))) }
   }
   const audioReadOf = (seg: EdlSegment) => {
@@ -523,9 +542,10 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
           // output grid, with no per-segment `fps` accumulation. The held source
           // always has those frames, even past its real end.
           const readEnd = end + APPLY_EDL_GRID_READ_GUARD_FRAMES / fps
+          const lead = intervals[i].leadFrames
           filters.push(
             `${held}trim=start=${start.toFixed(6)}:end=${readEnd.toFixed(6)},setpts=PTS-STARTPTS,` +
-              `${scalePad},fps=${fps},trim=start_frame=0:end_frame=${nFrames},setpts=PTS-STARTPTS,` +
+              `${scalePad},fps=${fps},trim=start_frame=${lead}:end_frame=${lead + nFrames},setpts=PTS-STARTPTS,` +
               `format=yuv420p,setsar=1${vLabel}`,
           )
         }
@@ -537,9 +557,10 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
         if (plan.join !== "none") {
           vLabel = `[v${i}]`
           const readEnd = end + APPLY_EDL_GRID_READ_GUARD_FRAMES / fps
+          const lead = intervals[i].leadFrames
           filters.push(
             `${held}trim=start=${start.toFixed(6)}:end=${readEnd.toFixed(6)},setpts=PTS-STARTPTS,` +
-              `${scalePad},fps=${fps},trim=start_frame=0:end_frame=${plan.frames},setpts=PTS-STARTPTS,` +
+              `${scalePad},fps=${fps},trim=start_frame=${lead}:end_frame=${lead + plan.frames},setpts=PTS-STARTPTS,` +
               `format=yuv420p,setsar=1${vLabel}`,
           )
         }
@@ -709,7 +730,7 @@ async function runSlice(cmd: SliceCommand, sourcePaths: Map<string, string>, out
 
 async function renderSlice(
   edl: Edl,
-  segs: readonly EdlSegment[],
+  segs: readonly PlanSegment[],
   opts: SliceOptions & { readonly sourcePaths: Map<string, string>; readonly outPath: string },
 ): Promise<void> {
   await runSlice(buildSliceCommand(edl, segs, opts), opts.sourcePaths, opts.outPath)
@@ -834,6 +855,22 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
     // Running GLOBAL output position handed to each chunk so the cumulative
     // frame grid (Track 0.14) is continuous across chunk seams — advanced by
     // every chunk, resumed ones included, so a resume can't shift the grid.
+    // Grid frames each picture chunk of a chunked video render holds, on the SAME
+    // accumulation as `chunkStartSec` below (bit for bit). A chunk that rounds to
+    // no frame — slivers under half a frame in all — contributes NO picture: its
+    // sound still plays in the continuous audio pass, and the next chunk's grid
+    // position already accounts for it. Rendering it would add the single frame
+    // `buildSliceCommand` keeps for a degenerate render and push every later
+    // picture a frame behind the sound. (Unless NO chunk has a frame: then the
+    // first keeps that one frame so a picture exists at all.)
+    const pictureFrames: number[] = []
+    for (let c = 0, at = 0; c < chunks.length; c++) {
+      const end = at + chunkOutputSec(chunks[c])
+      pictureFrames.push(Math.round(end * fps) - Math.round(at * fps))
+      at = end
+    }
+    const skipsPicture = (c: number) => muxAudioSeparately && pictureFrames[c] === 0 && pictureFrames.some((n) => n > 0)
+
     let chunkStartSec = 0
     for (let c = 0; c < chunks.length; c++) {
       // Chunk boundary = cancellation boundary. A user cancel (or the
@@ -848,6 +885,10 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
       // deletes them. Outside a worker context (tests, the characterization
       // suite) this is a no-op.
       await throwIfJobCancelled()
+      if (skipsPicture(c)) {
+        chunkStartSec += chunkOutputSec(chunks[c])
+        continue
+      }
       const chunkPath = join(workDir, `chunk-${c}.${pcmChunks ? "wav" : ext}`)
       const cmd = buildSliceCommand(edl, chunks[c], {
         output, quality, target, fps, chunkStartSec, masterAudioId, audioPresent, omitAudio: muxAudioSeparately,
@@ -908,7 +949,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
     const writeList = (path: string, files: readonly string[]) =>
       fs.writeFile(path, files.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n"))
     let outputPath: string
-    if (chunkPaths.length === 1) {
+    if (chunks.length === 1) {
       outputPath = chunkPaths[0]
     } else {
       // Option B (a chunked VIDEO render): ONE continuous audio track over the

@@ -88,7 +88,7 @@ export function GenerateButton({
       {isRunning && <Loader2 className="w-4 h-4 animate-spin" />}
       {isRunning ? t("credits.processing") : (children ?? label ?? t("credits.generate"))}
       {showCreditInfo && !isRunning && (
-        <span className="ml-1 opacity-80">
+        <span className="ms-1 opacity-80">
           {t("credits.amount", {
             n: shownCost,
             unit: shownCost === 1 ? t("credits.unit.one") : t("credits.unit.other"),

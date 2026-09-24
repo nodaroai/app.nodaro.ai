@@ -6,6 +6,7 @@
  * image-asset tabs use blue (#3b82f6) and motion tabs keep their amber tint.
  */
 import { AlertTriangle, RotateCw, X } from "lucide-react"
+import { useT } from "@/lib/i18n"
 
 export type PendingCardTheme = "image" | "motion"
 
@@ -39,6 +40,7 @@ interface PendingCardProps {
 }
 
 export function PendingCard({ jobId, name, progress, theme = "image", onCancel, aspect }: PendingCardProps) {
+  const tr = useT()
   const t = THEME[theme]
   const pct = Math.max(0, Math.min(100, progress))
   return (
@@ -50,7 +52,7 @@ export function PendingCard({ jobId, name, progress, theme = "image", onCancel, 
         )}
       </div>
       {/* Top-edge progress bar — width animates as the worker reports progress. */}
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-black/30">
+      <div className="absolute top-0 start-0 end-0 h-0.5 bg-black/30">
         <div className={`h-full ${t.bar} transition-all`} style={{ width: `${pct}%` }} />
       </div>
       {/* Cancel button — visible on hover. Calls backend; spinner disappears. */}
@@ -60,8 +62,8 @@ export function PendingCard({ jobId, name, progress, theme = "image", onCancel, 
           e.stopPropagation()
           onCancel(jobId)
         }}
-        title="Cancel generation"
-        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-black/40 hover:bg-red-500/70 rounded text-white opacity-0 group-hover:opacity-100 transition"
+        title={tr("studio.cancelGeneration")}
+        className="absolute top-1 end-1 w-5 h-5 flex items-center justify-center bg-black/40 hover:bg-red-500/70 rounded text-white opacity-0 group-hover:opacity-100 transition"
       >
         <X className="w-3 h-3" />
       </button>
@@ -88,6 +90,7 @@ interface FailedCardProps {
  * with a red error treatment, a Retry button, and a ✕ dismiss.
  */
 export function FailedCard({ name, aspect, onRetry, onDismiss }: FailedCardProps) {
+  const t = useT()
   return (
     <div className="relative rounded-md overflow-hidden bg-[#1a1d27] border border-[#ef444433] group">
       <div
@@ -95,7 +98,7 @@ export function FailedCard({ name, aspect, onRetry, onDismiss }: FailedCardProps
         style={{ aspectRatio: aspect ?? 0.75 }}
       >
         <AlertTriangle className="w-5 h-5 text-[#ef4444]" />
-        <div className="text-[10px] text-[#ef4444]">Generation failed</div>
+        <div className="text-[10px] text-[#ef4444]">{t("cfgext.phdGenerationFailed")}</div>
         <button
           type="button"
           onClick={(e) => {
@@ -104,7 +107,7 @@ export function FailedCard({ name, aspect, onRetry, onDismiss }: FailedCardProps
           }}
           className="mt-0.5 flex items-center gap-1 text-[10px] bg-[#1e293b] hover:bg-[#27364a] text-slate-200 rounded px-2 py-1"
         >
-          <RotateCw className="w-3 h-3" /> Retry
+          <RotateCw className="w-3 h-3" /> {t("common.retry")}
         </button>
       </div>
       {/* Dismiss — top-right, mirrors PendingCard's cancel affordance. */}
@@ -114,8 +117,8 @@ export function FailedCard({ name, aspect, onRetry, onDismiss }: FailedCardProps
           e.stopPropagation()
           onDismiss()
         }}
-        title="Dismiss"
-        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-black/40 hover:bg-red-500/70 rounded text-white opacity-0 group-hover:opacity-100 transition"
+        title={t("studio.dismiss")}
+        className="absolute top-1 end-1 w-5 h-5 flex items-center justify-center bg-black/40 hover:bg-red-500/70 rounded text-white opacity-0 group-hover:opacity-100 transition"
       >
         <X className="w-3 h-3" />
       </button>

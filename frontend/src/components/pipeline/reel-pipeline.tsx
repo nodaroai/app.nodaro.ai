@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { pipelinesApi } from "@/lib/pipelines-api"
+import { useT, type MessageKey, type TFunction } from "@/lib/i18n"
 
 /**
  * Phase 3 cinematic — REEL COMPILATION PIPELINE (mockup screens 2/8/9).
@@ -45,6 +46,12 @@ interface ReelScene {
 
 type StatusKind = "ready" | "rendering" | "queued" | "draft"
 
+const LANE_KEYS: Record<"VIDEO" | "SOUND" | "FOLEY/FX", MessageKey> = {
+  VIDEO: "pipe.cinemaLaneVideo",
+  SOUND: "pipe.cinemaLaneSound",
+  "FOLEY/FX": "pipe.cinemaLaneFoley",
+}
+
 const STATUS_COLOR: Record<StatusKind, string> = {
   ready: "text-emerald-400",
   rendering: "text-[#ff0073]",
@@ -61,18 +68,19 @@ const STATUS_COLOR: Record<StatusKind, string> = {
 function deriveStatus(
   d: SceneNodeDataView | undefined,
   entityStatus: string,
+  t: TFunction,
 ): { kind: StatusKind; label: string } {
   const shots = d?.shots ?? []
   const total = shots.length
   const withVid = shots.filter((s) => s.video_url).length
   const hasClip = !!d?.composite_video_url || (total > 0 && withVid === total)
-  if (hasClip) return { kind: "ready", label: "READY" }
-  if (withVid > 0) return { kind: "rendering", label: `RENDERING ${withVid}/${total}` }
+  if (hasClip) return { kind: "ready", label: t("pipe.cinemaStatusReady") }
+  if (withVid > 0) return { kind: "rendering", label: t("pipe.cinemaStatusRendering", { done: withVid, total }) }
   if (entityStatus === "approved" || entityStatus === "completed")
-    return { kind: "queued", label: "QUEUED" }
+    return { kind: "queued", label: t("pipe.cinemaStatusQueued") }
   if (entityStatus === "generating" || entityStatus === "awaiting_approval")
-    return { kind: "rendering", label: "GENERATING" }
-  return { kind: "draft", label: "DRAFT" }
+    return { kind: "rendering", label: t("pipe.cinemaStatusGenerating") }
+  return { kind: "draft", label: t("pipe.cinemaStatusDraft") }
 }
 
 export function ReelPipeline({
@@ -84,6 +92,7 @@ export function ReelPipeline({
    *  id so the editor can load it) instead of opening the local popup. */
   onPlayClip?: (url: string, label: string, sceneId: string) => void
 }) {
+  const t = useT()
   const [scenes, setScenes] = useState<SceneEntity[] | null>(null)
   const [view, setView] = useState<"feed" | "timeline">("feed")
   const [playing, setPlaying] = useState<string | null>(null)
@@ -116,7 +125,7 @@ export function ReelPipeline({
         d?.composite_video_url ??
         d?.shots?.find((sh) => sh.video_url)?.video_url ??
         null
-      const st = deriveStatus(d, s.status)
+      const st = deriveStatus(d, s.status, t)
       return {
         id: s.id,
         n: i + 1,
@@ -129,7 +138,7 @@ export function ReelPipeline({
         video,
       }
     })
-  }, [scenes])
+  }, [scenes, t])
 
   const totalSeconds = reel.reduce((s, r) => s + r.seconds, 0)
 
@@ -138,15 +147,15 @@ export function ReelPipeline({
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="font-mono text-[11px] font-bold uppercase tracking-[0.15em] text-[#ff0073]">
-            Reel Compilation Pipeline
+            {t("pipe.cinemaReelPipeline")}
           </span>
           <span className="font-mono text-[10px] text-muted-foreground">
-            {reel.length} scenes totalize {totalSeconds} seconds runtime
+            {t("pipe.cinemaScenesTotalize", { scenes: reel.length, seconds: totalSeconds })}
           </span>
         </div>
         <div className="flex items-center gap-2">
           <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            View:
+            {t("pipe.cinemaViewLabel")}
           </span>
           {(["feed", "timeline"] as const).map((v) => (
             <button
@@ -159,7 +168,7 @@ export function ReelPipeline({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {v === "feed" ? "▦ Shots Feed" : "≋ Timeline Lanes"}
+              {v === "feed" ? `▦ ${t("pipe.cinemaShotsFeed")}` : `≋ ${t("pipe.cinemaTimelineLanes")}`}
             </button>
           ))}
         </div>
@@ -179,14 +188,14 @@ export function ReelPipeline({
                   (onPlayClip ? onPlayClip(r.video, r.title, r.id) : setPlaying(r.video))
                 }
                 disabled={!r.video}
-                title={r.video ? "Play clip" : "Clip not rendered yet"}
+                title={r.video ? t("pipe.cinemaPlayClip") : t("pipe.cinemaClipNotRendered")}
                 className="group/clip relative block h-24 w-full bg-black"
               >
                 {r.thumb ? (
                   <img src={r.thumb} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <span className="flex h-full w-full items-center justify-center font-mono text-[9px] text-muted-foreground">
-                    SH {String(r.n).padStart(2, "0")}
+                    {t("pipe.cinemaShotAbbrev", { n: String(r.n).padStart(2, "0") })}
                   </span>
                 )}
                 {r.video && (
@@ -197,7 +206,7 @@ export function ReelPipeline({
                   </span>
                 )}
                 <span className="absolute left-1 top-1 rounded bg-black/70 px-1 font-mono text-[8px] text-foreground">
-                  SH {String(r.n).padStart(2, "0")}
+                  {t("pipe.cinemaShotAbbrev", { n: String(r.n).padStart(2, "0") })}
                 </span>
                 <span className="absolute right-1 top-1 rounded bg-black/70 px-1 font-mono text-[8px] text-foreground">
                   {r.video ? "▶ " : ""}
@@ -214,7 +223,7 @@ export function ReelPipeline({
                   </span>
                 </div>
                 <div className="mt-0.5 truncate font-mono text-[9px] text-muted-foreground">
-                  Look: {r.look}
+                  {t("pipe.cinemaLookLabel", { look: r.look })}
                 </div>
               </div>
             </div>
@@ -224,8 +233,8 @@ export function ReelPipeline({
             className="flex w-44 shrink-0 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-[#2a2a2a] py-6 text-muted-foreground hover:border-[#ff0073]/50"
           >
             <span className="text-lg">+</span>
-            <span className="font-mono text-[10px] uppercase tracking-wider">Add Scene Slot</span>
-            <span className="font-mono text-[8px]">Pin new storyboard specs</span>
+            <span className="font-mono text-[10px] uppercase tracking-wider">{t("pipe.cinemaAddSceneSlot")}</span>
+            <span className="font-mono text-[8px]">{t("pipe.cinemaPinStoryboardSpecs")}</span>
           </button>
         </div>
       ) : (
@@ -250,7 +259,7 @@ export function ReelPipeline({
             onClick={() => setPlaying(null)}
             className="absolute right-6 top-6 rounded-md bg-[#ff0073] px-3 py-1 font-mono text-[11px] font-bold uppercase text-white"
           >
-            Close [X]
+            {t("pipe.closeX")}
           </button>
         </div>
       )}
@@ -265,6 +274,7 @@ function TimelineLanes({
   reel: ReelScene[]
   totalSeconds: number
 }) {
+  const t = useT()
   const total = Math.max(1, totalSeconds)
   let cursor = 0
   const blocks = reel.map((r) => {
@@ -277,16 +287,16 @@ function TimelineLanes({
     <div className="rounded-md border border-[#2a2a2a] bg-[#0d0d0d] p-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-          Lane Controls · Frame rate: <span className="text-foreground">23.976 fps</span>
+          {t("pipe.cinemaLaneControls")} <span className="text-foreground">23.976 fps</span>
         </span>
         <span className="font-mono text-[10px] text-[#ff0073]">
-          Runtime {total}s
+          {t("pipe.cinemaRuntime", { s: total })}
         </span>
       </div>
       {(["VIDEO", "SOUND", "FOLEY/FX"] as const).map((lane) => (
         <div key={lane} className="mb-1.5 flex items-stretch gap-2">
           <div className="flex w-16 shrink-0 items-center font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-            {lane}
+            {t(LANE_KEYS[lane])}
           </div>
           <div className="relative h-9 flex-1 rounded bg-[#161616]">
             {lane === "VIDEO" &&
@@ -297,7 +307,7 @@ function TimelineLanes({
                   style={{ left: `${b.left}%`, width: `calc(${b.width}% - 2px)` }}
                   title={b.title}
                 >
-                  SH {String(b.n).padStart(2, "0")} · {b.title}
+                  {t("pipe.cinemaShotAbbrev", { n: String(b.n).padStart(2, "0") })} · {b.title}
                 </div>
               ))}
             {lane === "SOUND" && (
@@ -306,10 +316,10 @@ function TimelineLanes({
             {lane === "FOLEY/FX" && (
               <>
                 <span className="absolute left-[8%] top-1.5 rounded border border-amber-500/40 px-1 font-mono text-[8px] text-amber-300">
-                  GLASS BREACH FX
+                  {t("pipe.cinemaFoleyGlass")}
                 </span>
                 <span className="absolute left-[45%] top-1.5 rounded border border-amber-500/40 px-1 font-mono text-[8px] text-amber-300">
-                  RAIN SIZZLE LOOP
+                  {t("pipe.cinemaFoleyRain")}
                 </span>
               </>
             )}
@@ -318,10 +328,10 @@ function TimelineLanes({
       ))}
       <div className="mt-2 flex items-center justify-between font-mono text-[9px] text-muted-foreground">
         <span>
-          Stems Sync:{" "}
-          <span className="text-foreground">{reel.length} components synced</span>
+          {t("pipe.cinemaStemsSync")}{" "}
+          <span className="text-foreground">{t("pipe.cinemaComponentsSynced", { n: reel.length })}</span>
         </span>
-        <span>Click timeline stems to audit sound layers</span>
+        <span>{t("pipe.cinemaClickStems")}</span>
       </div>
     </div>
   )

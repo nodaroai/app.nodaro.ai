@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react"
 import type { ChatTurn as ChatTurnType } from "@nodaro/sdk"
 import { ChatTurnBubble } from "./chat-turn"
+import { useT } from "@/lib/i18n"
 
 interface Props {
   turns: ChatTurnType[]
@@ -20,6 +21,7 @@ export function ChatHistory({
   isApplying,
   applyError,
 }: Props) {
+  const t = useT()
   const endRef = useRef<HTMLDivElement | null>(null)
   const sorted = [...turns].sort((a, b) => a.turn_n - b.turn_n)
 
@@ -30,8 +32,7 @@ export function ChatHistory({
   if (sorted.length === 0) {
     return (
       <div className="flex-1 overflow-y-auto p-3 text-xs text-zinc-500 dark:text-zinc-400 italic">
-        No messages yet. Start the conversation below to refine the Showrunner's
-        plan.
+        {t("pipe.noMessagesYet")}
       </div>
     )
   }

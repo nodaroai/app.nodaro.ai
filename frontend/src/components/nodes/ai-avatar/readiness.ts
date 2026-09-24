@@ -8,6 +8,7 @@
 //   avatar src → an avatarId        image src → an image (wired OR data.imageUrl)
 
 import type { AiAvatarData } from "@/types/nodes"
+import { tx, type MessageKey, type TFunction } from "@/lib/i18n"
 import {
   AI_AVATAR_ENGINE_OPTIONS,
   AI_AVATAR_RESOLUTION_OPTIONS,
@@ -31,23 +32,24 @@ export interface AiAvatarReadiness {
   readonly text: string
 }
 
-const MISSING_PHRASE: Record<AiAvatarMissing, string> = {
-  avatar: "an avatar",
-  image: "a source image",
-  voice: "a voice",
-  script: "a script",
-  audio: "wired audio",
+const MISSING_PHRASE: Record<AiAvatarMissing, MessageKey> = {
+  avatar: "node.aiAvMissingAvatar",
+  image: "node.aiAvMissingImage",
+  voice: "node.aiAvMissingVoice",
+  script: "node.aiAvMissingScript",
+  audio: "node.aiAvMissingAudio",
 }
 
-/** "a, b and c" — natural English list. */
-function joinNatural(items: ReadonlyArray<string>): string {
+/** "a, b and c" — natural list in the active language. */
+function joinNatural(items: ReadonlyArray<string>, t: TFunction): string {
   if (items.length <= 1) return items[0] ?? ""
-  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`
+  return t("node.listAndLast", { list: items.slice(0, -1).join(", "), last: items[items.length - 1] })
 }
 
 export function computeAiAvatarReadiness(
   data: AiAvatarData,
   wiring: AiAvatarWiring,
+  t: TFunction = tx,
 ): AiAvatarReadiness {
   const source = data.avatarSource ?? "avatar"
   const mode = data.speechMode ?? "text"
@@ -70,13 +72,14 @@ export function computeAiAvatarReadiness(
     return {
       ready: false,
       missing,
-      text: `Needs ${joinNatural(missing.map((m) => MISSING_PHRASE[m]))} before it can run`,
+      text: t("node.aiAvNeedsBeforeRun", { items: joinNatural(missing.map((m) => t(MISSING_PHRASE[m])), t) }),
     }
   }
 
-  const visual = source === "image" ? "image" : "avatar"
-  const set = mode === "text" ? `${visual}, voice and script` : `${visual} and audio`
-  return { ready: true, missing, text: `Ready to run · ${set} are set` }
+  const readyKey: MessageKey = source === "image"
+    ? (mode === "text" ? "node.aiAvReadyImageVoiceScript" : "node.aiAvReadyImageAudio")
+    : (mode === "text" ? "node.aiAvReadyAvatarVoiceScript" : "node.aiAvReadyAvatarAudio")
+  return { ready: true, missing, text: t(readyKey) }
 }
 
 /**
@@ -84,14 +87,14 @@ export function computeAiAvatarReadiness(
  * resolution. Image-source mode uses HeyGen's own image engine (no IV/V lever),
  * so it never claims an avatar engine it won't run.
  */
-export function aiAvatarEngineLabel(data: AiAvatarData): string {
+export function aiAvatarEngineLabel(data: AiAvatarData, t: TFunction = tx): string {
   const engine = data.engine ?? "avatar-iv"
   const resolution = data.resolution ?? "720p"
   const resolutionLabel =
     (AI_AVATAR_RESOLUTION_OPTIONS[engine] ?? AI_AVATAR_RESOLUTION_OPTIONS["avatar-iv"] ?? [])
       .find((o) => o.value === resolution)?.label ?? resolution
   if ((data.avatarSource ?? "avatar") === "image") {
-    return `Image animation · ${resolutionLabel}`
+    return t("node.aiAvImageAnimation", { resolution: resolutionLabel })
   }
   const engineLabel = AI_AVATAR_ENGINE_OPTIONS.find((o) => o.value === engine)?.label ?? engine
   return `${engineLabel} · ${resolutionLabel}`

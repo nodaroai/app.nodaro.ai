@@ -33,6 +33,8 @@ import { PickerHeader, type PickerView } from "./picker-header"
 import { PickerRail, type LibraryEntry } from "./picker-rail"
 import { PersonGrid, PAGE_SIZE } from "./person-grid"
 import { LookDetail } from "./look-detail"
+import { useT } from "@/lib/i18n"
+import { formatNumber } from "@/lib/i18n/format"
 
 export interface AvatarPickerModalProps {
   readonly open: boolean
@@ -70,6 +72,7 @@ function resolveLocated(
 }
 
 export function AvatarPickerModal({ open, onOpenChange, value, onSelect, initialQuery, costLabel }: AvatarPickerModalProps) {
+  const t = useT()
   const { data: looks, isLoading, isError, complete } = useHeygenAvatars()
   const { data: voices } = useHeygenVoices()
 
@@ -93,11 +96,11 @@ export function AvatarPickerModal({ open, onOpenChange, value, onSelect, initial
   const located = useMemo(() => resolveLocated(selection, filtered, value), [selection, filtered, value])
 
   const libraries: LibraryEntry[] = useMemo(() => {
-    const libs: LibraryEntry[] = [{ id: "all", label: "All avatars", count: looks.length }]
-    if (ownLooks > 0) libs.push({ id: "own", label: "Your own looks", count: ownLooks })
-    if (recentIds.length > 0) libs.push({ id: "recent", label: "Recently used", count: recentIds.length })
+    const libs: LibraryEntry[] = [{ id: "all", label: t("heygen.allAvatars"), count: looks.length }]
+    if (ownLooks > 0) libs.push({ id: "own", label: t("heygen.yourOwnLooks"), count: ownLooks })
+    if (recentIds.length > 0) libs.push({ id: "recent", label: t("heygen.recentlyUsed"), count: recentIds.length })
     return libs
-  }, [looks.length, ownLooks, recentIds.length])
+  }, [looks.length, ownLooks, recentIds.length, t])
 
   // Every filter change starts paging from the first page again.
   const patchFilters = useCallback((patch: Partial<PickerFilters>) => {
@@ -167,24 +170,24 @@ export function AvatarPickerModal({ open, onOpenChange, value, onSelect, initial
     body = (
       <div className="flex flex-col items-center justify-center gap-2 text-center">
         <AlertCircle className="size-7 text-destructive/60" />
-        <p className="text-sm text-muted-foreground">Failed to load avatars</p>
+        <p className="text-sm text-muted-foreground">{t("heygen.failedLoadAvatars")}</p>
       </div>
     )
   } else if (looks.length === 0) {
     body = (
       <KeylessNotice
         icon={User}
-        title="No HeyGen avatars"
-        hint={keylessCatalogHint("avatars")}
+        title={t("heygen.noAvatars")}
+        hint={keylessCatalogHint("avatars", t)}
         testId="avatar-picker-empty"
       />
     )
   } else if (filtered.length === 0) {
     body = (
       <div className="flex flex-col items-center justify-center gap-2 text-center" data-testid="avatar-picker-no-match">
-        <p className="text-sm text-muted-foreground">No avatars match these filters</p>
+        <p className="text-sm text-muted-foreground">{t("heygen.noAvatarsMatchThese")}</p>
         <button type="button" className="text-[12px] text-[#ff0073] hover:underline" onClick={() => patchFilters(DEFAULT_FILTERS)}>
-          Clear search and filters
+          {t("heygen.clearSearchFilters")}
         </button>
       </div>
     )
@@ -212,8 +215,8 @@ export function AvatarPickerModal({ open, onOpenChange, value, onSelect, initial
       >
         <PickerHeader
           ref={searchRef}
-          subtitle={isLoading ? "Loading the catalog…" : `${describeSelection(filtered)}${complete ? "" : " · loading more…"}`}
-          total={looks.length.toLocaleString("en-US")}
+          subtitle={isLoading ? t("heygen.loadingCatalog") : `${describeSelection(filtered, t)}${complete ? "" : ` ${t("heygen.loadingMore")}`}`}
+          total={formatNumber(looks.length)}
           query={filters.query}
           onQuery={(query) => patchFilters({ query })}
           view={view}
@@ -236,7 +239,7 @@ export function AvatarPickerModal({ open, onOpenChange, value, onSelect, initial
               costLabel={costLabel}
             />
           ) : (
-            <div className="border-l border-border/60 bg-muted/20" />
+            <div className="border-s border-border/60 bg-muted/20" />
           )}
         </div>
       </DialogContent>

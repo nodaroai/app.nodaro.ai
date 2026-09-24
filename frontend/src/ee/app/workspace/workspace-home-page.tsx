@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card"
 import { queryKeys } from "@/lib/query-keys"
 import { getActiveWorkspaceId, setActiveWorkspace } from "@/lib/workspace-context"
 import { useVocabulary } from "@/ee/hooks/use-workspace"
+import { useT, type TFunction } from "@/lib/i18n"
 import { OrgApiError, getWorkspace } from "@/ee/lib/orgs-api"
 
 /**
@@ -24,6 +25,7 @@ import { OrgApiError, getWorkspace } from "@/ee/lib/orgs-api"
  * that will never work.
  */
 export default function WorkspaceHomePage() {
+  const t = useT()
   const { id = "" } = useParams<{ id: string }>()
   const vocabulary = useVocabulary()
 
@@ -40,7 +42,7 @@ export default function WorkspaceHomePage() {
   }, [data])
 
   if (isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+    return <div className="p-6 text-sm text-muted-foreground">{t("common.loading")}</div>
   }
 
   if (error) {
@@ -48,10 +50,10 @@ export default function WorkspaceHomePage() {
     return (
       <div className="mx-auto max-w-xl p-6">
         <Card className="space-y-4 p-8">
-          <h1 className="text-xl font-semibold">{title(code, vocabulary.workspace ?? "workspace")}</h1>
-          <p className="text-sm text-muted-foreground">{explain(code, vocabulary.workspace ?? "workspace")}</p>
+          <h1 className="text-xl font-semibold">{title(code, vocabulary.workspace ?? t("org.workspaceWord"), t)}</h1>
+          <p className="text-sm text-muted-foreground">{explain(code, vocabulary.workspace ?? t("org.workspaceWord"), t)}</p>
           <Button asChild variant="outline">
-            <Link to="/">Back to your work</Link>
+            <Link to="/">{t("org.backToYourWork")}</Link>
           </Button>
         </Card>
       </div>
@@ -67,7 +69,7 @@ export default function WorkspaceHomePage() {
           <h1 className="text-2xl font-semibold">{data.name}</h1>
           {data.role === "admin" && (
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-              {vocabulary.workspace_admin ?? "Admin"}
+              {vocabulary.workspace_admin ?? t("org.roleAdmin")}
             </span>
           )}
         </div>
@@ -76,27 +78,27 @@ export default function WorkspaceHomePage() {
 
       {data.archived && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
-          <p className="font-medium">This {(vocabulary.workspace ?? "workspace").toLowerCase()} is archived.</p>
+          <p className="font-medium">{t("org.workspaceIsArchived", { workspace: (vocabulary.workspace ?? t("org.workspaceWord")).toLowerCase() })}</p>
           <p className="text-muted-foreground">
-            Everything in it stays readable. Nothing new can be added until an administrator reopens it.
+            {t("org.archivedReadable")}
           </p>
         </div>
       )}
 
       <Card className="space-y-2 p-6">
-        <h2 className="font-medium">Shared work</h2>
+        <h2 className="font-medium">{t("org.sharedWork")}</h2>
         <p className="text-sm text-muted-foreground">
-          Work created here will appear in this list. Until then, everything you make is in your personal space.
+          {t("org.sharedWorkEmpty")}
         </p>
       </Card>
 
       {data.role === "admin" && (
         <div className="flex gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link to={`/w/${data.id}/people`}>People</Link>
+            <Link to={`/w/${data.id}/people`}>{t("org.people")}</Link>
           </Button>
           <Button asChild variant="outline" size="sm">
-            <Link to={`/w/${data.id}/settings`}>Settings</Link>
+            <Link to={`/w/${data.id}/settings`}>{t("common.settings")}</Link>
           </Button>
         </div>
       )}
@@ -104,20 +106,20 @@ export default function WorkspaceHomePage() {
   )
 }
 
-function title(code: string, workspaceWord: string): string {
-  if (code === "member_suspended") return "Your membership is suspended"
-  return `${workspaceWord} not found`
+function title(code: string, workspaceWord: string, t: TFunction): string {
+  if (code === "member_suspended") return t("org.membershipSuspendedTitle")
+  return t("org.workspaceNotFound", { workspace: workspaceWord })
 }
 
-function explain(code: string, workspaceWord: string): string {
+function explain(code: string, workspaceWord: string, t: TFunction): string {
   switch (code) {
     case "member_suspended":
-      return "You cannot open this while your membership is suspended. An administrator can lift it."
+      return t("org.suspendedCannotOpen")
     case "org_not_active":
-      return "The organization this belongs to is not active."
+      return t("org.parentOrgNotActive")
     default:
       // A 404 here means "no such workspace" OR "not yours" — the server
       // gives one answer on purpose, and repeating it is the honest thing.
-      return `This ${workspaceWord.toLowerCase()} does not exist, or you are not a member of it.`
+      return t("org.workspaceMissingOrNotMember", { workspace: workspaceWord.toLowerCase() })
   }
 }

@@ -1,5 +1,6 @@
 import { useCallback, useState, Suspense } from "react"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { UserCircle, Users, X, Loader2, AlertCircle, Plus, Trash2, ArchiveRestore } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -22,6 +23,7 @@ export function CharacterGalleryButton() {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<TabKey>("active")
   const { user } = useAuth()
+  const t = useT()
 
   const nodes = useWorkflowStore((s) => s.nodes)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -144,10 +146,10 @@ export function CharacterGalleryButton() {
     try {
       await deleteCharacter(archiveTarget.character.id)
       invalidateLists()
-      toast.success(`Archived '${archiveTarget.character.name}'`)
+      toast.success(tx("entity.archivedName", { name: archiveTarget.character.name }))
       setArchiveTarget(null)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to archive character.")
+      toast.error(e instanceof Error ? e.message : tx("entity.archiveCharacterFailed"))
     } finally {
       setArchiving(false)
     }
@@ -161,11 +163,11 @@ export function CharacterGalleryButton() {
         invalidateLists()
         toast.success(
           result.name !== dbChar.name
-            ? `Restored as '${result.name}' (the original name was taken)`
-            : `Restored '${result.name}'`,
+            ? tx("entity.restoredAsRenamed", { name: result.name })
+            : tx("entity.restoredName", { name: result.name }),
         )
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to restore character.")
+        toast.error(err instanceof Error ? err.message : tx("entity.restoreCharacterFailed"))
       }
     },
     [invalidateLists],
@@ -184,9 +186,9 @@ export function CharacterGalleryButton() {
         onClick={() => setOpen(true)}
       >
         <Users className="h-4 w-4" />
-        Characters
+        {t("entity.btnCharacters")}
         {charCount > 0 && (
-          <span className="ml-auto text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{charCount}</span>
+          <span className="ms-auto text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{charCount}</span>
         )}
       </Button>
 
@@ -196,8 +198,8 @@ export function CharacterGalleryButton() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card border rounded-xl shadow-2xl w-[420px] max-w-[90vw] max-h-[70vh] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b">
-              <h3 className="text-sm font-semibold">Character Library</h3>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setOpen(false)} aria-label="Close">
+              <h3 className="text-sm font-semibold">{t("entity.characterLibrary")}</h3>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setOpen(false)} aria-label={t("common.close")}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -208,13 +210,13 @@ export function CharacterGalleryButton() {
                 onClick={() => setTab("active")}
                 className={`flex-1 py-2 ${tab === "active" ? "text-primary border-b-2 border-primary font-medium" : "text-muted-foreground"}`}
               >
-                Active{activeCount > 0 && <span className="ml-1 opacity-60">({activeCount})</span>}
+                {t("entity.tabActive")}{activeCount > 0 && <span className="ms-1 opacity-60">({activeCount})</span>}
               </button>
               <button
                 onClick={() => setTab("archived")}
                 className={`flex-1 py-2 ${tab === "archived" ? "text-primary border-b-2 border-primary font-medium" : "text-muted-foreground"}`}
               >
-                Archived{archivedCount > 0 && <span className="ml-1 opacity-60">({archivedCount})</span>}
+                {t("entity.tabArchived")}{archivedCount > 0 && <span className="ms-1 opacity-60">({archivedCount})</span>}
               </button>
             </div>
 
@@ -287,11 +289,12 @@ function ActivePane({
   onArchive: (e: React.MouseEvent, c: DbCharacter) => void
   refetch: () => void
 }) {
+  const t = useT()
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
         <Loader2 className="w-8 h-8 animate-spin mb-2" />
-        <p className="text-sm">Loading characters...</p>
+        <p className="text-sm">{t("entity.loadingCharacters")}</p>
       </div>
     )
   }
@@ -299,8 +302,8 @@ function ActivePane({
     return (
       <div className="flex flex-col items-center justify-center py-8 text-destructive">
         <AlertCircle className="w-8 h-8 mb-2" />
-        <p className="text-sm">{error instanceof Error ? error.message : "Failed to load characters"}</p>
-        <Button variant="outline" size="sm" className="mt-2" onClick={refetch}>Retry</Button>
+        <p className="text-sm">{error instanceof Error ? error.message : t("entity.loadCharactersFailed")}</p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={refetch}>{t("common.retry")}</Button>
       </div>
     )
   }
@@ -308,8 +311,8 @@ function ActivePane({
     return (
       <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
         <UserCircle className="w-10 h-10 mb-2 opacity-40" />
-        <p className="text-sm">No saved characters</p>
-        <p className="text-xs mt-1">Generate a character portrait to save it here</p>
+        <p className="text-sm">{t("entity.noSavedCharacters")}</p>
+        <p className="text-xs mt-1">{t("entity.noSavedCharactersHint")}</p>
       </div>
     )
   }
@@ -321,9 +324,9 @@ function ActivePane({
           <div key={c.id} className="relative group">
             <button
               type="button"
-              className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-transparent hover:border-border hover:bg-muted/30 transition-colors cursor-pointer text-left w-full"
+              className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-transparent hover:border-border hover:bg-muted/30 transition-colors cursor-pointer text-start w-full"
               onClick={() => onCardClick(c)}
-              title={`View ${c.name}`}
+              title={t("assetlib.viewAsset", { name: c.name })}
             >
               <div className="relative">
                 {c.sourceImageUrl ? (
@@ -336,29 +339,29 @@ function ActivePane({
                   </div>
                 )}
                 {c.loraTrainingStatus === "succeeded" && (
-                  <div className="absolute -bottom-1 -right-1 z-10">
+                  <div className="absolute -bottom-1 -end-1 z-10">
                     <TrainedPill size="xs" />
                   </div>
                 )}
               </div>
               <span className="text-xs truncate w-full text-center">{c.name}</span>
-              {isOnCanvas && <span className="text-[9px] text-muted-foreground">On canvas</span>}
+              {isOnCanvas && <span className="text-[9px] text-muted-foreground">{t("assetlib.onCanvas")}</span>}
             </button>
             {/* Top-right hover archive button. */}
             <button
               type="button"
-              className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-muted text-muted-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow hover:text-destructive hover:bg-destructive/10"
+              className="absolute top-1 end-1 w-6 h-6 flex items-center justify-center bg-muted text-muted-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow hover:text-destructive hover:bg-destructive/10"
               onClick={(e) => onArchive(e, c)}
-              title="Archive character"
+              title={t("entity.archiveCharacter")}
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
             {/* Bottom-right hover add-to-canvas. */}
             <button
               type="button"
-              className="absolute bottom-1 right-1 w-6 h-6 flex items-center justify-center bg-primary text-primary-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-primary/90"
+              className="absolute bottom-1 end-1 w-6 h-6 flex items-center justify-center bg-primary text-primary-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-primary/90"
               onClick={(e) => onAdd(e, c)}
-              title={`Add ${c.name} to canvas`}
+              title={t("assetlib.addToCanvas", { name: c.name })}
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -382,11 +385,12 @@ function ArchivedPane({
   onRestore: (e: React.MouseEvent, c: DbCharacter) => void
   refetch: () => void
 }) {
+  const t = useT()
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
         <Loader2 className="w-8 h-8 animate-spin mb-2" />
-        <p className="text-sm">Loading archive...</p>
+        <p className="text-sm">{t("entity.loadingArchive")}</p>
       </div>
     )
   }
@@ -394,8 +398,8 @@ function ArchivedPane({
     return (
       <div className="flex flex-col items-center justify-center py-8 text-destructive">
         <AlertCircle className="w-8 h-8 mb-2" />
-        <p className="text-sm">{error instanceof Error ? error.message : "Failed to load archived characters"}</p>
-        <Button variant="outline" size="sm" className="mt-2" onClick={refetch}>Retry</Button>
+        <p className="text-sm">{error instanceof Error ? error.message : t("entity.loadArchivedFailed")}</p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={refetch}>{t("common.retry")}</Button>
       </div>
     )
   }
@@ -403,8 +407,8 @@ function ArchivedPane({
     return (
       <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
         <ArchiveRestore className="w-10 h-10 mb-2 opacity-40" />
-        <p className="text-sm">No archived characters</p>
-        <p className="text-xs mt-1">Archived characters land here. Restore any time.</p>
+        <p className="text-sm">{t("entity.noArchivedCharacters")}</p>
+        <p className="text-xs mt-1">{t("entity.noArchivedCharactersHint")}</p>
       </div>
     )
   }
@@ -427,10 +431,10 @@ function ArchivedPane({
             variant="outline"
             className="h-7 text-[11px] gap-1 mt-1"
             onClick={(e) => onRestore(e, c)}
-            title={`Restore ${c.name}`}
+            title={t("entity.restoreName", { name: c.name })}
           >
             <ArchiveRestore className="w-3 h-3" />
-            Restore
+            {t("marketplace.restore")}
           </Button>
         </div>
       ))}
@@ -450,36 +454,37 @@ function ArchiveConfirmModal({
   onConfirm: () => void
 }) {
   const { character, usage } = target
+  const t = useT()
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={archiving ? undefined : onCancel} />
       <div className="relative bg-card border rounded-xl shadow-2xl w-[400px] max-w-[90vw] p-5">
-        <h4 className="text-sm font-semibold mb-2">Archive '{character.name}'?</h4>
+        <h4 className="text-sm font-semibold mb-2">{t("entity.archiveConfirmTitle", { name: character.name })}</h4>
         <p className="text-xs text-muted-foreground mb-3">
-          The character will be hidden from the library but won't be destroyed. Workflows that reference it keep working — restore from the Archived tab any time.
+          {t("entity.archiveConfirmBody")}
         </p>
         {usage === null ? (
-          <p className="text-[11px] text-muted-foreground italic mb-3">Checking workflow usage…</p>
+          <p className="text-[11px] text-muted-foreground italic mb-3">{t("entity.checkingUsage")}</p>
         ) : usage.workflowCount === 0 ? (
-          <p className="text-[11px] text-muted-foreground mb-3">Not used in any workflows.</p>
+          <p className="text-[11px] text-muted-foreground mb-3">{t("entity.notUsedInWorkflows")}</p>
         ) : (
           <div className="text-[11px] mb-3">
             <p className="text-foreground/80 mb-1">
-              Used in {usage.workflowCount} workflow{usage.workflowCount === 1 ? "" : "s"}:
+              {usage.workflowCount === 1 ? t("entity.usedInWorkflowsOne") : t("entity.usedInWorkflowsMany", { n: usage.workflowCount })}
             </p>
             <ul className="list-disc list-inside text-muted-foreground space-y-0.5 max-h-[120px] overflow-y-auto">
               {usage.workflows.slice(0, 10).map((w) => (
                 <li key={w.id} className="truncate">{w.name}</li>
               ))}
-              {usage.workflows.length > 10 && <li className="italic">+ {usage.workflows.length - 10} more…</li>}
+              {usage.workflows.length > 10 && <li className="italic">{t("entity.moreItems", { n: usage.workflows.length - 10 })}</li>}
             </ul>
           </div>
         )}
         <div className="flex justify-end gap-2 mt-2">
-          <Button size="sm" variant="ghost" onClick={onCancel} disabled={archiving}>Cancel</Button>
+          <Button size="sm" variant="ghost" onClick={onCancel} disabled={archiving}>{t("common.cancel")}</Button>
           <Button size="sm" variant="destructive" onClick={onConfirm} disabled={archiving}>
-            {archiving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Trash2 className="w-3 h-3 mr-1" />}
-            Archive
+            {archiving ? <Loader2 className="w-3 h-3 animate-spin me-1" /> : <Trash2 className="w-3 h-3 me-1" />}
+            {t("marketplace.archive")}
           </Button>
         </div>
       </div>

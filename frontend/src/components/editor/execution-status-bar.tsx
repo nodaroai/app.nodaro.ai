@@ -135,15 +135,15 @@ export function ExecutionStatusBar({ executionId, onStopped, onRunInstead }: Exe
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuItem onClick={handleDiscard}>
-            <Trash2 className="w-4 h-4 mr-2" />
+            <Trash2 className="w-4 h-4 me-2" />
             {t("run.discardMenu")}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleStopAfterCurrent}>
-            <SkipForward className="w-4 h-4 mr-2" />
+            <SkipForward className="w-4 h-4 me-2" />
             {t("run.stopAfterCurrentMenu")}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => onRunInstead?.()}>
-            <RotateCcw className="w-4 h-4 mr-2" />
+            <RotateCcw className="w-4 h-4 me-2" />
             {t("node.runInstead")}
           </DropdownMenuItem>
         </DropdownMenuContent>

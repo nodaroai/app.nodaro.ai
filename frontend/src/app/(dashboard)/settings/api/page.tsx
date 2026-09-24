@@ -33,9 +33,12 @@ import {
 } from "@/hooks/queries/use-api-tokens-queries"
 import { surfacePlatformLinks } from "@/lib/surface-selectors"
 import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { formatDate } from "@/lib/i18n/format"
 
 export default function ApiSettingsPage() {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const { user, loading: authLoading } = useAuth()
   const { data: tokens, isLoading } = useApiTokens()
   const createMutation = useCreateApiTokenMutation()
@@ -112,7 +115,7 @@ export default function ApiSettingsPage() {
           to="/settings"
           className="text-muted-foreground hover:text-foreground transition-colors"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className={cn("h-5 w-5", isRtl && "rotate-180")} />
         </Link>
         <div>
           <h1 className="text-2xl font-bold">{t("apiTok.title")}</h1>
@@ -154,9 +157,9 @@ export default function ApiSettingsPage() {
                 <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                   <span>{t("apiTok.reqPerMin", { n: token.rateLimit })}</span>
                   {token.lastUsedAt && (
-                    <span>{t("apiTok.lastUsed", { date: new Date(token.lastUsedAt).toLocaleDateString() })}</span>
+                    <span>{t("apiTok.lastUsed", { date: formatDate(token.lastUsedAt) })}</span>
                   )}
-                  <span>{t("apiTok.created", { date: new Date(token.createdAt).toLocaleDateString() })}</span>
+                  <span>{t("apiTok.created", { date: formatDate(token.createdAt) })}</span>
                 </div>
               </div>
 
@@ -186,7 +189,7 @@ export default function ApiSettingsPage() {
         disabled={(tokens ?? []).length >= 10}
         className="bg-[#ff0073] hover:bg-[#e00067] text-white"
       >
-        <Plus className="h-4 w-4 mr-2" />
+        <Plus className="h-4 w-4 me-2" />
         {t("apiTok.createToken")}
       </Button>
       {(tokens ?? []).length >= 10 && (
@@ -283,13 +286,13 @@ export default function ApiSettingsPage() {
               </div>
 
               <div className="relative">
-                <code className="block w-full p-3 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-sm font-mono break-all pr-10">
+                <code className="block w-full p-3 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-sm font-mono break-all pe-10">
                   {createdToken}
                 </code>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="absolute right-1 top-1 h-8 w-8 p-0"
+                  className="absolute end-1 top-1 h-8 w-8 p-0"
                   onClick={() => handleCopy(createdToken)}
                 >
                   {copied ? (
@@ -342,7 +345,7 @@ export default function ApiSettingsPage() {
                   className="bg-[#ff0073] hover:bg-[#e00067] text-white"
                 >
                   {createMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    <Loader2 className="h-4 w-4 animate-spin me-2" />
                   ) : null}
                   {t("apiTok.create")}
                 </Button>
@@ -371,7 +374,7 @@ export default function ApiSettingsPage() {
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <Loader2 className="h-4 w-4 animate-spin me-2" />
               ) : null}
               {t("apiTok.delete")}
             </Button>
@@ -397,7 +400,7 @@ function CodeExample({ title, code }: { title: string; code: string }) {
       <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
         <span className="text-xs font-medium text-muted-foreground">{title}</span>
         <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={handleCopy}>
-          {copied ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+          {copied ? <Check className="h-3 w-3 me-1" /> : <Copy className="h-3 w-3 me-1" />}
           {copied ? t("apiTok.copied") : t("apiTok.copy")}
         </Button>
       </div>

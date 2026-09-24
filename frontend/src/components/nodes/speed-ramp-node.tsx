@@ -50,7 +50,7 @@ function SpeedRampNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
   }
 
-  const speedLabel = nodeData.speed === 1 ? "1x" : nodeData.speed < 1 ? `${nodeData.speed}x Slow` : `${nodeData.speed}x Fast`
+  const speedLabel = nodeData.speed === 1 ? "1x" : nodeData.speed < 1 ? t("node.speedSlow", { n: nodeData.speed }) : t("node.speedFast", { n: nodeData.speed })
 
   const hasResult = status !== "running" && !!activeUrl && !videoError
 

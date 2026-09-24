@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
 import { getWorkflowAccess, isNotFoundError, shareWorkflow, unshareWorkflow, CredentialUnboundError, type UnboundCredentialUse } from "@/lib/api"
 import { CredentialLockDialog } from "./credential-lock-dialog"
 import { CollaboratorsPanel } from "./collaborators-panel"
@@ -40,6 +41,7 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
   const [unboundUses, setUnboundUses] = useState<ReadonlyArray<UnboundCredentialUse> | null>(null)
   const [shareToken, setShareToken] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const t = useT()
 
   // Asked only once the dialog is actually open. It is a per-workflow
   // authorization question, so it belongs to whoever is looking at it right
@@ -75,7 +77,7 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
         setUnboundUses(err.details)
         return
       }
-      toast.error(err instanceof Error ? err.message : "Failed to share")
+      toast.error(err instanceof Error ? err.message : tx("present.failedToShare"))
     } finally {
       setLoading(false)
     }
@@ -86,15 +88,15 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
     try {
       await unshareWorkflow(workflowId)
       setShareToken(null)
-      toast.success("Sharing disabled")
+      toast.success(tx("present.sharingDisabled"))
     } catch (err) {
       // Nothing to revoke (404) is the state the click asked for (#722).
       if (isNotFoundError(err)) {
         setShareToken(null)
-        toast.success("Sharing disabled")
+        toast.success(tx("present.sharingDisabled"))
         return
       }
-      toast.error(err instanceof Error ? err.message : "Failed to revoke")
+      toast.error(err instanceof Error ? err.message : tx("present.failedToRevoke"))
     } finally {
       setLoading(false)
     }
@@ -104,7 +106,7 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
     if (shareUrl) {
       navigator.clipboard.writeText(shareUrl)
       setCopied(true)
-      toast.success("Link copied")
+      toast.success(tx("runner.linkCopied"))
       setTimeout(() => setCopied(false), 2000)
     }
   }, [shareUrl])
@@ -157,13 +159,13 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
-          <Share2 className="h-4 w-4 mr-1" />
-          Share
+          <Share2 className="h-4 w-4 me-1" />
+          {t("common.share")}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share</DialogTitle>
+          <DialogTitle>{t("common.share")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -185,7 +187,7 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
           )}
 
           <p className="text-sm text-muted-foreground">
-            Share this workflow as a presentation. Anyone with the link can run it (they pay their own credits).
+            {t("present.shareDesc")}
           </p>
 
           {shareToken ? (
@@ -200,13 +202,13 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
               {/* Share settings */}
               {showSettings && (
                 <div className="space-y-4 border-t border-border pt-4">
-                  <h3 className="text-sm font-medium text-foreground">Viewer Settings</h3>
+                  <h3 className="text-sm font-medium text-foreground">{t("present.viewerSettings")}</h3>
 
                   {/* Read-only toggle */}
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium">Read-only</p>
-                      <p className="text-xs text-muted-foreground">Viewers can only see results</p>
+                      <p className="text-sm font-medium">{t("pubDialog.readOnlyLabel")}</p>
+                      <p className="text-xs text-muted-foreground">{t("present.viewersOnlySeeResults")}</p>
                     </div>
                     <Switch
                       checked={!!presentationSettings.shareReadOnly}
@@ -216,7 +218,7 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
 
                   {/* Allowed view modes */}
                   <div>
-                    <p className="text-sm font-medium mb-2">Allowed view modes</p>
+                    <p className="text-sm font-medium mb-2">{t("present.allowedViewModes")}</p>
                     <div className="flex items-center gap-1">
                       {VIEW_MODES.map(({ mode, icon: Icon, label }) => {
                         const isActive = allowedSet.has(mode)
@@ -225,7 +227,7 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
                             key={mode}
                             type="button"
                             onClick={() => handleToggleMode(mode)}
-                            title={label}
+                            title={t(label)}
                             className={`flex items-center justify-center w-9 h-8 rounded-md border transition-colors ${
                               isActive
                                 ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
@@ -241,14 +243,14 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
 
                   {/* Default view mode */}
                   <div>
-                    <p className="text-sm font-medium mb-1.5">Default view mode</p>
+                    <p className="text-sm font-medium mb-1.5">{t("present.defaultViewMode")}</p>
                     <Select value={defaultMode} onValueChange={handleDefaultModeChange}>
                       <SelectTrigger className="w-full h-9 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {VIEW_MODES.filter((m) => allowedSet.has(m.mode)).map(({ mode, label }) => (
-                          <SelectItem key={mode} value={mode}>{label}</SelectItem>
+                          <SelectItem key={mode} value={mode}>{t(label)}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -257,16 +259,16 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
                   {/* Compare side defaults */}
                   {showCompareSettings && nodeOptions.length >= 2 && (
                     <div>
-                      <p className="text-sm font-medium mb-1.5">Compare defaults</p>
+                      <p className="text-sm font-medium mb-1.5">{t("present.compareDefaults")}</p>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">Left</p>
+                          <p className="text-xs text-muted-foreground mb-1">{t("common.left")}</p>
                           <Select
                             value={presentationSettings.compareLeft ?? ""}
                             onValueChange={(v) => handleCompareChange("compareLeft", v)}
                           >
                             <SelectTrigger className="w-full h-8 text-xs">
-                              <SelectValue placeholder="Select node" />
+                              <SelectValue placeholder={t("present.selectNode")} />
                             </SelectTrigger>
                             <SelectContent>
                               {nodeOptions.map(({ id, label }) => (
@@ -276,13 +278,13 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
                           </Select>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">Right</p>
+                          <p className="text-xs text-muted-foreground mb-1">{t("common.right")}</p>
                           <Select
                             value={presentationSettings.compareRight ?? ""}
                             onValueChange={(v) => handleCompareChange("compareRight", v)}
                           >
                             <SelectTrigger className="w-full h-8 text-xs">
-                              <SelectValue placeholder="Select node" />
+                              <SelectValue placeholder={t("present.selectNode")} />
                             </SelectTrigger>
                             <SelectContent>
                               {nodeOptions.map(({ id, label }) => (
@@ -305,11 +307,11 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
                 className="w-full"
               >
                 {loading ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="h-4 w-4 me-2 animate-spin" />
                 ) : (
-                  <Link2Off className="h-4 w-4 mr-2" />
+                  <Link2Off className="h-4 w-4 me-2" />
                 )}
-                Revoke Sharing
+                {t("present.revokeSharing")}
               </Button>
             </>
           ) : (
@@ -320,11 +322,11 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
               style={{ backgroundColor: "#ff0073" }}
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 me-2 animate-spin" />
               ) : (
-                <Share2 className="h-4 w-4 mr-2" />
+                <Share2 className="h-4 w-4 me-2" />
               )}
-              Generate Share Link
+              {t("present.generateShareLink")}
             </Button>
           )}
         </div>

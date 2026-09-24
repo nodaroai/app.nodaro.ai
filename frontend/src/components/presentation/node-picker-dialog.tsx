@@ -34,6 +34,9 @@ import {
   useCatalogPacksVersion,
   type ParameterPickerMeta,
 } from "@/lib/picker-ui"
+import { useT, type MessageKey } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 
 interface NodePickerDialogProps {
   open: boolean
@@ -59,6 +62,7 @@ function PickerInputConfig({
   updatePresentationSettings: (settings: Partial<PresentationSettings>) => void
 }) {
   const [restrictOpen, setRestrictOpen] = useState(false)
+  const t = useT()
   const card = presentationSettings.cardMeta?.[nodeId]
   const mode = card?.pickerMode ?? "inline"
   const allowed = card?.pickerAllowedValues
@@ -66,8 +70,8 @@ function PickerInputConfig({
   const total = meta.kind === "single" ? meta.entries.length : 0
   const restricted = allowed && allowed.length > 0 && allowed.length < total
   const restrictLabel = restricted
-    ? `Restrict (${allowedCount}/${total})`
-    : `Restrict (all)`
+    ? t("present.restrictCount", { n: allowedCount, total })
+    : t("present.restrictAll")
 
   const updateCard = (patch: { pickerMode?: "inline" | "modal" | "compact"; pickerAllowedValues?: string[] | undefined }) => {
     const current = presentationSettings.cardMeta ?? {}
@@ -76,26 +80,26 @@ function PickerInputConfig({
   }
 
   return (
-    <div className="ml-7 mt-1 flex flex-wrap items-center gap-2">
-      <span className="text-[10px] text-muted-foreground">Display:</span>
+    <div className="ms-7 mt-1 flex flex-wrap items-center gap-2">
+      <span className="text-[10px] text-muted-foreground">{t("present.displayLabel")}</span>
       <div className="flex gap-1">
         <button
           className={`text-[10px] px-2 py-0.5 rounded border ${mode === "inline" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
           onClick={() => updateCard({ pickerMode: "inline" })}
         >
-          Inline
+          {t("present.modeInline")}
         </button>
         <button
           className={`text-[10px] px-2 py-0.5 rounded border ${mode === "modal" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
           onClick={() => updateCard({ pickerMode: "modal" })}
         >
-          Modal
+          {t("present.modeModal")}
         </button>
         <button
           className={`text-[10px] px-2 py-0.5 rounded border ${mode === "compact" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
           onClick={() => updateCard({ pickerMode: "compact" })}
         >
-          Compact
+          {t("present.modeCompact")}
         </button>
       </div>
       {meta.kind === "single" && (
@@ -157,6 +161,7 @@ function OutputDisplayModeToggle({
   updatePresentationSettings: (settings: Partial<PresentationSettings>) => void
 }) {
   const mode = presentationSettings.outputDisplayModes?.[nodeId] ?? "individual"
+  const t = useT()
 
   const updateDisplayMode = useCallback(
     (newMode: "gallery" | "individual") => {
@@ -169,19 +174,19 @@ function OutputDisplayModeToggle({
   )
 
   return (
-    <div className="ml-7 mt-1 flex gap-1">
-      <span className="text-[10px] text-muted-foreground mr-1">Multiple results:</span>
+    <div className="ms-7 mt-1 flex gap-1">
+      <span className="text-[10px] text-muted-foreground me-1">{t("present.multipleResults")}</span>
       <button
         className={`text-[10px] px-2 py-0.5 rounded border ${mode === "gallery" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
         onClick={() => updateDisplayMode("gallery")}
       >
-        Gallery
+        {t("present.galleryMode")}
       </button>
       <button
         className={`text-[10px] px-2 py-0.5 rounded border ${mode !== "gallery" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
         onClick={() => updateDisplayMode("individual")}
       >
-        Individual
+        {t("present.individualMode")}
       </button>
     </div>
   )
@@ -192,14 +197,14 @@ function getNodeDef(nodeType: string) {
   return NODE_DEF_MAP.get(nodeType)
 }
 
-/** Type badge for exposable field types. */
-const FIELD_TYPE_LABELS: Record<ExposableField["type"], string> = {
-  select: "Select",
-  "aspect-ratio": "Aspect Ratio",
-  slider: "Slider",
-  toggle: "Toggle",
-  text: "Text",
-  color: "Color",
+/** Type badge for exposable field types (message keys, translated at render). */
+const FIELD_TYPE_LABELS: Record<ExposableField["type"], MessageKey> = {
+  select: "common.select",
+  "aspect-ratio": "field.aspectRatio",
+  slider: "present.fieldSlider",
+  toggle: "present.fieldToggle",
+  text: "present.text",
+  color: "present.fieldColor",
 }
 
 function NodeRow({
@@ -222,6 +227,8 @@ function NodeRow({
   allVisibleNodeIds: string[]
 }) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const data = node.data as Record<string, unknown>
   const isVisible = section === "inputs" ? data.presentationInput === true : data.presentationOutput === true
   const isReadOnly = !!data.presentationReadOnly
@@ -371,12 +378,12 @@ function NodeRow({
           <button
             className="p-0.5 rounded hover:bg-accent/50 text-muted-foreground shrink-0"
             onClick={onToggleExpand}
-            aria-label={expanded ? "Collapse fields" : "Expand fields"}
+            aria-label={expanded ? t("present.collapseFields") : t("present.expandFields")}
           >
             {expanded ? (
               <ChevronDown className="h-3.5 w-3.5" />
             ) : (
-              <ChevronRight className="h-3.5 w-3.5" />
+              <ChevronRight className={cn("h-3.5 w-3.5", isRtl && "rotate-180")} />
             )}
           </button>
         ) : (
@@ -392,12 +399,12 @@ function NodeRow({
             {typeBadge}
           </Badge>
           {isVisible && node.type === "text-prompt" && (
-            <div className="flex items-center gap-0.5 ml-auto">
+            <div className="flex items-center gap-0.5 ms-auto">
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-6 w-6 p-0"
-                title={promptHelperEnabled ? "AI helper enabled" : "AI helper disabled"}
+                title={promptHelperEnabled ? t("present.aiHelperEnabled") : t("present.aiHelperDisabled")}
                 onClick={(e) => {
                   e.stopPropagation()
                   updateNodeData(node.id, { presentationPromptHelper: !promptHelperEnabled })
@@ -409,7 +416,7 @@ function NodeRow({
                 variant="ghost"
                 size="sm"
                 className="h-6 w-6 p-0"
-                title={isReadOnly ? "Read-only in app" : "Editable in app"}
+                title={isReadOnly ? t("present.readOnlyInApp") : t("present.editableInApp")}
                 onClick={(e) => {
                   e.stopPropagation()
                   updateNodeData(node.id, { presentationReadOnly: !isReadOnly })
@@ -445,12 +452,12 @@ function NodeRow({
 
       {/* Expanded section: exposable outputs + fields */}
       {isVisible && expanded && hasExposable && (
-        <div className="ml-[30px] mb-2 pl-3 border-l border-border/50 space-y-1">
+        <div className="ms-[30px] mb-2 ps-3 border-s border-border/50 space-y-1">
           {/* Exposable outputs */}
           {exposableOutputs && exposableOutputs.length > 0 && (
             <>
               <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider pt-1">
-                Outputs
+                {t("preview.outputs")}
               </p>
               {exposableOutputs.map((output) => (
                 <label
@@ -476,7 +483,7 @@ function NodeRow({
           {exposableFields && exposableFields.length > 0 && (
             <>
               <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider pt-1">
-                Fields
+                {t("present.fields")}
               </p>
               {exposableFields.map((field) => {
                 const checked = isFieldChecked(field.key)
@@ -492,7 +499,7 @@ function NodeRow({
                       />
                       <span className="text-xs truncate">{field.label}</span>
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0">
-                        {FIELD_TYPE_LABELS[field.type]}
+                        {t(FIELD_TYPE_LABELS[field.type])}
                       </Badge>
                     </label>
                     {checked && field.type === "select" && field.options && field.options.length > 0 && (
@@ -519,6 +526,7 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
   const presentationSettings = useWorkflowStore((s) => s.presentationSettings)
   const updatePresentationSettings = useWorkflowStore((s) => s.updatePresentationSettings)
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
+  const t = useT()
 
   const availableNodes = useMemo(() => getInputNodes(nodes, false), [nodes])
   const arrayNodes = useMemo(() => availableNodes.filter(n => n.type === "list"), [availableNodes])
@@ -589,19 +597,19 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {section === "inputs" ? "Select Input Nodes" : "Select Output Nodes"}
+            {section === "inputs" ? t("present.selectInputNodes") : t("present.selectOutputNodes")}
           </DialogTitle>
         </DialogHeader>
         <div className="max-h-80 overflow-auto py-2">
           {availableNodes.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-              No nodes in this workflow
+              {t("present.noNodesInWorkflow")}
             </p>
           ) : (
             <div className="space-y-1">
               {standardNodes.length > 0 && arrayNodes.length > 0 && (
                 <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-3 pt-1 pb-1">
-                  Standard Inputs
+                  {t("present.standardInputs")}
                 </p>
               )}
               {standardNodes.map((node) => (
@@ -621,10 +629,10 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
                 <>
                   <div className="flex items-center gap-2 px-3 pt-3 pb-1">
                     <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                      Array Inputs
+                      {t("present.arrayInputs")}
                     </p>
                     <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073]">
-                      New
+                      {t("common.new")}
                     </span>
                   </div>
                   {arrayNodes.map((node) => {
@@ -642,7 +650,7 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
                       } else if (typeof data.items === "string" && data.items.trim()) {
                         items = data.items.split("\n").filter(Boolean).length
                       }
-                      meta = `${items} item${items !== 1 ? "s" : ""} \u00b7 max ${maxItems}`
+                      meta = items === 1 ? t("present.oneItemMax", { max: maxItems }) : t("present.itemsMax", { n: items, max: maxItems })
                     }
                     return (
                       <div key={node.id}>
@@ -657,7 +665,7 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
                           allVisibleNodeIds={visibleNodeIds}
                         />
                         {meta && (
-                          <p className="text-[10px] text-muted-foreground/60 pl-10 -mt-1 pb-1">
+                          <p className="text-[10px] text-muted-foreground/60 ps-10 -mt-1 pb-1">
                             {meta}
                           </p>
                         )}

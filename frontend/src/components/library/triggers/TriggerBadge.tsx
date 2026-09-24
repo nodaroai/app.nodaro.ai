@@ -1,4 +1,5 @@
 import type { FC } from "react"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 /**
  * TriggerBadge — small colored pill showing how an execution was triggered.
@@ -14,13 +15,13 @@ export interface TriggerBadgeProps {
   className?: string
 }
 
-const LABELS: Record<string, string> = {
-  manual: "Manual",
-  webhook: "Webhook",
-  schedule: "Scheduled",
-  app_run: "App run",
-  mcp: "via MCP",
-  "single-node": "Single node",
+const LABELS: Record<string, MessageKey> = {
+  manual: "lib.triggerManual",
+  webhook: "lib.triggerWebhook",
+  schedule: "lib.triggerSchedule",
+  app_run: "lib.triggerAppRun",
+  mcp: "lib.triggerViaMcp",
+  "single-node": "lib.triggerSingleNode",
 }
 
 const COLORS: Record<string, string> = {
@@ -35,10 +36,12 @@ const COLORS: Record<string, string> = {
 const FALLBACK_COLOR = "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
 
 export const TriggerBadge: FC<TriggerBadgeProps> = ({ triggerType, mcpClient, className = "" }) => {
+  const t = useT()
+  const labelKey: MessageKey | undefined = LABELS[triggerType]
   const label =
     triggerType === "mcp" && mcpClient
-      ? `via ${mcpClient}`
-      : LABELS[triggerType] ?? triggerType
+      ? t("lib.triggerViaClient", { client: mcpClient })
+      : labelKey ? t(labelKey) : triggerType
   const color = COLORS[triggerType] ?? FALLBACK_COLOR
   return (
     <span

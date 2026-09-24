@@ -21,6 +21,7 @@ import { isMultiUser } from "@/lib/edition"
 import { useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query"
 import { Loader2, Check, Search, UserCircle, Package, PawPrint, MapPin, Globe, FolderOpen, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 import {
   Dialog,
   DialogContent,
@@ -55,11 +56,11 @@ interface LibItem {
   sourceImageUrl: string | null
 }
 
-const KIND_META: Record<EntityKind, { label: string; Icon: typeof UserCircle; plural: string }> = {
-  character: { label: "Character", Icon: UserCircle, plural: "characters" },
-  object: { label: "Object/Props", Icon: Package, plural: "objects" },
-  creature: { label: "Animal/Creature", Icon: PawPrint, plural: "creatures" },
-  location: { label: "Location", Icon: MapPin, plural: "locations" },
+const KIND_META: Record<EntityKind, { labelKey: MessageKey; Icon: typeof UserCircle; plural: string; pluralKey: MessageKey }> = {
+  character: { labelKey: "entity.kindCharacter", Icon: UserCircle, plural: "characters", pluralKey: "entity.pluralCharacters" },
+  object: { labelKey: "entity.kindObject", Icon: Package, plural: "objects", pluralKey: "entity.pluralObjects" },
+  creature: { labelKey: "entity.kindCreature", Icon: PawPrint, plural: "creatures", pluralKey: "entity.pluralCreatures" },
+  location: { labelKey: "entity.kindLocation", Icon: MapPin, plural: "locations", pluralKey: "entity.pluralLocations" },
 }
 
 // Soft-delete (archive) — recoverable; nodes already bound keep working because
@@ -119,6 +120,7 @@ export function AssetPickerModal({
 }) {
   const { user } = useAuth()
   const qc = useQueryClient()
+  const t = useT()
   const meta = KIND_META[kind]
   const [tab, setTab] = useState<"library" | "gallery">("library")
   // The id (library asset OR gallery listing) currently being bound — drives the
@@ -135,7 +137,7 @@ export function AssetPickerModal({
     const ok = await bindEntityNodeFromLibrary(kind, nodeId, entityId)
     setBinding(null)
     if (ok) onOpenChange(false)
-    else toast.error(`Couldn't load that ${meta.label.toLowerCase()}.`)
+    else toast.error(tx("entity.loadKindFailed", { label: tx(meta.labelKey).toLowerCase() }))
   }
 
   async function doDelete() {
@@ -144,9 +146,9 @@ export function AssetPickerModal({
     try {
       await DELETE_FN[kind](id)
       await qc.invalidateQueries({ queryKey: queryKeys.assets.all })
-      toast.success(`Deleted "${name}" from your library`)
+      toast.success(tx("entity.deletedFromLibrary", { name }))
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to delete.")
+      toast.error(e instanceof Error ? e.message : tx("entity.deleteFailed"))
     } finally {
       setConfirmDelete(null)
     }
@@ -159,13 +161,13 @@ export function AssetPickerModal({
       await qc.invalidateQueries({ queryKey: queryKeys.assets.all })
       const ok = await bindEntityNodeFromLibrary(kind, nodeId, id)
       if (ok) {
-        toast.success(`Added "${card.title}" to your library`)
+        toast.success(tx("entity.addedToLibrary", { name: card.title }))
         onOpenChange(false)
       } else {
-        toast.error("Cloned to your library, but couldn't bind it to the node.")
+        toast.error(tx("entity.clonedNotBound"))
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to add from the gallery.")
+      toast.error(e instanceof Error ? e.message : tx("entity.addFromGalleryFailed"))
     } finally {
       setBinding(null)
     }
@@ -180,7 +182,7 @@ export function AssetPickerModal({
       setDupChoice(null)
       onOpenChange(false)
     } else {
-      toast.error("Couldn't bind that copy.")
+      toast.error(tx("entity.bindCopyFailed"))
     }
   }
 
@@ -207,11 +209,11 @@ export function AssetPickerModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-5 pt-5 pb-3">
-          <DialogTitle className="text-sm">Choose {meta.label} asset</DialogTitle>
+          <DialogTitle className="text-sm">{t("entity.chooseAssetTitle", { label: t(meta.labelKey) })}</DialogTitle>
           <DialogDescription className="text-xs">
             {dupChoice
-              ? "You already have this in your library."
-              : `Pick from your library or the public gallery${currentDbId ? " to replace the current one" : ""}.`}
+              ? t("entity.alreadyInLibrary")
+              : currentDbId ? t("entity.pickFromLibraryReplace") : t("entity.pickFromLibrary")}
           </DialogDescription>
         </DialogHeader>
 
@@ -229,13 +231,13 @@ export function AssetPickerModal({
           <Tabs value={tab} onValueChange={(v) => setTab(v as "library" | "gallery")} className="px-5">
             <TabsList className="w-full">
               <TabsTrigger value="library" className="flex-1 gap-1.5">
-                <FolderOpen className="h-3.5 w-3.5" /> My Library
+                <FolderOpen className="h-3.5 w-3.5" /> {t("canvas.myLibrary")}
               </TabsTrigger>
               {/* /v1/community/browse is isMultiUser()-gated; the tab was
                   clickable on a single-user self-host and always empty. */}
               {isMultiUser() && (
                 <TabsTrigger value="gallery" className="flex-1 gap-1.5">
-                  <Globe className="h-3.5 w-3.5" /> Public Gallery
+                  <Globe className="h-3.5 w-3.5" /> {t("entity.publicGallery")}
                 </TabsTrigger>
               )}
             </TabsList>
@@ -262,8 +264,8 @@ export function AssetPickerModal({
           isOpen={confirmDelete !== null}
           onClose={() => setConfirmDelete(null)}
           onConfirm={doDelete}
-          title={confirmDelete ? `Delete "${confirmDelete.name}"?` : "Delete?"}
-          description="This removes it from your library (you can restore it from the studio's archived items). Nodes already using it on the canvas keep working."
+          title={confirmDelete ? t("entity.deleteNameQuestion", { name: confirmDelete.name }) : t("entity.deleteQuestion")}
+          description={t("entity.deleteFromLibraryDesc")}
         />
       </DialogContent>
     </Dialog>
@@ -294,6 +296,7 @@ function LibraryTab({
   onPick: (id: string) => void
   onRequestDelete: (item: LibItem) => void
 }) {
+  const t = useT()
   const [filter, setFilter] = useState("")
   const { data, isLoading } = useQuery({
     queryKey: assetKey(kind, userId),
@@ -309,24 +312,24 @@ function LibraryTab({
   return (
     <div className="flex flex-col gap-2">
       <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder={`Search your ${KIND_META[kind].plural}…`}
-          className="w-full text-xs bg-muted/30 border border-border rounded-md pl-8 pr-3 py-2 outline-none focus:ring-1 focus:ring-ring"
+          placeholder={t("entity.searchYourPlural", { plural: t(KIND_META[kind].pluralKey) })}
+          className="w-full text-xs bg-muted/30 border border-border rounded-md ps-8 pe-3 py-2 outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
       <div className="h-[360px] overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
+            <Loader2 className="h-4 w-4 animate-spin me-2" /> {t("common.loading")}
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center h-full text-xs text-muted-foreground text-center px-6">
             {items.length === 0
-              ? `No saved ${KIND_META[kind].plural} yet — create one, or browse the Public Gallery.`
-              : "No matches."}
+              ? t("entity.noSavedPluralYet", { plural: t(KIND_META[kind].pluralKey) })
+              : t("entity.noMatches")}
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-2 pb-1">
@@ -344,7 +347,7 @@ function LibraryTab({
                     type="button"
                     disabled={!!binding}
                     onClick={() => onPick(item.id)}
-                    className="block w-full text-left disabled:opacity-60"
+                    className="block w-full text-start disabled:opacity-60"
                     title={item.name}
                   >
                     {item.sourceImageUrl ? (
@@ -361,20 +364,20 @@ function LibraryTab({
                     <div className="px-1.5 py-1 text-[10px] truncate">{item.name}</div>
                   </button>
                   {isCurrent && (
-                    <span className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-full p-0.5 pointer-events-none">
+                    <span className="absolute top-1 end-1 bg-primary text-primary-foreground rounded-full p-0.5 pointer-events-none">
                       <Check className="h-3 w-3" />
                     </span>
                   )}
                   <button
                     type="button"
-                    aria-label={`Delete ${item.name}`}
+                    aria-label={t("entity.deleteNameAria", { name: item.name })}
                     disabled={!!binding}
                     onClick={(e) => {
                       e.stopPropagation()
                       onRequestDelete(item)
                     }}
-                    className="absolute top-1 left-1 w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
-                    title="Delete from library"
+                    className="absolute top-1 start-1 w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
+                    title={t("entity.deleteFromLibrary")}
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>
@@ -410,12 +413,12 @@ function DupChoicePanel({
   onMakeNew: () => void
   onCancel: () => void
 }) {
+  const t = useT()
   return (
     <div className="px-5 flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">
-        You already have {clones.length === 1 ? "a copy" : `${clones.length} copies`} of{" "}
-        <span className="font-medium text-foreground">{listingTitle}</span> in your library. Use one of
-        them, or make a fresh copy.
+        {clones.length === 1 ? t("entity.dupHaveCopyOne") : t("entity.dupHaveCopiesMany", { n: clones.length })}{" "}
+        <span className="font-medium text-foreground">{listingTitle}</span> {t("entity.dupInLibraryTail")}
       </p>
       <div className="grid grid-cols-3 gap-2 max-h-[300px] overflow-y-auto">
         {clones.map((c) => {
@@ -426,7 +429,7 @@ function DupChoicePanel({
               type="button"
               disabled={!!binding}
               onClick={() => onUseExisting(c.id)}
-              className="group relative text-left rounded-md border border-border hover:border-primary overflow-hidden transition-colors disabled:opacity-60"
+              className="group relative text-start rounded-md border border-border hover:border-primary overflow-hidden transition-colors disabled:opacity-60"
               title={c.name}
             >
               {c.sourceImageUrl ? (
@@ -457,7 +460,7 @@ function DupChoicePanel({
           disabled={!!binding}
           className="text-xs text-muted-foreground hover:text-foreground px-3 py-2 disabled:opacity-50"
         >
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           type="button"
@@ -467,10 +470,10 @@ function DupChoicePanel({
         >
           {binding ? (
             <span className="flex items-center gap-1.5">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Working…
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("pipe.workingGeneric")}
             </span>
           ) : (
-            "Make a new copy"
+            t("entity.makeNewCopy")
           )}
         </button>
       </div>
@@ -487,6 +490,7 @@ function GalleryTab({
   binding: string | null
   onPick: (card: CommunityCard) => void
 }) {
+  const t = useT()
   const [q, setQ] = useState("")
   const [sort, setSort] = useState<CommunitySort>("newest")
   const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } =
@@ -503,36 +507,36 @@ function GalleryTab({
     <div className="flex flex-col gap-2">
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search the public gallery…"
-            className="w-full text-xs bg-muted/30 border border-border rounded-md pl-8 pr-3 py-2 outline-none focus:ring-1 focus:ring-ring"
+            placeholder={t("entity.searchPublicGallery")}
+            className="w-full text-xs bg-muted/30 border border-border rounded-md ps-8 pe-3 py-2 outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value as CommunitySort)}
           className="text-xs bg-muted/30 border border-border rounded-md px-2 outline-none"
-          aria-label="Sort gallery"
+          aria-label={t("entity.sortGallery")}
         >
-          <option value="newest">Newest</option>
-          <option value="popular">Popular</option>
+          <option value="newest">{t("explore.sortNewest")}</option>
+          <option value="popular">{t("explore.sortPopular")}</option>
         </select>
       </div>
       <div className="h-[360px] overflow-y-auto">
         {isError ? (
           <div className="flex items-center justify-center h-full text-xs text-muted-foreground text-center px-6">
-            The public gallery isn&apos;t available right now.
+            {t("entity.galleryUnavailable")}
           </div>
         ) : isLoading ? (
           <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
+            <Loader2 className="h-4 w-4 animate-spin me-2" /> {t("common.loading")}
           </div>
         ) : cards.length === 0 ? (
           <div className="flex items-center justify-center h-full text-xs text-muted-foreground text-center px-6">
-            No public {KIND_META[kind].plural} found.
+            {t("entity.noPublicFound", { plural: t(KIND_META[kind].pluralKey) })}
           </div>
         ) : (
           <>
@@ -546,7 +550,7 @@ function GalleryTab({
                     type="button"
                     disabled={!!binding}
                     onClick={() => onPick(card)}
-                    className="group relative text-left rounded-md border border-border hover:border-muted-foreground/40 overflow-hidden transition-colors disabled:opacity-60"
+                    className="group relative text-start rounded-md border border-border hover:border-muted-foreground/40 overflow-hidden transition-colors disabled:opacity-60"
                     title={card.title}
                   >
                     {preview ? (
@@ -563,13 +567,13 @@ function GalleryTab({
                     <div className="px-1.5 py-1">
                       <div className="text-[10px] truncate">{card.title}</div>
                       <div className="text-[9px] text-muted-foreground truncate">
-                        {card.creator_display_name ?? "Community"} · {card.clone_count} uses
+                        {card.creator_display_name ?? t("entity.communityFallback")} · {t("entity.usesCount", { n: card.clone_count })}
                       </div>
                     </div>
                     {isBinding && (
                       <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center gap-1">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-[9px]">Adding…</span>
+                        <span className="text-[9px]">{t("entity.adding")}</span>
                       </div>
                     )}
                   </button>
@@ -583,7 +587,7 @@ function GalleryTab({
                 disabled={isFetchingNextPage}
                 className="w-full text-xs text-muted-foreground hover:text-foreground py-2 disabled:opacity-50"
               >
-                {isFetchingNextPage ? "Loading…" : "Load more"}
+                {isFetchingNextPage ? t("common.loading") : t("entity.loadMore")}
               </button>
             )}
           </>

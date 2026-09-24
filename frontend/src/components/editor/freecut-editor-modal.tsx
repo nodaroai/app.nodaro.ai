@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { X, Loader2, Check, FilePlus } from "lucide-react"
 import { NODARO_LOAD_VIDEO, NODARO_IMPORT_FILES, NODARO_RESET_PROJECT, FREECUT_READY, FREECUT_EXPORT_COMPLETE, FREECUT_REQUEST_IMPORT } from "@nodaro/shared"
 import { runtimeFreecutOrigin, runtimeFreecutUrl } from "@/lib/runtime-config"
+import { useT } from "@/lib/i18n"
 
 /**
  * Read at RUNTIME, not inlined at build time (#767). The published community
@@ -43,6 +44,7 @@ interface FreeCutEditorModalProps {
 }
 
 export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAssets, onExportComplete, onClose, onImportRequest, sendImportFilesRef }: FreeCutEditorModalProps) {
+  const t = useT()
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeLoaded, setIframeLoaded] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "done">("idle")
@@ -242,19 +244,19 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-[#1E1E1E] border-b border-[#2D2D2D] shrink-0">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-white">NodarCut Editor</span>
+          <span className="text-sm font-medium text-white">{t("mediaed.nodarcutEditorTitle")}</span>
           <button
             type="button"
             className="flex items-center gap-1.5 px-2 py-1 text-[11px] rounded-md text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors"
             onClick={() => setShowNewProjectConfirm(true)}
           >
             <FilePlus className="w-3.5 h-3.5" />
-            New Project
+            {t("mediaed.newProject")}
           </button>
         </div>
         <button
           type="button"
-          aria-label="Close editor"
+          aria-label={t("mediaed.closeEditor")}
           className="text-white/70 hover:text-white transition-colors"
           onClick={() => setShowCloseConfirm(true)}
         >
@@ -284,7 +286,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
           className="w-full h-full border-0"
           allow="autoplay; camera; microphone; storage-access"
           onLoad={() => setIframeLoaded(true)}
-          title="NodarCut Video Editor"
+          title={t("mediaed.nodarcutFrameTitle")}
         />
         )}
       </div>
@@ -296,13 +298,13 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
             {saveState === "saving" && (
               <>
                 <Loader2 className="w-8 h-8 animate-spin text-white" />
-                <span className="text-sm text-white">Saving edited video...</span>
+                <span className="text-sm text-white">{t("mediaed.savingVideo")}</span>
               </>
             )}
             {saveState === "done" && (
               <>
                 <Check className="w-8 h-8 text-green-400" />
-                <span className="text-sm text-green-400">Saved</span>
+                <span className="text-sm text-green-400">{t("common.saved")}</span>
               </>
             )}
           </div>
@@ -319,9 +321,9 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
             className="bg-[#1E1E1E] border border-[#2D2D2D] rounded-lg p-6 max-w-sm mx-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-medium text-white mb-2">Start a new project?</h3>
+            <h3 className="text-sm font-medium text-white mb-2">{t("mediaed.newProjectTitle")}</h3>
             <p className="text-xs text-white/60 mb-4">
-              This will discard your current edits and start fresh with the original video.
+              {t("mediaed.newProjectBody")}
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -329,14 +331,14 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
                 className="px-3 py-1.5 text-xs rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors"
                 onClick={() => setShowNewProjectConfirm(false)}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
                 className="px-3 py-1.5 text-xs rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors"
                 onClick={handleNewProject}
               >
-                Start Fresh
+                {t("mediaed.startFresh")}
               </button>
             </div>
           </div>
@@ -353,9 +355,9 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
             className="bg-[#1E1E1E] border border-[#2D2D2D] rounded-lg p-6 max-w-sm mx-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-medium text-white mb-2">Discard changes?</h3>
+            <h3 className="text-sm font-medium text-white mb-2">{t("mediaed.discardChangesTitle")}</h3>
             <p className="text-xs text-white/60 mb-4">
-              Your edits haven't been sent back. Closing will discard them.
+              {t("mediaed.discardBodyVideo")}
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -363,14 +365,14 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
                 className="px-3 py-1.5 text-xs rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors"
                 onClick={() => setShowCloseConfirm(false)}
               >
-                Continue editing
+                {t("mediaed.continueEditing")}
               </button>
               <button
                 type="button"
                 className="px-3 py-1.5 text-xs rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors"
                 onClick={() => { setShowCloseConfirm(false); onClose() }}
               >
-                Discard
+                {t("node.discard")}
               </button>
             </div>
           </div>
@@ -394,26 +396,23 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
  * has to explain itself rather than look like a bug (#767).
  */
 function EditorUnreachable({ url }: { readonly url: string }) {
+  const t = useT()
   const host = typeof window !== "undefined" ? window.location.hostname : ""
   const isLocal = host === "localhost" || host === "127.0.0.1" || host === "[::1]"
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-black p-8">
       <div className="max-w-md text-center flex flex-col gap-3">
-        <p className="text-white text-sm font-medium">The video editor did not load</p>
+        <p className="text-white text-sm font-medium">{t("mediaed.editorDidNotLoad")}</p>
         {isLocal ? (
           <p className="text-white/60 text-xs leading-relaxed">
-            Could not reach <span className="font-mono">{url}</span>. Check this machine's
-            connection, or point the install at your own editor with{" "}
+            {t("mediaed.unreachableLocalA")} <span className="font-mono">{url}</span>{t("mediaed.unreachableLocalB")}{" "}
             <span className="font-mono">FREECUT_URL</span>.
           </p>
         ) : (
           <p className="text-white/60 text-xs leading-relaxed">
-            The hosted editor only accepts being embedded from{" "}
-            <span className="font-mono">localhost</span>, and this install is served
-            from <span className="font-mono">{host}</span>. Ask us to allow this origin,
-            or run your own FreeCut and set{" "}
-            <span className="font-mono">FREECUT_URL</span> to it — it is public and
-            MIT-licensed.
+            {t("mediaed.unreachableHostedA")}{" "}
+            <span className="font-mono">localhost</span>{t("mediaed.unreachableHostedB")} <span className="font-mono">{host}</span>{t("mediaed.unreachableHostedC")}{" "}
+            <span className="font-mono">FREECUT_URL</span> {t("mediaed.unreachableHostedD")}
           </p>
         )}
       </div>
@@ -423,12 +422,12 @@ function EditorUnreachable({ url }: { readonly url: string }) {
 
 /** No editor configured (`FREECUT_URL=off`). Says so instead of framing nothing. */
 function EditorDisabled() {
+  const t = useT()
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-black p-8">
       <p className="max-w-md text-center text-white/60 text-xs leading-relaxed">
-        No video editor is configured for this install. Set{" "}
-        <span className="font-mono">FREECUT_URL</span> to your own FreeCut deployment
-        to enable editing.
+        {t("mediaed.noVideoEditorA")}{" "}
+        <span className="font-mono">FREECUT_URL</span> {t("mediaed.noVideoEditorB")}
       </p>
     </div>
   )

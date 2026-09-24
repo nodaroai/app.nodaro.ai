@@ -23,11 +23,15 @@ import { Card } from "@/components/ui/card"
 import { hasCredits } from "@/lib/edition"
 import { creditUnits, formatCreditUnits } from "@/lib/credit-units"
 import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
+import { formatDateTime, formatNumber } from "@/lib/i18n/format"
 
 type PeriodKey = "today" | "last7Days" | "last30Days" | "allTime"
 
 export default function AppAnalyticsPage() {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const { appId } = useParams<{ appId: string }>()
   const [period, setPeriod] = useState<PeriodKey>("last7Days")
   const [runsCursor, setRunsCursor] = useState<string | undefined>()
@@ -74,7 +78,7 @@ export default function AppAnalyticsPage() {
       <div className="flex items-center gap-3 mb-6">
         <Link to="/apps">
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className={cn("h-4 w-4", isRtl && "rotate-180")} />
           </Button>
         </Link>
         <div>
@@ -152,17 +156,17 @@ export default function AppAnalyticsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted/30">
-                    <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">{t("apps.analytics.time")}</th>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">{t("apps.analytics.status")}</th>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">{t("apps.analytics.progress")}</th>
-                    <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">{t("apps.analytics.credits")}</th>
+                    <th className="text-start px-4 py-2 text-xs font-medium text-muted-foreground">{t("apps.analytics.time")}</th>
+                    <th className="text-start px-4 py-2 text-xs font-medium text-muted-foreground">{t("apps.analytics.status")}</th>
+                    <th className="text-start px-4 py-2 text-xs font-medium text-muted-foreground">{t("apps.analytics.progress")}</th>
+                    <th className="text-end px-4 py-2 text-xs font-medium text-muted-foreground">{t("apps.analytics.credits")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(runsPage?.data ?? []).map((run) => (
                     <tr key={run.id} className="border-t border-border/50">
                       <td className="px-4 py-2 text-xs text-muted-foreground">
-                        {new Date(run.createdAt).toLocaleString()}
+                        {formatDateTime(run.createdAt)}
                       </td>
                       <td className="px-4 py-2">
                         <RunStatusBadge status={run.status} />
@@ -170,7 +174,7 @@ export default function AppAnalyticsPage() {
                       <td className="px-4 py-2 text-xs text-muted-foreground">
                         {run.completedNodes}/{run.totalNodes}
                       </td>
-                      <td className="px-4 py-2 text-xs text-right text-muted-foreground">
+                      <td className="px-4 py-2 text-xs text-end text-muted-foreground">
                         {run.creditsUsed}
                       </td>
                     </tr>
@@ -220,7 +224,7 @@ function StatCard({
         <Icon className={`h-4 w-4 ${color ?? "text-muted-foreground"}`} />
         <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
       </div>
-      <span className="text-2xl font-bold text-foreground">{value.toLocaleString()}</span>
+      <span className="text-2xl font-bold text-foreground">{formatNumber(value)}</span>
     </div>
   )
 }

@@ -172,7 +172,7 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
   )
 
   const cardClass =
-    "group relative flex min-h-[220px] flex-col overflow-hidden rounded-xl border border-border text-left transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:[border-color:var(--sig)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sig)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    "group relative flex min-h-[220px] flex-col overflow-hidden rounded-xl border border-border text-start transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:[border-color:var(--sig)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sig)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
   const cardStyle = { "--sig": app.sig } as CSSProperties
 
   if (app.status === "live" && app.href) {

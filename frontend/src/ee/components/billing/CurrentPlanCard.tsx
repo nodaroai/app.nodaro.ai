@@ -6,12 +6,14 @@ import { PRICING_TIERS } from "@/lib/pricing-data"
 import { getScheduledCancelDate } from "@/ee/lib/subscription"
 import { creditUnits } from "@/lib/credit-units"
 import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
+import { useT } from "@/lib/i18n"
 import {
   sectionCardSpaced,
   sectionIcon,
   sectionTitle,
   statLabel,
 } from "./billing-styles"
+import { formatDate, formatNumber } from "@/lib/i18n/format"
 
 interface CurrentPlanCardProps {
   balance: UserBalance | undefined
@@ -61,6 +63,7 @@ export function CurrentPlanCard({
   onManageSubscription,
   managePending,
 }: CurrentPlanCardProps) {
+  const tr = useT()
   const effectiveTier = balance?.effectiveTier ?? "free"
   const tierName =
     PRICING_TIERS.find((t) => t.id === effectiveTier)?.name ?? effectiveTier
@@ -72,22 +75,22 @@ export function CurrentPlanCard({
     effectiveTier === "payg"
       ? "—"
       : balance?.periodEnd
-        ? new Date(balance.periodEnd).toLocaleDateString()
+        ? formatDate(balance.periodEnd)
         : "--"
 
   const stats: readonly PlanStat[] = [
-    { label: "Plan", value: tierName },
+    { label: tr("usage.plan"), value: tierName },
     {
-      label: scheduledCancelDate ? "Plan Ends" : "Period Ends",
+      label: scheduledCancelDate ? tr("billing.planEnds") : tr("billing.periodEnds"),
       value: periodEndsValue,
       ...(scheduledCancelDate ? { accentColor: "#f59e0b" } : {}),
     },
     {
-      label: "Credits / month",
-      value: creditUnits(balance?.monthlyAllocation ?? 0).toLocaleString("en-US"),
+      label: tr("billing.creditsPerMonth"),
+      value: formatNumber(creditUnits(balance?.monthlyAllocation ?? 0)),
     },
     ...(storageLimitBytes != null && storageLimitBytes > 0
-      ? [{ label: "Storage", value: formatBytes(storageLimitBytes) }]
+      ? [{ label: tr("lib.storage"), value: formatBytes(storageLimitBytes) }]
       : []),
   ]
 
@@ -103,7 +106,7 @@ export function CurrentPlanCard({
       >
         <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
           <span style={sectionIcon}>♛</span>
-          <h2 style={sectionTitle}>Current Plan</h2>
+          <h2 style={sectionTitle}>{tr("pricing.currentPlan")}</h2>
         </div>
         <span
           style={{
@@ -124,9 +127,8 @@ export function CurrentPlanCard({
         <div className="mb-5 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
           <Calendar className="h-4 w-4 text-amber-500 flex-shrink-0" />
           <p className="text-sm text-amber-700 dark:text-amber-400">
-            Your subscription is scheduled to cancel on{" "}
-            <strong>{new Date(scheduledCancelDate).toLocaleDateString()}</strong>. You keep
-            your plan and remaining credits until then.
+            {tr("billing.cancelScheduledPrefix")}{" "}
+            <strong>{formatDate(scheduledCancelDate)}</strong>{tr("billing.cancelScheduledSuffix")}
           </p>
         </div>
       )}
@@ -174,7 +176,7 @@ export function CurrentPlanCard({
               color: "var(--blg-t1-btn)",
             }}
           >
-            ↗ {subscription && subscription.status !== "canceled" ? "Manage Subscription" : "Manage Billing"}
+            ↗ {subscription && subscription.status !== "canceled" ? tr("billing.manageSubscription") : tr("billing.manageBilling")}
           </button>
         )}
         {/* Plan change is a self-serve purchase — withheld when the deployment
@@ -188,7 +190,7 @@ export function CurrentPlanCard({
                 border: "1px solid var(--blg-border-strong)",
               }}
             >
-              ⇅ {subscription ? "Change Plan" : "View Plans"}
+              ⇅ {subscription ? tr("billing.changePlan") : tr("billing.viewPlans")}
             </button>
           </Link>
         )}

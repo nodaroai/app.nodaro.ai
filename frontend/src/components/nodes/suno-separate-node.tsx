@@ -66,7 +66,7 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
               <button
                 key={`${r.jobId}-${i}`}
                 type="button"
-                aria-label={`Result ${i + 1}`}
+                aria-label={t("node.resultN", { n: i + 1 })}
                 className={`w-10 h-10 flex items-center justify-center rounded-lg cursor-pointer transition-all ${
                   i === activeIndex
                     ? "ring-2 ring-[#ff0073] bg-[#ff0073]/20"
@@ -123,13 +123,13 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
         {nodeData.vocalUrl && (
           <div className="flex flex-col gap-1 px-1">
             <span className="text-[10px] text-muted-foreground font-medium">{t("audiocfg.vocal")}</span>
-            <AudioResultOverlay url={nodeData.vocalUrl} label="Vocal" hasResults={false} onExpand={() => setPreviewOpen(true)} onDelete={() => {}} />
+            <AudioResultOverlay url={nodeData.vocalUrl} label={t("audiocfg.vocal")} hasResults={false} onExpand={() => setPreviewOpen(true)} onDelete={() => {}} />
           </div>
         )}
         {nodeData.instrumentalUrl && (
           <div className="flex flex-col gap-1 px-1">
             <span className="text-[10px] text-muted-foreground font-medium">{t("audiocfg.instrumental")}</span>
-            <AudioResultOverlay url={nodeData.instrumentalUrl} label="Instrumental" hasResults={false} onExpand={() => setPreviewOpen(true)} onDelete={() => {}} />
+            <AudioResultOverlay url={nodeData.instrumentalUrl} label={t("audiocfg.instrumental")} hasResults={false} onExpand={() => setPreviewOpen(true)} onDelete={() => {}} />
           </div>
         )}
 
@@ -154,7 +154,7 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <span className="text-xs text-muted-foreground">
-          Separate · {nodeData.type === "split_stem" ? "12 Stems" : "Vocal/Inst"}
+          {t("node.separate")} · {nodeData.type === "split_stem" ? t("audiocfg.twelveStems") : t("node.vocalInst")}
         </span>
       </div>
     </BaseNode>

@@ -12,30 +12,31 @@ import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 import type { ObjectNodeData, ObjectAssetItem } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
 
 type TabType = "main" | "angles" | "materials" | "variations" | "custom"
 
-const TABS: readonly { readonly id: TabType; readonly label: string }[] = [
-  { id: "main", label: "Main" },
-  { id: "angles", label: "Angles" },
-  { id: "materials", label: "Materials" },
-  { id: "variations", label: "Variations" },
-  { id: "custom", label: "Custom" },
+const TABS: readonly { readonly id: TabType; readonly labelKey: MessageKey }[] = [
+  { id: "main", labelKey: "entity.tabMain" },
+  { id: "angles", labelKey: "entity.tabAngles" },
+  { id: "materials", labelKey: "entity.tabMaterials" },
+  { id: "variations", labelKey: "entity.tabVariations" },
+  { id: "custom", labelKey: "common.custom" },
 ]
 
-const CATEGORY_LABELS: Record<string, string> = {
-  furniture: "Furniture",
-  vehicle: "Vehicle",
-  weapon: "Weapon",
-  food: "Food",
-  clothing: "Clothing",
-  electronics: "Electronics",
-  nature: "Nature",
-  tool: "Tool",
-  animal: "Animal",
-  other: "Other",
+const CATEGORY_LABEL_KEYS: Record<string, MessageKey> = {
+  furniture: "entity.objCatFurniture",
+  vehicle: "entity.objCatVehicle",
+  weapon: "entity.objCatWeapon",
+  food: "entity.objCatFood",
+  clothing: "entity.objCatClothing",
+  electronics: "entity.objCatElectronics",
+  nature: "entity.objCatNature",
+  tool: "entity.objCatTool",
+  animal: "entity.objCatAnimal",
+  other: "entity.objCatOther",
 }
 
 interface ObjectPageModalProps {
@@ -56,22 +57,23 @@ function InlineDeleteConfirm({
   readonly onCancel: () => void
   readonly onConfirm: () => void
 }) {
+  const t = useT()
   return (
     <span className="flex items-center gap-1 text-[10px]">
-      <span className="text-red-500 font-medium">Delete?</span>
+      <span className="text-red-500 font-medium">{t("entity.deleteQuestion")}</span>
       <button
         type="button"
         className="px-1.5 py-0.5 rounded text-[10px] bg-muted hover:bg-muted/80 text-muted-foreground"
         onClick={(e) => { e.stopPropagation(); onCancel() }}
       >
-        Cancel
+        {t("common.cancel")}
       </button>
       <button
         type="button"
         className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/90 hover:bg-red-500 text-white"
         onClick={(e) => { e.stopPropagation(); onConfirm() }}
       >
-        Delete
+        {t("common.delete")}
       </button>
     </span>
   )
@@ -102,12 +104,13 @@ function DraggableImage({
   readonly onConfirmDelete?: () => void
   readonly isMainImage?: boolean
 }) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-1.5">
       <div className="relative group">
         <CachedImage
           src={src}
-          alt={label ?? "Object image"}
+          alt={label ?? t("entity.objectImageAlt")}
           draggable
           onDragStart={(e) => startDrag(e, src, onDragStarted)}
           onDragEnd={() => onDragEnded?.()}
@@ -123,10 +126,10 @@ function DraggableImage({
         {onAddToCanvas && (
           <button
             type="button"
-            className="absolute bottom-1 right-1 w-6 h-6 flex items-center justify-center bg-emerald-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-emerald-600"
+            className="absolute bottom-1 end-1 w-6 h-6 flex items-center justify-center bg-emerald-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-emerald-600"
             onClick={(e) => { e.stopPropagation(); onAddToCanvas(src) }}
-            aria-label="Add to canvas"
-            title="Add to canvas"
+            aria-label={t("entity.addToCanvas")}
+            title={t("entity.addToCanvas")}
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -134,20 +137,20 @@ function DraggableImage({
         {/* Enlarge button */}
         <button
           type="button"
-          className="absolute bottom-1 left-1 p-1 rounded bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute bottom-1 start-1 p-1 rounded bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
           onClick={(e) => { e.stopPropagation(); onEnlarge(src) }}
-          aria-label="Enlarge image"
-          title="Enlarge"
+          aria-label={t("entity.enlargeImage")}
+          title={t("common.enlarge")}
         >
           <Maximize2 className="w-3 h-3" />
         </button>
         {onRequestDelete && !confirmingDelete && (
           <button
             type="button"
-            className="absolute top-1 right-1 p-1 rounded bg-black/60 hover:bg-red-500/90 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-1 end-1 p-1 rounded bg-black/60 hover:bg-red-500/90 text-white opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => { e.stopPropagation(); onRequestDelete() }}
-            aria-label="Delete image"
-            title="Delete"
+            aria-label={t("entity.deleteImage")}
+            title={t("common.delete")}
           >
             <Trash2 className="w-3 h-3" />
           </button>
@@ -214,6 +217,7 @@ function AssetGrid({
 }
 
 export function ObjectPageModal({ objectNodeId, onClose }: ObjectPageModalProps) {
+  const t = useT()
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>("main")
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
@@ -267,7 +271,7 @@ export function ObjectPageModal({ objectNodeId, onClose }: ObjectPageModalProps)
     })
     if (nodeId) {
       selectNode(nodeId)
-      toast.success("Image added to canvas")
+      toast.success(tx("entity.imageAddedToCanvas"))
       onClose()
     }
   }, [nodes, addNode, selectNode, onClose])
@@ -275,7 +279,7 @@ export function ObjectPageModal({ objectNodeId, onClose }: ObjectPageModalProps)
   // Refine object image - generate 4 clean versions
   const handleRefine = useCallback(async () => {
     if (!mainImageUrl || !data) {
-      toast.error("No image to refine")
+      toast.error(tx("entity.noImageToRefine"))
       return
     }
 
@@ -291,7 +295,7 @@ Product photo, centered, clean white background,
 studio lighting, front view, high quality,
 no shadows, professional product photography`
 
-      toast.info("Generating refined versions...")
+      toast.info(tx("entity.generatingRefined"))
 
       // Generate 4 variations
       const results: string[] = []
@@ -309,7 +313,7 @@ no shadows, professional product photography`
                   resolve(job.output_data?.imageUrl ?? "")
                 } else if (job.status === "failed") {
                   clearInterval(interval)
-                  reject(new Error(job.error_message ?? "Failed"))
+                  reject(new Error(job.error_message ?? tx("common.failed")))
                 }
               } catch (err) {
                 clearInterval(interval)
@@ -328,20 +332,20 @@ no shadows, professional product photography`
       }
 
       if (results.length === 0) {
-        throw new Error("Failed to generate any refined images")
+        throw new Error(tx("entity.noRefinedGenerated"))
       }
 
       setShowRefinePicker(true)
       setSelectedRefinedIndex(null)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown error"
+      const errorMessage = err instanceof Error ? err.message : tx("lib.unknownError")
       // Check for content moderation error (E005)
       if (errorMessage.includes("E005") || errorMessage.toLowerCase().includes("flagged as sensitive")) {
-        toast.error("Content moderation error", {
-          description: "The image was flagged by the AI provider's content filter. Try using a different image or adjusting the object's appearance.",
+        toast.error(tx("entity.moderationErrorTitle"), {
+          description: tx("entity.moderationErrorObjectDesc"),
         })
       } else {
-        toast.error("Failed to refine object", {
+        toast.error(tx("entity.refineObjectFailed"), {
           description: errorMessage,
         })
       }
@@ -390,27 +394,27 @@ no shadows, professional product photography`
         })
         // Saved successfully
       } catch (err) {
-        toast.error("Failed to save refined image")
+        toast.error(tx("entity.saveRefinedFailed"))
       }
     }
 
     setShowRefinePicker(false)
     setRefinedResults([])
     setRefinementCompleted(true)
-    toast.success("Refined image selected")
+    toast.success(tx("entity.refinedSelected"))
   }, [data, objectNodeId, projectId, updateNodeData])
 
   // Generate all object assets (angles, materials, variations)
   const handleGenerateAllAssets = useCallback(async () => {
     if (!mainImageUrl || !data) {
-      toast.error("No image available")
+      toast.error(tx("entity.noImageAvailable"))
       return
     }
     const imageUrl = mainImageUrl
 
     setGeneratingAllAssets(true)
     setRefinementCompleted(false)
-    toast.info("Generating all object assets...")
+    toast.info(tx("entity.generatingAllObjectAssets"))
 
     const ASSET_TYPES = [
       { type: "angles" as const, variants: ["front", "side", "top", "back", "three-quarter"], names: ["Front", "Side", "Top", "Back", "Three-Quarter"], dataKey: "angles" },
@@ -453,7 +457,7 @@ no shadows, professional product photography`
                     resolve(job.output_data?.imageUrl ?? "")
                   } else if (job.status === "failed") {
                     clearInterval(interval)
-                    reject(new Error(job.error_message ?? "Failed"))
+                    reject(new Error(job.error_message ?? tx("common.failed")))
                   }
                 } catch (err) {
                   clearInterval(interval)
@@ -476,10 +480,10 @@ no shadows, professional product photography`
         }
       }
 
-      toast.success("All object assets generated!")
+      toast.success(tx("entity.allObjectAssetsGenerated"))
     } catch (err) {
-      toast.error("Failed to generate some assets", {
-        description: err instanceof Error ? err.message : "Unknown error",
+      toast.error(tx("entity.someAssetsFailed"), {
+        description: err instanceof Error ? err.message : tx("lib.unknownError"),
       })
     } finally {
       setGeneratingAllAssets(false)
@@ -508,7 +512,7 @@ no shadows, professional product photography`
       updateNodeData(objectNodeId, { [dataKey]: items })
     }
     setConfirmingAssetDelete(null)
-    toast.success("Asset deleted")
+    toast.success(tx("entity.assetDeleted"))
   }
 
   async function handleDeleteObject() {
@@ -521,11 +525,11 @@ no shadows, professional product photography`
       }
       // Remove node from canvas
       deleteNode(objectNodeId)
-      toast.success(`Object "${data.objectName || "Unnamed"}" permanently deleted`)
+      toast.success(tx("entity.objectPermanentlyDeleted", { name: data.objectName || tx("cfgext.entUnnamed") }))
       onClose()
     } catch (err) {
-      toast.error("Failed to delete object", {
-        description: err instanceof Error ? err.message : "Unknown error",
+      toast.error(tx("entity.deleteObjectFailed"), {
+        description: err instanceof Error ? err.message : tx("lib.unknownError"),
       })
     } finally {
       setDeletingObject(false)
@@ -535,7 +539,7 @@ no shadows, professional product photography`
   const handleGenerateCustom = useCallback(async () => {
     if (!customPrompt.trim()) return
     if (!mainImageUrl || !data) {
-      toast.error("Generate or upload a main image first")
+      toast.error(tx("entity.mainImageFirst"))
       return
     }
 
@@ -552,7 +556,7 @@ no shadows, professional product photography`
         userId: user?.id,
       })
 
-      toast.info("Generating custom variation...")
+      toast.info(tx("entity.generatingCustomVariation"))
 
       const imageUrl = await new Promise<string>((resolve, reject) => {
         const interval = setInterval(async () => {
@@ -563,7 +567,7 @@ no shadows, professional product photography`
               resolve(job.output_data?.imageUrl ?? "")
             } else if (job.status === "failed") {
               clearInterval(interval)
-              reject(new Error(job.error_message ?? "Failed"))
+              reject(new Error(job.error_message ?? tx("common.failed")))
             }
           } catch (err) {
             clearInterval(interval)
@@ -580,11 +584,11 @@ no shadows, professional product photography`
 
       const updated = [...(data.customVariations ?? []), newVariation]
       updateNodeData(objectNodeId, { customVariations: updated })
-      toast.success("Custom variation generated")
+      toast.success(tx("entity.customVariationGenerated"))
       setCustomPrompt("")
     } catch (err) {
-      toast.error("Failed to generate custom variation", {
-        description: err instanceof Error ? err.message : "Unknown error",
+      toast.error(tx("entity.customVariationFailed"), {
+        description: err instanceof Error ? err.message : tx("lib.unknownError"),
       })
     } finally {
       setGenerating(false)
@@ -623,17 +627,17 @@ no shadows, professional product photography`
           <div className="border-b px-6 py-4 flex items-center justify-between shrink-0">
             <div>
               <h2 className="text-lg font-semibold">
-                {data.objectName || "Unnamed Object"}
+                {data.objectName || t("entity.unnamedObject")}
               </h2>
               <p className="text-sm text-muted-foreground">
-                {data.style ?? "realistic"} | {CATEGORY_LABELS[data.category] ?? data.category}
+                {data.style ?? "realistic"} | {CATEGORY_LABEL_KEYS[data.category] ? t(CATEGORY_LABEL_KEYS[data.category]) : data.category}
               </p>
             </div>
             <div className="flex items-center gap-2">
               {confirmingObjectDelete ? (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-red-500 max-w-[260px]">
-                    Permanently delete {data.objectName || "this object"}? All assets will be lost. This cannot be undone.
+                    {t("entity.permanentDeleteConfirm", { name: data.objectName || t("entity.thisObject") })}
                   </span>
                   <Button
                     variant="ghost"
@@ -642,7 +646,7 @@ no shadows, professional product photography`
                     onClick={() => setConfirmingObjectDelete(false)}
                     disabled={deletingObject}
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                   <Button
                     variant="destructive"
@@ -651,11 +655,11 @@ no shadows, professional product photography`
                     disabled={deletingObject}
                   >
                     {deletingObject ? (
-                      <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+                      <Loader2 className="w-4 h-4 animate-spin me-1.5" />
                     ) : (
-                      <Trash2 className="w-4 h-4 mr-1.5" />
+                      <Trash2 className="w-4 h-4 me-1.5" />
                     )}
-                    Delete Forever
+                    {t("entity.deleteForever")}
                   </Button>
                 </div>
               ) : (
@@ -665,11 +669,11 @@ no shadows, professional product photography`
                   className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
                   onClick={() => setConfirmingObjectDelete(true)}
                 >
-                  <Trash2 className="w-4 h-4 mr-1.5" />
-                  Delete Object
+                  <Trash2 className="w-4 h-4 me-1.5" />
+                  {t("entity.deleteObject")}
                 </Button>
               )}
-              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("common.close")}>
                 <X className="w-5 h-5" />
               </Button>
             </div>
@@ -691,18 +695,18 @@ no shadows, professional product photography`
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 )}
               >
-                {tab.label}
+                {t(tab.labelKey)}
                 {tab.id === "angles" && (data.angles ?? []).length > 0 && (
-                  <span className="ml-1 text-xs text-muted-foreground">({(data.angles ?? []).length})</span>
+                  <span className="ms-1 text-xs text-muted-foreground">({(data.angles ?? []).length})</span>
                 )}
                 {tab.id === "materials" && (data.materials ?? []).length > 0 && (
-                  <span className="ml-1 text-xs text-muted-foreground">({(data.materials ?? []).length})</span>
+                  <span className="ms-1 text-xs text-muted-foreground">({(data.materials ?? []).length})</span>
                 )}
                 {tab.id === "variations" && (data.variations ?? []).length > 0 && (
-                  <span className="ml-1 text-xs text-muted-foreground">({(data.variations ?? []).length})</span>
+                  <span className="ms-1 text-xs text-muted-foreground">({(data.variations ?? []).length})</span>
                 )}
                 {tab.id === "custom" && (data.customVariations ?? []).length > 0 && (
-                  <span className="ml-1 text-xs text-muted-foreground">({(data.customVariations ?? []).length})</span>
+                  <span className="ms-1 text-xs text-muted-foreground">({(data.customVariations ?? []).length})</span>
                 )}
               </button>
             ))}
@@ -731,18 +735,18 @@ no shadows, professional product photography`
                     >
                       {isRefining ? (
                         <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Refining... ({refinedResults.length}/4)
+                          <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                          {t("entity.refiningProgress", { n: refinedResults.length })}
                         </>
                       ) : (
                         <>
-                          <Sparkles className="w-4 h-4 mr-2" />
-                          Refine Object
+                          <Sparkles className="w-4 h-4 me-2" />
+                          {t("entity.refineObject")}
                         </>
                       )}
                     </Button>
                     <p className="text-xs text-muted-foreground text-center mt-1.5">
-                      Generate a clean product photo with studio lighting
+                      {t("entity.refineObjectHint")}
                     </p>
 
                     {/* Prominent CTA after refinement */}
@@ -751,8 +755,8 @@ no shadows, professional product photography`
                         <div className="flex items-center gap-3">
                           <Sparkles className="w-6 h-6 text-emerald-400 shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-white">Object refined!</p>
-                            <p className="text-sm text-gray-400">Generate angles, materials & variations</p>
+                            <p className="font-medium text-white">{t("entity.objectRefined")}</p>
+                            <p className="text-sm text-gray-400">{t("entity.objectRefinedNext")}</p>
                           </div>
                           <Button
                             onClick={handleGenerateAllAssets}
@@ -761,13 +765,13 @@ no shadows, professional product photography`
                           >
                             {generatingAllAssets ? (
                               <>
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                Generating...
+                                <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                                {t("cfgext.entGenerating")}
                               </>
                             ) : (
                               <>
-                                <Sparkles className="w-4 h-4 mr-2" />
-                                Generate All Assets
+                                <Sparkles className="w-4 h-4 me-2" />
+                                {t("entity.generateAllAssets")}
                               </>
                             )}
                           </Button>
@@ -777,19 +781,19 @@ no shadows, professional product photography`
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-12">
-                    No image generated yet. Generate or upload one from the config panel.
+                    {t("entity.noImageYet")}
                   </p>
                 )}
 
                 {(data.generatedResults ?? []).length > 1 && (
                   <div>
-                    <h3 className="text-sm font-medium mb-3">Version History</h3>
+                    <h3 className="text-sm font-medium mb-3">{t("entity.versionHistory")}</h3>
                     <div className="grid grid-cols-4 gap-3">
                       {(data.generatedResults ?? []).map((r, i) => (
                         <DraggableImage
                           key={r.jobId ?? i}
                           src={r.url}
-                          label={`v${i + 1}`}
+                          label={t("entity.versionShort", { n: i + 1 })}
                           onEnlarge={setLightboxSrc}
                           onAddToCanvas={handleAddImageToCanvas}
                           onDragStarted={() => setIsDragging(true)}
@@ -809,7 +813,7 @@ no shadows, professional product photography`
                 onAddToCanvas={handleAddImageToCanvas}
                 onDragStarted={() => setIsDragging(true)}
                 onDragEnded={() => setIsDragging(false)}
-                emptyMessage="No angle views generated yet. Generate them from the config panel."
+                emptyMessage={t("entity.emptyAngles")}
                 confirmingIndex={confirmingAssetDelete}
                 onRequestDelete={setConfirmingAssetDelete}
                 onCancelDelete={() => setConfirmingAssetDelete(null)}
@@ -825,7 +829,7 @@ no shadows, professional product photography`
                 onAddToCanvas={handleAddImageToCanvas}
                 onDragStarted={() => setIsDragging(true)}
                 onDragEnded={() => setIsDragging(false)}
-                emptyMessage="No material variations generated yet. Generate them from the config panel."
+                emptyMessage={t("entity.emptyMaterials")}
                 confirmingIndex={confirmingAssetDelete}
                 onRequestDelete={setConfirmingAssetDelete}
                 onCancelDelete={() => setConfirmingAssetDelete(null)}
@@ -841,7 +845,7 @@ no shadows, professional product photography`
                 onAddToCanvas={handleAddImageToCanvas}
                 onDragStarted={() => setIsDragging(true)}
                 onDragEnded={() => setIsDragging(false)}
-                emptyMessage="No style variations generated yet. Generate them from the config panel."
+                emptyMessage={t("entity.emptyStyleVariations")}
                 confirmingIndex={confirmingAssetDelete}
                 onRequestDelete={setConfirmingAssetDelete}
                 onCancelDelete={() => setConfirmingAssetDelete(null)}
@@ -854,13 +858,13 @@ no shadows, professional product photography`
               <div>
                 <div className="mb-6">
                   <label className="text-sm font-medium mb-2 block">
-                    Describe a new variation
+                    {t("entity.describeNewVariation")}
                   </label>
                   <div className="flex gap-2">
                     <Input
                       value={customPrompt}
                       onChange={(e) => setCustomPrompt(e.target.value)}
-                      placeholder="e.g., glowing in the dark, covered in ice, made of gold"
+                      placeholder={t("entity.objectVariationPlaceholder")}
                       disabled={generating}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !generating && customPrompt.trim()) {
@@ -876,7 +880,7 @@ no shadows, professional product photography`
                       {generating ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
-                        "Generate"
+                        t("common.generate")
                       )}
                     </Button>
                   </div>
@@ -884,7 +888,7 @@ no shadows, professional product photography`
 
                 {(data.customVariations ?? []).length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-12">
-                    No custom variations yet. Describe a material, effect, or modification above.
+                    {t("entity.noCustomVariationsObject")}
                   </p>
                 ) : (
                   <div className="grid grid-cols-3 gap-4">
@@ -924,13 +928,13 @@ no shadows, professional product photography`
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Select Refined Image</h3>
-              <Button variant="ghost" size="icon" onClick={() => setShowRefinePicker(false)} aria-label="Close">
+              <h3 className="text-lg font-semibold">{t("entity.selectRefinedImage")}</h3>
+              <Button variant="ghost" size="icon" onClick={() => setShowRefinePicker(false)} aria-label={t("common.close")}>
                 <X className="w-5 h-5" />
               </Button>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
-              Click to select, use expand button to preview full size
+              {t("entity.selectRefinedHint")}
             </p>
             <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto">
               {refinedResults.map((url, i) => (
@@ -946,7 +950,7 @@ no shadows, professional product photography`
                 >
                   <CachedImage
                     src={url}
-                    alt={`Refined ${i + 1}`}
+                    alt={t("entity.refinedAlt", { n: i + 1 })}
                     className="w-full h-36 object-cover rounded-lg"
                     thumbnail
                     thumbnailWidth={320}
@@ -954,7 +958,7 @@ no shadows, professional product photography`
                   {/* Expand button */}
                   <button
                     type="button"
-                    className="absolute bottom-2 left-2 p-1.5 rounded-md bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute bottom-2 start-2 p-1.5 rounded-md bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => {
                       e.stopPropagation()
                       setRefineLightboxSrc(url)
@@ -963,7 +967,7 @@ no shadows, professional product photography`
                     <Expand className="w-4 h-4" />
                   </button>
                   {selectedRefinedIndex === i && (
-                    <div className="absolute top-2 right-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center">
+                    <div className="absolute top-2 end-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center">
                       <span className="text-white text-xs font-bold">✓</span>
                     </div>
                   )}
@@ -972,14 +976,14 @@ no shadows, professional product photography`
             </div>
             <div className="flex justify-end gap-2 mt-4">
               <Button variant="outline" onClick={() => setShowRefinePicker(false)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 onClick={() => selectedRefinedIndex !== null && handleSelectRefined(refinedResults[selectedRefinedIndex])}
                 disabled={selectedRefinedIndex === null}
                 className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
               >
-                Use This Image
+                {t("entity.useThisImage")}
               </Button>
             </div>
           </div>
@@ -994,14 +998,14 @@ no shadows, professional product photography`
         >
           <button
             type="button"
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white"
+            className="absolute top-4 end-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white"
             onClick={() => setRefineLightboxSrc(null)}
           >
             <X className="w-6 h-6" />
           </button>
           <CachedImage
             src={refineLightboxSrc}
-            alt="Full size preview"
+            alt={t("entity.fullSizePreviewAlt")}
             className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
           />
         </div>

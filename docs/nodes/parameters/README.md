@@ -95,3 +95,31 @@ Styling, Temporal, Exposure Settings) and Sound / Music / Voice. The free-text
 and pure-runtime parameter nodes (Tone, Style Guide, Provider, Scene Count,
 Duration, Aspect Ratio, Motion) have no catalog term behind them, so they carry
 no hint-mode toggle.
+
+## Preview pictures: real or illustration
+
+On nodaro.ai, the Look and Camera pickers picture each option with a real
+render: the same base frame put through that option (for Camera Motion, a
+short clip that plays while you hover the still). Each of those pickers also
+has a drawn illustration, and you can pick which one a node shows.
+
+**Which pickers.** Camera Motion, Color / Look, Style, Lens, Lighting,
+Atmosphere, Camera / Film, Framing and Mood (whose illustration is its emoji).
+Era and Composition Effects have no illustration, so they always show the
+render. Self-hosted installs (Community / Business) have no renders at all:
+they show the illustrations and never offer the switch.
+
+**Where to switch.** Two places, same setting. On the canvas: hover (or
+select) the node — a two-icon switch (film = real, pen = illustration) sits
+beside the selected option's title, in the **Picks** and **Both** display
+modes. In the config panel and the fullscreen picker: the same switch sits
+beside the picker's heading and changes both the option grid and the node.
+
+**What is saved.** The choice is saved on the node as `previewStyle` (`"real"`
+or `"illustration"`); absent means `"real"`, so existing workflows look the
+same as before. It changes only the pictures, never the prompt fragment. A
+published app's input card follows the creator's saved choice and offers app
+users no switch. Your last choice for each picker type is remembered in this
+browser and applied to the next node of that type you add. Camera Motion and
+Color / Look remember separately, and nodes already on the canvas keep
+their own setting.

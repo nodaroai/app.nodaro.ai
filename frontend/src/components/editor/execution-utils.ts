@@ -1,3 +1,6 @@
+import { tx } from "@/lib/i18n"
+import { formatDate } from "@/lib/i18n/format"
+
 export const STATUS_COLORS: Record<string, string> = {
   completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
   failed: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400",
@@ -29,11 +32,12 @@ export function formatRelativeTime(dateString: string): string {
   const diffHours = Math.floor(diffMins / 60)
   const diffDays = Math.floor(diffHours / 24)
 
-  if (diffSecs < 60) return "just now"
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString()
+  // Same dictionary keys as formatRelative() (English is unchanged: "5m ago").
+  if (diffSecs < 60) return tx("time.justNow")
+  if (diffMins < 60) return tx("time.minAgo", { n: diffMins })
+  if (diffHours < 24) return tx("time.hrAgo", { n: diffHours })
+  if (diffDays < 7) return tx("time.dayAgo", { n: diffDays })
+  return formatDate(date)
 }
 
 export function formatDuration(startedAt: string | undefined, completedAt: string | undefined): string {

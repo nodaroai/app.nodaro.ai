@@ -212,7 +212,7 @@ function ZoomControl({
             finish(false)
           }
         }}
-        aria-label="Set zoom percentage"
+        aria-label={t("canvas.setZoomPct")}
         className={cn(
           "h-9 w-[3.5rem] px-2 text-center text-sm font-medium tabular-nums rounded-lg",
           "bg-transparent outline-none ring-1 ring-[#ff0073]",
@@ -252,7 +252,7 @@ function ZoomControl({
             "dark:bg-[#2D2D2D] dark:text-[#E2E8F0] dark:border-[#3D3D3D] dark:shadow-xl"
           )}
         >
-          <span className="text-sm">Click to type · double-click 100% · drag to zoom</span>
+          <span className="text-sm">{t("canvas.zoomTooltip")}</span>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

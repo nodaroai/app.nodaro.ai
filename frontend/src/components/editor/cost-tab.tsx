@@ -206,7 +206,7 @@ export function CostTab({ className = "" }: CostTabProps) {
                     ) : (
                       <Coins className="w-4 h-4 text-[#ff0073]" />
                     )}
-                    <span className="ml-1.5 text-xs font-medium">
+                    <span className="ms-1.5 text-xs font-medium">
                       {dollars ? "$" : serverUnitLabel(summary?.unit, t("credits.unitShort"))}
                     </span>
                   </Button>
@@ -268,19 +268,19 @@ export function CostTab({ className = "" }: CostTabProps) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-[#2D2D2D]">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                     {t("cost.col.type")}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  <th className="px-4 py-3 text-start text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                     {t("cost.col.model")}
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  <th className="px-4 py-3 text-end text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                     {t("cost.col.runs")}
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  <th className="px-4 py-3 text-end text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                     {dollars ? t("cost.col.perRunDollars") : t("cost.col.perRunCredits", { u: serverUnitLabel(summary.unit, t("credits.unitShort")) })}
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  <th className="px-4 py-3 text-end text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                     {t("cost.col.total")}
                   </th>
                 </tr>
@@ -297,18 +297,18 @@ export function CostTab({ className = "" }: CostTabProps) {
                     <td className="px-4 py-3 text-gray-500 dark:text-[#94A3B8] font-mono text-xs">
                       {item.model}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-500 dark:text-[#94A3B8] font-mono">
+                    <td className="px-4 py-3 text-end text-gray-500 dark:text-[#94A3B8] font-mono">
                       {item.runs}
                       {item.failed > 0 && (
-                        <span className="ml-1 text-red-400 text-xs">({item.failed}f)</span>
+                        <span className="ms-1 text-red-400 text-xs">({item.failed}f)</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-500 dark:text-[#94A3B8] font-mono">
+                    <td className="px-4 py-3 text-end text-gray-500 dark:text-[#94A3B8] font-mono">
                       {dollars
                         ? formatDollarsN(item.runs > 0 && item.total_cost_usd != null ? item.total_cost_usd / item.runs : null)
                         : formatCreditsN(item.avg_credits_per_run, summary.unit)}
                     </td>
-                    <td className="px-4 py-3 text-right text-[#ff0073] font-mono font-medium">
+                    <td className="px-4 py-3 text-end text-[#ff0073] font-mono font-medium">
                       {dollars ? formatDollarsN(item.total_cost_usd ?? null) : formatCreditsN(item.total_credits, summary.unit)}
                     </td>
                   </tr>
@@ -320,11 +320,11 @@ export function CostTab({ className = "" }: CostTabProps) {
                     {t("cost.col.total")}
                   </td>
                   <td />
-                  <td className="px-4 py-3 text-right font-mono font-semibold text-gray-700 dark:text-[#E2E8F0]">
+                  <td className="px-4 py-3 text-end font-mono font-semibold text-gray-700 dark:text-[#E2E8F0]">
                     {summary.total_jobs}
                   </td>
                   <td />
-                  <td className="px-4 py-3 text-right text-[#ff0073] font-mono font-bold">
+                  <td className="px-4 py-3 text-end text-[#ff0073] font-mono font-bold">
                     {dollars ? formatDollarsN(summary.total_cost_usd ?? null) : formatCreditsN(summary.total_credits, summary.unit)}
                   </td>
                 </tr>

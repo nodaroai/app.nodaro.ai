@@ -30,6 +30,7 @@ import { useBackToClose } from "@/hooks/use-back-to-close"
 import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-grid"
 import { useT } from "@/lib/i18n"
 import type { LibraryAsset } from "@/lib/api"
+import { uiLocale } from "@/lib/i18n/format"
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -40,7 +41,7 @@ function formatBytes(bytes: number): string {
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+  return d.toLocaleDateString(uiLocale(), { month: "short", day: "numeric", year: "numeric" })
 }
 
 const TYPE_FILTERS = ["all", "image", "video", "audio"] as const
@@ -129,7 +130,7 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
         {/* Checkbox overlay */}
         <button
           type="button"
-          className={`absolute top-2 left-2 transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+          className={`absolute top-2 start-2 transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
           onClick={(e) => {
             e.stopPropagation()
             onToggleSelect(asset.id)
@@ -459,7 +460,7 @@ export default function LibraryPage() {
           {virtualRows.map((virtualRow) => (
             <div
               key={virtualRow.key}
-              className="absolute top-0 left-0 w-full"
+              className="absolute top-0 start-0 w-full"
               style={{
                 transform: `translateY(${virtualRow.start - scrollMargin}px)`,
                 display: "grid",

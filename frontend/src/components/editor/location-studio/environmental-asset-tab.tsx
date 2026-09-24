@@ -3,6 +3,7 @@ import { Check, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { LOCATION_BUCKET_TO_CATALOG_ID, LOCATION_PRESET_TO_CATALOG } from "@nodaro/shared"
 import { generateLocationAsset, removeLocationAsset } from "@/lib/api"
+import { tx, useT, type MessageKey } from "@/lib/i18n"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { useLocationStudioJobs } from "./use-location-studio-jobs"
@@ -63,12 +64,12 @@ const BUCKET_TO_COLUMN: Record<LocationEnvironmentalBucket, LocationEnvironmenta
   lighting: "lighting",
 }
 
-const BUCKET_LABEL: Record<LocationEnvironmentalBucket, string> = {
-  timeOfDay: "time of day",
-  weather: "weather",
-  seasons: "seasons",
-  angles: "angles",
-  lighting: "lighting",
+const BUCKET_LABEL: Record<LocationEnvironmentalBucket, MessageKey> = {
+  timeOfDay: "studio.bucketTimeOfDay",
+  weather: "studio.bucketWeather",
+  seasons: "studio.bucketSeasons",
+  angles: "studio.bucketAngles",
+  lighting: "studio.bucketLighting",
 }
 
 interface EnvironmentalAssetTabProps {
@@ -84,6 +85,7 @@ export function EnvironmentalAssetTab({
   presets,
   iconLabel,
 }: EnvironmentalAssetTabProps) {
+  const t = useT()
   const data = studio.stagedData
   const [customPrompt, setCustomPrompt] = useState("")
   const jobs = useLocationStudioJobs([])
@@ -103,7 +105,7 @@ export function EnvironmentalAssetTab({
   // Only the failure toast is wired so users see if a chip click no-ops.
   useEffect(() => {
     jobs.onFailed((jobId) => {
-      toast.error(`Generation ${jobId.slice(0, 8)}… failed`)
+      toast.error(tx("studio.genFailedId", { id: jobId.slice(0, 8) }))
     })
   }, [jobs.onFailed])
 
@@ -155,7 +157,7 @@ export function EnvironmentalAssetTab({
       // `generateLocationAsset` (apiJson) THROWS without toasting — surface the
       // backend message so the optimistic card doesn't vanish unexplained. This
       // silent swallow is exactly what hid the "Sunset Boat" style-enum 400.
-      toast.error(e instanceof Error ? e.message : "Failed to generate variant")
+      toast.error(e instanceof Error ? e.message : tx("studio.generateVariantFailed"))
     }
   }
 
@@ -169,11 +171,11 @@ export function EnvironmentalAssetTab({
     const existingNames = new Set(items.map((i) => i.name.toLowerCase()))
     const missing = presets.filter((p) => !existingNames.has(p.toLowerCase()))
     if (missing.length === 0) {
-      toast.info("All presets already generated")
+      toast.info(tx("studio.allPresetsGenerated"))
       return
     }
     if (missing.length >= 4) {
-      if (!window.confirm(`This will queue ${missing.length} generation jobs.`)) return
+      if (!window.confirm(tx("studio.confirmQueueJobs", { n: missing.length }))) return
     }
     for (const variant of missing) {
       // Sequential so we don't blast N parallel POSTs at once. The orchestrator
@@ -189,7 +191,7 @@ export function EnvironmentalAssetTab({
     const trimmed = customPrompt.trim()
     if (!trimmed) return
     if (trimmed.length > 2000) {
-      toast.error("Custom prompt is too long (max 2000 chars)")
+      toast.error(tx("studio.customPromptTooLong"))
       return
     }
     await fireGen(trimmed, true)
@@ -214,7 +216,7 @@ export function EnvironmentalAssetTab({
       try {
         await removeLocationAsset(id, { column: BUCKET_TO_COLUMN[bucketName], url: target.url })
       } catch {
-        toast.error("Failed to delete asset — refresh to restore")
+        toast.error(tx("studio.deleteAssetFailed"))
       }
     }
   }
@@ -262,7 +264,7 @@ export function EnvironmentalAssetTab({
         ),
       )
       if (results.some((r) => r.status === "rejected")) {
-        toast.error("Failed to delete some assets — refresh to restore")
+        toast.error(tx("studio.deleteSomeAssetsFailed"))
       }
     }
   }
@@ -315,7 +317,7 @@ export function EnvironmentalAssetTab({
           disabled={disabled}
           className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Generate All
+          {t("studio.generateAll")}
         </button>
       </div>
 
@@ -325,8 +327,8 @@ export function EnvironmentalAssetTab({
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search ${BUCKET_LABEL[bucketName]}…`}
-            aria-label={`Search ${BUCKET_LABEL[bucketName]}`}
+            placeholder={t("studio.searchBucketPh", { bucket: t(BUCKET_LABEL[bucketName]) })}
+            aria-label={t("studio.searchBucketAria", { bucket: t(BUCKET_LABEL[bucketName]) })}
             className="flex-1 px-3 py-1.5 text-[11px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600"
           />
           {q && (
@@ -335,7 +337,7 @@ export function EnvironmentalAssetTab({
               onClick={() => setSearchQuery("")}
               className="text-[11px] text-slate-400 hover:text-slate-200"
             >
-              Clear
+              {t("common.clear")}
             </button>
           )}
         </div>
@@ -347,11 +349,11 @@ export function EnvironmentalAssetTab({
       {isSelectionMode && (
         <div
           role="toolbar"
-          aria-label="Bulk actions"
+          aria-label={t("studio.bulkActions")}
           className="flex items-center justify-between gap-2 px-3 py-2 rounded bg-[#1a1d27] border border-[#1e293b] text-[11px] text-slate-300"
         >
           <span>
-            {selectedIdx.size} selected
+            {t("studio.nSelected", { n: selectedIdx.size })}
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -359,14 +361,14 @@ export function EnvironmentalAssetTab({
               onClick={clearSelection}
               className="px-2 py-1 rounded text-slate-400 hover:bg-[#1e293b] hover:text-slate-200"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="button"
               onClick={() => void handleBulkDelete()}
               className="px-3 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-medium"
             >
-              Delete {selectedIdx.size}
+              {t("studio.deleteN", { n: selectedIdx.size })}
             </button>
           </div>
         </div>
@@ -421,9 +423,9 @@ export function EnvironmentalAssetTab({
                   toggleSelected(originalIdx)
                 }}
                 onClick={(e) => e.stopPropagation()}
-                aria-label={`Select ${item.name}`}
+                aria-label={t("studio.selectNamed", { name: item.name })}
                 className={
-                  "absolute top-1 left-1 size-4 accent-[#22d3ee] cursor-pointer "
+                  "absolute top-1 start-1 size-4 accent-[#22d3ee] cursor-pointer "
                   + (isSelectionMode ? "opacity-100" : "opacity-0 group-hover:opacity-100")
                 }
               />
@@ -434,10 +436,10 @@ export function EnvironmentalAssetTab({
                     e.stopPropagation()
                     void handleRemove(originalIdx)
                   }}
-                  aria-label={`Remove ${item.name}`}
-                  className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
+                  aria-label={t("cfgshared.removeModel", { name: item.name })}
+                  className="absolute top-1 end-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
                 >
-                  Remove
+                  {t("common.remove")}
                 </button>
               )}
             </div>
@@ -449,23 +451,23 @@ export function EnvironmentalAssetTab({
             className="aspect-video border border-[#1e293b] rounded bg-[#0e1117] flex flex-col items-center justify-center gap-2 text-[11px] text-slate-400"
           >
             <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
-            <span className="truncate max-w-full px-2">Generating {j.name}…</span>
+            <span className="truncate max-w-full px-2">{t("studio.generatingName", { name: j.name })}</span>
           </div>
         ))}
         {!q && items.length === 0 && trackedForBucket.length === 0 && (
           <div className="col-span-full text-center text-[11px] text-slate-500 py-8 border border-dashed border-[#1e293b] rounded">
-            No {BUCKET_LABEL[bucketName]} variants yet — pick a preset below or enter a custom prompt.
+            {t("studio.noVariantsYet", { bucket: t(BUCKET_LABEL[bucketName]) })}
           </div>
         )}
         {zeroResults && (
           <div className="col-span-full text-center text-[11px] text-slate-500 py-6 border border-dashed border-[#1e293b] rounded">
-            No matches for &quot;{searchQuery.trim()}&quot;.{" "}
+            {t("studio.noMatchesFor", { q: searchQuery.trim() })}{" "}
             <button
               type="button"
               onClick={() => setSearchQuery("")}
               className="text-pink-400 hover:underline"
             >
-              Clear
+              {t("common.clear")}
             </button>
           </div>
         )}
@@ -492,10 +494,10 @@ export function EnvironmentalAssetTab({
                 disabled
                   ? undefined
                   : st === "created"
-                    ? `${label} — already generated`
+                    ? t("studio.presetAlreadyGenerated", { name: label })
                     : st === "creating"
-                      ? `${label} — generating…`
-                      : `Generate ${label}`
+                      ? t("studio.presetGenerating", { name: label })
+                      : t("studio.generateNamed", { name: label })
               }
               onClick={() => handlePresetClick(p)}
               className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 inline-flex items-center gap-1.5 transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40 disabled:cursor-not-allowed data-[state=created]:text-emerald-300/80 data-[state=created]:border-emerald-700/40"
@@ -514,7 +516,7 @@ export function EnvironmentalAssetTab({
           type="text"
           value={customPrompt}
           onChange={(e) => setCustomPrompt(e.target.value)}
-          placeholder="Custom prompt (free-form)"
+          placeholder={t("studio.customPromptPh")}
           disabled={disabled}
           className="flex-1 px-3 py-2 text-[12px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600 disabled:opacity-40"
           onKeyDown={(e) => {
@@ -532,7 +534,7 @@ export function EnvironmentalAssetTab({
           disabled={customDisabled}
           className="px-4 py-2 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
         >
-          Generate
+          {t("common.generate")}
         </button>
       </div>
 

@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { hasAdmin } from "@/lib/edition"
+import { useT, tx } from "@/lib/i18n"
 import { refreshHeygenCatalog, type HeygenCatalogRefreshResponse } from "@/lib/api"
 import {
   HEYGEN_AVATARS_QUERY_KEY,
@@ -27,21 +28,21 @@ import {
 
 /** One line per outcome, in the operator's words. */
 export function describeRefresh(r: HeygenCatalogRefreshResponse): string {
-  if (r.mode === "connection") return "This install lists what nodaro.ai can render — its copy was forgotten and will be pulled fresh on the next pick."
+  if (r.mode === "connection") return tx("integ.heygenRefreshRelay")
   const parts: string[] = []
   const say = (what: string, outcome: HeygenCatalogRefreshResponse["avatars"]) => {
     switch (outcome) {
-      case "started": parts.push(`${what}: refreshing in the background`); break
-      case "already-running": parts.push(`${what}: a refresh is already running here`); break
-      case "locked-elsewhere": parts.push(`${what}: another server is refreshing it right now`); break
-      case "adopted": parts.push(`${what}: a newer shared list already existed — taken as-is`); break
-      case "unconfigured": parts.push(`${what}: no HeyGen key on this install`); break
-      case "relay-reset": parts.push(`${what}: forgotten, re-pulled on the next pick`); break
+      case "started": parts.push(tx("integ.heygenOutcomeStarted", { what })); break
+      case "already-running": parts.push(tx("integ.heygenOutcomeRunning", { what })); break
+      case "locked-elsewhere": parts.push(tx("integ.heygenOutcomeLocked", { what })); break
+      case "adopted": parts.push(tx("integ.heygenOutcomeAdopted", { what })); break
+      case "unconfigured": parts.push(tx("integ.heygenOutcomeUnconfigured", { what })); break
+      case "relay-reset": parts.push(tx("integ.heygenOutcomeRelayReset", { what })); break
     }
   }
-  say("Presets", r.avatars)
-  say("Your own looks", r.privateAvatars)
-  say("Voices", r.voices)
+  say(tx("integ.heygenPresets"), r.avatars)
+  say(tx("integ.heygenOwnLooks"), r.privateAvatars)
+  say(tx("integ.heygenVoices"), r.voices)
   return parts.join(" · ")
 }
 
@@ -50,6 +51,7 @@ export function HeygenCatalogCard() {
   const queryClient = useQueryClient()
   const [busy, setBusy] = useState(false)
   const [lastResult, setLastResult] = useState<string | null>(null)
+  const t = useT()
 
   const refresh = useCallback(async () => {
     setBusy(true)
@@ -65,9 +67,9 @@ export function HeygenCatalogCard() {
         queryClient.invalidateQueries({ queryKey: HEYGEN_PRIVATE_AVATARS_QUERY_KEY }),
         queryClient.invalidateQueries({ queryKey: HEYGEN_VOICES_QUERY_KEY }),
       ])
-      toast.success("HeyGen catalog refresh requested", { description: text })
+      toast.success(tx("integ.heygenRefreshRequested"), { description: text })
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to refresh the HeyGen catalog"
+      const message = err instanceof Error ? err.message : tx("integ.heygenRefreshFailed")
       setLastResult(null)
       toast.error(message)
     } finally {
@@ -94,19 +96,17 @@ export function HeygenCatalogCard() {
         <div className="flex items-center gap-2.5">
           <Users className="h-3.5 w-3.5" style={{ color: "var(--integ-muted)" }} aria-hidden />
           <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: "var(--integ-muted)" }}>
-            Cache
+            {t("integ.cacheEyebrow")}
           </span>
         </div>
         <h3 id="heygen-catalog-heading" className="text-[15px] font-bold tracking-[-0.01em]">
-          HeyGen avatar catalog
+          {t("integ.heygenCatalogTitle")}
         </h3>
         {/* Deliberately not "synced 4h ago" as the handoff shows: the refresh
             endpoint returns no timestamp, and a made-up one is worse than
             none on a card whose whole job is telling you how stale a list is. */}
         <p className="text-[12.5px] leading-[1.55] text-pretty" style={{ color: "var(--integ-muted)" }}>
-          Avatar and voice lists refresh once a day; your own looks every few minutes. Pull now if a new avatar is
-          missing from the picker — the fill takes about two minutes, and pickers show the new lists the next time
-          they open.
+          {t("integ.heygenCatalogDesc")}
         </p>
       </div>
 
@@ -121,8 +121,8 @@ export function HeygenCatalogCard() {
       )}
 
       <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={busy} className="h-9 w-full shrink-0">
-        {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
-        Refresh now
+        {busy ? <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="me-1.5 h-3.5 w-3.5" />}
+        {t("integ.refreshNow")}
       </Button>
     </section>
   )

@@ -1490,7 +1490,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
         <>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">{t("utilcfg.expression")}</Label>
-            <Textarea
+            <Textarea dir="ltr"
               value={expression}
               onChange={(e) => onUpdate({ expression: e.target.value })}
               className="font-mono text-xs min-h-[100px] resize-y"
@@ -1504,7 +1504,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                 {t("utilcfg.syntaxReference")}
               </AccordionTrigger>
               <AccordionContent className="px-3 pb-3 pt-0">
-                <pre className="text-[10px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap">{t("utilcfg.syntaxReferenceBody")}</pre>
+                <pre dir="ltr" className="text-[10px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap">{t("utilcfg.syntaxReferenceBody")}</pre>
               </AccordionContent>
             </AccordionItem>
           </Accordion>

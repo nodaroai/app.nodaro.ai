@@ -41,10 +41,10 @@ export function Scene3DPendingRevisionNotice({
       {!readOnly && (
         <div className="flex gap-1.5">
           <Button type="button" size="sm" className="h-6 text-[11px]" onClick={() => onResolve(true)}>
-            <Check className="w-3 h-3 mr-1" /> {t("cfgext.scene3dUsePending")}
+            <Check className="w-3 h-3 me-1" /> {t("cfgext.scene3dUsePending")}
           </Button>
           <Button type="button" size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => onResolve(false)}>
-            <X className="w-3 h-3 mr-1" /> {t("cfgext.scene3dKeepMine")}
+            <X className="w-3 h-3 me-1" /> {t("cfgext.scene3dKeepMine")}
           </Button>
         </div>
       )}
@@ -90,7 +90,7 @@ export function Scene3DRevisionHistory({
                 !readOnly && (
                   <button
                     type="button"
-                    aria-label={`Restore revision ${entry.revisionId.slice(0, 6)}`}
+                    aria-label={t("scene3dcfg.restoreRevision", { id: entry.revisionId.slice(0, 6) })}
                     title={entry.context?.prompt}
                     className="text-muted-foreground/60 hover:text-foreground shrink-0"
                     onClick={() => onRestore(entry.revisionId)}

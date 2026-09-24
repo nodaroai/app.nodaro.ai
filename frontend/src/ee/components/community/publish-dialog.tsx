@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { publishToCommunity } from "@/lib/api"
+import { tx, useT, type MessageKey } from "@/lib/i18n"
 
 interface PublishDialogProps {
   entityType: "character" | "location" | "object" | "creature"
@@ -21,6 +22,14 @@ interface PublishDialogProps {
   defaultTitle?: string
   open: boolean
   onOpenChange: (open: boolean) => void
+}
+
+/** One full sentence per entity type — the noun's gender changes the rest of the Hebrew sentence. */
+const PUBLISH_DESCRIPTION_KEYS: Record<PublishDialogProps["entityType"], MessageKey> = {
+  character: "community.publishDescCharacter",
+  location: "community.publishDescLocation",
+  object: "community.publishDescObject",
+  creature: "community.publishDescCreature",
 }
 
 /** Split a comma-separated tag string into a clean, de-duped list. */
@@ -40,6 +49,7 @@ export function PublishDialog({
   open,
   onOpenChange,
 }: PublishDialogProps) {
+  const t = useT()
   const [title, setTitle] = useState(defaultTitle ?? "")
   const [description, setDescription] = useState("")
   const [category, setCategory] = useState("")
@@ -81,12 +91,12 @@ export function PublishDialog({
         attestation: true,
         likenessAttestation: isCharacter ? likenessAttestation : undefined,
       })
-      toast.success("Published to community", {
-        description: result.slug ? `Slug: ${result.slug}` : undefined,
+      toast.success(tx("community.publishedToCommunity"), {
+        description: result.slug ? tx("community.slugLabel", { slug: result.slug }) : undefined,
       })
       onOpenChange(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to publish")
+      toast.error(err instanceof Error ? err.message : tx("pubDialog.publishFailed"))
     } finally {
       setSubmitting(false)
     }
@@ -99,64 +109,63 @@ export function PublishDialog({
           above them so it isn't rendered behind the studio (was invisible on click). */}
       <DialogContent className="sm:max-w-lg z-[10000]" overlayClassName="z-[10000]">
         <DialogHeader>
-          <DialogTitle>Share to community</DialogTitle>
+          <DialogTitle>{t("studio.shareToCommunity")}</DialogTitle>
           <DialogDescription>
-            Publish this {entityType} to the public community library so others can discover and
-            clone it.
+            {t(PUBLISH_DESCRIPTION_KEYS[entityType])}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label htmlFor="publish-title">Title</Label>
+            <Label htmlFor="publish-title">{t("present.title")}</Label>
             <Input
               id="publish-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="A short, descriptive name"
+              placeholder={t("community.titlePlaceholder")}
               maxLength={120}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="publish-description">Description</Label>
+            <Label htmlFor="publish-description">{t("common.description")}</Label>
             <Textarea
               id="publish-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What makes this worth sharing? (optional)"
+              placeholder={t("community.descriptionPlaceholder")}
               rows={3}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="publish-category">Category</Label>
+              <Label htmlFor="publish-category">{t("pubTemplate.categoryLabel")}</Label>
               <Input
                 id="publish-category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                placeholder="Optional"
+                placeholder={t("common.optional")}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="publish-style">Style</Label>
+              <Label htmlFor="publish-style">{t("field.style")}</Label>
               <Input
                 id="publish-style"
                 value={style}
                 onChange={(e) => setStyle(e.target.value)}
-                placeholder="Optional"
+                placeholder={t("common.optional")}
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="publish-tags">Tags</Label>
+            <Label htmlFor="publish-tags">{t("marketplace.tagsLabel")}</Label>
             <Input
               id="publish-tags"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
-              placeholder="Comma-separated, e.g. sci-fi, hero, portrait"
+              placeholder={t("community.tagsPlaceholder")}
             />
           </div>
 
@@ -168,7 +177,7 @@ export function PublishDialog({
                 className="mt-0.5"
               />
               <span className="text-muted-foreground">
-                I have the rights to share this and consent to it being public.
+                {t("community.attestRights")}
               </span>
             </label>
 
@@ -181,11 +190,11 @@ export function PublishDialog({
                     className="mt-0.5"
                   />
                   <span className="text-muted-foreground">
-                    I have the rights/consent of any real person depicted, who is 18+.
+                    {t("community.attestLikeness")}
                   </span>
                 </label>
-                <p className="text-xs text-muted-foreground/80 pl-7">
-                  Published images are visible to everyone; the generated likeness will be public.
+                <p className="text-xs text-muted-foreground/80 ps-7">
+                  {t("community.likenessPublicNote")}
                 </p>
               </>
             )}
@@ -194,10 +203,10 @@ export function PublishDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button onClick={handleSubmit} disabled={!canSubmit}>
-            {submitting ? "Publishing…" : "Publish"}
+            {submitting ? t("community.publishing") : t("pubDialog.trigger")}
           </Button>
         </DialogFooter>
       </DialogContent>

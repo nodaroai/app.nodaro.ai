@@ -13,11 +13,13 @@
  */
 import { useEffect, useState } from "react"
 import { Bookmark, Trash2, X } from "lucide-react"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
 import { deleteCopilotMemory, listCopilotMemories, type CopilotMemory } from "@/ee/lib/copilot/api"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
+import { tx, useT } from "@/lib/i18n"
 
 export function MemorySavedPins() {
+  const t = useT()
   const memorySaves = useCopilotStore((s) => s.turn.memorySaves)
   const removeMemorySave = useCopilotStore((s) => s.removeMemorySave)
   const setNotice = useCopilotStore((s) => s.setNotice)
@@ -31,7 +33,7 @@ export function MemorySavedPins() {
       await deleteCopilotMemory(id)
       removeMemorySave(id)
     } catch {
-      setNotice(S.memoryUndoFailed)
+      setNotice(tx(K.memoryUndoFailed))
     } finally {
       setUndoing(null)
     }
@@ -46,7 +48,7 @@ export function MemorySavedPins() {
         >
           <Bookmark className="w-3 h-3 flex-none text-primary" strokeWidth={2.2} aria-hidden />
           <span className="min-w-0 flex-1 text-[11.5px] leading-[1.45] text-foreground break-words">
-            <span className="text-[var(--copilot-dim)]">{S.memoryRemembered} · </span>
+            <span className="text-[var(--copilot-dim)]">{t(K.memoryRemembered)} · </span>
             {memory.content}
           </span>
           <button
@@ -55,7 +57,7 @@ export function MemorySavedPins() {
             disabled={undoing === memory.id}
             className="flex-none text-[11px] text-[var(--copilot-muted)] hover:text-foreground underline disabled:opacity-50"
           >
-            {S.memoryUndo}
+            {t(K.memoryUndo)}
           </button>
         </div>
       ))}
@@ -64,14 +66,15 @@ export function MemorySavedPins() {
 }
 
 export function CopilotMemoriesButton() {
+  const t = useT()
   const [open, setOpen] = useState(false)
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={S.memoriesOpen}
-        title={S.memoriesOpen}
+        aria-label={t(K.memoriesOpen)}
+        title={t(K.memoriesOpen)}
         className="w-[26px] h-[26px] rounded-[7px] border border-border text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center transition-colors"
       >
         <Bookmark className="w-3 h-3" strokeWidth={2.2} />
@@ -82,6 +85,7 @@ export function CopilotMemoriesButton() {
 }
 
 function MemoriesDialog({ onClose }: { onClose: () => void }) {
+  const t = useT()
   const [memories, setMemories] = useState<CopilotMemory[] | null>(null)
   const [failed, setFailed] = useState(false)
 
@@ -125,33 +129,33 @@ function MemoriesDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal aria-label={S.memoriesTitle}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal aria-label={t(K.memoriesTitle)}>
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
       <div className="relative w-[420px] max-w-[92vw] max-h-[70vh] flex flex-col bg-[var(--copilot-card)] border border-[var(--copilot-strong)] rounded-xl shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
           <Bookmark className="w-3.5 h-3.5 text-primary" strokeWidth={2.2} aria-hidden />
-          <span className="text-[13px] font-semibold text-foreground">{S.memoriesTitle}</span>
+          <span className="text-[13px] font-semibold text-foreground">{t(K.memoriesTitle)}</span>
           <button
             type="button"
             onClick={onClose}
-            aria-label={S.close}
-            className="ml-auto w-[26px] h-[26px] rounded-[7px] border border-border text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center"
+            aria-label={t(K.close)}
+            className="ms-auto w-[26px] h-[26px] rounded-[7px] border border-border text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center"
           >
             <X className="w-3 h-3" strokeWidth={2.2} />
           </button>
         </div>
 
         <div className="px-4 py-2.5 text-[11.5px] leading-[1.5] text-[var(--copilot-muted)] border-b border-border">
-          {S.memoriesBlurb}
+          {t(K.memoriesBlurb)}
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2">
           {failed ? (
-            <div className="px-2.5 py-4 text-[11.5px] text-[var(--copilot-fail)]">{S.memoriesLoadFailed}</div>
+            <div className="px-2.5 py-4 text-[11.5px] text-[var(--copilot-fail)]">{t(K.memoriesLoadFailed)}</div>
           ) : memories === null ? (
-            <div className="px-2.5 py-4 text-[11.5px] text-[var(--copilot-muted)]">{S.pickerLoading}</div>
+            <div className="px-2.5 py-4 text-[11.5px] text-[var(--copilot-muted)]">{t(K.pickerLoading)}</div>
           ) : memories.length === 0 ? (
-            <div className="px-2.5 py-4 text-[11.5px] text-[var(--copilot-muted)]">{S.memoriesEmpty}</div>
+            <div className="px-2.5 py-4 text-[11.5px] text-[var(--copilot-muted)]">{t(K.memoriesEmpty)}</div>
           ) : (
             memories.map((memory) => (
               <div key={memory.id} className="flex items-start gap-2 px-2.5 py-2 rounded-lg hover:bg-[var(--copilot-surface)]">
@@ -159,11 +163,11 @@ function MemoriesDialog({ onClose }: { onClose: () => void }) {
                 <button
                   type="button"
                   onClick={() => void forget(memory.id)}
-                  aria-label={`${S.memoriesDelete}: ${memory.content.slice(0, 40)}`}
+                  aria-label={`${t(K.memoriesDelete)}: ${memory.content.slice(0, 40)}`}
                   className="flex-none mt-0.5 inline-flex items-center gap-1 text-[11px] text-[var(--copilot-muted)] hover:text-[var(--copilot-fail)]"
                 >
                   <Trash2 className="w-3 h-3" strokeWidth={2} aria-hidden />
-                  {S.memoriesDelete}
+                  {t(K.memoriesDelete)}
                 </button>
               </div>
             ))

@@ -1,4 +1,5 @@
 import type { CompositeLayerConfig } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
 
 const LAYER_COLORS = [
   "#3B82F6", // blue
@@ -20,6 +21,7 @@ interface CompositePreviewProps {
 }
 
 export function CompositePreview({ layers, aspectRatio }: CompositePreviewProps) {
+  const t = useT()
   const ratio = ASPECT_RATIOS[aspectRatio] ?? ASPECT_RATIOS["16:9"]
   const maxWidth = 280
   const containerWidth = maxWidth
@@ -29,7 +31,7 @@ export function CompositePreview({ layers, aspectRatio }: CompositePreviewProps)
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="text-xs font-medium text-muted-foreground">Layer Preview</div>
+      <div className="text-xs font-medium text-muted-foreground">{t("preview.layerPreview")}</div>
       <div
         className="relative rounded-md border border-[var(--border-primary)] bg-muted/20 overflow-hidden mx-auto"
         style={{ width: containerWidth, height: containerHeight }}
@@ -64,7 +66,7 @@ export function CompositePreview({ layers, aspectRatio }: CompositePreviewProps)
 
         {sortedLayers.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground/50">
-            No layers
+            {t("preview.noLayers")}
           </div>
         )}
       </div>

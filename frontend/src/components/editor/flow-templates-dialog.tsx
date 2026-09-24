@@ -18,6 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 import {
   SYSTEM_PROMPT_TEMPLATES,
   TEMPLATE_GROUPS,
@@ -41,6 +42,7 @@ export function FlowTemplatesDialog({
   userTemplates,
   onSave,
 }: FlowTemplatesDialogProps) {
+  const t = useT()
   const [draft, setDraft] = useState<Record<string, string>>({})
 
   // Reset draft when dialog opens
@@ -89,13 +91,13 @@ export function FlowTemplatesDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Workflow Prompt Templates</DialogTitle>
+          <DialogTitle>{t("flowtpl.title")}</DialogTitle>
           <DialogDescription>
-            Override prompt templates for this workflow only. Leave empty to use your default settings.
+            {t("flowtpl.description")}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="overflow-y-auto flex-1 space-y-4 pr-1">
+        <div className="overflow-y-auto flex-1 space-y-4 pe-1">
           {TEMPLATE_GROUPS.map((group) => (
             <FlowTemplateGroupCard
               key={group.name}
@@ -121,7 +123,7 @@ export function FlowTemplatesDialog({
 
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={handleCancel}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             size="sm"
@@ -129,8 +131,8 @@ export function FlowTemplatesDialog({
             disabled={!hasChanges}
             className="bg-[#ff0073] hover:bg-[#e00067] text-white"
           >
-            <Save className="h-3.5 w-3.5 mr-1.5" />
-            Save
+            <Save className="h-3.5 w-3.5 me-1.5" />
+            {t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -155,6 +157,7 @@ function FlowTemplateGroupCard({
   readonly onChange: (key: string, value: string) => void
   readonly onReset: (key: string) => void
 }) {
+  const t = useT()
   const [tab, setTab] = useState<TemplateTab>("description")
 
   const activeKey = tab === "description" ? descriptionKey : generationKey
@@ -177,15 +180,15 @@ function FlowTemplateGroupCard({
               </button>
             </TooltipTrigger>
             <TooltipContent side="right" className="max-w-xs text-xs leading-relaxed">
-              <p><strong>Description</strong> -- text appended when this asset is connected to Generate Image.</p>
-              <p className="mt-1"><strong>Generation</strong> -- prompt used when generating this asset&apos;s own image.</p>
+              <p><strong>{t("common.description")}</strong> {t("flowtpl.descriptionTip")}</p>
+              <p className="mt-1"><strong>{t("settings.generationTab")}</strong> {t("flowtpl.generationTip")}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
         {hasOverride && (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
-            Override
+            {t("flowtpl.override")}
           </span>
         )}
       </div>
@@ -201,7 +204,7 @@ function FlowTemplateGroupCard({
               : "text-muted-foreground hover:bg-muted/50 border border-transparent",
           )}
         >
-          Description
+          {t("common.description")}
         </button>
         <button
           type="button"
@@ -213,11 +216,11 @@ function FlowTemplateGroupCard({
               : "text-muted-foreground hover:bg-muted/50 border border-transparent",
           )}
         >
-          Generation
+          {t("settings.generationTab")}
         </button>
 
         {hasOverride && (
-          <div className="ml-auto">
+          <div className="ms-auto">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -230,7 +233,7 @@ function FlowTemplateGroupCard({
                     <RotateCcw className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Clear flow override</TooltipContent>
+                <TooltipContent>{t("flowtpl.clearFlowOverride")}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
@@ -251,7 +254,7 @@ function FlowTemplateGroupCard({
       />
       {info.variables.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2">
-          <span className="text-xs text-muted-foreground">Variables:</span>
+          <span className="text-xs text-muted-foreground">{t("settings.variables")}</span>
           {info.variables.map((v) => (
             <span
               key={v}
@@ -279,6 +282,7 @@ function FlowTemplateCard({
   readonly onChange: (key: string, value: string) => void
   readonly onReset: (key: string) => void
 }) {
+  const t = useT()
   const info = SYSTEM_PROMPT_TEMPLATES[templateKey]
   if (!info) return null
 
@@ -292,7 +296,7 @@ function FlowTemplateCard({
             <h4 className="text-sm font-semibold">{info.label}</h4>
             {hasOverride && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
-                Override
+                {t("flowtpl.override")}
               </span>
             )}
           </div>
@@ -312,7 +316,7 @@ function FlowTemplateCard({
                   <RotateCcw className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Clear flow override</TooltipContent>
+              <TooltipContent>{t("flowtpl.clearFlowOverride")}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         )}
@@ -332,7 +336,7 @@ function FlowTemplateCard({
       />
       {info.variables.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2">
-          <span className="text-xs text-muted-foreground">Variables:</span>
+          <span className="text-xs text-muted-foreground">{t("settings.variables")}</span>
           {info.variables.map((v) => (
             <span
               key={v}

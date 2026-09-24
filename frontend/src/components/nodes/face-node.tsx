@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, type MessageKey } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { SmilePlus, Loader2, AlertCircle, X, ImageIcon, Maximize2, Type, Download, Link, Pencil } from "lucide-react"
@@ -24,11 +24,12 @@ import type { FaceNodeData } from "@/types/nodes"
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT = (t: string) => isValidFaceConnection("in", t, isPickerType)
 
-const STYLE_LABELS: Record<string, string> = {
-  realistic: "Realistic",
-  anime: "Anime",
-  "3d-pixar": "3D Pixar",
-  illustration: "Illustration",
+/** Same keys the entity config panel's style select reads. */
+const STYLE_LABEL_KEYS: Record<string, MessageKey> = {
+  realistic: "imgcfg.styleRealistic",
+  anime: "cfgext.entStyleAnime",
+  "3d-pixar": "cfgext.entStyle3dPixar",
+  illustration: "cfgext.entStyleIllustration",
 }
 
 function FaceNodeComponent({ id, data, selected }: NodeProps) {
@@ -101,7 +102,7 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
               )}
               <CachedImage
                 src={activeUrl}
-                alt={nodeData.faceName || "Face"}
+                alt={nodeData.faceName || t("assetlib.typeFace")}
                 className="w-full h-full object-cover cursor-pointer"
                 thumbnail={!useFull}
                 thumbnailWidth={320}
@@ -140,7 +141,7 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
                 a.download = `${nodeData.label || 'image'}.png`
                 a.click()
               }}
-              title="Download"
+              title={t("common.download")}
             >
               <Download className="w-3 h-3" />
             </button>
@@ -151,7 +152,7 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
               className="absolute bottom-1 right-[25px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={(e) => {
                 e.stopPropagation()
-                copyToClipboard(activeUrl ?? '', "URL copied")
+                copyToClipboard(activeUrl ?? '', t("node.urlCopied"))
               }}
               title={t("cfgshared.copyUrl")}
             >
@@ -165,14 +166,14 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
                 e.stopPropagation()
                 setLightboxSrc(activeUrl)
               }}
-              title="Enlarge"
+              title={t("common.enlarge")}
             >
               <Maximize2 className="w-3 h-3" />
             </button>
             {results.length > 0 && (
               <button
                 type="button"
-                aria-label="Remove" className="absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label={t("common.remove")} className="absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(e) => {
                   e.stopPropagation()
                   setDeleteConfirm(activeIndex)
@@ -226,7 +227,7 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
                 </button>
                 <button
                   type="button"
-                  aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                  aria-label={t("common.remove")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(i)
@@ -241,7 +242,7 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Metadata */}
         <div className="flex justify-between text-muted-foreground text-[10px]">
-          <span>{STYLE_LABELS[nodeData.style] ?? nodeData.style}</span>
+          <span>{nodeData.style in STYLE_LABEL_KEYS ? t(STYLE_LABEL_KEYS[nodeData.style]) : nodeData.style}</span>
         </div>
       </div>
     </BaseNode>
@@ -259,7 +260,7 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
 
     <ImageLightbox
       src={lightboxSrc}
-      alt={nodeData.faceName || "Face"}
+      alt={nodeData.faceName || t("assetlib.typeFace")}
       onClose={() => setLightboxSrc(null)}
     />
     </div>

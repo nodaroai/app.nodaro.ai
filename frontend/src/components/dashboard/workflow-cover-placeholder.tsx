@@ -11,6 +11,7 @@
  * here to end.
  */
 import { useId } from "react"
+import { useT } from "@/lib/i18n"
 import { COVER_VARIANTS, coverVariantForNodeTypes, type CoverVariant } from "@/lib/workflow-cover"
 
 interface Colourway {
@@ -88,6 +89,7 @@ export function WorkflowCoverPlaceholder({ nodeTypes, variant }: WorkflowCoverPl
   // Genuinely per instance. A grid renders many cards of the same colourway,
   // and `cover-mark-${key}` gave every one of them the same DOM id.
   const gradientId = useId()
+  const t = useT()
 
   return (
     <div
@@ -129,8 +131,8 @@ export function WorkflowCoverPlaceholder({ nodeTypes, variant }: WorkflowCoverPl
           </g>
         </svg>
         <div className="flex flex-col items-center gap-1">
-          <div className="text-[15px] font-bold tracking-[-0.01em] text-white/[0.94]">No cover yet</div>
-          <div className="text-[10.5px] font-medium text-white/40">Open the flow to add one</div>
+          <div className="text-[15px] font-bold tracking-[-0.01em] text-white/[0.94]">{t("dash.noCoverYet")}</div>
+          <div className="text-[10.5px] font-medium text-white/40">{t("dash.openFlowToAddCover")}</div>
         </div>
       </div>
     </div>

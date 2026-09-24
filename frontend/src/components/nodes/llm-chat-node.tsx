@@ -346,7 +346,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                     {outputView === "rendered" ? (
                       <Suspense
                         fallback={
-                          <p className="text-xs text-muted-foreground px-3 pb-3 pt-0.5">Rendering…</p>
+                          <p className="text-xs text-muted-foreground px-3 pb-3 pt-0.5">{t("node.renderingEllipsis")}</p>
                         }
                       >
                         <LlmOutputView text={activeText} json={jsonValue} />

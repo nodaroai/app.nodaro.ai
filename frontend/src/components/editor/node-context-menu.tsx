@@ -3,6 +3,7 @@
 import { useRef, useMemo, useState } from "react"
 import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon, ZoomIn, Maximize2, UserPlus } from "lucide-react"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
 import { useReactFlow } from "@xyflow/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useClickOutside } from "@/hooks/use-click-outside"
@@ -21,6 +22,7 @@ interface NodeContextMenuProps {
 }
 
 export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps) {
+  const t = useT()
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -185,7 +187,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
         .getState()
         .nodes.find((n) => !before.has(n.id) && n.type === "character")
       if (!freshNode) {
-        toast.error("Couldn't duplicate node.")
+        toast.error(tx("canvas.duplicateNodeFailed"))
         return
       }
       const { id: newDbId, name } = await duplicateCharacter(characterDbId, {
@@ -200,9 +202,9 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
       )
       // Library list needs to refresh so the new character shows up.
       queryClient.invalidateQueries({ queryKey: queryKeys.assets.characters(projectId ?? undefined, user?.id) })
-      toast.success(`Forked to '${name}'`)
+      toast.success(tx("canvas.forkedTo", { name }))
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to duplicate as new character.")
+      toast.error(e instanceof Error ? e.message : tx("canvas.forkFailed"))
     } finally {
       setForking(false)
       onClose()
@@ -221,47 +223,47 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
       style={{ left: x, top: y }}
     >
       <button
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer disabled:opacity-50"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer disabled:opacity-50"
         onClick={handleRun}
         disabled={isRunning}
       >
         <Play className="h-3.5 w-3.5" />
-        Run
+        {t("common.run")}
       </button>
       {hasDownstream && (
         <button
-          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer disabled:opacity-50"
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer disabled:opacity-50"
           onClick={handleRunFromHere}
           disabled={isRunning}
         >
           <FastForward className="h-3.5 w-3.5" />
-          Run from here
+          {t("node.runFromHere")}
         </button>
       )}
       {selectedCount >= 2 && (
         <button
-          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer disabled:opacity-50"
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer disabled:opacity-50"
           onClick={handleRunSelected}
           disabled={isRunning}
         >
           <ListChecks className="h-3.5 w-3.5" />
-          Run selected ({selectedCount})
+          {t("canvas.runSelectedCount", { n: selectedCount })}
         </button>
       )}
       <button
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer"
         onClick={handleToggleSkip}
       >
         {isSkipped ? <CircleCheck className="h-3.5 w-3.5" /> : <CircleSlash className="h-3.5 w-3.5" />}
-        {isSkipped ? "Unskip Node" : "Skip Node"}
+        {isSkipped ? t("canvas.unskipNode") : t("canvas.skipNode")}
       </button>
       {thumbnailUrl && (
         <button
-          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer"
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer"
           onClick={handleSetThumbnail}
         >
           <ImageIcon className="h-3.5 w-3.5" />
-          Set as Thumbnail
+          {t("cfgshared.setAsThumbnail")}
         </button>
       )}
       {/* Zoom row: shows current zoom with - / + / reset buttons inline.
@@ -270,61 +272,61 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
       {showZoom && (
         <div className="flex items-center gap-1 px-3 py-1.5 text-sm">
           <ZoomIn className="h-3.5 w-3.5" />
-          <span className="flex-1">Zoom: {Math.round(zoom * 100)}%</span>
+          <span className="flex-1">{t("canvas.zoomPct", { pct: Math.round(zoom * 100) })}</span>
           {/* Fixed-width buttons so different glyph widths (−, +, ↺) and
               disabled-state changes don't shift sibling buttons sideways. */}
           <button
             className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs cursor-pointer"
             onClick={() => handleSetZoom(Math.max(0.5, Math.round((zoom - 0.25) * 100) / 100))}
-            title="Decrease zoom"
+            title={t("canvas.decreaseZoom")}
           >−</button>
           <button
             className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs cursor-pointer"
             onClick={() => handleSetZoom(Math.min(2.0, Math.round((zoom + 0.25) * 100) / 100))}
-            title="Increase zoom"
+            title={t("canvas.increaseZoom")}
           >+</button>
           <button
             className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs cursor-pointer disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
             disabled={zoom === 1}
             onClick={() => handleSetZoom(1)}
-            title="Reset to 100%"
+            title={t("canvas.resetZoom")}
           >↺</button>
         </div>
       )}
       <button
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer"
         onClick={handleFitContent}
       >
         <Maximize2 className="h-3.5 w-3.5" />
-        Fit Content
+        {t("canvas.fitContent")}
       </button>
       <div className="my-1 border-t" />
       <button
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer"
         onClick={handleDuplicate}
       >
         <Copy className="h-3.5 w-3.5" />
-        Duplicate
-        <span className="ml-auto text-xs text-muted-foreground">{formatBinding(SHORTCUTS.duplicate.bindings[0], isMac)}</span>
+        {t("common.duplicate")}
+        <span className="ms-auto text-xs text-muted-foreground">{formatBinding(SHORTCUTS.duplicate.bindings[0], isMac)}</span>
       </button>
       {characterDbId && (
         <button
-          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer disabled:opacity-50"
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer disabled:opacity-50"
           onClick={handleDuplicateAsNewCharacter}
           disabled={forking}
-          title="Create an independent character (default Duplicate shares the same library entry)"
+          title={t("canvas.forkCharacterTitle")}
         >
           <UserPlus className="h-3.5 w-3.5" />
-          {forking ? "Forking…" : "Duplicate as new character"}
+          {forking ? t("canvas.forking") : t("canvas.duplicateAsNewCharacter")}
         </button>
       )}
       <button
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer text-destructive"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer text-destructive"
         onClick={handleDelete}
       >
         <Trash2 className="h-3.5 w-3.5" />
-        Delete
-        <span className="ml-auto text-xs text-muted-foreground">{formatBinding(SHORTCUTS.delete.bindings[0], isMac)}</span>
+        {t("common.delete")}
+        <span className="ms-auto text-xs text-muted-foreground">{formatBinding(SHORTCUTS.delete.bindings[0], isMac)}</span>
       </button>
     </div>
   )

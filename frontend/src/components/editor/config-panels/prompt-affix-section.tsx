@@ -1,6 +1,8 @@
 "use client"
 
 import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { Label } from "@/components/ui/label"
@@ -50,6 +52,7 @@ function PromptAffixSectionInner({
   updateNodeData: (id: string, data: Record<string, unknown>) => void
 }) {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const prefix = readText(nodeData, PROMPT_PREFIX_KEY)
   const suffix = readText(nodeData, PROMPT_SUFFIX_KEY)
   const setCount = (prefix.trim() ? 1 : 0) + (suffix.trim() ? 1 : 0)
@@ -69,7 +72,7 @@ function PromptAffixSectionInner({
           onClick={() => setExpanded((v) => !v)}
           className="flex w-full items-center gap-1.5 text-start"
         >
-          {expanded ? <ChevronDown className="w-3 h-3 text-muted-foreground" /> : <ChevronRight className="w-3 h-3 text-muted-foreground" />}
+          {expanded ? <ChevronDown className="w-3 h-3 text-muted-foreground" /> : <ChevronRight className={cn("w-3 h-3 text-muted-foreground", isRtl && "rotate-180")} />}
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] cursor-pointer">
             {t("cfgshared.promptAffixTitle")}
           </Label>

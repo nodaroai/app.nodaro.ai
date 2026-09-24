@@ -16,6 +16,7 @@ import {
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits, isMultiUser } from "@/lib/edition"
 import { STUDIO_MODAL_Z } from "../studio-shell/studio-modal-z"
+import { useT, tx } from "@/lib/i18n"
 
 // Lazy dynamic import keeps this core file off the ee/ static-import graph
 // (check-ee-imports.mjs only flags top-level `import ... from "@/ee/..."`,
@@ -68,6 +69,7 @@ const INERT_JOBS: CreatureStudioJobs = {
 
 export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProps) {
   const studio = useCreatureStudio(nodeId)
+  const t = useT()
   // Main-image candidate state + jobs tracker, owned at MODAL scope so in-flight
   // candidates + the completed-candidate grid survive Appearance↔other-tab
   // navigation (StudioShell unmounts the page on every switch). Mounted
@@ -86,7 +88,7 @@ export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProp
       if (e.key !== "Escape") return
       if (studio.isSaving || studio.isApprovingMainImage) return
       if (studio.isDirty) {
-        if (window.confirm("Discard unsaved changes?")) onClose()
+        if (window.confirm(tx("creature.discardUnsavedChanges"))) onClose()
       } else {
         onClose()
       }
@@ -100,10 +102,10 @@ export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProp
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Creature Studio"
+        aria-label={t("creature.studioAria")}
         className={`fixed inset-0 ${STUDIO_MODAL_Z} bg-[#0d1017] flex items-center justify-center`}
       >
-        <div className="text-sm text-slate-400">Loading creature…</div>
+        <div className="text-sm text-slate-400">{t("creature.loadingCreature")}</div>
       </div>
     )
   }
@@ -132,11 +134,11 @@ export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProp
           )}
           <div>
             <h1 id="creature-studio-title" className="text-[13px] font-semibold text-slate-200">
-              {data.creatureName || "Unnamed creature"}
+              {data.creatureName || t("creature.unnamedCreature")}
             </h1>
             <div className="text-[10px] text-slate-500">
               {data.species || data.category} · {data.style}
-              {data.styleLock && <span className="text-[#A78BFA]"> · Style locked</span>}
+              {data.styleLock && <span className="text-[#A78BFA]"> {t("creature.styleLocked")}</span>}
             </div>
           </div>
         </div>
@@ -149,7 +151,7 @@ export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProp
               disabled={closeBlocked}
               className="accent-[#A78BFA]"
             />
-            Style Lock
+            {t("cfgext.entStyleLock")}
           </label>
           <button
             type="button"
@@ -161,7 +163,7 @@ export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProp
             disabled={!studio.isDirty || closeBlocked}
             className="text-[11px] px-3 py-1.5 rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white"
           >
-            {studio.isSaving ? "Saving…" : "Save"}
+            {studio.isSaving ? t("common.saving") : t("common.save")}
           </button>
           {isAdmin && isMultiUser() && (
             <TooltipProvider delayDuration={0}>
@@ -177,13 +179,13 @@ export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProp
                       onClick={() => setShowPublish(true)}
                     >
                       <Upload className="h-3.5 w-3.5" />
-                      Share to community
+                      {t("creature.shareToCommunity")}
                     </Button>
                   </span>
                 </TooltipTrigger>
                 {!data.creatureDbId && (
                   <TooltipContent side="bottom">
-                    Generate an appearance to save the creature first
+                    {t("creature.shareNeedsSave")}
                   </TooltipContent>
                 )}
               </Tooltip>
@@ -193,14 +195,14 @@ export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProp
             type="button"
             onClick={() => {
               if (closeBlocked) return
-              if (studio.isDirty && !window.confirm("Discard unsaved changes?")) return
+              if (studio.isDirty && !window.confirm(tx("creature.discardUnsavedChanges"))) return
               onClose()
             }}
             disabled={closeBlocked}
             className="text-[10px] bg-[#1e293b] rounded px-3 py-1.5 text-slate-400 disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="Close"
+            aria-label={t("common.close")}
           >
-            ✕ Close
+            {t("creature.closeButton")}
           </button>
         </div>
       </div>

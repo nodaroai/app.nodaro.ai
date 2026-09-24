@@ -13,6 +13,8 @@
 import { useMemo, useState } from "react"
 import { optimizedImageUrl } from "@/lib/image"
 import { formatCreditUnits } from "@/lib/credit-units"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { deriveEditFanOut } from "./image-editing-edits"
 import {
   CRITIC_LINE,
@@ -46,9 +48,11 @@ export default function ImageEditingBody({
   onRunNode,
 }: TutorialBodyProps) {
   const { step, focusStep } = focus
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const { base, critic, edits } = useMemo(
-    () => deriveEditFanOut(nodes, edges, EDIT_ORDER),
-    [nodes, edges],
+    () => deriveEditFanOut(nodes, edges, EDIT_ORDER, t, localizeNode),
+    [nodes, edges, t, localizeNode],
   )
 
   // Which result is being traced. An index rather than a node id so a template
@@ -73,20 +77,20 @@ export default function ImageEditingBody({
   })
 
   if (!base) {
-    return <div className="nd-state">This tutorial&rsquo;s workflow could not be read.</div>
+    return <div className="nd-state">{t("tut.workflowUnreadable")}</div>
   }
 
   return (
     <div className="ied">
       <header className="ied-band">
         <div>
-          <h2 className="ied-headline">{HEADLINE}</h2>
-          <p className="ied-subline">{SUBLINE}</p>
+          <h2 className="ied-headline">{t(HEADLINE)}</h2>
+          <p className="ied-subline">{t(SUBLINE)}</p>
         </div>
         <div className="nd-chips">
           {FACTS.map((f) => (
             <span key={f} className="nd-chip">
-              {f}
+              {t(f)}
             </span>
           ))}
         </div>
@@ -104,10 +108,10 @@ export default function ImageEditingBody({
           onMouseEnter={() => focusStep(STEP.in)}
         >
           <header className="ied-head">
-            <span className="ied-badge">IN</span>
+            <span className="ied-badge">{t("tut.badgeIn")}</span>
             <div className="ied-head-text">
-              <div className="ied-title">{IN_COLUMN.title}</div>
-              <div className="ied-sub">{IN_COLUMN.sub}</div>
+              <div className="ied-title">{t(IN_COLUMN.title)}</div>
+              <div className="ied-sub">{t(IN_COLUMN.sub)}</div>
             </div>
             {base.chips.length > 0 && <span className="ied-meta">{base.chips.join(" · ")}</span>}
           </header>
@@ -117,25 +121,25 @@ export default function ImageEditingBody({
               <img
                 className="ied-base"
                 src={optimizedImageUrl(base.imageUrl, { width: 900, quality: 82 })}
-                alt="The original image every edit reads"
+                alt={t("tut.iedBaseAlt")}
               />
             )}
 
-            {base.prompt && <pre className="ied-prompt">{base.prompt}</pre>}
+            {base.prompt && <pre dir="auto" className="ied-prompt">{base.prompt}</pre>}
 
             {critic && (
               <div className="ied-critic">
                 <div className="ied-critic-top">
                   {critic.score !== null && <span className="ied-score">{critic.score}</span>}
                   <span className="nd-eyebrow">
-                    {["Image critic", critic.mode, critic.approved ? "passed" : "below threshold"]
+                    {[t("tut.imageCritic"), critic.mode, critic.approved ? t("tut.criticPassed") : t("tut.criticBelow")]
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
                 </div>
                 <p className="ied-critic-body">
-                  {CRITIC_LINE}
-                  {critic.threshold !== null && ` Threshold ${critic.threshold}.`}
+                  {t(CRITIC_LINE)}
+                  {critic.threshold !== null && ` ${t("tut.thresholdN", { n: critic.threshold })}`}
                 </p>
               </div>
             )}
@@ -146,9 +150,9 @@ export default function ImageEditingBody({
         <div className="ied-fan" aria-hidden="true">
           <span className="ied-fan-bar" />
           <span className="ied-fan-label">
-            FANS
+            {t("tut.fansOut1")}
             <br />
-            OUT
+            {t("tut.fansOut2")}
           </span>
         </div>
 
@@ -159,14 +163,14 @@ export default function ImageEditingBody({
           onMouseEnter={() => focusStep(STEP.out)}
         >
           <header className="ied-head">
-            <span className="ied-badge ied-badge-accent">OUT</span>
+            <span className="ied-badge ied-badge-accent">{t("tut.badgeOut")}</span>
             <div className="ied-head-text">
               <div className="ied-title">
-                {edits.length} {OUT_COLUMN.noun}
+                {t(OUT_COLUMN.countLabel, { n: edits.length })}
               </div>
-              <div className="ied-sub">{OUT_COLUMN.sub}</div>
+              <div className="ied-sub">{t(OUT_COLUMN.sub)}</div>
             </div>
-            <span className="ied-meta ied-meta-accent">CLICK TO FOLLOW</span>
+            <span className="ied-meta ied-meta-accent">{t("tut.clickToFollow")}</span>
           </header>
 
           <div className="ied-grid">
@@ -191,7 +195,7 @@ export default function ImageEditingBody({
                   />
                 )}
                 <span className="ied-tile-label">
-                  {EDIT_PROSE[edit.nodeId]?.name ?? edit.nodeLabel}
+                  {EDIT_PROSE[edit.nodeId] ? t(EDIT_PROSE[edit.nodeId].name) : edit.nodeLabel}
                 </span>
               </button>
             ))}
@@ -213,61 +217,61 @@ export default function ImageEditingBody({
               <header className="ied-head">
                 <span className="ied-badge ied-badge-accent">{pad(traced.index)}</span>
                 <div className="ied-head-text">
-                  <div className="ied-title">{prose?.name ?? traced.nodeLabel}</div>
-                  <div className="ied-sub">{prose?.sub ?? "How this result was made"}</div>
+                  <div className="ied-title">{prose ? t(prose.name) : traced.nodeLabel}</div>
+                  <div className="ied-sub">{t(prose?.sub ?? "tut.howResultMade")}</div>
                 </div>
               </header>
 
               <div className="ied-panel-body">
                 <div className="ied-compare">
                   <figure>
-                    <figcaption className="nd-eyebrow">Before</figcaption>
+                    <figcaption className="nd-eyebrow">{t("tut.before")}</figcaption>
                     {base.imageUrl && (
                       <img
                         className="ied-before"
                         src={optimizedImageUrl(base.imageUrl, { width: 420, quality: 78 })}
-                        alt="The original"
+                        alt={t("tut.theOriginal")}
                       />
                     )}
                   </figure>
                   <span className="ied-compare-arrow" aria-hidden="true" />
                   <figure>
-                    <figcaption className="nd-eyebrow ied-eyebrow-accent">After</figcaption>
+                    <figcaption className="nd-eyebrow ied-eyebrow-accent">{t("tut.after")}</figcaption>
                     {traced.resultUrl && (
                       <img
                         className="ied-after"
                         src={optimizedImageUrl(traced.resultUrl, { width: 420, quality: 78 })}
-                        alt={prose?.name ?? traced.nodeLabel}
+                        alt={prose ? t(prose.name) : traced.nodeLabel}
                       />
                     )}
                   </figure>
                 </div>
 
                 <div>
-                  <div className="nd-eyebrow">What drove it</div>
+                  <div className="nd-eyebrow">{t("tut.whatDroveIt")}</div>
                   <div className="ied-driver">
                     <div className="nd-eyebrow ied-eyebrow-accent">{traced.driverKind}</div>
-                    <div className="ied-driver-value">{traced.driverValue || NO_SETTINGS}</div>
+                    <div className="ied-driver-value">{traced.driverValue || t(NO_SETTINGS)}</div>
                   </div>
                 </div>
 
                 {prose?.why && (
                   <div>
-                    <div className="nd-eyebrow">Why it matters</div>
-                    <p className="ied-why">{prose.why}</p>
+                    <div className="nd-eyebrow">{t("tut.whyItMatters")}</div>
+                    <p className="ied-why">{t(prose.why)}</p>
                   </div>
                 )}
 
                 <div className="ied-node-row">
-                  <span className="nd-eyebrow">Node</span>
+                  <span className="nd-eyebrow">{t("tut.nodeEyebrow")}</span>
                   <span className="ied-node-name">{traced.nodeLabel}</span>
                   {traced.model && <span className="ied-node-model">{traced.model}</span>}
                 </div>
 
                 <button type="button" className="ied-run" onClick={onRunNode}>
-                  <span>Open this template</span>
+                  <span>{t("tut.openTemplate")}</span>
                   {estimatedCredits > 0 && (
-                    <span className="ied-run-cost">{formatCreditUnits(estimatedCredits)} to run it all</span>
+                    <span className="ied-run-cost">{t("tut.toRunItAll", { credits: formatCreditUnits(estimatedCredits) })}</span>
                   )}
                 </button>
               </div>

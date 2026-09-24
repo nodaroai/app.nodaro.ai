@@ -170,7 +170,7 @@ export function TemplatePreviewModal({
         <button
           type="button"
           aria-label={t("templates.closePreview")}
-          className="absolute top-3 right-3 z-20 p-1.5 rounded-full bg-background/80 backdrop-blur-sm border border-border hover:bg-accent transition-colors"
+          className="absolute top-3 end-3 z-20 p-1.5 rounded-full bg-background/80 backdrop-blur-sm border border-border hover:bg-accent transition-colors"
           onClick={onClose}
         >
           <X className="w-5 h-5 text-foreground" />
@@ -195,7 +195,7 @@ export function TemplatePreviewModal({
         </div>
 
         {/* Right: Info panel (~40%) */}
-        <div className="w-[40%] min-w-[340px] max-w-[500px] flex flex-col border-l border-border bg-background">
+        <div className="w-[40%] min-w-[340px] max-w-[500px] flex flex-col border-s border-border bg-background">
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-5">
             {/* Name */}
@@ -366,7 +366,7 @@ export function TemplatePreviewModal({
                       key={tag}
                       className="text-xs px-2 py-0.5 rounded-full bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/20 font-medium"
                     >
-                      <Tag className="inline h-3 w-3 mr-0.5 -mt-px" />
+                      <Tag className="inline h-3 w-3 me-0.5 -mt-px" />
                       {tag}
                     </span>
                   ))}
@@ -415,9 +415,9 @@ export function TemplatePreviewModal({
               onClick={handleClone}
             >
               {isCloning ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin me-2" />
               ) : (
-                <Copy className="h-4 w-4 mr-2" />
+                <Copy className="h-4 w-4 me-2" />
               )}
               {t("templates.cloneToProject")}
             </Button>

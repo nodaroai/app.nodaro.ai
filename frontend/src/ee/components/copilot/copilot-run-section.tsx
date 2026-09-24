@@ -17,7 +17,8 @@ import { useQuery } from "@tanstack/react-query"
 import { getWorkflowExecution } from "@/lib/api"
 import { executionStatusRefetchInterval } from "@/components/editor/execution-status-bar"
 import { isNotFound } from "@/lib/api-errors"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
+import { tx } from "@/lib/i18n"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { spendableCredits } from "@/lib/spendable-credits"
 import { useBillingSurface } from "@/hooks/use-billing-surface"
@@ -100,7 +101,7 @@ export function CopilotRunSection({ userId, nodeCount, onStopRun }: CopilotRunSe
   // Polling gave up: the execution is gone. Saying so beats sitting on
   // "Running" forever — in Auto mode nobody is watching that card.
   useEffect(() => {
-    if (executionId && isNotFound(executionError)) abandonRunFollow(S.runVanished)
+    if (executionId && isNotFound(executionError)) abandonRunFollow(tx(K.runVanished))
   }, [executionId, executionError])
 
   useEffect(() => {

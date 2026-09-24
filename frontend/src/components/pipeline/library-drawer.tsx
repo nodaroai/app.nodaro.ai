@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { getFeaturedEntities, type FeaturedEntity } from "@nodaro/shared"
 import { getCharacters, getLocations, getObjects } from "@/lib/api"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 /**
  * Phase 3 cinematic — entity Library drawer (mockup screens 5/6/7).
@@ -12,10 +13,21 @@ import { getCharacters, getLocations, getObjects } from "@/lib/api"
 
 export type LibraryType = "character" | "location" | "object"
 
-const TITLES: Record<LibraryType, string> = {
-  character: "Characters Library",
-  location: "Locations Index",
-  object: "Props & Gear Catalog",
+const TITLE_KEYS: Record<LibraryType, MessageKey> = {
+  character: "pipe.cinemaCharactersLibrary",
+  location: "pipe.cinemaLocationsIndex",
+  object: "pipe.cinemaPropsCatalog",
+}
+/** The entity noun for "Describe a new …" and its example placeholder. */
+const TYPE_KEYS: Record<LibraryType, MessageKey> = {
+  character: "pipe.cinemaTypeCharacter",
+  location: "pipe.cinemaTypeLocation",
+  object: "pipe.cinemaTypeObject",
+}
+const EXAMPLE_KEYS: Record<LibraryType, MessageKey> = {
+  character: "pipe.cinemaExampleCharacter",
+  location: "pipe.cinemaExampleLocation",
+  object: "pipe.cinemaExampleObject",
 }
 
 interface MineItem {
@@ -52,6 +64,7 @@ export function LibraryDrawer({
   onClose: () => void
   onUseInShot?: (name: string, description: string) => void
 }) {
+  const t = useT()
   const [tab, setTab] = useState<"featured" | "mine" | "new">("featured")
   const [mine, setMine] = useState<MineItem[] | null>(null)
   const [newDesc, setNewDesc] = useState("")
@@ -72,13 +85,13 @@ export function LibraryDrawer({
   }, [type])
 
   return (
-    <div className="flex w-[320px] shrink-0 flex-col border-r border-[#1d1d1d] bg-[#0a0a0a] p-4">
+    <div className="flex w-[320px] shrink-0 flex-col border-e border-[#1d1d1d] bg-[#0a0a0a] p-4">
       <div className="mb-3 flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground">
-            {TITLES[type]}
+            {t(TITLE_KEYS[type])}
           </div>
-          <div className={LABEL}>Creative Constraint Injections</div>
+          <div className={LABEL}>{t("pipe.cinemaCreativeConstraints")}</div>
         </div>
         <button
           type="button"
@@ -97,7 +110,7 @@ export function LibraryDrawer({
             tab === "featured" ? "bg-[#ff0073] text-white" : "text-muted-foreground"
           }`}
         >
-          ★ Featured
+          ★ {t("cfgext.voiceCatFeatured")}
         </button>
         <button
           type="button"
@@ -106,7 +119,7 @@ export function LibraryDrawer({
             tab === "mine" ? "bg-[#ff0073] text-white" : "text-muted-foreground"
           }`}
         >
-          + My Cast ({mine?.length ?? 0})
+          + {t("pipe.cinemaMyCast", { n: mine?.length ?? 0 })}
         </button>
         <button
           type="button"
@@ -115,7 +128,7 @@ export function LibraryDrawer({
             tab === "new" ? "bg-[#ff0073] text-white" : "text-muted-foreground"
           }`}
         >
-          + New
+          + {t("common.new")}
         </button>
       </div>
 
@@ -123,14 +136,14 @@ export function LibraryDrawer({
         {tab === "featured" && (
           <>
             <p className="rounded-md border border-[#2a2a2a] p-2 font-mono text-[10px] text-muted-foreground">
-              <span className="text-[#ff0073]">ⓘ</span> App-provided pipeline standards. Click{" "}
-              <span className="text-foreground">"Use in Shot"</span> to inject them instantly.
+              <span className="text-[#ff0073]">ⓘ</span> {t("pipe.cinemaFeaturedInfoPre")}{" "}
+              <span className="text-foreground">{t("pipe.cinemaUseInShotQuoted")}</span> {t("pipe.cinemaFeaturedInfoPost")}
             </p>
             {featured.map((f) => (
               <Card
                 key={f.id}
                 name={f.label}
-                tag="Starter"
+                tag={t("pipe.cinemaTagStarter")}
                 description={f.description}
                 onUse={() => onUseInShot?.(f.label, f.description)}
               />
@@ -139,18 +152,18 @@ export function LibraryDrawer({
         )}
         {tab === "mine" &&
           (mine === null ? (
-            <p className="font-mono text-[10px] text-muted-foreground">Loading your library…</p>
+            <p className="font-mono text-[10px] text-muted-foreground">{t("pipe.loadingLibrary")}</p>
           ) : mine.length === 0 ? (
             <p className="font-mono text-[10px] text-muted-foreground">
-              Nothing saved yet — create one in + New, or generate during the run.
+              {t("pipe.cinemaNothingSavedYet")}
             </p>
           ) : (
             mine.map((m) => (
               <Card
                 key={m.id}
                 name={m.name}
-                tag="Mine"
-                description={m.description || "Saved asset"}
+                tag={t("marketplace.tabMineShort")}
+                description={m.description || t("pipe.cinemaSavedAsset")}
                 thumb={m.url}
                 onUse={() => onUseInShot?.(m.name, m.description)}
               />
@@ -158,18 +171,12 @@ export function LibraryDrawer({
           ))}
         {tab === "new" && (
           <div className="space-y-2">
-            <span className={LABEL}>Describe a new {type}</span>
+            <span className={LABEL}>{t("pipe.cinemaDescribeNew", { type: t(TYPE_KEYS[type]) })}</span>
             <textarea
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
               rows={4}
-              placeholder={`e.g. ${
-                type === "character"
-                  ? "a stoic ronin in a neon raincoat"
-                  : type === "location"
-                    ? "a flooded subway platform at midnight"
-                    : "a humming plasma katana"
-              }`}
+              placeholder={t("pipe.cinemaExamplePrefix", { example: t(EXAMPLE_KEYS[type]) })}
               className="w-full resize-none rounded-md border border-[#2a2a2a] bg-[#111] p-2 font-mono text-[11px] text-foreground outline-none focus:border-[#ff0073]"
             />
             <button
@@ -181,7 +188,7 @@ export function LibraryDrawer({
               }}
               className="w-full rounded-md bg-[#ff0073] py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white disabled:opacity-40"
             >
-              Use in Shot
+              {t("pipe.cinemaUseInShot")}
             </button>
           </div>
         )}
@@ -203,6 +210,7 @@ function Card({
   thumb?: string | null
   onUse: () => void
 }) {
+  const t = useT()
   return (
     <div className="group rounded-md border border-[#2a2a2a] bg-[#111] p-2 hover:border-[#ff0073]/50">
       <div className="flex gap-2">
@@ -232,7 +240,7 @@ function Card({
         onClick={onUse}
         className="mt-2 hidden w-full rounded bg-[#ff0073]/15 py-1 font-mono text-[9px] font-bold uppercase tracking-wider text-[#ff0073] group-hover:block"
       >
-        Use in Shot
+        {t("pipe.cinemaUseInShot")}
       </button>
     </div>
   )

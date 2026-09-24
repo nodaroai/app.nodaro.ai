@@ -1,4 +1,6 @@
 import { Check, Loader2 } from "lucide-react"
+import { useT } from "@/lib/i18n"
+import { presetLabel } from "./preset-labels"
 import { presetState } from "./preset-state"
 
 /**
@@ -29,11 +31,15 @@ interface PresetChipsProps {
 }
 
 export function PresetChips({ presets, createdNames, busyNames, disabled, disabledHint, onPick }: PresetChipsProps) {
+  const t = useT()
   return (
     <div className="flex flex-wrap gap-2">
       {presets.map((p) => {
         const st = presetState(p, createdNames, busyNames)
         const inactive = st !== "idle"
+        // The id stays the key, the asset name and the value sent to the
+        // generator; only the caption and tooltip are localized.
+        const name = presetLabel(t, p)
         return (
           <button
             key={p}
@@ -44,17 +50,17 @@ export function PresetChips({ presets, createdNames, busyNames, disabled, disabl
               disabled
                 ? disabledHint
                 : st === "created"
-                  ? `${p} — already generated`
+                  ? t("studioPreset.tipAlreadyGenerated", { name })
                   : st === "creating"
-                    ? `${p} — generating…`
-                    : `Generate ${p}`
+                    ? t("studioPreset.tipGenerating", { name })
+                    : t("studioPreset.tipGenerate", { name })
             }
             onClick={() => onPick(p)}
             className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 inline-flex items-center gap-1.5 transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40 disabled:cursor-not-allowed data-[state=created]:text-emerald-300/80 data-[state=created]:border-emerald-700/40"
           >
             {st === "creating" && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
             {st === "created" && <Check className="w-2.5 h-2.5" />}
-            {p}
+            {name}
           </button>
         )
       })}

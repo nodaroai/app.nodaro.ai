@@ -50,9 +50,9 @@ function FadeVideoNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   const parts: string[] = []
-  if (nodeData.fadeIn) parts.push(`In ${nodeData.fadeInDuration ?? 0.5}s`)
-  if (nodeData.fadeOut) parts.push(`Out ${nodeData.fadeOutDuration ?? 0.5}s`)
-  const fadeLabel = parts.length > 0 ? parts.join(" / ") : "No fade"
+  if (nodeData.fadeIn) parts.push(t("node.fadeInSeconds", { n: nodeData.fadeInDuration ?? 0.5 }))
+  if (nodeData.fadeOut) parts.push(t("node.fadeOutSeconds", { n: nodeData.fadeOutDuration ?? 0.5 }))
+  const fadeLabel = parts.length > 0 ? parts.join(" / ") : t("node.noFade")
 
   const hasResult = status !== "running" && !!activeUrl && !videoError
 
@@ -118,7 +118,7 @@ function FadeVideoNodeComponent({ id, data, selected }: NodeProps) {
                 ))}
               </div>
             )}
-            <p className="text-muted-foreground">{fadeLabel} ({nodeData.color ?? "black"})</p>
+            <p className="text-muted-foreground">{fadeLabel} ({nodeData.color === "white" ? t("node.fadeColorWhite") : t("node.fadeColorBlack")})</p>
           </div>
         )}
       </BaseNode>

@@ -30,6 +30,7 @@ import {
   type MetaAdsScrapeStatus,
 } from "@nodaro/shared"
 import { useT, tx } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
 import type { MetaAdsScrapeNodeData } from "@/types/nodes"
 import { META_ADS_COUNTRIES } from "@/lib/meta-ads-countries"
@@ -462,6 +463,7 @@ export function MetaAdsScrapeResultsTab({
   readonly onUpdate: (d: Record<string, unknown>) => void
 }) {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const [view, setView] = useState<ResultsView>("list")
   const [openIndex, setOpenIndex] = useState(-1)
   const items = metaAdsScrapeItems(data.generatedJson)
@@ -660,7 +662,7 @@ export function MetaAdsScrapeResultsTab({
                     </div>
                     <div className="flex items-center justify-between gap-2 text-[12px] font-bold">
                       <span className="text-[var(--meta-ads-muted)]">
-                        {metaAdDateRange(ad)}
+                        {metaAdDateRange(ad, isRtl)}
                         {days !== null ? ` · ${t("cfgext.metaAdsRunDays", { count: days })}` : ""}
                       </span>
                       <span className="flex items-center gap-2">

@@ -4,12 +4,15 @@
  *
  * Two sizes: `"xs"` (default, for autocomplete rows) and `"sm"` (for cards).
  */
+import { useT } from "@/lib/i18n"
+
 interface TrainedPillProps {
   readonly size?: "xs" | "sm"
   readonly className?: string
 }
 
 export function TrainedPill({ size = "xs", className }: TrainedPillProps) {
+  const t = useT()
   const sizeClass =
     size === "xs"
       ? "px-1 py-0 text-[9px]"
@@ -19,9 +22,9 @@ export function TrainedPill({ size = "xs", className }: TrainedPillProps) {
       className={
         `inline-flex items-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 font-medium ${sizeClass} ${className ?? ""}`.trim()
       }
-      title="This character has a trained high-fidelity model. Generations will use the trained model instead of reference image injection."
+      title={t("editor.trainedPillTitle")}
     >
-      Trained
+      {t("editor.trainedBadge")}
     </span>
   )
 }

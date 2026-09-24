@@ -39,6 +39,7 @@ import {
   CINEMATIC_ASPECT_RATIO_OPTIONS,
   CINEMATIC_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
+import { useT } from "@/lib/i18n"
 import { INPUT_CLS } from "./shared"
 
 const MAX_LOOKS = 3
@@ -92,6 +93,7 @@ export function CinematicAvatarInputCard({
   readOnly,
 }: InputCardProps) {
   const data = node.data as Record<string, unknown>
+  const t = useT()
 
   // Determine which sub-controls the app author wants to expose.
   const fields = (data.appInputFields ?? {}) as AppInputFields
@@ -187,7 +189,7 @@ export function CinematicAvatarInputCard({
       <GlassCard>
         <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
           <Clapperboard className="size-4 shrink-0" />
-          <span>Cinematic Avatar (no editable fields)</span>
+          <span>{t("present.cinematicAvatarNoFields")}</span>
         </div>
       </GlassCard>
     )
@@ -200,18 +202,18 @@ export function CinematicAvatarInputCard({
         {/* ---- Prompt ---- */}
         {showPrompt && (
           <div>
-            <SectionLabel>Prompt</SectionLabel>
+            <SectionLabel>{t("present.prompt")}</SectionLabel>
             <textarea
               value={prompt}
               onChange={handlePromptChange}
-              placeholder="Describe the cinematic scene the avatar should perform…"
+              placeholder={t("present.cinematicPromptPlaceholder")}
               rows={4}
               maxLength={10000}
               className={cn(INPUT_CLS, "resize-none max-h-[40vh] overflow-y-auto")}
-              aria-label="Cinematic avatar prompt"
+              aria-label={t("present.cinematicAvatarPrompt")}
             />
             {prompt.length > 0 && (
-              <p className="mt-1 text-right text-[10px] text-muted-foreground">
+              <p className="mt-1 text-end text-[10px] text-muted-foreground">
                 {prompt.length}/10000
               </p>
             )}
@@ -222,9 +224,9 @@ export function CinematicAvatarInputCard({
         {showAvatar && (
           <div>
             <SectionLabel>
-              Avatar Looks
-              <span className="ml-1.5 normal-case tracking-normal text-muted-foreground/60 font-normal">
-                (pick 1–{MAX_LOOKS})
+              {t("present.avatarLooks")}
+              <span className="ms-1.5 normal-case tracking-normal text-muted-foreground/60 font-normal">
+                {t("present.pickRange", { max: MAX_LOOKS })}
               </span>
             </SectionLabel>
 
@@ -239,7 +241,7 @@ export function CinematicAvatarInputCard({
                     {!readOnly && (
                       <button
                         type="button"
-                        aria-label={`Remove ${avatarLookNames[i] ?? id}`}
+                        aria-label={t("present.removeNamed", { name: avatarLookNames[i] ?? id })}
                         onClick={() => handleRemoveLook(id)}
                         className="hover:text-[#ff0073]/70"
                       >
@@ -275,14 +277,14 @@ export function CinematicAvatarInputCard({
                 htmlFor={`cinematic-input-auto-duration-${node.id}`}
                 className="text-xs cursor-pointer"
               >
-                Auto duration (let HeyGen decide)
+                {t("present.autoDurationHeygen")}
               </label>
             </div>
 
             {!autoDuration && (
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <SectionLabel>Duration</SectionLabel>
+                  <SectionLabel>{t("field.duration")}</SectionLabel>
                   <span className="text-xs text-muted-foreground tabular-nums">
                     {duration}s
                   </span>
@@ -295,7 +297,7 @@ export function CinematicAvatarInputCard({
                   disabled={readOnly}
                   onValueChange={([v]) => write("duration", v)}
                   className="w-full"
-                  aria-label="Duration"
+                  aria-label={t("field.duration")}
                 />
                 <div className="flex justify-between text-[9px] text-muted-foreground/60">
                   <span>4s</span>
@@ -309,13 +311,13 @@ export function CinematicAvatarInputCard({
         {/* ---- Aspect Ratio ---- */}
         {showAspectRatio && (
           <div>
-            <SectionLabel>Aspect Ratio</SectionLabel>
+            <SectionLabel>{t("field.aspectRatio")}</SectionLabel>
             <Select
               value={aspectRatio}
               onValueChange={(v) => write("aspectRatio", v)}
               disabled={readOnly}
             >
-              <SelectTrigger aria-label="Aspect ratio"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("paramcfg.aspectRatio")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {CINEMATIC_ASPECT_RATIO_OPTIONS.map((ar) => (
                   <SelectItem key={ar.value} value={ar.value}>{ar.label}</SelectItem>
@@ -328,13 +330,13 @@ export function CinematicAvatarInputCard({
         {/* ---- Resolution ---- */}
         {showResolution && (
           <div>
-            <SectionLabel>Resolution</SectionLabel>
+            <SectionLabel>{t("field.resolution")}</SectionLabel>
             <Select
               value={resolution}
               onValueChange={(v) => write("resolution", v)}
               disabled={readOnly}
             >
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {CINEMATIC_RESOLUTION_OPTIONS.map((r) => (
                   <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
@@ -357,7 +359,7 @@ export function CinematicAvatarInputCard({
               htmlFor={`cinematic-input-enhance-prompt-${node.id}`}
               className="text-xs cursor-pointer"
             >
-              Enhance prompt
+              {t("present.enhancePrompt")}
             </label>
           </div>
         )}

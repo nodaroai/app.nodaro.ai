@@ -1,4 +1,5 @@
 import type { ProposedChange } from "@nodaro/shared"
+import { useT, tx, type TFunction } from "@/lib/i18n"
 
 type EditPatch = Extract<ProposedChange, { change_type: "edit_artifact" }>
 export type DiffOp = EditPatch["json_patch"][number]
@@ -17,10 +18,11 @@ export type DiffOp = EditPatch["json_patch"][number]
  * application happens server-side in `applyStageEdit`.
  */
 export function DiffRenderer({ ops }: { ops: DiffOp[] }) {
+  const t = useT()
   if (ops.length === 0) {
     return (
       <div className="text-xs text-zinc-500 dark:text-zinc-400 italic">
-        (no operations)
+        {t("pipe.noOperations")}
       </div>
     )
   }
@@ -31,7 +33,7 @@ export function DiffRenderer({ ops }: { ops: DiffOp[] }) {
     >
       {ops.map((op, i) => (
         <li key={i} className="leading-snug">
-          {describeOp(op)}
+          {describeOp(op, t)}
         </li>
       ))}
     </ul>
@@ -39,134 +41,147 @@ export function DiffRenderer({ ops }: { ops: DiffOp[] }) {
 }
 
 /**
- * Human description for a single JSON Patch op. Exported for tests.
+ * Human description for a single JSON Patch op. Exported for tests. `t`
+ * defaults to the live-locale `tx` so bare calls still resolve.
  */
-export function describeOp(op: DiffOp): string {
+export function describeOp(op: DiffOp, t: TFunction = tx): string {
   const { op: kind, path } = op
   const value = "value" in op ? op.value : undefined
 
   // Scenes
   const sceneSummary = path.match(/^\/scenes\/(\d+)\/summary$/)
   if (sceneSummary) {
-    return `Scene ${Number(sceneSummary[1]) + 1}: rewrite summary → ${truncate(value)}`
+    return t("pipe.diffSceneSummary", { n: Number(sceneSummary[1]) + 1, value: truncate(value) })
   }
   const sceneTitle = path.match(/^\/scenes\/(\d+)\/title$/)
   if (sceneTitle) {
-    return `Scene ${Number(sceneTitle[1]) + 1}: retitle → ${truncate(value)}`
+    return t("pipe.diffSceneRetitle", { n: Number(sceneTitle[1]) + 1, value: truncate(value) })
   }
   const sceneDuration = path.match(/^\/scenes\/(\d+)\/duration_seconds$/)
   if (sceneDuration) {
-    return `Scene ${Number(sceneDuration[1]) + 1}: duration → ${value}s`
+    return t("pipe.diffSceneDuration", { n: Number(sceneDuration[1]) + 1, value: String(value) })
   }
   const sceneMood = path.match(/^\/scenes\/(\d+)\/mood$/)
   if (sceneMood) {
-    return `Scene ${Number(sceneMood[1]) + 1}: mood → ${truncate(value)}`
+    return t("pipe.diffSceneMood", { n: Number(sceneMood[1]) + 1, value: truncate(value) })
   }
   const sceneAdd = path.match(/^\/scenes\/-$/) || path.match(/^\/scenes\/(\d+)$/)
   if (sceneAdd && kind === "add") {
-    const idx = path.endsWith("/-") ? "end" : `index ${path.split("/")[2]}`
-  return `Insert scene at ${idx}`
+    const idx = path.endsWith("/-") ? t("pipe.diffAtEnd") : t("pipe.diffAtIndex", { n: path.split("/")[2] ?? "" })
+  return t("pipe.diffInsertSceneAt", { position: idx })
   }
   const sceneRemove = path.match(/^\/scenes\/(\d+)$/)
   if (sceneRemove && kind === "remove") {
-    return `Remove scene ${Number(sceneRemove[1]) + 1}`
+    return t("pipe.diffRemoveScene", { n: Number(sceneRemove[1]) + 1 })
   }
   const sceneFallback = path.match(/^\/scenes\/(\d+)\/(.+)$/)
   if (sceneFallback) {
-    return `Scene ${Number(sceneFallback[1]) + 1}: ${kind} ${sceneFallback[2]}${
-      kind !== "remove" ? ` → ${truncate(value)}` : ""
-    }`
+    return t("pipe.diffSceneField", {
+      n: Number(sceneFallback[1]) + 1,
+      op: kind,
+      field: sceneFallback[2] ?? "",
+      tail: kind !== "remove" ? t("pipe.diffArrowValue", { value: truncate(value) }) : "",
+    })
   }
 
   // Cast
   const castName = path.match(/^\/cast\/(\d+)\/name$/)
   if (castName) {
-    return `Cast #${Number(castName[1]) + 1}: rename → ${truncate(value)}`
+    return t("pipe.diffCastRename", { n: Number(castName[1]) + 1, value: truncate(value) })
   }
   const castVisual = path.match(/^\/cast\/(\d+)\/visual_description$/)
   if (castVisual) {
-    return `Cast #${Number(castVisual[1]) + 1}: update visual description`
+    return t("pipe.diffCastVisual", { n: Number(castVisual[1]) + 1 })
   }
   const castVoice = path.match(/^\/cast\/(\d+)\/voice_profile$/)
   if (castVoice) {
-    return `Cast #${Number(castVoice[1]) + 1}: update voice profile`
+    return t("pipe.diffCastVoice", { n: Number(castVoice[1]) + 1 })
   }
   const castAdd = path === "/cast/-" || /^\/cast\/\d+$/.test(path)
   if (castAdd && kind === "add") {
-    return `Add cast member`
+    return t("pipe.diffAddCast")
   }
   const castRemoveMatch = path.match(/^\/cast\/(\d+)$/)
   if (castRemoveMatch && kind === "remove") {
-    return `Remove cast #${Number(castRemoveMatch[1]) + 1}`
+    return t("pipe.diffRemoveCast", { n: Number(castRemoveMatch[1]) + 1 })
   }
   const castFallback = path.match(/^\/cast\/(\d+)\/(.+)$/)
   if (castFallback) {
-    return `Cast #${Number(castFallback[1]) + 1}: ${kind} ${castFallback[2]}${
-      kind !== "remove" ? ` → ${truncate(value)}` : ""
-    }`
+    return t("pipe.diffCastField", {
+      n: Number(castFallback[1]) + 1,
+      op: kind,
+      field: castFallback[2] ?? "",
+      tail: kind !== "remove" ? t("pipe.diffArrowValue", { value: truncate(value) }) : "",
+    })
   }
 
   // Locations
   const locName = path.match(/^\/locations\/(\d+)\/name$/)
   if (locName) {
-    return `Location #${Number(locName[1]) + 1}: rename → ${truncate(value)}`
+    return t("pipe.diffLocationRename", { n: Number(locName[1]) + 1, value: truncate(value) })
   }
   const locVisual = path.match(/^\/locations\/(\d+)\/visual_description$/)
   if (locVisual) {
-    return `Location #${Number(locVisual[1]) + 1}: update visual description`
+    return t("pipe.diffLocationVisual", { n: Number(locVisual[1]) + 1 })
   }
   const locAddRoot = path === "/locations/-"
   if (locAddRoot && kind === "add") {
-    return `Add location`
+    return t("pipe.diffAddLocation")
   }
   const locRemoveMatch = path.match(/^\/locations\/(\d+)$/)
   if (locRemoveMatch && kind === "remove") {
-    return `Remove location #${Number(locRemoveMatch[1]) + 1}`
+    return t("pipe.diffRemoveLocation", { n: Number(locRemoveMatch[1]) + 1 })
   }
   const locFallback = path.match(/^\/locations\/(\d+)\/(.+)$/)
   if (locFallback) {
-    return `Location #${Number(locFallback[1]) + 1}: ${kind} ${locFallback[2]}${
-      kind !== "remove" ? ` → ${truncate(value)}` : ""
-    }`
+    return t("pipe.diffLocationField", {
+      n: Number(locFallback[1]) + 1,
+      op: kind,
+      field: locFallback[2] ?? "",
+      tail: kind !== "remove" ? t("pipe.diffArrowValue", { value: truncate(value) }) : "",
+    })
   }
 
   // Objects
   const objName = path.match(/^\/objects\/(\d+)\/name$/)
   if (objName) {
-    return `Object #${Number(objName[1]) + 1}: rename → ${truncate(value)}`
+    return t("pipe.diffObjectRename", { n: Number(objName[1]) + 1, value: truncate(value) })
   }
   const objAddRoot = path === "/objects/-"
   if (objAddRoot && kind === "add") {
-    return `Add object`
+    return t("pipe.diffAddObject")
   }
   const objRemoveMatch = path.match(/^\/objects\/(\d+)$/)
   if (objRemoveMatch && kind === "remove") {
-    return `Remove object #${Number(objRemoveMatch[1]) + 1}`
+    return t("pipe.diffRemoveObject", { n: Number(objRemoveMatch[1]) + 1 })
   }
   const objFallback = path.match(/^\/objects\/(\d+)\/(.+)$/)
   if (objFallback) {
-    return `Object #${Number(objFallback[1]) + 1}: ${kind} ${objFallback[2]}${
-      kind !== "remove" ? ` → ${truncate(value)}` : ""
-    }`
+    return t("pipe.diffObjectField", {
+      n: Number(objFallback[1]) + 1,
+      op: kind,
+      field: objFallback[2] ?? "",
+      tail: kind !== "remove" ? t("pipe.diffArrowValue", { value: truncate(value) }) : "",
+    })
   }
 
   // Top-level Showrunner-plan fields
-  if (path === "/title") return `Retitle plan → ${truncate(value)}`
-  if (path === "/logline") return `Rewrite logline → ${truncate(value)}`
+  if (path === "/title") return t("pipe.diffRetitlePlan", { value: truncate(value) })
+  if (path === "/logline") return t("pipe.diffRewriteLogline", { value: truncate(value) })
   if (path === "/has_narrator") {
-    return `Narrator → ${value ? "enabled" : "disabled"}`
+    return t("pipe.diffNarrator", { state: value ? t("pipe.diffEnabled") : t("pipe.diffDisabled") })
   }
   if (path === "/narrator_profile") {
-    return `Narrator profile → ${truncate(value)}`
+    return t("pipe.diffNarratorProfile", { value: truncate(value) })
   }
   if (path.startsWith("/music_plan/")) {
-    return `Music ${path.replace(/^\/music_plan\//, "")} → ${truncate(value)}`
+    return t("pipe.diffMusic", { field: path.replace(/^\/music_plan\//, ""), value: truncate(value) })
   }
   if (path.startsWith("/global_style/")) {
-    return `Style ${path.replace(/^\/global_style\//, "")} → ${truncate(value)}`
+    return t("pipe.diffStyle", { field: path.replace(/^\/global_style\//, ""), value: truncate(value) })
   }
   if (path === "/total_duration_seconds") {
-    return `Total duration → ${value}s`
+    return t("pipe.diffTotalDuration", { value: String(value) })
   }
 
   // Generic fallback for unknown paths

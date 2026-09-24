@@ -6,7 +6,7 @@ import { LANGUAGES, type LocaleId } from "@nodaro/shared"
 import { useLocaleStore } from "@/lib/locale-store"
 import { useAuth } from "@/hooks/use-auth"
 import { useUpdatePreferredLocaleMutation } from "@/hooks/queries/use-user-settings-queries"
-import { useT } from "@/lib/i18n"
+import { languageMenuRows, useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -18,6 +18,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
  * opens the language menu. Unlike the compact config-panel <LocalePicker>, this
  * writes the same locale-store + persists to the profile, so switching here
  * localizes BOTH the app chrome (via useT) AND the picker catalogs.
+ * Lists only the languages whose chrome translation is complete (plus the
+ * current one, if it predates that gate) — see `lib/i18n/offered-locales.ts`.
  * Must be rendered inside a <TooltipProvider> (the sidebar supplies one).
  */
 function LanguageSwitcherComponent() {
@@ -59,7 +61,7 @@ function LanguageSwitcherComponent() {
           {t("lang.label")}
         </div>
         <div className="flex flex-col gap-0.5">
-          {LANGUAGES.map((lang) => {
+          {languageMenuRows(locale).map((lang) => {
             const selected = lang.id === locale
             return (
               <button
@@ -67,7 +69,7 @@ function LanguageSwitcherComponent() {
                 type="button"
                 onClick={() => handlePick(lang.id)}
                 className={cn(
-                  "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-muted/60 cursor-pointer transition-colors text-left",
+                  "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-muted/60 cursor-pointer transition-colors text-start",
                   selected && "bg-muted/40",
                 )}
                 dir={lang.dir}

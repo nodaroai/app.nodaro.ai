@@ -123,7 +123,7 @@ export function WebhookOutputConfig({ data, onUpdate, nodes }: ConfigProps<Webho
           <span className="pointer-events-none absolute inset-y-0 start-2 flex items-center text-[9.5px] font-bold tracking-[0.06em] text-emerald-700 dark:text-emerald-400">
             POST
           </span>
-          <Input
+          <Input dir="ltr"
             id="webhook-url"
             value={data.url}
             onChange={(e) => onUpdate({ url: e.target.value })}

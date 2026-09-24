@@ -49,6 +49,14 @@ describe("approved row bodies", () => {
     )
   })
 
+  it("rewind (the prompted in-shot rewind; timed, not a cut)", () => {
+    expect(composeTransitionHintFromConnections("rewind", [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      "reverse-motion rewind (reverse motion: the actions just seen are undone exactly as they happened, in reverse " +
+        "order and at the same pace, the subject retracing each step to where it began, ending on the end frame), " +
+        "the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing",
+    )
+  })
+
   it("zoom-into-mouth drops only 'the throat'", () => {
     expect(getTransitionPromptHint("zoom-into-mouth")).toBe(
       "the camera pushes into the subject's open mouth, the dark interior fills the frame, and the camera passes " +

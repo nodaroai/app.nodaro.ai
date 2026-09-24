@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, tx } from "@/lib/i18n"
 import { memo, useState, useEffect, lazy, Suspense } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Paintbrush, Layers, Image as ImageIcon, Link2, RotateCcw, Download } from "lucide-react"
@@ -111,10 +111,10 @@ function useMaskStats(maskUrl: string | undefined): { coverage: number | null; d
 function timeAgo(epochMs: number | undefined): string | null {
   if (!epochMs) return null
   const s = Math.max(0, Math.floor((Date.now() - epochMs) / 1000))
-  if (s < 60) return "just now"
-  if (s < 3600) return `edited ${Math.floor(s / 60)}m ago`
-  if (s < 86400) return `edited ${Math.floor(s / 3600)}h ago`
-  return `edited ${Math.floor(s / 86400)}d ago`
+  if (s < 60) return tx("time.justNow")
+  if (s < 3600) return tx("node.editedMinAgo", { n: Math.floor(s / 60) })
+  if (s < 86400) return tx("node.editedHrAgo", { n: Math.floor(s / 3600) })
+  return tx("node.editedDayAgo", { n: Math.floor(s / 86400) })
 }
 
 const ACCEPTS_IMAGE = (t: string) => isValidPaintMaskConnection("image", t)
@@ -186,7 +186,7 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
                   <Link2 className="w-4 h-4" />
                 </div>
                 <div className="text-muted-foreground dark:text-[#75757c] text-xs">{t("node.connectAnImageToPaint")}</div>
-                <div className="text-muted-foreground/60 dark:text-[#4f4f57] text-[10.5px] font-mono">wire the image input</div>
+                <div className="text-muted-foreground/60 dark:text-[#4f4f57] text-[10.5px] font-mono">{t("node.wireTheImageInput")}</div>
               </div>
             )}
 
@@ -203,7 +203,7 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
               >
                 <img
                   src={optimizedImageUrl(substrateUrl)}
-                  alt="Source"
+                  alt={t("inputcfg.source")}
                   className="w-full h-full object-cover opacity-55"
                   draggable={false}
                 />
@@ -225,7 +225,7 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
                 {substrateUrl ? (
                   <img
                     src={optimizedImageUrl(substrateUrl)}
-                    alt="Source"
+                    alt={t("inputcfg.source")}
                     className="w-full h-full object-cover"
                     draggable={false}
                     onLoad={(e) => {
@@ -236,7 +236,7 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
                 ) : (
                   <img
                     src={optimizedImageUrl(maskUrl!)}
-                    alt="Mask"
+                    alt={t("imgcfg.maskAlt")}
                     className="w-full h-full object-cover"
                     draggable={false}
                   />
@@ -256,7 +256,7 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
                 {coverage != null && (
                   <div className="absolute left-2 top-2 px-2 py-[3px] rounded-full text-[10px] font-mono text-[#e6e6ea] border border-[#2c2c32]"
                     style={{ background: "rgba(10,10,12,.72)" }}>
-                    {coverage}% masked
+                    {t("node.percentMasked", { n: coverage })}
                   </div>
                 )}
                 {/* Hover actions */}
@@ -304,13 +304,13 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
             {state === 1 && (
               <>
                 <span className="text-muted-foreground/60 dark:text-[#4f4f57] text-[11px]">{t("node.waitingForInput")}</span>
-                <span className="px-2 py-0.5 rounded-full bg-muted dark:bg-[#1a1a1e] text-muted-foreground/70 dark:text-[#5c5c64] text-[10px] font-mono">idle</span>
+                <span className="px-2 py-0.5 rounded-full bg-muted dark:bg-[#1a1a1e] text-muted-foreground/70 dark:text-[#5c5c64] text-[10px] font-mono">{t("node.idle")}</span>
               </>
             )}
             {state === 2 && (
               <>
-                <span className="text-muted-foreground dark:text-[#75757c] text-[11px] font-mono">{dims ?? "ready to paint"}</span>
-                <span className="text-muted-foreground/60 dark:text-[#4f4f57] text-[10.5px]">double-click to open</span>
+                <span className="text-muted-foreground dark:text-[#75757c] text-[11px] font-mono">{dims ?? t("node.readyToPaint")}</span>
+                <span className="text-muted-foreground/60 dark:text-[#4f4f57] text-[10.5px]">{t("node.doubleClickToOpen")}</span>
               </>
             )}
             {state === 3 && (

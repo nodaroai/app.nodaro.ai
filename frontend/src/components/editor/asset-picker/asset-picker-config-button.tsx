@@ -30,7 +30,7 @@ export function AssetPickerConfigButton({
         aria-label={label}
       >
         <Library className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="flex-1 text-left text-muted-foreground">{label}</span>
+        <span className="flex-1 text-start text-muted-foreground">{label}</span>
       </button>
       {pickerElement}
     </>

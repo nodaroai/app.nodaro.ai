@@ -1,6 +1,7 @@
 "use client"
 
-import { tx } from "@/lib/i18n"
+import { tx, useT, type MessageKey } from "@/lib/i18n"
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useEffect, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock, Wand2, Hash, Music2, Mic, Volume2, Gauge, Layers } from "lucide-react"
@@ -44,7 +45,7 @@ import {
   getVideoResolutionOptions,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { availableReasoningEfforts, isSeedanceVideoEditProvider, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS } from "@nodaro/shared"
+import { availableReasoningEfforts, isSeedanceVideoEditProvider, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS } from "@nodaro/shared"
 import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 
@@ -160,39 +161,39 @@ const providerControl = (
   list: ReadonlyArray<{ readonly value: string | number; readonly label: string }>,
 ): QuickConfigControl => ({
   field: "provider",
-  ariaLabel: "Model",
+  ariaLabel: tx("field.model"),
   icon: Sparkles,
   options: toOptions(list),
 })
 
 /** Suno model dropdown (writes `data.model`), shared by all Suno nodes that
  *  carry a `model: SunoModel`. */
-const sunoModelControl: QuickConfigControl = {
+const sunoModelControl = (): QuickConfigControl => ({
   field: "model",
-  ariaLabel: "Model",
+  ariaLabel: tx("field.model"),
   icon: Sparkles,
   options: toOptions(SUNO_MODELS),
-}
+})
 
 /** Suno Instrumental toggle as a 2-option dropdown (writes boolean `data.instrumental`).
  *  Undefined reads as "With vocals" — executor treats `instrumental ?? false`. */
-const sunoInstrumentalControl: QuickConfigControl = {
+const sunoInstrumentalControl = (): QuickConfigControl => ({
   field: "instrumental",
-  ariaLabel: "Instrumental",
+  ariaLabel: tx("audiocfg.instrumental"),
   icon: Music2,
   boolean: true,
   options: [
     { value: "false", label: tx("node.withVocals") },
-    { value: "true", label: "Instrumental — no vocals" },
+    { value: "true", label: tx("node.instrumentalNoVocals") },
   ],
-}
+})
 
 /** Suno Vocal gender (writes `data.vocalGender`); "Auto" → undefined (API accepts
  *  only male/female). Hidden when instrumental is on (no vocals to gender),
  *  preserving the stored value. Auto first so an unset field shows "Auto". */
-const sunoVocalControl: QuickConfigControl = {
+const sunoVocalControl = (): QuickConfigControl => ({
   field: "vocalGender",
-  ariaLabel: "Vocal",
+  ariaLabel: tx("audiocfg.vocal"),
   icon: Mic,
   sentinelUndefined: "auto",
   preserveOnHide: true,
@@ -200,18 +201,18 @@ const sunoVocalControl: QuickConfigControl = {
     data.instrumental
       ? []
       : [
-          { value: "auto", label: "Auto" },
-          { value: "male", label: "Male" },
-          { value: "female", label: "Female" },
+          { value: "auto", label: tx("common.auto") },
+          { value: "male", label: tx("audiocfg.male") },
+          { value: "female", label: tx("audiocfg.female") },
         ],
-}
+})
 
 /** LLM model dropdown (writes `data.llmModel`), shared by the LLM-backed nodes.
  *  Vendor-clustered + tier-ordered via the shared ordering (the strip's compact
  *  Select can't render group headers, but the clustering still scans). */
-const llmModelControl: QuickConfigControl = {
+const llmModelControl = (): QuickConfigControl => ({
   field: "llmModel",
-  ariaLabel: "Model",
+  ariaLabel: tx("field.model"),
   icon: Sparkles,
   options: orderedLlmModels().map((m) => ({ value: m.id, label: m.displayName })),
   // Clearing `advancedMode` on ANY model switch is deliberately blunt: the
@@ -222,7 +223,7 @@ const llmModelControl: QuickConfigControl = {
   // an orchestrated run fails with `advanced_mode_unsupported` and no visible
   // cause. Prefer the annoyance.
   additionalClear: ["advancedMode"],
-}
+})
 
 /** Effort dropdown for reasoning-capable models (writes `data.reasoningEffort`).
  *  Provider-aware: options are derived from the CURRENTLY selected `llmModel`'s
@@ -231,9 +232,9 @@ const llmModelControl: QuickConfigControl = {
  *  `useEffect` (same mechanism every provider-aware control here relies on)
  *  snaps or clears a stale stored effort whenever the model switch changes
  *  this list — no bespoke onChange wiring needed. */
-const reasoningEffortControl: QuickConfigControl = {
+const reasoningEffortControl = (): QuickConfigControl => ({
   field: "reasoningEffort",
-  ariaLabel: "Effort",
+  ariaLabel: tx("node.effort"),
   icon: Gauge,
   sentinelUndefined: "auto",
   options: (data) => {
@@ -247,26 +248,26 @@ const reasoningEffortControl: QuickConfigControl = {
     )
     if (levels.length === 0) return []
     return [
-      { value: "auto", label: "Auto" },
+      { value: "auto", label: tx("common.auto") },
       ...levels.map((level) => ({ value: level, label: EFFORT_LABELS()[level] })),
     ]
   },
-}
+})
 
 /** Vision LLM model dropdown (writes `data.llmModel`). The describe-to-picker
  *  analyzer forces a schema over an image, so the strip offers exactly the
  *  vision models that can return guaranteed structured output (Anthropic +
  *  Gemini) — the shared {@link STRUCTURED_VISION_MODELS} list the route gate
  *  also enforces, so the picker and the gate can't drift. */
-const visionModelControl: QuickConfigControl = {
+const visionModelControl = (): QuickConfigControl => ({
   field: "llmModel",
-  ariaLabel: "Model",
+  ariaLabel: tx("field.model"),
   icon: Sparkles,
   options: orderedLlmModels(STRUCTURED_VISION_MODELS).map((m) => ({ value: m.id, label: m.displayName })),
   // Same rationale as llmModelControl: a stranded advancedMode fails an
   // orchestrated run invisibly, so clear it on any model switch.
   additionalClear: ["advancedMode"],
-}
+})
 
 // NOTE: the lists below mirror INLINE `<SelectItem>`s in the referenced config
 // panels (not yet exported). Several are single-option today (others are
@@ -274,67 +275,67 @@ const visionModelControl: QuickConfigControl = {
 // import in both places (as done for EXTEND_VIDEO_MODELS) to remove the mirror.
 
 /** transcribe / audio-isolation provider — mirrors audio-configs.tsx (~L887). */
-const sttProviderControl: QuickConfigControl = {
-  field: "provider", ariaLabel: "Provider", icon: Sparkles,
+const sttProviderControl = (): QuickConfigControl => ({
+  field: "provider", ariaLabel: tx("field.provider"), icon: Sparkles,
   options: [{ value: "elevenlabs-stt", label: "ElevenLabs STT" }],
-}
+})
 /** generate-music provider — mirrors music-config.tsx (~L75). */
-const musicProviderControl: QuickConfigControl = {
-  field: "provider", ariaLabel: "Provider", icon: Sparkles,
+const musicProviderControl = (): QuickConfigControl => ({
+  field: "provider", ariaLabel: tx("field.provider"), icon: Sparkles,
   options: [{ value: "minimax", label: "MiniMax Music" }],
-}
+})
 /** text-to-audio provider — mirrors audio-configs.tsx (~L229). */
-const audioSfxProviderControl: QuickConfigControl = {
-  field: "provider", ariaLabel: "Provider", icon: Sparkles,
+const audioSfxProviderControl = (): QuickConfigControl => ({
+  field: "provider", ariaLabel: tx("field.provider"), icon: Sparkles,
   options: [{ value: "elevenlabs-sfx", label: "ElevenLabs SFX v2" }],
-}
+})
 /** voice-design / voice-remix model — mirrors audio-configs.tsx (~L1518). */
-const voiceDesignModelControl: QuickConfigControl = {
-  field: "model", ariaLabel: "Model", icon: Sparkles,
+const voiceDesignModelControl = (): QuickConfigControl => ({
+  field: "model", ariaLabel: tx("field.model"), icon: Sparkles,
   options: [
     { value: "eleven_multilingual_ttv_v2", label: "ElevenLabs Multilingual v2" },
     { value: "eleven_ttv_v3", label: "ElevenLabs v3" },
   ],
-}
+})
 /** video-upscale provider — mirrors video-configs.tsx (~L1554, dynamic credit labels there). */
-const videoUpscaleProviderControl: QuickConfigControl = {
-  field: "provider", ariaLabel: "Provider", icon: Sparkles,
+const videoUpscaleProviderControl = (): QuickConfigControl => ({
+  field: "provider", ariaLabel: tx("field.provider"), icon: Sparkles,
   options: [
     { value: "topaz", label: "Topaz" },
     { value: "veo-1080p", label: "VEO 1080p" },
     { value: "veo-4k", label: "VEO 4K" },
   ],
-}
+})
 /** Language dropdowns reuse the exported ALL_LANGUAGES list (no drift). */
-const targetLanguageControl: QuickConfigControl = {
-  field: "targetLanguage", ariaLabel: "Language", icon: Languages, options: ALL_LANGUAGES,
-}
-const dialogueLanguageControl: QuickConfigControl = {
-  field: "languageCode", ariaLabel: "Language", icon: Languages, options: ALL_LANGUAGES,
-}
+const targetLanguageControl = (): QuickConfigControl => ({
+  field: "targetLanguage", ariaLabel: tx("field.language"), icon: Languages, options: ALL_LANGUAGES,
+})
+const dialogueLanguageControl = (): QuickConfigControl => ({
+  field: "languageCode", ariaLabel: tx("field.language"), icon: Languages, options: ALL_LANGUAGES,
+})
 /** speech-to-video resolution — mirrors video-configs.tsx (dynamic credit labels there). */
-const speechVideoResControl: QuickConfigControl = {
-  field: "resolution", ariaLabel: "Resolution", icon: Sparkles,
+const speechVideoResControl = (): QuickConfigControl => ({
+  field: "resolution", ariaLabel: tx("field.resolution"), icon: Sparkles,
   options: [
     { value: "480p", label: "480p" },
     { value: "580p", label: "580p" },
     { value: "720p", label: "720p" },
   ],
-}
+})
 /** face-swap provider — fixed to roop in the panel today. */
-const faceSwapProviderControl: QuickConfigControl = {
-  field: "provider", ariaLabel: "Provider", icon: Sparkles,
+const faceSwapProviderControl = (): QuickConfigControl => ({
+  field: "provider", ariaLabel: tx("field.provider"), icon: Sparkles,
   options: [{ value: "roop", label: "Roop" }],
-}
+})
 /** remove-background motion (enum field on the node data). */
-const removeBgMotionControl: QuickConfigControl = {
-  field: "motion", ariaLabel: "Motion", icon: Sparkles,
+const removeBgMotionControl = (): QuickConfigControl => ({
+  field: "motion", ariaLabel: tx("field.motion"), icon: Sparkles,
   options: [
-    { value: "subtle", label: "Subtle" },
-    { value: "moderate", label: "Moderate" },
-    { value: "dynamic", label: "Dynamic" },
+    { value: "subtle", label: tx("vidcfg.subtle") },
+    { value: "moderate", label: tx("vidcfg.moderate") },
+    { value: "dynamic", label: tx("vidcfg.dynamic") },
   ],
-}
+})
 /** video-to-video resolution. Provider-aware, three ways:
  *   - runway-aleph has no resolution lever (it uses an aspect-ratio control
  *     instead — see video-configs.tsx) → `[]`, so QuickConfigSelect hides the
@@ -346,15 +347,15 @@ const removeBgMotionControl: QuickConfigControl = {
  *  A static superset here would be the Zod-reject trap CLAUDE.md calls out:
  *  480p written by the strip and then carried onto a Wan provider is rejected
  *  by the /v1/video-to-video enum at generate time. */
-const v2vResolutionControl: QuickConfigControl = {
-  field: "v2vResolution", ariaLabel: "Resolution", icon: Sparkles,
+const v2vResolutionControl = (): QuickConfigControl => ({
+  field: "v2vResolution", ariaLabel: tx("field.resolution"), icon: Sparkles,
   options: (data) => {
     const provider = typeof data.provider === "string" ? data.provider : "wan"
     if (provider === "runway-aleph") return []
     if (isSeedanceVideoEditProvider(provider)) return getVideoResolutionOptions(provider) ?? []
     return toOptions(V2V_RESOLUTION_OPTIONS)
   },
-}
+})
 /** cinematic-avatar duration (numeric, 4–15s). Provider-aware: when
  *  `data.autoDuration` is on, HeyGen picks the length, so there's no duration
  *  lever — return [] and QuickConfigSelect hides the control. preserveOnHide so
@@ -364,45 +365,45 @@ const CINEMATIC_DURATION_OPTIONS: ReadonlyArray<QuickConfigOption> = Array.from(
   { length: 12 },
   (_, i) => ({ value: String(i + 4), label: `${i + 4}s` }),
 )
-const cinematicDurationControl: QuickConfigControl = {
-  field: "duration", ariaLabel: "Duration", numeric: true, preserveOnHide: true,
+const cinematicDurationControl = (): QuickConfigControl => ({
+  field: "duration", ariaLabel: tx("field.duration"), numeric: true, preserveOnHide: true,
   options: (data) => (data.autoDuration === true ? [] : CINEMATIC_DURATION_OPTIONS),
-}
+})
 
 /** generate-mask segmentation threshold (numeric — Grounded SAM confidence). */
 /** generate-3d-scene aspect — the SAME COMPOSITION_RATIOS list the config
  *  panel renders (and the `/v1/3d-scene/generate` Zod enum accepts), labels
  *  compacted to the bare ratio for the pill. Deliberately NOT
  *  PRO3D_ASPECT_RATIOS: 21:9 is a 3D Render Pro capability this route refuses. */
-const scene3dAspectControl: QuickConfigControl = {
+const scene3dAspectControl = (): QuickConfigControl => ({
   field: "aspectRatio",
-  ariaLabel: "Aspect",
+  ariaLabel: tx("node.aspect"),
   icon: Ratio,
   options: COMPOSITION_RATIOS.map((r) => ({ value: r.value, label: r.value })),
-}
+})
 
 /** generate-3d-scene length — writes `durationSeconds` (the node's own field,
  *  not the video strip's `duration`). Presets cover the previz sweet spot and
  *  include the node default (4s); "Custom…" opens the slider/number popover
  *  for ANY value inside the route's SCENE3D_LIMITS bounds, so the strip can
  *  never offer a length the route rejects. */
-const scene3dDurationControl: QuickConfigControl = {
+const scene3dDurationControl = (): QuickConfigControl => ({
   field: "durationSeconds",
-  ariaLabel: "Duration",
+  ariaLabel: tx("field.duration"),
   icon: Clock,
   numeric: true,
   options: [2, 4, 6, 8, 10, 15, 20, 30].map((v) => ({ value: String(v), label: `${v}s` })),
   customRange: { min: SCENE3D_LIMITS.minDurationSeconds, max: SCENE3D_LIMITS.maxDurationSeconds, unit: "s" },
-}
+})
 
-const maskThresholdControl: QuickConfigControl = {
-  field: "threshold", ariaLabel: "Threshold", icon: Sparkles, numeric: true,
+const maskThresholdControl = (): QuickConfigControl => ({
+  field: "threshold", ariaLabel: tx("scriptcfg.threshold"), icon: Sparkles, numeric: true,
   options: [
     { value: "0.2", label: tx("node.thresholdLow") },
     { value: "0.3", label: tx("node.thresholdMed") },
     { value: "0.45", label: tx("node.thresholdHigh") },
   ],
-}
+})
 
 /** assemble-narrated-video's three ffmpeg-fit knobs. No provider lever exists
  *  on this node (pure ffmpeg logic — see assemble-narrated-video-config.tsx),
@@ -421,9 +422,21 @@ const ASSEMBLE_NARRATED_VIDEO_MAX_SLOWDOWN_OPTIONS: ReadonlyArray<QuickConfigOpt
   1, 1.1, 1.25, 1.5, 1.75, 2,
 ].map((v) => ({ value: String(v), label: `${v}×` }))
 
-/** Title-case a kebab sheet enum value for the dropdown label (drift-proof — no
- *  separate label map to keep in sync with SHEET_TYPES/SHEET_SKINS). */
-const sheetLabel = (v: string) => v.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+/** Sheet type / skin display keys — the SAME cfgext keys the config panel's
+ *  TYPE_LABELS / SKIN_LABELS read. Exhaustive over SheetType / SheetSkin, so a
+ *  new SHEET_TYPES / SHEET_SKINS entry is a compile error until it has a label. */
+export const SHEET_TYPE_LABEL_KEYS: Readonly<Record<SheetType, MessageKey>> = {
+  turnaround: "cfgext.refSheetTypeTurnaround",
+  "variation-board": "cfgext.refSheetTypeVariationBoard",
+  detail: "cfgext.refSheetTypeDetail",
+  "full-reference": "cfgext.refSheetTypeFullReference",
+}
+export const SHEET_SKIN_LABEL_KEYS: Readonly<Record<SheetSkin, MessageKey>> = {
+  studio: "cfgext.refSheetSkinStudio",
+  cinematic: "cfgext.refSheetSkinCinematic",
+  blueprint: "cfgext.refSheetSkinBlueprint",
+  illustrated: "cfgext.refSheetSkinIllustrated",
+}
 
 /** A getter, not a module constant: option labels resolve through the live locale. */
 export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<QuickConfigControl>>> {
@@ -432,7 +445,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "generate-image": [
     {
       field: "provider",
-      ariaLabel: "Model",
+      ariaLabel: tx("field.model"),
       icon: Sparkles,
       // Clearing `providers` on change collapses multi-provider mode to single.
       additionalClear: ["providers"],
@@ -440,7 +453,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     },
     {
       field: "aspectRatio",
-      ariaLabel: "Aspect",
+      ariaLabel: tx("node.aspect"),
       icon: Ratio,
       options: (data) => {
         const provider = typeof data.provider === "string" ? data.provider : "nano-banana-pro"
@@ -449,7 +462,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     },
     {
       field: "resolution",
-      ariaLabel: "Resolution",
+      ariaLabel: tx("field.resolution"),
       icon: Maximize2,
       options: (data) => {
         const provider = typeof data.provider === "string" ? data.provider : "nano-banana-pro"
@@ -458,7 +471,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     },
     {
       field: "repeatCount",
-      ariaLabel: "Runs",
+      ariaLabel: tx("node.runs"),
       numeric: true,
       options: [
         { value: "1", label: "× 1" },
@@ -472,13 +485,13 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "generate-video": [
     {
       field: "provider",
-      ariaLabel: "Model",
+      ariaLabel: tx("field.model"),
       icon: Sparkles,
       options: toOptions(VIDEO_GEN_MODELS),
     },
     {
       field: "aspectRatio",
-      ariaLabel: "Aspect",
+      ariaLabel: tx("node.aspect"),
       icon: Ratio,
       options: (data) => {
         const provider = typeof data.provider === "string" ? data.provider : "seedance-2-fast"
@@ -487,7 +500,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     },
     {
       field: "duration",
-      ariaLabel: "Duration",
+      ariaLabel: tx("field.duration"),
       icon: Clock,
       numeric: true,
       options: (data) => {
@@ -497,7 +510,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     },
     {
       field: "resolution",
-      ariaLabel: "Resolution",
+      ariaLabel: tx("field.resolution"),
       icon: Maximize2,
       options: (data) => {
         const provider = typeof data.provider === "string" ? data.provider : "seedance-2-fast"
@@ -506,7 +519,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     },
     {
       field: "repeatCount",
-      ariaLabel: "Runs",
+      ariaLabel: tx("node.runs"),
       numeric: true,
       options: [
         { value: "1", label: "× 1" },
@@ -521,13 +534,13 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "generate-video-pro": [
     {
       field: "provider",
-      ariaLabel: "Model",
+      ariaLabel: tx("field.model"),
       icon: Sparkles,
       options: toOptions(GVP_PROVIDERS),
     },
     {
       field: "aspectRatio",
-      ariaLabel: "Aspect",
+      ariaLabel: tx("node.aspect"),
       icon: Ratio,
       // PROVIDER-AWARE (2026-08-05): the pro node now offers models well past
       // the Seedance-2 family, and Seedance's set (21:9/4:3/3:4/adaptive) is a
@@ -546,7 +559,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     },
     {
       field: "duration",
-      ariaLabel: "Duration",
+      ariaLabel: tx("field.duration"),
       icon: Clock,
       numeric: true,
       // Long-form presets — the pro node spans 4–120s and splits into stitched
@@ -561,7 +574,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     },
     {
       field: "resolution",
-      ariaLabel: "Resolution",
+      ariaLabel: tx("field.resolution"),
       icon: Maximize2,
       // Provider-aware: seedance-2 exposes 480p/720p/1080p/4k, fast/mini stop
       // at 720p. Same VIDEO_RESOLUTION_OPTIONS source the config panel's
@@ -579,7 +592,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "edit-video-pro": [
     {
       field: "provider",
-      ariaLabel: "Model",
+      ariaLabel: tx("field.model"),
       icon: Sparkles,
       options: toOptions(EVP_PROVIDERS),
     },
@@ -591,22 +604,22 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "image-collage": [
     {
       field: "layout",
-      ariaLabel: "Layout",
+      ariaLabel: tx("proccfg.layout"),
       icon: LayoutGrid,
       options: [
-        { value: "smart", label: "Smart" },
-        { value: "grid", label: "Grid" },
+        { value: "smart", label: tx("node.layoutSmart") },
+        { value: "grid", label: tx("node.layoutGrid") },
       ],
     },
     {
       field: "aspectRatio",
-      ariaLabel: "Aspect",
+      ariaLabel: tx("node.aspect"),
       icon: Ratio,
       options: COLLAGE_ASPECT_RATIOS.map((r) => ({ value: r.value, label: r.value })),
     },
     {
       field: "resolution",
-      ariaLabel: "Resolution",
+      ariaLabel: tx("field.resolution"),
       icon: Maximize2,
       options: [
         { value: "2K", label: "2K" },
@@ -620,12 +633,12 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     // corner alone so any labels keep rendering where the user put them.
     {
       field: "badges",
-      ariaLabel: "Numbers",
+      ariaLabel: tx("node.numbers"),
       icon: Hash,
       options: [
-        { value: "none", label: "None", description: tx("node.noSequenceNumbers") },
-        { value: "top-left", label: "Top-left", description: "1, 2, 3… at each image's top-left" },
-        { value: "top-right", label: "Top-right", description: "1, 2, 3… at each image's top-right" },
+        { value: "none", label: tx("common.none"), description: tx("node.noSequenceNumbers") },
+        { value: "top-left", label: tx("node.topLeft"), description: tx("node.numbersTopLeftDesc") },
+        { value: "top-right", label: tx("proccfg.topRight"), description: tx("node.numbersTopRightDesc") },
       ],
       read: (data) =>
         data.numbered === true ? (data.badgePosition === "top-right" ? "top-right" : "top-left") : "none",
@@ -638,44 +651,44 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   // ── Assemble Narrated Video (voice / ambient / max-slow — per original
   // design spec; trims stay config-panel-only) ──
   "assemble-narrated-video": [
-    { field: "voiceVolume", ariaLabel: "Voice %", icon: Mic, numeric: true, options: ASSEMBLE_NARRATED_VIDEO_VOICE_VOLUME_OPTIONS },
-    { field: "clipAudioVolume", ariaLabel: "Ambient %", icon: Volume2, numeric: true, options: ASSEMBLE_NARRATED_VIDEO_CLIP_VOLUME_OPTIONS },
-    { field: "maxSlowdown", ariaLabel: "Max slow ×", icon: Gauge, numeric: true, options: ASSEMBLE_NARRATED_VIDEO_MAX_SLOWDOWN_OPTIONS },
+    { field: "voiceVolume", ariaLabel: tx("node.voicePercent"), icon: Mic, numeric: true, options: ASSEMBLE_NARRATED_VIDEO_VOICE_VOLUME_OPTIONS },
+    { field: "clipAudioVolume", ariaLabel: tx("node.ambientPercent"), icon: Volume2, numeric: true, options: ASSEMBLE_NARRATED_VIDEO_CLIP_VOLUME_OPTIONS },
+    { field: "maxSlowdown", ariaLabel: tx("node.maxSlow"), icon: Gauge, numeric: true, options: ASSEMBLE_NARRATED_VIDEO_MAX_SLOWDOWN_OPTIONS },
   ],
   // `edit-image` / `image-to-image` are legacy types folded into `modify-image`
   // (not creatable, never mounted) — no quick-config entry; guard test enforces.
   "modify-image": [providerControl(MODIFY_IMAGE_MODELS)],
   "upscale-image": [providerControl(UPSCALE_IMAGE_MODELS)],
-  "video-to-video": [providerControl(VIDEO_V2V_MODELS), v2vResolutionControl],
+  "video-to-video": [providerControl(VIDEO_V2V_MODELS), v2vResolutionControl()],
   // SwitchX (Beeble) — mirrors Generate Video's strip: mode · keyframe (select-only)
   // · resolution · runs. The prompt button + Run come from NodeQuickStrip itself.
   "switchx": [
     {
       field: "alphaMode",
-      ariaLabel: "Mode",
+      ariaLabel: tx("node.mode"),
       icon: Wand2,
       options: [
-        { value: "auto", label: "Auto", description: "AI masks the subject — relight it or swap the background. No mask needed." },
-        { value: "fill", label: "Fill", description: "No masking — restyle the entire frame. No mask needed." },
-        { value: "select", label: "Select", description: tx("node.youSupplyAMaskFor") },
-        { value: "custom", label: "Custom", description: tx("node.youSupplyAFullPer") },
+        { value: "auto", label: tx("common.auto"), description: tx("node.alphaAutoDesc") },
+        { value: "fill", label: tx("node.alphaFill"), description: tx("node.alphaFillDesc") },
+        { value: "select", label: tx("common.select"), description: tx("node.youSupplyAMaskFor") },
+        { value: "custom", label: tx("common.custom"), description: tx("node.youSupplyAFullPer") },
       ],
     },
     {
       field: "alphaKeyframeIndex",
-      ariaLabel: "Keyframe",
+      ariaLabel: tx("node.keyframe"),
       icon: Hash,
       numeric: true,
       // Only meaningful in select mode → return [] otherwise so QuickConfigSelect
       // hides the control AND clears the stale value (provider-sync trap fix).
       options: (data) =>
         data.alphaMode === "select"
-          ? Array.from({ length: 10 }, (_, i) => ({ value: String(i), label: `Frame ${i}` }))
+          ? Array.from({ length: 10 }, (_, i) => ({ value: String(i), label: tx("node.frameN", { n: i }) }))
           : [],
     },
     {
       field: "maxResolution",
-      ariaLabel: "Resolution",
+      ariaLabel: tx("field.resolution"),
       icon: Maximize2,
       numeric: true,
       options: [
@@ -685,7 +698,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     },
     {
       field: "repeatCount",
-      ariaLabel: "Runs",
+      ariaLabel: tx("node.runs"),
       numeric: true,
       options: [
         { value: "1", label: "× 1" },
@@ -700,53 +713,53 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "text-to-speech": [providerControl(TTS_MODELS)],
   "motion-transfer": [providerControl(MOTION_TRANSFER_MODELS)],
   // ── Suno (model: SunoModel) ──
-  "suno-generate": [sunoModelControl, sunoInstrumentalControl, sunoVocalControl],
-  "suno-cover": [sunoModelControl],
-  "suno-extend": [sunoModelControl],
-  "suno-music-video": [sunoModelControl],
-  "suno-mashup": [sunoModelControl],
-  "suno-convert-wav": [sunoModelControl],
-  "suno-upload-extend": [sunoModelControl],
-  "suno-add-instrumental": [sunoModelControl],
-  "suno-add-vocals": [sunoModelControl],
-  "suno-lyrics": [sunoModelControl],
-  "suno-separate": [sunoModelControl],
-  "suno-replace-section": [sunoModelControl],
-  "suno-style-boost": [sunoModelControl],
+  "suno-generate": [sunoModelControl(), sunoInstrumentalControl(), sunoVocalControl()],
+  "suno-cover": [sunoModelControl()],
+  "suno-extend": [sunoModelControl()],
+  "suno-music-video": [sunoModelControl()],
+  "suno-mashup": [sunoModelControl()],
+  "suno-convert-wav": [sunoModelControl()],
+  "suno-upload-extend": [sunoModelControl()],
+  "suno-add-instrumental": [sunoModelControl()],
+  "suno-add-vocals": [sunoModelControl()],
+  "suno-lyrics": [sunoModelControl()],
+  "suno-separate": [sunoModelControl()],
+  "suno-replace-section": [sunoModelControl()],
+  "suno-style-boost": [sunoModelControl()],
   // ── LLM-backed (llmModel) ──
-  "generate-script": [llmModelControl, reasoningEffortControl],
-  "qa-check": [llmModelControl, reasoningEffortControl],
-  "image-to-text": [llmModelControl, reasoningEffortControl],
-  "describe-to-picker": [visionModelControl, reasoningEffortControl],
-  "image-critic": [llmModelControl, reasoningEffortControl],
+  "generate-script": [llmModelControl(), reasoningEffortControl()],
+  "qa-check": [llmModelControl(), reasoningEffortControl()],
+  "image-to-text": [llmModelControl(), reasoningEffortControl()],
+  "describe-to-picker": [visionModelControl(), reasoningEffortControl()],
+  "image-critic": [llmModelControl(), reasoningEffortControl()],
   // forced-alignment is a fixed ElevenLabs feature (static "elevenlabs-forced-
   // alignment" credit id in forced-alignment-node.tsx) — ForcedAlignmentData
   // forced-alignment is deliberately ABSENT: it's a fixed-price ElevenLabs
   // feature — ForcedAlignmentData has no llmModel/reasoningEffort field, and a
   // model dropdown here wrote a field the node never reads.
-  "motion-graphics": [llmModelControl, reasoningEffortControl],
-  "3d-title": [llmModelControl, reasoningEffortControl],
+  "motion-graphics": [llmModelControl(), reasoningEffortControl()],
+  "3d-title": [llmModelControl(), reasoningEffortControl()],
   // Length + aspect sit on the strip like generate-image / generate-video —
   // they are the generation parameters a user reaches for on every run.
-  "generate-3d-scene": [llmModelControl, reasoningEffortControl, scene3dAspectControl, scene3dDurationControl],
-  "edit-3d-scene": [llmModelControl, reasoningEffortControl],
+  "generate-3d-scene": [llmModelControl(), reasoningEffortControl(), scene3dAspectControl(), scene3dDurationControl()],
+  "edit-3d-scene": [llmModelControl(), reasoningEffortControl()],
   // ── Audio / voice (inline-mirrored lists) ──
-  "transcribe": [sttProviderControl],
-  "audio-isolation": [sttProviderControl],
-  "generate-music": [musicProviderControl],
-  "text-to-audio": [audioSfxProviderControl],
-  "voice-design": [voiceDesignModelControl],
-  "voice-remix": [voiceDesignModelControl],
-  "video-upscale": [videoUpscaleProviderControl],
+  "transcribe": [sttProviderControl()],
+  "audio-isolation": [sttProviderControl()],
+  "generate-music": [musicProviderControl()],
+  "text-to-audio": [audioSfxProviderControl()],
+  "voice-design": [voiceDesignModelControl()],
+  "voice-remix": [voiceDesignModelControl()],
+  "video-upscale": [videoUpscaleProviderControl()],
   // ── Language / resolution (other dropdown configs) ──
-  "dubbing": [targetLanguageControl],
-  "voice-changer": [targetLanguageControl],
-  "text-to-dialogue": [dialogueLanguageControl],
-  "speech-to-video": [speechVideoResControl],
+  "dubbing": [targetLanguageControl()],
+  "voice-changer": [targetLanguageControl()],
+  "text-to-dialogue": [dialogueLanguageControl()],
+  "speech-to-video": [speechVideoResControl()],
   // ── Last holdouts (their only configurable field) ──
-  "face-swap": [faceSwapProviderControl],
-  "remove-background": [removeBgMotionControl],
-  "generate-mask": [maskThresholdControl],
+  "face-swap": [faceSwapProviderControl()],
+  "remove-background": [removeBgMotionControl()],
+  "generate-mask": [maskThresholdControl()],
   // ── Video Analysis — the two "how should this run" levers the config panel
   // exposes: Analysis quality (tier) + best-of-N Result selection. Both are
   // static enums (not provider-dependent), sourced from the SAME shared lists /
@@ -761,19 +774,19 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "video-analysis": [
     {
       field: "llmModel",
-      ariaLabel: "Analysis quality",
+      ariaLabel: tx("vidcfg.analysisQuality"),
       icon: Gauge,
       defaultValue: DEFAULT_VIDEO_ANALYSIS_TIER,
       options: VIDEO_ANALYSIS_TIER_ORDER.map((t) => ({ value: t, label: VIDEO_ANALYSIS_TIER_LABELS[t] })),
     },
     {
       field: "selectionMode",
-      ariaLabel: "Result selection",
+      ariaLabel: tx("vidcfg.resultSelection"),
       icon: Layers,
       defaultValue: "choose",
       options: [
-        { value: "choose", label: "Choose", description: tx("node.keepTheStrongestPass") },
-        { value: "combine", label: "Combine", description: "Fold in every pass — most complete" },
+        { value: "choose", label: tx("vidcfg.choose"), description: tx("node.keepTheStrongestPass") },
+        { value: "combine", label: tx("vidcfg.combine"), description: tx("node.foldInEveryPass") },
       ],
     },
   ],
@@ -782,8 +795,8 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   // they stay in the config panel. Registering entries also suppresses the
   // fallback "Settings" strip button (the node has its own on-body gear). ──
   "reference-sheet": [
-    { field: "type", ariaLabel: "Sheet type", icon: LayoutGrid, options: SHEET_TYPES.map((t) => ({ value: t, label: sheetLabel(t) })) },
-    { field: "skin", ariaLabel: "Skin", icon: Palette, options: SHEET_SKINS.map((s) => ({ value: s, label: sheetLabel(s) })) },
+    { field: "type", ariaLabel: tx("cfgext.refSheetSheetType"), icon: LayoutGrid, options: SHEET_TYPES.map((t) => ({ value: t, label: tx(SHEET_TYPE_LABEL_KEYS[t]) })) },
+    { field: "skin", ariaLabel: tx("cfgext.refSheetSkinLabel"), icon: Palette, options: SHEET_SKINS.map((s) => ({ value: s, label: tx(SHEET_SKIN_LABEL_KEYS[s]) })) },
   ],
   // ── AI Avatar (HeyGen) ──
   "ai-avatar": [
@@ -794,13 +807,13 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       // keys off this same field. Static list lifted to model-options.ts so the
       // panel Source radio and this toggle can't drift.
       field: "avatarSource",
-      ariaLabel: "Source",
+      ariaLabel: tx("inputcfg.source"),
       icon: ImageIcon,
       options: AI_AVATAR_SOURCE_OPTIONS,
     },
     {
       field: "engine",
-      ariaLabel: "Engine",
+      ariaLabel: tx("node.engine"),
       icon: Sparkles,
       // Provider-aware: image-source mode has no IV/V engine lever (HeyGen's
       // type:"image" uses its own engine), so return [] there — QuickConfigSelect
@@ -818,14 +831,14 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       // Provider-aware: if a future engine has no resolution lever, return []
       // and QuickConfigSelect hides + clears the stale value automatically.
       field: "resolution",
-      ariaLabel: "Resolution",
+      ariaLabel: tx("field.resolution"),
       options: (data) =>
         (AI_AVATAR_RESOLUTION_OPTIONS[String(data.engine ?? "avatar-iv")] ??
          AI_AVATAR_RESOLUTION_OPTIONS["avatar-iv"]!) as ReadonlyArray<QuickConfigOption>,
     },
     {
       field: "speechMode",
-      ariaLabel: "Mode",
+      ariaLabel: tx("node.mode"),
       options: AI_AVATAR_SPEECH_MODES,
     },
   ],
@@ -837,15 +850,15 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "cinematic-avatar": [
     {
       field: "resolution",
-      ariaLabel: "Resolution",
+      ariaLabel: tx("field.resolution"),
       options: CINEMATIC_RESOLUTION_OPTIONS,
     },
     {
       field: "aspectRatio",
-      ariaLabel: "Aspect Ratio",
+      ariaLabel: tx("field.aspectRatio"),
       options: CINEMATIC_ASPECT_RATIO_OPTIONS,
     },
-    cinematicDurationControl,
+    cinematicDurationControl(),
   ],
   }
 }
@@ -878,6 +891,8 @@ export function QuickConfigSelect({
   readonly disabled?: boolean
   readonly onOpenChange?: (open: boolean) => void
 }) {
+  const t = useT()
+  const localizeOption = useLocalizeOptionLabel()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const [customOpen, setCustomOpen] = useState(false)
   // The Select trigger doubles as the popover ANCHOR (not a PopoverTrigger), so
@@ -942,6 +957,7 @@ export function QuickConfigSelect({
     // a blank dropdown when the node was created before this control existed.
     options[0]?.label ??
     effectiveValue
+  const shownLabel = localizeOption(triggerLabel)
   const CUSTOM = "__custom__"
   const writeValue = (v: string) => {
     const patch: Record<string, unknown> = control.write
@@ -974,24 +990,24 @@ export function QuickConfigSelect({
           >
             <SelectTrigger className={ghostTriggerClass} aria-label={control.ariaLabel} title={control.ariaLabel}>
               {Icon && <Icon />}
-              <SelectValue placeholder={triggerLabel}>{triggerLabel}</SelectValue>
+              <SelectValue placeholder={shownLabel}>{shownLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent className="node-menu-surface">
               {options.map((o) => (
                 <SelectItem key={o.value} value={o.value} className="text-xs">
                   {o.description ? (
                     <span className="flex flex-col gap-0.5">
-                      <span>{o.label}</span>
+                      <span>{localizeOption(o.label)}</span>
                       <span className="text-[10px] leading-tight text-muted-foreground/70">{o.description}</span>
                     </span>
                   ) : (
-                    o.label
+                    localizeOption(o.label)
                   )}
                 </SelectItem>
               ))}
               {range && (
                 <SelectItem key={CUSTOM} value={CUSTOM} className="text-xs">
-                  Custom…
+                  {t("node.customEllipsis")}
                 </SelectItem>
               )}
             </SelectContent>
@@ -1031,7 +1047,7 @@ export function QuickConfigSelect({
                 value={draft}
                 onChange={(e) => writeValue(e.target.value)}
                 className="flex-1 h-1.5 rounded-lg cursor-pointer accent-[#ff0073]"
-                aria-label={`${control.ariaLabel} (custom)`}
+                aria-label={t("node.customAria", { label: control.ariaLabel })}
               />
               {/* Commits on blur / Enter — clamping per keystroke made "12"
                   untypeable (the "1" snapped to the 4s floor first). */}
@@ -1044,7 +1060,7 @@ export function QuickConfigSelect({
                   if (n !== undefined) writeValue(String(n))
                 }}
                 className="w-16 h-7 text-xs shrink-0"
-                aria-label={`${control.ariaLabel} (custom value)`}
+                aria-label={t("node.customValueAria", { label: control.ariaLabel })}
               />
             </div>
           </div>

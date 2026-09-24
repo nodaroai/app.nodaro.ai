@@ -3,6 +3,7 @@ import StarterKit from "@tiptap/starter-kit"
 import Link from "@tiptap/extension-link"
 import { Bold, Italic, Heading2, Heading3, Link as LinkIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useT } from "@/lib/i18n"
 import { useCallback, useRef, useEffect } from "react"
 
 interface RichtextEditorProps {
@@ -12,6 +13,7 @@ interface RichtextEditorProps {
 }
 
 export function RichtextEditor({ content, onChange, placeholder }: RichtextEditorProps) {
+  const t = useT()
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const debouncedOnChange = useCallback((html: string) => {
     clearTimeout(debounceRef.current)
@@ -67,7 +69,7 @@ export function RichtextEditor({ content, onChange, placeholder }: RichtextEdito
           size="icon"
           className={`h-7 w-7 ${editor.isActive("bold") ? "bg-muted text-foreground" : "text-muted-foreground"}`}
           onClick={() => editor.chain().focus().toggleBold().run()}
-          aria-label="Bold"
+          aria-label={t("present.bold")}
           aria-pressed={editor.isActive("bold")}
         >
           <Bold className="h-4 w-4" />
@@ -78,7 +80,7 @@ export function RichtextEditor({ content, onChange, placeholder }: RichtextEdito
           size="icon"
           className={`h-7 w-7 ${editor.isActive("italic") ? "bg-muted text-foreground" : "text-muted-foreground"}`}
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          aria-label="Italic"
+          aria-label={t("present.italic")}
           aria-pressed={editor.isActive("italic")}
         >
           <Italic className="h-4 w-4" />
@@ -92,7 +94,7 @@ export function RichtextEditor({ content, onChange, placeholder }: RichtextEdito
           size="icon"
           className={`h-7 w-7 ${editor.isActive("heading", { level: 2 }) ? "bg-muted text-foreground" : "text-muted-foreground"}`}
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          aria-label="Heading 2"
+          aria-label={t("present.heading2")}
           aria-pressed={editor.isActive("heading", { level: 2 })}
         >
           <Heading2 className="h-4 w-4" />
@@ -103,7 +105,7 @@ export function RichtextEditor({ content, onChange, placeholder }: RichtextEdito
           size="icon"
           className={`h-7 w-7 ${editor.isActive("heading", { level: 3 }) ? "bg-muted text-foreground" : "text-muted-foreground"}`}
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          aria-label="Heading 3"
+          aria-label={t("present.heading3")}
           aria-pressed={editor.isActive("heading", { level: 3 })}
         >
           <Heading3 className="h-4 w-4" />
@@ -117,7 +119,7 @@ export function RichtextEditor({ content, onChange, placeholder }: RichtextEdito
           size="icon"
           className={`h-7 w-7 ${editor.isActive("link") ? "bg-muted text-foreground" : "text-muted-foreground"}`}
           onClick={toggleLink}
-          aria-label="Link"
+          aria-label={t("present.link")}
           aria-pressed={editor.isActive("link")}
         >
           <LinkIcon className="h-4 w-4" />

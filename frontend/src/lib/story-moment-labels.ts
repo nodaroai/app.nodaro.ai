@@ -18,30 +18,43 @@
  * a separate canvas-side surface.
  */
 
-export const STORY_MOMENT_LABELS = {
-  setup: "Setup",
-  inciting: "Opening",
-  rising: "Building tension",
-  climax: "Climax",
-  fall: "Aftermath",
-  release: "Resolution",
-  shock: "Surprise / Reveal",
-  // Best-fit guesses for the two enum values not in the original spec:
-  release_humor: "Comic relief",
-  reflection: "Reflection",
-} as const
+import { tx, type MessageKey, type TFunction } from "@/lib/i18n"
 
-export type StoryMomentKey = keyof typeof STORY_MOMENT_LABELS
+export type StoryMomentKey =
+  | "setup"
+  | "inciting"
+  | "rising"
+  | "climax"
+  | "fall"
+  | "release"
+  | "shock"
+  | "release_humor"
+  | "reflection"
+
+/** Dictionary key of the friendly label per enum value — translated at render. */
+export const STORY_MOMENT_LABEL_KEYS: Record<StoryMomentKey, MessageKey> = {
+  setup: "pipe.momentSetup",
+  inciting: "pipe.momentOpening",
+  rising: "pipe.momentBuildingTension",
+  climax: "pipe.momentClimax",
+  fall: "pipe.momentAftermath",
+  release: "pipe.momentResolution",
+  shock: "pipe.momentSurpriseReveal",
+  // Best-fit guesses for the two enum values not in the original spec:
+  release_humor: "pipe.momentComicRelief",
+  reflection: "pipe.momentReflection",
+}
 
 /**
- * Friendly label for a schema enum value. Falls back to the raw enum
- * string (with underscores → spaces) for any value the map doesn't cover —
+ * Friendly label for a schema enum value, localized — pass the component's
+ * `t`; a bare call reads the live locale. Falls back to the raw enum string
+ * (with underscores → spaces) for any value the map doesn't cover —
  * defensive against schema additions that haven't been mapped yet.
  */
-export function storyMomentLabel(beat: string | null | undefined): string {
+export function storyMomentLabel(beat: string | null | undefined, t: TFunction = tx): string {
   if (!beat) return ""
-  if (beat in STORY_MOMENT_LABELS) {
-    return STORY_MOMENT_LABELS[beat as StoryMomentKey]
+  if (beat in STORY_MOMENT_LABEL_KEYS) {
+    return t(STORY_MOMENT_LABEL_KEYS[beat as StoryMomentKey])
   }
   return beat.replace(/_/g, " ")
 }

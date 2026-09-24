@@ -3,6 +3,9 @@ import { optimizedImageUrl } from "@/lib/image"
 import { X, Upload, ChevronRight, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 import { uploadImage } from "@/lib/api"
+import { tx, useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 
 const MAX_PHOTOS_PER_VARIANT = 5
 
@@ -23,6 +26,8 @@ export function PerVariantRealLifeRefsDrawer({
   refsByVariant,
   onChange,
 }: PerVariantRefsDrawerProps) {
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const [expanded, setExpanded] = useState<string | null>(null)
   const [uploading, setUploading] = useState<string | null>(null)
 
@@ -34,7 +39,7 @@ export function PerVariantRealLifeRefsDrawer({
     const key = normalize(variant)
     const current = refsByVariant[key] ?? []
     if (current.length >= MAX_PHOTOS_PER_VARIANT) {
-      toast.error(`Max ${MAX_PHOTOS_PER_VARIANT} photos per variant.`)
+      toast.error(tx("studio.maxPhotosPerVariant", { n: MAX_PHOTOS_PER_VARIANT }))
       return
     }
     setUploading(variant)
@@ -42,7 +47,7 @@ export function PerVariantRealLifeRefsDrawer({
       const { url } = await uploadImage(file)
       onChange({ ...refsByVariant, [key]: [...current, url] })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed.")
+      toast.error(err instanceof Error ? err.message : tx("studio.uploadFailed"))
     } finally {
       setUploading(null)
     }
@@ -59,7 +64,7 @@ export function PerVariantRealLifeRefsDrawer({
   }
 
   return (
-    <div className="absolute inset-y-0 right-0 w-80 bg-[#0d1017] border-l border-[#1e293b] z-40 flex flex-col">
+    <div className="absolute inset-y-0 end-0 w-80 bg-[#0d1017] border-s border-[#1e293b] z-40 flex flex-col">
       <div className="flex items-center justify-between px-3 py-2 border-b border-[#1e293b]">
         <span className="text-[11px] text-slate-200">{title}</span>
         <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-200">
@@ -79,7 +84,7 @@ export function PerVariantRealLifeRefsDrawer({
                 className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] text-slate-300 hover:bg-[#13161f]"
               >
                 <span className="flex items-center gap-1">
-                  {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className={cn("w-3 h-3", isRtl && "rotate-180")} />}
                   {variant}
                 </span>
                 <span className="text-[10px] text-slate-500 tabular-nums">{urls.length}/{MAX_PHOTOS_PER_VARIANT}</span>
@@ -93,8 +98,8 @@ export function PerVariantRealLifeRefsDrawer({
                         <button
                           type="button"
                           onClick={() => removeUrl(variant, url)}
-                          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/80 text-white opacity-0 group-hover:opacity-100"
-                          aria-label="Remove"
+                          className="absolute -top-1 -end-1 w-4 h-4 rounded-full bg-black/80 text-white opacity-0 group-hover:opacity-100"
+                          aria-label={t("common.remove")}
                         >
                           <X className="w-2 h-2" />
                         </button>

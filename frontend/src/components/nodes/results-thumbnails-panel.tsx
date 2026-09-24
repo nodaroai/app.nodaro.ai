@@ -227,7 +227,7 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
                 <button
                   type="button"
                   aria-label={t("node.switchToResultN", { n: absoluteIndex + 1 })}
-                  title={isTextTile ? (r.text ?? "").slice(0, 120) : `Result ${absoluteIndex + 1}`}
+                  title={isTextTile ? (r.text ?? "").slice(0, 120) : t("node.resultN", { n: absoluteIndex + 1 })}
                   className={`${tileClass} flex items-center justify-center ${isActive ? "bg-[#ff0073]/15" : "bg-muted"}`}
                   onClick={handleClick}
                 >

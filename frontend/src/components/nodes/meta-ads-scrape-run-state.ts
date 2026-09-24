@@ -7,6 +7,7 @@ import {
   type WebScrapeCardState,
   type WebScrapeOutcome,
 } from "./web-scrape-run-state"
+import { uiLocale } from "@/lib/i18n/format"
 
 /**
  * Meta Ads run-state logic — the same five-state contract as Web Scrape
@@ -148,19 +149,28 @@ function parseDate(v: unknown): Date | null {
   return Number.isFinite(t) ? new Date(t) : null
 }
 
-const SHORT_DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
+/** "Aug 27", in the chosen language — built per call: a module-level formatter would freeze the locale at import. */
+function shortDate(d: Date): string {
+  return new Intl.DateTimeFormat(uiLocale(), { month: "short", day: "numeric", timeZone: "UTC" }).format(d)
+}
 
-/** "Aug 27 → Sep 17"; an open-ended ad renders "Aug 27 →". */
-export function metaAdDateRange(item: Record<string, unknown>): string {
+/**
+ * "Aug 27 → Sep 17"; an open-ended ad renders "Aug 27 →". The arrow points
+ * from the start date to the end date in the reading direction: pass `rtl`
+ * from a surface that follows the page direction (the config panel); the
+ * node card sits on the LTR-pinned canvas and keeps the default.
+ */
+export function metaAdDateRange(item: Record<string, unknown>, rtl = false): string {
   const start = parseDate(item.startDate)
   const end = parseDate(item.endDate)
   if (!start) return ""
-  return end ? `${SHORT_DATE.format(start)} → ${SHORT_DATE.format(end)}` : `${SHORT_DATE.format(start)} →`
+  const arrow = rtl ? "←" : "→"
+  return end ? `${shortDate(start)} ${arrow} ${shortDate(end)}` : `${shortDate(start)} ${arrow}`
 }
 
 export function metaAdStartLabel(item: Record<string, unknown>): string {
   const start = parseDate(item.startDate)
-  return start ? SHORT_DATE.format(start) : ""
+  return start ? shortDate(start) : ""
 }
 
 /** Whole days the ad has been running (start → end, or → now while it runs). */

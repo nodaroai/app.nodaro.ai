@@ -11,10 +11,12 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { DeduplicateNodeData } from "@/types/nodes"
 import { isValidDeduplicateConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
+import { useT } from "@/lib/i18n"
 
 const ACCEPTS_IN = (t: string) => isValidDeduplicateConnection("in", t)
 
 function DeduplicateNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as DeduplicateNodeData
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -23,7 +25,7 @@ function DeduplicateNodeComponent({ id, data, selected }: NodeProps) {
   useAutoExecute(id, data as Record<string, unknown>)
 
   const field = nodeData.field?.trim() ?? ""
-  const fieldLabel = field === "" ? "(whole item)" : field
+  const fieldLabel = field === "" ? t("utilcfg.wholeItem") : field
   const listResults = nodeData.__listResults ?? nodeData.listResults
   const itemCount = listResults?.length ?? 0
   const hasResult = status === "completed" && listResults !== undefined
@@ -57,16 +59,16 @@ function DeduplicateNodeComponent({ id, data, selected }: NodeProps) {
           {hasResult ? (
             <div className="w-full rounded-md bg-muted/30 p-2">
               <p className="text-xs text-foreground/80">
-                {itemCount} unique item{itemCount === 1 ? "" : "s"}
+                {itemCount === 1 ? t("node.uniqueItemsOne", { n: itemCount }) : t("node.uniqueItemsMany", { n: itemCount })}
               </p>
               <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                By: {fieldLabel}
+                {t("node.byField", { field: fieldLabel })}
               </span>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
               <FileText className="w-5 h-5" />
-              <span className="text-[10px] mt-0.5">By: {fieldLabel}</span>
+              <span className="text-[10px] mt-0.5">{t("node.byField", { field: fieldLabel })}</span>
             </div>
           )}
         </div>

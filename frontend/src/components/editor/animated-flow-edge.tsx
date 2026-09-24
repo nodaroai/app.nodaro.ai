@@ -6,6 +6,7 @@ import { X, ChevronDown } from "lucide-react"
 import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useClickOutside } from "@/hooks/use-click-outside"
+import { useT } from "@/lib/i18n"
 import { parseListExpression, describeEdgeBehavior, type SelectorMode } from "@nodaro/shared"
 import type { CSSProperties } from "react"
 import { useEdgeInsertAnimation } from "./workflow-editor/use-edge-insert-animation"
@@ -49,10 +50,10 @@ type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
 // listExpression: "1, 3, last"), where "last" means "the final index in the
 // array." Same word, different meanings.
 const MODE_OPTIONS = [
-  { value: "last", label: "Selected", desc: "The selected result" },
-  { value: "item", label: "Item", desc: "Pick one item" },
-  { value: "each", label: "Each", desc: "All items, one by one" },
-  { value: "all", label: "Bundle", desc: "All items at once" },
+  { value: "last", labelKey: "canvas.edgeModeSelected", descKey: "canvas.edgeModeSelectedDesc" },
+  { value: "item", labelKey: "canvas.edgeModeItem", descKey: "canvas.edgeModeItemDesc" },
+  { value: "each", labelKey: "canvas.edgeModeEach", descKey: "canvas.edgeModeEachDesc" },
+  { value: "all", labelKey: "canvas.edgeModeBundle", descKey: "canvas.edgeModeBundleDesc" },
 ] as const
 
 // List/loop/split-text produce inherent items with no user-selection concept,
@@ -106,6 +107,7 @@ function AnimatedFlowEdgeComponent({
   data,
   selected,
 }: AnimatedFlowEdgeProps) {
+  const t = useT()
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
   const updateEdgeData = useWorkflowStore((s) => s.updateEdgeData)
   // Edge hover state — driven by HandlePopover when the user hovers a
@@ -298,7 +300,7 @@ function AnimatedFlowEdgeComponent({
           strokeWidth={12}
           style={{ pointerEvents: "stroke" }}
         >
-          <title>Not referenced in the prompt</title>
+          <title>{t("canvas.edgeUnusedPromptRef")}</title>
         </path>
       )}
 
@@ -356,7 +358,7 @@ function AnimatedFlowEdgeComponent({
                     deleteEdge(id)
                   }}
                   onMouseDown={(e) => e.stopPropagation()}
-                  aria-label="Delete connection"
+                  aria-label={t("canvas.deleteConnection")}
                   style={{
                     background: "#3a1a1a",
                     border: "1px solid #ef4444",
@@ -453,7 +455,7 @@ function AnimatedFlowEdgeComponent({
                     setShowModeMenu((prev) => !prev)
                   }}
                   onMouseDown={(e) => e.stopPropagation()}
-                  aria-label="Change output mode"
+                  aria-label={t("canvas.changeOutputMode")}
                   style={{
                     background: showModeMenu ? "#a78bfa" : "#3a2a5a",
                     border: "1px solid #a78bfa",
@@ -505,7 +507,7 @@ function AnimatedFlowEdgeComponent({
                     textTransform: "uppercase",
                   }}
                 >
-                  Output
+                  {t("node.output")}
                 </div>
                 {/* Mode radio buttons */}
                 <div style={{ padding: "8px 0" }}>
@@ -555,9 +557,9 @@ function AnimatedFlowEdgeComponent({
                                 fontSize: 11,
                               }}
                             >
-                              {opt.label}
+                              {t(opt.labelKey)}
                             </span>
-                            <span style={{ color: "#64748b", fontSize: 10 }}>{opt.desc}</span>
+                            <span style={{ color: "#64748b", fontSize: 10 }}>{t(opt.descKey)}</span>
                           </span>
                           {/* Reserved slot — always present so every row has
                               the same width; only Item's active state fills it. */}
@@ -611,7 +613,7 @@ function AnimatedFlowEdgeComponent({
                                       cursor: "pointer",
                                     }}
                                   >
-                                    {tab === "range" ? "Range" : "List"}
+                                    {tab === "range" ? t("cfgext.selRange") : t("canvas.edgeTabList")}
                                   </button>
                                 )
                               })}
@@ -642,7 +644,7 @@ function AnimatedFlowEdgeComponent({
                     <div style={{ height: 1, background: "#555" }} />
                     <div style={{ padding: "8px 14px" }}>
                       <span style={{ color: "#f59e0b", fontSize: 9.5 }}>
-                        Negative step iterates backwards — set From &gt; To
+                        {t("canvas.negativeStepHint")}
                       </span>
                     </div>
                   </>
@@ -671,15 +673,16 @@ function RangeConfig({
   onToChange: (value: string) => void
   onStepChange: (value: string) => void
 }) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <FieldInput label="FROM" value={rangeFrom ?? ""} placeholder="1" onChange={onFromChange} />
+        <FieldInput label={t("canvas.edgeFieldFrom")} value={rangeFrom ?? ""} placeholder="1" onChange={onFromChange} />
         <span style={{ color: "#64748b", fontSize: 10, marginTop: 14 }}>&rarr;</span>
-        <FieldInput label="TO" value={rangeTo ?? ""} placeholder="last" onChange={onToChange} />
+        <FieldInput label={t("canvas.edgeFieldTo")} value={rangeTo ?? ""} placeholder="last" onChange={onToChange} />
         <span style={{ color: "#64748b", fontSize: 10, marginTop: 14 }}>+</span>
         <FieldInput
-          label="STEP"
+          label={t("canvas.edgeFieldStep")}
           value={rangeStep != null ? String(rangeStep) : ""}
           placeholder="1"
           onChange={onStepChange}
@@ -701,6 +704,7 @@ function ListConfig({
   placeholder?: string
   containerPadding?: string
 }) {
+  const t = useT()
   const validation = parseListExpression(value)
   const isInvalid = !validation.ok
   return (
@@ -725,7 +729,7 @@ function ListConfig({
         }}
       />
       <div style={{ color: "#64748b", fontSize: 9.5, marginTop: 4 }}>
-        Examples: <code>1, 2, last</code> · <code>1..5</code> · <code>1..10:2</code> · <code>1..last-1</code>
+        {t("cfgext.selExamples")}<code>1, 2, last</code> · <code>1..5</code> · <code>1..10:2</code> · <code>1..last-1</code>
       </div>
     </div>
   )

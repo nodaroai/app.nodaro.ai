@@ -61,10 +61,10 @@ export const APPLY_EDL_MAX_OUTPUT_MS = 180 * 60_000
  *  it is a runner resource limit the graph must stay under. Every PURE-CUT video
  *  render is therefore chunked to at most this many segments per graph (a margin
  *  under the cliff) and the chunks stream-copy concat; the cumulative frame grid
- *  (`chunkStartSec`) keeps them continuous. ONE case is NOT bounded by this: a
- *  continuous CROSSFADE run has no hard cut to split on, so `planChunks` keeps it
- *  whole and a run longer than this stays a single graph — rare (the podcast
- *  templates cut hard), and no worse than before this cap. Audio graphs have
+ *  (`chunkStartSec`) keeps them continuous. A CROSSFADE run has no hard cut to
+ *  close a chunk at, so `planChunks` makes one INSIDE one of its segments
+ *  (`splitInsideCrossfadeRun`); only a run whose segments are all too short for
+ *  their crossfades to take that cut stays one wider graph. Audio graphs have
  *  their own cap (`AUDIO_FILTERGRAPH_MAX_SEGMENTS`), for a different reason.
  *  Guarded by a frame-count e2e assertion. */
 export const VIDEO_FILTERGRAPH_MAX_SEGMENTS = 30
@@ -82,9 +82,9 @@ export const VIDEO_FILTERGRAPH_MAX_SEGMENTS = 30
  *  of the same windows, 27–50 CPU-s each. At this width the linear chunk kill
  *  budget below holds with ≥3× margin; at 100–200 no linear budget can, since
  *  the cost is quadratic in the width. The slices are lossless PCM joined
- *  sample-exactly and encoded to AAC ONCE, so more slices add no seam. Like the
- *  picture cap, it cannot split a continuous crossfade run (`planChunks`), so
- *  such a run stays one wider graph with a floored kill budget
+ *  sample-exactly and encoded to AAC ONCE, so more slices add no seam. A
+ *  crossfade run is closed inside one of its segments, as for the picture; one
+ *  too short to cut stays one wider graph with a floored kill budget
  *  (`WIDE_SLICE_FLOOR_MS`). */
 export const AUDIO_FILTERGRAPH_MAX_SEGMENTS = 30
 
@@ -126,8 +126,9 @@ export const INPUT_SEEK_MARGIN_SEC = 2
  * linear because graphs are capped (`VIDEO_FILTERGRAPH_MAX_SEGMENTS`,
  * `AUDIO_FILTERGRAPH_MAX_SEGMENTS`): a slice's cost also grows with its width,
  * which at 30 segments the margin covers and at 100–200 no coefficient can.
- * The one slice the caps cannot bound — a continuous crossfade run — is floored
- * instead (`WIDE_SLICE_FLOOR_MS`).
+ * The one slice the caps cannot bound — a crossfade run whose segments are too
+ * short to cut (`splitInsideCrossfadeRun`) — is floored instead
+ * (`WIDE_SLICE_FLOOR_MS`).
  *
  * The picture terms scale with the CANVAS pixel rate (`canvasPixelFactor`:
  * 1080p30 = 1, 1080p60 = 2, 4K30 = 4 — a 4K chunk measured ~4.5× the 1080p
@@ -186,20 +187,22 @@ export interface ChunkReads {
  * its seek point (earliest read − `INPUT_SEEK_MARGIN_SEC`, floored at 0) to its
  * latest read end — exactly how the render seeks and trims. Pure; counts every
  * read the segments name (the render may skip a zero-frame picture read or a
- * soundless source, so this is never less than the real decode).
+ * soundless source, so this is never less than the real decode), including the
+ * picture a split tail re-reads from its whole segment's start (`splitLeadMs`).
  */
 export function chunkDecodeSpanSec(
   edl: Edl,
-  segs: readonly EdlSegment[],
+  segs: readonly PlanSegment[],
   reads: ChunkReads,
 ): { readonly videoSec: number; readonly audioSec: number } {
   const masterAudioId = edl.sources.find((s) => s.role === "master-audio")?.id
   const offsetOf = (id: string): number => edl.sources.find((s) => s.id === id)?.offsetMs ?? 0
   const windows = { video: new Map<string, [number, number]>(), audio: new Map<string, [number, number]>() }
-  const note = (kind: "video" | "audio", id: string | undefined, seg: EdlSegment) => {
+  const note = (kind: "video" | "audio", id: string | undefined, seg: PlanSegment) => {
     if (!id) return
     const off = offsetOf(id)
-    const start = Math.max(0, secs(seg.inMs - off))
+    const lead = kind === "video" ? seg.splitLeadMs ?? 0 : 0
+    const start = Math.max(0, secs(seg.inMs - lead - off))
     const end = Math.max(start, secs(seg.outMs - off))
     const w = windows[kind].get(id)
     windows[kind].set(id, w ? [Math.min(w[0], start), Math.max(w[1], end)] : [start, end])
@@ -237,7 +240,8 @@ export function audioSourceId(edl: Edl, seg: EdlSegment, masterAudioId: string |
 
 /** The chunk plan for a given OUTPUT: ONE pass at or below the output's
  *  filter-graph cap, else slices of at most that many segments closed at hard
- *  cuts (a continuous crossfade run stays whole — see `planChunks`). The cap is
+ *  cuts (a crossfade run is closed by cutting one of its segments in two — see
+ *  `planChunks`; a run with no segment long enough stays whole). The cap is
  *  `VIDEO_FILTERGRAPH_MAX_SEGMENTS` for a video render's picture chunks and
  *  `AUDIO_FILTERGRAPH_MAX_SEGMENTS` for sound (an audio render, and option B's
  *  audio pass, which plans with `"audio"`). Both the render and its liveness
@@ -247,11 +251,11 @@ export function resolveChunksForOutput(
   segs: readonly EdlSegment[],
   output: "video" | "audio",
   options: ChunkPlanOptions = {},
-): EdlSegment[][] {
+): PlanSegment[][] {
   const cap = output === "video" ? VIDEO_FILTERGRAPH_MAX_SEGMENTS : AUDIO_FILTERGRAPH_MAX_SEGMENTS
   const threshold = Math.min(options.chunkThreshold ?? cap, cap)
   const maxPerChunk = Math.min(options.maxSegmentsPerChunk ?? cap, cap)
-  return segs.length > threshold ? planChunks(segs, maxPerChunk) : [segs as EdlSegment[]]
+  return segs.length > threshold ? planChunks(segs, maxPerChunk) : [segs as PlanSegment[]]
 }
 
 /** The output seconds one chunk renders (D17: crossfade overlaps subtracted). */
@@ -281,21 +285,17 @@ export function chunkBudgetMs(work: {
 }
 
 /**
- * The floor of a slice WIDER than its graph cap. Only a continuous crossfade run
- * can be one — `planChunks` never splits it, and the node's Default crossfade
- * turns a whole edit into one run — and its cost grows faster than linearly
- * with its width, which the linear terms cannot see. Measured on the pinned
- * 8.1.2 (2 CPUs), 50 ms crossfades on every boundary: 300 × 200 ms audio-only
- * (45 s out) ran past a 120 s limit with 16 s rendered; 250 × 200 ms video
- * (37.6 s out) ran past 338 s with 21.9 s rendered. Until crossfade runs are split
- * into pieces (plan B2), such a slice keeps at least the limit production gave
- * every chunk before the linear budget — max(20 min, 6 × output), on its OWN
- * output. The same graph is never killed where production rendered it (all of
- * a video render's crossfade runs, and an audio edit that is one run — the
- * Default crossfade case). Residual until B2: a mixed audio-only edit of ≤200
- * segments rendered in ONE pass before, budgeted on the whole edit's output,
- * while its run's chunk is now floored on the run's own output. A floor, not a
- * model of its cost.
+ * The floor of a slice WIDER than its graph cap. Only a crossfade run can be
+ * one, and only when none of its segments can take a cut
+ * (`splitInsideCrossfadeRun`: segments too short for their crossfades, e.g. 1 s
+ * clips under 5 s crossfades, clamped to 0.9 s each side). Its cost grows faster
+ * than linearly with its width, which the linear terms cannot see. Measured on
+ * the pinned 8.1.2 (2 CPUs), 50 ms crossfades on every boundary, unsplit:
+ * 300 × 200 ms audio-only (45 s out) ran past a 120 s limit with 16 s rendered;
+ * 250 × 200 ms video (37.6 s out) ran past 338 s with 21.9 s rendered. Such a
+ * slice keeps at least the limit production gave every chunk before the linear
+ * budget — max(20 min, 6 × output), on its OWN output. A floor, not a model of
+ * its cost.
  */
 export const WIDE_SLICE_FLOOR_MS = 20 * 60_000
 export const WIDE_SLICE_SECS_PER_OUTPUT_SEC = 6
@@ -304,7 +304,7 @@ export const WIDE_SLICE_SECS_PER_OUTPUT_SEC = 6
  *  chunk's output and the source spans it decodes for the tracks it reads, on
  *  its canvas — floored for a slice wider than its graph cap (picture cap when
  *  it reads picture, else the sound cap; see `WIDE_SLICE_FLOOR_MS`). */
-export function chunkRenderTimeoutMs(edl: Edl, segs: readonly EdlSegment[], reads: ChunkReads, canvas: RenderCanvas): number {
+export function chunkRenderTimeoutMs(edl: Edl, segs: readonly PlanSegment[], reads: ChunkReads, canvas: RenderCanvas): number {
   const { videoSec, audioSec } = chunkDecodeSpanSec(edl, segs, reads)
   const outputSec = chunkOutputSec(segs)
   const linear = chunkBudgetMs({
@@ -401,22 +401,120 @@ export function applyEdlRenderBudgetMs(
   return render + prep + assemble
 }
 
-/** Split the timeline into contiguous slices closed ONLY at hard-cut boundaries
- *  (index i is a cut when segment i has no time-consuming transition). A run of
- *  xfaded segments stays whole even if it overshoots `maxPerChunk`. */
-export function planChunks(segs: readonly EdlSegment[], maxPerChunk: number): EdlSegment[][] {
-  const chunks: EdlSegment[][] = []
-  let current: EdlSegment[] = []
+/**
+ * A segment of a render PLAN. Almost all are the EDL's own segments; the one
+ * kind the planner makes is the SECOND half of a segment cut inside a crossfade
+ * run (`splitInsideCrossfadeRun`). Its picture is sampled on the frame phase of
+ * the whole segment it came from, which starts `splitLeadMs` earlier on the
+ * same source: the slice reads from there and drops the frames before its own
+ * start, so the frames it keeps are the unsplit render's.
+ */
+export interface PlanSegment extends EdlSegment {
+  readonly splitLeadMs?: number
+  /** On the FIRST half of a split (the last segment of its chunk): how long its
+   *  tail, which opens the next chunk, runs. The head can lie wholly inside the
+   *  crossfade into it (it is as short as the clamp allows, so it can outlast
+   *  that crossfade by under a frame); it then renders as a crossfade over all
+   *  of its frames — exactly the frames one pass blends — but only when the tail
+   *  has a frame of its own, i.e. when one pass would show the whole segment at
+   *  all. Any other wholly-covered segment adds no picture. */
+  readonly splitTailMs?: number
+}
+
+/**
+ * Cut `seg` — inside a crossfade run, between `prev` and `next` — into a head and
+ * a tail joined by a HARD cut, so a chunk can close at that cut. The head keeps
+ * the crossfade in from `prev`; the tail has no transition and `next` blends
+ * out of it. Both read contiguous time from the same source, so the cut is
+ * invisible. The head is as short as it can be (the tail's picture re-decodes
+ * it, see `PlanSegment`), in whole ms so the plan does not depend on the
+ * canvas, which the dispatch-time budget cannot know.
+ *
+ * `undefined` when no cut keeps BOTH crossfades exactly: the per-boundary clamp
+ * (`boundaryOverlapSecs`: 0.9 × the shorter neighbour) would shrink one of
+ * them on a shorter half — very short segments under near-maximal crossfades.
+ * Checked with the clamp itself, never a re-derivation of it.
+ */
+export function splitInsideCrossfadeRun(
+  prev: EdlSegment,
+  seg: EdlSegment,
+  next: EdlSegment,
+): { readonly head: PlanSegment; readonly tail: PlanSegment } | undefined {
+  const durMs = seg.outMs - seg.inMs
+  const inOverlap = boundaryOverlapSecs(seg, prev)
+  const outOverlap = boundaryOverlapSecs(next, seg)
+  if (inOverlap <= 0 || outOverlap <= 0) return undefined
+  const { transition: _incoming, ...untransitioned } = seg
+  const cut = (x: number) => ({
+    head: { ...seg, id: `${seg.id}~1`, outMs: seg.inMs + x, splitTailMs: durMs - x } as PlanSegment,
+    tail: { ...untransitioned, id: `${seg.id}~2`, inMs: seg.inMs + x, splitLeadMs: x } as PlanSegment,
+  })
+  // The shortest head that keeps the crossfade in (0.9·x ≥ overlap, give or
+  // take the clamp's integer floor); a longer head only shortens the tail.
+  const inOverlapMs = Math.round(inOverlap * 1000)
+  for (let x = Math.max(1, Math.floor(inOverlapMs / 0.9) - 2); x < durMs; x++) {
+    const { head, tail } = cut(x)
+    if (boundaryOverlapSecs(head, prev) !== inOverlap) continue
+    return boundaryOverlapSecs(next, tail) === outOverlap ? { head, tail } : undefined
+  }
+  return undefined
+}
+
+/** Split the timeline into contiguous slices of at most `maxPerChunk` segments,
+ *  closed at hard cuts (index i is a cut when segment i has no time-consuming
+ *  transition). When a full chunk sits inside a crossfade run that goes on, it is
+ *  closed at the LATEST point that keeps it within `maxPerChunk`: a hard cut
+ *  inside it, or a run segment cut in two (`splitInsideCrossfadeRun`). Only when
+ *  no segment of the run within reach can take a cut (too short for its
+ *  crossfades) does the chunk grow past `maxPerChunk`, closing at the first run
+ *  segment that can; a run with none stays whole (its kill budget keeps
+ *  `WIDE_SLICE_FLOOR_MS`). */
+export function planChunks(segs: readonly EdlSegment[], maxPerChunk: number): PlanSegment[][] {
+  const crossfadeInto = (j: number) => j > 0 && j < segs.length && boundaryOverlapSecs(segs[j], segs[j - 1]) > 0
+  const chunks: PlanSegment[][] = []
+  let current: PlanSegment[] = []
   for (let i = 0; i < segs.length; i++) {
-    const isCutBoundary = i > 0 && boundaryOverlapSecs(segs[i], segs[i - 1]) === 0
-    if (isCutBoundary && current.length >= maxPerChunk) {
+    if (!crossfadeInto(i) && current.length >= maxPerChunk) {
       chunks.push(current)
       current = []
     }
     current.push(segs[i])
+    // Full, and the crossfade run goes on past segment i: no hard cut is coming
+    // to close at, so close inside the chunk.
+    if (current.length >= maxPerChunk && crossfadeInto(i + 1)) {
+      const closed = closeInsideRun(current, segs[i + 1], maxPerChunk)
+      if (closed) {
+        chunks.push(closed.chunk)
+        current = closed.rest
+      }
+    }
   }
   if (current.length > 0) chunks.push(current)
   return chunks
+}
+
+/** Close a full chunk that ends inside a crossfade run (`next` blends out of its
+ *  last segment): at the latest hard cut or cuttable run segment whose close
+ *  keeps the chunk within `maxPerChunk`, else at the newest segment if it can
+ *  take a cut. A chunk's first segment is never cut (it may already be a tail). */
+function closeInsideRun(
+  current: readonly PlanSegment[],
+  next: EdlSegment,
+  maxPerChunk: number,
+): { readonly chunk: PlanSegment[]; readonly rest: PlanSegment[] } | undefined {
+  const tryAt = (k: number) => {
+    const seg = current[k]
+    if (boundaryOverlapSecs(seg, current[k - 1]) === 0) {
+      return { chunk: current.slice(0, k), rest: current.slice(k) } // a hard cut: close there
+    }
+    const split = splitInsideCrossfadeRun(current[k - 1], seg, current[k + 1] ?? next)
+    return split ? { chunk: [...current.slice(0, k), split.head], rest: [split.tail, ...current.slice(k + 1)] } : undefined
+  }
+  for (let k = Math.min(current.length - 1, maxPerChunk - 1); k >= 1; k--) {
+    const closed = tryAt(k)
+    if (closed) return closed
+  }
+  return current.length - 1 > maxPerChunk - 1 ? tryAt(current.length - 1) : undefined
 }
 
 /**

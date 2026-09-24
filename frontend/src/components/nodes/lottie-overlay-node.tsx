@@ -66,7 +66,7 @@ function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex items-center justify-center h-16 rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
             <div className="text-center">
               <div className="text-sm font-medium text-[#ff0073]">
-                {overlayCount} overlays
+                {t("node.nOverlays", { n: overlayCount })}
               </div>
               <div className="text-[10px] text-muted-foreground">{nodeData.durationSeconds}s</div>
             </div>
@@ -96,7 +96,7 @@ function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
         <div className="text-muted-foreground text-[10px] line-clamp-1">
           {nodeData.overlayPrompt?.trim()
             ? nodeData.overlayPrompt
-            : "No prompt set"}
+            : t("pro3d.noPrompt")}
         </div>
       </div>
     </BaseNode>

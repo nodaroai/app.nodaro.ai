@@ -130,11 +130,11 @@ export function CredentialFormDialog({ open, mode, credential, saving, onSubmit,
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1.25fr]">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="cred-header">{t("creds.headerName")}</Label>
-                  <Input id="cred-header" value={headerName} onChange={(e) => setHeaderName(e.target.value)} className="font-mono text-xs" maxLength={64} />
+                  <Input dir="ltr" id="cred-header" value={headerName} onChange={(e) => setHeaderName(e.target.value)} className="font-mono text-xs" maxLength={64} />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="cred-secret">{t("creds.secret")}</Label>
-                  <Input
+                  <Input dir="ltr"
                     id="cred-secret"
                     type="password"
                     autoComplete="off"
@@ -157,7 +157,7 @@ export function CredentialFormDialog({ open, mode, credential, saving, onSubmit,
               return (
                 <label
                   key={option.id}
-                  className={`flex items-start gap-3 rounded-[11px] border-[1.5px] p-3 text-left ${
+                  className={`flex items-start gap-3 rounded-[11px] border-[1.5px] p-3 text-start ${
                     option.disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
                   } ${active ? "border-foreground bg-background" : "border-border bg-muted/30"}`}
                 >
@@ -191,7 +191,7 @@ export function CredentialFormDialog({ open, mode, credential, saving, onSubmit,
               <div className="flex flex-col gap-2.5 rounded-[11px] border border-border bg-muted/30 p-3">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="cred-url">{t("creds.boundUrl")}</Label>
-                  <Input
+                  <Input dir="ltr"
                     id="cred-url"
                     value={boundUrl}
                     onChange={(e) => setBoundUrl(e.target.value)}

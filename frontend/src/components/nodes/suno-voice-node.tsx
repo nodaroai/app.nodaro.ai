@@ -45,7 +45,7 @@ function SunoVoiceNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex-1 min-w-0">
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{t("audiocfg.voicePersona")}</div>
               <div className="text-sm font-semibold truncate">
-                {nodeData.voiceName?.trim() || (ready ? "Untitled voice" : "Not configured")}
+                {nodeData.voiceName?.trim() || (ready ? t("audiocfg.untitledVoice") : t("audiocfg.notConfigured"))}
               </div>
               {nodeData.style && ready && (
                 <div className="text-[10px] text-muted-foreground truncate" title={nodeData.style}>
@@ -62,7 +62,7 @@ function SunoVoiceNodeComponent({ id, data, selected }: NodeProps) {
             {inProgress && (
               <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-medium">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                {status === "generating" ? "Creating" : "Phrase"}
+                {status === "generating" ? t("node.voiceStatusCreating") : t("node.voiceStatusPhrase")}
               </div>
             )}
           </div>
@@ -93,7 +93,7 @@ function SunoVoiceNodeComponent({ id, data, selected }: NodeProps) {
             }}
           >
             <Settings2 className="w-3.5 h-3.5 mr-1.5" />
-            {ready ? "Edit Voice" : inProgress ? "Resume Setup" : "Configure Voice"}
+            {ready ? t("node.editVoice") : inProgress ? t("node.resumeSetup") : t("audiocfg.configureVoiceBtn")}
           </Button>
         </div>
       </BaseNode>

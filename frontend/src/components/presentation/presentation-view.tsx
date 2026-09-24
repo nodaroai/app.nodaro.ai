@@ -31,6 +31,7 @@ import { CreditBalance } from "@/ee/components/credits/CreditBalance"
 import { GetCreditsModal } from "@/ee/components/credits/GetCreditsModal"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
+import { isResetAction, newRunActionLabel, type NewRunAction } from "@/components/app-runner/types"
 import { hasCredits } from "@/lib/edition"
 import { formatCreditUnits } from "@/lib/credit-units"
 import { spendableCredits } from "@/lib/spendable-credits"
@@ -56,6 +57,7 @@ import { createClient } from "@/lib/supabase"
 import { getActiveWorkspaceId } from "@/lib/workspace-context"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { ShareDialog } from "./share-dialog"
 import { PublishDialog } from "./publish-dialog"
@@ -165,7 +167,7 @@ interface PresentationViewProps {
   onRun?: () => void
   onCancel?: () => void
   onNewRun?: () => void
-  newRunLabel?: string
+  newRunAction?: NewRunAction
   inputsReadOnly?: boolean
   suppressOutputFallback?: boolean
   isRunning?: boolean
@@ -183,9 +185,10 @@ interface PresentationViewProps {
   runSlots?: RunSlotsApi
 }
 
-export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft, headerActions, onHiddenNodesChange, onNodeStatesChange, runSlots }: PresentationViewProps) {
+export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunAction, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft, headerActions, onHiddenNodesChange, onNodeStatesChange, runSlots }: PresentationViewProps) {
   const { user, signOut: globalSignOut } = useAuth()
   const navigate = useNavigate()
+  const t = useT()
   const [isEditMode, setIsEditMode] = useState(false)
   const [pickerSection, setPickerSection] = useState<"inputs" | "outputs" | null>(null)
   const [isOpeningNewTab, setIsOpeningNewTab] = useState(false)
@@ -432,17 +435,21 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         return rows.length < minRows
       })
       .map((n) => ({
-        label: (n.data as Record<string, unknown>).label as string || "Table",
+        label: (n.data as Record<string, unknown>).label as string || t("present.tableFallback"),
         minRows: ((n.data as Record<string, unknown>).minRows as number) ?? 0,
         currentRows: ((presInputValues[n.id] as Record<string, unknown>)?.rows as string[][] | undefined)?.length ?? 0,
       }))
-  }, [isFullscreen, orderedInputNodes, presInputValues])
+  }, [isFullscreen, orderedInputNodes, presInputValues, t])
 
   const underMinWarning = useMemo(() => {
     if (underMinTables.length === 0) return ""
-    const msgs = underMinTables.slice(0, 2).map((t) => `${t.label} needs ${t.minRows}+ row${t.minRows !== 1 ? "s" : ""}`)
-    return msgs.join("; ") + (underMinTables.length > 2 ? ` +${underMinTables.length - 2} more` : "")
-  }, [underMinTables])
+    const msgs = underMinTables.slice(0, 2).map((tbl) =>
+      tbl.minRows === 1
+        ? t("present.needsOneRow", { label: tbl.label })
+        : t("present.needsRows", { label: tbl.label, n: tbl.minRows }),
+    )
+    return msgs.join("; ") + (underMinTables.length > 2 ? ` ${t("present.plusMore", { n: underMinTables.length - 2 })}` : "")
+  }, [underMinTables, t])
 
   const handleRunClick = useCallback(() => {
     if (isFullscreen) {
@@ -667,7 +674,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           .insert({ user_id: user.id, name: REMIX_PROJECT_NAME, workspace_id: getActiveWorkspaceId() })
           .select("id")
           .single()
-        if (projErr || !newProject) throw new Error("Failed to create project")
+        if (projErr || !newProject) throw new Error(tx("runner.failedCreateProject"))
         projectId = newProject.id
       }
 
@@ -710,11 +717,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         .select("id")
         .single()
 
-      if (wfErr || !wf) throw new Error("Failed to create workflow")
+      if (wfErr || !wf) throw new Error(tx("runner.failedCreateWorkflow"))
 
       window.open(`/projects/${projectId}/workflows/${wf.id}`, "_blank")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to remix app")
+      toast.error(err instanceof Error ? err.message : tx("runner.failedRemixApp"))
     } finally {
       setIsRemixing(false)
     }
@@ -1205,7 +1212,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         <button
           type="button"
           onClick={() => setConfigNode(node)}
-          className="w-full text-left rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer overflow-hidden"
+          className="w-full text-start rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer overflow-hidden"
         >
           {resultData.url && mediaType === "image" && (
             <img src={optimizedImageUrl(resultData.url)} alt={label} className="w-full h-32 object-cover" />
@@ -1215,7 +1222,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           )}
           <div className="p-3">
             <p className="text-sm font-medium text-foreground">{label}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Click to edit settings</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{t("present.clickToEditSettings")}</p>
           </div>
         </button>
       )
@@ -1302,7 +1309,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         actions={nodeActions}
       />
     )
-  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta, fieldBadgesByNode, hiddenResultKeys, isRevealingHidden, getNodeActions, getResultActions])
+  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta, fieldBadgesByNode, hiddenResultKeys, isRevealingHidden, getNodeActions, getResultActions, t])
 
   // Render a single PresentationItem — dispatches by type for input side
   const renderInputItem = useCallback(
@@ -1354,7 +1361,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   const updatedItems = updateItemContent(items, item.id, html)
                   updatePresentationSettings({ [key]: updatedItems })
                 }}
-                placeholder="Type something..."
+                placeholder={t("present.typeSomething")}
               />
             )
           }
@@ -1398,7 +1405,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           return null
       }
     },
-    [nodeMap, renderInputCard, findFieldDef, isFullscreen, presInputValues, presUpdateInput, updateNodeData, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, isEditing, inputItems, settings, updatePresentationSettings],
+    [nodeMap, renderInputCard, findFieldDef, isFullscreen, presInputValues, presUpdateInput, updateNodeData, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, isEditing, inputItems, settings, updatePresentationSettings, t],
   )
 
   // Render a single PresentationItem — dispatches by type for output side
@@ -1432,7 +1439,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   const updatedItems = updateItemContent(items, item.id, html)
                   updatePresentationSettings({ outputItems: updatedItems })
                 }}
-                placeholder="Type something..."
+                placeholder={t("present.typeSomething")}
               />
             )
           }
@@ -1476,7 +1483,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           return null
       }
     },
-    [nodeMap, renderOutputCard, findFieldDef, isFullscreen, presInputValues, isEditing, settings, updatePresentationSettings, hiddenNodeIds, isRevealingHidden],
+    [nodeMap, renderOutputCard, findFieldDef, isFullscreen, presInputValues, isEditing, settings, updatePresentationSettings, hiddenNodeIds, isRevealingHidden, t],
   )
 
   // Add a group item to the specified side
@@ -1485,10 +1492,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       const key = side === "input" ? "inputItems" : "outputItems"
       const current = settings[key] ?? []
       updatePresentationSettings({
-        [key]: [...current, { type: "group" as const, id: crypto.randomUUID(), title: "New Group", items: [] }],
+        [key]: [...current, { type: "group" as const, id: crypto.randomUUID(), title: t("present.newGroup"), items: [] }],
       })
     },
-    [settings, updatePresentationSettings],
+    [settings, updatePresentationSettings, t],
   )
 
   // Add a richtext item inside a group
@@ -1582,7 +1589,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {headerLeft}
             <h1 className="text-sm md:text-lg font-semibold truncate text-foreground min-w-[3rem]">
-              {workflowName || "Untitled"}
+              {workflowName || t("common.untitled")}
             </h1>
             {headerActions}
           </div>
@@ -1596,7 +1603,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                     <TooltipTrigger asChild>
                       <div><CreditBalance userId={user.id} onClick={() => setShowGetCreditsModal(true)} /></div>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom">View credits &amp; plans</TooltipContent>
+                    <TooltipContent side="bottom">{t("present.viewCreditsPlans")}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               ) : (
@@ -1636,15 +1643,15 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 type="button"
                 onClick={onNewRun}
                 className={`shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 ${
-                  newRunLabel === "Retry" || newRunLabel === "Clear"
+                  isResetAction(newRunAction)
                     ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
                     : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
                 }`}
               >
-                {newRunLabel === "Retry" || newRunLabel === "Clear"
+                {isResetAction(newRunAction)
                   ? <RotateCcw className="h-4 w-4" />
                   : <Plus className="h-4 w-4" />}
-                <span className="hidden sm:inline">{newRunLabel ?? "New Run"}</span>
+                <span className="hidden sm:inline">{t(newRunActionLabel(newRunAction))}</span>
               </button>
             )}
 
@@ -1657,7 +1664,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 disabled={!onCancel}
               >
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Stop
+                {t("common.stop")}
               </button>
             ) : (
               inputsReadOnly !== true && (
@@ -1668,7 +1675,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                     className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200"
                   >
                     <Sparkles className="h-4 w-4" />
-                    {userCredits?.tier === "free" ? "Get Free Credits" : "Get Credits"}
+                    {userCredits?.tier === "free" ? t("present.getFreeCredits") : t("runner.getCredits")}
                   </button>
                 ) : (
                   <>
@@ -1682,9 +1689,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                       disabled={!!user && !allInputsFilled}
                     >
                       {!user ? (
-                        <><LogIn className="h-4 w-4" />Sign in to Run</>
+                        <><LogIn className="h-4 w-4" />{t("present.signInToRun")}</>
                       ) : (
-                        <><Play className="h-4 w-4" />Run{costLabel}</>
+                        <><Play className="h-4 w-4" />{t("present.run")}{costLabel}</>
                       )}
                     </button>
                   </>
@@ -1700,11 +1707,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   type="button"
                   onClick={handleRemix}
                   disabled={isRemixing}
-                  title="Remix this app"
+                  title={t("present.remixThisApp")}
                   className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 disabled:opacity-50"
                 >
                   {isRemixing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                  Remix
+                  {t("present.remix")}
                 </button>
               </>
             )}
@@ -1713,11 +1720,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             <button
               type="button"
               onClick={() => window.open("/apps", "_blank")}
-              title="Explore more apps"
+              title={t("present.exploreMoreApps")}
               className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200"
             >
               <LayoutGrid className="h-4 w-4" />
-              More Apps
+              {t("present.moreApps")}
             </button>
           </div>
         )}
@@ -1729,7 +1736,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               variant="ghost"
               size="sm"
               onClick={toggleNativeFullscreen}
-              title={isNativeFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              title={isNativeFullscreen ? t("common.exitFullscreen") : t("common.fullscreen")}
               className="text-muted-foreground hover:text-foreground"
             >
               {isNativeFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -1743,7 +1750,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   <TooltipTrigger asChild>
                     <div><CreditBalance userId={user.id} onClick={() => setShowGetCreditsModal(true)} /></div>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">View credits &amp; plans</TooltipContent>
+                  <TooltipContent side="bottom">{t("present.viewCreditsPlans")}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             ) : (
@@ -1775,12 +1782,12 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               size="sm"
               onClick={() => setIsEditMode(!isEditMode)}
               className={isEditMode ? "" : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"}
-              title={isEditMode ? "Switch to view mode" : "Edit presentation"}
+              title={isEditMode ? t("present.switchToViewMode") : t("present.editPresentation")}
             >
               {isEditMode ? (
-                <><Eye className="h-4 w-4 mr-1" />View</>
+                <><Eye className="h-4 w-4 me-1" />{t("common.view")}</>
               ) : (
-                <><Pencil className="h-4 w-4 mr-1" />Edit</>
+                <><Pencil className="h-4 w-4 me-1" />{t("common.edit")}</>
               )}
             </Button>
           )}
@@ -1827,8 +1834,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 onClick={() => setShowPublishTemplate(true)}
                 className="border-border text-muted-foreground hover:text-foreground hover:bg-muted"
               >
-                <LayoutGrid className="h-4 w-4 mr-1" />
-                Template
+                <LayoutGrid className="h-4 w-4 me-1" />
+                {t("present.templateButton")}
               </Button>
               <PublishTemplateDialog
                 workflowId={workflowId}
@@ -1852,12 +1859,12 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   const { shareToken } = await shareWorkflow(workflowId)
                   window.open(`/present/${shareToken}`, "_blank")
                 } catch {
-                  toast.error("Failed to open in new tab")
+                  toast.error(tx("present.failedOpenNewTab"))
                 } finally {
                   setIsOpeningNewTab(false)
                 }
               }}
-              title="Open in new tab"
+              title={t("present.openInNewTab")}
               className="border-border text-muted-foreground hover:text-foreground hover:bg-muted"
             >
               <ExternalLink className="h-4 w-4" />
@@ -1874,7 +1881,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 disabled={!onCancel}
               >
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Stop
+                {t("common.stop")}
               </button>
             ) : (
               <>
@@ -1888,9 +1895,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   disabled={(!isFullscreen && mode === "tab" && !onRun) || (isFullscreen && !allInputsFilled && !!user)}
                 >
                   {isFullscreen && !user ? (
-                    <><LogIn className="h-4 w-4" />Sign in to Run</>
+                    <><LogIn className="h-4 w-4" />{t("present.signInToRun")}</>
                   ) : (
-                    <><Play className="h-4 w-4" />Run{costLabel}</>
+                    <><Play className="h-4 w-4" />{t("present.run")}{costLabel}</>
                   )}
                 </button>
               </>
@@ -2017,21 +2024,21 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
 
       {/* Mobile fixed bottom action bar for app runner — stays above keyboard */}
       {isAppRunner && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center gap-2 px-3 py-2 bg-card/95 backdrop-blur-lg border-t border-border" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
+        <div className="md:hidden fixed bottom-0 start-0 end-0 z-50 flex items-center justify-center gap-2 px-3 py-2 bg-card/95 backdrop-blur-lg border-t border-border" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
           {user && viewMode !== "chat" && (
             <button
               type="button"
               onClick={onNewRun}
               className={`shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 touch-manipulation ${
-                newRunLabel === "Retry" || newRunLabel === "Clear"
+                isResetAction(newRunAction)
                   ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
                   : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
               }`}
             >
-              {newRunLabel === "Retry" || newRunLabel === "Clear"
+              {isResetAction(newRunAction)
                 ? <RotateCcw className="h-4 w-4" />
                 : <Plus className="h-4 w-4" />}
-              {newRunLabel ?? "New Run"}
+              {t(newRunActionLabel(newRunAction))}
             </button>
           )}
 
@@ -2043,7 +2050,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               disabled={!onCancel}
             >
               <Loader2 className="h-4 w-4 animate-spin" />
-              Stop
+              {t("common.stop")}
             </button>
           ) : (
             inputsReadOnly !== true && (
@@ -2054,7 +2061,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   className="shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 touch-manipulation"
                 >
                   <Sparkles className="h-4 w-4" />
-                  {userCredits?.tier === "free" ? "Get Free Credits" : "Get Credits"}
+                  {userCredits?.tier === "free" ? t("present.getFreeCredits") : t("runner.getCredits")}
                 </button>
               ) : (
                 <button
@@ -2064,9 +2071,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   disabled={!!user && !allInputsFilled}
                 >
                   {!user ? (
-                    <><LogIn className="h-4 w-4" />Sign in to Run</>
+                    <><LogIn className="h-4 w-4" />{t("present.signInToRun")}</>
                   ) : (
-                    <><Play className="h-4 w-4" />Run{costLabel}</>
+                    <><Play className="h-4 w-4" />{t("present.run")}{costLabel}</>
                   )}
                 </button>
               )
@@ -2078,7 +2085,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               type="button"
               onClick={handleRemix}
               disabled={isRemixing}
-              title="Remix this app"
+              title={t("present.remixThisApp")}
               className="shrink-0 whitespace-nowrap h-10 px-3 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 disabled:opacity-50 touch-manipulation"
             >
               {isRemixing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
@@ -2088,7 +2095,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           <button
             type="button"
             onClick={() => window.open("/apps", "_blank")}
-            title="Explore more apps"
+            title={t("present.exploreMoreApps")}
             className="shrink-0 whitespace-nowrap h-10 px-3 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 touch-manipulation"
           >
             <LayoutGrid className="h-4 w-4" />

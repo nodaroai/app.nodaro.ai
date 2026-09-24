@@ -63,6 +63,27 @@ describe("NODE_LABELS_HE coverage", () => {
 })
 
 /**
+ * The add-node popup and the sidebar render `NODE_OPTIONS` labels, looked up in
+ * the same `NODE_LABELS_HE` map. An option label is NOT always the node
+ * definition's label ("Create Face" vs "Face", "Suno Create Music" vs "Suno
+ * Generate"), so the definition check above does not cover it — and one
+ * unmapped option shows English in an otherwise Hebrew menu.
+ */
+describe("NODE_OPTIONS labels have a Hebrew entry", () => {
+  it(
+    "every add-node menu label in lib/node-options.tsx is in NODE_LABELS_HE",
+    () => {
+      const mapped = mappedLabels("NODE_LABELS_HE")
+      const labels = [...read("lib/node-options.tsx").matchAll(/^ {4}label: "([^"]+)",?$/gm)].map((m) => m[1])
+      expect(labels.length).toBeGreaterThan(150)
+      const missing = [...new Set(labels)].filter((l) => !mapped.has(l))
+      expect(missing, `add-node menu labels with no Hebrew entry: ${missing.join(", ")}`).toEqual([])
+    },
+    TIMEOUT,
+  )
+})
+
+/**
  * Same trap one level down: the pip labels on a node's input/output handles
  * ("Start Frame", "Image Refs", "Video Refs" …) come from
  * `target-handle-registry.ts` and are looked up in `HANDLE_LABELS_HE` by

@@ -76,7 +76,7 @@ function SunoLyricsNodeComponent({ id, data, selected }: NodeProps) {
                 className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
-                  copyToClipboard(activeText, "Text copied")
+                  copyToClipboard(activeText, t("node.textCopied"))
                 }}
               >
                 <Copy className="w-3 h-3" />

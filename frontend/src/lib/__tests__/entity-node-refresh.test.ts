@@ -21,6 +21,8 @@ vi.mock("@/components/editor/workflow-editor/auto-execute", () => ({
 vi.mock("@/lib/parameter-node-prefs", () => ({
   getStickyParameterDisplayMode: vi.fn(() => "picks"),
   setStickyParameterDisplayMode: vi.fn(),
+  getStickyLookPreviewStyle: vi.fn(() => undefined),
+  setStickyLookPreviewStyle: vi.fn(),
 }))
 
 import { ENTITY_KINDS, ENTITY_DB_ID_FIELD, refreshEntityNodes } from "../entity-node-data"

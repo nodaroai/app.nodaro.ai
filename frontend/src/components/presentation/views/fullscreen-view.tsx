@@ -6,6 +6,9 @@ import { getOutputType } from "@/lib/presentation-utils"
 import { isAudioUrl, isVideoUrl } from "@/lib/media-type"
 import { GlassCard } from "../output-cards/shared"
 import { WaveformBars } from "../input-cards/shared"
+import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import type { WorkflowNode } from "@/types/nodes"
 import type { ViewProps } from "./types"
 
@@ -53,6 +56,8 @@ export function FullscreenView({
 }: FullscreenViewProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const touchStartRef = useRef<number | null>(null)
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
 
   // ←/→ navigate a single list of INPUTS then OUTPUTS. `resolveResult` (when
   // provided) overrides `getResult` so the viewer can show a FROZEN run slot.
@@ -161,8 +166,8 @@ export function FullscreenView({
     <button
       type="button"
       onClick={onBack}
-      aria-label="Close"
-      className="absolute top-4 right-14 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-muted/80 text-foreground hover:bg-muted"
+      aria-label={t("common.close")}
+      className="absolute top-4 end-14 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-muted/80 text-foreground hover:bg-muted"
     >
       <X className="h-5 w-5" />
     </button>
@@ -173,7 +178,7 @@ export function FullscreenView({
       <div className={`${rootClass} text-muted-foreground gap-3 p-6`}>
         {closeButton}
         <FileText className="w-12 h-12 text-muted-foreground/30" />
-        <p className="text-sm">Run the workflow to see inputs &amp; outputs</p>
+        <p className="text-sm">{t("present.runToSeeIO")}</p>
       </div>
     )
   }
@@ -189,7 +194,7 @@ export function FullscreenView({
     >
       {closeButton}
       {/* Corner badge: Input / Output + node name */}
-      <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
+      <div className="absolute top-4 start-4 flex items-center gap-2 z-10">
         <span
           className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
             current.kind === "input"
@@ -197,15 +202,15 @@ export function FullscreenView({
               : "bg-green-500/15 text-green-600"
           }`}
         >
-          {current.kind}
+          {current.kind === "input" ? t("present.kindInput") : t("present.kindOutput")}
         </span>
         <span className="text-[11px] text-muted-foreground uppercase tracking-wider truncate max-w-[40vw]">{current.title}</span>
       </div>
 
       {/* Counter + run-nav hint */}
-      <div className="absolute top-4 right-4 flex items-center gap-2 text-[11px] text-muted-foreground/60 z-10">
+      <div className="absolute top-4 end-4 flex items-center gap-2 text-[11px] text-muted-foreground/60 z-10">
         <span>{safeIndex + 1} / {items.length}</span>
-        {hasRunNav && <span className="hidden sm:inline">↑↓ runs · ←→ items</span>}
+        {hasRunNav && <span className="hidden sm:inline">{t("present.navHint")}</span>}
       </div>
 
       {/* Left arrow */}
@@ -213,13 +218,13 @@ export function FullscreenView({
         type="button"
         onClick={goPrev}
         disabled={safeIndex === 0}
-        className={`absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors z-10 touch-manipulation ${
+        className={`absolute start-2 sm:start-4 top-1/2 -translate-y-1/2 w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors z-10 touch-manipulation ${
           safeIndex === 0
             ? "bg-muted/40 text-muted-foreground/30 cursor-default"
             : "bg-muted/80 hover:bg-muted text-foreground cursor-pointer"
         }`}
       >
-        <ChevronLeft className="w-5 h-5" />
+        <ChevronLeft className={cn("w-5 h-5", isRtl && "rotate-180")} />
       </button>
 
       {/* Right arrow */}
@@ -227,13 +232,13 @@ export function FullscreenView({
         type="button"
         onClick={goNext}
         disabled={safeIndex >= items.length - 1}
-        className={`absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors z-10 touch-manipulation ${
+        className={`absolute end-2 sm:end-4 top-1/2 -translate-y-1/2 w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors z-10 touch-manipulation ${
           safeIndex >= items.length - 1
             ? "bg-muted/40 text-muted-foreground/30 cursor-default"
             : "bg-muted/80 hover:bg-muted text-foreground cursor-pointer"
         }`}
       >
-        <ChevronRight className="w-5 h-5" />
+        <ChevronRight className={cn("w-5 h-5", isRtl && "rotate-180")} />
       </button>
 
       {/* Content */}

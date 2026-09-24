@@ -135,7 +135,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "aging",                   label: "Aging",                      category: "time", description: "Subject visibly ages forward in time",
     promptHint: "accelerated aging transition: the subject visibly ages forward - fine lines deepen into wrinkles, hair greys to silver, posture settles - while the framing stays unchanged", term: "accelerated aging" },
   { id: "rewind",                  label: "Rewind",                     category: "time", description: "Time reverses, motion plays backward",
-    promptHint: "rewind transition: time reverses and all motion plays smoothly backward, water flows up, debris reassembles, the subject's recent actions undo, with a faint VHS-rewind tracking distortion at the edges", term: "reverse-motion rewind" },
+    promptHint: "rewind transition: reverse motion: the actions just seen are undone exactly as they happened, in reverse order and at the same pace, the subject retracing each step to where it began, ending on the end frame", term: "reverse-motion rewind" },
   { id: "freeze-frame-jump",       label: "Freeze-Frame Jump",          category: "time", description: "Action freezes, jumps forward in time",
     promptHint: "freeze-frame transition: all motion stops mid-action and the picture holds still for a beat; only then does it jump to the same view hours or days later, everything in new positions, and motion resumes", term: "freeze-frame time jump" },
   { id: "weather-shift",           label: "Weather Shift",              category: "time", description: "Same scene through changing weather",

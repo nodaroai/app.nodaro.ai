@@ -28,9 +28,12 @@ import { AssetsTab } from "@/components/dashboard/assets-tab"
 import { JobsTab } from "@/components/dashboard/jobs-tab"
 import { isStudioProject } from "@/lib/studio"
 import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 
 export default function ProjectPage() {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const { id } = useParams<{ id: string }>()
   const { isAdmin } = useAuth()
   const { data: projects = [], isLoading: projectsLoading } = useProjects()
@@ -99,7 +102,7 @@ export default function ProjectPage() {
       <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
         <Link to="/projects">
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className={cn("h-4 w-4", isRtl && "rotate-180")} />
           </Button>
         </Link>
         <div className="flex-1 min-w-0">
@@ -135,11 +138,11 @@ export default function ProjectPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={openRenameDialog}>
-                <Pencil className="h-3.5 w-3.5 mr-2" />
+                <Pencil className="h-3.5 w-3.5 me-2" />
                 {t("project.rename")}
               </DropdownMenuItem>
               <DropdownMenuItem disabled>
-                <Settings className="h-3.5 w-3.5 mr-2" />
+                <Settings className="h-3.5 w-3.5 me-2" />
                 {t("project.settings")}
               </DropdownMenuItem>
             </DropdownMenuContent>

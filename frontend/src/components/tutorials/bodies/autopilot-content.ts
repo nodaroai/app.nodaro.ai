@@ -3,21 +3,30 @@
 // The step chain names the nodes it reads from; everything shown inside a step
 // (excerpts, slide lines, thumbnails, the caption, the post) comes off those
 // nodes at render time.
+//
+// Copy is held as dictionary keys and translated at render.
 
-export const HEADLINE = "Paste an idea. Get a published Instagram carousel."
-export const SUBLINE =
-  "Seven nodes do the rest: they split your text into slides, draw an image for each one, write the caption, and post it."
-export const HEADLINE_CHIPS = ["10 slides max", "one image per slide", "runs unattended"]
+import type { MessageKey } from "@/lib/i18n"
 
-export const HERO = {
-  in: { badge: "IN", title: "What you give it", sub: "One block of text. Nothing else." },
-  out: { badge: "OUT", title: "What you get back", sub: "Ten images, a caption, and a live post" },
-  connector: ["7 STEPS", "BELOW"],
+export const HEADLINE: MessageKey = "tut.apHeadline"
+export const SUBLINE: MessageKey = "tut.apSubline"
+export const HEADLINE_CHIPS: readonly MessageKey[] = ["tut.apChipSlidesMax", "tut.apChipImagePerSlide", "tut.apChipUnattended"]
+
+interface HeroCard {
+  badge: MessageKey
+  title: MessageKey
+  sub: MessageKey
 }
 
-export const CHAIN_HEADING = {
-  title: "How it gets from one to the other",
-  note: "Each step below shows a piece of what it actually produced on this run.",
+export const HERO: { in: HeroCard; out: HeroCard; connector: readonly [MessageKey, MessageKey] } = {
+  in: { badge: "tut.badgeIn", title: "tut.apInTitle", sub: "tut.apInSub" },
+  out: { badge: "tut.badgeOut", title: "tut.uwOutTitle", sub: "tut.apOutSub" },
+  connector: ["tut.uwConnector1", "tut.uwConnector2"],
+}
+
+export const CHAIN_HEADING: { title: MessageKey; note: MessageKey } = {
+  title: "tut.uwChainHeading",
+  note: "tut.apChainNote",
 }
 
 /**
@@ -25,17 +34,18 @@ export const CHAIN_HEADING = {
  * `node` is matched by label first, then by type — the template's ids are
  * generated, but the labels are authored and stable.
  */
-export const STEPS = [
-  { n: 1, kind: "Reads", title: "Your idea", line: "The text you pasted, untouched.", label: "Text Prompt" },
-  { n: 2, kind: "Constrains", title: "The rules", line: "What it must and must not do.", label: "System" },
-  { n: 3, kind: "Writes", title: "Slide copy", line: "One line of copy per slide.", label: "LLM Chat" },
-  { n: 4, kind: "Splits", title: "Ten slides", line: "The script becomes rows.", label: "Carousel Script" },
-  { n: 5, kind: "Draws", title: "One image each", line: "A picture per slide, in sequence.", label: "Generate Image" },
-  { n: 6, kind: "Writes", title: "The caption", line: "Hook, question, hashtags.", label: "LLM Chat-Hook Generator" },
-  { n: 7, kind: "Posts", title: "Formats and posts", line: "Sized for the feed, then published.", label: "Instagram Post" },
-] as const
+export const STEPS: ReadonlyArray<{ n: number; kind: MessageKey; title: MessageKey; line: MessageKey; label: string }> = [
+  { n: 1, kind: "tut.kindReads", title: "tut.apStep1Title", line: "tut.apStep1Line", label: "Text Prompt" },
+  { n: 2, kind: "tut.kindConstrains", title: "tut.apStep2Title", line: "tut.apStep2Line", label: "System" },
+  { n: 3, kind: "tut.kindWrites", title: "tut.apStep3Title", line: "tut.apStep3Line", label: "LLM Chat" },
+  { n: 4, kind: "tut.kindSplits", title: "tut.apStep4Title", line: "tut.apStep4Line", label: "Carousel Script" },
+  { n: 5, kind: "tut.kindDraws", title: "tut.apStep5Title", line: "tut.apStep5Line", label: "Generate Image" },
+  { n: 6, kind: "tut.kindWrites", title: "tut.theCaption", line: "tut.apStep6Line", label: "LLM Chat-Hook Generator" },
+  { n: 7, kind: "tut.kindPosts", title: "tut.apStep7Title", line: "tut.apStep7Line", label: "Instagram Post" },
+]
 
 export const SLIDE_PREVIEW_COUNT = 2
-export const OTHER_SLIDES_LABEL = "The other nine slides"
-export const CAPTION_LABEL = "The caption it wrote"
-export const POST_CAPTION = "slide 1 of 10, square feed"
+export const OTHER_SLIDES_LABEL: MessageKey = "tut.apOtherSlides"
+export const CAPTION_LABEL: MessageKey = "tut.apCaptionLabel"
+/** `{n}` is the slide on show. */
+export const POST_CAPTION: MessageKey = "tut.apPostCaption"

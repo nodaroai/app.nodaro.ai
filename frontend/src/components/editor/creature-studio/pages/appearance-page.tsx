@@ -1,6 +1,7 @@
 import { useContext, useState } from "react"
 import { ANIMALS } from "@nodaro/shared"
 import { optimizedImageUrl } from "@/lib/image"
+import { useT } from "@/lib/i18n"
 import type { StudioPageProps } from "../../studio-shell/types"
 import type { CreatureStudioJobs } from "../use-creature-studio-jobs"
 import type { CreatureStudioState } from "../use-creature-studio"
@@ -48,6 +49,7 @@ import { CreatureCandidatesContext } from "../creature-candidates-context"
 const ANIMAL_SPECIES_SUGGESTIONS = ANIMALS
 
 export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, CreatureStudioJobs>) {
+  const t = useT()
   const studio = state
   const data = studio.stagedData
   const [count, setCount] = useState<1 | 2 | 4>(1)
@@ -77,31 +79,31 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
       <div className="space-y-6 max-w-2xl mx-auto">
         {/* Main image preview */}
         <section>
-          <h2 className="text-[12px] font-medium text-slate-300 mb-2">Main image</h2>
+          <h2 className="text-[12px] font-medium text-slate-300 mb-2">{t("creature.mainImage")}</h2>
           {data.sourceImageUrl ? (
             <img
               src={optimizedImageUrl(data.sourceImageUrl, { width: 800 })}
-              alt={data.creatureName || "Creature"}
+              alt={data.creatureName || t("assetlib.typeCreature")}
               loading="lazy"
               className="w-full max-h-[400px] object-contain rounded border border-[#1e293b]"
             />
           ) : (
             <div className="aspect-video bg-[#1a1d27] rounded border border-[#1e293b] flex items-center justify-center text-[11px] text-slate-500">
-              No main image yet — generate candidates below
+              {t("creature.noMainImageYet")}
             </div>
           )}
         </section>
 
         {/* Identity form */}
         <section className="space-y-3">
-          <h2 className="text-[12px] font-medium text-slate-300">Identity</h2>
+          <h2 className="text-[12px] font-medium text-slate-300">{t("creature.identity")}</h2>
           <label className="block">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Name</span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider">{t("common.name")}</span>
             <input
               type="text"
               value={data.creatureName || ""}
               onChange={(e) => studio.patch({ creatureName: e.target.value })}
-              placeholder="e.g. Ember the fox"
+              placeholder={t("creature.namePlaceholder")}
               className="w-full mt-1 px-3 py-2 text-[12px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600"
             />
           </label>
@@ -110,13 +112,13 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
               hybrid creatures aren't locked to the catalog. Distinct from the
               object's hard category enum. Mirrors CreatureConfig. */}
           <label className="block">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Species / Type</span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider">{t("cfgext.entSpeciesType")}</span>
             <input
               type="text"
               list="creature-studio-species-suggestions"
               value={data.species ?? ""}
               onChange={(e) => studio.patch({ species: e.target.value })}
-              placeholder="e.g. red fox, griffin, dragon"
+              placeholder={t("creature.speciesPlaceholder")}
               className="w-full mt-1 px-3 py-2 text-[12px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600"
             />
             <datalist id="creature-studio-species-suggestions">
@@ -125,15 +127,15 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
               ))}
             </datalist>
             <span className="block mt-1 text-[9px] text-slate-600">
-              Free text — pick a suggestion or type any animal / mythical creature.
+              {t("creature.speciesHint")}
             </span>
           </label>
           <label className="block">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Description</span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider">{t("common.description")}</span>
             <textarea
               value={data.description || ""}
               onChange={(e) => studio.patch({ description: e.target.value })}
-              placeholder="Optional — describe form, fur/scales, colors, distinctive features"
+              placeholder={t("creature.descriptionPlaceholder")}
               rows={3}
               className="w-full mt-1 px-3 py-2 text-[12px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600 resize-y"
             />
@@ -143,8 +145,8 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
         {/* Generate */}
         <section>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-slate-400">Candidates:</span>
-            <div className="flex gap-1" role="group" aria-label="Candidate count">
+            <span className="text-[11px] text-slate-400">{t("creature.candidates")}:</span>
+            <div className="flex gap-1" role="group" aria-label={t("creature.candidateCountAria")}>
               {([1, 2, 4] as const).map((n) => (
                 <button
                   key={n}
@@ -165,14 +167,14 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
               type="button"
               onClick={() => void cands.generate(count)}
               disabled={generateDisabled}
-              className="ml-auto px-4 py-1.5 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
+              className="ms-auto px-4 py-1.5 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
             >
-              Generate
+              {t("common.generate")}
             </button>
           </div>
           {cands.tracked.length > 0 && (
             <div className="mt-2 text-[10px] text-slate-500">
-              Generating {cands.tracked.length} candidate{cands.tracked.length === 1 ? "" : "s"}…
+              {cands.tracked.length === 1 ? t("creature.generatingCandidatesOne") : t("creature.generatingCandidatesMany", { n: cands.tracked.length })}
             </div>
           )}
         </section>
@@ -180,13 +182,13 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
         {/* Candidates grid */}
         {cands.candidates.length > 0 && (
           <section>
-            <h2 className="text-[12px] font-medium text-slate-300 mb-2">Candidates</h2>
+            <h2 className="text-[12px] font-medium text-slate-300 mb-2">{t("creature.candidates")}</h2>
             <div className="grid grid-cols-2 gap-3">
               {cands.candidates.map((c) => (
                 <div key={c.jobId} className="border border-[#1e293b] rounded p-2 bg-[#0e1117]">
                   <img
                     src={optimizedImageUrl(c.url, { width: 512 })}
-                    alt="candidate"
+                    alt={t("creature.candidateAlt")}
                     loading="lazy"
                     className="w-full aspect-square object-cover rounded"
                   />
@@ -197,12 +199,12 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
                       disabled={approveDiscardDisabled}
                       title={
                         mainImageGenPending
-                          ? "Wait for in-flight candidate generations to finish"
+                          ? t("creature.waitForCandidates")
                           : undefined
                       }
                       className="flex-1 text-[11px] px-2 py-1 rounded bg-[#A78BFA] hover:bg-[#A78BFA]/90 disabled:opacity-40 disabled:cursor-not-allowed text-slate-900 font-medium"
                     >
-                      {studio.isApprovingMainImage ? "Approving…" : "Approve"}
+                      {studio.isApprovingMainImage ? t("creature.approving") : t("pipe.approve")}
                     </button>
                     <button
                       type="button"
@@ -210,12 +212,12 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
                       disabled={approveDiscardDisabled}
                       title={
                         mainImageGenPending
-                          ? "Wait for in-flight candidate generations to finish"
+                          ? t("creature.waitForCandidates")
                           : undefined
                       }
                       className="text-[11px] px-2 py-1 rounded bg-[#1a1d27] hover:bg-[#1e293b] disabled:opacity-40 disabled:cursor-not-allowed text-slate-400"
                     >
-                      Discard
+                      {t("node.discard")}
                     </button>
                   </div>
                 </div>
@@ -227,9 +229,9 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
         {/* Canonical description (LLM-authored, read-only display) */}
         {data.canonicalDescription && (
           <section className="text-[11px] bg-[#0e1117] border border-[#1e293b] p-3 rounded">
-            <div className="font-medium text-slate-300 mb-1">Canonical description</div>
+            <div className="font-medium text-slate-300 mb-1">{t("creature.canonicalDescription")}</div>
             <div className="text-slate-400 italic">{data.canonicalDescription}</div>
-            <div className="text-[9px] text-slate-600 mt-1">Auto-generated when you approved the main image.</div>
+            <div className="text-[9px] text-slate-600 mt-1">{t("creature.canonicalDescriptionHint")}</div>
           </section>
         )}
       </div>

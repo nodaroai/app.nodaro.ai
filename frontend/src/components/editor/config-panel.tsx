@@ -41,6 +41,7 @@ import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
 import { isTileGridPickerType } from "@/lib/picker-handles"
 import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared"
 import { getOutputMinuteUnits, NO_RERUNS } from "@/components/editor/workflow-editor/types"
+import { NodeLookPreviewStyleScope } from "@/components/nodes/look-preview-style"
 import {
   getConnectedSources,
   getModelIdentifier,
@@ -1047,6 +1048,10 @@ export function ConfigPanel() {
                 shared Full / Compact lever. Provided once here so every picker
                 panel, present and future, is covered with no per-panel work. */}
             <ParameterPreviewContext.Provider value={{ node: selectedNode, nodes, edges }}>
+              {/* The picker grid pictures its options the way this node is
+                  set (real render / illustration), and the switch above the
+                  grid writes the node — so grid and canvas card never differ. */}
+              <NodeLookPreviewStyleScope nodeId={selectedNodeId ?? undefined} nodeType={nodeType} data={nodeData}>
               {isExpanded ? (
                 <TileCommitContext.Provider value={{ commit: closeFullscreenSettings }}>
                   <NodeTypeConfig
@@ -1070,6 +1075,7 @@ export function ConfigPanel() {
                   selectedNodeId={selectedNodeId ?? undefined}
                 />
               )}
+              </NodeLookPreviewStyleScope>
             </ParameterPreviewContext.Provider>
             {/* Prompt Injection — opt out of auto-injecting Look / Elements.
                Renders only for nodes with a look/cinematography or elements

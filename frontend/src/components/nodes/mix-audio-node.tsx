@@ -83,12 +83,12 @@ function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
                 <div role="button" aria-label={t("node.playAudioResult")} tabIndex={0} className={`w-10 h-10 flex items-center justify-center rounded cursor-pointer transition-opacity bg-muted ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url }) }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url }) } }}>
                   <AudioLines className="w-4 h-4" />
                 </div>
-                <button type="button" aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
+                <button type="button" aria-label={t("common.remove")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
               </div>
             ))}
           </div>
         )}
-        <p className="text-muted-foreground">{nodeData.trackCount} tracks</p>
+        <p className="text-muted-foreground">{t("node.nTracks", { n: nodeData.trackCount })}</p>
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="mix-audio" handleId="in"        type="target" position={Position.Left}  label="Audio" color={FFMPEG_COLORS.audio} icon={<AudioLines />} side="left"  top="calc(100% - 24px)" orderMatters accepts={ACCEPTS_AUDIO} />

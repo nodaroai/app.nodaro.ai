@@ -1,6 +1,7 @@
 import React from "react"
 import { Eye } from "lucide-react"
 import { toast } from "sonner"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 
 export type OutputStatus = "idle" | "waiting" | "running" | "completed" | "failed"
 
@@ -23,10 +24,11 @@ export interface OutputCardActions {
 }
 
 export function IterationProgress({ status, iterationTotal, iterationCompleted }: { status: OutputStatus; iterationTotal?: number; iterationCompleted?: number }) {
+  const t = useT()
   if ((status !== "running" && status !== "waiting") || iterationTotal == null) return null
   return (
     <div className="text-xs text-muted-foreground mb-2">
-      {iterationCompleted ?? 0}/{iterationTotal} generated
+      {t("present.generatedProgress", { done: iterationCompleted ?? 0, total: iterationTotal })}
     </div>
   )
 }
@@ -38,18 +40,26 @@ const STATUS_COLORS: Record<string, string> = {
   failed: "bg-red-500/10 text-red-500 border border-red-500/20",
 }
 
+const STATUS_LABELS: Record<Exclude<OutputStatus, "idle">, MessageKey> = {
+  waiting: "present.statusWaiting",
+  running: "present.statusRunning",
+  completed: "present.statusCompleted",
+  failed: "present.statusFailed",
+}
+
 export function StatusBadge({ status }: { status: OutputStatus }) {
+  const t = useT()
   if (status === "idle") return null
   return (
     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider ${STATUS_COLORS[status] ?? ""}`}>
-      {status}
+      {t(STATUS_LABELS[status])}
     </span>
   )
 }
 
 export function copyUrl(url: string) {
   navigator.clipboard.writeText(url)
-  toast.success("URL copied")
+  toast.success(tx("apps.urlCopied"))
 }
 
 export function downloadFile(url: string, filename: string) {
@@ -141,6 +151,7 @@ export function resolveTextCardActions(
 }
 
 export function UnhideBanner({ onUnhide }: { onUnhide: () => void }) {
+  const t = useT()
   return (
     <button
       type="button"
@@ -150,7 +161,7 @@ export function UnhideBanner({ onUnhide }: { onUnhide: () => void }) {
         border-t border-amber-500/20 rounded-b-xl"
     >
       <Eye className="w-3.5 h-3.5" />
-      Unhide
+      {t("present.unhide")}
     </button>
   )
 }

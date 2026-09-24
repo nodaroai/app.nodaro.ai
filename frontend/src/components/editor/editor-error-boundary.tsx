@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from "react"
 import { AlertTriangle, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { tx } from "@/lib/i18n"
 
 interface Props {
   children: ReactNode
@@ -32,14 +33,14 @@ export class EditorErrorBoundary extends Component<Props, State> {
               <AlertTriangle className="h-6 w-6 text-destructive" />
             </div>
             <h2 className="text-lg font-semibold text-foreground">
-              {this.props.label ?? "Something"} crashed
+              {tx("editor.boundaryCrashed", { label: this.props.label ?? tx("editor.boundarySomething") })}
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              {this.state.error?.message ?? "An unexpected error occurred"}
+              {this.state.error?.message ?? tx("editor.boundaryUnexpected")}
             </p>
             <Button variant="outline" className="mt-4" onClick={this.handleReload}>
               <RotateCcw className="size-4" />
-              Reload
+              {tx("editor.boundaryReload")}
             </Button>
           </div>
         </div>

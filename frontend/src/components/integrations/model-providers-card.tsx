@@ -13,6 +13,7 @@ import {
   type ProviderTile,
 } from "@/lib/provider-tiles"
 import { ProviderKeyRow } from "./provider-key-row"
+import { useT } from "@/lib/i18n"
 
 /**
  * "Model providers" on Integrations (self-hosted editions; null on cloud) —
@@ -48,6 +49,7 @@ export function ModelProvidersCard() {
   const [status, setStatus] = useState<SetupStatusSlice | null>(null)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
+  const t = useT()
 
   const refresh = useCallback(async () => {
     try {
@@ -89,17 +91,16 @@ export function ModelProvidersCard() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 id="model-providers-heading" className="font-semibold text-gray-900 dark:text-white text-sm">
-              Model providers
+              {t("integ.modelProviders")}
             </h3>
             {tiles.length > 0 && (
               <span className="text-[11px] font-mono text-gray-500 dark:text-gray-400">
-                {setCount}/{tiles.length} set
+                {t("integ.keysSetCount", { set: setCount, total: tiles.length })}
               </span>
             )}
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Your own provider keys, alongside the nodaro.ai connection above. Pasted keys are stored encrypted on this
-            server and take effect without a restart; a key set in the environment (.env) wins and is read-only here.
+            {t("integ.modelProvidersDesc")}
           </p>
         </div>
       </div>
@@ -107,13 +108,13 @@ export function ModelProvidersCard() {
       {loading ? (
         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Reading provider status…
+          {t("integ.readingProviderStatus")}
         </div>
       ) : failed || !providers ? (
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Could not read this server&apos;s provider status right now — see{" "}
+          {t("integ.providerStatusFailedPre")}{" "}
           <Link to="/setup" className="underline underline-offset-4">
-            Install health
+            {t("integ.installHealth")}
           </Link>
           .
         </p>
@@ -121,31 +122,27 @@ export function ModelProvidersCard() {
         <>
           {encryptionMissing && (
             <p role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/30 p-3 text-xs text-red-700 dark:text-red-400">
-              This server has no instance encryption key, so pasted keys cannot be stored. Set{" "}
-              <span className="font-mono">NODARO_ENCRYPTION_KEY</span> (see{" "}
+              {t("integ.encryptionMissingPre")}{" "}
+              <span className="font-mono">NODARO_ENCRYPTION_KEY</span> {t("integ.encryptionMissingSee")}{" "}
               <Link to="/setup" className="underline underline-offset-4">
-                Install health
+                {t("integ.installHealth")}
               </Link>
-              ); environment keys keep working.
+              {t("integ.encryptionMissingPost")}
             </p>
           )}
 
           <p className="text-xs text-gray-600 dark:text-gray-300">
             {connected ? (
               coverage.uncoveredMissing.length > 0 ? (
-                <>
-                  Connected via nodaro.ai — image, video, speech and LLM models are covered. Still needs its own key:{" "}
-                  {coverage.uncoveredMissing.map((t) => t.name).join(", ")}.
-                </>
+                <>{t("integ.coveredStillNeeds", { names: coverage.uncoveredMissing.map((tile) => tile.name).join(", ") })}</>
               ) : (
-                <>Connected via nodaro.ai — every provider below is covered; paste a key only to call that vendor directly.</>
+                <>{t("integ.coveredAll")}</>
               )
             ) : coverage.coveredMissing > 0 ? (
               <>
-                Connecting nodaro.ai above clears {coverage.coveredMissing} of the {coverage.coveredMissing + coverage.uncoveredMissing.length}{" "}
-                missing keys with one click
+                {t("integ.clearsMissingKeys", { n: coverage.coveredMissing, total: coverage.coveredMissing + coverage.uncoveredMissing.length })}
                 {coverage.uncoveredMissing.length > 0 ? (
-                  <> — not covered (own key needed): {coverage.uncoveredMissing.map((t) => t.name).join(", ")}</>
+                  <> {t("integ.notCoveredOwnKey", { names: coverage.uncoveredMissing.map((tile) => tile.name).join(", ") })}</>
                 ) : null}
                 .
               </>
@@ -162,10 +159,10 @@ export function ModelProvidersCard() {
             <div className="flex flex-col gap-3">
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Used by specific nodes
+                  {t("integ.usedBySpecificNodes")}
                 </h4>
                 <p className="text-[11px] text-gray-400 dark:text-gray-500">
-                  Only needed for the node each one names — leave them empty otherwise.
+                  {t("integ.nodeSpecificHint")}
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

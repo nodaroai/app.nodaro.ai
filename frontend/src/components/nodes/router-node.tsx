@@ -11,10 +11,12 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import { VARIABLES_HANDLE_ID } from "@nodaro/shared"
 import type { RouterNodeData } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
 
 const LETTERS = "ABCDEFGHIJ"
 
 function RouterNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as RouterNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
@@ -73,7 +75,7 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
     return h
   }, [routeIds, spacing]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const modeLabel = mode === "radio" ? "Radio" : mode === "checkbox" ? "Checkbox" : "Conditional"
+  const modeLabel = mode === "radio" ? t("node.modeRadio") : mode === "checkbox" ? t("node.modeCheckbox") : t("node.modeConditional")
 
   return (
     <div className="relative" style={{ maxWidth: "220px" }}>
@@ -103,7 +105,7 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
           </span>
           {routes.length > 0 && routes.every((r) => !isRouteActive(r)) && (
             <span className="text-[9px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded font-medium">
-              NONE
+              {t("node.noneBadge")}
             </span>
           )}
         </div>
@@ -119,7 +121,7 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
                   (isConditional ? "cursor-default" : "hover:opacity-80")
                 }
                 onClick={(e) => toggleRoute(route.id, e)}
-                title={isConditional ? "Active state is decided by condition groups at run time" : undefined}
+                title={isConditional ? t("node.activeStateByConditions") : undefined}
               >
                 {mode === "checkbox" ? (
                   <div className={`w-6 h-3.5 rounded-full relative transition-colors ${

@@ -6,48 +6,55 @@ switcher** lives at the bottom of the app sidebar, next to the theme toggle.
 
 ## What it changes
 
-One choice controls two things at once:
+One choice controls three things at once:
 
 - **App chrome** — the interface itself: navigation, buttons, dialogs, and
   other UI text.
 - **Picker catalogs** — the option labels inside parameter pickers like Mood,
   Framing, and Lens.
+- **Dates, times and numbers** — written the way the chosen language writes
+  them (in Hebrew, a date reads "24 בספט׳" rather than "Sep 24"), not in your
+  browser's locale. With English chosen, they keep your browser's regional
+  format (an en-GB browser still shows "24/09/2026").
+- **The Copilot's replies** — the Copilot answers in the language you have
+  chosen. Node names, model names and other identifiers stay as they are, so
+  the workflow it builds reads the same in every language.
 
-There's no separate setting for each; picking a language updates both.
+There's no separate setting for each; picking a language updates all of them.
 
-## Supported languages
+## Languages offered
+
+The language menu lists only the languages whose interface translation is
+complete, so that picking one gives you the whole app in that language —
+never English menus around translated picker tiles:
 
 - English
-- Arabic
-- German
-- Spanish
-- French
 - Hebrew
-- Hindi
-- Japanese
-- Korean
-- Portuguese (Brazil)
-- Russian
-- Chinese (Simplified)
+
+More languages are on the way. The picker catalogs (Mood, Framing, Lens and
+the rest) are already translated into Arabic, German, Spanish, French, Hindi,
+Japanese, Korean, Portuguese (Brazil), Russian and Chinese (Simplified); each
+of those languages joins the menu as soon as its interface translation is
+complete (at least 98% of the interface text), with no further action on your
+side.
 
 ## Translation coverage
 
-Translation is rolled out incrementally, and coverage varies by language and
-by area of the app. Any text that isn't translated yet in your chosen
-language falls back to English automatically — you'll never see a blank
-label. It's expected that some languages are fully translated in one area
-(for example, the picker catalogs) while still showing English text in
-another (for example, the app chrome), and that this improves over time as
-more translations ship.
+Within an offered language, the rare string that is not translated yet falls
+back to English automatically — you'll never see a blank label. Model,
+provider and brand names (for example Kling, Suno, ElevenLabs) keep their
+original spelling in every language.
 
-Right-to-left languages (Arabic and Hebrew) mirror the app's layout: the
-sidebar moves to the right and navigation, pages and panels flip with it.
-Two areas intentionally keep their left-to-right layout in every language:
-the workflow canvas (a workflow you share looks the same to everyone,
-whatever language they read) and the visual picker grids (their tiles keep
-the same order as the catalogs and tutorials). Choosing a right-to-left
-language whose translation is still incomplete mirrors the layout while
-showing English text for the untranslated parts.
+Right-to-left languages (Hebrew today; Arabic once it is offered) mirror the
+app's layout: the sidebar moves to the right and navigation, pages and panels
+flip with it. Two areas intentionally keep their left-to-right layout in every
+language: the workflow canvas (a workflow you share looks the same to
+everyone, whatever language they read) and the visual picker grids (their
+tiles keep the same order as the catalogs and tutorials).
+
+If your account was set to a language before it was offered, that language
+stays selected and remains listed in your menu, so you can keep it or switch;
+new visitors are only ever detected into an offered language.
 
 ## Where your choice is saved
 

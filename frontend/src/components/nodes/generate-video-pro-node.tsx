@@ -2,7 +2,7 @@
 
 import { hasCredits } from "@/lib/edition"
 
-import { useT } from "@/lib/i18n"
+import { useT, tx } from "@/lib/i18n"
 import { memo, useState, useMemo, useEffect } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Loader2, AlertCircle, AlertTriangle, Type, Image as ImageIcon, Images, Film, Minus, Volume2, Music, Users, Aperture, Sparkles, Copy, ListChecks } from "lucide-react"
@@ -119,7 +119,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
     []
   const contentPolicyNotice =
     contentPolicyRewrites.length > 0
-      ? `Segment ${contentPolicyRewrites.map((r) => r.segment).join(", ")} prompt${contentPolicyRewrites.length > 1 ? "s were" : " was"} adjusted to pass the provider's content screen.`
+      ? t(contentPolicyRewrites.length > 1 ? "node.segmentPromptAdjustedMany" : "node.segmentPromptAdjustedOne", { segments: contentPolicyRewrites.map((r) => r.segment).join(", ") })
       : undefined
 
   const provider = nodeData.provider ?? "seedance-2"
@@ -168,7 +168,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
         } else if (job.status === "failed") {
           updateNodeData(id, {
             executionStatus: "failed",
-            errorMessage: job.error_message ?? "Planning failed",
+            errorMessage: job.error_message ?? tx("node.planningFailed"),
             currentJobId: undefined,
             currentJobProgress: undefined,
           })
@@ -364,7 +364,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="flex items-center gap-1.5 px-1 pb-1 text-[10px] font-medium text-muted-foreground">
                   <ListChecks className="w-3 h-3 shrink-0" />
                   <span>
-                    Plan — {planSegments.length || plan.segmentCount || 0} segment{(planSegments.length || plan.segmentCount) === 1 ? "" : "s"}
+                    {t((planSegments.length || plan.segmentCount) === 1 ? "node.planSegmentsOne" : "node.planSegmentsMany", { n: planSegments.length || plan.segmentCount || 0 })}
                     {plan.totalDurationSec ? ` · ${plan.totalDurationSec}s` : ""}
                   </span>
                 </div>
@@ -380,7 +380,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                   ))}
                   {planSegments.length === 0 && (
-                    <div className="px-2 py-1 text-muted-foreground/60">Plan ready — copy JSON for details</div>
+                    <div className="px-2 py-1 text-muted-foreground/60">{t("node.planReadyCopyJson")}</div>
                   )}
                 </div>
                 <button

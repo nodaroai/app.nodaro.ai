@@ -1052,7 +1052,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                                 if (colType === "video-url" || colType === "audio-url") {
                                   return (
                                     <span key={col.id} className="text-[10px] text-muted-foreground/60 italic block py-1">
-                                      {cell ? "media" : "\u2014"}
+                                      {cell ? t("node.mediaCell") : "\u2014"}
                                     </span>
                                   )
                                 }

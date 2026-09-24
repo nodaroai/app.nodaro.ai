@@ -1,5 +1,11 @@
 # @nodaro/shared
 
+## 3.12.1
+
+### Patch Changes
+
+- e9fe83a: Correct the Hebrew picker-catalog translations: fix mistranslated labels and descriptions (for example tiger, leopard and cheetah, hips versus waist, assault rifle, compound bow, mirrorless camera), translate ordinary words that were left in English, and bring the Character Motion catalog to one grammatical form. Catalog ids and English copy are unchanged.
+
 ## 3.12.0
 
 ### Minor Changes

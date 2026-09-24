@@ -10,8 +10,11 @@ import { History, Sparkles, User, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Switch } from "@/components/ui/switch"
 import { capitalize, type PickerFilters, type PickerLibrary } from "./model"
+import { genderLabel } from "@/components/heygen/heygen-catalog"
 import { CHIP, CHIP_ON, KICKER } from "./styles"
 import { useRovingRadiogroup } from "./use-roving-radiogroup"
+import { useT } from "@/lib/i18n"
+import { formatNumber } from "@/lib/i18n/format"
 
 export interface LibraryEntry {
   readonly id: PickerLibrary
@@ -43,6 +46,7 @@ function Chips({
   onPick: (v: string) => void
   render?: (v: string) => string
 }) {
+  const t = useT()
   const all = ["all", ...options]
   const roving = useRovingRadiogroup(all.length, all.indexOf(value), (i) => onPick(all[i]))
   return (
@@ -51,7 +55,7 @@ function Chips({
       <div className="flex flex-wrap gap-1.5">
         {all.map((o, i) => {
           const on = value === o
-          const text = o === "all" ? "All" : render(o)
+          const text = o === "all" ? t("common.all") : render(o)
           return (
             <button
               key={o}
@@ -73,9 +77,10 @@ function Chips({
 }
 
 function Libraries({ libraries, active, onPick }: { libraries: readonly LibraryEntry[]; active: PickerLibrary; onPick: (id: PickerLibrary) => void }) {
+  const t = useT()
   const roving = useRovingRadiogroup(libraries.length, libraries.findIndex((l) => l.id === active), (i) => onPick(libraries[i].id))
   return (
-    <div className="flex flex-col gap-0.5" role="radiogroup" aria-label="Library">
+    <div className="flex flex-col gap-0.5" role="radiogroup" aria-label={t("pipe.library")}>
       {libraries.map((lib, i) => {
         const on = active === lib.id
         const Icon = LIBRARY_ICON[lib.id]
@@ -85,9 +90,9 @@ function Libraries({ libraries, active, onPick }: { libraries: readonly LibraryE
             type="button"
             role="radio"
             aria-checked={on}
-            aria-label={`${lib.label}, ${lib.count.toLocaleString("en-US")} looks`}
+            aria-label={t("heygen.libraryLooksAria", { label: lib.label, n: formatNumber(lib.count) })}
             className={cn(
-              "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[12.5px] transition-colors",
+              "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-start text-[12.5px] transition-colors",
               on ? "bg-muted text-foreground" : "text-foreground/75 hover:bg-muted/60",
             )}
             onClick={() => onPick(lib.id)}
@@ -95,7 +100,7 @@ function Libraries({ libraries, active, onPick }: { libraries: readonly LibraryE
           >
             <Icon className={cn("size-3.5 shrink-0", on ? "text-[#ff0073]" : "text-muted-foreground/70")} aria-hidden />
             <span className="flex-1 whitespace-nowrap">{lib.label}</span>
-            <span className="font-mono text-[10px] text-muted-foreground/70 tabular-nums">{lib.count.toLocaleString("en-US")}</span>
+            <span className="font-mono text-[10px] text-muted-foreground/70 tabular-nums">{formatNumber(lib.count)}</span>
           </button>
         )
       })}
@@ -104,32 +109,33 @@ function Libraries({ libraries, active, onPick }: { libraries: readonly LibraryE
 }
 
 export function PickerRail({ libraries, genders, scenes, filters, onChange }: PickerRailProps) {
+  const t = useT()
   return (
-    <div className="flex flex-col gap-5 overflow-y-auto border-r border-border/60 px-3.5 py-4" data-testid="avatar-picker-rail">
+    <div className="flex flex-col gap-5 overflow-y-auto border-e border-border/60 px-3.5 py-4" data-testid="avatar-picker-rail">
       <Libraries libraries={libraries} active={filters.library} onPick={(library) => onChange({ library })} />
 
       {genders.length > 1 && (
         <Chips
-          label="Gender"
+          label={t("heygen.gender")}
           options={genders}
           value={filters.gender}
           onPick={(gender) => onChange({ gender })}
-          render={(g) => (g === "unknown" ? "Unspecified" : capitalize(g))}
+          render={(g) => genderLabel(g, t) || t("heygen.unspecified")}
         />
       )}
       {scenes.length > 0 && (
-        <Chips label="Scene" options={scenes} value={filters.scene} onPick={(scene) => onChange({ scene })} render={(s) => s} />
+        <Chips label={t("cfgshared.badgeScene")} options={scenes} value={filters.scene} onPick={(scene) => onChange({ scene })} render={(s) => s} />
       )}
 
       <label className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-2.5 cursor-pointer">
         <Switch
           checked={filters.onlyAvatarV}
           onCheckedChange={(v) => onChange({ onlyAvatarV: v })}
-          aria-label="Supports Avatar V"
+          aria-label={t("node.supportsAvatarV")}
           className="data-[state=checked]:bg-[#ff0073]"
         />
         <span className="text-[11.5px] leading-snug text-foreground/80">
-          Supports
+          {t("heygen.supports")}
           <br />
           <span className="inline-flex items-center gap-1">
             <Sparkles className="size-3 text-violet-500" aria-hidden />

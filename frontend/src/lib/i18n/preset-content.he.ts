@@ -41,8 +41,8 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-image/cast-scene": { name: "סצנת שחקנים (לפי שם)", description: "חברו רשת שחקנים ← ביימו סצנה תוך אזכור השמות; בלי לתאר מחדש את המראה." },
 
   // ── Edit by Name ──
-  "generate-image/label-elements": { name: "תיוג רכיבים", description: "שלב 1 · חברו תמונה ← אותה תמונה עם מספר על כל רכיב שניתן לשנות." },
-  "generate-image/edit-by-name": { name: "עריכה לפי שם", description: "שלב 2 · חברו את הגיליון המתויג ← ערכו רכיבים לפי שם; התוויות מוסרות מהתוצאה." },
+  "generate-image/label-elements": { name: "תיוג אלמנטים", description: "שלב 1 · חברו תמונה ← אותה תמונה עם מספר על כל אלמנט שניתן לשנות." },
+  "generate-image/edit-by-name": { name: "עריכה לפי שם", description: "שלב 2 · חברו את הגיליון המתויג ← כתבו את השינוי בפרומפט (למשל: ״משקה 1״ לכחול); התוויות מוסרות מהתוצאה." },
 
   // ── Photography & Cinematic ──
   "generate-image/cinematic-portrait": { name: "דיוקן קולנועי", description: "מראה דיוקן אפלולי עם עומק שדה רדוד." },
@@ -62,7 +62,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-image/character-turnaround": { name: "גיליון דמות · סבב (3 מבטים)", description: "חזית / צד / גב, בתנוחת T." },
   "generate-image/character-action-4": { name: "גיליון דמות · תנוחות פעולה ×4", description: "ארבע תנוחות גוף מלא דינמיות." },
   "generate-image/character-expressions-6": { name: "גיליון דמות · הבעות ×6", description: "6 רגשות, שתי שורות של שלוש." },
-  "generate-image/character-expressions-16": { name: "גיליון דמות · רשת הבעות ×16", description: "רשת רגשות 4×4, פנים אחד." },
+  "generate-image/character-expressions-16": { name: "גיליון דמות · רשת הבעות ×16", description: "רשת רגשות 4×4, אותן פנים." },
   "generate-image/character-outfits": { name: "גיליון דמות · וריאציות לבוש", description: "אותה דמות, 4 מערכות לבוש." },
   "generate-image/character-turnaround-labeled": { name: "גיליון דמות · עם תוויות", description: "סבב + תוויות + טבלת גובה." },
   "generate-image/character-chibi": { name: "גיליון דמות · צ׳יבי", description: "תנוחות מוקטנות וחמודות." },
@@ -97,9 +97,9 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   // ── Print & Posters ──
   "generate-image/movie-poster": { name: "פוסטר סרט", description: "אמנות מפתח קולנועית, כותרת וסלוגן." },
   "generate-image/event-poster": { name: "פוסטר אירוע", description: "פלייר אירוע גרפי ובולט." },
-  "generate-image/book-cover": { name: "כריכת ספר", description: "כריכה לפי ז'אנר, כותרת ומחבר." },
+  "generate-image/book-cover": { name: "כריכת ספר", description: "כריכה לפי ז׳אנר, כותרת ומחבר." },
   "generate-image/tshirt-design": { name: "עיצוב לחולצה / הדפסה", description: "גרפיקה מבודדת מוכנה להדפסה." },
-  "generate-image/sticker-diecut": { name: "מדבקה בחיתוך מדויק", description: "מדבקה מבריקה עם מסגרת לבנה." },
+  "generate-image/sticker-diecut": { name: "מדבקה בחיתוך צורני", description: "מדבקה מבריקה עם מסגרת לבנה." },
   "generate-image/album-cover": { name: "עטיפת אלבום", description: "אמנות עטיפה ריבועית מוכוונת אווירה." },
 
   // ── Illustration & Art Styles ──
@@ -141,7 +141,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-image/game-icon": { name: "אייקון משחק", description: "אייקון פריט מבריק בסגנון משחקי תפקידים." },
   "generate-image/seamless-texture": { name: "מרקם רציף", description: "חומר בסגנון PBR הניתן לריצוף." },
   "generate-image/seamless-pattern": { name: "דוגמה רציפה", description: "מוטיב דקורטיבי הניתן לריצוף." },
-  "generate-image/emoji-set": { name: "סט אמוג'י / תגובות", description: "וריאציות אמוג'י תלת־ממדיות מבריקות." },
+  "generate-image/emoji-set": { name: "סט אמוג׳י / תגובות", description: "וריאציות אמוג׳י תלת־ממדיות מבריקות." },
   "generate-image/pixel-sprite": { name: "ספרייט פיקסלים", description: "ספרייט פיקסלים מוכן למשחק." },
 
   // ── Cinematic & Specialty ──
@@ -156,7 +156,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-image/pop-art": { name: "פופ ארט", description: "גרפיקה בולטת בסגנון פופ ארט." },
   "generate-image/low-poly": { name: "לואו־פולי", description: "תלת־ממד גיאומטרי מפואט." },
   "generate-image/paper-cut": { name: "חיתוך נייר", description: "יצירת נייר חתוך בשכבות." },
-  "generate-image/stained-glass": { name: "ויטראז'", description: "פסיפס זכוכית צבעונית משובצת." },
+  "generate-image/stained-glass": { name: "ויטראז׳", description: "פסיפס זכוכית צבעונית משובצת." },
 
   // ── Diagrams & Infographics ──
   "generate-image/blueprint": { name: "שרטוט טכני", description: "שרטוט לבן על כחול." },
@@ -174,7 +174,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-image/age-progression-5": { name: "חמישה גילים", description: "אותו אדם בחמישה גילים, שורת סטודיו. דורש תמונת ייחוס." },
   "generate-image/age-progression-3": { name: "טריפטיך שלושה גילים", description: "אותו אדם בשלושה גילים (~10 / 40 / 75). דורש תמונת ייחוס." },
   "generate-image/age-progression-bw": { name: "חמישה גילים — שחור־לבן", description: "שורת גילים במונוכרום. דורש תמונת ייחוס." },
-  "generate-image/decade-timeline": { name: "ציר עשורים", description: "אותו אדם משנות ה־80 ועד שנות ה־20. דורש תמונת ייחוס." },
+  "generate-image/decade-timeline": { name: "ציר עשורים", description: "אותו אדם משנות ה־80 ועד שנות ה־2020. דורש תמונת ייחוס." },
   "generate-image/four-seasons": { name: "ארבע עונות", description: "אותו אדם באביב / קיץ / סתיו / חורף. דורש תמונת ייחוס." },
   "generate-image/times-of-day": { name: "שעות היום", description: "אותו אדם בזריחה / צהריים / שעת הזהב / לילה. דורש תמונת ייחוס." },
   "generate-image/sports-jersey-portrait": { name: "דיוקן בחולצת קבוצה", description: "אתם בחולצת קבוצה רחבה, סגנון סטודיו עריכתי. דורש תמונת ייחוס." },
@@ -187,17 +187,17 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   // ═══ generate-video ═══
 
   // ── Camera Moves ──
-  "generate-video/slow-push-in": { name: "כניסה איטית", description: "דולי הדרגתי לעבר הנושא." },
+  "generate-video/slow-push-in": { name: "התקרבות איטית", description: "דולי הדרגתי לעבר הנושא." },
   "generate-video/dolly-out": { name: "יציאת דולי (חשיפה)", description: "נסיגה לאחור שחושפת את הסצנה." },
   "generate-video/orbit-360": { name: "הקפה 360°", description: "המצלמה מקיפה את הנושא." },
   "generate-video/arc-shot": { name: "שוט קשת", description: "קשת רוחבית סוחפת." },
-  "generate-video/crane-up": { name: "עליית מנוף", description: "עלייה מעל לחשיפת קנה מידה." },
+  "generate-video/crane-up": { name: "עליית מנוף", description: "עלייה מעל הסצנה לחשיפת קנה המידה." },
   "generate-video/tracking-follow": { name: "מעקב מאחור", description: "עקיבה אחרי הנושא מאחור." },
   "generate-video/slow-pan": { name: "פאן איטי", description: "סריקה אופקית על פני הסצנה." },
   "generate-video/tilt-reveal": { name: "חשיפה בהטיה כלפי מעלה", description: "חשיפה אנכית מהבסיס לפסגה." },
   "generate-video/whip-pan": { name: "פאן מהיר", description: "מעבר מהיר ואנרגטי." },
   "generate-video/dolly-zoom": { name: "דולי זום (ורטיגו)", description: "הרקע מתעוות, הנושא קבוע." },
-  "generate-video/crash-zoom": { name: "זום פתאומי", description: "כניסה חדה ואנרגטית." },
+  "generate-video/crash-zoom": { name: "זום פתאומי", description: "התקרבות חדה ואנרגטית." },
 
   // ── Shot Types & Angles ──
   "generate-video/establishing-wide": { name: "שוט רחב פותח", description: "שוט פתיחה עצום עם תחושת קנה מידה." },
@@ -231,7 +231,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-video/product-spin": { name: "סיבוב מוצר 360", description: "לולאת סטודיו מסתובבת ונקייה." },
   "generate-video/liquid-splash": { name: "התזת נוזל", description: "התזה פרסומית בהילוך איטי." },
   "generate-video/unboxing": { name: "פתיחת אריזה", description: "חשיפה קולנועית של החבילה." },
-  "generate-video/lifestyle-ad": { name: "פרסומת אורח חיים", description: "מוצר בשימוש, שאפתני." },
+  "generate-video/lifestyle-ad": { name: "פרסומת אורח חיים", description: "מוצר בשימוש, במראה נחשק." },
   "generate-video/before-after": { name: "חשיפת לפני / אחרי", description: "מעבר ניגוב בין שני מצבים." },
 
   // ── Motion Graphics & Logo ──
@@ -244,14 +244,14 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   // ── B-Roll & Nature ──
   "generate-video/clouds-timelapse": { name: "טיים־לאפס עננים", description: "שמיים נעים ודרמטיים." },
   "generate-video/water-slowmo": { name: "מים בהילוך איטי", description: "מים נוצצים בהילוך איטי." },
-  "generate-video/forest-drift": { name: "שיט ביער", description: "היסחפות שלווה באור שמש." },
+  "generate-video/forest-drift": { name: "ריחוף ביער", description: "היסחפות שלווה באור שמש." },
   "generate-video/aerial-landscape": { name: "נוף אווירי", description: "מבט רחפן סוחף." },
   "generate-video/ocean-loop": { name: "לולאת אוקיינוס", description: "גלים רגועים בלולאה חלקה." },
   "generate-video/weather-atmosphere": { name: "אווירת מזג אוויר", description: "גשם / שלג / ערפל נכנסים." },
 
   // ── Animation & Style ──
   "generate-video/anime-motion": { name: "תנועת אנימה", description: "סצנה מונפשת בהצללת סלים." },
-  "generate-video/cartoon-3d": { name: "קריקטורה תלת־ממד", description: "תנועה שובבה בסגנון אנימציה ממוחשבת." },
+  "generate-video/cartoon-3d": { name: "סרט מצויר תלת־ממד", description: "תנועה שובבה בסגנון אנימציה ממוחשבת." },
   "generate-video/claymation-move": { name: "אנימציית פלסטלינה", description: "תחושת סטופ־מושן מוחשית." },
   "generate-video/watercolor-motion": { name: "צבעי מים חיים", description: "תנועה ציורית זורמת." },
 
@@ -259,12 +259,12 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-video/subtle-motion": { name: "תנועה עדינה", description: "תנועה טבעית ומתונה (מצוין להנפשת תמונה סטטית)." },
   "generate-video/living-wallpaper": { name: "טפט חי", description: "סצנת אווירה בלולאה." },
   "generate-video/parallax": { name: "פרלקסה (2.5D)", description: "תנועת עומק מעל תמונה סטטית." },
-  "generate-video/cinemagraph": { name: "סינמגרף", description: "כמעט הכול סטטי, רכיב אחד נע." },
+  "generate-video/cinemagraph": { name: "סינמגרף", description: "כמעט הכול סטטי, אלמנט אחד נע." },
   "generate-video/fire-smoke-loop": { name: "אפקט אש ועשן", description: "גחלים ועשן בלולאה." },
 
   // ── Viral & Effects ──
   "generate-video/frozen-in-ice": { name: "קפוא בקרח", description: "הנושא קופא לגוש קרח." },
-  "generate-video/superhero-transformation": { name: "התגלגלות לגיבור־על", description: "נושא רגיל ← חשיפת גיבור־על." },
+  "generate-video/superhero-transformation": { name: "הפיכה לגיבור־על", description: "נושא רגיל ← חשיפת גיבור־על." },
   "generate-video/elevator-doors-reveal": { name: "חשיפת דלתות מעלית", description: "הדלתות נפתחות, חפצים נשפכים החוצה." },
   "generate-video/pov-skydive": { name: "צניחה בגוף ראשון", description: "נפילה חופשית בגוף ראשון מעל מקום." },
   "generate-video/underwater-pov": { name: "צלילה בגוף ראשון", description: "צלילה בגוף ראשון, קרני שמש ובועות." },
@@ -285,7 +285,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-video/seedance-action-beat": { name: "פעימת אקשן (מרדף)", description: "פעימת פארקור בשני שוטים — מהלך אחד לכל שוט." },
   "generate-video/seedance-food-macro": { name: "פרסומת מאקרו לאוכל", description: "צילום אוכל מאקרו מתלהט עם שמע עשיר." },
   "generate-video/seedance-film-noir": { name: "סצנת פילם נואר", description: "תאורת מקור יחיד בניגודיות חדה, אווירה מעיקה." },
-  "generate-video/seedance-asmr-foley": { name: "תקריב צלילים מרגיעים", description: "צלילי טריגר בגוף ראשון, ללא מוזיקה — אפקטים בלבד." },
+  "generate-video/seedance-asmr-foley": { name: "תקריב ASMR", description: "צלילי טריגר בגוף ראשון, ללא מוזיקה — אפקטים בלבד." },
   "generate-video/seedance-silhouette-crowd": { name: "קהל צלליות אפי", description: "קהל באור אחורי בקנה מידה גדול — צלליות מסתירות מורכבות." },
   "generate-video/seedance-speed-ramp-duel": { name: "דו־קרב בהאטה הדרגתית", description: "התנגשות אמנויות לחימה עם האטה קיצונית." },
   "generate-video/seedance-creature-feature": { name: "סרט יצורים", description: "יצור מיתי מעוגן באנטומיה של חיה אמיתית." },
@@ -296,14 +296,14 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   // ═══ voice (TTS / voice design / voice changer) ═══
   "text-to-speech/narrator-calm": { name: "קריין רגוע", description: "קריינות אחידה ומדודה." },
   "text-to-speech/audiobook": { name: "ספר מוקלט", description: "חמים, יציב, מעט איטי יותר." },
-  "text-to-speech/documentary": { name: "סרט תיעודי", description: "מסירה מדודה עם כובד ראש." },
+  "text-to-speech/documentary": { name: "סרט תיעודי", description: "הגשה מדודה עם כובד ראש." },
   "text-to-speech/news-anchor": { name: "קריין חדשות", description: "ניטרלי, סמכותי, בקצב אחיד." },
   "text-to-speech/explainer": { name: "הסברה / הדרכה", description: "ברור, ידידותי, בקצב בינוני." },
   "text-to-speech/commercial": { name: "קריאת פרסומת", description: "אנרגטי, משכנע, חד." },
   "text-to-speech/hype": { name: "אנרגיה גבוהה", description: "מהיר, נלהב, דינמי." },
   "text-to-speech/podcast-host": { name: "מנחה פודקאסט", description: "טבעי, קליל, שיחתי." },
   "text-to-speech/character": { name: "דמות / מספר סיפורים", description: "בעל הבעה, טווח דרמטי." },
-  "text-to-speech/meditation": { name: "הרפיה", description: "איטי מאוד, רך ומרגיע." },
+  "text-to-speech/meditation": { name: "הרפיה / ASMR", description: "איטי מאוד, רך ומרגיע." },
   "voice-design/trailer-narrator": { name: "קריין טריילרים", description: "עמוק, דרמטי, סמכותי." },
   "voice-design/noir-detective": { name: "בלש נואר", description: "צרוד, מעושן, מהורהר." },
   "voice-design/meditation-guide": { name: "מנחה הרפיה", description: "רגוע, רך, נשימתי." },
@@ -312,9 +312,9 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "voice-design/corporate-ivr": { name: "מענה קולי עסקי", description: "ניטרלי, מוקפד, מקצועי." },
   "voice-design/audiobook-female": { name: "ספר מוקלט נשי חם", description: "מרגיע, ברור, אינטימי." },
   "voice-design/old-wizard": { name: "קוסם זקן", description: "צרוד, חכם, תיאטרלי." },
-  "voice-changer/faithful": { name: "נאמן למקור", description: "משמר את המסירה המקורית." },
+  "voice-changer/faithful": { name: "נאמן למקור", description: "משמר את ההגשה המקורית." },
   "voice-changer/clean-stable": { name: "נקי ויציב", description: "חלק, אחיד, מנוקה מרעש." },
-  "voice-changer/expressive": { name: "בעל הבעה", description: "מגביר את ההבעה שבמסירה." },
+  "voice-changer/expressive": { name: "בעל הבעה", description: "מגביר את ההבעה שבהגשה." },
   "voice-changer/studio-clean": { name: "ניקיון סטודיו", description: "מוכן לשידור, מנוקה מרעש." },
 
   // ═══ sfx ═══
@@ -339,7 +339,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
 
   // ═══ video-edit ═══
   "video-to-video/anime": { name: "עיצוב מחדש לאנימה", description: "מראה אנימה דו־ממדי בהצללת סלים." },
-  "video-to-video/claymation": { name: "פלסטלינה", description: "סטופ־מושן מוחשי מפלסטלינה." },
+  "video-to-video/claymation": { name: "אנימציית פלסטלינה", description: "סטופ־מושן מוחשי מפלסטלינה." },
   "video-to-video/cyberpunk-neon": { name: "ניאון סייברפאנק", description: "מראה עיר ניאון רטובה מגשם." },
   "video-to-video/oil-painting": { name: "ציור שמן", description: "משיחות מכחול ציוריות בתנועה." },
   "video-to-video/pixar-3d": { name: "אנימציית תלת־ממד", description: "מראה סרט ממוחשב מלוטש." },
@@ -353,7 +353,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "add-captions/top-banner": { name: "רצועה עליונה", description: "כתוביות לאורך החלק העליון." },
   "combine-videos/seamless-join": { name: "חיבור חלק (שוט אחד)", description: "חיבור ללא קפיצה להארכת סצנה או לקליפים עם פריים פתיחה וסיום." },
   "combine-videos/hard-cut": { name: "חיתוך חד", description: "מעבר מיידי, ללא מיזוג. הכי מהיר." },
-  "combine-videos/crossfade": { name: "מעבר צלב", description: "מעבר רך בין קליפים." },
+  "combine-videos/crossfade": { name: "מעבר צולב", description: "מעבר רך בין קליפים." },
   "combine-videos/dissolve": { name: "המסה", description: "מיזוג אורגני וגרגירי לרגעי זיכרון." },
   "combine-videos/fade-through-black": { name: "מעבר דרך שחור", description: "התעמעמות לשחור בין סצנות." },
 
@@ -368,9 +368,9 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "motion-graphics/lower-third": { name: "כיתוב תחתון", description: "כיתוב תחתון מונפש עם שם, תפקיד וצבע הדגשה." },
   "motion-graphics/title-card": { name: "כרטיס כותרת", description: "כותרת וכותרת משנה ממורכזות בכניסת הגדלה." },
   "motion-graphics/kinetic-typography": { name: "טיפוגרפיה קינטית", description: "שלוש מילים נכנסות בתנועה מדורגת." },
-  "motion-graphics/quote-card": { name: "כרטיס ציטוט", description: "ציטוט אלגנטי עם ייחוס וקו הדגשה נמשך." },
+  "motion-graphics/quote-card": { name: "כרטיס ציטוט", description: "ציטוט אלגנטי עם שם המצוטט וקו הדגשה נמשך." },
   "motion-graphics/end-card-cta": { name: "כרטיס סיום (קריאה לפעולה)", description: "כרטיס סיום עם כותרת וכפתור פועם." },
-  "motion-graphics/logo-sting": { name: "סטינגר לוגו", description: "חשיפת מותג חדה עם ציפייה וחריגה." },
+  "motion-graphics/logo-sting": { name: "סטינגר לוגו", description: "חשיפת מותג חדה עם אנטיסיפציה ואוברשוט." },
   "motion-graphics/channel-intro": { name: "פתיח ערוץ", description: "פתיחה אנרגטית עם שם, סלוגן וצורות." },
   "motion-graphics/countdown": { name: "ספירה לאחור", description: "ספירה של 5 שניות מ־5 עד 1 עם קשת נסחפת." },
   "motion-graphics/subscribe-reminder": { name: "תזכורת הרשמה", description: "כפתור הרשמה שקופץ ופועם." },
@@ -418,7 +418,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-music/score-epic": { name: "אפי / הרואי", description: "מנצח ורב עוצמה." },
   "generate-music/score-happy": { name: "שמח / שובב", description: "עליז וקליל." },
   "generate-music/score-dark": { name: "אפל / מהורהר", description: "אווירה מאיימת." },
-  "generate-music/score-romantic": { name: "לירי", description: "חמים ומרגש." },
+  "generate-music/score-romantic": { name: "רומנטי", description: "חמים ומרגש." },
   "generate-music/ambient-cinematic": { name: "אווירה קולנועית", description: "רקע אינסטרומנטלי אטמוספרי." },
   "generate-music/genre-lofi": { name: "לו־פיי היפ־הופ", description: "ביט ג׳אזי ורגוע." },
   "generate-music/genre-edm": { name: "אלקטרוני / האוס", description: "אנרגיית מועדון בקצב אחיד." },
@@ -437,8 +437,8 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-music/dnb": { name: "דראם אנד בייס", description: "ברייקביטים מהירים, בס עמוק." },
   "generate-music/afrobeats": { name: "אפרוביטס", description: "גרוב חמים ומסונקף." },
   "generate-music/country": { name: "קאנטרי / אמריקנה", description: "אקוסטי ומרגש." },
-  "generate-music/phonk": { name: "פאנק (Phonk)", description: "פאנק אפל לרילס." },
-  "generate-music/reggae": { name: "רגאיי / דאב", description: "גרוב איי רגוע." },
+  "generate-music/phonk": { name: "פונק (Phonk)", description: "דריפט־פונק אפל לרילס." },
+  "generate-music/reggae": { name: "רגאיי / דאב", description: "גרוב טרופי רגוע." },
 
   "suno-generate/lofi-study": { name: "לו־פיי ללימודים", description: "ביט מתון לריכוז." },
   "suno-generate/podcast-intro": { name: "פתיח פודקאסט", description: "פתיחה קצרה ובטוחה." },
@@ -471,8 +471,8 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "suno-generate/dnb": { name: "דראם אנד בייס", description: "ברייקביטים מהירים, בס עמוק." },
   "suno-generate/afrobeats": { name: "אפרוביטס", description: "גרוב חמים ומסונקף." },
   "suno-generate/country": { name: "קאנטרי / אמריקנה", description: "אקוסטי ומרגש." },
-  "suno-generate/phonk": { name: "פאנק (Phonk)", description: "פאנק אפל לרילס." },
-  "suno-generate/reggae": { name: "רגאיי / דאב", description: "גרוב איי רגוע." },
+  "suno-generate/phonk": { name: "פונק (Phonk)", description: "דריפט־פונק אפל לרילס." },
+  "suno-generate/reggae": { name: "רגאיי / דאב", description: "גרוב טרופי רגוע." },
   "suno-generate/song-rnb": { name: "אר אנד בי / סול (קולי)", description: "שירה חלקה ונשמתית — הוסיפו מילים." },
   "suno-generate/song-kpop": { name: "קיי־פופ (קולי)", description: "פזמון מלוטש — הוסיפו מילים." },
 
@@ -481,7 +481,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "llm-chat/brainstorm": { name: "סיעור מוחות / רעיונות", description: "10 רעיונות מגוונים." },
   "llm-chat/copywriter": { name: "קופירייטר / כותרות", description: "קופי שיווקי חד." },
   "llm-chat/social-caption": { name: "כיתוב לרשתות + תגיות", description: "כיתוב ואחריו תגיות." },
-  "llm-chat/seo-metadata": { name: "מטא־נתוני קידום", description: "כותרת, תיאור ומילות מפתח." },
+  "llm-chat/seo-metadata": { name: "מטא־נתוני SEO", description: "כותרת, תיאור ומילות מפתח." },
   "llm-chat/rewrite-tone": { name: "כתיבה מחדש / שינוי טון", description: "עיצוב מחדש של הטקסט תוך שמירת המשמעות." },
   "llm-chat/script-writer": { name: "כתיבת תסריט / סטוריבורד", description: "תסריט וידאו שוט אחר שוט." },
   "llm-chat/prompt-enhancer": { name: "שיפור פרומפט", description: "רעיון ← פרומפט תמונה עשיר." },
@@ -496,13 +496,13 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-script/ad-spot": { name: "פרסומת", description: "ספוט משכנע של 30 שניות." },
   "generate-script/product-demo": { name: "קריינות הדגמת מוצר", description: "סקירת יכולות בביטחון." },
   "generate-script/listicle": { name: "רשימה (5 המובילים)", description: "ספירה לאחור קצבית." },
-  "generate-script/ugc-ad": { name: "פרסומת אישית", description: "המלצה על מוצר בסגנון צילום עצמי." },
+  "generate-script/ugc-ad": { name: "פרסומת UGC", description: "המלצה על מוצר בסגנון צילום עצמי." },
   "generate-script/podcast-outline": { name: "מתווה פודקאסט", description: "פעימות פרק בסגנון שיחה." },
   "generate-script/trailer-narration": { name: "קריינות טריילר", description: "פעימות קריינות דרמטיות." },
   "generate-script/story-beats": { name: "פעימות סיפור", description: "קשת נרטיבית רגשית." },
 
   "image-to-text/alt-text": { name: "טקסט חלופי", description: "נגיש, עד 125 תווים." },
-  "image-to-text/seo-caption": { name: "כיתוב לקידום", description: "כיתוב ומילות מפתח." },
+  "image-to-text/seo-caption": { name: "כיתוב SEO", description: "כיתוב ומילות מפתח." },
   "image-to-text/social-caption": { name: "כיתוב לרשתות", description: "כיתוב ותגיות." },
   "image-to-text/ocr": { name: "חילוץ טקסט (OCR)", description: "מחזיר רק את הטקסט הנראה." },
   "image-to-text/tags": { name: "תגיות / מילות מפתח", description: "תגיות מופרדות בפסיקים." },
@@ -511,7 +511,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "image-to-text/reverse-prompt": { name: "פרומפט הפוך", description: "תמונה ← פרומפט ליצירת תמונה." },
 
   // ═══ shared-image (registered under BOTH generate-image/ and modify-image/) ═══
-  "generate-image/cartoon-person-real-world": { name: "דמות מצוירת בעולם אמיתי", description: "הנושא ← קריקטורה תלת־ממדית, השאר נשאר ריאליסטי." },
+  "generate-image/cartoon-person-real-world": { name: "דמות מצוירת בעולם אמיתי", description: "הנושא ← דמות מצוירת תלת־ממדית, השאר נשאר ריאליסטי." },
   "generate-image/caricature-real-photo": { name: "קריקטורה על תמונה אמיתית", description: "ראש מצויר מוגזם על סצנה אמיתית." },
   "generate-image/anime-person-real-bg": { name: "דמות אנימה על רקע אמיתי", description: "הנושא ← אנימה דו־ממדית, סביבה אמיתית." },
   "generate-image/real-person-cartoon-world": { name: "אדם אמיתי בעולם מצויר", description: "הפוך — נושא אמיתי, עולם מסוגנן." },
@@ -525,7 +525,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-image/doodle-overlay": { name: "שרבוטים על התמונה", description: "שרבוטי טוש מצוירים ביד מעל — התמונה נשארת נקייה." },
   "generate-image/doodle-overlay-expressive": { name: "שרבוטים · חופשי", description: "שרבוטים חופשיים יותר — המודל מאלתר." },
 
-  "modify-image/cartoon-person-real-world": { name: "דמות מצוירת בעולם אמיתי", description: "הנושא ← קריקטורה תלת־ממדית, השאר נשאר ריאליסטי." },
+  "modify-image/cartoon-person-real-world": { name: "דמות מצוירת בעולם אמיתי", description: "הנושא ← דמות מצוירת תלת־ממדית, השאר נשאר ריאליסטי." },
   "modify-image/caricature-real-photo": { name: "קריקטורה על תמונה אמיתית", description: "ראש מצויר מוגזם על סצנה אמיתית." },
   "modify-image/anime-person-real-bg": { name: "דמות אנימה על רקע אמיתי", description: "הנושא ← אנימה דו־ממדית, סביבה אמיתית." },
   "modify-image/real-person-cartoon-world": { name: "אדם אמיתי בעולם מצויר", description: "הפוך — נושא אמיתי, עולם מסוגנן." },

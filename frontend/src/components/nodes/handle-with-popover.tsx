@@ -434,7 +434,7 @@ export function HandleWithPopover({
                 role="status"
                 className="min-w-[280px] flex items-center justify-center py-4"
               >
-                <span className="text-[10px] text-muted-foreground/60">Loading…</span>
+                <span className="text-[10px] text-muted-foreground/60">{t("common.loading")}</span>
               </div>
             }
           >

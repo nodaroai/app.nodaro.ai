@@ -39,7 +39,7 @@ function AudioResultOverlayComponent({
           </button>
           <button
             type="button"
-            aria-label="Download"
+            aria-label={t("common.download")}
             className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
             onClick={(e) => {
               e.stopPropagation()
@@ -57,7 +57,7 @@ function AudioResultOverlayComponent({
             className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
             onClick={(e) => {
               e.stopPropagation()
-              copyToClipboard(url, "URL copied")
+              copyToClipboard(url, t("node.urlCopied"))
             }}
           >
             <Link className="w-3 h-3" />

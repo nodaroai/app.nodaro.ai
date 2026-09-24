@@ -10,6 +10,7 @@ import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { collectKeys } from "@/ee/lib/ensure-signup-grant"
 import { claimWelcomeOffer, markWelcomeOfferSeen, type WelcomeOfferClaimResult } from "./welcome-offer-api"
 import { useWelcomeOfferStore } from "./welcome-offer-store"
+import { formatNumber } from "@/lib/i18n/format"
 
 /**
  * Which welcome surface applies to this account, if any:
@@ -73,7 +74,7 @@ export function useWelcomeOffer(): WelcomeOffer {
     void markWelcomeOfferSeen()
   }, [queryClient, userId])
 
-  return { mode, popupDue, credits: creditUnits(FREE_TIER_CREDITS).toLocaleString(), claim, markSeen }
+  return { mode, popupDue, credits: formatNumber(creditUnits(FREE_TIER_CREDITS)), claim, markSeen }
 }
 
 /**

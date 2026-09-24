@@ -60,3 +60,33 @@ describe("PickerInputCard — Era icon slot", () => {
     expect(img!.getAttribute("srcset")).toContain("cdn.nodaro.ai")
   })
 })
+
+describe("PickerInputCard — the creator's real / illustration choice", () => {
+  function renderStyle(data: Record<string, unknown>) {
+    return render(
+      <PickerInputCard
+        nodeId="n1"
+        label="Style"
+        nodeType="style"
+        data={data}
+        isFullscreen={false}
+        inputValues={{}}
+        onUpdateInput={() => {}}
+        displayMode="inline"
+      />,
+    )
+  }
+
+  it("shows renders when the node is left real", () => {
+    registerLookPreviews(LOOK_PREVIEW_SETS)
+    const { container } = renderStyle({ style: "anime" })
+    expect(container.querySelector("img")?.getAttribute("srcset")).toContain("cdn.nodaro.ai")
+  })
+
+  it("shows the illustrations when the creator set the node so — and offers app users no switch", () => {
+    registerLookPreviews(LOOK_PREVIEW_SETS)
+    const { container } = renderStyle({ style: "anime", previewStyle: "illustration" })
+    expect(container.querySelector("img")).toBeNull()
+    expect(screen.queryByRole("tablist")).toBeNull()
+  })
+})

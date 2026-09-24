@@ -7,6 +7,7 @@
 
 import { memo } from "react"
 import { Play, Pause, Square, Download } from "lucide-react"
+import { useT } from "@/lib/i18n"
 import type { AudioPlayerControlsConfig } from "./types"
 
 function formatTime(seconds: number): string {
@@ -47,12 +48,13 @@ function AudioPlayerControlsComponent({
   onDownload,
   onSeek,
 }: AudioPlayerControlsProps) {
+  const t = useT()
   return (
     <div className="flex w-full items-center gap-2">
       {config.playPause && (
         <button
           type="button"
-          aria-label={isPlaying ? "Pause" : "Play"}
+          aria-label={isPlaying ? t("common.pause") : t("common.play")}
           onClick={(e) => { e.stopPropagation(); onPlayPause() }}
           className={`${BTN} w-7 h-7 rounded-full bg-[#ff0073] text-white hover:bg-[#ff0073]/90`}
         >
@@ -63,7 +65,7 @@ function AudioPlayerControlsComponent({
       {config.stop && (
         <button
           type="button"
-          aria-label="Stop"
+          aria-label={t("common.stop")}
           onClick={(e) => { e.stopPropagation(); onStop() }}
           className={`${BTN} w-6 h-6 rounded-md bg-black/10 dark:bg-white/10 text-foreground/70 hover:text-foreground hover:bg-black/20 dark:hover:bg-white/20`}
         >
@@ -98,7 +100,7 @@ function AudioPlayerControlsComponent({
       {showDownload && (
         <button
           type="button"
-          aria-label="Download"
+          aria-label={t("common.download")}
           onClick={(e) => { e.stopPropagation(); onDownload() }}
           className={`${BTN} w-6 h-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-black/10 dark:hover:bg-white/10`}
         >

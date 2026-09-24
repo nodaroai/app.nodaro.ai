@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { useClickOutside } from "@/hooks/use-click-outside"
 import { SHORTCUTS, formatBindingCaps, isMacPlatform } from "@/lib/shortcuts"
 import { Kbd } from "@/components/ui/kbd"
+import { useT } from "@/lib/i18n"
 
 interface MenuItemProps {
   readonly icon: React.ReactNode
@@ -22,7 +23,7 @@ function MenuItem({ icon, label, shortcut, onClick, disabled }: MenuItemProps) {
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "w-full flex items-center gap-3 px-3 py-2 text-left",
+        "w-full flex items-center gap-3 px-3 py-2 text-start",
         "transition-colors",
         "hover:bg-[#F1F5F9] dark:hover:bg-[#2D2D2D]",
         disabled && "opacity-50 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent"
@@ -68,6 +69,7 @@ export function CanvasContextMenu({
   onClearSelection,
   hasSelection,
 }: CanvasContextMenuProps) {
+  const t = useT()
   const menuRef = useRef<HTMLDivElement>(null)
   const isMac = isMacPlatform()
 
@@ -124,7 +126,7 @@ export function CanvasContextMenu({
     >
       <MenuItem
         icon={<Plus className="w-4 h-4" />}
-        label="Add node"
+        label={t("canvas.addNode")}
         shortcut={formatBindingCaps(SHORTCUTS.addNode.bindings[0], isMac)}
         onClick={() => {
           onAddNode()
@@ -133,7 +135,7 @@ export function CanvasContextMenu({
       />
       <MenuItem
         icon={<StickyNote className="w-4 h-4" />}
-        label="Add sticky note"
+        label={t("canvas.addStickyNote")}
         shortcut={formatBindingCaps(SHORTCUTS.stickyNote.bindings[0], isMac)}
         onClick={() => {
           onAddStickyNote()
@@ -145,7 +147,7 @@ export function CanvasContextMenu({
 
       <MenuItem
         icon={<Wand2 className="w-4 h-4" />}
-        label="Tidy up workflow"
+        label={t("canvas.tidyUp")}
         shortcut={formatBindingCaps(SHORTCUTS.tidyUp.bindings[0], isMac)}
         onClick={() => {
           onTidyUp()
@@ -157,7 +159,7 @@ export function CanvasContextMenu({
 
       <MenuItem
         icon={<MousePointer2 className="w-4 h-4" />}
-        label="Select all"
+        label={t("canvas.selectAll")}
         shortcut={formatBindingCaps(SHORTCUTS.selectAll.bindings[0], isMac)}
         onClick={() => {
           onSelectAll()
@@ -166,7 +168,7 @@ export function CanvasContextMenu({
       />
       <MenuItem
         icon={<XCircle className="w-4 h-4" />}
-        label="Clear selection"
+        label={t("canvas.clearSelection")}
         onClick={() => {
           onClearSelection()
           onClose()
