@@ -29,7 +29,7 @@ import { resolveNodeDefaults, rememberSelection, pickRelevantFields, isNodeDefau
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { getCachedUserId } from "@/hooks/use-auth"
-import { getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
+import { getStickyLookPreviewStyle, getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
 import { getInlinePromptMode, setInlinePromptMode as persistInlinePromptMode } from "@/lib/inline-prompt-pref"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migration"
@@ -1426,6 +1426,13 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     // resolution (which always trusts the saved data on existing nodes).
     if (definition.category === "parameter" && nodeData.displayMode === undefined) {
       nodeData.displayMode = getStickyParameterDisplayMode()
+    }
+    // Look pickers: seed the real / illustration choice from the last one the
+    // user made on this TYPE. Only types the user has switched have an entry;
+    // everything else stays absent (= real), exactly as before the choice.
+    if (definition.category === "parameter" && nodeData.previewStyle === undefined) {
+      const previewStyle = getStickyLookPreviewStyle(type)
+      if (previewStyle !== undefined) nodeData.previewStyle = previewStyle
     }
 
     // Generate fresh UUIDs for sub-workflow port IDs and routeIds

@@ -5,6 +5,7 @@ import type { NodeProps } from "@xyflow/react"
 import { Film } from "lucide-react"
 import { getCameraFormat, getCameraFormatLabel } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { LookPreviewStyleSwitch } from "./look-preview-style"
 import { usePickerJsonConsumer } from "./use-picker-json-consumer"
 import { PICKER_CONSUMER_INPUT_HANDLES, PickerJsonHandleIcon, PickerUpdateButton } from "./picker-json-handle"
 import { CameraFormatPreview, LookArt } from "@/lib/picker-ui"
@@ -29,9 +30,12 @@ function CameraFormatNodeComponent({ id, data, selected }: NodeProps) {
       extraHandleIcons={<PickerJsonHandleIcon nodeId={id} nodeType="camera-format" />}
       headerSlot={isConnected && !nodeData.autoApplyInjected ? <PickerUpdateButton hasPending={hasPending} onApply={apply} /> : null}
     >
-      <p className="text-foreground text-sm font-medium">
-        {getCameraFormatLabel(cameraFormatId)}
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-foreground text-sm font-medium min-w-0">
+          {getCameraFormatLabel(cameraFormatId)}
+        </p>
+        <LookPreviewStyleSwitch pickerKey="camera-format" />
+      </div>
       <LookArt pickerKey="camera-format" id={cameraFormatId} className="w-full aspect-[16/9]" width={640} fallback={<CameraFormatPreview cameraFormatId={cameraFormatId} className="w-full aspect-[16/9]" />} />
       {description && (
         <p className="text-muted-foreground text-[11px] leading-snug">

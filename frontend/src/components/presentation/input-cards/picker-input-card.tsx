@@ -29,7 +29,9 @@ import { cn } from "@/lib/utils"
 import {
   getParameterPickerMeta,
   useCatalogPacksVersion,
-  useHasLookPreviews,
+  LookPreviewStyleProvider,
+  readLookPreviewStyle,
+  useShowsLookRenders,
   type MultiDimParameterPickerMeta,
   type MultiDimValue,
   type ParameterPickerMeta,
@@ -72,8 +74,13 @@ export function PickerInputCard(props: PickerInputCardProps) {
   useCatalogPacksVersion()
   const meta = getParameterPickerMeta(props.nodeType)
   if (!meta) return null
-  if (meta.kind === "multi") return <MultiPickerCard {...props} meta={meta} />
-  return <SinglePickerCard {...props} meta={meta} />
+  // Options are pictured the way the creator set this node (real render or
+  // illustration). Read-only: app users get no switch.
+  return (
+    <LookPreviewStyleProvider style={readLookPreviewStyle(props.data)}>
+      {meta.kind === "multi" ? <MultiPickerCard {...props} meta={meta} /> : <SinglePickerCard {...props} meta={meta} />}
+    </LookPreviewStyleProvider>
+  )
 }
 
 const LABEL_CLS =
@@ -133,8 +140,9 @@ function SinglePickerCard({
   // A picker may have no icon at all, or only for some options (a rendered
   // look preview that this edition does not register) — null means "no icon".
   const iconFor = (id: string): ReactNode => meta.renderIcon?.(id) ?? null
-  // Rendered look previews read better filling the tile than in the 56px icon box.
-  const bigArt = useHasLookPreviews(meta.nodeType)
+  // Rendered look previews read better filling the tile than in the 56px icon
+  // box; the illustrations keep the icon box they were drawn for.
+  const bigArt = useShowsLookRenders(meta.nodeType)
 
   const grid = (
     <DimensionTileGrid

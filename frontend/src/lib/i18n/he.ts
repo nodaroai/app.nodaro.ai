@@ -1231,6 +1231,10 @@ export const he: ChromeDict = {
   "node.hintModeFull": "מלא",
   "node.hintModeCompact": "מקוצר",
   "node.hintModeSwitch": "רמז לפרומפט: {label}",
+  "node.previewStyle": "תצוגה מקדימה",
+  "node.previewStyleReal": "תצוגה אמיתית",
+  "node.previewStyleIllustration": "איור",
+  "node.previewStyleSwitch": "תצוגה מקדימה: {label}",
 
   // Config panel (shared chrome)
   "configPanel.nodeSettingsTitle": "הגדרות הרכיב · {name}",
