@@ -114,9 +114,11 @@ export const INPUT_SEEK_MARGIN_SEC = 2
  *  crossfade over a short outgoing input can emit frames whose timestamps do
  *  not advance, which the encoder would otherwise drop after `trim` counted
  *  them (pinned 8.1.2: 538 of 547). `trim` ends the stream, so the unbounded
- *  pad terminates. */
+ *  pad terminates. `round(…)`: on a 1/F timebase `N/FRAME_RATE/TB` evaluates
+ *  to e.g. 122.999… for frame 123 at 30 fps and setpts truncates, giving two
+ *  frames the same pts (masked today by the CLI's CFR output, not relied on). */
 function gridHold(frames: number): string {
-  return `tpad=stop_mode=clone:stop=-1,trim=start_frame=0:end_frame=${frames},setpts=N/FRAME_RATE/TB`
+  return `tpad=stop_mode=clone:stop=-1,trim=start_frame=0:end_frame=${frames},setpts=round(N/FRAME_RATE/TB)`
 }
 
 /** Kill budget of option B's final step (join the lossless audio slices, encode
@@ -222,6 +224,19 @@ export function assertSegmentsWithinSources(
     const aId = audioSourceId(edl, seg, masterAudioId)
     if (aId) reads.push({ id: aId, track: "audio" })
     for (const { id, track } of reads) {
+      // A read before the source's origin (masterMs < offsetMs) has no media:
+      // refuse it, never clamp it to the first frame. It depends only on the
+      // EDL, so it runs FIRST — before the probe-keyed skips below (a probe that
+      // failed, or a sound track that is absent, must not wave it through).
+      // Ingress (`validateEffectiveEdl`) already refuses it; this is the
+      // executor's own guarantee for any caller that reaches it.
+      const originMs = offsetOf(edl.sources.find((s) => s.id === id))
+      if (seg.inMs < originMs) {
+        throw new DeterministicJobError(
+          `apply-edl: segment[${i}] "${seg.id}" starts at ${secs(seg.inMs).toFixed(3)}s on the master clock, before source "${id}" ` +
+            `begins (its offsetMs is ${originMs}) — start the segment later or check the source's offsetMs`,
+        )
+      }
       const t = sourceEnds.get(id)?.[track]
       if (t === undefined) continue
       if (t.state === "absent") {
@@ -289,6 +304,11 @@ const even = (d: { width: number; height: number }): { width: number; height: nu
 /** How ONE contiguous slice of segments renders (see `buildSliceCommand`). */
 export interface SliceOptions {
   readonly output: "video" | "audio"
+  /** Keys the ENCODER: a proxy (review) render encodes fast at a lower
+   *  quality; a final one at delivery quality — whatever the canvas size. (It
+   *  used to key on `target.height <= 720`, so a FINAL render of 720p sources
+   *  got the proxy encoder.) The canvas cap is `targetForQuality`'s job. */
+  readonly quality: "proxy" | "final"
   readonly target: { width: number; height: number }
   readonly fps: number
   /** This chunk's start position on the GLOBAL output timeline, in seconds
@@ -369,30 +389,87 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
   // frames, where cumStart_i is the segment's GLOBAL output position (this
   // chunk's start + the segments before it). The counts telescope, so the whole
   // render holds round(totalDur·F) frames and the video end lands within a frame
-  // of the audio (measured +0.003s over the same 90 cuts). A crossfade needs
-  // frame-aligned inputs, so a chunk that CONTAINS an xfade keeps the
-  // per-segment `fps` path — and because that path can run long or short
-  // (~0.4s over 30 mixed-fps cuts), its picture is trimmed/padded at the chunk
-  // END to exactly the grid's frame count (see the xfade chain below). Any drift
-  // then stays inside that one chunk: the next chunk starts back on the grid,
-  // which option B's single continuous audio pass depends on. The podcast
-  // templates cut hard and take the grid.
+  // of the audio (measured +0.003s over the same 90 cuts). A chunk that
+  // CONTAINS a crossfade is on the same grid, laid on the overlap-compressed
+  // output timeline (`xfPlan`, Track 0.16): every segment keeps exactly its
+  // grid frames and every xfade blends whole frames at a frame-counted offset,
+  // so no boundary drifts and no real frame is cut. Both kinds of chunk still
+  // end with `gridHold` — a backstop that guarantees the chunk's count, which
+  // option B's single continuous audio pass depends on.
   const chunkHasXfade = wantVideo && segs.some((s, i) => i > 0 && boundaryOverlapSecs(s, segs[i - 1]) > 0)
   const useGrid = wantVideo && !chunkHasXfade
+
+  // Each segment's GLOBAL frame interval [startF, endF), for both kinds of
+  // chunk, computed with EXACTLY `chunkOutputSec`'s arithmetic: the running
+  // prefix is `(prefix + duration) − overlap` in that operation order, so the
+  // last segment's end is the bitwise-same double `gridN` rounds and the caller
+  // adds to the next chunk's `chunkStartSec`. A chunk's plan, its gridHold and
+  // the next chunk's first frame therefore agree even at an exact half-frame
+  // tie, where two float orders of the same sum round to opposite frames. A
+  // plan built from a different running sum disagreed with gridHold at ~1–5% of
+  // crossfade chunks at 25/30/50/60 fps (gridHold then cloned the last frame in
+  // place of a real one), and a cut-only chunk's end could miss the next
+  // chunk's start by a frame — a one-frame A/V step per such seam. A cut's
+  // start IS the previous end (the same integer), so the counts telescope.
+  const intervals: Array<{ readonly startF: number; readonly endF: number; readonly overlapSec: number }> = []
+  {
+    let prefix = 0
+    let prevEndF = Math.round(chunkStartSec * fps)
+    segs.forEach((seg, i) => {
+      const overlapSec = i > 0 ? boundaryOverlapSecs(seg, segs[i - 1]) : 0
+      const startF = overlapSec > 0 ? Math.round((chunkStartSec + (prefix - overlapSec)) * fps) : prevEndF
+      prefix = prefix + secs(seg.outMs - seg.inMs) - overlapSec
+      const endF = Math.round((chunkStartSec + prefix) * fps)
+      intervals.push({ startF, endF, overlapSec })
+      prevEndF = endF
+    })
+  }
 
   // Per-segment frame counts on the global cumulative grid (grid path only).
   const gridFrames: number[] = []
   if (useGrid) {
-    let cum = chunkStartSec
-    for (const seg of segs) {
-      const startF = Math.round(cum * fps)
-      cum += secs(seg.outMs - seg.inMs)
-      gridFrames.push(Math.round(cum * fps) - startF)
-    }
+    for (const { startF, endF } of intervals) gridFrames.push(endF - startF)
     // A whole chunk shorter than half a frame would round to zero frames
     // everywhere and leave no video stream at all — give the first segment one
     // frame so the render still produces a picture (degenerate EDL, never real).
     if (gridFrames.length > 0 && !gridFrames.some((n) => n > 0)) gridFrames[0] = 1
+  }
+
+  // Per-segment frame plan for a chunk that CONTAINS a crossfade (Track 0.16) —
+  // the same intervals, on the overlap-compressed output timeline. The joined
+  // picture so far ends at `accEndF`. A crossfade blends exactly
+  // `accEndF − startF` frames at an offset counted in FRAMES, so nothing is
+  // lost: the old offset accumulated NOMINAL seconds while each segment's `fps`
+  // output rounded (a sliver or a one-frame segment rounds UP), and xfade
+  // silently cut the long outgoing tail. A crossfade that rounds to under one
+  // frame is a cut; one whose incoming segment lies wholly inside the overlap
+  // adds nothing (its end equals the picture's end — no frame is lost), and a
+  // zero-frame segment drops out. `endF` never decreases, so `accEndF` is
+  // always the previous kept segment's end and a cut's incoming segment is
+  // never partly covered. The chunk then holds exactly its grid count
+  // (`accEndF − chunkStartF === gridN`); gridHold below is the backstop.
+  interface XfSeg { readonly frames: number; readonly join: "first" | "concat" | "xfade" | "none"; readonly xfFrames: number; readonly offsetFrames: number }
+  const xfPlan: XfSeg[] = []
+  if (chunkHasXfade) {
+    const chunkStartF = Math.round(chunkStartSec * fps)
+    let accEndF = chunkStartF
+    let started = false
+    intervals.forEach(({ startF, endF, overlapSec }) => {
+      const frames = Math.max(0, endF - startF)
+      const covered = Math.max(0, accEndF - startF) // frames of this segment the picture already holds
+      if (started && overlapSec > 0 && covered >= 1 && covered < frames) {
+        xfPlan.push({ frames, join: "xfade", xfFrames: covered, offsetFrames: startF - chunkStartF })
+        accEndF = endF
+      } else if (frames - covered > 0) {
+        xfPlan.push({ frames, join: started ? "concat" : "first", xfFrames: 0, offsetFrames: 0 })
+        started = true
+        accEndF = endF
+      } else {
+        xfPlan.push({ frames, join: "none", xfFrames: 0, offsetFrames: 0 })
+      }
+    })
+    // Degenerate: the whole chunk rounds to no frame — keep one so a picture exists.
+    if (!started && xfPlan.length > 0) xfPlan[0] = { frames: 1, join: "first", xfFrames: 0, offsetFrames: 0 }
   }
 
   const scalePad =
@@ -402,6 +479,9 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
   // Where each segment reads, on its source's own clock (master − offsetMs).
   const videoReadOf = (seg: EdlSegment) => {
     const vs = edl.sources.find((s) => s.id === seg.video)!
+    // max(0): unreachable in a render — assertSegmentsWithinSources refuses a
+    // pre-origin read first; kept so a direct builder call never asks for
+    // negative source time.
     const start = Math.max(0, secs(seg.inMs - offsetOf(vs)))
     return { id: vs.id, start, end: Math.max(start, secs(seg.outMs - offsetOf(vs))) }
   }
@@ -424,7 +504,8 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
   const minReadOf = new Map<string, number>()
   const noteRead = (id: string, t: number) => minReadOf.set(id, Math.min(minReadOf.get(id) ?? Infinity, t))
   segs.forEach((seg, i) => {
-    if (wantVideo && !(useGrid && gridFrames[i] <= 0)) noteRead(videoReadOf(seg).id, videoReadOf(seg).start)
+    const dropped = useGrid ? gridFrames[i] <= 0 : chunkHasXfade && xfPlan[i]!.join === "none"
+    if (wantVideo && !dropped) noteRead(videoReadOf(seg).id, videoReadOf(seg).start)
     if (emitAudio) {
       const a = audioReadOf(seg)
       if (a) noteRead(a.id, a.start)
@@ -469,15 +550,19 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
           )
         }
       } else {
-        // xfade chunk: per-segment fps, frame-aligned for the transition. The
-        // held source keeps an outgoing segment at least as long as its xfade
-        // offset (a short one made xfade emit collapsed timestamps the encoder
-        // then dropped).
-        vLabel = `[v${i}]`
-        filters.push(
-          `${held}trim=start=${start.toFixed(6)}:end=${end.toFixed(6)},setpts=PTS-STARTPTS,` +
-            `${scalePad},fps=${fps},format=yuv420p,setsar=1${vLabel}`,
-        )
+        // xfade chunk (Track 0.16): exactly the segment's grid frames — read
+        // past the window from the held source, then keep that many, like the
+        // grid path.
+        const plan = xfPlan[i]!
+        if (plan.join !== "none") {
+          vLabel = `[v${i}]`
+          const readEnd = end + APPLY_EDL_GRID_READ_GUARD_FRAMES / fps
+          filters.push(
+            `${held}trim=start=${start.toFixed(6)}:end=${readEnd.toFixed(6)},setpts=PTS-STARTPTS,` +
+              `${scalePad},fps=${fps},trim=start_frame=0:end_frame=${plan.frames},setpts=PTS-STARTPTS,` +
+              `format=yuv420p,setsar=1${vLabel}`,
+          )
+        }
       }
     }
 
@@ -516,7 +601,8 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
     ? filters.map((f) => f.replaceAll("[SILENCE]", `[${inputIds.length}:a]`)).join(";")
     : filters.join(";")
 
-  // Pairwise join — offsets accumulate like combine-videos' buildVideoFilter.
+  // Audio joins pairwise with offsets in seconds (like combine-videos'
+  // buildVideoFilter); the video chain below counts whole frames (xfPlan).
   const durs = segs.map((s) => secs(s.outMs - s.inMs))
   const chainParts: string[] = []
 
@@ -543,38 +629,32 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
   // video chain (video output only)
   let videoOutLabel: string | undefined
   if (wantVideo && chunkHasXfade) {
-    // xfade chunk — pairwise xfade/concat, offsets accumulate. The per-segment
-    // `fps` path does not land on the frame grid, so the chain ends at [vxf]
-    // and is then held to EXACTLY the grid's frame count for this chunk:
-    // clone-pad the last frame (short case), then keep `gridN` frames (long
-    // case). That makes the chunk END on the global grid, so the next chunk and
-    // the continuous audio stay in sync. (An xfade needs ≥ 2 segments, so the
-    // chain always runs.)
-    let vAcc = plans[0].vLabel!
-    let runV = durs[0]
-    for (let i = 1; i < segs.length; i++) {
-      const D = boundaryOverlapSecs(segs[i], segs[i - 1])
-      const out = i === segs.length - 1 ? "[vxf]" : `[vAcc${i}]`
-      if (D > 0) {
-        const off = Math.max(0, runV - D)
-        chainParts.push(`${vAcc}${plans[i].vLabel!}xfade=transition=fade:duration=${D.toFixed(6)}:offset=${off.toFixed(6)}${out}`)
-        runV = off + durs[i]
+    // xfade chunk — joined in plan order (Track 0.16). Every xfade's duration
+    // and offset are whole FRAMES of the accumulated picture, so the chain is
+    // frame-exact and ends on the grid; `gridHold` stays as the backstop that
+    // guarantees the chunk's count for option B's continuous audio.
+    // `concat` outputs on the microsecond timebase while segments and xfade
+    // outputs are on 1/fps; xfade refuses mismatched inputs (Track 0.15), so a
+    // cut is renumbered by frame index and put back on 1/fps — keeping every
+    // frame even at degenerate joins (a bare `fps` dropped one there).
+    let vAcc: string | undefined
+    for (let i = 0; i < segs.length; i++) {
+      const plan = xfPlan[i]!
+      const label = plans[i].vLabel
+      if (plan.join === "none" || !label) continue
+      if (!vAcc) {
+        vAcc = label
+        continue
+      }
+      const out = `[vAcc${i}]`
+      if (plan.join === "xfade") {
+        chainParts.push(`${vAcc}${label}xfade=transition=fade:duration=${(plan.xfFrames / fps).toFixed(6)}:offset=${(plan.offsetFrames / fps).toFixed(6)}${out}`)
       } else {
-        // `concat` outputs on the microsecond timebase while every segment (and
-        // every xfade output) is on 1/fps; xfade refuses mismatched inputs, so a
-        // crossfade that follows a hard cut failed the render (Track 0.15).
-        // Renumber the joined frames by INDEX, then re-apply the SAME `fps` to
-        // put the join back on 1/fps. A bare `fps` resamples concat's own
-        // timestamps, which are wrong at degenerate joins — a zero-frame sliver
-        // or a one-frame input (concat estimates an input's end from its frame
-        // spacing) — and `fps` then dropped a real frame there, silently moving
-        // every later cut in the chunk one frame early. Index renumbering keeps
-        // every frame, exactly as `gridHold` does.
-        chainParts.push(`${vAcc}${plans[i].vLabel!}concat=n=2:v=1:a=0,setpts=N/FRAME_RATE/TB,fps=${fps}${out}`)
-        runV += durs[i]
+        chainParts.push(`${vAcc}${label}concat=n=2:v=1:a=0,setpts=N/FRAME_RATE/TB,fps=${fps}${out}`)
       }
       vAcc = out
     }
+    chainParts.push(`${vAcc!}null[vxf]`)
     const gridN = Math.max(1, Math.round((chunkStartSec + chunkOutputSec(segs)) * fps) - Math.round(chunkStartSec * fps))
     chainParts.push(`[vxf]${gridHold(gridN)}[vout]`)
     videoOutLabel = "[vout]"
@@ -598,7 +678,7 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
 
   const fullFilter = [graph, ...chainParts].filter(Boolean).join(";")
 
-  const proxy = target.height <= 720
+  const proxy = opts.quality === "proxy"
   const outputArgs: string[] = []
   if (wantVideo) {
     outputArgs.push("-map", videoOutLabel!)
@@ -708,7 +788,7 @@ export function resolveChunksForOutput(
 }
 
 /** The output seconds one chunk renders (D17: crossfade overlaps subtracted). */
-function chunkOutputSec(segs: readonly EdlSegment[]): number {
+export function chunkOutputSec(segs: readonly EdlSegment[]): number {
   return segs.reduce((acc, s, i) => acc + secs(s.outMs - s.inMs) - (i > 0 ? boundaryOverlapSecs(segs[i], segs[i - 1]) : 0), 0)
 }
 
@@ -898,7 +978,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
     for (let c = 0; c < chunks.length; c++) {
       const chunkPath = join(workDir, `chunk-${c}.${ext}`)
       const cmd = buildSliceCommand(edl, chunks[c], {
-        output, target, fps, chunkStartSec, masterAudioId, audioPresent, omitAudio: muxAudioSeparately,
+        output, quality, target, fps, chunkStartSec, masterAudioId, audioPresent, omitAudio: muxAudioSeparately,
       })
       // The key is the command's fingerprint, so a checkpoint rendered for a
       // different plan (other chunk boundaries, grid position, width cap,
@@ -974,7 +1054,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
         for (let k = 0; k < audioChunks.length; k++) {
           const pcmPath = join(workDir, `audio-${k}.wav`)
           await renderSlice(edl, audioChunks[k], {
-            output: "audio", audioCodec: "pcm", target, fps, chunkStartSec: 0, masterAudioId, audioPresent, sourcePaths, outPath: pcmPath,
+            output: "audio", audioCodec: "pcm", quality, target, fps, chunkStartSec: 0, masterAudioId, audioPresent, sourcePaths, outPath: pcmPath,
           })
           pcmPaths.push(pcmPath)
         }

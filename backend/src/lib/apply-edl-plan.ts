@@ -203,8 +203,8 @@ export function validateEffectiveEdl(edl: Edl, output: "video" | "audio"): Apply
 
   // A segment must exist on the source it reads. `masterMs = sourceMs + offsetMs`,
   // so a segment starting before a source's origin would ask for negative source
-  // time; the renderer clamps that to 0 (`renderSlice`) and would deliver the
-  // wrong picture — so it is refused here, before anything is reserved.
+  // time. It is refused here, before anything is reserved (and the executor's
+  // window check refuses it too — it never clamps to the source's first frame).
   // "Reads" is the executor's rule exactly: the picture source only for a video
   // output (an audio cut never touches it), the sound source always.
   const masterAudioId = edl.sources.find((s) => s.role === "master-audio")?.id

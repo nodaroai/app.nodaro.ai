@@ -6,7 +6,7 @@
 // crossfade chunk's end-of-chunk hold to the frame grid (Track 0.14).
 import { describe, it, expect } from "vitest"
 import type { Edl, EdlSegment } from "@nodaro/shared"
-import { buildSliceCommand, sliceFingerprint, INPUT_SEEK_MARGIN_SEC, type SliceOptions } from "../apply-edl.js"
+import { buildSliceCommand, chunkOutputSec, sliceFingerprint, INPUT_SEEK_MARGIN_SEC, type SliceOptions } from "../apply-edl.js"
 
 const EDL: Edl = {
   version: 1,
@@ -23,6 +23,7 @@ const EDL: Edl = {
 
 const OPTS: SliceOptions = {
   output: "video",
+  quality: "final",
   target: { width: 320, height: 240 },
   fps: 30,
   chunkStartSec: 0,
@@ -100,7 +101,7 @@ describe("every chunk is held to its grid frame count at its END", () => {
     { id: "x1", inMs: 1000, outMs: 2000, video: "B", transition: { type: "crossfade", durationMs: 300 } },
     { id: "x2", inMs: 2000, outMs: 3000, video: "A" },
   ] as unknown as EdlSegment[]
-  const HOLD = (n: number) => `tpad=stop_mode=clone:stop=-1,trim=start_frame=0:end_frame=${n},setpts=N/FRAME_RATE/TB[vout]`
+  const HOLD = (n: number) => `tpad=stop_mode=clone:stop=-1,trim=start_frame=0:end_frame=${n},setpts=round(N/FRAME_RATE/TB)[vout]`
 
   it("a crossfade chunk keeps exactly round((start+out)·F) − round(start·F) frames", () => {
     const c = cmd({ chunkStartSec: 10 }, segs)
@@ -140,5 +141,173 @@ describe("input seek — each source is read from its earliest window, not from 
     const b = cmd({}, at200)
     expect(a.filterGraph).toBe(b.filterGraph)
     expect(sliceFingerprint(a, EDL, "v")).not.toBe(sliceFingerprint(b, EDL, "v"))
+  })
+})
+
+/** Integer-exact PRNG (mulberry32): a float LCG overflows 2^53 and cycles in
+ *  a few hundred draws, which would quietly shrink these sweeps. */
+function mulberry32(a: number): () => number {
+  return () => {
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+describe("a crossfade chunk is frame-exact (Track 0.16)", () => {
+  // Deterministic pseudo-random EDLs: every shape the validator admits (a
+  // crossfade ≤ 0.9·min(adjacent)), slivers and one-frame segments included,
+  // at integer and fractional rates, anywhere on the global timeline.
+  const rnd = mulberry32(16)
+  const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rnd() * xs.length)]!
+
+  function randomChunk(): EdlSegment[] {
+    const n = 2 + Math.floor(rnd() * 12)
+    const lens = Array.from({ length: n }, () => pick([10, 20, 34, 40, 67, 120, 500, 1000, 2370]))
+    return lens.map((len, i) => {
+      const seg = { id: `r${i}`, inMs: 1000, outMs: 1000 + len, video: pick(["A", "B"]) } as EdlSegment
+      if (i === 0 || rnd() < 0.4) return seg
+      const maxD = Math.floor(0.9 * Math.min(len, lens[i - 1]!))
+      return maxD >= 1 ? ({ ...seg, transition: { type: "crossfade", durationMs: 1 + Math.floor(rnd() * maxD) } } as EdlSegment) : seg
+    })
+  }
+
+  it("the joined picture holds exactly the chunk's grid count, every xfade whole frames that fit its inputs", () => {
+    let chunksWithXfade = 0
+    for (let k = 0; k < 400; k++) {
+      const segs = randomChunk()
+      const fps = pick([24, 25, 29.97, 30, 59.94])
+      const chunkStartSec = pick([0, 0.02, 10, 100.123, 3599.99])
+      const g = cmd({ fps, chunkStartSec }, segs).filterGraph
+      if (!g.includes("xfade=")) continue
+      chunksWithXfade++
+      const kept = new Map<string, number>()
+      for (const m of g.matchAll(/trim=start_frame=(\d+):end_frame=(\d+),setpts=PTS-STARTPTS,format=yuv420p,setsar=1(\[v\d+\])/g)) {
+        const [a, b] = [Number(m[1]), Number(m[2])]
+        expect(b, g).toBeGreaterThan(a) // no empty label
+        kept.set(m[3]!, b - a)
+      }
+      let blended = 0
+      for (const m of g.matchAll(/\[[^\]]+\](\[v\d+\])xfade=transition=fade:duration=([\d.]+):offset=([\d.]+)/g)) {
+        const d = Number(m[2]) * fps
+        const off = Number(m[3]) * fps
+        expect(Math.abs(d - Math.round(d)), `duration ${m[2]} @${fps}`).toBeLessThan(1e-3)
+        expect(Math.abs(off - Math.round(off)), `offset ${m[3]} @${fps}`).toBeLessThan(1e-3)
+        expect(Math.round(d)).toBeGreaterThanOrEqual(1)
+        expect(Math.round(d)).toBeLessThan(kept.get(m[1]!)!) // the incoming side outlasts the blend
+        blended += Math.round(d)
+      }
+      const total = [...kept.values()].reduce((a, b) => a + b, 0) - blended
+      const outSec = segs.reduce((acc, s, i) => {
+        const t = s.transition as { durationMs?: number } | undefined
+        const ov = i > 0 && t ? Math.min(t.durationMs ?? 0, Math.floor(0.9 * Math.min(s.outMs - s.inMs, segs[i - 1]!.outMs - segs[i - 1]!.inMs))) : 0
+        return acc + (s.outMs - s.inMs - ov) / 1000
+      }, 0)
+      const gridN = Math.max(1, Math.round((chunkStartSec + outSec) * fps) - Math.round(chunkStartSec * fps))
+      expect(total, `${JSON.stringify(segs)} @${fps} start ${chunkStartSec}\n${g}`).toBe(gridN)
+    }
+    expect(chunksWithXfade).toBeGreaterThan(150) // the generator really exercises crossfades
+  })
+})
+
+describe("a chunk's picture, its gridHold and the next chunk's start agree — even at an exact half-frame tie (Track 0.16)", () => {
+  // Two float orders of the same sum round to opposite frames when the chunk's
+  // end lands exactly on a half frame (e.g. 2.325 s × 60 = 139.5). The plan,
+  // gridHold's count and the next chunk's first frame must all use ONE
+  // arithmetic: `chunkOutputSec`, the value the render loop adds to
+  // `chunkStartSec`. Durations here are multiples of 25/50 ms, which make such
+  // ties common at 25/30/50/60 fps.
+  const rnd = mulberry32(1600)
+  const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rnd() * xs.length)]!
+  const endFrameOfHold = (g: string) => Number(/trim=start_frame=0:end_frame=(\d+),setpts=round\(N\/FRAME_RATE\/TB\)\[vout\]/.exec(g)![1])
+
+  /** Σ kept label frames − Σ xfade frames: what the chain actually holds. */
+  function chainFrames(g: string, fps: number): number {
+    let kept = 0
+    for (const m of g.matchAll(/fps=[\d.]+,trim=start_frame=0:end_frame=(\d+),setpts=PTS-STARTPTS,format=yuv420p,setsar=1\[v\d+\]/g)) kept += Number(m[1])
+    let blended = 0
+    for (const m of g.matchAll(/xfade=transition=fade:duration=([\d.]+):offset=/g)) blended += Math.round(Number(m[1]) * fps)
+    return kept - blended
+  }
+
+  function tieChunk(xfade: boolean): EdlSegment[] {
+    const n = 2 + Math.floor(rnd() * 6)
+    const lens = Array.from({ length: n }, () => pick([25, 50, 75, 150, 825, 1000, 1550, 2150, 2275]))
+    return lens.map((len, i) => {
+      const seg = { id: `t${i}`, inMs: 0, outMs: len, video: pick(["A", "B"]) } as EdlSegment
+      if (!xfade || i === 0 || rnd() < 0.3) return seg
+      const maxD = Math.floor(0.9 * Math.min(len, lens[i - 1]!))
+      const d = Math.floor((pick([25, 50, 100, 300, 850]) * maxD) / 850 / 25) * 25
+      return d >= 25 ? ({ ...seg, transition: { type: "crossfade", durationMs: d } } as EdlSegment) : seg
+    })
+  }
+
+  it("the reviewer's minimal repros: 825 + 1550 (xf 100) @60 from 0.05 s, and 2150 + 1000 (xf 850) @30 from 7200.05 s", () => {
+    const cases: Array<{ segs: EdlSegment[]; fps: number; chunkStartSec: number }> = [
+      { fps: 60, chunkStartSec: 0.05, segs: [
+        { id: "a", inMs: 0, outMs: 825, video: "A" },
+        { id: "b", inMs: 0, outMs: 1550, video: "B", transition: { type: "crossfade", durationMs: 100 } },
+      ] as EdlSegment[] },
+      { fps: 30, chunkStartSec: 7200.05, segs: [
+        { id: "a", inMs: 0, outMs: 2150, video: "A" },
+        { id: "b", inMs: 0, outMs: 1000, video: "B", transition: { type: "crossfade", durationMs: 850 } },
+      ] as EdlSegment[] },
+    ]
+    for (const { segs, fps, chunkStartSec } of cases) {
+      const g = cmd({ fps, chunkStartSec }, segs).filterGraph
+      const nextStartF = Math.round((chunkStartSec + chunkOutputSec(segs)) * fps)
+      expect(chainFrames(g, fps), g).toBe(endFrameOfHold(g))
+      expect(endFrameOfHold(g), g).toBe(nextStartF - Math.round(chunkStartSec * fps))
+    }
+  })
+
+  it("crossfade chunks: the chain holds exactly gridHold's count, which ends on the next chunk's first frame", () => {
+    let ties = 0
+    for (let k = 0; k < 2000; k++) {
+      const segs = tieChunk(true)
+      const fps = pick([25, 30, 50, 60, 29.97])
+      const chunkStartSec = pick([0, 0.02, 0.05, 10, 7200.05])
+      const g = cmd({ fps, chunkStartSec }, segs).filterGraph
+      if (!g.includes("xfade=")) continue
+      const outEnd = (chunkStartSec + chunkOutputSec(segs)) * fps
+      if (Math.abs(outEnd - Math.floor(outEnd) - 0.5) < 1e-6) ties++
+      expect(chainFrames(g, fps), `${JSON.stringify(segs)} @${fps} from ${chunkStartSec}`).toBe(endFrameOfHold(g))
+      expect(endFrameOfHold(g)).toBe(Math.round(outEnd) - Math.round(chunkStartSec * fps))
+    }
+    expect(ties).toBeGreaterThan(20) // the generator really lands on exact half-frame ties
+  })
+
+  it("cut-only chunks: the grid's frames end on the next chunk's first frame (no seam drift at a tie)", () => {
+    let ties = 0
+    for (let k = 0; k < 2000; k++) {
+      const segs = tieChunk(false)
+      const fps = pick([25, 30, 50, 60, 29.97])
+      const chunkStartSec = pick([0, 0.02, 0.05, 10, 7200.05])
+      const g = cmd({ fps, chunkStartSec }, segs).filterGraph
+      const outEnd = (chunkStartSec + chunkOutputSec(segs)) * fps
+      if (Math.abs(outEnd - Math.floor(outEnd) - 0.5) < 1e-6) ties++
+      const expected = Math.max(1, Math.round(outEnd) - Math.round(chunkStartSec * fps))
+      expect(endFrameOfHold(g), `${JSON.stringify(segs)} @${fps} from ${chunkStartSec}`).toBe(expected)
+    }
+    expect(ties).toBeGreaterThan(20) // the generator really lands on exact half-frame ties
+  })
+})
+
+describe("the encoder follows the render's quality, not its canvas size (A1)", () => {
+  const encoder = (c: ReturnType<typeof cmd>) => {
+    const a = c.outputArgs
+    return { preset: a[a.indexOf("-preset") + 1], crf: a[a.indexOf("-crf") + 1] }
+  }
+  it("a FINAL render of a ≤720p canvas encodes at delivery quality — the old height rule gave it the proxy encoder", () => {
+    expect(encoder(cmd({ quality: "final", target: { width: 1280, height: 720 } }))).toEqual({ preset: "fast", crf: "18" })
+    expect(encoder(cmd({ quality: "final", target: { width: 320, height: 240 } }))).toEqual({ preset: "fast", crf: "18" })
+  })
+  it("a PROXY render encodes fast, whatever its canvas", () => {
+    expect(encoder(cmd({ quality: "proxy", target: { width: 1280, height: 720 } }))).toEqual({ preset: "veryfast", crf: "26" })
+    expect(encoder(cmd({ quality: "proxy", target: { width: 640, height: 360 } }))).toEqual({ preset: "veryfast", crf: "26" })
+  })
+  it("the resume key moves with the quality (a proxy chunk is never resumed into a final render)", () => {
+    expect(sliceFingerprint(cmd({ quality: "proxy" }), EDL, "v")).not.toBe(sliceFingerprint(cmd({ quality: "final" }), EDL, "v"))
   })
 })
