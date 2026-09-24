@@ -48,9 +48,19 @@ export interface Transition {
    * second on the change, and it obliges with a dissolve: a match cut rendered
    * as a 1.75 s cross-dissolve in QA. The composer therefore skips the duration
    * lever when every picked transition is instant, and consumers (the picker
-   * UI, Studio) read `isInstantTransition` to hide that lever. Position and
-   * intensity still apply — WHERE the cut lands, and how hard it hits, are
-   * real choices.
+   * UI, Studio) read `isInstantTransition` to hide that lever.
+   *
+   * The same holds for INTENSITY: every intensity clause describes how the
+   * change PERFORMS over time ("natural unhurried timing", "wild flourishes and
+   * dramatic distortion"), and a cut has no performance to shape — "unhurried"
+   * on a match cut is another invitation to blend. So the composer drops the
+   * intensity clause too when every pick is instant. Position still applies —
+   * WHERE the cut lands is a real choice.
+   *
+   * The bare term is not enough on its own either: "match cut" still came back
+   * as a ~1 s superimposition in prod QA (seedance-2-5). The composer therefore
+   * follows an all-instant pick with `INSTANT_CUT_CLAUSE`, once — the explicit
+   * anti-blend instruction that made the model render a true single-frame cut.
    */
   readonly instant?: boolean
 }
@@ -343,6 +353,48 @@ export function isInstantTransition(
   return ids.every((one) => getTransition(one)?.instant === true)
 }
 
+/**
+ * The anti-blend instruction that follows an all-instant transition pick —
+ * the ONE place this sentence lives (see `Transition.instant`). Each row keeps
+ * its own meaning in its term/hint (a match cut still matches shapes, snap to
+ * black still holds black for a beat); this clause only forbids the blend a
+ * video model otherwise puts between the two images. Measured on prod with
+ * seedance-2-5: with it, a match cut renders as a true single-frame hard cut,
+ * with and without an end frame; without it, as a ~1 s dissolve.
+ */
+export const INSTANT_CUT_CLAUSE =
+  "an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend"
+
+/**
+ * The transition BASE fragments for a pick — one per id that resolves to a
+ * non-empty hint (the `term` in compact mode, the full `promptHint`
+ * otherwise), in pick order. When EVERY contributing id is instant, the last
+ * fragment is followed by ` — ${INSTANT_CUT_CLAUSE}`.
+ *
+ * The clause is attached to the fragment rather than emitted as its own: the
+ * cap-aware assemblers shed whole fragments from the tail, and a lone
+ * anti-blend fragment shed away from its term would leave exactly the bare
+ * "match cut" that renders as a dissolve.
+ *
+ * Shared by `composeTransitionHintFromConnections` (the canvas transition
+ * node) and the direction registry's `transition` row (the server fold of
+ * `direction.transition`), so both paths word a cut identically.
+ */
+export function renderTransitionBases(
+  ids: ReadonlyArray<string>,
+  mode: PickerHintMode = "full",
+): string[] {
+  const resolveBase = mode === "compact" ? getTransitionTerm : getTransitionPromptHint
+  // Only ids that contribute a base hint count — a no-op "auto" beside a cut
+  // must not make the pick look non-instant.
+  const picked = ids.filter((id) => resolveBase(id).length > 0)
+  const bases = picked.map(resolveBase)
+  if (bases.length > 0 && isInstantTransition(picked)) {
+    bases[bases.length - 1] = `${bases[bases.length - 1]} — ${INSTANT_CUT_CLAUSE}`
+  }
+  return bases
+}
+
 // ---------------------------------------------------------------------------
 // Graph-aware composer — start/end input handles + timing fields + multi-pick
 // ---------------------------------------------------------------------------
@@ -424,8 +476,9 @@ const INTENSITY_CLAUSES = clausesOf(TRANSITION_INTENSITIES)
  * - 0 hints (no transition, empty array, or all-empty hints) → ""
  * - n base hints joined with ", and "
  * - Timing/start/end clauses apply ONCE at the outer layer, not per-id
- * - The duration clause is dropped when every picked id is instant (a cut —
- *   see `isInstantTransition`); position and intensity still apply
+ * - When every picked id is instant (a cut — see `isInstantTransition`) the
+ *   base carries `INSTANT_CUT_CLAUSE` once, after the term(s), and the
+ *   duration and intensity clauses are dropped; position still applies
  * - null input is treated like undefined (falsy short-circuit → returns "")
  *
  * @param mode `"compact"` builds the base from each transition's short
@@ -446,12 +499,11 @@ export function composeTransitionHintFromConnections(
     : transitionId ? [transitionId] : []
   // ONLY the base fragment swaps in compact mode — the multi-pick join, the
   // timing clauses and the start/end clauses below are identical either way.
-  const resolveBase = mode === "compact" ? getTransitionTerm : getTransitionPromptHint
-  // Only ids that contribute a base hint count below — a no-op "auto" beside a
-  // cut must not make the pick look non-instant.
-  const picked = ids.filter((id) => resolveBase(id).length > 0)
-  const baseHints = picked.map(resolveBase)
+  const baseHints = renderTransitionBases(ids, mode)
   if (baseHints.length === 0) return ""
+  // Same "contributes a base hint" filter `renderTransitionBases` applies.
+  const resolveBase = mode === "compact" ? getTransitionTerm : getTransitionPromptHint
+  const instant = isInstantTransition(ids.filter((id) => resolveBase(id).length > 0))
 
   const combinedBase = baseHints.join(", and ")
   const parts: string[] = [combinedBase]
@@ -459,13 +511,14 @@ export function composeTransitionHintFromConnections(
   if (timing?.position && timing.position !== "auto") {
     parts.push(POSITION_CLAUSES[timing.position])
   }
-  // A cut has no duration: "lasting approximately 1 second" on a match cut
-  // makes the model render a one-second dissolve. Skipped only when EVERY
-  // picked id is instant — a mixed pick still has a non-cut to time.
-  if (timing?.duration && timing.duration !== "auto" && !isInstantTransition(picked)) {
+  // A cut has no duration and no performance: "lasting approximately 1
+  // second" or "with natural unhurried timing" on a match cut makes the model
+  // render a dissolve. Skipped only when EVERY picked id is instant — a mixed
+  // pick still has a non-cut to time and shape.
+  if (timing?.duration && timing.duration !== "auto" && !instant) {
     parts.push(DURATION_CLAUSES[timing.duration])
   }
-  if (timing?.intensity && timing.intensity !== "auto") {
+  if (timing?.intensity && timing.intensity !== "auto" && !instant) {
     parts.push(INTENSITY_CLAUSES[timing.intensity])
   }
 

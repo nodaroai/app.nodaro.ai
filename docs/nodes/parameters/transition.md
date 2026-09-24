@@ -15,7 +15,7 @@ Unlike the `transition` field on the Combine Videos node (which is an FFmpeg pos
 | Transition | multi-select | `"auto"` | Catalog entry id, or array of 1-2 ids for compound transitions (e.g., `["smash-cut","white-flash"]`). |
 | Position | select | `"auto"` | Where in the clip the transition occurs: `auto` / `start` / `middle` / `end` / `full`. |
 | Duration | select | `"auto"` | How long the transition lasts: `auto` / `instant` / `short` (~1s) / `medium` (~2s) / `long` (~3s). Ignored for a cut (see below). |
-| Intensity | select | `"auto"` | Energy/character of the transition: `auto` / `subtle` / `natural` / `dynamic` / `crazy`. |
+| Intensity | select | `"auto"` | Energy/character of the transition: `auto` / `subtle` / `natural` / `dynamic` / `crazy`. Ignored for a cut (see below). |
 | Pre Text | text | empty | Free-form text prepended to the composed hint. |
 | Post Text | text | empty | Free-form text appended to the composed hint. |
 | Hint mode  | select       | `full`    | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
@@ -24,7 +24,13 @@ All four enum fields default to `auto`, which contributes no prompt text. Settin
 
 Position, Duration and Intensity are catalogs, not free values: the `transition` picker catalog exposes them as `dimensions` beside its `options` (`GET /v1/picker-catalogs/transition`, `client.pickerCatalogs.get("transition")`, the MCP `get_picker_catalog` tool, or `TRANSITION_POSITIONS` / `TRANSITION_DURATIONS` / `TRANSITION_INTENSITIES` from `@nodaro/prompts`), each row carrying the exact clause it injects. The [Character FX](./character-fx.md) node has the same three fields with the same ids but its own wording — read each node's own rows. See [Parameter Picker Catalogs](../../picker-catalogs.md#single-dimension-pickers-with-secondary-parameters-transition-character-fx).
 
-**Cuts take no duration.** Eight transitions are cuts — the change happens between two frames: `none` (hard cut), `snap-to-black`, `match-cut`, `smash-cut`, `seamless-match`, `jump-cut`, `jump-match` and `action-relay`. For these, Duration is dropped from the prompt: a length on a cut makes video models render a dissolve instead. Position and Intensity still apply. When two transitions are picked and only one is a cut, Duration is kept. The picker catalog marks these rows `instant: true` on their options, and `@nodaro/prompts` exports `isInstantTransition(id)`, so a client can hide the Duration control for them.
+**Cuts are worded as true hard cuts.** Eight transitions are cuts — the change happens between two frames: `none` (hard cut), `snap-to-black`, `match-cut`, `smash-cut`, `seamless-match`, `jump-cut`, `jump-match` and `action-relay`. When every picked transition is a cut:
+
+- The transition text is followed, once, by an explicit anti-blend instruction — `match cut — an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend`. On its own, the name of a cut is often rendered as a short dissolve; with this instruction, video models render a true single-frame cut. Each cut keeps its own meaning (a match cut still matches shapes; snap to black still holds black for a beat).
+- Duration and Intensity are dropped from the prompt. Both describe how a transition plays out over time ("lasting approximately 1 second", "with natural unhurried timing"), and on a cut either one makes video models blend the two images instead of cutting.
+- Position still applies — where the cut lands is a real choice.
+
+When two transitions are picked and only one is a cut, nothing changes: Duration and Intensity are kept and no anti-blend instruction is added. The same wording applies to a transition sent in the `direction` field of a video request. The picker catalog marks these rows `instant: true` on their options, and `@nodaro/prompts` exports `isInstantTransition(id)`, so a client can hide the Duration and Intensity controls for them.
 
 ## Catalog (82 entries across 8 categories)
 

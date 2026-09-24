@@ -2896,7 +2896,7 @@
         }
       },
       "ctx": null,
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot"
+      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot — an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend"
     },
     {
       "key": "transition/id:auto",
@@ -2966,7 +2966,7 @@
         }
       },
       "ctx": null,
-      "expected": "shot on location, no transition, hard cut, instantaneous switch from first shot to second shot, no text overlays"
+      "expected": "shot on location, no transition, hard cut, instantaneous switch from first shot to second shot — an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend, no text overlays"
     },
     {
       "key": "transition/timing",
@@ -2998,7 +2998,7 @@
         }
       },
       "ctx": null,
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot"
+      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot — an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend"
     },
     {
       "key": "transition/timing-instant",
@@ -3014,7 +3014,7 @@
         }
       },
       "ctx": null,
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot, the transition occurs in the middle of the clip, with dynamic energy and assertive flourish"
+      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot — an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend, the transition occurs in the middle of the clip"
     },
     {
       "key": "transition/with-ctx",
@@ -3058,7 +3058,7 @@
           }
         ]
       },
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot, starting from wide shot, full body of the subject with visible surroundings, ending at with a calm, centered expression"
+      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot — an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend, starting from wide shot, full body of the subject with visible surroundings, ending at with a calm, centered expression"
     },
     {
       "key": "transition/with-ctx-timing-multi-pick",
