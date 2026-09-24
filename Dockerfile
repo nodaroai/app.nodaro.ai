@@ -648,6 +648,19 @@ else
 fi
 CHILD_PIDS="$CHILD_PIDS $!"
 
+# Plugin daemon host (long-lived private-plugin processes). Cloud-only and
+# OPT-IN, because exactly one copy may run: either as its OWN service from
+# this image (start command `node /app/backend/dist/plugin-daemons.js`, one
+# replica — then leave this unset), or here, with
+# PLUGIN_DAEMONS_IN_CONTAINER=true, only while this service runs ONE replica
+# (each replica would otherwise host its own copy). In the container it binds
+# loopback unless told otherwise — the API reaches it on 127.0.0.1, and no
+# other service on the private network has any business on its port.
+if [ "$EDITION" = "cloud" ] && [ "$PLUGIN_DAEMONS_IN_CONTAINER" = "true" ]; then
+  supervise plugin-daemons env PLUGIN_DAEMONS_HOST="${PLUGIN_DAEMONS_HOST:-127.0.0.1}" node dist/plugin-daemons.js &
+  CHILD_PIDS="$CHILD_PIDS $!"
+fi
+
 # Wait for backend to be ready before accepting traffic
 echo "Waiting for backend on port 9000..."
 for i in $(seq 1 30); do

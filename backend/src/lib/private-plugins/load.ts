@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify"
 import { hasCredits } from "../config.js"
 import { buildToolkit } from "./toolkit.js"
+import { daemonListProblem } from "./daemons.js"
 import { CONTRACT_VERSION } from "./types.js"
 import type {
   NodaroPrivatePlugin,
+  PluginDaemon,
   PluginEngines,
   PluginHandlerFn,
   PluginServices,
@@ -41,6 +43,12 @@ export interface LoadPrivatePluginsOpts {
    * the loader without depending on Task 9.
    */
   toolkit?: PluginToolkit
+  /**
+   * Collect every plugin's `daemons(tk)` into `result.daemons`. ONLY the
+   * daemon host (`plugin-daemons.ts`) sets this — the API server and the
+   * workers never construct a daemon.
+   */
+  daemons?: boolean
 }
 
 export interface LoadPrivatePluginsResult {
@@ -69,6 +77,12 @@ export interface LoadPrivatePluginsResult {
    * that has no reference to this result.
    */
   services: PluginServices
+  /**
+   * Present only when `opts.daemons` asked for it: every plugin's daemons,
+   * in plugin order, already validated as a hostable list (unique, well-formed
+   * names). Absent after a failed load — the host reads that as none.
+   */
+  daemons?: PluginDaemon[]
 }
 
 /**
@@ -224,6 +238,7 @@ export async function loadPrivatePlugins(
   const engines: PluginEngines = {}
   const prompts: PromptTable = {}
   const services: PluginServices = {}
+  let daemons: readonly PluginDaemon[] = []
 
   for (const plugin of plugins) {
     // A capability that THROWS while being constructed is a load failure like
@@ -256,6 +271,14 @@ export async function loadPrivatePlugins(
         Object.assign(prompts, pluginPrompts)
         await applyPipelinePrompts(pluginPrompts)
       }
+      if (opts.daemons && plugin.daemons) {
+        const contributed: unknown = plugin.daemons(getToolkit())
+        if (!Array.isArray(contributed)) throw new Error("daemons() must return a list")
+        const next = [...daemons, ...(contributed as PluginDaemon[])]
+        const problem = daemonListProblem(next)
+        if (problem) throw new Error(problem)
+        daemons = next
+      }
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       return handleLoadFailure(`plugin "${plugin.name}" failed to initialise: ${detail}`, exit)
@@ -265,7 +288,7 @@ export async function loadPrivatePlugins(
 
   pluginServices = services
   setPluginEngines(engines)
-  return { handlers, loaded, engines, prompts, services }
+  return { handlers, loaded, engines, prompts, services, ...(opts.daemons ? { daemons: [...daemons] } : {}) }
 }
 
 /**
