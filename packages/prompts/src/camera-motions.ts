@@ -53,7 +53,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Static",
     category: "default",
     description: "Fixed camera, no movement",
-    promptHint: "locked off static camera, no camera movement",
+    promptHint: "The camera is locked on a solid tripod and does not move at all for the entire shot: it never travels, never rotates, never tilts, never changes focal length. The viewpoint is completely fixed and the framing stays exactly the same from the first frame to the last.\nLife within the scene carries on naturally, but the camera holds perfectly still throughout.\nNo camera movement of any kind, no drift, no sway, no zoom.",
     term: "locked-off static camera",
   },
   {
@@ -61,7 +61,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Handheld",
     category: "default",
     description: "Natural handheld shake",
-    promptHint: "handheld camera with subtle natural shake and micro movements",
+    promptHint: "The camera is HANDHELD, held in an operator's hands rather than on any support, so it carries the constant small live motion of a real person holding it: a continuous gentle shake and wobble, tiny irregular drifts and corrections in every direction, a slight bob in time with breathing, never settling completely still even for a moment.\nThe motion is small and organic, never a large or deliberate move: the camera stays roughly where it is and keeps roughly the same framing, it simply never locks off. It does not travel toward anything, away from anything, or off to any side; it holds its position and only jitters around it. The unsteadiness is human and slightly random, not a smooth mechanical sway and not a rhythmic loop.\nThe lens does not change and the camera does not travel anywhere, orbit, or turn to a new direction; it just floats and jitters in place as if held.\nThe framing stays broadly the same across the shot, loosely on the subject, wandering by only small amounts.\nNo zoom, no deliberate camera move, no forward or backward travel, no rotation to a new angle, no smooth glide.",
     term: "handheld camera",
   },
   {
@@ -69,7 +69,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Steadicam",
     category: "default",
     description: "Smooth stabilized walking shot",
-    promptHint: "smooth steadicam shot, gliding stabilized movement through the scene",
+    promptHint: "The camera moves with the perfectly smooth, floating quality of a Steadicam or gimbal: it glides gently and continuously, with none of the shake, jitter or bob of a handheld rig. Every bit of movement is buttery, damped and stabilised, as if the camera were floating on air.\nThe motion is a slow, graceful drift through the scene — easing a little forward and around with fluid, gliding ease — always even and controlled, never abrupt, never trembling, never correcting.\nThe lens does not change. The framing stays loosely on the subject throughout, the glide being gentle enough that the composition holds.\nThe single defining quality is SMOOTHNESS: this is the opposite of handheld — no shake whatsoever, only silky stabilised floating motion.\nNo zoom, no jitter, no handheld shake, no abrupt moves.",
     term: "smooth steadicam shot",
   },
 
@@ -271,14 +271,14 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Dutch Angle",
     category: "roll",
     description: "Static tilted frame for tension",
-    promptHint: "dutch angle, canted tilted frame for tension",
+    promptHint: "The shot begins level, then the camera rolls a little way around its own lens axis and STOPS at a fixed cant, holding that tilted Dutch-angle framing for the rest of the shot. It is a single small settling roll into a tilt, not a continuous spin: the frame tips perhaps fifteen or twenty degrees off level and then stays there, canted and still, for an uneasy, tense feeling.\nOnly the roll axis is involved: the camera stays in the same position, does not travel, does not pan or tilt its aim up or down, and the lens does not change. The horizon starts level and ends clearly canted, then holds.\nBecause it is a pure roll, there is no parallax: the whole frame turns as one flat picture, near and far together.\nLife in the scene carries on gently while the framing holds its tilt.\nNo zoom, no travel, no continuous spinning, no returning to level once canted.",
   },
   {
     id: "spin-360",
     label: "Full 360 Spin",
     category: "roll",
     description: "Camera rotates a full 360° on its axis",
-    promptHint: "full 360 degree spin, the camera rotates a complete revolution on its own lens axis",
+    promptHint: "The camera rotates a FULL 360 degrees around its own lens axis in one continuous even spin, and keeps turning the same way without pausing until the picture has come all the way back to level exactly as it started. The horizon sweeps from level, round through fully sideways on one side, through completely upside-down, through fully sideways on the other side, and back to level — one complete unbroken revolution.\nOnly the roll axis is involved: the camera stays in exactly the same position, does not travel, does not pan or tilt its aim, and the lens does not change. It spins about the axis running straight out through the lens.\nBecause it is a pure roll, there is no parallax: the whole frame turns as one flat picture, near and far rotating together by the same amount.\nThe spin is smooth and continuous at an even speed, going round only once and ending back at level.\nNo zoom, no travel, no pan, no tilt of the aim, no reversal of the spin direction.",
     term: "full 360 degree camera roll",
   },
 
@@ -403,7 +403,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Ronin Glide",
     category: "tracking",
     description: "Slow gliding move on a Ronin/Movi gimbal",
-    promptHint: "ronin glide, slow gliding move on a Ronin or Movi gimbal, cinematic float without any shake",
+    promptHint: "ronin gimbal glide, ultra-smooth floating tracking movement following the subject",
     term: "slow gliding gimbal move",
   },
   {
@@ -411,7 +411,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Serpentine Track",
     category: "tracking",
     description: "Camera weaves through obstacles in S-curves",
-    promptHint: "serpentine track, the camera weaves through obstacles in S-curves, snaking forward along a winding path",
+    promptHint: "serpentine tracking shot, camera weaves smoothly side to side while following the subject",
     term: "serpentine tracking shot",
   },
 
@@ -421,7 +421,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "POV",
     category: "special",
     description: "First person point of view",
-    promptHint: "POV shot, first person perspective as seen through the subject's eyes",
+    promptHint: "POV shot, first person perspective as seen through the subject's eyes. The viewpoint moves forward at a calm, unhurried walking pace — steady and gentle, never a fast rush or a vehicle-like travel speed. No body parts, hands or feet ever enter the frame; only the point of view itself drifts smoothly forward.",
     term: "first person pov shot",
   },
   {
@@ -429,7 +429,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Over The Shoulder",
     category: "special",
     description: "Frame past a character's shoulder",
-    promptHint: "over the shoulder shot, framing past one character's shoulder onto another",
+    promptHint: "Over the shoulder shot: the camera is already framed past the near character's shoulder onto the second character from the very first frame, with no push-in or approach - the framing and distance stay constant throughout, at most a very small handheld-style settle. No camera travel toward or away from either character. No dialogue, no spoken words, no lip movement suggesting speech - completely silent, ambient sound only if any.",
     term: "over-the-shoulder shot",
   },
   {
@@ -453,7 +453,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Aerial",
     category: "special",
     description: "High altitude drone-style shot",
-    promptHint: "aerial drone shot, high altitude slow forward movement over the landscape",
+    promptHint: "The camera is airborne and sinks straight downward through the air, losing altitude like an aircraft lowering itself vertically. Its aim is completely fixed: the horizon line stays at exactly the same height across the frame from the first moment to the last, and the camera never dips or tips its view downward at all — what it points at does not change, only where it is in space.\nAs the camera drops in height, everything in view slides UPWARD through the frame together because the viewpoint is lower: whatever stands tall rises up the frame and grows, and more of what lies far below climbs into view from the bottom. This vertical sliding of the whole scene is the ONLY change; the angle of view is frozen.\nNo tilting, no dipping the aim down, no looking further down, no rotation, no forward travel — the horizon must remain pinned at its starting height while the camera simply loses altitude.",
     term: "high altitude aerial drone shot",
   },
   {
@@ -461,7 +461,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Helicopter",
     category: "special",
     description: "Wide high-altitude sweeping aerial",
-    promptHint: "helicopter shot, high altitude wide sweeping aerial pass with strong lateral movement",
+    promptHint: "helicopter shot, sweeping aerial movement banking around the scene",
     term: "sweeping helicopter aerial shot",
   },
   {
@@ -469,7 +469,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Fly Over",
     category: "special",
     description: "Low fast aerial pass over the scene",
-    promptHint: "fly over shot, low altitude drone passing quickly over the scene with strong forward motion",
+    promptHint: "The camera flies steadily FORWARD through the air at a constant height, cruising ahead toward what lies in front of it without ever changing altitude. Its height stays exactly the same from start to finish — it does not descend, does not climb, does not dip its aim; it simply travels forward at cruising speed.\nBecause it moves forward, whatever lies ahead grows closer and sweeps toward the camera and past it on both sides, near things rushing by faster than far things. The horizon holds at exactly the same height in the frame the whole time.\nNo descending, no climbing, no tilting the aim, no rotation — only steady level forward flight at a fixed altitude.",
     term: "low aerial fly-over pass",
   },
   {
@@ -501,7 +501,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Rack Focus",
     category: "special",
     description: "Pull focus between foreground and background",
-    promptHint: "rack focus, lens focus shifts from a foreground subject to a background subject (or vice versa), the unfocused plane blurs",
+    promptHint: "The camera itself never moves, never zooms and never changes its framing — it is completely locked in place for the whole shot. Only the lens's focus plane shifts. It starts sharply focused on the nearest element in the frame, with everything further back a soft out-of-focus blur. Then the focus pulls smoothly across to the far background, which becomes crisp and sharp, while the near foreground that was sharp a moment ago now falls out of focus and blurs instead. The two states — near-sharp/far-blurred, then near-blurred/far-sharp — must read as clearly opposite. No camera travel, no zoom, no change in composition — only which plane is sharp changes.",
   },
 
   // Modern / social-video vocabulary
@@ -510,7 +510,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Handheld Vlog",
     category: "default",
     description: "Casual vlog-style handheld",
-    promptHint: "casual handheld vlog-style camera, slight wandering and natural shake, talking-to-camera framing",
+    promptHint: "The camera is a casual handheld vlog camera, held at arm's length by the subject or a companion, with the loose, informal quality of someone filming themselves. It has clear handheld shake and small bobbing motion, but looser and more wandering than a careful operator: it drifts around a bit, reframes casually, bobs as if the holder is shifting their weight or gesturing.\nThe framing sits fairly close and personal, roughly on the subject, wandering by moderate amounts as a vlogger's arm naturally would — informal and lively, not locked or composed.\nThe motion has personality and looseness: more movement than a careful handheld, unpolished and spontaneous, but it stays broadly in place rather than travelling off anywhere.\nThe lens does not change; the camera does not glide smoothly (that would be a steadicam) and does not travel deliberately in any direction.\nNo zoom, no smooth stabilised glide, no deliberate directional move, no tripod stillness.",
     term: "handheld vlog-style camera",
   },
   {
@@ -518,7 +518,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "POV Walk",
     category: "tracking",
     description: "First-person walking POV",
-    promptHint: "first-person POV walking camera, GoPro-style head-mounted perspective with natural footstep movement",
+    promptHint: "first-person POV walking shot, camera as the subject's eyes with natural head-bob as they walk forward",
     term: "first person walking pov",
   },
   {
@@ -541,23 +541,23 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Screen Tap",
     category: "special",
     description: "On-screen finger-tap transition",
-    promptHint: "camera transition triggered by an on-screen finger tap, TikTok-native pacing with snap to the next subject",
-    term: "on-screen finger-tap transition",
+    promptHint: "An abrupt hard snap-cut transition: the camera instantly jumps to a new framing of the scene with no gradual movement in between, a fast decisive jolt rather than any smooth pan, push or travel. No object, hand, finger, or UI element ever appears in the frame. TikTok-native snap pacing.",
+    term: "abrupt snap-cut transition",
   },
   {
     id: "phone-flip",
     label: "Phone Flip",
     category: "special",
     description: "Front/rear camera flip",
-    promptHint: "camera-flip transition where the phone visibly rotates between the front and rear sensors, brief blur during the swap",
-    term: "front-to-rear phone camera flip",
+    promptHint: "A rapid flip-transition, functioning as a hard cut rather than a smooth continuous rotation: the entire frame snaps through one quick full rotation in a fraction of a second, with strong motion blur through the spin, then lands upright again immediately on a new framing of the scene. This is abrupt and near-instant, never a slow, smooth, or continuously spinning carousel-like rotation. No object, hand, phone, or UI element ever appears in the frame.",
+    term: "fast flip-cut transition",
   },
   {
     id: "gentle-drift",
     label: "Gentle Drift",
     category: "default",
     description: "Slow ambient floating motion",
-    promptHint: "gentle camera drift, a slow ambient floating motion with no specific direction, the camera barely moves but never sits perfectly still, evocative of contemplative atmospheric shots",
+    promptHint: "The camera drifts with an extremely slow, gentle, ambient floating motion, as if suspended and barely stirring in still air. There is no shake and no deliberate direction: it simply floats, drifting a tiny amount one way and then easing another, aimless and dreamlike.\nThe movement is minimal and continuous — the camera never sits perfectly still, but it never travels anywhere either; it hovers almost in place, wandering by only the smallest amounts, smooth and weightless throughout.\nThe pace is contemplative and calm, the drift so slow it is only just perceptible. The picture stays sharp; there is no motion blur.\nThe lens does not change and the framing stays broadly the same, resting loosely on the subject.\nNo zoom, no shake, no jitter, no deliberate directional move, no travel across the scene.",
     term: "slow gentle camera drift",
   },
   {
@@ -565,7 +565,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     label: "Parallax",
     category: "default",
     description: "Lateral motion with foreground/background depth separation",
-    promptHint: "parallax camera motion, lateral movement that emphasizes the depth separation between foreground and background elements, foreground objects appearing to move faster than distant ones",
+    promptHint: "The camera makes a small, smooth sideways move that shows off the depth of the scene through parallax. It eases gently a short way across, staying at the same distance and keeping its aim forward.\nThe defining quality is a STRONG parallax gradient: the nearest foreground elements slide across noticeably and quickly, the mid-distance elements shift more gently, and the most distant elements barely move at all — one smooth continuous gradient of speed from near to far that makes the separation between the layers obvious. Nothing is frozen; everything shifts, just by very different amounts according to its distance.\nThe move is modest and ambient rather than a full travelling shot: a gentle reveal of depth, not a journey across the scene.\nThe lens does not change; the camera does not push in, pull back, rotate, or shake.\nNo zoom, no forward or backward travel, no rotation, no handheld shake.",
     term: "lateral parallax camera move",
   },
 ]

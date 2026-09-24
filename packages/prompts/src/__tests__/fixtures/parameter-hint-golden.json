@@ -368,7 +368,7 @@
         }
       },
       "ctx": null,
-      "expected": "locked off static camera, no camera movement"
+      "expected": "The camera is locked on a solid tripod and does not move at all for the entire shot: it never travels, never rotates, never tilts, never changes focal length. The viewpoint is completely fixed and the framing stays exactly the same from the first frame to the last.\nLife within the scene carries on naturally, but the camera holds perfectly still throughout.\nNo camera movement of any kind, no drift, no sway, no zoom."
     },
     {
       "key": "camera-motion/id:arc-left",
@@ -407,7 +407,7 @@
         }
       },
       "ctx": null,
-      "expected": "parallax camera motion, lateral movement that emphasizes the depth separation between foreground and background elements, foreground objects appearing to move faster than distant ones"
+      "expected": "The camera makes a small, smooth sideways move that shows off the depth of the scene through parallax. It eases gently a short way across, staying at the same distance and keeping its aim forward.\nThe defining quality is a STRONG parallax gradient: the nearest foreground elements slide across noticeably and quickly, the mid-distance elements shift more gently, and the most distant elements barely move at all — one smooth continuous gradient of speed from near to far that makes the separation between the layers obvious. Nothing is frozen; everything shifts, just by very different amounts according to its distance.\nThe move is modest and ambient rather than a full travelling shot: a gentle reveal of depth, not a journey across the scene.\nThe lens does not change; the camera does not push in, pull back, rotate, or shake.\nNo zoom, no forward or backward travel, no rotation, no handheld shake."
     },
     {
       "key": "camera-motion/pre-post",
@@ -422,7 +422,7 @@
         }
       },
       "ctx": null,
-      "expected": "shot on location, locked off static camera, no camera movement, no text overlays"
+      "expected": "shot on location, The camera is locked on a solid tripod and does not move at all for the entire shot: it never travels, never rotates, never tilts, never changes focal length. The viewpoint is completely fixed and the framing stays exactly the same from the first frame to the last.\nLife within the scene carries on naturally, but the camera holds perfectly still throughout.\nNo camera movement of any kind, no drift, no sway, no zoom. no text overlays"
     },
     {
       "key": "camera-motion/with-ctx",
@@ -466,7 +466,7 @@
           }
         ]
       },
-      "expected": "locked off static camera, no camera movement, beginning with wide shot, full body of the subject with visible surroundings, ending with with a calm, centered expression"
+      "expected": "The camera is locked on a solid tripod and does not move at all for the entire shot: it never travels, never rotates, never tilts, never changes focal length. The viewpoint is completely fixed and the framing stays exactly the same from the first frame to the last.\nLife within the scene carries on naturally, but the camera holds perfectly still throughout.\nNo camera movement of any kind, no drift, no sway, no zoom. beginning with wide shot, full body of the subject with visible surroundings, ending with with a calm, centered expression"
     },
     {
       "key": "camera-motion/with-ctx-pre-post",
@@ -512,7 +512,7 @@
           }
         ]
       },
-      "expected": "handheld, locked off static camera, no camera movement, beginning with wide shot, full body of the subject with visible surroundings, ending with with a calm, centered expression, 35mm"
+      "expected": "handheld, The camera is locked on a solid tripod and does not move at all for the entire shot: it never travels, never rotates, never tilts, never changes focal length. The viewpoint is completely fixed and the framing stays exactly the same from the first frame to the last.\nLife within the scene carries on naturally, but the camera holds perfectly still throughout.\nNo camera movement of any kind, no drift, no sway, no zoom. beginning with wide shot, full body of the subject with visible surroundings, ending with with a calm, centered expression, 35mm"
     },
     {
       "key": "character-fx/id:auto",
