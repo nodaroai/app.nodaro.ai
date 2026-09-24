@@ -54,6 +54,7 @@ import {
   referencedSourceIds,
   resolveChunksForOutput,
   secs,
+  INPUT_SEEK_MARGIN_SEC,
   type ChunkPlanOptions,
 } from "./apply-edl-budget.js"
 
@@ -65,8 +66,17 @@ export {
   APPLY_EDL_CANVAS_PROBE_MS,
   APPLY_EDL_PER_SOURCE_PREP_MS,
   AUDIO_MUX_SECS_PER_OUTPUT_SEC,
+  CHUNK_RENDER_MARGIN,
+  CHUNK_RENDER_SECS_PER_AUDIO_OUTPUT_SEC,
+  CHUNK_RENDER_SECS_PER_AUDIO_SPAN_SEC,
   CHUNK_RENDER_SECS_PER_OUTPUT_SEC,
+  CHUNK_RENDER_SECS_PER_VIDEO_SPAN_SEC,
   CHUNK_RENDER_TIMEOUT_FLOOR_MS,
+  INPUT_SEEK_MARGIN_SEC,
+  LIVENESS_CANVAS,
+  canvasPixelFactor,
+  chunkBudgetMs,
+  chunkDecodeSpanSec,
   DEFAULT_CHUNK_THRESHOLD,
   DEFAULT_MAX_SEGMENTS_PER_CHUNK,
   VIDEO_FILTERGRAPH_MAX_SEGMENTS,
@@ -106,12 +116,6 @@ export interface ApplyEdlResult {
  *  the cumulative grid asks for (Track 0.14). Reading past the source end simply
  *  yields fewer frames — the `SOURCE_END_TOLERANCE_SEC` skew case, not a crash. */
 export const APPLY_EDL_GRID_READ_GUARD_FRAMES = 4
-
-/** Seconds of lead-in kept before each input's earliest read in a slice when it
- *  is seeked (`-ss`): the seek lands on the prior keyframe and decodes forward,
- *  and the margin keeps a codec's post-seek warm-up (AAC's first frame after a
- *  seek lacks its overlap) out of every trimmed window. */
-export const INPUT_SEEK_MARGIN_SEC = 2
 
 /** The tail that holds a chunk's picture to EXACTLY `frames` frames on the
  *  canvas grid: clone the last frame without limit (a short chain), keep
@@ -671,7 +675,7 @@ export function buildSliceCommand(edl: Edl, segs: readonly EdlSegment[], opts: S
   // Explicit longer timeout: the default 10-min per-spawn would kill a long
   // chunk. The handler's liveness budget (`applyEdlRenderBudgetMs`) is summed
   // from this same per-chunk figure, so "hung" means one thing to both.
-  return { inputIds, needsSilence, filterGraph: fullFilter, outputArgs, inputSeekSec, timeoutMs: chunkRenderTimeoutMs(segs) }
+  return { inputIds, needsSilence, filterGraph: fullFilter, outputArgs, inputSeekSec, timeoutMs: chunkRenderTimeoutMs(edl, segs, { video: wantVideo, audio: emitAudio }, { width: target.width, height: target.height, fps }) }
 }
 
 /** Run a built slice: bind the local source paths, hand ffmpeg the graph as a

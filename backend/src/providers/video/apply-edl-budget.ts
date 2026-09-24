@@ -83,11 +83,115 @@ export function audioMuxTimeoutMs(outputSec: number): number {
   return Math.max(DEFAULT_FFMPEG_TIMEOUT_MS, Math.ceil(outputSec * AUDIO_MUX_SECS_PER_OUTPUT_SEC) * 1000)
 }
 
-/** ffmpeg kill budget per chunk: this many seconds of wall clock per second of
- *  output, with `CHUNK_RENDER_TIMEOUT_FLOOR_MS` as the floor — a hung encode
- *  is killed by its own spawn, not by anything watching from outside. */
-export const CHUNK_RENDER_SECS_PER_OUTPUT_SEC = 6
-export const CHUNK_RENDER_TIMEOUT_FLOOR_MS = 20 * 60_000
+/** Seconds of lead-in kept before each input's earliest read in a slice when it
+ *  is seeked (`-ss`): the seek lands on the prior keyframe and decodes forward,
+ *  and the margin keeps a codec's post-seek warm-up (AAC's first frame after a
+ *  seek lacks its overlap) out of every trimmed window. The render seeks with
+ *  it; the kill budget counts the decode it implies. */
+export const INPUT_SEEK_MARGIN_SEC = 2
+
+/**
+ * ffmpeg kill budget per chunk — a hung encode is killed by its own spawn, not
+ * by anything watching from outside. It is sized from the work the chunk
+ * really does, measured on the production-pinned ffmpeg (2 CPUs, the video
+ * worker's slot shape): wall clock grows with the seconds of OUTPUT it encodes
+ * AND with the seconds of SOURCE it must decode to reach them. Each input is
+ * seeked to its earliest read, then decoded through its latest one, so a
+ * sparse chunk — 30 one-second windows spread across a 3-hour episode — decodes
+ * ~3 hours for 30 s of output (measured 1,340–1,518 s; the old flat 20-minute
+ * floor killed it). An output-only limit cannot see that; a flat floor hides
+ * it on some shapes and budgets ~120 h for a dense 3-hour edit on others.
+ *
+ *   budget = max(FLOOR, MARGIN × (PER_OUTPUT·output + PER_VIDEO_SPAN·videoSpan + PER_AUDIO_SPAN·audioSpan))
+ *
+ * where PER_OUTPUT is the picture ENCODE cost for a slice that renders video,
+ * and the far smaller sound-only cost for an audio slice (option B's PCM
+ * slices, an audio render) — charging an audio slice the video encode rate
+ * would budget a 3-hour audio pass ~22 h for minutes of work.
+ *
+ * The picture terms scale with the CANVAS pixel rate (`canvasPixelFactor`:
+ * 1080p30 = 1, 1080p60 = 2, 4K30 = 4 — a 4K chunk measured ~4.5× the 1080p
+ * cost), so a 1080p hang is caught fast and a 4K chunk still gets the time it
+ * needs. The coefficients are the worst measured per-second costs at 1080p30
+ * (dense cuts, multicam, crossfades, sparse supercuts), and MARGIN covers a busy
+ * box (four ffmpegs share a video worker). Guarded by `apply-edl-budget.test.ts`,
+ * which re-checks every measured shape against its new budget.
+ *
+ * The render's LIVENESS budget is declared at dispatch, before any source is
+ * probed, so it cannot know the canvas: it assumes `LIVENESS_CANVAS` (4K30), and
+ * a chunk's kill budget never assumes more (its pixel factor is capped there).
+ * So the heartbeat and the workflow ceilings are always at least the sum of the
+ * chunk kill budgets — looser for a 1080p render, never tighter.
+ */
+export const CHUNK_RENDER_TIMEOUT_FLOOR_MS = 2 * 60_000
+export const CHUNK_RENDER_MARGIN = 3
+export const CHUNK_RENDER_SECS_PER_OUTPUT_SEC = 1.6
+export const CHUNK_RENDER_SECS_PER_AUDIO_OUTPUT_SEC = 0.1
+export const CHUNK_RENDER_SECS_PER_VIDEO_SPAN_SEC = 0.5
+export const CHUNK_RENDER_SECS_PER_AUDIO_SPAN_SEC = 0.05
+
+/** The canvas a render draws on (width × height at fps). */
+export interface RenderCanvas {
+  readonly width: number
+  readonly height: number
+  readonly fps: number
+}
+
+/** The canvas the dispatch-time liveness budget assumes: 4K30, the ceiling a
+ *  chunk's kill budget is charged at (see `canvasPixelFactor`). */
+export const LIVENESS_CANVAS: RenderCanvas = Object.freeze({ width: 3840, height: 2160, fps: 30 })
+
+const BASE_PIXEL_RATE = 1920 * 1080 * 30
+
+/** How much more picture work a canvas is than 1080p30, floored at 1 (a smaller
+ *  canvas keeps the 1080p30 rates) and capped at `LIVENESS_CANVAS`'s factor so a
+ *  chunk's kill budget can never exceed what the liveness budget assumed (a
+ *  4K60 canvas is charged the 4K30 rate; its measured margin still covers it). */
+export function canvasPixelFactor(canvas: RenderCanvas): number {
+  const rate = (c: RenderCanvas) => Math.max(0, c.width) * Math.max(0, c.height) * Math.max(0, c.fps)
+  const cap = rate(LIVENESS_CANVAS) / BASE_PIXEL_RATE
+  const f = rate(canvas) / BASE_PIXEL_RATE
+  return Number.isFinite(f) ? Math.min(cap, Math.max(1, f)) : cap
+}
+
+/** Which tracks a slice decodes: a picture-only chunk of a multi-chunk video
+ *  render reads no sound, an audio slice reads no picture. */
+export interface ChunkReads {
+  readonly video: boolean
+  readonly audio: boolean
+}
+
+/**
+ * Seconds of SOURCE one slice decodes, per track kind: for every input, from
+ * its seek point (earliest read − `INPUT_SEEK_MARGIN_SEC`, floored at 0) to its
+ * latest read end — exactly how the render seeks and trims. Pure; counts every
+ * read the segments name (the render may skip a zero-frame picture read or a
+ * soundless source, so this is never less than the real decode).
+ */
+export function chunkDecodeSpanSec(
+  edl: Edl,
+  segs: readonly EdlSegment[],
+  reads: ChunkReads,
+): { readonly videoSec: number; readonly audioSec: number } {
+  const masterAudioId = edl.sources.find((s) => s.role === "master-audio")?.id
+  const offsetOf = (id: string): number => edl.sources.find((s) => s.id === id)?.offsetMs ?? 0
+  const windows = { video: new Map<string, [number, number]>(), audio: new Map<string, [number, number]>() }
+  const note = (kind: "video" | "audio", id: string | undefined, seg: EdlSegment) => {
+    if (!id) return
+    const off = offsetOf(id)
+    const start = Math.max(0, secs(seg.inMs - off))
+    const end = Math.max(start, secs(seg.outMs - off))
+    const w = windows[kind].get(id)
+    windows[kind].set(id, w ? [Math.min(w[0], start), Math.max(w[1], end)] : [start, end])
+  }
+  for (const seg of segs) {
+    if (reads.video) note("video", seg.video, seg)
+    if (reads.audio) note("audio", audioSourceId(edl, seg, masterAudioId), seg)
+  }
+  const span = (m: Map<string, [number, number]>) =>
+    [...m.values()].reduce((acc, [start, end]) => acc + (end - Math.max(0, start - INPUT_SEEK_MARGIN_SEC)), 0)
+  return { videoSec: span(windows.video), audioSec: span(windows.audio) }
+}
 
 export const secs = (ms: number): number => ms / 1000
 
@@ -149,9 +253,39 @@ export function chunkOutputSec(segs: readonly EdlSegment[]): number {
   return segs.reduce((acc, s, i) => acc + secs(s.outMs - s.inMs) - (i > 0 ? boundaryOverlapSecs(segs[i], segs[i - 1]) : 0), 0)
 }
 
-/** The ffmpeg kill budget `renderSlice` gives one chunk. */
-export function chunkRenderTimeoutMs(segs: readonly EdlSegment[]): number {
-  return Math.max(CHUNK_RENDER_TIMEOUT_FLOOR_MS, Math.ceil(chunkOutputSec(segs) * CHUNK_RENDER_SECS_PER_OUTPUT_SEC) * 1000)
+/** The kill budget for a slice's WORK — its output seconds and the seconds of
+ *  source it decodes per track kind (see `CHUNK_RENDER_TIMEOUT_FLOOR_MS` for
+ *  the formula and how it was measured). Exported so the measured table can be
+ *  re-checked against it directly. */
+export function chunkBudgetMs(work: {
+  readonly outputSec: number
+  /** Does the slice encode picture? (false: an audio-only slice) */
+  readonly encodesVideo: boolean
+  readonly videoSpanSec: number
+  readonly audioSpanSec: number
+  /** `canvasPixelFactor` of the canvas; scales the picture terms only. */
+  readonly pixelFactor: number
+}): number {
+  const pf = Math.max(1, work.pixelFactor)
+  const perOutput = work.encodesVideo ? CHUNK_RENDER_SECS_PER_OUTPUT_SEC * pf : CHUNK_RENDER_SECS_PER_AUDIO_OUTPUT_SEC
+  const workSec = perOutput * work.outputSec
+    + CHUNK_RENDER_SECS_PER_VIDEO_SPAN_SEC * pf * work.videoSpanSec
+    + CHUNK_RENDER_SECS_PER_AUDIO_SPAN_SEC * work.audioSpanSec
+  return Math.max(CHUNK_RENDER_TIMEOUT_FLOOR_MS, Math.ceil(CHUNK_RENDER_MARGIN * workSec) * 1000)
+}
+
+/** The ffmpeg kill budget `renderSlice` gives one chunk: `chunkBudgetMs` of the
+ *  chunk's output and the source spans it decodes for the tracks it reads, on
+ *  its canvas. */
+export function chunkRenderTimeoutMs(edl: Edl, segs: readonly EdlSegment[], reads: ChunkReads, canvas: RenderCanvas): number {
+  const { videoSec, audioSec } = chunkDecodeSpanSec(edl, segs, reads)
+  return chunkBudgetMs({
+    outputSec: chunkOutputSec(segs),
+    encodesVideo: reads.video,
+    videoSpanSec: videoSec,
+    audioSpanSec: audioSec,
+    pixelFactor: canvasPixelFactor(canvas),
+  })
 }
 
 /** Per referenced source, run in sequence before the first chunk: one fetch
@@ -206,7 +340,15 @@ export function applyEdlRenderBudgetMs(
 ): number {
   const output = options.output === "audio" ? "audio" : "video"
   const chunks = resolveChunksForOutput(edl.segments, output, options)
-  const render = chunks.reduce((acc, chunk) => acc + chunkRenderTimeoutMs(chunk), 0)
+  // The same reads each slice makes: a multi-chunk video render's chunks are
+  // picture-only (option B renders the sound separately); a single-pass video
+  // render reads both; an audio render reads sound only.
+  const chunkReads: ChunkReads = output === "audio"
+    ? { video: false, audio: true }
+    : { video: true, audio: chunks.length === 1 }
+  // Dispatch-time: no source is probed yet, so every chunk is charged at the
+  // liveness canvas — never less than the kill budget it will get.
+  const render = chunks.reduce((acc, chunk) => acc + chunkRenderTimeoutMs(edl, chunk, chunkReads, LIVENESS_CANVAS), 0)
   const prep = referencedSourceIds(edl, output).size * APPLY_EDL_PER_SOURCE_PREP_MS
     + (output === "video" ? APPLY_EDL_CANVAS_PROBE_MS : 0)
   // A chunked render probes the ffmpeg build once (its resume keys hash it),
@@ -216,7 +358,7 @@ export function applyEdlRenderBudgetMs(
   // at its own kill budget) and joins/encodes/muxes them in one step (option
   // B) — exactly the steps `applyEdl` runs in that case. Keep in lockstep.
   const audioMux = output === "video" && chunks.length > 1
-    ? resolveChunksForOutput(edl.segments, "audio", options).reduce((acc, c) => acc + chunkRenderTimeoutMs(c), 0)
+    ? resolveChunksForOutput(edl.segments, "audio", options).reduce((acc, c) => acc + chunkRenderTimeoutMs(edl, c, { video: false, audio: true }, LIVENESS_CANVAS), 0)
       + audioMuxTimeoutMs(edlDurationMs(edl) / 1000)
     : 0
   return render + prep + chunked + audioMux
