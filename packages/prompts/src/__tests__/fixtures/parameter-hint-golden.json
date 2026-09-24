@@ -2896,7 +2896,7 @@
         }
       },
       "ctx": null,
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot"
+      "expected": "hard cut (no transition, instantaneous switch from first shot to second shot; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
     },
     {
       "key": "transition/id:auto",
@@ -2922,7 +2922,7 @@
         }
       },
       "ctx": null,
-      "expected": "the first and second scenes blend as a translucent double exposure where both images coexist semi-transparently on the frame, the first image then gradually fades out leaving the second image fully resolved"
+      "expected": "double exposure (the first and second scenes blend as a translucent double exposure where both images coexist semi-transparently on the frame, the first image then gradually fades out leaving the second image fully resolved)"
     },
     {
       "key": "transition/id:dream-ripple",
@@ -2935,7 +2935,7 @@
         }
       },
       "ctx": null,
-      "expected": "a circular ripple radiates outward across the frame as if the image were the surface of water, and where the ripple passes the first scene is replaced by the second scene"
+      "expected": "dream ripple (a circular ripple radiates outward across the frame as if the image were the surface of water, and where the ripple passes the first scene is replaced by the second scene)"
     },
     {
       "key": "transition/multi-pick",
@@ -2951,7 +2951,7 @@
         }
       },
       "ctx": null,
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot, and smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in"
+      "expected": "hard cut (no transition, instantaneous switch from first shot to second shot), and cross-dissolve (smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in)"
     },
     {
       "key": "transition/pre-post",
@@ -2966,7 +2966,7 @@
         }
       },
       "ctx": null,
-      "expected": "shot on location, no transition, hard cut, instantaneous switch from first shot to second shot, no text overlays"
+      "expected": "shot on location, hard cut (no transition, instantaneous switch from first shot to second shot; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), no text overlays"
     },
     {
       "key": "transition/timing",
@@ -2982,7 +2982,7 @@
         }
       },
       "ctx": null,
-      "expected": "smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in, the transition occurs in the middle of the clip, lasting approximately 1 second, with dynamic energy and assertive flourish"
+      "expected": "cross-dissolve (smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in), the transition occurs in the middle of the clip, lasting approximately 1 second, with dynamic energy and assertive flourish"
     },
     {
       "key": "transition/timing-auto",
@@ -2998,7 +2998,7 @@
         }
       },
       "ctx": null,
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot"
+      "expected": "hard cut (no transition, instantaneous switch from first shot to second shot; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
     },
     {
       "key": "transition/timing-instant",
@@ -3014,7 +3014,7 @@
         }
       },
       "ctx": null,
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot, the transition occurs in the middle of the clip, with dynamic energy and assertive flourish"
+      "expected": "hard cut (no transition, instantaneous switch from first shot to second shot; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of the clip"
     },
     {
       "key": "transition/with-ctx",
@@ -3058,7 +3058,7 @@
           }
         ]
       },
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot, starting from wide shot, full body of the subject with visible surroundings, ending at with a calm, centered expression"
+      "expected": "hard cut (no transition, instantaneous switch from first shot to second shot; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), starting from wide shot, full body of the subject with visible surroundings, ending at with a calm, centered expression"
     },
     {
       "key": "transition/with-ctx-timing-multi-pick",
@@ -3110,7 +3110,7 @@
           }
         ]
       },
-      "expected": "on the beat, no transition, hard cut, instantaneous switch from first shot to second shot, and smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in, the transition occurs at the end of the clip, lasting approximately 3 seconds, with subtle restrained energy and minimal flourish, starting from wide shot, full body of the subject with visible surroundings, ending at with a calm, centered expression, hold the last frame"
+      "expected": "on the beat, hard cut (no transition, instantaneous switch from first shot to second shot), and cross-dissolve (smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in), the transition occurs at the end of the clip, lasting approximately 3 seconds, with subtle restrained energy and minimal flourish, starting from wide shot, full body of the subject with visible surroundings, ending at with a calm, centered expression, hold the last frame"
     },
     {
       "key": "unknown/type",

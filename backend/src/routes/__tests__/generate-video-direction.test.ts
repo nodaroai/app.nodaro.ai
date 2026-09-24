@@ -87,8 +87,10 @@ import {
   getPersonTerm,
   getStylePromptHint,
   getStyleTerm,
-  getTransitionPromptHint,
   getTransitionTerm,
+  getCameraMotionPromptHint,
+  getCameraMotionTerm,
+  renderTransitionBases,
   buildAtmosphereHints,
   buildPhotographerHints,
   getStylingPromptHint,
@@ -160,6 +162,7 @@ function mockJobInsert(result: { data: unknown; error: unknown }) {
 const USER = "00000000-0000-4000-8000-000000000001"
 const STYLE = "cinematic"
 const TRANSITION = "cross-dissolve"
+const CAMERA_MOTION = "handheld"
 const PHOTOGRAPHER = "tim-walker"
 
 async function post(payload: Record<string, unknown>) {
@@ -234,12 +237,12 @@ describe("POST /v1/generate-video — the direction channel", () => {
     const { queued } = await post({
       ...BASE,
       prompt: "a knight rides",
-      direction: { style: STYLE, transition: TRANSITION },
+      direction: { style: STYLE, cameraMotion: CAMERA_MOTION },
     })
     const prompt = queued!.prompt as string
     expect(prompt).toContain(getStylePromptHint(STYLE))
-    expect(prompt).toContain(getTransitionTerm(TRANSITION))
-    expect(prompt).not.toContain(getTransitionPromptHint(TRANSITION))
+    expect(prompt).toContain(getCameraMotionTerm(CAMERA_MOTION))
+    expect(prompt).not.toContain(getCameraMotionPromptHint(CAMERA_MOTION))
   })
 })
 
@@ -440,11 +443,21 @@ describe("POST /v1/generate-video — wire tolerance", () => {
     const { queued } = await post({
       ...BASE,
       prompt: "a knight rides",
-      direction: { transition: TRANSITION },
+      direction: { cameraMotion: CAMERA_MOTION },
     })
-    expect(queued!.prompt).toBe(`a knight rides. ${getTransitionTerm(TRANSITION)}`)
+    expect(queued!.prompt).toBe(`a knight rides. ${getCameraMotionTerm(CAMERA_MOTION)}`)
     // …and the look family is NOT compacted along with it.
     expect(getStyleTerm(STYLE)).not.toBe(getStylePromptHint(STYLE))
+  })
+
+  it("folds a transition as `term (hint)` — the bare term did not steer the model", async () => {
+    const { queued } = await post({
+      ...BASE,
+      prompt: "a knight rides",
+      direction: { transition: TRANSITION },
+    })
+    expect(queued!.prompt).toBe(`a knight rides. ${renderTransitionBases([TRANSITION])[0]}`)
+    expect(queued!.prompt).toContain(`${getTransitionTerm(TRANSITION)} (`)
   })
 })
 
