@@ -145,8 +145,8 @@ describe("transitions in a video prompt — `term (hint)`", () => {
       "lasting approximately 1 second, with natural timing",
     )
     expect(c("freeze-frame-jump")).toBe(
-      "freeze-frame time jump (motion arrests mid-action, the frame holds frozen for a beat, then snaps to a new " +
-      "moment hours or days later in the same scene with subjects in different positions), " +
+      "freeze-frame time jump (all motion stops mid-action and the picture holds still for a beat; only then does it " +
+      "jump to the same view hours or days later, everything in new positions, and motion resumes), " +
       "lasting approximately 1 second, with natural timing",
     )
     expect(c("shatter-glass")).toBe(

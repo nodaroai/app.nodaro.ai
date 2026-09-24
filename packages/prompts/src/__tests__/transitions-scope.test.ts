@@ -37,6 +37,18 @@ describe("approved row bodies", () => {
     )
   })
 
+  it("freeze-frame-jump (stays a timed transition, not a cut)", () => {
+    expect(getTransitionPromptHint("freeze-frame-jump")).toBe(
+      "freeze-frame transition: all motion stops mid-action and the picture holds still for a beat; only then does it " +
+        "jump to the same view hours or days later, everything in new positions, and motion resumes",
+    )
+    expect(composeTransitionHintFromConnections("freeze-frame-jump", [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      "freeze-frame time jump (all motion stops mid-action and the picture holds still for a beat; only then does it " +
+        "jump to the same view hours or days later, everything in new positions, and motion resumes), " +
+        "the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing",
+    )
+  })
+
   it("zoom-into-mouth drops only 'the throat'", () => {
     expect(getTransitionPromptHint("zoom-into-mouth")).toBe(
       "the camera pushes into the subject's open mouth, the dark interior fills the frame, and the camera passes " +
