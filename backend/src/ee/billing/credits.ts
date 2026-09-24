@@ -2205,11 +2205,17 @@ export class CreditsService {
       return { allowed: true, balance: 999999, watermark: false }
     }
 
-    // Get user's profile
+    // Check the same account reserveCredits will debit. Workflow preflights
+    // carry the resolved deployment context but do not pass through the route
+    // guard, which already loads the payer's profile. The requester still owns
+    // the job and remains the identity passed to the shared credit check.
+    const profileUserId = surface?.billingContext?.payer === "deployment"
+      ? surface.billingContext.payerId
+      : userId
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("tier, subscription_tier, lifetime_topup_credits, subscription_credits, topup_credits, daily_spent_credits, last_daily_reset, app_credits_allowance")
-      .eq("id", userId)
+      .eq("id", profileUserId)
       .single()
 
     if (profileError || !profile) {

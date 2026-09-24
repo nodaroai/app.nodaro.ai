@@ -2,6 +2,8 @@
 
 A cloud deployment with a designated payer can authorize customer spending through its own wallet. The deployment's prepaid pool still pays for platform usage. The external wallet controls each customer's available budget across products.
 
+Single-node requests and workflow nodes check the deployment payer's prepaid pool before reserving against the customer's external wallet. The customer's local credit balance is not a spending requirement. An insufficient deployment pool can prevent a wallet reserve call; the wallet's reserve decision remains authoritative for the customer's shared budget.
+
 Configure `DEPLOYMENT_WALLET_URL`, `DEPLOYMENT_WALLET_TOKEN` and `DEPLOYMENT_WALLET_SSO_PROVIDER` together on the API and workers. The URL must use HTTPS. The token is a dedicated server secret. `DEPLOYMENT_WALLET_TIMEOUT_MS` defaults to 10000 and accepts 1000–30000. Leave all three authority settings unset to retain existing billing. Local per-user allowance enforcement must be off; incompatible configuration refuses activation.
 
 The endpoint accepts POST JSON with `contract: 1` and `unit: "nodaro_credit"`. Authenticate `Authorization: Bearer <token>`. Never interpret these credits as another product's tokens without an explicit conversion owned by the external wallet.
