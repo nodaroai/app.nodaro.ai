@@ -1,5 +1,6 @@
 "use client"
 
+import { LookArt } from "../look-previews/look-art"
 import { memo, useId, useMemo, useState } from "react"
 import { Search } from "lucide-react"
 import { FRAMINGS as BASE_FRAMINGS, FRAMING_CATEGORY_ORDER, FRAMING_CATEGORY_LABELS, FRAMING_FIELD_BY_CATEGORY, MAX_SELECTED_BY_FRAMING_CATEGORY, type Framing, type FramingCategory, type FramingValue } from "@nodaro/prompts"
@@ -230,12 +231,12 @@ function CategorySection({
                     : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                 )}
               >
-                <FramingPreview framingId={framing.id} className="w-full aspect-square" />
+                <LookArt pickerKey="framing" id={framing.id} className="w-full aspect-video" width={240} fallback={<FramingPreview framingId={framing.id} className="w-full aspect-square" />} />
                 <FitText
                   text={entryLabel}
                   className={cn(
                     "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center",
-                    selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
+                    selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                   )}
                 />
               </button>

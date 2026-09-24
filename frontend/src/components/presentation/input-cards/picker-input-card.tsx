@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { ChevronDown, Pencil, X } from "lucide-react"
 import { pickIds } from "@nodaro/shared"
 import {
@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils"
 import {
   getParameterPickerMeta,
   useCatalogPacksVersion,
+  useHasLookPreviews,
   type MultiDimParameterPickerMeta,
   type MultiDimValue,
   type ParameterPickerMeta,
@@ -127,6 +128,12 @@ function SinglePickerCard({
     writeValue(meta.defaultValue)
   }
 
+  // A picker may have no icon at all, or only for some options (a rendered
+  // look preview that this edition does not register) — null means "no icon".
+  const iconFor = (id: string): ReactNode => meta.renderIcon?.(id) ?? null
+  // Rendered look previews read better filling the tile than in the 56px icon box.
+  const bigArt = useHasLookPreviews(meta.nodeType)
+
   const grid = (
     <DimensionTileGrid
       entries={filteredEntries}
@@ -137,18 +144,20 @@ function SinglePickerCard({
           if (displayMode === "modal") setModalOpen(false)
         }
       }}
-      renderIcon={(entry) =>
-        meta.renderIcon ? (
-          <div className="size-full">{meta.renderIcon(entry.id)}</div>
+      renderIcon={(entry) => {
+        const icon = iconFor(entry.id)
+        return icon !== null ? (
+          <div className="size-full">{icon}</div>
         ) : (
           <div className="flex size-full items-center justify-center text-[10px] font-medium text-muted-foreground/80 px-1 text-center leading-tight">
             {resolveLabel(entry.id, entry.label)}
           </div>
         )
-      }
+      }}
       searchPlaceholder={`Search ${meta.label.toLowerCase()}…`}
       catalog={meta.catalogId}
       gridClassName="grid grid-cols-3 sm:grid-cols-4 gap-2"
+      iconClassName={bigArt ? "w-full aspect-square" : undefined}
     />
   )
 
@@ -172,9 +181,9 @@ function SinglePickerCard({
           >
             <SelectTrigger className="flex-1 h-9">
               <div className="flex items-center gap-2 min-w-0">
-                {meta.renderIcon && (
+                {iconFor(currentValue) !== null && (
                   <div className="size-5 shrink-0 flex items-center justify-center [&>*]:size-full">
-                    {meta.renderIcon(currentValue)}
+                    {iconFor(currentValue)}
                   </div>
                 )}
                 <SelectValue placeholder={`Select ${meta.label.toLowerCase()}…`}>
@@ -186,9 +195,9 @@ function SinglePickerCard({
               {filteredEntries.map((entry) => (
                 <SelectItem key={entry.id} value={entry.id}>
                   <span className="flex items-center gap-2">
-                    {meta.renderIcon && (
+                    {iconFor(entry.id) !== null && (
                       <span className="size-4 shrink-0 flex items-center justify-center [&>*]:size-full">
-                        {meta.renderIcon(entry.id)}
+                        {iconFor(entry.id)}
                       </span>
                     )}
                     <span>{resolveLabel(entry.id, entry.label)}</span>
@@ -240,9 +249,7 @@ function SinglePickerCard({
             )}
             aria-label={`Change ${meta.label}`}
           >
-            {meta.renderIcon ? (
-              meta.renderIcon(currentValue)
-            ) : (
+            {iconFor(currentValue) ?? (
               <span className="text-[10px] font-medium text-muted-foreground/80 text-center px-1 leading-tight">
                 {selectedLabel}
               </span>

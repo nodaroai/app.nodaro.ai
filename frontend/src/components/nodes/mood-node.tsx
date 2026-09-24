@@ -6,7 +6,7 @@ import { Smile } from "lucide-react"
 import { getMood, getMoodLabel } from "@nodaro/prompts"
 import { pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
-import { MoodEmoji } from "@/lib/picker-ui"
+import { LookArt, MoodEmoji, useLookPreviewUrl } from "@/lib/picker-ui"
 import type { MoodData } from "@/types/nodes"
 
 function MoodNodeComponent({ id, data, selected }: NodeProps) {
@@ -15,6 +15,9 @@ function MoodNodeComponent({ id, data, selected }: NodeProps) {
   const primaryId = ids[0] || "calm"
   const extraIds = ids.slice(1)
   const description = getMood(primaryId)?.description
+  // With a rendered preview the node shows it full width (the same picture as
+  // the picker tile); without one it keeps the emoji beside the label.
+  const hasArt = useLookPreviewUrl("mood", primaryId) !== undefined
 
   return (
     <ParameterNodeShell id={id} label={nodeData.label} icon={<Smile />} handleId="out" selected={selected} fluidWidth>
@@ -35,8 +38,17 @@ function MoodNodeComponent({ id, data, selected }: NodeProps) {
             </p>
           )}
         </div>
-        <MoodEmoji moodId={primaryId} className="size-8 shrink-0" />
+        {!hasArt && <MoodEmoji moodId={primaryId} className="size-8 shrink-0" />}
       </div>
+      {hasArt && (
+        <LookArt
+          pickerKey="mood"
+          id={primaryId}
+          className="w-full aspect-[16/9]"
+          width={640}
+          fallback={<MoodEmoji moodId={primaryId} className="size-8 shrink-0" />}
+        />
+      )}
     </ParameterNodeShell>
   )
 }

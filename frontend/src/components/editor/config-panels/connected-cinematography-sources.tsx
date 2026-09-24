@@ -10,7 +10,7 @@ import { LensPreview } from "@/lib/picker-ui"
 import { CameraFormatPreview } from "@/lib/picker-ui"
 import { ColorLookPreview } from "@/lib/picker-ui"
 import { AtmospherePreview } from "@/lib/picker-ui"
-import { StylePreview } from "@/lib/picker-ui"
+import { LookArt, StylePreview } from "@/lib/picker-ui"
 import { TemporalPreview } from "@/lib/picker-ui"
 import { CameraMotionPreview } from "@/lib/picker-ui"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
@@ -60,7 +60,7 @@ function collectSources(
           icon: Video,
           title: `${srcNodeLabel}: ${getCameraMotionLabel(motionId)}`,
           description: motion?.description ?? "",
-          preview: <CameraMotionPreview motionId={motionId} className="w-full aspect-[16/9]" />,
+          preview: <LookArt pickerKey="camera-motion" id={motionId} className="w-full aspect-[16/9]" width={480} fallback={<CameraMotionPreview motionId={motionId} className="w-full aspect-[16/9]" />} />,
         })
         break
       }
@@ -78,7 +78,7 @@ function collectSources(
             icon: Frame,
             title: `${srcNodeLabel} · ${FRAMING_CATEGORY_LABELS[category]}: ${entry.label}`,
             description: entry.description,
-            preview: <FramingPreview framingId={id} className="w-full aspect-[16/9]" />,
+            preview: <LookArt pickerKey="framing" id={id} className="w-full aspect-[16/9]" width={480} fallback={<FramingPreview framingId={id} className="w-full aspect-[16/9]" />} />,
           })
         }
         break
@@ -95,7 +95,7 @@ function collectSources(
             icon: Lightbulb,
             title: `${srcNodeLabel} · ${LIGHTING_CATEGORY_LABELS[category]}: ${entry.label}`,
             description: entry.description,
-            preview: <LightingPreview lightingId={id} className="w-full aspect-[16/9]" />,
+            preview: <LookArt pickerKey="lighting" id={id} className="w-full aspect-[16/9]" width={480} fallback={<LightingPreview lightingId={id} className="w-full aspect-[16/9]" />} />,
           })
         }
         break
@@ -127,7 +127,7 @@ function collectSources(
           icon: Aperture,
           title: `${srcNodeLabel}: ${getLensLabel(id)}`,
           description: entry.description,
-          preview: <LensPreview lensId={id} className="w-full aspect-[16/9]" />,
+          preview: <LookArt pickerKey="lens" id={id} className="w-full aspect-[16/9]" width={480} fallback={<LensPreview lensId={id} className="w-full aspect-[16/9]" />} />,
         })
         break
       }
@@ -141,7 +141,7 @@ function collectSources(
           icon: Film,
           title: `${srcNodeLabel}: ${getCameraFormatLabel(id)}`,
           description: entry.description,
-          preview: <CameraFormatPreview cameraFormatId={id} className="w-full aspect-[16/9]" />,
+          preview: <LookArt pickerKey="camera-format" id={id} className="w-full aspect-[16/9]" width={480} fallback={<CameraFormatPreview cameraFormatId={id} className="w-full aspect-[16/9]" />} />,
         })
         break
       }
@@ -155,7 +155,7 @@ function collectSources(
           icon: SwatchBook,
           title: `${srcNodeLabel}: ${getColorLookLabel(id)}`,
           description: entry.description,
-          preview: <ColorLookPreview colorLookId={id} className="w-full aspect-[16/9]" />,
+          preview: <LookArt pickerKey="color-look" id={id} className="w-full aspect-[16/9]" width={480} fallback={<ColorLookPreview colorLookId={id} className="w-full aspect-[16/9]" />} />,
         })
         break
       }
@@ -169,7 +169,7 @@ function collectSources(
           icon: CloudFog,
           title: `${srcNodeLabel}: ${getAtmosphereLabel(id)}`,
           description: entry.description,
-          preview: <AtmospherePreview atmosphereId={id} className="w-full aspect-[16/9]" />,
+          preview: <LookArt pickerKey="atmosphere" id={id} className="w-full aspect-[16/9]" width={480} fallback={<AtmospherePreview atmosphereId={id} className="w-full aspect-[16/9]" />} />,
         })
         break
       }
@@ -183,7 +183,7 @@ function collectSources(
           icon: Brush,
           title: `${srcNodeLabel}: ${getStyleLabel(id)}`,
           description: entry.description,
-          preview: <StylePreview styleId={id} className="w-full aspect-[16/9]" />,
+          preview: <LookArt pickerKey="style" id={id} className="w-full aspect-[16/9]" width={480} fallback={<StylePreview styleId={id} className="w-full aspect-[16/9]" />} />,
         })
         break
       }

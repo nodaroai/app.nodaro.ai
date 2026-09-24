@@ -82,7 +82,7 @@ import { LoopSubjectPicker } from "@/lib/picker-ui"
 import { PersonPicker } from "@/lib/picker-ui"
 import { MOODS as BASE_MOODS, POSES as BASE_POSES, buildFramingHints, getLensPromptHint, getCameraFormatPromptHint, buildLightingHints, getColorLookPromptHint, buildAtmosphereHints, buildActionFxHints, getStylePromptHint, getSettingPromptHint, getLoopSubjectPromptHint, buildMoodHints, buildPoseHints, buildStylingHints, buildTemporalHints, buildMaterialHints, getPhotoGenrePromptHint, getBackdropPromptHint, buildHeldPropHints, buildPhotographerHints, buildAestheticHints, getEraPromptHint, buildExposureHints, getRenderQualityPromptHint, getCompositionEffectPromptHint, buildPostProcessHints, buildPersonHints, TRANSITION_POSITIONS, TRANSITION_DURATIONS, TRANSITION_INTENSITIES, CHARACTER_FX_POSITIONS, CHARACTER_FX_DURATIONS, CHARACTER_FX_INTENSITIES, CHARACTER_MOTION_POSITIONS, CHARACTER_MOTION_PACES, CHARACTER_MOTION_MAX_PICKS } from "@nodaro/prompts"
 import { getAnimal, getVehicle, getWeapon, getFurniture } from "@nodaro/shared"
-import { MoodEmoji } from "@/lib/picker-ui"
+import { LookArt, MoodEmoji, useHasLookPreviews } from "@/lib/picker-ui"
 import { DimensionTileGrid } from "@/lib/picker-ui"
 import { PoseIcon } from "@/lib/picker-ui"
 import { StylingPicker } from "@/lib/picker-ui"
@@ -721,6 +721,7 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
 export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
   const t = useT()
   const MOODS = useCuratedEntries("mood", BASE_MOODS)
+  const moodArt = useHasLookPreviews("mood")
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -759,11 +760,14 @@ export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
         entries={MOODS}
         value={data.mood}
         onChange={(v) => onUpdate({ mood: v })}
-        renderIcon={(entry) => <MoodEmoji moodId={entry.id} className="size-full" />}
+        renderIcon={(entry) => (
+          <LookArt pickerKey="mood" id={entry.id} className="size-full rounded-md" width={160} fallback={<MoodEmoji moodId={entry.id} className="size-full" />} />
+        )}
         searchPlaceholder={t("paramcfg.searchMoods")}
         gridClassName="grid grid-cols-3 gap-2"
         catalog="mood"
         maxSelected={2}
+        iconClassName={moodArt ? "w-full aspect-square" : undefined}
       />
     </div>
   )

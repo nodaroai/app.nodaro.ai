@@ -7,6 +7,7 @@ import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { StylePreview } from "../previews/style-preview"
+import { LookArt } from "../look-previews/look-art"
 import { useLocalizedCatalog } from "../i18n"
 import { useCuratedEntries } from "../curated.js"
 
@@ -71,12 +72,17 @@ export const StylePicker = memo(function StylePicker({
                   : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
               )}
             >
-              <StylePreview styleId={style.id} className="w-full aspect-square" />
+              <LookArt
+                pickerKey="style"
+                id={style.id}
+                className="w-full aspect-square rounded-md"
+                fallback={<StylePreview styleId={style.id} className="w-full aspect-square" />}
+              />
               <FitText
                 text={label}
                 className={cn(
                   "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center",
-                  selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
+                  selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               />
             </button>

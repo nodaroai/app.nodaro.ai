@@ -9,6 +9,8 @@ import "@/lib/i18n-bootstrap"
 // through subscribeCatalogPacks the moment the registration lands). Safety
 // never depended on this — the server refuses foreign ids on every run lane.
 import { bootstrapCatalogs } from "@/lib/catalog-bootstrap"
+// Rendered look previews (Cloud only; a self-hosted install keeps the drawn ones).
+import { bootstrapLookPreviews } from "@/lib/look-previews-bootstrap"
 
 // Auto-reload on stale chunks after deployment.
 // Vite fires this when any preloaded JS/CSS dep returns 404.
@@ -66,6 +68,7 @@ const ReactQueryDevtools = lazy(() =>
 )
 
 void bootstrapCatalogs()
+bootstrapLookPreviews()
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

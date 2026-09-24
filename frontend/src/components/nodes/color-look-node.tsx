@@ -5,7 +5,7 @@ import type { NodeProps } from "@xyflow/react"
 import { SwatchBook } from "lucide-react"
 import { getColorLook, getColorLookLabel } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
-import { ColorLookPreview } from "@/lib/picker-ui"
+import { ColorLookPreview, LookArt } from "@/lib/picker-ui"
 import type { ColorLookData } from "@/types/nodes"
 
 function ColorLookNodeComponent({ id, data, selected }: NodeProps) {
@@ -18,7 +18,7 @@ function ColorLookNodeComponent({ id, data, selected }: NodeProps) {
       <p className="text-foreground text-sm font-medium">
         {getColorLookLabel(colorLookId)}
       </p>
-      <ColorLookPreview colorLookId={colorLookId} className="w-full aspect-[16/9]" />
+      <LookArt pickerKey="color-look" id={colorLookId} className="w-full aspect-[16/9]" width={640} fallback={<ColorLookPreview colorLookId={colorLookId} className="w-full aspect-[16/9]" />} />
       {description && (
         <p className="text-muted-foreground text-[11px] leading-snug">
           {description}

@@ -178,7 +178,7 @@ function CategorySection({
                 text={entryLabel}
                 className={cn(
                   "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center",
-                  selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
+                  selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               />
             </button>
