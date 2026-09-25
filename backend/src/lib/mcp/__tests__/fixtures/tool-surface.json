@@ -17,6 +17,9 @@
   "audio_sync",
   "browse_gallery",
   "browse_uploads",
+  "build_ugc_cards",
+  "build_ugc_clips",
+  "build_ugc_creator",
   "check_balance",
   "clone_studio_production",
   "combine_videos",
@@ -191,6 +194,9 @@
   "wait_for_job"
  ],
  "cloud/jobs": [
+  "build_ugc_cards",
+  "build_ugc_clips",
+  "build_ugc_creator",
   "diagnose_run",
   "get_job",
   "get_node_skill",
@@ -211,6 +217,9 @@
   "wait_for_job"
  ],
  "cloud/none": [
+  "build_ugc_cards",
+  "build_ugc_clips",
+  "build_ugc_creator",
   "get_node_skill",
   "get_picker_catalog",
   "get_recast_authoring_skill",

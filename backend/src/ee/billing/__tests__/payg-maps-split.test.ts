@@ -9,6 +9,7 @@ import {
   STRIPE_PRODUCTS,
   TOP_UPS,
 } from "../stripe-config.js"
+import { TIER_ORDER } from "../model-availability.js"
 import {
   TIER_PIPELINE_PARALLELISM,
   TIER_MAX_PIPELINE_COST_CREDITS,
@@ -40,11 +41,8 @@ describe("payg entitlement maps", () => {
     expect(TIER_MAX_PIPELINE_COST_CREDITS.payg).toBe(3000)
   })
 
-  it("TIER_ORDER slots payg between free and basic (text-pin — const is not exported)", () => {
-    const credits = read("../credits.ts")
-    expect(credits).toMatch(
-      /TIER_ORDER = \["free", "payg", "basic", "standard", "pro", "business"\]/
-    )
+  it("TIER_ORDER slots payg between free and basic", () => {
+    expect(TIER_ORDER).toEqual(["free", "payg", "basic", "standard", "pro", "business"])
   })
 })
 
@@ -75,7 +73,7 @@ describe("pre-existing map asymmetries stay pinned (audit F9e)", () => {
   it("TIER_STORAGE_LIMITS carries enterprise; TIER_PARALLELISM and TIER_ORDER do not", () => {
     expect("enterprise" in TIER_STORAGE_LIMITS).toBe(true)
     expect("enterprise" in TIER_PARALLELISM).toBe(false)
-    expect(read("../credits.ts")).not.toMatch(/TIER_ORDER = \[[^\]]*enterprise/)
+    expect(TIER_ORDER as readonly string[]).not.toContain("enterprise")
   })
 
   it("TIER_LLM_LIMITS is deleted (was a dead constant — zero imports)", () => {
