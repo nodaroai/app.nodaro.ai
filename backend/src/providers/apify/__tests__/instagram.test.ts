@@ -136,7 +136,10 @@ describe("runInstagramScrape", () => {
   })
 
   it("calls the actor and returns projected posts", async () => {
-    mocks.datasetListItems.mockResolvedValueOnce({ items: [rawPost({ timestamp: "2026-09-18T06:00:00.000Z" })] })
+    // A post from a day ago — inside "7d" on any date. A fixed date here aged
+    // out of the window on 2026-09-25 and failed every run after it.
+    const aDayAgo = new Date(Date.now() - 24 * 3_600_000).toISOString()
+    mocks.datasetListItems.mockResolvedValueOnce({ items: [rawPost({ timestamp: aDayAgo })] })
     const res = await runInstagramScrape({ mode: "profile", targets: ["nike"], count: 3, period: "7d" })
     expect(mocks.actorFn).toHaveBeenCalledWith(INSTAGRAM_ACTOR.apifyActorId)
     expect(res.json).toHaveLength(1)
