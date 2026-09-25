@@ -156,14 +156,14 @@ function SlideshowNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex-1 min-h-24 flex flex-col items-center justify-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/5 p-3 text-center">
                 <div className="w-7 h-7 rounded-md bg-red-500/15 border border-red-500/50 flex items-center justify-center text-red-500 text-sm">!</div>
                 <span className="text-[11px] text-red-400 font-medium">{t("node.only1Image")}</span>
-                <span className="text-[10px] text-muted-foreground leading-snug">{t("node.slideshowNeedsAtLeast2")} <span className="text-foreground">{t("node.stillToVideo")}</span> {t("node.sameOutputNoListNeeded")}</span>
+                <span className="text-[10px] text-muted-foreground leading-snug">{t("node.slideshowNeedsAtLeast2")}{t("common.fragmentGap")}<span className="text-foreground">{t("node.stillToVideo")}</span>{t("common.fragmentGap")}{t("node.sameOutputNoListNeeded")}</span>
               </div>
             )}
             {tooMany && !isEncoding && !isQueued && (
               <div className="flex-1 min-h-24 flex flex-col items-center justify-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/5 p-3 text-center">
                 <div className="w-7 h-7 rounded-md bg-red-500/15 border border-red-500/50 flex items-center justify-center text-red-500 text-sm">!</div>
                 <span className="text-[11px] text-red-400 font-medium">{t("node.nImages", { n })}</span>
-                <span className="text-[10px] text-muted-foreground leading-snug">{t("node.capIs")} {MAX_IMAGES}. {t("node.trimTheSetUpstream")}</span>
+                <span className="text-[10px] text-muted-foreground leading-snug">{t("node.capIsMax", { max: MAX_IMAGES })}{t("common.fragmentGap")}{t("node.trimTheSetUpstream")}</span>
               </div>
             )}
 

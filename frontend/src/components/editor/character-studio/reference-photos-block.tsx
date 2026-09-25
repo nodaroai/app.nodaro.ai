@@ -85,8 +85,8 @@ export function ReferencePhotosBlock({ photos, onChange }: ReferencePhotosBlockP
         {SLOTS.map((slot) => (
           <Slot
             key={slot}
-            slot={slot}
             label={slot === "other" ? "+" : t(SLOT_LABEL_KEYS[slot])}
+            name={slot === "other" ? t("studio.otherLower") : t(SLOT_LABEL_KEYS[slot])}
             photo={byKind.get(slot)}
             otherCount={slot === "other" ? otherPhotos.length : 0}
             uploading={uploadingSlot === slot}
@@ -103,16 +103,18 @@ export function ReferencePhotosBlock({ photos, onChange }: ReferencePhotosBlockP
 }
 
 function Slot({
-  slot,
   label,
+  name,
   photo,
   otherCount,
   uploading,
   onUpload,
   onRemove,
 }: {
-  slot: ReferencePhotoKind
+  /** What the tile shows ("+" for the multi-photo slot). */
   label: string
+  /** The slot's name for screen readers and alt text — never the internal kind id. */
+  name: string
   photo?: ReferencePhoto
   otherCount: number
   uploading: boolean
@@ -129,7 +131,7 @@ function Slot({
         type="file"
         accept="image/*"
         className="absolute inset-0 opacity-0 cursor-pointer z-10"
-        aria-label={t("studio.uploadSlot", { slot })}
+        aria-label={t("studio.uploadSlot", { slot: name })}
         onChange={(e) => {
           const f = e.target.files?.[0]
           if (f) onUpload(f)
@@ -139,11 +141,11 @@ function Slot({
       />
       <button
         type="button"
-        aria-label={t("studio.slotAria", { slot })}
+        aria-label={t("studio.slotAria", { slot: name })}
         className="w-16 h-16 rounded-md border border-dashed border-[#334155] bg-[#13161f] flex items-center justify-center text-[10px] text-slate-500 overflow-hidden hover:border-[#3b82f6]/60"
       >
         {photo ? (
-          <img src={optimizedImageUrl(photo.url)} alt={slot} className="w-full h-full object-cover" />
+          <img src={optimizedImageUrl(photo.url)} alt={name} className="w-full h-full object-cover" />
         ) : uploading ? (
           <Upload className="w-3 h-3 animate-pulse" />
         ) : (
@@ -156,7 +158,7 @@ function Slot({
       {photo && (
         <button
           type="button"
-          aria-label={t("cfgshared.removeModel", { name: slot })}
+          aria-label={t("cfgshared.removeModel", { name })}
           className="absolute -top-1 -end-1 w-4 h-4 rounded-full bg-black/80 text-white text-[9px] flex items-center justify-center opacity-0 group-hover:opacity-100 z-20"
           onClick={() => onRemove(photo)}
         >

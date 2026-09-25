@@ -1425,6 +1425,45 @@ describe("silence_detect verb", () => {
   })
 })
 
+describe("audio_sync verb", () => {
+  it("calls /v1/audio-sync with the sources verbatim and the chosen reference", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/audio-sync", { jobId: "j-as" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const sources = [
+      { id: "mic", url: "https://a/mic.m4a" },
+      { id: "camA", url: "https://a/camA.mp4" },
+      { id: "camB", url: "https://a/camB.mp4" },
+    ]
+    const result = await callTool(server, "audio_sync", { sources, reference: "camA" })
+
+    expect(result.isError).toBeUndefined()
+    expect((result.structuredContent as Record<string, unknown>)?.jobId).toBe("j-as")
+    expect(received.body?.sources).toEqual(sources)
+    expect(received.body?.reference).toBe("camA")
+    expect(received.body?.mcp_client).toBe("Claude")
+    expect(received.body?.userId).toBe("u1")
+  })
+
+  it("omits reference when none is given (the route defaults to the first source)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/audio-sync", { jobId: "j-as2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "audio_sync", {
+      sources: [{ id: "a", url: "https://a/a.wav" }, { id: "b", url: "https://a/b.wav" }],
+    })
+    expect(received.body && "reference" in received.body).toBe(false)
+  })
+
+  it("does NOT register without workflows:execute scope", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: readOnlySession(), fastify: Fastify() })
+    const tools = await listTools(server)
+    expect(tools.map((t) => t.name)).not.toContain("audio_sync")
+  })
+})
+
 describe("apply_edl verb", () => {
   const validEdl = {
     version: 1,

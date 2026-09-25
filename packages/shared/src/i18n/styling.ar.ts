@@ -8,6 +8,7 @@ const map: LocaleCatalogMap = {
   "makeup-editorial": { label: "تحريري", description: "مكياج أزياء طليعي" },
   "makeup-goth": { label: "Goth", description: "جمالية Goth داكنة" },
   "makeup-dewy": { label: "توهج Dewy", description: "تركيز على بشرة طازجة متوهجة" },
+  "makeup-bare": { label: "وجه بدون مكياج", description: "بلا أي مكياج" },
 
   "eyewear-sunglasses": { label: "نظارات شمسية", description: "نظارات شمسية داكنة عامة" },
   "eyewear-aviators": { label: "Aviators", description: "نظارات Aviator كلاسيكية" },
@@ -159,6 +160,7 @@ const map: LocaleCatalogMap = {
   "outfit-one-piece-swim": { label: "ملابس سباحة قطعة واحدة", description: "ملابس سباحة قطعة واحدة مفصلة" },
   "outfit-lingerie": { label: "طقم Lingerie", description: "طقم Lingerie متطابق" },
   "outfit-pajamas": { label: "بيجاما", description: "طقم بيجاما قطنية ناعمة" },
+  "outfit-casual-home": { label: "ملابس منزلية مريحة", description: "تيشيرت أو كنزة مع بنطال مريح" },
   "outfit-bathrobe": { label: "روب حمام", description: "روب Terrycloth وثير" },
   "outfit-kimono": { label: "كيمونو", description: "كيمونو ياباني تقليدي" },
   "outfit-ballerina": { label: "Ballerina", description: "زي راقصة باليه كلاسيكي" },

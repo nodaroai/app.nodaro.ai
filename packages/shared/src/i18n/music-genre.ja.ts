@@ -2,7 +2,7 @@ import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
   // -------------------- Hip Hop / R&B --------------------
-  "hip-hop": { label: "ヒップホップ", description: "リズミカルな語り口、サンプルまたはプログラムされたビート" },
+  "hip-hop": { label: "ヒップホップ", description: "リズミカルな語り口、サンプリングや打ち込みのビート" },
   "trap": { label: "トラップ", description: "トラップ" },
   "boom-bap": { label: "ブーンバップ", description: "ブーンバップ・ヒップホップ" },
   "lo-fi-hip-hop": { label: "ローファイ・ヒップホップ", description: "ローファイ・ヒップホップ" },
@@ -64,7 +64,7 @@ const map: LocaleCatalogMap = {
   "jungle": { label: "ジャングル", description: "ジャングル" },
   "dubstep": { label: "ダブステップ", description: "ダブステップ" },
   "future-bass": { label: "フューチャーベース", description: "フューチャーベース" },
-  "trap-edm": { label: "トラップ (EDM)", description: "トラップEDM" },
+  "trap-edm": { label: "トラップ（EDM）", description: "トラップEDM" },
   "synthwave": { label: "シンセウェイブ", description: "シンセウェイブ" },
   "outrun": { label: "アウトラン", description: "アウトラン・シンセウェイブ" },
   "vaporwave": { label: "ヴェイパーウェイブ", description: "ヴェイパーウェイブ" },
@@ -83,13 +83,13 @@ const map: LocaleCatalogMap = {
   "industrial-metal": { label: "インダストリアル・メタル", description: "インダストリアル・メタル" },
   "noise": { label: "ノイズ", description: "ノイズ・インダストリアル" },
 
-  "ambient-genre": { label: "アンビエント", description: "雰囲気的、ゆっくり進化、しばしばビートレス" },
+  "ambient-genre": { label: "アンビエント", description: "空間的、ゆっくりと変化、ビートレスなことも多い" },
   "dark-ambient": { label: "ダーク・アンビエント", description: "ダーク・アンビエント" },
-  "drone": { label: "ドローン", description: "ドローン" },
+  "drone": { label: "ドローン", description: "ドローン・ミュージック" },
   "new-age": { label: "ニューエイジ", description: "ニューエイジ・アンビエント" },
   "space-music": { label: "スペース", description: "スペース・アンビエント" },
 
-  "experimental": { label: "実験的", description: "ジャンル不定、前衛、抽象" },
+  "experimental": { label: "実験的", description: "ジャンルにとらわれない、前衛的、抽象的" },
   "musique-concrete": { label: "ミュジーク・コンクレート", description: "ミュジーク・コンクレート" },
   "noise-music": { label: "ノイズ", description: "ノイズ・ミュージック" },
   "free-improv": { label: "フリー・インプロヴィゼーション", description: "フリー・インプロヴィゼーション" },
@@ -101,13 +101,13 @@ const map: LocaleCatalogMap = {
   "downtempo": { label: "ダウンテンポ", description: "ダウンテンポ" },
   "trip-hop": { label: "トリップホップ", description: "トリップホップ" },
 
-  "disco": { label: "ディスコ", description: "フォー・オン・ザ・フロア、豪華なストリングス、ダンスフロア時代" },
+  "disco": { label: "ディスコ", description: "四つ打ち、豪華なストリングス、ダンスフロア全盛期" },
   "italo-disco": { label: "イタロ・ディスコ", description: "イタロ・ディスコ" },
   "nu-disco": { label: "ニューディスコ", description: "ニューディスコ" },
   "euro-disco": { label: "ユーロ・ディスコ", description: "ユーロ・ディスコ" },
 
   // -------------------- Pop --------------------
-  "pop": { label: "ポップ", description: "メインストリーム、フックが主導" },
+  "pop": { label: "ポップ", description: "メインストリーム、フック重視" },
   "synth-pop": { label: "シンセポップ", description: "シンセポップ" },
   "dream-pop": { label: "ドリームポップ", description: "ドリームポップ" },
   "indie-pop": { label: "インディーポップ", description: "インディーポップ" },
@@ -188,7 +188,7 @@ const map: LocaleCatalogMap = {
   "country": { label: "カントリー", description: "アコースティック、物語的な歌詞" },
   "country-pop": { label: "カントリー・ポップ", description: "カントリー・ポップ" },
   "outlaw-country": { label: "アウトロー・カントリー", description: "アウトロー・カントリー" },
-  "alt-country": { label: "オルト・カントリー", description: "オルト・カントリー" },
+  "alt-country": { label: "オルタナティブ・カントリー", description: "オルタナティブ・カントリー" },
   "country-rock": { label: "カントリー・ロック", description: "カントリー・ロック" },
   "americana": { label: "アメリカーナ", description: "アメリカーナ" },
   "honky-tonk": { label: "ホンキートンク", description: "ホンキートンク" },
@@ -249,15 +249,15 @@ const map: LocaleCatalogMap = {
   "baroque": { label: "バロック", description: "バロック・クラシック" },
   "romantic": { label: "ロマン派", description: "ロマン派時代のクラシック" },
   "modern-classical": { label: "現代クラシック", description: "現代クラシック" },
-  "minimalist-classical": { label: "ミニマリスト", description: "ミニマリスト・クラシック" },
+  "minimalist-classical": { label: "ミニマル", description: "ミニマル・ミュージック" },
   "choral": { label: "合唱", description: "合唱クラシック" },
   "chamber-music": { label: "室内楽", description: "室内楽" },
   "opera": { label: "オペラ", description: "オペラ的" },
   "early-music": { label: "古楽", description: "古楽" },
 
-  "cinematic": { label: "シネマティック", description: "スコア風、喚起的、ムード主導" },
+  "cinematic": { label: "シネマティック", description: "映画音楽風、情感を呼び起こす、ムード重視" },
   "epic-orchestral": { label: "壮大なオーケストラ", description: "壮大なオーケストラ・シネマティック" },
-  "minimalist-score": { label: "ミニマリスト・スコア", description: "ミニマリスト・シネマティック・スコア" },
+  "minimalist-score": { label: "ミニマル・スコア", description: "ミニマルな映画音楽" },
   "trailer-music": { label: "トレーラー", description: "トレーラー・シネマティック音楽" },
   "score-action": { label: "アクション", description: "アクション映画スコア" },
   "score-horror": { label: "ホラー", description: "ホラー映画スコア" },
@@ -267,19 +267,19 @@ const map: LocaleCatalogMap = {
   "score-noir": { label: "ノワール", description: "ノワール・シネマティック" },
   "score-documentary": { label: "ドキュメンタリー", description: "ドキュメンタリー・スコア" },
 
-  "video-game": { label: "ビデオゲーム", description: "ゲームスコア風 — チップチューン、オーケストラ、エレクトロニック" },
+  "video-game": { label: "ゲーム音楽", description: "ゲーム音楽風 — チップチューン、オーケストラ、エレクトロニック" },
   "chiptune": { label: "チップチューン", description: "チップチューン" },
   "8bit": { label: "8ビット", description: "8ビット" },
   "16bit": { label: "16ビット", description: "16ビット" },
-  "vgm-orchestral": { label: "オーケストラVGM", description: "オーケストラ・ビデオゲーム" },
-  "vgm-synth": { label: "シンセVGM", description: "シンセ・ビデオゲーム" },
+  "vgm-orchestral": { label: "オーケストラVGM", description: "オーケストラ系ゲーム音楽" },
+  "vgm-synth": { label: "シンセVGM", description: "シンセ系ゲーム音楽" },
 
   "holiday": { label: "ホリデー", description: "季節 — クリスマス、お祝い、伝統的" },
   "christmas": { label: "クリスマス", description: "クリスマス" },
   "winter": { label: "冬", description: "冬のホリデー" },
   "festive": { label: "祝祭", description: "祝祭" },
 
-  "children": { label: "子ども", description: "子どもの音楽 — シングアロング、子守歌、教育的" },
+  "children": { label: "子ども向け", description: "子どもの音楽 — シングアロング、子守歌、教育的" },
   "lullaby": { label: "子守歌", description: "子守歌" },
   "nursery-rhyme": { label: "童謡", description: "童謡" },
   "kids-pop": { label: "子どもポップ", description: "子どもポップ" },
@@ -296,7 +296,7 @@ const map: LocaleCatalogMap = {
   "2000s": { description: "ポップパンク、R&Bリバイバル" },
   "2010s": { description: "EDMメインストリーム、ストリーミング時代" },
   "modern": { label: "現代", description: "2020年代以降のコンテンポラリー" },
-  "futurist": { label: "未来派", description: "SF的、異世界的" },
+  "futurist": { label: "近未来", description: "SF的、異世界的" },
 }
 
 export default map

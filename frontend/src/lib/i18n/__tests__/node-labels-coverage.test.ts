@@ -2,16 +2,19 @@ import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
 import { FACTORY_PRESETS } from "@nodaro/prompts"
+import { LABEL_TABLES } from "../labels"
+import type { LocaleLabelTables } from "../label-tables"
 
 /**
- * `NODE_LABELS_HE` is keyed by the English node label, and an unmapped label
- * silently passes through as English — no type error, no runtime error, just
- * an untranslated node name in the sidebar and the add-node menu.
+ * Every locale's `node` table (labels.<locale>.ts, registered in LABEL_TABLES)
+ * is keyed by the English node label, and an unmapped label silently passes
+ * through as English — no type error, no runtime error, just an untranslated
+ * node name in the sidebar and the add-node menu.
  *
  * This reads `types/nodes.ts` as source text (rather than importing it,
  * which drags the whole editor + backend `gen:skills` parsing surface into
  * the test — and this file is NEVER edited by i18n work, only read) and
- * asserts every node-definition default `label:` has a Hebrew entry.
+ * asserts every node-definition default `label:` has an entry in every locale.
  *
  * Cost budget: read exactly the two files under test, no tree walk, and give
  * each assertion a generous timeout — CI runners are ~10x slower than local.
@@ -23,11 +26,12 @@ function read(rel: string): string {
   return fs.readFileSync(path.join(SRC, rel), "utf8")
 }
 
-function mappedLabels(mapName: string): Set<string> {
-  const labels = read("lib/i18n/labels.ts")
-  const block = new RegExp(`const ${mapName}[^{]*\\{([\\s\\S]*?)\\n\\}`).exec(labels)
-  if (!block) throw new Error(`${mapName} block not found in labels.ts`)
-  return new Set([...block[1].matchAll(/"([^"]+)":/g)].map((m) => m[1]))
+/** "locale: label" for every label a registered locale's table is missing. */
+function missingIn(table: keyof LocaleLabelTables, labels: Iterable<string>): string[] {
+  const unique = [...new Set(labels)]
+  return Object.entries(LABEL_TABLES).flatMap(([locale, tables]) =>
+    unique.filter((l) => !(l in (tables?.[table] ?? {}))).map((l) => `${locale}: ${l}`),
+  )
 }
 
 /**
@@ -45,17 +49,16 @@ function nodeDefinitionLabels(): string[] {
   return [...src.matchAll(/^ {4}label: "([^"]+)",$/gm)].map((m) => m[1])
 }
 
-describe("NODE_LABELS_HE coverage", () => {
+describe("node label tables coverage", () => {
   it(
-    "every node-definition default label in types/nodes.ts has a Hebrew entry",
+    "every node-definition default label in types/nodes.ts has an entry in every locale",
     () => {
-      const mapped = mappedLabels("NODE_LABELS_HE")
       const extracted = nodeDefinitionLabels()
       // Floor so a reformat of types/nodes.ts (e.g. label moved off its own
       // 4-space line) fails loudly here instead of silently extracting zero
       // labels and passing the coverage check for free.
       expect(extracted.length).toBeGreaterThan(150)
-      const missing = [...new Set(extracted)].filter((l) => !mapped.has(l))
+      const missing = missingIn("node", extracted)
       expect(missing, `untranslated node labels: ${missing.join(", ")}`).toEqual([])
     },
     TIMEOUT,
@@ -63,21 +66,52 @@ describe("NODE_LABELS_HE coverage", () => {
 })
 
 /**
+ * A new node's header renders the label it was created with — its PERSISTED
+ * default, `defaultData.label` — which is not always the definition label the
+ * check above reads ("New group" vs "Group", "Era" vs "Era / Period"). An
+ * unmapped one puts English on every new node of that type, in every locale.
+ * Two shapes: the label on the `defaultData: {` line, or first on the next.
+ */
+function persistedDefaultLabels(): string[] {
+  const src = read("types/nodes.ts")
+  const sameLine = [...src.matchAll(/defaultData:\s*\{[^\n}]*?\blabel:\s*"([^"]+)"/g)].map((m) => m[1])
+  const nextLine = [...src.matchAll(/defaultData:\s*\{\s*\n\s*label:\s*"([^"]+)"/g)].map((m) => m[1])
+  return [...sameLine, ...nextLine]
+}
+
+/** Persisted defaults that read the same in every language. */
+const LANGUAGE_NEUTRAL_DEFAULT_LABELS = new Set([
+  "A", // Teleport Send / Receive: the default channel letter
+])
+
+describe("persisted default node labels have an entry in every locale", () => {
+  it(
+    "every defaultData.label in types/nodes.ts is in every locale's node table",
+    () => {
+      const extracted = persistedDefaultLabels()
+      expect(extracted.length).toBeGreaterThan(150)
+      const missing = missingIn("node", extracted.filter((l) => !LANGUAGE_NEUTRAL_DEFAULT_LABELS.has(l)))
+      expect(missing, `persisted default labels with no entry: ${missing.join(", ")}`).toEqual([])
+    },
+    TIMEOUT,
+  )
+})
+
+/**
  * The add-node popup and the sidebar render `NODE_OPTIONS` labels, looked up in
- * the same `NODE_LABELS_HE` map. An option label is NOT always the node
+ * the same `node` tables. An option label is NOT always the node
  * definition's label ("Create Face" vs "Face", "Suno Create Music" vs "Suno
  * Generate"), so the definition check above does not cover it — and one
- * unmapped option shows English in an otherwise Hebrew menu.
+ * unmapped option shows English in an otherwise translated menu.
  */
-describe("NODE_OPTIONS labels have a Hebrew entry", () => {
+describe("NODE_OPTIONS labels have an entry in every locale", () => {
   it(
-    "every add-node menu label in lib/node-options.tsx is in NODE_LABELS_HE",
+    "every add-node menu label in lib/node-options.tsx is in every locale's node table",
     () => {
-      const mapped = mappedLabels("NODE_LABELS_HE")
       const labels = [...read("lib/node-options.tsx").matchAll(/^ {4}label: "([^"]+)",?$/gm)].map((m) => m[1])
       expect(labels.length).toBeGreaterThan(150)
-      const missing = [...new Set(labels)].filter((l) => !mapped.has(l))
-      expect(missing, `add-node menu labels with no Hebrew entry: ${missing.join(", ")}`).toEqual([])
+      const missing = missingIn("node", labels)
+      expect(missing, `add-node menu labels with no entry: ${missing.join(", ")}`).toEqual([])
     },
     TIMEOUT,
   )
@@ -86,15 +120,14 @@ describe("NODE_OPTIONS labels have a Hebrew entry", () => {
 /**
  * Same trap one level down: the pip labels on a node's input/output handles
  * ("Start Frame", "Image Refs", "Video Refs" …) come from
- * `target-handle-registry.ts` and are looked up in `HANDLE_LABELS_HE` by
+ * `target-handle-registry.ts` and are looked up in each locale's `handle` table by
  * their English string — so a new handle silently renders English next to
- * otherwise Hebrew pips.
+ * otherwise translated pips.
  */
-describe("HANDLE_LABELS_HE coverage", () => {
+describe("handle label tables coverage", () => {
   it(
-    "every handle label in target-handle-registry.ts has a Hebrew entry",
+    "every handle label in target-handle-registry.ts has an entry in every locale",
     () => {
-      const mapped = mappedLabels("HANDLE_LABELS_HE")
       const registry = read("lib/target-handle-registry.ts")
       // Display strings in this registry are `key: "Capitalised value"`
       // pairs (handleId/label entries); ids/handleIds are camelCase or
@@ -107,7 +140,7 @@ describe("HANDLE_LABELS_HE coverage", () => {
       // Floor so a reformat of target-handle-registry.ts fails loudly here
       // instead of silently extracting zero labels and passing for free.
       expect(labels.size).toBeGreaterThan(20)
-      const missing = [...labels].filter((l) => !mapped.has(l))
+      const missing = missingIn("handle", labels)
       expect(missing, `untranslated handle labels: ${missing.join(", ")}`).toEqual([])
     },
     TIMEOUT,
@@ -117,8 +150,8 @@ describe("HANDLE_LABELS_HE coverage", () => {
 /**
  * Node-picker family / section headers ("Camera", "Light & Look", …) come
  * from `NODE_FAMILIES` and `COMMON_SECTIONS` in `lib/node-families.ts` and
- * are looked up in `NODE_GROUPS_HE` by their English `label` string — a new
- * family silently renders an English header in an otherwise Hebrew tab.
+ * are looked up in each locale's `nodeGroup` table by their English `label` string — a new
+ * family silently renders an English header in an otherwise translated tab.
  *
  * Read as source text for the same reason as `types/nodes.ts` above: this
  * file is never edited by i18n work, only read, and a plain regex scan over
@@ -137,16 +170,15 @@ function nodeFamilyGroupLabels(): string[] {
   return [...src.matchAll(/label: "([^"]+)"/g)].map((m) => m[1])
 }
 
-describe("NODE_GROUPS_HE coverage", () => {
+describe("node-group tables coverage", () => {
   it(
-    "every NODE_FAMILIES / COMMON_SECTIONS label in node-families.ts, plus the synthetic picker sections, has a Hebrew entry",
+    "every NODE_FAMILIES / COMMON_SECTIONS label in node-families.ts, plus the synthetic picker sections, has an entry in every locale",
     () => {
-      const mapped = mappedLabels("NODE_GROUPS_HE")
       const extracted = nodeFamilyGroupLabels()
       // Floor so a reformat of node-families.ts fails loudly here instead of
       // silently extracting zero labels and passing the check for free.
       expect(extracted.length).toBeGreaterThan(20)
-      const missing = [...new Set(extracted)].filter((l) => !mapped.has(l))
+      const missing = missingIn("nodeGroup", extracted)
       expect(missing, `untranslated node-family group labels: ${missing.join(", ")}`).toEqual([])
     },
     TIMEOUT,
@@ -156,19 +188,18 @@ describe("NODE_GROUPS_HE coverage", () => {
 /**
  * Factory-preset GROUP names (the folder/section headers in the node preset
  * dropdown) come from each `FactoryPreset.group` field in `@nodaro/prompts`
- * and are looked up in `PRESET_GROUPS_HE` by that English string — a new
- * preset group silently renders English in an otherwise Hebrew dropdown.
+ * and are looked up in each locale's `presetGroup` table by that English string — a new
+ * preset group silently renders English in an otherwise translated dropdown.
  *
  * Imported directly (rather than read as text) because it mirrors
  * `preset-content.test.ts`'s existing import of the same package, and the
  * group names live scattered across many preset-definition files with no
  * single line shape a regex could reliably target.
  */
-describe("PRESET_GROUPS_HE coverage", () => {
+describe("preset-group tables coverage", () => {
   it(
-    "every FACTORY_PRESETS group name has a Hebrew entry",
+    "every FACTORY_PRESETS group name has an entry in every locale",
     () => {
-      const mapped = mappedLabels("PRESET_GROUPS_HE")
       const groups = new Set(
         Object.values(FACTORY_PRESETS)
           .flatMap((list) => list.map((p) => p.group))
@@ -177,7 +208,7 @@ describe("PRESET_GROUPS_HE coverage", () => {
       // Floor so a reformat/removal of factory-preset group metadata fails
       // loudly here instead of silently extracting zero groups and passing.
       expect(groups.size).toBeGreaterThan(20)
-      const missing = [...groups].filter((g) => !mapped.has(g))
+      const missing = missingIn("presetGroup", groups)
       expect(missing, `untranslated preset group names: ${missing.join(", ")}`).toEqual([])
     },
     TIMEOUT,

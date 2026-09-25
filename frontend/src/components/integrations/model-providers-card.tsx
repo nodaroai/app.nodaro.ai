@@ -112,18 +112,18 @@ export function ModelProvidersCard() {
         </div>
       ) : failed || !providers ? (
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          {t("integ.providerStatusFailedPre")}{" "}
+          {t("integ.providerStatusFailedPre")}{t("common.fragmentGap")}
           <Link to="/setup" className="underline underline-offset-4">
             {t("integ.installHealth")}
           </Link>
-          .
+          {t("common.sentenceEnd")}
         </p>
       ) : (
         <>
           {encryptionMissing && (
             <p role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/30 p-3 text-xs text-red-700 dark:text-red-400">
-              {t("integ.encryptionMissingPre")}{" "}
-              <span className="font-mono">NODARO_ENCRYPTION_KEY</span> {t("integ.encryptionMissingSee")}{" "}
+              {t("integ.encryptionMissingPre")}{t("common.fragmentGap")}
+              <span className="font-mono">NODARO_ENCRYPTION_KEY</span> {t("integ.encryptionMissingSee")}{t("common.fragmentGap")}
               <Link to="/setup" className="underline underline-offset-4">
                 {t("integ.installHealth")}
               </Link>
@@ -134,7 +134,7 @@ export function ModelProvidersCard() {
           <p className="text-xs text-gray-600 dark:text-gray-300">
             {connected ? (
               coverage.uncoveredMissing.length > 0 ? (
-                <>{t("integ.coveredStillNeeds", { names: coverage.uncoveredMissing.map((tile) => tile.name).join(", ") })}</>
+                <>{t("integ.coveredStillNeeds", { names: coverage.uncoveredMissing.map((tile) => tile.name).join(t("common.listComma")) })}</>
               ) : (
                 <>{t("integ.coveredAll")}</>
               )
@@ -142,9 +142,9 @@ export function ModelProvidersCard() {
               <>
                 {t("integ.clearsMissingKeys", { n: coverage.coveredMissing, total: coverage.coveredMissing + coverage.uncoveredMissing.length })}
                 {coverage.uncoveredMissing.length > 0 ? (
-                  <> {t("integ.notCoveredOwnKey", { names: coverage.uncoveredMissing.map((tile) => tile.name).join(", ") })}</>
+                  <>{t("common.fragmentGap")}{t("integ.notCoveredOwnKey", { names: coverage.uncoveredMissing.map((tile) => tile.name).join(t("common.listComma")) })}</>
                 ) : null}
-                .
+                {t("common.sentenceEnd")}
               </>
             ) : null}
           </p>

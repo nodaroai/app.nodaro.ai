@@ -148,6 +148,9 @@ export const RUN_RESULT_TYPE_KEYS: Readonly<Record<string, readonly string[]>> =
   "image-critic": ["score", "approved", "feedback", "details"],
   // The RESULT's pixel size (staleness check). The size a person sets lives in `canvas`.
   "image-overlay": ["width", "height"],
+  // The last run's warnings line, its output canvas + length, and the
+  // composition it was rendered from (the "Result (old)" check).
+  "video-overlay": ["resultCompositionKey", "warnings", "width", "height", "durationSec"],
 }
 
 /** Run STATE only — what a content card may lose. Never its content. */

@@ -7,6 +7,7 @@ import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared"
 import type { ScheduleRule } from "@nodaro/shared"
+import type { VideoOverlayFit, VideoOverlayLayerInput, VideoOverlayOutputAspect, VideoOverlayWarning } from "@nodaro/shared"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "utility"
 
@@ -3731,6 +3732,61 @@ export type ImageOverlayData = {
   currentJobId?: string
 }
 
+/**
+ * What the browser learned about a WIRED video (`useUpstreamVideoProbe`),
+ * cached on the node and trusted only while `url` still matches the resolved
+ * upstream url. `durationSec` is present only for a finite, positive length;
+ * `width` / `height` are the display size (`videoWidth` / `videoHeight`), kept
+ * whenever the read yields them; `error` marks a probe that produced no usable
+ * length — a load error, a timeout, OR metadata that reports no finite length
+ * (streamed MP4s, MediaRecorder WebM report Infinity) — so every settled probe
+ * is distinguishable from "not probed yet" (`!error && durationSec === undefined`).
+ */
+export type ProbedVideoInfo = {
+  url: string
+  durationSec?: number
+  width?: number
+  height?: number
+  error?: true
+}
+
+/** Video Overlay: timed image layers over a video. `layers[]` is index-aligned
+ *  with the layer handles (layers[0] ↔ "overlay", [1] ↔ "overlay2", …; 12
+ *  handles, 20 layers — 13 and up exist only in data, via `imageUrl`). A stored
+ *  layer may be partial or `null` (an untouched slot, a JSON write): every
+ *  reader expands it with `expandVideoOverlayLayer` (@nodaro/shared), and a
+ *  wired slot with no settings runs as DEFAULT_VIDEO_OVERLAY_LAYER. */
+export type VideoOverlayData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  layers: Array<VideoOverlayLayerInput | null>
+  /** Layer handles shown on the node (1..12); grown automatically to cover wired or configured layers. */
+  layerCount?: number
+  /** Render onto this canvas instead of the base's own display size. */
+  outputAspect?: VideoOverlayOutputAspect
+  /** With outputAspect: how the base fills it (default cover). */
+  baseFit?: VideoOverlayFit
+  /** With outputAspect + contain: the padding colour, #RRGGBB (default #000000). */
+  backgroundColor?: string
+  probedVideo?: ProbedVideoInfo
+  /** The composition the last run's result was rendered from — stamped by the canvas Run and by every backend (DAG) run; the result entry carries the same key ("Result (old)" when it differs). */
+  resultCompositionKey?: string
+  /** The last run's output_data.warnings. */
+  warnings?: VideoOverlayWarning[]
+  /** The last run's output canvas and duration. */
+  width?: number
+  height?: number
+  durationSec?: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+}
+
 export type AssembleNarratedVideoData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -5378,6 +5434,54 @@ export type WebScrapeNodeData = {
   lastGoodCount?: number
 }
 
+// --- Audio Sync Node Data ---
+
+/** One recording's measured clock offset against the reference (D19:
+ *  `referenceMs = sourceMs + offsetMs`). `sourceId` is the upstream NODE id. */
+export type AudioSyncOffset = {
+  sourceId: string
+  offsetMs: number
+  /** 0..1; below 0.5 a note asks for a check by ear. */
+  confidence: number
+  /** Measured clock drift against the reference (ms gained per hour); null when
+   *  the overlap was too short to measure it. Measured, never corrected. */
+  driftMsPerHour: number | null
+}
+
+/** audio-sync's `json` output. */
+export type AudioSyncResult = {
+  version: number
+  reference: string
+  offsets: AudioSyncOffset[]
+  notes: string[]
+}
+
+/** audio-sync — measures how far apart the clocks of 2–6 recordings of one
+ *  conversation are (camera files and/or a master mic) by cross-correlating
+ *  their audio. Keyless (local ffmpeg + in-process correlation). The recordings
+ *  wire into the `sources` handle (audio OR video); each one's id is its
+ *  upstream NODE id. One `json` output carrying an AudioSyncResult. */
+export type AudioSyncNodeData = {
+  [key: string]: unknown
+  label: string
+  /** The source every offset is measured against — one of the wired source
+   *  NODE ids. Unset (or no longer wired) → the first source. */
+  reference?: string
+  /** User-configured source ordering (source node ids), mirroring edit-plan's
+   *  `sourceOrder` — drives the ConnectedMediaList reorder (and so which source
+   *  is "first", the default reference). */
+  sourceOrder?: string[]
+  fieldMappings?: Record<string, unknown>
+  // execution state
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  /** The single structured json output (an AudioSyncResult). Mirrors
+   *  SilenceDetectNodeData.generatedJson so the DAG extractors read it uniformly. */
+  generatedJson?: unknown
+}
+
 // --- Silence Detect Node Data ---
 
 export type SilenceDetectNodeData = {
@@ -5496,7 +5600,7 @@ export type VideoAnalysisNodeData = PromptAffixFields & {
   // Same url-bound shape for a WIRED video: the duration read from the video's own
   // metadata, so the credit estimate is not forced to the :600s ceiling. Only
   // trusted while `probedVideo.url` still matches the resolved upstream url.
-  probedVideo?: { url: string; durationSec: number }
+  probedVideo?: ProbedVideoInfo
   // Analysis config
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
@@ -5625,7 +5729,7 @@ export type VideoAuditNodeData = {
   // url-bound duration cache for the credit-bucket estimate, same shape and
   // same trust rule as video-analysis's `probedVideo`: only honoured while
   // `probedVideo.url` still matches the resolved upstream url.
-  probedVideo?: { url: string; durationSec: number }
+  probedVideo?: ProbedVideoInfo
   // The disclosure report from the last run — rendered as the node's summary
   // strip. Kept beside `generatedJson` (the corrected analysis) rather than
   // inside it so downstream consumers see a plain analysis payload.
@@ -6404,6 +6508,7 @@ export type SceneNodeData =
   | LoopVideoData
   | GifToVideoData
   | FadeVideoData
+  | VideoOverlayData
   | TranscodeVideoData
   | ManualEditData
   | LipSyncData
@@ -6427,6 +6532,7 @@ export type SceneNodeData =
   | LLMChatData
   | WebScrapeNodeData
   | SilenceDetectNodeData
+  | AudioSyncNodeData
   | MetaAdsScrapeNodeData
   | InstagramScrapeNodeData
   | VideoAnalysisNodeData
@@ -6585,6 +6691,7 @@ export type SceneNodeType =
   | "split-media"
   | "extract-audio"
   | "silence-detect"
+  | "audio-sync"
   | "remove-audio"
   | "mix-audio"
   | "combine-audio"
@@ -6606,6 +6713,7 @@ export type SceneNodeType =
   | "loop-video"
   | "gif-to-video"
   | "fade-video"
+  | "video-overlay"
   | "transcode-video"
   | "manual-edit"
   | "lip-sync"
@@ -8262,6 +8370,30 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     ],
   },
   {
+    type: "video-overlay",
+    label: "Video Overlay",
+    category: "processing",
+    creditCost: 20,
+    // Base video + the 12 layer handles, index-aligned with data.layers[]
+    // (overlay → 0, overlay2 → 1, …). Literal on purpose (the gen-skills
+    // parser reads this file as text) — must equal ["video",
+    // ...VIDEO_OVERLAY_HANDLE_IDS]; node-input-handles-completeness pins it.
+    // The reserved JSON id "layerPlan" is deliberately NOT an input: no pip
+    // renders for it in v1.
+    inputs: ["video", "overlay", "overlay2", "overlay3", "overlay4", "overlay5", "overlay6", "overlay7", "overlay8", "overlay9", "overlay10", "overlay11", "overlay12"],
+    outputs: ["video-out"],
+    defaultData: {
+      label: "Video Overlay",
+      layers: [],
+      layerCount: 4,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as VideoOverlayData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+  },
+  {
     type: "assemble-narrated-video",
     label: "Assemble Narrated Video",
     category: "processing",
@@ -8376,6 +8508,17 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["json"],
     defaultData: { label: "Silence Detect", thresholdDb: -35, minSilenceMs: 700, padMs: 120, fieldMappings: {} } as SilenceDetectNodeData,
+  },
+  {
+    type: "audio-sync",
+    label: "Audio Sync",
+    category: "processing",
+    // The 2-source price (10 × (sources − 1)); the live cost follows the wired
+    // source count (`audio-sync:<n>src`, lib/audio-sync.ts).
+    creditCost: 10,
+    inputs: ["sources"],
+    outputs: ["json"],
+    defaultData: { label: "Audio Sync", fieldMappings: {} } as AudioSyncNodeData,
   },
   {
     type: "remove-audio",

@@ -118,6 +118,8 @@ vi.mock("../list-execution", () => ({
 // ---------------------------------------------------------------------------
 
 import { restorePollingForRunningJobs } from "../run-handlers"
+import { videoOverlayCompositionKey, videoOverlaySlotSources } from "@nodaro/shared"
+import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
 import type { ExecutionContext } from "../types"
 
 // ---------------------------------------------------------------------------
@@ -903,6 +905,54 @@ describe("restorePollingForRunningJobs", () => {
   // onto generatedJson — NOT a blank-url media result. Without the type branch
   // the generic path completed the node empty (reported 2026-08-03: analysis
   // billed + completed while the poll was dead, node showed nothing).
+  // Video Overlay: a job restored after a reload lands its warnings / canvas /
+  // length on the node and the result, the same mapping every live lane writes.
+  it("puts a restored video-overlay's warnings, canvas and length on the node and the result", async () => {
+    const skipped = { layer: 1, slot: 2, code: "skipped", detail: "starts at 9 s, after the video ends (5.00 s)" }
+    mockNodes = [makeNode("n1", "video-overlay")]
+    mockGetJobStatus.mockResolvedValue({
+      status: "completed",
+      output_data: { videoUrl: "https://cdn/o.mp4", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 },
+    })
+    restorePollingForRunningJobs([{ nodeId: "n1", jobId: "j1", nodeType: "video-overlay" }], makeCtx(), vi.fn())
+    await vi.advanceTimersByTimeAsync(3000)
+    const completion = mockUpdateNodeData.mock.calls.find(
+      (call: unknown[]) => call[0] === "n1" && (call[1] as Record<string, unknown>).executionStatus === "completed",
+    )![1] as Record<string, unknown>
+    expect(completion).toMatchObject({ generatedVideoUrl: "https://cdn/o.mp4", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 })
+    expect((completion.generatedResults as Array<Record<string, unknown>>)[0]).toMatchObject({ jobId: "j1", warnings: [skipped] })
+  })
+
+  // Reload during a canvas single-node Run: the REST job's output_data carries
+  // the key the canvas sent with the request (the route stores it, the worker
+  // echoes it), so the restored result reads fresh under the node's settings.
+  it("reload during a single-node Run: the restored result carries the key the canvas sent and reads fresh", async () => {
+    const layers = [{ start: 1, end: 3, preset: "card" as const }]
+    const canvasKey = videoOverlayCompositionKey({ baseUrl: "https://x/base.mp4", sources: videoOverlaySlotSources(layers, ["https://x/a.png"]), data: { layers } })
+    mockNodes = [makeNode("n1", "video-overlay")]
+    mockGetJobStatus.mockResolvedValue({ status: "completed", output_data: { videoUrl: "https://cdn/r.mp4", resultCompositionKey: canvasKey } })
+    restorePollingForRunningJobs([{ nodeId: "n1", jobId: "j1", nodeType: "video-overlay" }], makeCtx(), vi.fn())
+    await vi.advanceTimersByTimeAsync(3000)
+    const completion = mockUpdateNodeData.mock.calls.find(
+      (call: unknown[]) => call[0] === "n1" && (call[1] as Record<string, unknown>).executionStatus === "completed",
+    )![1] as Record<string, unknown>
+    const [restored] = completion.generatedResults as Array<Record<string, unknown>>
+    expect(videoOverlayResultFresh(canvasKey, restored)).toBe(true)
+    expect(videoOverlayResultFresh(canvasKey, completion)).toBe(true)
+  })
+
+  it("a restored backend-run completion stamps the freshness key on the node and the result", async () => {
+    mockNodes = [makeNode("n1", "video-overlay")]
+    mockGetJobStatus.mockResolvedValue({ status: "completed", output_data: { videoUrl: "https://cdn/k.mp4", resultCompositionKey: "K1" } })
+    restorePollingForRunningJobs([{ nodeId: "n1", jobId: "j1", nodeType: "video-overlay" }], makeCtx(), vi.fn())
+    await vi.advanceTimersByTimeAsync(3000)
+    const completion = mockUpdateNodeData.mock.calls.find(
+      (call: unknown[]) => call[0] === "n1" && (call[1] as Record<string, unknown>).executionStatus === "completed",
+    )![1] as Record<string, unknown>
+    expect(completion.resultCompositionKey).toBe("K1")
+    expect((completion.generatedResults as Array<Record<string, unknown>>)[0]).toMatchObject({ jobId: "j1", resultCompositionKey: "K1" })
+  })
+
   it("writes generatedJson for a restored video-analysis completion", async () => {
     const analysis = {
       meta: { durationSec: 72 },

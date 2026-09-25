@@ -4,7 +4,7 @@ import { creditUnits } from "@/lib/credit-units"
 import { useNavigate, useParams } from "react-router-dom"
 import { PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_VIDEO_MODELS, getFeaturedEntities, estimateFilmCredits } from "@nodaro/shared"
 import { STYLE_PRESETS, getStylePreset } from "@nodaro/prompts"
-import type { PipelineEvent, PipelineMode, PipelinePinnableImageModel, PipelinePinnableVideoModel, PipelineStageName, SubGateName } from "@nodaro/shared"
+import type { PipelineEvent, PipelineMode, PipelinePinnableImageModel, PipelinePinnableVideoModel, PipelineStageName, PipelineStatus, SubGateName } from "@nodaro/shared"
 import { pipelinesApi, type PipelineRecord } from "@/lib/pipelines-api"
 import {
   uploadImage,
@@ -152,6 +152,18 @@ const STAGE_LABELS: Record<string, MessageKey> = {
   post_merge: "pipe.stageFinish",
 }
 
+// A pipeline's status in words, for the narration's "Pipeline status: …" line
+// (the status id itself — "awaiting_approval" — is never shown).
+const PIPELINE_STATUS_KEYS: Record<PipelineStatus, MessageKey> = {
+  queued: "node.queued",
+  running: "exec.statusRunning",
+  awaiting_approval: "pipe.statusAwaitingApproval",
+  completed: "exec.statusCompleted",
+  failed: "exec.statusFailed",
+  cancelled: "exec.statusCancelled",
+  forked: "pipe.statusForked",
+}
+
 // Human "what's happening now" line per stage — shown in the status banner so
 // the user always knows the director is working, even when there's no gate to
 // act on (otherwise a generating stage looks frozen).
@@ -199,12 +211,17 @@ function describeEvent(evt: PipelineEvent): string | null {
   const r = evt as unknown as Record<string, unknown>
   const v = (k: string) => (r[k] == null ? "" : String(r[k]))
   switch (evt.type as string) {
-    case "pipeline:status":
-      return tx("misc.pipelineStatusEvent", { status: v("status") })
+    case "pipeline:status": {
+      // A status a newer server sends before this map knows it shows as sent.
+      const key = (PIPELINE_STATUS_KEYS as Record<string, MessageKey | undefined>)[v("status")]
+      return tx("misc.pipelineStatusEvent", { status: key ? tx(key) : v("status") })
+    }
     case "stage:status":
       return `${STAGE_LABELS[v("stageName")] ? tx(STAGE_LABELS[v("stageName")]) : v("stageName")} ${v("status")}`
     case "stage:progress":
-      return (v("message") || tx("pipe.workingOn", { stage: v("stageName") })).replace(
+      return (v("message") || tx("pipe.workingOn", {
+        stage: STAGE_LABELS[v("stageName")] ? tx(STAGE_LABELS[v("stageName")]) : v("stageName"),
+      })).replace(
         /\s*\([\d.]+\s*[KMG]?B so far\)/i,
         "",
       )
@@ -225,7 +242,7 @@ function describeEvent(evt: PipelineEvent): string | null {
 
 function pushLine(prev: NarrationLine[], type: string, text: string): NarrationLine[] {
   const last = prev[prev.length - 1]
-  // Skip exact consecutive duplicates (e.g. repeated "Pipeline awaiting_approval").
+  // Skip exact consecutive duplicates (e.g. a repeated "Pipeline status: Awaiting approval").
   if (last && last.text === text) return prev
   if (last && last.type === type && type === "stage:progress") {
     return [...prev.slice(0, -1), { type, text }]

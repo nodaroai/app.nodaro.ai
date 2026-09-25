@@ -11,16 +11,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { useEdges } from "@xyflow/react"
 import { getPublishedApp, estimateComponentCredits } from "@/lib/api"
-import { useT } from "@/lib/i18n"
+import { useT, type MessageKey } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { ConfigProps } from "./types"
 import type { ComponentNodeData } from "@/types/nodes"
-import type { ComponentMetadata, ExposedSetting } from "@nodaro/shared"
+import type { ComponentHandle, ComponentMetadata, ExposedSetting } from "@nodaro/shared"
+
+/** A component port's media type in words; the type id itself is never shown. */
+const HANDLE_TYPE_KEYS: Readonly<Record<ComponentHandle["type"], MessageKey>> = {
+  image: "cfgext.cmpCfgTypeImage",
+  video: "cfgext.cmpCfgTypeVideo",
+  audio: "cfgext.cmpCfgTypeAudio",
+  text: "cfgext.cmpCfgTypeText",
+}
 
 export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<ComponentNodeData> & { nodeId?: string }) {
   const t = useT()
   const localizeNode = useLocalizeNodeLabel()
   const nodeData = data as ComponentNodeData
+  // Metadata from an older published version may carry a type this map does
+  // not know yet; it shows as sent rather than blank.
+  const handleType = (type: string) => {
+    const key = (HANDLE_TYPE_KEYS as Readonly<Record<string, MessageKey | undefined>>)[type]
+    return key ? t(key) : type
+  }
   const edges = useEdges()
 
   // Auto-refresh metadata + credits from the latest published version on first open.
@@ -166,7 +180,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
                     {h.name}
                     {h.required && <span className="text-red-400 ms-0.5">*</span>}
                   </Label>
-                  <Badge variant="outline" className="text-[9px] px-1 py-0">{h.type}</Badge>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0">{handleType(h.type)}</Badge>
                 </div>
                 {isConnected ? (
                   <div className="text-[10px] text-muted-foreground/60 italic px-2 py-1.5 bg-muted/30 rounded-md">
@@ -181,7 +195,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
                   />
                 ) : (
                   <div className="text-[10px] text-muted-foreground/60 italic px-2 py-1.5 bg-muted/30 rounded-md">
-                    {t("cfgext.cmpCfgConnectFromUpstream", { type: h.type })}
+                    {t("cfgext.cmpCfgConnectTypeFromUpstream", { type: handleType(h.type) })}
                   </div>
                 )}
               </div>
@@ -307,7 +321,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
             {meta.outputs.map((h) => (
               <div key={h.id} className="flex items-center justify-between text-[10px]">
                 <span className="text-muted-foreground">{h.name}</span>
-                <Badge variant="outline" className="text-[9px] px-1 py-0">{h.type}</Badge>
+                <Badge variant="outline" className="text-[9px] px-1 py-0">{handleType(h.type)}</Badge>
               </div>
             ))}
           </div>

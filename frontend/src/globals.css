@@ -2446,6 +2446,17 @@ html, body {
   unicode-bidi: isolate;
 }
 
+/* Japanese: Geist has no Japanese glyphs. Naming the Japanese system faces
+   before the generic fallback gives the same weights and metrics on every
+   machine: Hiragino on macOS and iOS, Yu Gothic UI or Meiryo on Windows,
+   Noto Sans CJK JP on Android and Linux. Scoped to lang="ja", which
+   i18n-html-dir.tsx sets on <html> (it also makes the browser draw kanji in
+   their Japanese forms rather than the Chinese ones). Every other locale
+   keeps its stack. */
+:root:lang(ja) {
+  --default-font-family: 'Geist Variable', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', 'Noto Sans CJK JP', 'Noto Sans JP', system-ui, sans-serif;
+}
+
 
 
 /* Welcome credits popup: the soft pink radial glow at the top of the card. */

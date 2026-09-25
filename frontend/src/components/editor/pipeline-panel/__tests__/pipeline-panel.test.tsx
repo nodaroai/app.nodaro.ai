@@ -225,7 +225,8 @@ describe("PipelinePanel", () => {
     )
     expect(screen.getByText("Branched from")).toBeInTheDocument()
     expect(screen.getByText("original pipeline")).toBeInTheDocument()
-    expect(screen.getByText("(at shot_list)")).toBeInTheDocument()
+    // The stage reads as its label, never the raw id ("shot_list").
+    expect(screen.getByText("(at 5. Shot List)")).toBeInTheDocument()
   })
 
   it("hides breadcrumb when pipeline is not branched", async () => {
@@ -493,9 +494,10 @@ describe("PipelinePanel", () => {
     await waitFor(() =>
       expect(screen.queryByTestId("chat-panel")).toBeInTheDocument(),
     )
-    // Header label uses the stage prop — "Post merge chat" confirms the
-    // post_merge stage value was threaded all the way down to ChatPanel.
-    expect(screen.getByText(/post merge chat/i)).toBeInTheDocument()
+    // Header label uses the stage prop — "8. Final Merge chat" confirms the
+    // post_merge stage value was threaded all the way down to ChatPanel (and
+    // that the header names the stage by its label, not the raw id).
+    expect(screen.getByText(/8\. Final Merge chat/i)).toBeInTheDocument()
   })
 
   it("does NOT mount ChatPanel at post_merge when mode='manual' (chat is guided-only)", async () => {

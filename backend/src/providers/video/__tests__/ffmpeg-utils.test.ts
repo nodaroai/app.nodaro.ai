@@ -1524,3 +1524,27 @@ describe("probeStreamEnds", () => {
     await expect(probeStreamEnds("/tmp/garbage.mp4")).rejects.toThrow()
   })
 })
+
+// Video Overlay classifies a render failure on these flags (spec §4.2 step 9):
+// the Node watchdog kill is a timeout; a maxBuffer overflow is a kill but not one.
+describe("runFfmpeg / runFfprobe — the watchdog flags", () => {
+  it("a watchdog kill carries killed + timedOut", async () => {
+    execFileOnce("", Object.assign(new Error("Command failed"), { killed: true }) as NodeJS.ErrnoException, "frame= 9000")
+    await expect(runFfmpeg(["-i", "x"])).rejects.toMatchObject({ killed: true, timedOut: true })
+  })
+
+  it("a maxBuffer overflow is a kill but NOT a timeout", async () => {
+    execFileOnce("", Object.assign(new Error("stdout maxBuffer length exceeded"), { killed: true, code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" }) as NodeJS.ErrnoException, "")
+    await expect(runFfmpeg(["-i", "x"])).rejects.toMatchObject({ killed: true, timedOut: false })
+  })
+
+  it("an ordinary non-zero exit is neither, and keeps its message", async () => {
+    execFileOnce("", new Error("exit 1") as NodeJS.ErrnoException, "Conversion failed")
+    await expect(runFfmpeg(["bad"])).rejects.toMatchObject({ killed: false, timedOut: false, message: expect.stringMatching(/ffmpeg failed: Conversion failed/) })
+  })
+
+  it("runFfprobe carries the same flags", async () => {
+    execFileOnce("", Object.assign(new Error("Command failed"), { killed: true }) as NodeJS.ErrnoException, "")
+    await expect(runFfprobe(["x"])).rejects.toMatchObject({ killed: true, timedOut: true })
+  })
+})

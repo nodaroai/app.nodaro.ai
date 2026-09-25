@@ -246,10 +246,10 @@ export default function VideoDirectorPage() {
 
         {phase === "completed" && !videoUrl && (
           <div className="rounded-md border border-yellow-500/40 bg-yellow-500/5 p-4 text-sm text-muted-foreground">
-            {t("vd.noUrlPre")}{" "}
+            {t("vd.noUrlPre")}{t("common.fragmentGap")}
             <Link to="/my-files" className="text-primary hover:underline">
               {t("vd.myFiles")}
-            </Link>{" "}
+            </Link>{t("common.fragmentGap")}
             {t("vd.noUrlPost")}
             <div className="mt-3">
               <Button onClick={handleReset}>{t("vd.makeAnother")}</Button>

@@ -296,10 +296,11 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
           </DialogTitle>
           <DialogDescription>
             {t("node.sunoSetupStepOf3", { step })}
-            {step === 3 && data.voiceId ? <>{" "}{t("node.sunoSetupAlreadyGenerated")}</> : null}
-            {". "}
+            {step === 3 && data.voiceId ? <>{t("common.fragmentGap")}{t("node.sunoSetupAlreadyGenerated")}</> : null}
+            {t("common.sentenceEnd")}{t("common.fragmentGap")}
+            {/* A literal space before the figure: every language spaces a number. */}
             {t("node.sunoSetupCostPre")}{" "}
-            <span className="font-medium">{t("node.sunoSetupCostCredits")}</span>{" "}
+            <span className="font-medium">{t("node.sunoSetupCostCredits")}</span>{t("common.fragmentGap")}
             {t("node.sunoSetupCostPost")}
           </DialogDescription>
         </DialogHeader>

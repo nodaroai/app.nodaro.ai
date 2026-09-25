@@ -258,7 +258,7 @@ export function MotionTab({ studio }: MotionTabProps) {
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <label htmlFor="creature-motion-provider" className="text-[12px] text-slate-300">
-            {t("cfgshared.provider")}:
+            {t("studio.providerColon")}
           </label>
           <select
             id="creature-motion-provider"
@@ -276,7 +276,7 @@ export function MotionTab({ studio }: MotionTabProps) {
         </div>
         <div className="flex items-center gap-2">
           <label htmlFor="creature-motion-aspect" className="text-[12px] text-slate-300">
-            {t("paramcfg.aspectRatio")}:
+            {t("studio.aspectRatioColon")}
           </label>
           <select
             id="creature-motion-aspect"

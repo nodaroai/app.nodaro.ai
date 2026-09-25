@@ -1,74 +1,18 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
-import { ChevronDown, ChevronRight, Wand2 } from "lucide-react"
+import { useState } from "react"
+import { Wand2 } from "lucide-react"
 import { toast } from "sonner"
 import { useT } from "@/lib/i18n"
-import { useAppDir } from "@/lib/locale-store"
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { OVERLAY_HANDLE_IDS, type OverlayAnchor, type OverlayLayerConfig } from "@/types/nodes"
 import { TextStyleEditor, QrStyleEditor, ShapeStyleEditor, ImageEffectsEditor } from "./image-overlay-kind-editors"
 import { suggestOverlayPlacement } from "@/lib/api"
-
-/** The 3×3 anchor picker, laid out like the base image. */
-const ANCHOR_GRID: ReadonlyArray<ReadonlyArray<OverlayAnchor>> = [
-  ["top-left", "top", "top-right"],
-  ["left", "center", "right"],
-  ["bottom-left", "bottom", "bottom-right"],
-]
-
-function px(pct: number, total: number | undefined): string {
-  return total ? ` ≈ ${Math.round((pct / 100) * total)}px` : ""
-}
-
-function PctSlider({
-  id, label, value, min, max, step = 1, onChange, hint,
-}: {
-  id: string; label: string; value: number; min: number; max: number; step?: number
-  onChange: (v: number) => void; hint?: string
-}) {
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between">
-        <Label htmlFor={id} className="text-xs">{label}</Label>
-        <span className="text-[10px] tabular-nums text-muted-foreground">{value}{hint ?? ""}</span>
-      </div>
-      <Slider id={id} value={[value]} min={min} max={max} step={step} onValueChange={([v]) => onChange(v)} />
-    </div>
-  )
-}
-
-/**
- * One of the three groups every layer's controls fall into. Content and
- * Placement open by default; Style (blend, shadow — the rare ones) starts
- * folded with a one-line summary, so the panel reads top-down as "what it
- * is → where it goes → how it looks" instead of seventeen stacked controls.
- */
-function Section({ title, summary, defaultOpen = true, children }: { title: string; summary?: string; defaultOpen?: boolean; children: ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen)
-  const isRtl = useAppDir() === "rtl"
-  return (
-    <section className="rounded-md border border-border/60">
-      <button
-        type="button"
-        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-start"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        {open ? <ChevronDown className="w-3 h-3 text-muted-foreground" aria-hidden /> : <ChevronRight className={cn("w-3 h-3 text-muted-foreground", isRtl && "rotate-180")} aria-hidden />}
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</span>
-        {!open && summary && <span className="ms-auto text-[10px] text-muted-foreground truncate">{summary}</span>}
-      </button>
-      {open && <div className="px-2 pb-2 space-y-2">{children}</div>}
-    </section>
-  )
-}
+import { ANCHOR_GRID, PctSlider, Section, pctPx as px } from "./panel-section"
 
 /**
  * The selected layer's controls, shared by the config panel and the full

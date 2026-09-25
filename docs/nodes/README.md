@@ -66,7 +66,8 @@ the foot of the list.
 | **Voices** | Voice Changer · Voice Changer Pro · Voice Design · Voice Remix · Dubbing |
 | **Music** | Suno Create Music · Generate Music · Suno Lyrics · Suno Cover · Suno Extend · Suno Mashup · Suno Replace Section · Suno Add Vocals · Suno Add Instrumental · Suno Upload Extend · Suno Style Boost · Suno Convert WAV |
 | **Sound Effects** | Text to Audio |
-| **Clean & Separate** | Voice Extractor · Audio Separation · Suno Separate · Silence Detect |
+| **Clean & Separate** | Voice Extractor · Audio Separation · Suno Separate |
+| **Analyze** | Silence Detect · Audio Sync |
 | **Edit Audio** | Trim Audio · Combine Audio · Mix Audio · Adjust Volume · Audio FX |
 | **Transcribe** | Transcribe · Forced Alignment |
 
@@ -196,7 +197,7 @@ Visual style, mood, color, atmosphere, and aesthetic pickers. Wire into an AI im
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Setting](./parameters/setting.md) | Pick from 63 settings across indoor/urban/nature/fantastical | Establish where a shot takes place |
+| [Setting](./parameters/setting.md) | Pick from 66 settings across indoor/urban/nature/fantastical | Establish where a shot takes place |
 | [Atmosphere](./parameters/atmosphere.md) | Pick atmospheric conditions (fog, rain, smoke, ...) from 40 entries | Add weather, particles, and light scattering to a scene |
 | [Style](./parameters/style.md) | Pick a visual style preset (cinematic, anime, oil-painting, ...) from 48 entries | Lock the overall aesthetic register |
 | [Color / Look](./parameters/color-look.md) | Pick a color-grading look (warm, teal-orange, bleached, ...) from 41 entries | Set the chromatic signature of a frame |
@@ -247,8 +248,8 @@ Pickers that combine multiple independent dimensions into a single descriptor.
 |------|-------------|-------------|
 | [Framing](./parameters/framing.md) | Multi-dim: shot size + angle + coverage + composition + vantage (72 options across 5 fields) | Per-shot framing direction |
 | [Lighting](./parameters/lighting.md) | Multi-dim: time-of-day + style + direction (72 options across 3 fields) | Compose a full lighting setup |
-| [Person](./parameters/person.md) | Multi-dim: 21 attributes (type, age, ethnicity, regional aesthetic, build, face, hair, eyes, skin, …) — 547 options | Casting brief / recurring-character generation |
-| [Styling](./parameters/styling.md) | Multi-dim: makeup + eyewear + headwear + hair + jewelry + nails + face-paint + fabric (262 options across 9 fields) | Fashion-editorial / character continuity |
+| [Person](./parameters/person.md) | Multi-dim: 21 attributes (type, age, ethnicity, regional aesthetic, build, face, hair, eyes, skin, …) — 575 options | Casting brief / recurring-character generation |
+| [Styling](./parameters/styling.md) | Multi-dim: makeup + eyewear + headwear + hair + jewelry + nails + face-paint + fabric (274 options across 9 fields) | Fashion-editorial / character continuity |
 | [Temporal](./parameters/temporal.md) | Multi-dim: speed + freeze + direction + shutter (18 options across 4 fields) | Time-based effects (slow-mo, freeze, reverse) |
 | [Exposure Settings](./parameters/exposure-settings.md) | Multi-dim: aperture + shutter speed + ISO (20 options across 3 fields) | Photographic exposure-triangle direction |
 
@@ -389,6 +390,7 @@ FFmpeg-based video manipulation.
 | [Extract Frame](./processing-video/extract-frame.md) | Pull a single still frame as a PNG | Capture last frame for i2v chaining, thumbnails, or reference stills |
 | [Image Collage](./processing-video/image-collage.md) | Composite N images into one 2K/4K image | Tile a batch of images into a smart (justified) or grid collage — mood boards, contact sheets, social grids |
 | [Image Overlay](./processing-video/image-overlay.md) | Place up to 12 layers — pictures, real text, QR codes, shapes — on a base image, pixel-exactly, with a draggable live preview | Logos, watermarks, headlines, price badges, QR codes and stickers placed by anchor + % offsets — banners, thumbnails, covers, before/after cards |
+| [Video Overlay](./processing-video/video-overlay.md) | Place up to 20 timed image layers — logos, product shots, screenshots, cards — over a video, with a live preview; base audio untouched (20 CR) | Product cards over a talking-head clip timed to the voice-over, a logo for the whole video, screenshots and badges over product clips |
 | [Video Upscale](./processing-video/video-upscale.md) | Upscale resolution (Topaz, VEO) | Enhance video quality to 1080p, 4K, or 8K |
 | [Add Captions](./processing-video/add-captions.md) | Generate and overlay captions on video | Add subtitles, word-highlight, or karaoke-style captions |
 | [Adjust Speed](./processing-video/speed-ramp.md) | Change playback speed (0.25x-4x) | Create slow motion or time-lapse effects |
@@ -412,6 +414,7 @@ FFmpeg-based audio manipulation.
 | [Merge Video & Audio](./processing-audio/merge-video-audio.md) | Combine video with audio tracks | Add voiceover, music, or sound effects to video |
 | [Extract Audio](./processing-audio/extract-audio.md) | Demux a video's audio track to MP3 | Pull audio from a video for transcription, dubbing, or reuse |
 | [Silence Detect](./processing-audio/silence-detect.md) | Detect silent spans in audio or video and emit them as source-clock ranges (10 CR, keyless) | Find dead air and long pauses before an editing pass; feed a downstream tighten/edit step |
+| [Audio Sync](./processing-audio/audio-sync.md) | Measure how far apart 2–6 recordings' clocks are, from their sound (10 × (sources − 1) CR, keyless) | Line up a multicam podcast's cameras and master mic before planning the edit |
 | [Trim Audio](./processing-audio/trim-audio.md) | Extract section of audio file | Cut specific time range from audio |
 | [Mix Audio](./processing-audio/mix-audio.md) | Blend multiple audio tracks with levels | Layer voice, music, and SFX with volume control |
 | [Combine Audio](./processing-audio/combine-audio.md) | Concatenate audio tracks end-to-end, with per-segment trim | Join clips sequentially (vs. Mix Audio's layering) |

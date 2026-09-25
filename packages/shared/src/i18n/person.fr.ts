@@ -277,6 +277,7 @@ const map: LocaleCatalogMap = {
   "face-short-beard": { label: "Barbe courte", description: "Barbe courte taillée" },
   "face-full-beard": { label: "Barbe pleine", description: "Barbe épaisse fournie" },
   // Skin texture
+  "texture-natural": { label: "Naturelle", description: "Vrais pores, variations naturelles" },
   "texture-smooth": { label: "Lisse", description: "Peau impeccable et soyeuse" },
   "texture-wrinkled": { label: "Ridée", description: "Peau âgée, profondément ridée" },
   "texture-goosebumps": { label: "Chair de poule", description: "Chair de poule sur la peau" },

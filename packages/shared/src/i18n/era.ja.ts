@@ -5,11 +5,11 @@ const map: LocaleCatalogMap = {
   "1920s-flapper": { label: "1920年代フラッパー", description: "ジャズエイジのスピークイージー・グラマー" },
   "1930s-art-deco": { label: "1930年代アール・デコ", description: "流線型デコのグラマー" },
   "1940s-wartime": { label: "1940年代戦時下", description: "戦時下のユーティリティとビクトリーロール" },
-  "1950s-diner": { label: "1950年代ダイナー／ピンナップ", description: "クロームのダイナーとボウファントのピンナップ" },
-  "1960s-mod": { label: "1960年代モッド", description: "スウィンギング・ロンドンのグラフィックなモッド" },
+  "1950s-diner": { label: "1950年代ダイナー／ピンナップ", description: "クロームのダイナーと、髪を高くふくらませたピンナップ" },
+  "1960s-mod": { label: "1960年代モッズ", description: "スウィンギング・ロンドンのグラフィックなモッズ" },
   "1970s-disco": { label: "1970年代ディスコ", description: "スタジオ54のミラーボール・グリッター" },
   "1980s-neon": { label: "1980年代ネオン", description: "パワースーツとMTVのネオン的過剰さ" },
-  "1990s-mall": { label: "1990年代モール", description: "モールラットのグランジとポップが混じる90年代" },
+  "1990s-mall": { label: "1990年代モール", description: "モールにたむろする若者の、グランジとポップが混じる90年代" },
   "2000s-y2k": { label: "2000年代タブロイド／Y2K", description: "パパラッチフラッシュのローライズ・タブロイド" },
 
   // Pre-modern
@@ -20,22 +20,22 @@ const map: LocaleCatalogMap = {
   "wild-west": { label: "ワイルドウエスト", description: "陽に焼けたフロンティアのカウボーイ・アメリカーナ" },
   "ancient-rome": { label: "古代ローマ", description: "大理石の柱が立ち並ぶ帝国ローマ" },
   "ancient-egypt": { label: "古代エジプト", description: "ファラオの黄金とリネンのナイル川" },
-  "feudal-japan": { label: "封建日本", description: "江戸時代の侍と芸者" },
-  "roaring-prewar": { label: "戦前のロアリング", description: "1910年代後半のアール・ヌーヴォーの境目" },
+  "feudal-japan": { label: "封建時代の日本", description: "江戸時代の侍と芸者" },
+  "roaring-prewar": { label: "戦前の狂騒", description: "1910年代後半、アール・ヌーヴォー末期の転換期" },
 
   // Speculative
   "near-future": { label: "近未来", description: "5〜15年先のもっともらしい未来" },
   "far-future": { label: "遠未来", description: "数世紀先の宇宙航行時代" },
-  "dieselpunk": { label: "ディーゼルパンク", description: "1930〜40年代の工業オルタナ史" },
-  "atompunk": { label: "アトムパンク", description: "1950年代未来の宇宙時代の楽観主義" },
+  "dieselpunk": { label: "ディーゼルパンク", description: "1930〜40年代を舞台にした工業的な歴史改変もの" },
+  "atompunk": { label: "アトムパンク", description: "1950年代が思い描いた未来、宇宙時代の楽観主義" },
   "cyberpunk-future": { label: "サイバーパンク未来", description: "ネオンの巨大都市のハイテク・ローライフ" },
-  "post-apocalyptic": { label: "ポスト・アポカリプス", description: "スカベンジャーの荒野生存" },
-  "retrofuturism": { label: "レトロフューチャリズム", description: "昨日の明日のノスタルジア" },
+  "post-apocalyptic": { label: "ポスト・アポカリプス", description: "廃品をあさって荒野を生き抜くサバイバル" },
+  "retrofuturism": { label: "レトロフューチャリズム", description: "かつて思い描かれた未来へのノスタルジア" },
 
   // Additional eras
   "atomic-age-50s": { label: "アトミック・エイジ（1950年代）", description: "1950年代のSF未来主義と冷戦期の不安" },
-  "gen-z-2020s": { label: "Z世代（2020年代）", description: "スマホファーストの構図、TikTok調のスタイリング、Y2Kリバイバル" },
-  "fin-de-siecle": { label: "フィン・ド・シエクル", description: "ベル・エポックの世紀末ヨーロッパの優雅さ" },
+  "gen-z-2020s": { label: "Z世代（2020年代）", description: "スマホファーストで TikTok 調の、今の時代" },
+  "fin-de-siecle": { label: "世紀末（1895〜1905年）", description: "ベル・エポックの世紀末ヨーロッパの優雅さ" },
 }
 
 export default map

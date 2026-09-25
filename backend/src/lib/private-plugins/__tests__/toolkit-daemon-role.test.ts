@@ -25,6 +25,7 @@ import {
   updateAccountSecret,
   upsertAccountSecret,
 } from "../../plugin-account-secrets.js"
+import { firePluginTrigger, listActivePluginTriggers } from "../../plugin-triggers.js"
 
 describe("buildToolkit — daemon role", () => {
   it("every process gets the metadata surface of the account-secret store, and nothing that decrypts", () => {
@@ -42,6 +43,13 @@ describe("buildToolkit — daemon role", () => {
     expect(tk.accountSecrets?.upsert).toBe(upsertAccountSecret)
     expect(tk.accountSecrets?.open).toBe(openAccountSecret)
     expect(tk.accountSecrets?.list).toBe(listAccountSecrets)
+  })
+
+  it("only the daemon host can read trigger lanes and start runs from them", () => {
+    expect(buildToolkit()).not.toHaveProperty("triggers")
+    const tk = buildToolkit({ role: "daemon" })
+    expect(tk.triggers?.listActive).toBe(listActivePluginTriggers)
+    expect(tk.triggers?.fire).toBe(firePluginTrigger)
   })
 
   it("tk.redis.kv cannot write, bump, expire or delete a lease key — only tk.redis.lease owns that namespace", async () => {

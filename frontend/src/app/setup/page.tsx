@@ -1116,7 +1116,7 @@ export default function SetupPage() {
                         {t("setup.connectedDesc")}
                         {coverage.uncoveredMissing.length > 0 && (
                           <>
-                            {" "}{t("setup.stillNeedsOwnKey", { names: coverage.uncoveredMissing.map((tile) => tile.name).join(", ") })}
+                            {t("common.fragmentGap")}{t("setup.stillNeedsOwnKey", { names: coverage.uncoveredMissing.map((tile) => tile.name).join(t("common.listComma")) })}
                           </>
                         )}
                       </>
@@ -1125,10 +1125,10 @@ export default function SetupPage() {
                         <strong style={{ color: INK, fontWeight: 600 }}>
                           {t("setup.oneClickClears", { n: coverage.coveredMissing, total: keysMissing })}
                         </strong>
-                        {" "}{t("setup.oauthNoKeys")}
+                        {t("common.fragmentGap")}{t("setup.oauthNoKeys")}
                         {coverage.uncoveredMissing.length > 0 && (
                           <>
-                            {" "}{t("setup.notCoveredOwnKey", { names: coverage.uncoveredMissing.map((tile) => tile.name).join(", ") })}
+                            {t("common.fragmentGap")}{t("setup.notCoveredOwnKey", { names: coverage.uncoveredMissing.map((tile) => tile.name).join(t("common.listComma")) })}
                           </>
                         )}
                       </>
@@ -1316,8 +1316,9 @@ export default function SetupPage() {
                 }}
               >
                 <li>
-                  {t("setup.envStep1")}{" "}
-                  <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>docker-compose.community.yml</code>.
+                  {t("setup.envStep1")}{t("common.fragmentGap")}
+                  <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>docker-compose.community.yml</code>
+                  {t("common.sentenceEnd")}
                 </li>
                 <li>
                   {t("setup.envStep2Pre")} <code style={{ fontFamily: MONO, fontSize: 12, color: INK }}>.env</code>{" "}

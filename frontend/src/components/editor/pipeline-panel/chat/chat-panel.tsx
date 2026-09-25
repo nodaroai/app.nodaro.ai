@@ -6,6 +6,7 @@ import { ChatHistory } from "./chat-history"
 import { ChatInput } from "./chat-input"
 import { useT } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
+import { STAGE_LABEL_KEYS } from "../stage-labels"
 
 interface Props {
   pipelineId: string
@@ -176,7 +177,7 @@ export function ChatPanel({ pipelineId, stage, onApplied }: Props) {
             {t("pipe.refine")}
           </div>
           <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 capitalize">
-            {t("pipe.stageChat", { stage: stage.replace(/_/g, " ") })}
+            {t("pipe.stageChatTitle", { stage: t(STAGE_LABEL_KEYS[stage]) })}
           </div>
         </div>
         <Button

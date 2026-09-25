@@ -12,6 +12,7 @@ import type {
   SelectorNodeData,
   WebScrapeNodeData,
   SilenceDetectNodeData,
+  AudioSyncNodeData,
   VideoAnalysisNodeData,
   VideoAuditNodeData,
   DescribeToPickerData,
@@ -540,6 +541,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "loop-video" ||
     type === "gif-to-video" ||
     type === "fade-video" ||
+    type === "video-overlay" ||
     type === "manual-edit" ||
     type === "transcode-video" ||
     type === "remove-audio"
@@ -735,6 +737,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     const d = node.data as WebScrapeNodeData;
     // Single json handle — stringify for text consumers; Extract Field reads
     // d.generatedJson directly (bypasses extractNodeOutput).
+    if (sourceHandle === "json" || !sourceHandle) {
+      return d.generatedJson === undefined ? undefined : JSON.stringify(d.generatedJson);
+    }
+    return undefined;
+  }
+  if (type === "audio-sync") {
+    const d = node.data as AudioSyncNodeData;
+    // Single json handle carrying { version, reference, offsets, notes } —
+    // stringified exactly like silence-detect's ranges below.
     if (sourceHandle === "json" || !sourceHandle) {
       return d.generatedJson === undefined ? undefined : JSON.stringify(d.generatedJson);
     }
@@ -1099,6 +1110,7 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "loop-video",
   "gif-to-video",
   "fade-video",
+  "video-overlay",
   "transcode-video",
   "manual-edit",
   "video-sfx",
@@ -1156,6 +1168,8 @@ export function detectPreviewItemType(
   // media URL — classify it as data so its preview isn't mis-typed by the URL
   // fallthrough below.
   if (nodeType === "silence-detect") return "data"
+  // audio-sync emits its offsets as JSON, never a media URL.
+  if (nodeType === "audio-sync") return "data"
   // edit-plan emits an EDL plan (json), never a media URL — classify as data.
   if (nodeType === "edit-plan") return "data"
   // apply-edl `json` handle = the remapped Transcript (data). Its media handle

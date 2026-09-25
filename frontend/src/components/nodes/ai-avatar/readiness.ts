@@ -43,7 +43,7 @@ const MISSING_PHRASE: Record<AiAvatarMissing, MessageKey> = {
 /** "a, b and c" — natural list in the active language. */
 function joinNatural(items: ReadonlyArray<string>, t: TFunction): string {
   if (items.length <= 1) return items[0] ?? ""
-  return t("node.listAndLast", { list: items.slice(0, -1).join(", "), last: items[items.length - 1] })
+  return t("node.listAndLast", { list: items.slice(0, -1).join(t("common.listComma")), last: items[items.length - 1] })
 }
 
 export function computeAiAvatarReadiness(

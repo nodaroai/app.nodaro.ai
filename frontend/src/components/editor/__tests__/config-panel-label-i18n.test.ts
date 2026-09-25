@@ -30,7 +30,7 @@ describe("config panel Label field", () => {
  * of `nodeTypeDefaultLabel(type)` — the node definition's own persisted label,
  * so the field's default and the stored default can never disagree. Pinned
  * for every definition: the field SHOWS Hebrew for the untouched default
- * (NODE_LABELS_HE knows the persisted string) and typing it back restores it.
+ * (the Hebrew `node` table knows the persisted string) and typing it back restores it.
  */
 describe("Label field default ↔ persisted node label", () => {
   const defs = NODE_DEFINITIONS.filter((d) => typeof d.label === "string" && d.label.length > 0)

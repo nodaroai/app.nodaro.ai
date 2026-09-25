@@ -72,8 +72,8 @@ export function ForkButton({ pipelineId, pipelineStatus, onForked }: Props) {
           <DialogHeader>
             <DialogTitle>{t("pipe.forkThisPipeline")}</DialogTitle>
             <DialogDescription>
-              {t("pipe.forkDescPre")}{" "}
-              <strong>{t("pipe.cannotBeUndone")}</strong> {t("pipe.forkDescPost")}
+              {t("pipe.forkDescPre")}{t("common.fragmentGap")}
+              <strong>{t("pipe.cannotBeUndone")}</strong>{t("common.fragmentGap")}{t("pipe.forkDescPost")}
             </DialogDescription>
           </DialogHeader>
           {errMsg && (

@@ -17,7 +17,7 @@ import type { SimpleNode, ResolvedInputs } from "../types.js"
 /** Measured on frontend/src/components/editor/workflow-editor/execute-node.ts
  *  @ origin/dev d7815542 with the window+regex in the last test below. Bump it
  *  ONLY together with a new table row or a justified PARITY_EXEMPT entry. */
-const FRONTEND_MEDIA_REFUSAL_COUNT = 84 // +2 image-overlay: base image (table row) + overlay layers (the case throws its own); +1 silence-detect (audio/video source, table row); +1 apply-edl (the "connect an EDL" guard over-matches "connect a"; JSON-input guard, exempt below); +1 edit-plan (the "connect a transcript" guard over-matches "connect a"; JSON-input guard, exempt below)
+const FRONTEND_MEDIA_REFUSAL_COUNT = 86 // +1 video-overlay: base video (table row); +2 image-overlay: base image (table row) + overlay layers (the case throws its own); +1 silence-detect (audio/video source, table row); +1 apply-edl (the "connect an EDL" guard over-matches "connect a"; JSON-input guard, exempt below); +1 edit-plan (the "connect a transcript" guard over-matches "connect a"; JSON-input guard, exempt below); +1 audio-sync ("connect at least 2 recordings" — a source-COUNT guard, exempt below)
 
 const JOB = "job-media-required"
 const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
@@ -319,6 +319,7 @@ describe("required media inputs", () => {
       "generate-mask",           // :5739 no image connected
       "image-collage",           // :5907 need at least 2 image inputs
       "image-overlay",           // no base image connected + no overlay image connected
+      "video-overlay",           // no base video connected (the layer refusals speak the shared validator's codes)
       "combine-videos",          // :6002 need at least 2 video inputs
       "apply-edl",               // "connect an EDL to the EDL input" — a json-input guard, not media (exempt below)
       "edit-plan",               // "connect a transcript to the Transcript input" — a json-input guard, not media (exempt below)
@@ -327,6 +328,7 @@ describe("required media inputs", () => {
       "trim-audio",              // :6125 no video input
       "extract-audio",           // :6150 no video input
       "silence-detect",          // connect an audio or video source
+      "audio-sync",              // connect at least 2 recordings to the "Sources" input (source-COUNT guard, exempt below)
       "remove-audio",            // :6166 no video input
       "split-media",             // :6184 no video or audio input found
       "trim-video",              // :6287 no video input
@@ -394,6 +396,8 @@ describe("required media inputs", () => {
         "the frontend refusal is 'connect an EDL' — a JSON-input guard, not a media one (its media resolves from EdlSource.url inside the EDL). The backend enforces parity by building + validating the effective EDL in the payload-builder case (validateEffectiveEdl throws before the reservation), so a media-only REQUIRED_MEDIA_INPUTS row would be wrong.",
       "edit-plan":
         "the counted refusal is 'connect a transcript' — a JSON-input guard, not a media one (edit-plan reads the transcript, never pixels). buildPayload DOES enforce parity: its edit-plan case throws for BOTH an unresolved transcript AND empty sources before the reserve (mirroring the two frontend refusals). A REQUIRED_MEDIA_INPUTS row would still be wrong because the PRIMARY guard is the JSON transcript, and the media guard is a source-COUNT (min 1), not a specific typed-URL slot that table models.",
+      "audio-sync":
+        "the guard is a source-COUNT (2..6 recordings on one `sources` handle, each kept with its node id), not a typed-URL slot the table models. buildPayload DOES enforce parity: its audio-sync case throws for fewer than 2 or more than 6 wired recordings, and for any source that is not a fetchable media URL, before the reserve (pinned by ee/billing/__tests__/audio-sync-credits.test.ts).",
     }
     for (const t of FE_GUARDED) {
       if (t in PARITY_EXEMPT) continue

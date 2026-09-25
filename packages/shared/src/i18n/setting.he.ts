@@ -9,6 +9,7 @@ const map: LocaleCatalogMap = {
   "bedroom": { label: "חדר שינה", description: "חדר שינה אינטימי" },
   "living-room": { label: "סלון", description: "סלון ביתי נעים" },
   "kitchen": { label: "מטבח", description: "מטבח ביתי חמים באור בוקר" },
+  "bathroom": { label: "חדר רחצה", description: "חדר רחצה ביתי מואר" },
   "hotel-room": { label: "חדר מלון", description: "חדר מלון אלגנטי עם נוף לעיר" },
   "restaurant": { label: "מסעדה", description: "מסעדה אינטימית לאור נרות" },
   "nightclub": { label: "מועדון לילה", description: "מועדון חשוך עם לייזרים ועשן" },
@@ -20,6 +21,7 @@ const map: LocaleCatalogMap = {
   "warehouse": { label: "מחסן תעשייתי", description: "מחסן ענק עם חלונות גג" },
   "subway-car": { label: "קרון רכבת תחתית", description: "פנים רכבת תחתית בתנועה" },
   "taxi": { label: "פנים מונית", description: "מושב אחורי של מונית עירונית בלילה" },
+  "car-interior": { label: "פנים רכב", description: "המושב הקדמי ברכב חונה" },
   "cathedral": { label: "קתדרלה", description: "פנים קתדרלה גותית" },
   "art-gallery": { label: "גלריית אמנות", description: "גלריה מינימליסטית בסגנון הקובייה הלבנה" },
 

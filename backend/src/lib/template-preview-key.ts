@@ -4,7 +4,8 @@ import { createHash } from "node:crypto"
  * Where a template's durable preview copy lives in R2.
  *
  * The CDN serves every object under a one-year immutable cache
- * (`R2_CACHE_CONTROL` in storage.ts) and there is no purge, so a cover written
+ * (`R2_CACHE_CONTROL` in storage.ts) and there is no automated purge
+ * (single-file purge exists in the Cloudflare dashboard/API), so a cover written
  * over a fixed key never reaches viewers again — the edge keeps serving the
  * first copy for a year. The key therefore carries a stamp derived from the
  * SOURCE url: a new cover lands on a new key (fresh URL, fresh cache), while

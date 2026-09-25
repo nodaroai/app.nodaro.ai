@@ -13,12 +13,24 @@ import {
   CAPTION_MAX_WORDS_PER_LINE_MIN,
   CAPTION_MAX_WORDS_PER_LINE_MAX,
   TRANSCRIBE_LANES,
+  VIDEO_OVERLAY_CORNERS,
+  VIDEO_OVERLAY_FITS,
+  VIDEO_OVERLAY_OUTPUT_ASPECTS,
+  VIDEO_OVERLAY_PRESET_IDS,
+  isVideoOverlayCorner,
+  isVideoOverlayOutputAspect,
+  isVideoOverlayPresetId,
   type OverlayAnchor,
   type OverlayPlatformId,
   type CaptionStyle,
   type CaptionLookId,
   type SupportedFontName,
   type TranscribeLane,
+  type VideoOverlayCorner,
+  type VideoOverlayFit,
+  type VideoOverlayLayerSpec,
+  type VideoOverlayOutputAspect,
+  type VideoOverlayPresetId,
 } from "@nodaro/shared"
 import type { DownloadVideoProgress, CaptionEntry, CaptionSegmentInput } from "@nodaro/sdk"
 
@@ -41,6 +53,22 @@ function parseSection(raw: string): { sectionStartSec: number; sectionEndSec: nu
     process.exit(1)
   }
   return { sectionStartSec: start, sectionEndSec: end }
+}
+
+/**
+ * Parse one `--at <start[-end]>` (seconds, floats allowed): `3` = from 3 s to
+ * the end of the video, `1.2-2.6` = that window. Same refusal shape as
+ * `--section`: a message naming the flag, then exit 1.
+ */
+function parseAt(raw: string): { start: number; end?: number } {
+  const m = raw.match(/^([0-9]+(?:\.[0-9]+)?)(?:-([0-9]+(?:\.[0-9]+)?))?$/)
+  const start = m ? parseFloat(m[1]) : NaN
+  const end = m && m[2] !== undefined ? parseFloat(m[2]) : undefined
+  if (!m || (end !== undefined && !(end > start))) {
+    warn(`--at must be "<start>" or "<start>-<end>" in seconds with start < end (got "${raw}")`)
+    process.exit(1)
+  }
+  return end === undefined ? { start } : { start, end }
 }
 
 /** Parse `--max-words-per-line n` — a whole number inside the shared bounds.
@@ -101,7 +129,7 @@ function parseSafeArea(raw: string): { x: number; y: number; w: number; h: numbe
 
 export function mediaCommand(): Command {
   const cmd = new Command("media").description(
-    "media ingestion + compositing — pull a social video into storage, trim video/audio, burn captions, still-to-video, slideshow, collage images, overlay layers on an image, save a URL to storage, probe metadata",
+    "media ingestion + compositing — pull a social video into storage, trim video/audio, burn captions, still-to-video, slideshow, collage images, overlay layers on an image or timed images on a video, save a URL to storage, probe metadata",
   )
 
   cmd
@@ -804,6 +832,113 @@ vision model and answers in these same units.`)
             ...(opts.maskSpread !== undefined ? { maskSpread: opts.maskSpread } : {}),
           })
           await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "image overlay" })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
+    .command("video-overlay <videoUrl> [layerUrls...]")
+    .description("place timed image layers over a video (local compositor, no AI; the audio is kept) — positional URLs are layers, one --at each")
+    .option("--at <start[-end]>", 'a positional layer\'s window in seconds ("3" = from 3 s to the end, "1.2-2.6"); repeat once per layer, in order', collectVariadic)
+    .option("--preset <id>", `placement for every positional layer: ${VIDEO_OVERLAY_PRESET_IDS.join(" | ")} (default: a corner badge — bottom-right, or the --corner given)`)
+    .option("--corner <corner>", `with --preset corner-badge: ${VIDEO_OVERLAY_CORNERS.join(" | ")} (default bottom-right)`)
+    .option("--layers-file <path>", "JSON file with the full layers array (custom boxes, opacity, animate, zIndex; mutually exclusive with positional layer URLs)")
+    .option("--aspect <ratio>", `render onto a ${VIDEO_OVERLAY_OUTPUT_ASPECTS.join(" | ")} canvas instead of the video's own size`)
+    .option("--base-fit <fit>", "with --aspect: how the video fills the canvas, cover (default) or contain")
+    .option("--background-color <hex>", "with --aspect: the padding colour under --base-fit contain, #RRGGBB")
+    .option("--watch", "poll until the job completes")
+    .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText("after", `
+Examples:
+  $ nodaro media video-overlay https://x/clip.mp4 https://x/shot1.png https://x/shot2.png --at 1.2-2.6 --at 3-4.4 --preset card --watch
+  $ nodaro media video-overlay https://x/clip.mp4 https://x/logo.png --at 0 --preset corner-badge --corner top-right --watch
+  $ nodaro media video-overlay https://x/clip.mp4 --layers-file layers.json --aspect 9:16 --watch
+
+A layers file holds the API's layers array, e.g.
+  [{"imageUrl":"https://x/logo.png","start":0,"anchor":"top-left","x":4,"y":4,"width":12,"opacity":0.9}]
+Placement is in PERCENT of the output frame. An explicit box field overrides a
+preset; a layer with neither is a corner badge (bottom-right, or the corner it
+names).`)
+    .action(
+      async (
+        videoUrl: string,
+        layerUrls: string[],
+        opts: {
+          at?: string[]
+          preset?: string
+          corner?: string
+          layersFile?: string
+          aspect?: string
+          baseFit?: string
+          backgroundColor?: string
+        } & WatchOpts,
+      ) => {
+        try {
+          if (opts.layersFile && layerUrls.length > 0) {
+            warn("Pass layers EITHER as positional URLs OR with --layers-file, not both")
+            process.exit(1)
+          }
+          if (!opts.layersFile && layerUrls.length === 0) {
+            warn("Give at least one layer: a positional image URL (with its --at), or --layers-file with the layers array")
+            process.exit(1)
+          }
+          if (opts.layersFile && (opts.at?.length || opts.preset || opts.corner)) {
+            warn("--at, --preset and --corner apply to positional layers — put them inside the --layers-file entries instead")
+            process.exit(1)
+          }
+          if (opts.preset && !isVideoOverlayPresetId(opts.preset)) {
+            warn(`--preset must be one of ${VIDEO_OVERLAY_PRESET_IDS.join(", ")} (got "${opts.preset}")`)
+            process.exit(1)
+          }
+          if (opts.corner && !isVideoOverlayCorner(opts.corner)) {
+            warn(`--corner must be one of ${VIDEO_OVERLAY_CORNERS.join(", ")} (got "${opts.corner}")`)
+            process.exit(1)
+          }
+          if (opts.aspect && !isVideoOverlayOutputAspect(opts.aspect)) {
+            warn(`--aspect must be one of ${VIDEO_OVERLAY_OUTPUT_ASPECTS.join(", ")} (got "${opts.aspect}")`)
+            process.exit(1)
+          }
+          if (opts.baseFit && !(VIDEO_OVERLAY_FITS as readonly string[]).includes(opts.baseFit)) {
+            warn(`--base-fit must be cover or contain (got "${opts.baseFit}")`)
+            process.exit(1)
+          }
+          if ((opts.baseFit || opts.backgroundColor) && !opts.aspect) {
+            warn("--base-fit and --background-color need --aspect")
+            process.exit(1)
+          }
+
+          // Positional URLs pair with their --at windows and share the preset;
+          // a layers file carries whatever the route accepts, verbatim.
+          let layers: VideoOverlayLayerSpec[]
+          if (opts.layersFile) {
+            layers = readJsonArrayFile<VideoOverlayLayerSpec>(opts.layersFile, "--layers-file")
+          } else {
+            const at = opts.at ?? []
+            if (at.length !== layerUrls.length) {
+              warn(`Give one --at per layer URL, in order (${layerUrls.length} layer URL(s), ${at.length} --at)`)
+              process.exit(1)
+            }
+            layers = layerUrls.map((imageUrl, i) => ({
+              imageUrl,
+              ...parseAt(at[i]),
+              ...(opts.preset ? { preset: opts.preset as VideoOverlayPresetId } : {}),
+              ...(opts.corner ? { corner: opts.corner as VideoOverlayCorner } : {}),
+            }))
+          }
+
+          const client = buildClient(opts.profile)
+          const result = await client.media.videoOverlay({
+            videoUrl,
+            layers,
+            ...(opts.aspect ? { outputAspect: opts.aspect as VideoOverlayOutputAspect } : {}),
+            ...(opts.baseFit ? { baseFit: opts.baseFit as VideoOverlayFit } : {}),
+            ...(opts.backgroundColor ? { backgroundColor: opts.backgroundColor } : {}),
+          })
+          await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "video overlay" })
         } catch (err) {
           handleError(err)
         }

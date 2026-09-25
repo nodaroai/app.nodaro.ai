@@ -90,9 +90,12 @@ describe("NOT_GENERIC_RECOVERABLE", () => {
   // the reconciler runs the SAME completion tail the worker runs instead of
   // discarding a finished provider result and refunding the user 90 minutes
   // later. `finalize-job-type-coverage.test.ts` is what keeps the three sets
-  // total and pairwise disjoint; this pin is only the ratchet.
-  it("has exactly 60 members", () => {
-    expect(NOT_GENERIC_RECOVERABLE.size).toBe(60)
+  // total and pairwise disjoint; this pin is only the ratchet. `video-overlay`
+  // (a local ffmpeg lane with no provider task id to poll) took it to 61, and
+  // audio-sync (podcast B3: a SYNC local analysis with its own
+  // markJobCompleted, like silence-detect) to 62.
+  it("has exactly 61 members", () => {
+    expect(NOT_GENERIC_RECOVERABLE.size).toBe(62)
   })
 
   it("denies generate-script and no other entity handler key", () => {

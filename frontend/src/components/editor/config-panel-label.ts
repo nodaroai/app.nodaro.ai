@@ -119,6 +119,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "assemble-narrated-video": "Assemble Narrated Video",
   "image-collage": "Image Collage",
   "image-overlay": "Image Overlay",
+  "video-overlay": "Video Overlay",
   "merge-video-audio": "Merge Video & Audio",
   "add-captions": "Add Captions",
   "resize-video": "Resize Video",
@@ -127,6 +128,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "split-media": "Split into Chunks",
   "extract-audio": "Extract Audio",
   "silence-detect": "Silence Detect",
+  "audio-sync": "Audio Sync",
   "remove-audio": "Remove Audio",
   "mix-audio": "Mix Audio",
   "combine-audio": "Combine Audio",
@@ -206,7 +208,7 @@ export function getNodeTypeDisplayName(type: string): string {
 
 /**
  * The label the palette PERSISTS for a node type (`NODE_DEFINITIONS[].label`,
- * mirrored into `defaultData.label`) — the exact string `NODE_LABELS_HE` is
+ * mirrored into `defaultData.label`) — the exact string the `node` label tables are
  * keyed by. The Label field's round-trip (show localized → commit English)
  * compares against THIS, so it can never disagree with what the node stores.
  */

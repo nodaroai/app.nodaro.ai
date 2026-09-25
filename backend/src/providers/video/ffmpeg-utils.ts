@@ -1,4 +1,4 @@
-import { execFile, spawn } from "node:child_process"
+import { execFile, spawn, type ExecFileException } from "node:child_process"
 import { createWriteStream } from "node:fs"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
@@ -11,6 +11,7 @@ import { isIP } from "node:net"
 import { config } from "../../lib/config.js"
 import { safeFetch, isPrivateOrReservedIP } from "../../lib/safe-fetch.js"
 import { csvFields } from "./ffprobe-csv.js"
+import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_TIMEOUT_MS, FFPROBE_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
 
 // The ceilings live in a dependency-free leaf (see its header); re-exported so
@@ -164,6 +165,19 @@ export function ffmpegFailureMessage(stderr: string | undefined, fallback: strin
   return `ffmpeg failed: ${tail}`
 }
 
+/**
+ * `killed`: Node's execFile killed the child (the `timeout` watchdog or a
+ * maxBuffer overflow — ffmpeg traps the SIGTERM and exits 255, so `signal` is
+ * null and `killed` is the only reliable marker). `timedOut`: killed by the
+ * watchdog specifically. Attached to every ffmpeg / ffprobe failure so a
+ * caller can classify without parsing text (Video Overlay: a timeout is
+ * "Render exceeded the 10-minute limit"; a probe timeout stays retryable).
+ */
+function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut: boolean } {
+  const killed = error.killed === true
+  return { killed, timedOut: killed && error.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" }
+}
+
 export async function runFfmpeg(args: readonly string[], timeoutMs?: number): Promise<string> {
   const release = await acquireFfmpegSlot()
   try {
@@ -173,7 +187,7 @@ export async function runFfmpeg(args: readonly string[], timeoutMs?: number): Pr
         timeout: timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS,
       }, (error, stdout, stderr) => {
         if (error) {
-          reject(new Error(ffmpegFailureMessage(stderr, error.message)))
+          reject(Object.assign(new Error(ffmpegFailureMessage(stderr, error.message)), execFailureFlags(error)))
         } else {
           resolve(stdout)
         }
@@ -349,7 +363,7 @@ export function runFfprobe(args: readonly string[]): Promise<string> {
     // matches the safeFetch download timeout.
     execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout: FFPROBE_TIMEOUT_MS }, (error, stdout, stderr) => {
       if (error) {
-        reject(new Error(`ffprobe failed: ${stderr || error.message}`))
+        reject(Object.assign(new Error(`ffprobe failed: ${stderr || error.message}`), execFailureFlags(error)))
       } else {
         resolve(stdout)
       }
@@ -520,6 +534,110 @@ function constantFrameRate(avg: number | undefined, nominal: number | undefined)
   if (nominal === undefined) return avg
   const spread = Math.abs(avg - nominal) / Math.max(avg, nominal)
   return spread > VFR_RATE_TOLERANCE ? undefined : avg
+}
+
+/**
+ * What Video Overlay knows about its base after ONE local ffprobe call
+ * (`probeVideoOverlayBase`). `width` / `height` are the DISPLAY size — the
+ * stored size with the axes swapped for a 90°/270° rotation tag, which is what
+ * the ffmpeg CLI's autorotate hands `[0:v]` and what a browser's
+ * videoWidth/videoHeight report. `sar` is in the same (display) orientation;
+ * 1 when absent. Durations are the VIDEO stream's (AAC priming inflates the
+ * container's). The frame rates are the raw ffprobe rationals.
+ */
+export interface VideoOverlayBaseProbe {
+  readonly width: number
+  readonly height: number
+  /** Display-matrix rotation, degrees normalised to 0..359. */
+  readonly rotation: number
+  readonly sar: number
+  readonly rFrameRate?: string
+  readonly avgFrameRate?: string
+  readonly streamDurationSec: number
+  readonly startTimeSec: number
+  /** codec_name of the FIRST audio stream; null when the base is silent. */
+  readonly audioCodec: string | null
+}
+
+/**
+ * The ONE ffprobe call Video Overlay makes on its downloaded base (spec §4.2
+ * step 3). No `-select_streams` (v:0 and a:0 cannot be selected in one call):
+ * the first real video stream and the first audio stream are picked here.
+ * An embedded cover picture (`disposition.attached_pic`) is not a video — an
+ * MP3 with album art must fail as "not a video", not render one frame.
+ */
+const VIDEO_OVERLAY_PROBE_ENTRIES =
+  "stream=index,codec_type,codec_name,width,height,sample_aspect_ratio,r_frame_rate,avg_frame_rate,duration,start_time" +
+  ":stream_side_data=rotation:stream_disposition=attached_pic:stream_tags=rotate:format=duration"
+
+function parseSampleAspect(value: unknown): number {
+  if (typeof value !== "string") return 1
+  const [num, den] = value.split(":").map(Number)
+  return num !== undefined && den !== undefined && Number.isFinite(num) && Number.isFinite(den) && num > 0 && den > 0 ? num / den : 1
+}
+
+function parseRotation(stream: Record<string, unknown>): number {
+  const side = Array.isArray(stream.side_data_list) ? (stream.side_data_list as Array<Record<string, unknown>>) : []
+  const fromSide = side.map((s) => Number(s?.rotation)).find((r) => Number.isFinite(r))
+  const tag = Number((stream.tags as Record<string, unknown> | undefined)?.rotate)
+  const raw = fromSide ?? (Number.isFinite(tag) ? tag : 0)
+  return ((Math.round(raw) % 360) + 360) % 360
+}
+
+/** Pure: ffprobe JSON → the display-oriented probe, or DeterministicJobError("The base input is not a video"). */
+export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
+  const notVideo = () => new DeterministicJobError("The base input is not a video")
+  let parsed: { streams?: unknown; format?: { duration?: unknown } }
+  try {
+    parsed = JSON.parse(json) as typeof parsed
+  } catch {
+    throw notVideo()
+  }
+  const streams = Array.isArray(parsed.streams) ? (parsed.streams as Array<Record<string, unknown>>) : []
+  const video = streams.find(
+    (s) => s.codec_type === "video" && (s.disposition as { attached_pic?: unknown } | undefined)?.attached_pic !== 1,
+  )
+  const audio = streams.find((s) => s.codec_type === "audio")
+  if (!video) throw notVideo()
+  const storedW = Number(video.width)
+  const storedH = Number(video.height)
+  if (!Number.isInteger(storedW) || storedW <= 0 || !Number.isInteger(storedH) || storedH <= 0) throw notVideo()
+  const streamDur = Number(video.duration)
+  const formatDur = Number(parsed.format?.duration)
+  const streamDurationSec = Number.isFinite(streamDur) && streamDur > 0 ? streamDur : Number.isFinite(formatDur) && formatDur > 0 ? formatDur : NaN
+  if (!Number.isFinite(streamDurationSec)) throw notVideo()
+  const rotation = parseRotation(video)
+  const swap = rotation === 90 || rotation === 270
+  const sar = parseSampleAspect(video.sample_aspect_ratio)
+  const start = Number(video.start_time)
+  return {
+    width: swap ? storedH : storedW,
+    height: swap ? storedW : storedH,
+    rotation,
+    // The ffmpeg CLI's autorotate transposes the frame AND inverts its SAR.
+    sar: swap ? 1 / sar : sar,
+    ...(typeof video.r_frame_rate === "string" ? { rFrameRate: video.r_frame_rate } : {}),
+    ...(typeof video.avg_frame_rate === "string" ? { avgFrameRate: video.avg_frame_rate } : {}),
+    streamDurationSec,
+    startTimeSec: Number.isFinite(start) ? start : 0,
+    audioCodec: audio && typeof audio.codec_name === "string" ? audio.codec_name : null,
+  }
+}
+
+/**
+ * Probe the LOCAL base file. ffprobe failing on it (HTML, a PNG or an MP3
+ * saved as .mp4 …) is a deterministic refusal — fail once, refund; an
+ * ffprobe TIMEOUT stays a plain, retryable error.
+ */
+export async function probeVideoOverlayBase(path: string): Promise<VideoOverlayBaseProbe> {
+  let out: string
+  try {
+    out = await runFfprobe(["-v", "error", "-show_entries", VIDEO_OVERLAY_PROBE_ENTRIES, "-of", "json", path])
+  } catch (err) {
+    if ((err as { timedOut?: unknown }).timedOut === true) throw err
+    throw new DeterministicJobError("The base input is not a video", { cause: err })
+  }
+  return parseVideoOverlayProbe(out)
 }
 
 /**

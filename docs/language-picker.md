@@ -13,8 +13,8 @@ One choice controls three things at once:
 - **Picker catalogs** — the option labels inside parameter pickers like Mood,
   Framing, and Lens.
 - **Dates, times and numbers** — written the way the chosen language writes
-  them (in Hebrew, a date reads "24 בספט׳" rather than "Sep 24"), not in your
-  browser's locale. With English chosen, they keep your browser's regional
+  them (in Hebrew, a date reads "24 בספט׳" rather than "Sep 24"; in Japanese,
+  "9月24日"), not in your browser's locale. With English chosen, they keep your browser's regional
   format (an en-GB browser still shows "24/09/2026").
 - **The Copilot's replies** — the Copilot answers in the language you have
   chosen. Node names, model names and other identifiers stay as they are, so
@@ -30,13 +30,13 @@ never English menus around translated picker tiles:
 
 - English
 - Hebrew
+- Japanese
 
 More languages are on the way. The picker catalogs (Mood, Framing, Lens and
 the rest) are already translated into Arabic, German, Spanish, French, Hindi,
-Japanese, Korean, Portuguese (Brazil), Russian and Chinese (Simplified); each
-of those languages joins the menu as soon as its interface translation is
-complete (at least 98% of the interface text), with no further action on your
-side.
+Korean, Portuguese (Brazil), Russian and Chinese (Simplified); each of those
+languages joins the menu as soon as its interface translation is complete (at
+least 98% of the interface text), with no further action on your side.
 
 ## Translation coverage
 

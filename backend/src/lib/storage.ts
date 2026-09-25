@@ -759,8 +759,9 @@ function extractExtensionFromUrl(url: string): string | null {
  * the creator (matches who owns the template).
  *
  * The key is stamped from the source url (see `templatePreviewKey`): the CDN
- * caches every object for a year, immutable, with no purge, so a cover written
- * over a fixed key never reached viewers again. A new cover now lands on a new
+ * caches every object for a year, immutable, and there is no automated purge
+ * (single-file purge exists in the Cloudflare dashboard/API), so a cover
+ * written over a fixed key never reached viewers again. A new cover now lands on a new
  * key; re-publishing the same cover stays idempotent (same key, overwritten in
  * place).
  *

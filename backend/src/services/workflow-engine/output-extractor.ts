@@ -372,7 +372,10 @@ export function extractSourceNodeOutput(
       return { text: (triggerData.timestamp as string) ?? new Date().toISOString() }
     }
 
-    case "telegram-trigger": {
+    // The account lane carries the same message shape as the bot lane, plus
+    // who sent it and what kind of chat it came from.
+    case "telegram-trigger":
+    case "telegram-account-trigger": {
       const td = triggerData || {}
       const output: NodeOutput = {}
       if (td.text) output.text = td.text as string
@@ -383,6 +386,8 @@ export function extractSourceNodeOutput(
       const paramOutputs: Record<string, string> = {}
       if (td.chatId) paramOutputs["chatId"] = td.chatId as string
       if (td.messageId) paramOutputs["messageId"] = td.messageId as string
+      if (td.senderId) paramOutputs["senderId"] = td.senderId as string
+      if (td.chatType) paramOutputs["chatType"] = td.chatType as string
       if (Object.keys(paramOutputs).length > 0) output.paramOutputs = paramOutputs
       return Object.keys(output).length > 0 ? output : { text: JSON.stringify(td) }
     }
@@ -682,6 +687,13 @@ export function getPrimaryOutput(
   // consumer read state.output.json directly (bypassing getPrimaryOutput).
   // Mirrors the web-scrape json branch.
   if (sourceType === "silence-detect") {
+    return output.json === undefined ? undefined : JSON.stringify(output.json)
+  }
+
+  // Audio-sync: single `json` output handle carrying { version, reference,
+  // offsets, notes }. Stringified for generic text/json consumers, exactly like
+  // silence-detect's ranges.
+  if (sourceType === "audio-sync") {
     return output.json === undefined ? undefined : JSON.stringify(output.json)
   }
 
@@ -1035,6 +1047,8 @@ const VIDEO_RESULT_TYPES = new Set([
   "speed-ramp",
   "loop-video",
   "fade-video",
+  // Video Overlay: timed image layers over a video — generatedVideoUrl + per-result `url`.
+  "video-overlay",
   "transcode-video",
   "manual-edit",
   // Remove Audio: video in → silent video out (stores generatedVideoUrl).
@@ -1373,6 +1387,13 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return json === undefined ? undefined : { json }
   }
 
+  // Audio-sync: the same single `json` output, persisted on data.generatedJson,
+  // so a skipped / "Run from here" node hydrates its offsets without re-running.
+  if (type === "audio-sync") {
+    const json = data.generatedJson
+    return json === undefined ? undefined : { json }
+  }
+
   // Meta Ads scraper: `json` (the normalized ad array persisted on
   // data.generatedJson) plus the featured ad's text / image / video, derived
   // from `data.featuredIndex` so picking another thumb re-hydrates the typed
@@ -1653,6 +1674,23 @@ export function buildNodeOutputFromJobData(
       output.json = plan
       if (Array.isArray(plan)) output.listResults = plan.map((c) => JSON.stringify(c))
     }
+  }
+
+  // Video Overlay: the worker's warnings, output canvas, length and the DAG
+  // run's freshness key ride on the node output, so a backend run (Execute All, Run from here, schedule,
+  // webhook, app) paints the same "Last run" line the single-node Run does.
+  // Type-gated: `width` / `height` / `warnings` are too generic to promote
+  // into DIRECT_OUTPUT_KEYS for every node.
+  if (nodeType === "video-overlay") {
+    if (Array.isArray(outputData.warnings)) output.warnings = outputData.warnings as NodeOutput["warnings"]
+    if (typeof outputData.width === "number" && typeof outputData.height === "number") {
+      output.width = outputData.width
+      output.height = outputData.height
+    }
+    if (typeof outputData.durationSec === "number") output.durationSec = outputData.durationSec
+    // The freshness key a DAG run stamped — the node compares it with its
+    // current settings' key, so this run's result reads fresh, not "Result (old)".
+    if (typeof outputData.resultCompositionKey === "string") output.resultCompositionKey = outputData.resultCompositionKey
   }
 
   // Normalize generatedText -> text (image-to-text, ai-writer store output as generatedText)

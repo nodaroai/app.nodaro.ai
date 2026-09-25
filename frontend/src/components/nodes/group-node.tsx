@@ -1,6 +1,7 @@
 "use client"
 
-import { useT, tx } from "@/lib/i18n"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { memo, useCallback, useMemo, useState } from "react"
 import {
   NodeResizer,
@@ -23,7 +24,14 @@ import { useStaleHandleCleanup } from "@/hooks/use-stale-handle-cleanup"
 import { AggregateHandleIcon } from "@/components/nodes/handle-icon"
 import { computeGroupBuckets } from "@/components/editor/workflow-editor/execution-graph"
 import { NODE_COLORS, adjustColor, getEffectiveColor } from "@/lib/node-colors"
-import type { GroupNodeData, WorkflowNode } from "@/types/nodes"
+import { NODE_DEF_MAP, type GroupNodeData, type WorkflowNode } from "@/types/nodes"
+
+/** The label a new group is created with (its node definition's default). It
+ *  is persisted in English and localized for display through the node-label
+ *  table, like every node header — so a Hebrew or Japanese canvas shows it in
+ *  that language, and an empty rename falls back to it, never to a
+ *  translated string that would then stay frozen in one language. */
+const GROUP_DEFAULT_LABEL: string = (NODE_DEF_MAP.get("group")?.defaultData as GroupNodeData | undefined)?.label ?? ""
 
 /** Neutral frame — the look every existing group had before tinting existed. */
 const NEUTRAL_BORDER = "#2D2D2D"
@@ -48,6 +56,7 @@ function readableText(hex: string): string {
 
 function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
   const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const nodeData = data as GroupNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const [editing, setEditing] = useState(false)
@@ -126,7 +135,7 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
   useStaleHandleCleanup(id, types)
 
   const commitLabel = useCallback(() => {
-    const next = labelDraft.trim() || tx("node.newGroup")
+    const next = labelDraft.trim() || GROUP_DEFAULT_LABEL
     updateNodeData(id, { label: next })
     setEditing(false)
   }, [id, labelDraft, updateNodeData])
@@ -216,7 +225,10 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
             onMouseDown={(e) => e.stopPropagation()}
             title={t("node.doubleClickToRename")}
           >
-            {nodeData.label || t("node.newGroup")}
+            {/* Display-only localization, as in EditableNodeLabel: the edit
+                input stays on the stored label so a rename never persists
+                the translated default. */}
+            {localizeNode(nodeData.label || GROUP_DEFAULT_LABEL)}
           </span>
         )}
       </div>

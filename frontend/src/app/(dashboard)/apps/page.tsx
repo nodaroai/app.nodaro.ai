@@ -742,7 +742,10 @@ function MyAppCard({
         <span>{t("apps.runs", { n: app.runCount ?? app.totalRunCount ?? 0 })}</span>
         {app.monetizationEnabled && hasCredits() ? (
           <span className="text-xs text-muted-foreground">
-            {t("apps.baseLabel")} <CreditCost credits={app.baseEstimatedCredits ?? 0} /> {t("apps.totalLabel")}{" "}
+            {/* Label and figure are joined by the dictionary (no gap after a
+                full-width colon); the space between the two pairs follows the
+                Latin credit unit, so it stays in every language. */}
+            {t("apps.baseLabel")}{t("common.fragmentGap")}<CreditCost credits={app.baseEstimatedCredits ?? 0} /> {t("apps.totalLabel")}{t("common.fragmentGap")}
             <CreditCost credits={app.estimatedCredits ?? 0} />
           </span>
         ) : (
@@ -1153,7 +1156,7 @@ function EditAppDialog({
             />
             {previewMediaUrl.trim() && (
               <p className="text-[11px] text-muted-foreground mt-1">
-                {t("apps.detectedType")} {detectMediaType(previewMediaUrl.trim()) === "video" ? t("dash.mediaTypeVideo") : t("dash.mediaTypeImage")}
+                {t("apps.detectedType")}{t("common.fragmentGap")}{detectMediaType(previewMediaUrl.trim()) === "video" ? t("dash.mediaTypeVideo") : t("dash.mediaTypeImage")}
               </p>
             )}
           </div>

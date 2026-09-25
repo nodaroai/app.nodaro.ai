@@ -67,7 +67,7 @@ export function FormatPanel({
                   : "border-border/40 text-muted-foreground hover:border-border",
               )}
             >
-              {t("proccfg.original")} ({originalFormat.toUpperCase()})
+              {t("common.qualified", { token: t("proccfg.original"), qualifier: originalFormat.toUpperCase() })}
             </button>
             {options
               .filter((o) => o.value !== originalFormat)

@@ -528,25 +528,25 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
           <div className="mb-2 p-3 rounded-md bg-muted/30 border border-[var(--border-primary)] text-xs text-muted-foreground space-y-2">
             <p className="font-medium text-[var(--text-primary)]">{t("cfgext.compGuideWhatCanYouCreate")}</p>
             <ul className="space-y-1 list-disc list-inside">
-              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideLowerThirds")}</span>{" — "}{t("cfgext.compGuideLowerThirdsDesc")}</li>
-              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideTitleCards")}</span>{" — "}{t("cfgext.compGuideTitleCardsDesc")}</li>
-              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideIntrosOutros")}</span>{" — "}{t("cfgext.compGuideIntrosOutrosDesc")}</li>
-              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideKineticTypography")}</span>{" — "}{t("cfgext.compGuideKineticTypographyDesc")}</li>
-              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideAnimatedShapes")}</span>{" — "}{t("cfgext.compGuideAnimatedShapesDesc")}</li>
+              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideLowerThirds")}</span>{t("common.dashJoin")}{t("cfgext.compGuideLowerThirdsDesc")}</li>
+              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideTitleCards")}</span>{t("common.dashJoin")}{t("cfgext.compGuideTitleCardsDesc")}</li>
+              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideIntrosOutros")}</span>{t("common.dashJoin")}{t("cfgext.compGuideIntrosOutrosDesc")}</li>
+              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideKineticTypography")}</span>{t("common.dashJoin")}{t("cfgext.compGuideKineticTypographyDesc")}</li>
+              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideAnimatedShapes")}</span>{t("common.dashJoin")}{t("cfgext.compGuideAnimatedShapesDesc")}</li>
             </ul>
             <Separator className="my-1.5" />
             <p className="font-medium text-[var(--text-primary)]">{t("cfgext.compGuidePromptTips")}</p>
             <ul className="space-y-1 list-disc list-inside">
-              <li>{t("cfgext.compTipQuotes")}{" "}<span className="font-mono text-[10px]">{t("cfgext.compTipQuotesExample")}</span></li>
+              <li>{t("cfgext.compTipQuotes")}{t("common.fragmentGap")}<span className="font-mono text-[10px]">{t("cfgext.compTipQuotesExample")}</span></li>
               <li>{t("cfgext.compTipStyle")}</li>
-              <li>{t("cfgext.compTipColors")}{" "}<span className="font-mono text-[10px]">{t("cfgext.compTipColorsExample")}</span></li>
+              <li>{t("cfgext.compTipColors")}{t("common.fragmentGap")}<span className="font-mono text-[10px]">{t("cfgext.compTipColorsExample")}</span></li>
               <li>{t("cfgext.compTipAnimationFeel")}</li>
             </ul>
             <Separator className="my-1.5" />
             <p className="font-medium text-[var(--text-primary)]">{t("settings.title")}</p>
             <ul className="space-y-1 list-disc list-inside">
-              <li><span className="text-[var(--text-primary)]">{t("audiocfg.mergeRoleBackground")}</span>{" — "}{t("cfgext.compGuideBackgroundDesc")}</li>
-              <li><span className="text-[var(--text-primary)]">{t("field.duration")}</span>{" — "}{t("cfgext.compGuideDurationDesc")}</li>
+              <li><span className="text-[var(--text-primary)]">{t("audiocfg.mergeRoleBackground")}</span>{t("common.dashJoin")}{t("cfgext.compGuideBackgroundDesc")}</li>
+              <li><span className="text-[var(--text-primary)]">{t("field.duration")}</span>{t("common.dashJoin")}{t("cfgext.compGuideDurationDesc")}</li>
               {/* The node NAME goes through the label table, so the sentence
                   reads in one language; the inline highlight is dropped
                   because the name's position moves between languages. */}
@@ -943,7 +943,7 @@ export function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<Rende
         <div className="flex items-center gap-2 p-2 rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
           <Sparkles className="w-4 h-4 text-[#ff0073] shrink-0" />
           <div className="text-xs">
-            <span className="text-[var(--text-primary)]">{t("cfgext.compCompositionFrom")}{" "}</span>
+            <span className="text-[var(--text-primary)]">{t("cfgext.compCompositionFrom")}{t("common.fragmentGap")}</span>
             <span className="font-medium text-[#ff0073]">{localizeNode(upstreamComposer.label)}</span>
             {upstreamComposer.trackCount > 0 && (
               <span className="ms-1 text-muted-foreground">{t("cfgext.compTracksCount", { count: upstreamComposer.trackCount })}</span>

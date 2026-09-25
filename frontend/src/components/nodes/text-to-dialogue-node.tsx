@@ -39,7 +39,7 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
 
   const dialogue = nodeData.dialogue ?? []
   const uniqueVoices = new Set(dialogue.map((l) => l.voice))
-  const summary = `${t(dialogue.length === 1 ? "node.lineCountOne" : "node.lineCountMany", { n: dialogue.length })}, ${t(uniqueVoices.size === 1 ? "node.speakerCountOne" : "node.speakerCountMany", { n: uniqueVoices.size })}`
+  const summary = `${t(dialogue.length === 1 ? "node.lineCountOne" : "node.lineCountMany", { n: dialogue.length })}${t("common.listComma")}${t(uniqueVoices.size === 1 ? "node.speakerCountOne" : "node.speakerCountMany", { n: uniqueVoices.size })}`
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))

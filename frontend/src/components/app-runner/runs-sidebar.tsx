@@ -130,7 +130,7 @@ export function RunsSidebar({
             <option value="">{t("runner.latestVersionOption", { n: latestVersion })}</option>
             {versions.map((v) => (
               <option key={v.version} value={v.version}>
-                v{v.version}{v.version === latestVersion ? ` ${t("runner.latestSuffix")}` : ""}
+                v{v.version}{v.version === latestVersion ? `${t("common.fragmentGap")}${t("runner.latestSuffix")}` : ""}
               </option>
             ))}
           </select>

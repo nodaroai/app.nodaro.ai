@@ -121,7 +121,7 @@ describe("POST /v1/workflows/:id/sync-triggers", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ data: { synced: true, created: 1, updated: 0, removed: 0 } })
     expect(reconcileMock).toHaveBeenCalledTimes(1)
-    expect(reconcileMock).toHaveBeenCalledWith({ workflowId: WORKFLOW_ID, userId: OWNER, nodes: NODES, vouchNodeIds: ["s1"] })
+    expect(reconcileMock).toHaveBeenCalledWith({ workflowId: WORKFLOW_ID, userId: OWNER, nodes: NODES, vouchNodeIds: ["s1"], ownerActing: true })
   })
 
   it("no vouch ids in the body: projects, vouches for nothing", async () => {
@@ -138,7 +138,8 @@ describe("POST /v1/workflows/:id/sync-triggers", () => {
     const res = await sync(OWNER, "api_token")
     expect(res.statusCode).toBe(200)
     expect(reconcileMock).toHaveBeenCalledTimes(1)
-    expect(reconcileMock.mock.calls[0][0]).toMatchObject({ userId: OWNER })
+    // Still the owner acting: the account lane is theirs to change.
+    expect(reconcileMock.mock.calls[0][0]).toMatchObject({ userId: OWNER, ownerActing: true })
     expect(reconcileMock.mock.calls[0][0].vouchNodeIds).toBeUndefined()
   })
 

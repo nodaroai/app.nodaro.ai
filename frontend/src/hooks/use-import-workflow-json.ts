@@ -71,7 +71,7 @@ export function useImportWorkflowJson(): {
         const assetCount = bundledAssetCount(data)
         const report = created.importReport
         const copied = report?.rehosted
-          ? t("editor.mediaCopiedSuffix", { n: report.rehosted, suffix: report.rehosted === 1 ? "" : "s" })
+          ? t(report.rehosted === 1 ? "editor.mediaCopiedOne" : "editor.mediaCopiedMany", { n: report.rehosted })
           : ""
         toast.success(
           (assetCount > 0 ? t("editor.importedWithAssetsCount", { n: assetCount }) : t("editor.importedPlain")) + copied,
@@ -83,9 +83,8 @@ export function useImportWorkflowJson(): {
         if (unreachable.length > 0) {
           const n = unreachable.length
           toast.warning(
-            t("editor.unreachableImportWarn", {
+            t(n === 1 ? "editor.unreachableImportWarnOne" : "editor.unreachableImportWarnMany", {
               n,
-              suffix: n === 1 ? "" : "s",
               refs: describeMediaRefNodes(unreachable),
             }),
             { duration: 12_000 },

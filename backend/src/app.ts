@@ -86,6 +86,7 @@ import { audioFxRoutes } from "./routes/audio-fx.js"
 import { speedRampRoutes } from "./routes/speed-ramp.js"
 import { loopVideoRoutes } from "./routes/loop-video.js"
 import { fadeVideoRoutes } from "./routes/fade-video.js"
+import { videoOverlayRoutes } from "./routes/video-overlay.js"
 import { stillToVideoRoutes } from "./routes/still-to-video.js"
 import { gifToVideoRoutes } from "./routes/gif-to-video.js"
 import { slideshowRoutes } from "./routes/slideshow.js"
@@ -96,6 +97,7 @@ import { combineAudioRoutes } from "./routes/combine-audio.js"
 import { splitMediaRoutes } from "./routes/split-media.js"
 import { extractAudioRoutes } from "./routes/extract-audio.js"
 import { silenceDetectRoutes } from "./routes/silence-detect.js"
+import { audioSyncRoutes } from "./routes/audio-sync.js"
 import { removeAudioRoutes } from "./routes/remove-audio.js"
 import { generateMusicRoutes } from "./routes/generate-music.js"
 import { uploadRoutes } from "./routes/upload.js"
@@ -522,6 +524,7 @@ export async function buildApp() {
   await app.register(speedRampRoutes)
   await app.register(loopVideoRoutes)
   await app.register(fadeVideoRoutes)
+  await app.register(videoOverlayRoutes)
   await app.register(stillToVideoRoutes)
   await app.register(gifToVideoRoutes)
   await app.register(slideshowRoutes)
@@ -532,6 +535,7 @@ export async function buildApp() {
   await app.register(splitMediaRoutes)
   await app.register(extractAudioRoutes)
   await app.register(silenceDetectRoutes)
+  await app.register(audioSyncRoutes)
   await app.register(removeAudioRoutes)
   await app.register(generateMusicRoutes)
   await app.register(uploadRoutes)

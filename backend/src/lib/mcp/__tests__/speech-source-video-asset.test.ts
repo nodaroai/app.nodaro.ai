@@ -11,8 +11,8 @@ import { buildServer, callTool, executeSession, stubRoute } from "../tools/__tes
  * `transcribe` had the audio-then-video fallback; the other two promised the
  * same thing and refused.
  *
- * All three now go through ONE helper (`resolveSpeechSource` in
- * verbs-audio.ts). What is under test is the promise, not the helper: each verb
+ * All three now go through ONE helper (`resolveSpeechSourceUrl` in
+ * tools/_speech-source.ts). What is under test is the promise, not the helper: each verb
  * takes a video job id and reaches its route with that video's URL, and a
  * failure that is NOT "wrong kind" still stops the call.
  */

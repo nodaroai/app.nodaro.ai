@@ -110,7 +110,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "video-titles-graphics",
     label: "Titles, Graphics & Captions",
     tab: "video",
-    types: ["3d-title", "generate-3d-scene", "edit-3d-scene", "pro-3d-render", "motion-graphics", "after-effects", "lottie-overlay", "add-captions", "render-video"],
+    types: ["3d-title", "generate-3d-scene", "edit-3d-scene", "pro-3d-render", "motion-graphics", "after-effects", "lottie-overlay", "add-captions", "video-overlay", "render-video"],
   },
   {
     id: "video-format-export",
@@ -158,7 +158,16 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "audio-clean-separate",
     label: "Clean & Separate",
     tab: "audio",
-    types: ["audio-isolation", "audio-separation", "suno-separate", "silence-detect"],
+    types: ["audio-isolation", "audio-separation", "suno-separate"],
+  },
+  {
+    // Measuring a recording rather than changing it (the podcast primitives'
+    // Audio → Analyze family): where its silences are, how far its clock sits
+    // from the other recordings of the same conversation.
+    id: "audio-analyze",
+    label: "Analyze",
+    tab: "audio",
+    types: ["silence-detect", "audio-sync"],
   },
   {
     id: "audio-edit",

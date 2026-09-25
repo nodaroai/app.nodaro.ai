@@ -1,6 +1,8 @@
 // Core template functions — re-exported from shared package (single source of truth)
 export { applyTemplate } from "@nodaro/prompts"
 import { resolveTemplate as sharedResolveTemplate } from "@nodaro/prompts"
+import type { MessageKey } from "@/lib/i18n"
+import type { SceneNodeType } from "@/types/nodes"
 
 export interface PromptTemplateInfo {
   readonly label: string
@@ -80,16 +82,22 @@ export const SYSTEM_PROMPT_TEMPLATES: Record<string, PromptTemplateInfo> = {
 }
 
 export interface TemplateGroup {
+  /** Stable English id (React key); never rendered. */
   readonly name: string
+  /** The group's name in the interface language (the card heading). */
+  readonly labelKey: MessageKey
+  /** The asset node whose Run generates this group's image; the tooltip names
+   *  it the way the canvas shows it. */
+  readonly nodeType: SceneNodeType
   readonly descriptionKey: string
   readonly generationKey: string
 }
 
 export const TEMPLATE_GROUPS: readonly TemplateGroup[] = [
-  { name: "Character", descriptionKey: "character-description", generationKey: "character-generation" },
-  { name: "Object", descriptionKey: "object-description", generationKey: "object-generation" },
-  { name: "Location", descriptionKey: "location-description", generationKey: "location-generation" },
-  { name: "Face", descriptionKey: "face-description", generationKey: "face-generation" },
+  { name: "Character", labelKey: "assetlib.typeCharacter", nodeType: "character", descriptionKey: "character-description", generationKey: "character-generation" },
+  { name: "Object", labelKey: "assetlib.typeObject", nodeType: "object", descriptionKey: "object-description", generationKey: "object-generation" },
+  { name: "Location", labelKey: "assetlib.typeLocation", nodeType: "location", descriptionKey: "location-description", generationKey: "location-generation" },
+  { name: "Face", labelKey: "assetlib.typeFace", nodeType: "face", descriptionKey: "face-description", generationKey: "face-generation" },
 ]
 
 export const WRAPPER_TEMPLATE_KEY = "generate-image-wrapper"

@@ -150,7 +150,7 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
 
         <div className="flex justify-between text-muted-foreground">
           <span>{nodeData.provider || "musicgen"}</span>
-          <span className="text-xs">{nodeData.duration}s{nodeData.genre ? ` - ${nodeData.genre}` : ""}{nodeData.instrumental ? ` ${t("node.instSuffix")}` : ""}</span>
+          <span className="text-xs">{nodeData.duration}s{nodeData.genre ? ` - ${nodeData.genre}` : ""}{nodeData.instrumental ? `${t("common.fragmentGap")}${t("node.instSuffix")}` : ""}</span>
         </div>
       </div>
     </BaseNode>

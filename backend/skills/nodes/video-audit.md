@@ -1,7 +1,7 @@
 ---
 node_type: video-audit
-generated_at: 2026-09-21T19:12:09.630Z
-generated_from: 09788c987
+generated_at: 2026-09-24T14:14:07.743Z
+generated_from: e31839944
 ---
 
 # AI Audit
@@ -18,7 +18,7 @@ generated_from: 09788c987
 
 **Optional data fields:**
 - `videoUrl?: string`
-- `probedVideo?: { url: string; durationSec: number }`
+- `probedVideo?: ProbedVideoInfo`
 - `lastAuditReport?: VideoAuditReport`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`

@@ -19,6 +19,7 @@ import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { NodeDoubleClickAction } from "@/lib/node-double-click-action"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
+import { videoOverlayConnectPatch } from "@/lib/video-overlay-connect"
 import { ensureNodePositions } from "@/lib/node-position"
 import { findNonOverlappingPosition, nodeRect, DEFAULT_PLACEMENT_SIZE } from "@/lib/find-free-position"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
@@ -857,13 +858,15 @@ function getParallelOrderField(
 ): string | undefined {
   if (direction !== "target") return undefined
   if (!nodeType) return undefined
-  if (handleId !== "references" && handleId !== "in") return undefined
+  if (handleId !== "references" && handleId !== "in" && handleId !== "sources") return undefined
   switch (`${nodeType}:${handleId}`) {
     case "generate-image:references":   return "referenceImageOrder"
     case "combine-videos:in":           return "clipOrder"
     case "mix-audio:in":                return "trackOrder"
     case "combine-audio:in":            return "segmentOrder"
     case "image-collage:in":            return "imageOrder"
+    // audio-sync's order decides the default reference (the first source).
+    case "audio-sync:sources":          return "sourceOrder"
     // merge-video-audio is INTENTIONALLY OMITTED. Its `data.trackSettings`
     // is keyed by sourceNodeId (object), not order — the backend
     // (payload-builder.ts) and frontend runtime (execute-node.ts:4401)
@@ -1372,6 +1375,18 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
                 : n,
             )
           }
+        }
+      }
+
+      // Video Overlay (D3): a wire into a layer handle CLEARS that layer's own
+      // imageUrl — the wire replaces it, so a stored layer never carries both
+      // and disconnecting later empties the slot instead of resurfacing a
+      // hidden URL. Here, not in the panel: the panel may not be mounted.
+      const videoOverlayTarget = newNodes.find((n) => n.id === connection.target && n.type === "video-overlay")
+      if (videoOverlayTarget) {
+        const patch = videoOverlayConnectPatch(videoOverlayTarget.data as { layers?: unknown }, connection.targetHandle)
+        if (patch) {
+          newNodes = newNodes.map((n) => (n.id === videoOverlayTarget.id ? { ...n, data: { ...n.data, ...patch } } : n))
         }
       }
 
@@ -2499,6 +2514,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
         "combine-videos", "merge-video-audio", "add-captions", "resize-video",
         "social-media-format", "trim-video", "render-video", "speed-ramp",
         "loop-video", "fade-video", "transcode-video", "manual-edit", "video-sfx",
+        "video-overlay",
       ])
       // Suno nodes that have a typed `voice` target — used to route legacy
       // suno-voice → suno-* edges to the right slot. Matches the set of

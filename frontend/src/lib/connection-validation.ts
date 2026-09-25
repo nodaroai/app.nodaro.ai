@@ -60,6 +60,7 @@ import {
   isValidPaintMaskConnection,
   isValidImageCollageConnection,
   isValidImageOverlayConnection,
+  isValidVideoOverlayConnection,
   isValidUpscaleImageConnection,
   isValidRemoveBackgroundConnection,
   isValidFaceSwapConnection,
@@ -543,6 +544,14 @@ export function isValidWorkflowConnection(
     if (connection.targetHandle === "analysis") return ACCEPTS_ANALYSIS(auditSourceType)
     return false
   }
+  // audio-sync — its one `sources` target takes 2–6 recordings, audio OR video
+  // (the worker reads each one's audio proxy). Same predicate as the handle
+  // popover (TARGET_HANDLE_ACCEPTS), so drag-to-connect and the source-direction
+  // popover agree. Like apply-edl's `sources`, it is NOT an ffmpeg-family `in`
+  // handle, so it lives here rather than in isValidFfmpegConnection.
+  if (targetType === "audio-sync" && connection.targetHandle) {
+    return connection.targetHandle === "sources" && ACCEPTS_MEDIA(imageSourceType)
+  }
   // apply-edl — `edl` (required) and `transcript` (optional) take json/data
   // producers; `sources` takes optional media-URL overrides (video or audio).
   if (targetType === "apply-edl" && connection.targetHandle) {
@@ -632,6 +641,7 @@ const IMAGE_PRODUCER_VALIDATORS: Record<string, AudioTextValidator> = {
   "paint-mask":        (h, s) => isValidPaintMaskConnection(h, s),
   "image-collage":     (h, s) => isValidImageCollageConnection(h, s),
   "image-overlay":     (h, s) => isValidImageOverlayConnection(h, s),
+  "video-overlay":     (h, s) => isValidVideoOverlayConnection(h, s),
   "upscale-image":     (h, s) => isValidUpscaleImageConnection(h, s),
   "remove-background": (h, s) => isValidRemoveBackgroundConnection(h, s),
   "face-swap":         (h, s) => isValidFaceSwapConnection(h, s),

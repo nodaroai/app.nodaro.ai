@@ -25,14 +25,20 @@ import { sleep } from "./sleep.js"
  *    finally returned is a REAL response — the caller's own error text and
  *    status are unchanged, so nothing downstream learns a new failure shape.
  *
- * WHAT IT DOES NOT COVER, measured rather than assumed: the two production
- * failures were four minutes apart, and a ~6 s ladder cannot bridge that. A
- * probe of the live host (2026-09-15) returns `cf-cache-status: DYNAMIC` on
- * both a hit and a miss — these responses are not edge-cached at all — so the
- * "CDN negative cache" theory in the triage note is not supported for this
- * host, and a cache-busting query parameter would buy nothing. What this
- * closes is the single-GET-and-die shape: a blip lasting under a few seconds
- * now costs a pause instead of a paid job.
+ * WHY EACH RETRY BUSTS THE CACHE: the CDN's media paths (`images/`,
+ * `videos/`, `audios/`, `uploads/`) currently cache a 404 at the edge with the
+ * same one-year immutable header a real object gets. A GET that reaches the
+ * edge before the object lands (or during a read-after-write gap) therefore
+ * poisons that URL at that colo, and a plain retry just re-reads the cached
+ * 404. Only a URL the edge has never seen reaches R2, so every RETRY appends a
+ * unique cache-busting query parameter ({@link cacheBustedUrl}). The FIRST
+ * attempt keeps the plain URL so the normal path still gets cache hits. (An
+ * earlier probe reported `cf-cache-status: DYNAMIC` here; that is what a HEAD
+ * always shows — a GET under these paths is MISS then HIT, 404s included.)
+ *
+ * WHAT IT DOES NOT COVER: a failure that outlives the ~6 s ladder is not a
+ * blip, and a URL already poisoned for OTHER readers stays poisoned until its
+ * edge entry is purged — this only lets THIS caller read past it.
  */
 
 /**
@@ -78,8 +84,38 @@ function discard(res: Response): void {
   }
 }
 
+/** Query parameter a retry adds so the edge cannot answer from its cache. */
+export const OWN_MEDIA_CACHE_BUST_PARAM = "cb"
+
+/**
+ * `url` with a unique cache-busting query parameter for retry `attempt`,
+ * appended after any query it already carries. A pre-signed URL (SigV4
+ * `X-Amz-Signature`) is returned unchanged: an added parameter would break its
+ * signature, and a signed request is not served from a shared edge cache.
+ */
+export function cacheBustedUrl(url: string, attempt: number): string {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return url
+  }
+  if (parsed.searchParams.has("X-Amz-Signature")) return url
+  const token = `${attempt}-${Math.random().toString(36).slice(2, 10)}`
+  // String-append rather than `searchParams.append`: re-serializing through
+  // URLSearchParams would re-encode the query already there.
+  const hashAt = url.indexOf("#")
+  const base = hashAt === -1 ? url : url.slice(0, hashAt)
+  const fragment = hashAt === -1 ? "" : url.slice(hashAt)
+  const sep = base.includes("?") ? (base.endsWith("?") || base.endsWith("&") ? "" : "&") : "?"
+  return `${base}${sep}${OWN_MEDIA_CACHE_BUST_PARAM}=${token}${fragment}`
+}
+
 /**
  * Fetch `url` through `safeFetch`, retrying a 404/5xx from our own media host.
+ *
+ * The first attempt uses `url` as given; each retry uses a fresh
+ * {@link cacheBustedUrl} so a negatively cached 404 cannot defeat the ladder.
  *
  * Returns the last response either way — callers keep their own `res.ok`
  * handling and their own error text. A thrown transport error is NOT retried
@@ -107,7 +143,7 @@ export async function fetchOwnMedia(url: string, init: SafeFetchInit = {}): Prom
     )
     discard(res)
     await sleep(pause)
-    res = await safeFetch(url, init)
+    res = await safeFetch(cacheBustedUrl(url, i + 2), init)
     if (res.ok || !isTransientOwnMediaStatus(res.status)) return res
   }
   console.warn(`[own-media-retry] ${host} still HTTP ${res.status} after ${total} attempts`)

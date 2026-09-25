@@ -15,6 +15,7 @@ import type { BillingContext } from "../../lib/billing-context.js"
 import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/apply-edl-plan.js"
+import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 import { PIPELINE_PINNABLE_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveEffectiveTier, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_BUCKET_MINUTES, buildEditPlanCreditId, type EditPlanTier } from "@nodaro/shared"
@@ -1544,6 +1545,13 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // siblings (seeded at 1 by migration 430 — a ×10 re-denomination slip,
   // corrected by migration 439). Keyless; community works.
   "silence-detect": 10,
+  // Audio Sync — measures 2–6 recordings' clock offsets (local ffmpeg decode +
+  // in-process cross-correlation, no provider). Priced PER SOURCE ALIGNED to
+  // the reference: `audio-sync:<n>src` = 10 × (n − 1) — 2 sources 10 … 6
+  // sources 50 (decided 2026-09-25). Composites only (no bare row): every lane
+  // names a composite through `audioSyncCreditId` (lib/audio-sync-credit-id.ts),
+  // the single source of these rows; migration 443 mirrors them. Keyless.
+  ...AUDIO_SYNC_CREDIT_COSTS,
   "split-media": 20,
   "extract-audio": 10,
   "remove-audio": 20,
@@ -1557,6 +1565,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "speed-ramp:smooth": 50, // motion-compensated interpolation (minterpolate) — 5-20x slower than fast
   "loop-video": 10,
   "fade-video": 10,
+  // Video Overlay — timed image layers over a video in one local FFmpeg pass
+  // (no provider cost). Flat per run, whatever the layer count or length.
+  "video-overlay": 20,
   // Still to Video — one still + one audio → MP4 via local ffmpeg (no
   // provider cost). Deliberately ZERO credits: the free bridge from a still
   // into the video pipeline. The 0-cost reservation path still creates a
@@ -1782,6 +1793,12 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // honest answer for an estimate, and never the charge (the route re-resolves
   // from the request body it is actually about to run).
   "render-video": (data) => renderVideoCreditId(data),
+
+  // Audio Sync: `audio-sync:<n>src` from a request-shaped record's `sources`
+  // array (the route body / the job's input_data) — the same builder the route
+  // guard, its reservation and the payload builder use. No array → the
+  // 6-source ceiling (never under-quote).
+  "audio-sync": (data) => audioSyncCreditId(Array.isArray(data.sources) ? data.sources.length : Number.NaN),
 }
 
 // Tier order for restriction checks. payg ranks above free and below basic:
@@ -3308,7 +3325,10 @@ export class CreditsService {
     return nodes.reduce((sum, node) => {
       // Image Overlay is base + 2 per extra platform render — the shared formula.
       if (node.type === "image-overlay") return sum + imageOverlayCredits((node.data?.variants as unknown[] | undefined))
-      const modelId = getNodeModelIdentifier(node, { timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges) })
+      const modelId = getNodeModelIdentifier(node, {
+        timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
+        audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
+      })
       return sum + (STATIC_CREDIT_COSTS[modelId] ?? STATIC_CREDIT_COSTS[node.type] ?? 0)
     }, 0)
   }
@@ -3342,9 +3362,39 @@ function timedCaptionSourceWired(node: EstimateNode, nodes: ReadonlyArray<Estima
   )
 }
 
-function getNodeModelIdentifier(node: EstimateNode, graph: { timedCaptionSourceWired?: boolean } = {}): string {
+/**
+ * How many distinct upstream nodes feed this audio-sync node's `sources`
+ * handle — the count its price is read at (`audio-sync:<n>src`). UNKNOWN (no
+ * edges passed, or a node without an id) answers NaN, which
+ * `audioSyncCreditId` reads as the 6-source ceiling: the estimate may
+ * over-quote, it must never under-quote. Distinct by source node, because the
+ * source node id IS the audio-sync source id (the run keeps one row per node).
+ */
+function audioSyncWiredSourceCount(node: EstimateNode, edges?: ReadonlyArray<EstimateEdge>): number | undefined {
+  if (node.type !== "audio-sync") return undefined
+  if (!edges || !node.id) return Number.NaN
+  const sources = new Set<string>()
+  let anonymous = 0
+  for (const e of edges) {
+    if (e.target !== node.id || e.targetHandle !== "sources") continue
+    if (e.source) sources.add(e.source)
+    else anonymous++
+  }
+  return sources.size + anonymous
+}
+
+function getNodeModelIdentifier(
+  node: EstimateNode,
+  graph: { timedCaptionSourceWired?: boolean; audioSyncSourceCount?: number } = {},
+): string {
   const nodeType = node.type
   const data = node.data ?? {}
+
+  // Audio Sync: priced per source aligned to the reference — a GRAPH fact (how
+  // many recordings are wired into `sources`), counted by the caller from the
+  // edges. No count (no graph context) → the 6-source ceiling. The same builder
+  // the route and the payload builder reserve through.
+  if (nodeType === "audio-sync") return audioSyncCreditId(graph.audioSyncSourceCount ?? Number.NaN)
 
   // AI Writer always uses "ai-writer"
   if (nodeType === "ai-writer") return "ai-writer"

@@ -147,9 +147,9 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   // ELEMENT — 14 entries — teleport via natural element
   // ============================================================================
   { id: "dissolve-to-mist",  label: "Dissolve to Mist",   category: "element", description: "Subject turns to mist, drifts, reforms",
-    promptHint: "the subject gradually dissolves into a soft cloud of mist that swirls and drifts across the frame, then the mist re-condenses into the new subject in the new setting" },
+    promptHint: "the first subject loses its solid form and turns into a soft cloud of fine mist, starting at its edges and working inward. The camera stays where it is and the framing does not change. The mist drifts through the frame and thins until the first shot is gone, then gathers again at the same place in the frame and condenses into the second subject as the second shot appears behind it. The shot ends on the second subject, solid and fully resolved, with no mist left. The second subject forms only out of the gathered mist" },
   { id: "water-splash",      label: "Water Splash",       category: "element", description: "Subject becomes water, splashes, reforms",
-    promptHint: "the subject liquefies into a cascade of water that splashes and pools, the water then surges upward and re-forms into the new subject in a new setting" },
+    promptHint: "the first subject turns to water and collapses into a splashing cascade that spreads across the lower part of the frame. The camera stays where it is and the framing does not change. The water surges upward at the same place in the frame and takes the shape of the second subject, while the second shot appears behind it as the spray falls away. The shot ends on the second subject, solid and fully resolved, with no water left on it. The second subject forms only out of the rising water" },
   { id: "sand-scatter",      label: "Sand Scatter",       category: "element", description: "Subject becomes sand, blown away, reforms",
     promptHint: "the subject crumbles into fine sand that is swept away by a gust of wind in a swirling vortex, then the sand particles converge and re-form into the new subject" },
   { id: "fire-burnup",       label: "Burn-Up",            category: "element", description: "Subject burns to embers, embers reform",
@@ -181,7 +181,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "liquid-morph",      label: "Liquid Morph",       category: "morph", description: "Subject melts and reforms as new subject",
     promptHint: "smooth liquid morph: the first subject's surface becomes fluid and continuously deforms, flowing without breaks into the silhouette and details of the second subject" },
   { id: "pixelate-reform",   label: "Pixelate & Reform",  category: "morph", description: "Pixelates, scatters, reforms as new",
-    promptHint: "the first subject pixelates into large mosaic blocks that scatter outward across the frame, then the blocks converge and resolve into the new subject", term: "pixelate and reform" },
+    promptHint: "the first subject breaks into large square mosaic blocks, and the blocks scatter outward across the frame. The camera stays where it is and the framing does not change. The blocks fly back, lock together at the same place in the frame and sharpen into the second subject, while the second shot appears behind them. The shot ends on the second subject, fully sharp, with no blocks left. Only the subject turns into blocks; the surroundings change as the blocks clear", term: "pixelate and reform" },
   { id: "shatter-glass",     label: "Shatter & Reform",   category: "morph", description: "Subject shatters like glass, reforms",
     promptHint: "the first subject shatters like glass into hundreds of shards that fly outward, then the shards reverse direction in reverse time and reassemble into the new subject", term: "shatter like glass and reform" },
   { id: "origami-fold",      label: "Origami Fold",       category: "morph", description: "Subject folds like paper into new subject",
@@ -193,7 +193,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "wireframe-morph",   label: "Wireframe Morph",    category: "morph", description: "Subject reduces to wireframe, reforms as new subject",
     promptHint: "the first subject's surface peels away to reveal a glowing geometric wireframe of polygons and edges, the wireframe flexes and re-tessellates into the topology of the new subject, then the new surface skins over the wireframe" },
   { id: "polygon-shatter",   label: "Polygon Shatter",    category: "morph", description: "Subject fragments into low-poly chunks, reassembles",
-    promptHint: "the first subject fractures into low-polygon faceted chunks that explode outward in slow motion, the polygons then reverse course and re-assemble in clean geometric flight paths into the silhouette of the new subject" },
+    promptHint: "the first subject fractures into large opaque flat-shaded chunks, like the facets of a low-polygon model, and the chunks burst outward in slow motion. The camera stays where it is and the framing does not change. The chunks turn around mid-flight and fly back along clean straight paths, locking together at the same place in the frame into the shape of the second subject, while the second shot appears behind them. The shot ends on the second subject, solid and fully resolved, with no loose chunks left. The chunks stay opaque and matte throughout, like painted blocks" },
   { id: "melt-down",         label: "Melt Down",          category: "morph", description: "Subject melts into puddle, reforms as new",
     promptHint: "the first subject's form softens and melts downward like wax, collapsing into a glossy puddle on the ground, the puddle then surges upward and re-solidifies into the new subject standing in the new scene", term: "melt into a puddle and reform" },
 

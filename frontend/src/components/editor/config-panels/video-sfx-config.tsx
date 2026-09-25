@@ -105,9 +105,9 @@ export function VideoSfxConfig({
           workaround is to mux the SFX back into the original via Merge
           Video + Audio downstream. */}
       <p className="text-xs text-muted-foreground leading-snug">
-        {t("cfgext.sfxReplacesAudioBefore")}
-        <span className="font-medium text-foreground"> {localizeNode("Merge Video & Audio")} </span>
-        {t("cfgext.sfxReplacesAudioAfter")}
+        {t("cfgext.sfxReplacesAudioBefore")}{t("common.fragmentGap")}
+        <span className="font-medium text-foreground">{localizeNode("Merge Video & Audio")}</span>
+        {t("common.fragmentGap")}{t("cfgext.sfxReplacesAudioAfter")}
       </p>
 
       {/* 2. Prompt — mappable from upstream text nodes. The AI helper

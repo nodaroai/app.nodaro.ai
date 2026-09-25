@@ -401,6 +401,150 @@ await check("a keyless LLM route refuses cleanly", async () => {
   return `${status} ${code}`
 })
 
+// ---------------------------------------------------------------------------
+// Audio Sync: a CORE node that must SUCCEED keyless (podcast B3)
+//
+// The keyless checks above assert that paid lanes fail honestly. The podcast
+// primitives are the other half of the edition's promise: local FFmpeg nodes
+// that need no key at all. Audio Sync is the one that exercises the whole
+// keyless media lane end to end — an upload into the install's own storage,
+// the worker fetching it back through the app origin, the shared audio proxy,
+// in-process correlation, a json result — so it runs here for real on two
+// short synthetic recordings of one "conversation", the second started 1.5 s
+// later. Nothing is spent: the node has no provider.
+// ---------------------------------------------------------------------------
+
+/** Deterministic PRNG, so the two recordings share the same "voice". */
+function mulberry32(seed) {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/**
+ * A 16 kHz mono 16-bit WAV of a synthetic "conversation": noise gated on and
+ * off at random every 20 ms (so its onsets never repeat — a clean correlation
+ * peak), under a faint hiss of its own. `leadSilenceSec` starts the same
+ * conversation that much later — a second recorder switched on first.
+ */
+function syntheticConversationWav({ seconds, leadSilenceSec = 0, gain = 1 }) {
+  const rate = 16_000
+  const frame = Math.round(rate * 0.02)
+  const voice = mulberry32(7)
+  const gate = mulberry32(11)
+  const hiss = mulberry32(leadSilenceSec > 0 ? 29 : 23)
+  const total = Math.round(seconds * rate)
+  const lead = Math.round(leadSilenceSec * rate)
+  const samples = new Int16Array(total)
+  let on = false
+  for (let i = 0; i < total; i++) {
+    const k = i - lead
+    let v = (hiss() * 2 - 1) * 0.01
+    if (k >= 0) {
+      if (k % frame === 0) on = gate() > 0.55
+      v += (voice() * 2 - 1) * (on ? 0.5 : 0.03) * gain
+    }
+    samples[i] = Math.max(-32768, Math.min(32767, Math.round(v * 32767)))
+  }
+  const data = Buffer.from(samples.buffer)
+  const header = Buffer.alloc(44)
+  header.write("RIFF", 0)
+  header.writeUInt32LE(36 + data.length, 4)
+  header.write("WAVE", 8)
+  header.write("fmt ", 12)
+  header.writeUInt32LE(16, 16) // PCM chunk size
+  header.writeUInt16LE(1, 20) // PCM
+  header.writeUInt16LE(1, 22) // mono
+  header.writeUInt32LE(rate, 24)
+  header.writeUInt32LE(rate * 2, 28) // byte rate
+  header.writeUInt16LE(2, 32) // block align
+  header.writeUInt16LE(16, 34) // bits per sample
+  header.write("data", 36)
+  header.writeUInt32LE(data.length, 40)
+  return Buffer.concat([header, data])
+}
+
+/** Upload one file through the app's own upload route; returns its stored URL. */
+async function uploadFile(name, bytes, type) {
+  const form = new FormData()
+  form.append("file", new Blob([bytes], { type }), name)
+  const res = await fetch(`${BASE}/v1/upload`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${ctx.token}` },
+    body: form,
+  })
+  const text = await res.text()
+  let json
+  try {
+    json = text ? JSON.parse(text) : undefined
+  } catch {
+    json = undefined
+  }
+  assert(res.ok, `upload of ${name} failed (${res.status}): ${text.slice(0, 300)}`)
+  const url = json?.data?.url ?? json?.url
+  assert(typeof url === "string" && url.length > 0, `upload of ${name} returned no url: ${text.slice(0, 200)}`)
+  return url
+}
+
+await check("Audio Sync lines up two recordings on a keyless install (a core node, no provider)", async () => {
+  const { status, json } = await api("/v1/nodes")
+  assert(status === 200, `GET /v1/nodes expected 200, got ${status}`)
+  assert(
+    (json?.data ?? []).some((n) => n?.type === "audio-sync"),
+    "audio-sync is a core node but discovery does not advertise it",
+  )
+
+  const micUrl = await uploadFile("smoke-mic.wav", syntheticConversationWav({ seconds: 24 }), "audio/wav")
+  const camUrl = await uploadFile(
+    "smoke-cam.wav",
+    syntheticConversationWav({ seconds: 24, leadSilenceSec: 1.5, gain: 0.4 }),
+    "audio/wav",
+  )
+
+  const submitted = await api("/v1/audio-sync", {
+    method: "POST",
+    token: ctx.token,
+    body: { sources: [{ id: "mic", url: micUrl }, { id: "cam", url: camUrl }] },
+  })
+  assert(submitted.status < 300, `submit failed (${submitted.status}): ${submitted.text.slice(0, 300)}`)
+  const jobId = submitted.json?.jobId
+  assert(jobId, `no jobId in response: ${JSON.stringify(submitted.json).slice(0, 200)}`)
+
+  const started = Date.now()
+  const deadline = started + JOB_TIMEOUT_MS
+  let last = null
+  while (Date.now() < deadline) {
+    const { json: s } = await api(`/v1/jobs/${jobId}/status`, { token: ctx.token })
+    last = s?.data
+    if (last?.status === "failed" || last?.status === "completed") break
+    await new Promise((r) => setTimeout(r, 2000))
+  }
+  assert(last?.status !== "failed", `job ${jobId} FAILED on a keyless install: "${last?.error_message}"`)
+  assert(last?.status === "completed", `job ${jobId} is "${last?.status}" after ${JOB_TIMEOUT_MS / 1000}s`)
+
+  const result = last?.output_data?.json
+  assert(result && typeof result === "object", `completed job has no output_data.json: ${JSON.stringify(last?.output_data).slice(0, 200)}`)
+  assert(result.reference === "mic", `reference should default to the first source, got ${JSON.stringify(result.reference)}`)
+  const by = Object.fromEntries((result.offsets ?? []).map((o) => [o.sourceId, o]))
+  assert(by.mic?.offsetMs === 0, `the reference's own offset must be 0: ${JSON.stringify(by.mic)}`)
+  // The camera started 1.5 s later: its second 0 is the mic's second 1.5, so
+  // referenceMs = sourceMs + offsetMs gives −1500.
+  const cam = by.cam
+  assert(cam && Math.abs(cam.offsetMs - -1500) <= 20, `camera offset should be −1500 ms (±20), got ${JSON.stringify(cam)}`)
+  assert(cam.confidence >= 0.5, `camera confidence should be ≥ 0.5 on identical sound, got ${JSON.stringify(cam)}`)
+
+  const full = await api(`/v1/jobs/${jobId}`, { token: ctx.token })
+  const credits = (full.json?.data ?? full.json)?.credits
+  assert(!(typeof credits === "number" && credits > 0), `community job carries a credit charge (${credits})`)
+
+  return `cam at ${cam.offsetMs} ms (confidence ${cam.confidence}) in ${Math.round((Date.now() - started) / 1000)}s, no key, no credits`
+})
+
 /**
  * Transient generation-vendor hosts that must never appear in a PERSISTED
  * result URL — workers re-host every result into the install's own storage
@@ -827,6 +971,130 @@ await check("the 3D capabilities document reports Pro unavailable and no authori
     `pro.engines offers blender-local without SCENE3D_LOCAL_ENABLED: ${JSON.stringify(engines)}`,
   )
   return "basic available, advanced null, pro.available false, no blender-local"
+})
+
+// ---------------------------------------------------------------------------
+// Video Overlay: the local ffmpeg lane
+//
+// Rendered on the install itself — no provider key, no credits — so a keyless
+// community install must run it end to end, refuse a bad timing before any
+// job exists, and fail an unfetchable layer image with a message a node card
+// can show. The fixtures are the repo's demo assets, uploaded through the app:
+// the worker fetches the install's own storage, while a localhost URL is
+// refused by design (SSRF guard), so hosting them on the probe would not work.
+// ---------------------------------------------------------------------------
+
+const OVERLAY_RENDER = "Video Overlay renders on a keyless install — no key, no credits"
+const OVERLAY_REFUSAL = "Video Overlay refuses end ≤ start with a renderable 400"
+const OVERLAY_UNREACHABLE = "a Video Overlay job whose image cannot be fetched fails with a renderable message"
+
+/** Upload one of the repo's demo assets through POST /v1/upload; returns its stored URL. */
+async function uploadDemoAsset(file, mime) {
+  const bytes = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../frontend/public/demo-assets", file))
+  const form = new FormData()
+  form.append("file", new Blob([bytes], { type: mime }), file)
+  const res = await fetch(`${BASE}/v1/upload`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${ctx.token}` },
+    body: form,
+  })
+  const text = await res.text()
+  let json
+  try {
+    json = text ? JSON.parse(text) : undefined
+  } catch {
+    json = undefined
+  }
+  assert(res.status < 300, `uploading ${file} failed (${res.status}): ${text.slice(0, 200)}`)
+  const url = json?.data?.url
+  assert(typeof url === "string" && /^https?:\/\//.test(url), `uploading ${file} returned no url: ${text.slice(0, 200)}`)
+  return url
+}
+
+/** Follow a job until it is completed / failed, or the wait budget runs out. */
+async function waitForJob(jobId) {
+  const deadline = Date.now() + JOB_TIMEOUT_MS
+  let last = null
+  while (Date.now() < deadline) {
+    const { json } = await api(`/v1/jobs/${jobId}/status`, { token: ctx.token })
+    last = json?.data
+    if (last?.status === "failed" || last?.status === "completed") break
+    await new Promise((r) => setTimeout(r, 2000))
+  }
+  return last
+}
+
+await check(OVERLAY_RENDER, async () => {
+  const videoUrl = await uploadDemoAsset("scene-clip.mp4", "video/mp4")
+  ctx.overlayBaseUrl = videoUrl
+  const imageUrl = await uploadDemoAsset("scene-image.jpg", "image/jpeg")
+  const submitted = await api("/v1/video-overlay", {
+    method: "POST",
+    token: ctx.token,
+    body: { videoUrl, layers: [{ imageUrl, start: 0.5, end: 2.5, preset: "card" }] },
+  })
+  assert(submitted.status === 200, `POST /v1/video-overlay expected 200, got ${submitted.status}: ${submitted.text.slice(0, 300)}`)
+  const jobId = submitted.json?.jobId
+  assert(jobId, `no jobId in response: ${submitted.text.slice(0, 200)}`)
+  const last = await waitForJob(jobId)
+  assert(last?.status !== "failed", `job ${jobId} FAILED — the local lane needs no key: "${last?.error_message}"`)
+  assert(last?.status === "completed", `job ${jobId} is "${last?.status}" after ${JOB_TIMEOUT_MS / 1000}s`)
+  const out = last?.output_data?.videoUrl
+  assert(
+    typeof out === "string" && /^https?:\/\//.test(out),
+    `completed job has no output_data.videoUrl: ${JSON.stringify(last?.output_data).slice(0, 200)}`,
+  )
+  const media = await fetch(out)
+  assert(media.ok, `result URL answered ${media.status}: ${out}`)
+  const type = media.headers.get("content-type") ?? ""
+  const bytes = (await media.arrayBuffer()).byteLength
+  assert(type.startsWith("video/"), `result content-type is "${type}", not a video: ${out}`)
+  assert(bytes > 1024, `result is ${bytes} bytes — too small to be a real video: ${out}`)
+  return `completed, ${bytes}B ${type}`
+})
+
+await check(OVERLAY_REFUSAL, async () => {
+  // Refused by the route before any fetch, so the URLs never need to exist.
+  const res = await api("/v1/video-overlay", {
+    method: "POST",
+    token: ctx.token,
+    body: {
+      videoUrl: "https://example.com/overlay-smoke/base.mp4",
+      layers: [{ imageUrl: "https://example.com/overlay-smoke/card.png", start: 3, end: 2 }],
+    },
+  })
+  assert(res.status === 400, `POST /v1/video-overlay expected 400, got ${res.status}: ${res.text.slice(0, 300)}`)
+  assert(
+    res.json?.error?.code === "validation_error",
+    `expected error.code "validation_error", got ${JSON.stringify(res.json?.error?.code)}`,
+  )
+  assert(res.json?.jobId === undefined, `the refusal carried a job handle: ${res.text.slice(0, 200)}`)
+  assertRenderable(res.json?.error?.message, "video-overlay refusal")
+  assert(/after start/.test(res.json.error.message), `the refusal does not name the rule: "${res.json.error.message}"`)
+  return `400 — "${res.json.error.message}"`
+})
+
+await check(OVERLAY_UNREACHABLE, async () => {
+  if (!ctx.overlayBaseUrl) {
+    return skip(OVERLAY_UNREACHABLE, "no uploaded base video — the render check failed before its upload")
+  }
+  const submitted = await api("/v1/video-overlay", {
+    method: "POST",
+    token: ctx.token,
+    // `.invalid` never resolves (RFC 2606): the route accepts it, the worker cannot fetch it.
+    body: { videoUrl: ctx.overlayBaseUrl, layers: [{ imageUrl: "https://overlay-smoke.invalid/card.png", start: 0 }] },
+  })
+  assert(submitted.status === 200, `POST /v1/video-overlay expected 200, got ${submitted.status}: ${submitted.text.slice(0, 300)}`)
+  const jobId = submitted.json?.jobId
+  assert(jobId, `no jobId in response: ${submitted.text.slice(0, 200)}`)
+  const last = await waitForJob(jobId)
+  assert(
+    last?.status === "failed",
+    `job ${jobId} is "${last?.status}" — an unfetchable layer image must fail the job, never render without it or strand`,
+  )
+  assertRenderable(last.error_message, "video-overlay unfetchable-image error_message")
+  assert(/could not be fetched/.test(last.error_message), `the message does not say what failed: "${last.error_message}"`)
+  return `failed with: "${last.error_message}"`
 })
 
 // ---------------------------------------------------------------------------

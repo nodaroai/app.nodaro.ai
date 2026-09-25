@@ -295,6 +295,7 @@ const map: LocaleCatalogMap = {
   "face-full-beard": { label: "Barba Cheia", description: "Barba cheia e farta" },
 
   // Skin texture
+  "texture-natural": { label: "Natural", description: "Poros reais e variação natural" },
   "texture-smooth": { label: "Lisa", description: "Pele impecável, sedosa e lisa" },
   "texture-wrinkled": { label: "Enrugada", description: "Pele envelhecida, com rugas marcadas" },
   "texture-goosebumps": { label: "Arrepiada", description: "Pele arrepiada, com pelos eriçados" },

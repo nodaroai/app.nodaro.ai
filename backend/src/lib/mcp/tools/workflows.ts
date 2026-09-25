@@ -7,7 +7,7 @@ import { z } from "zod"
 import { isDeepStrictEqual } from "node:util"
 import { clientRequestIdSchema, idempotencyHeaders } from "./_verb-helpers.js"
 import type { FastifyInstance } from "fastify"
-import { stripExportContent, stripUnownedRefs, stripTransientRuntimeData, normalizeNodeModelParams, describeNodeAdjustments, type GenericNode, type WorkflowExport } from "@nodaro/shared"
+import { stripExportContent, stripUnownedRefs, stripTransientRuntimeData, normalizeNodeModelParams, normalizeVideoOverlayNodes, describeNodeAdjustments, type GenericNode, type WorkflowExport } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { reconcileWorkflowTriggers, type GraphNode } from "../../workflow-trigger-sync.js"
 
@@ -20,7 +20,8 @@ import { reconcileWorkflowTriggers, type GraphNode } from "../../workflow-trigge
  */
 async function projectTriggers(workflowId: string, ownerId: string, nodes: unknown): Promise<void> {
   if (!Array.isArray(nodes)) return
-  const result = await reconcileWorkflowTriggers({ workflowId, userId: ownerId, nodes: nodes as readonly GraphNode[] })
+  // MCP tools only reach the session user's own workflows, so the saver is the owner.
+  const result = await reconcileWorkflowTriggers({ workflowId, userId: ownerId, nodes: nodes as readonly GraphNode[], ownerActing: true })
   if (result.error) console.warn(`[mcp] workflow trigger sync failed for ${workflowId}: ${result.error}`)
 }
 import { mcpInject } from "../internal-request.js"
@@ -336,9 +337,14 @@ export function registerWorkflows({
         // Heal impossible provider/parameter pairs at the write boundary —
         // same reason as update_workflow_json: an agent-authored node never
         // renders the config panel, so nothing else ever snaps its values.
-        const storedNodes = normalizeNodeModelParams(
-          (args.nodes ?? []) as Array<{ id?: unknown; type?: unknown; data?: unknown }>,
-        ).nodes
+        // Then the Video Overlay pass: presets expanded, and a layer whose
+        // `overlay<i>` handle these edges wire keeps no stored `imageUrl`.
+        const storedNodes = normalizeVideoOverlayNodes(
+          normalizeNodeModelParams(
+            (args.nodes ?? []) as Array<{ id?: unknown; type?: unknown; data?: unknown }>,
+          ).nodes,
+          args.edges,
+        )
         const { data, error } = await supabase
           .from("workflows")
           .insert({
@@ -624,7 +630,8 @@ export function registerWorkflows({
           // and aborts the whole run at generate-time (incident 2026-08-09).
           const healed = normalizeNodeModelParams(stripped as Array<{ id?: unknown; type?: unknown; data?: unknown }>)
           nodeAdjustments = healed.adjustments
-          updates.nodes = healed.nodes
+          // Video Overlay: presets expanded; a wired layer keeps no `imageUrl`.
+          updates.nodes = normalizeVideoOverlayNodes(healed.nodes, migratedEdges)
           updates.edges = migratedEdges
         }
         if (args.settings !== undefined) updates.settings = args.settings
@@ -779,6 +786,8 @@ export function registerWorkflows({
           remappedNodes as Array<{ id: string; type?: string }>,
           (wf.edges ?? []) as Array<{ id: string; source: string; target: string; sourceHandle: string | null; targetHandle: string | null }>,
         )
+        // Video Overlay: presets expanded; a wired layer keeps no `imageUrl`.
+        const importedNodes = normalizeVideoOverlayNodes(remappedNodes, migratedEdges)
 
         const { data: newWorkflow, error: wfError } = await supabase
           .from("workflows")
@@ -786,7 +795,7 @@ export function registerWorkflows({
             project_id: mcpProjectId,
             user_id: session.userId,
             name: wf.name,
-            nodes: remappedNodes,
+            nodes: importedNodes,
             edges: migratedEdges,
             settings: remappedSettings,
           })
@@ -796,7 +805,7 @@ export function registerWorkflows({
           return err(`Error: ${wfError?.message ?? "Failed to create workflow"}`)
         }
         const row = newWorkflow as Record<string, unknown>
-        await projectTriggers(row.id as string, session.userId, remappedNodes)
+        await projectTriggers(row.id as string, session.userId, importedNodes)
 
         const mediaNotes = [
           importReport.rehosted > 0 ? `${importReport.rehosted} media file(s) copied onto this instance.` : "",

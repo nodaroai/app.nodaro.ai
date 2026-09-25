@@ -8,11 +8,14 @@
 export const SCHEDULE_TRIGGER_NODE_TYPE = "schedule-trigger"
 export const WEBHOOK_TRIGGER_NODE_TYPE = "webhook-trigger"
 export const TELEGRAM_TRIGGER_NODE_TYPE = "telegram-trigger"
+/** Fires on a message that reaches a Telegram account the owner connected (Cloud). */
+export const TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE = "telegram-account-trigger"
 
 export const PROJECTED_TRIGGER_NODE_TYPES: ReadonlySet<string> = new Set([
   SCHEDULE_TRIGGER_NODE_TYPE,
   WEBHOOK_TRIGGER_NODE_TYPE,
   TELEGRAM_TRIGGER_NODE_TYPE,
+  TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE,
 ])
 
 export function isProjectedTriggerNodeType(type: unknown): type is string {

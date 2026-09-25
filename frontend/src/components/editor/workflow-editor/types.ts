@@ -1,7 +1,8 @@
-import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData } from "@/types/nodes";
+import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData, ProbedVideoInfo } from "@/types/nodes";
 import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
+import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
@@ -53,6 +54,14 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "combine-videos": 30,
   "apply-edl": 10,
   "silence-detect": 10,
+  // audio-sync: 10 × (sources − 1), keyed by the wired source count — the
+  // run-level estimate names the composite (getModelIdentifier) and reads it
+  // here on a cold cache. Mirrors AUDIO_SYNC_CREDIT_COSTS (backend).
+  "audio-sync:2src": 10,
+  "audio-sync:3src": 20,
+  "audio-sync:4src": 30,
+  "audio-sync:5src": 40,
+  "audio-sync:6src": 50,
   // edit-plan's live per-run cost is dynamic (getModelIdentifier → the seeded
   // mode×tier×duration row). This is the COLD-CACHE fallback only: the table MAX
   // (clips·premium·180m = 1480), never-under-quote — mirrors video-analysis's
@@ -61,6 +70,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "assemble-narrated-video": 40,
   "image-collage": 20,
   "image-overlay": 10,
+  "video-overlay": 20,
   "merge-video-audio": 20,
   "trim-audio": 10,
   "split-media": 20,
@@ -519,7 +529,7 @@ export function estimateNodeCredits(
     // (the reserve is computed server-side from the real length), and a stale
     // window only exists for the moment between rewire and the hook's re-probe.
     const probed = node.data.probedYoutube as { url: string; durationSec: number } | undefined
-    const probedWired = node.data.probedVideo as { url: string; durationSec: number } | undefined
+    const probedWired = node.data.probedVideo as ProbedVideoInfo | undefined
     const durationSec =
       (probed && probed.url === node.data.youtubeUrl ? probed.durationSec : undefined) ??
       probedWired?.durationSec
@@ -530,6 +540,12 @@ export function estimateNodeCredits(
       ? VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(model, bucketSec)] ?? NODE_CREDIT_COSTS["video-analysis"] ?? 0
       : NODE_CREDIT_COSTS["video-analysis"] ?? 0
   }
+  // Audio Sync: priced per source aligned to the reference — the wired source
+  // count, from the edges (the SAME count getModelIdentifier and the node pill
+  // read). No edges → the 6-source ceiling (never under-quote).
+  if (nodeType === "audio-sync") {
+    return NODE_CREDIT_COSTS[audioSyncCreditId(audioSyncWiredSourceCount(node.id, edges))] ?? 0
+  }
   if (nodeType === "video-audit" && node.data) {
     // Family from the edges (see videoAuditAnalysisWired), duration from the
     // node's url-bound `probedVideo` cache — the SAME two inputs the node badge
@@ -537,7 +553,7 @@ export function estimateNodeCredits(
     // can only ever quote the same row. No YouTube alternative on this node, so
     // there is no probedYoutube fallback to consider. Unknown duration →
     // buildVideoAuditCreditId's own 600s ceiling composite (never a bare id).
-    const probedWired = node.data.probedVideo as { url: string; durationSec: number } | undefined
+    const probedWired = node.data.probedVideo as ProbedVideoInfo | undefined
     const creditId = buildVideoAuditCreditId({
       analysisProvided: videoAuditAnalysisWired(node.id, edges),
       durationSec: probedWired?.durationSec,
@@ -616,6 +632,7 @@ export const EXECUTABLE_TYPES = new Set([
   "assemble-narrated-video",
   "image-collage",
   "image-overlay",
+  "video-overlay",
   "merge-video-audio",
   "still-to-video",
   "slideshow",
@@ -623,6 +640,7 @@ export const EXECUTABLE_TYPES = new Set([
   "split-media",
   "extract-audio",
   "silence-detect",
+  "audio-sync",
   "remove-audio",
   "trim-video",
   "extract-frame",

@@ -25,6 +25,8 @@ const IMAGE_TYPES = new Set<string>([
   "generate-location",
   "generate-location-asset",
   "extract-frame",
+  "image-overlay",
+  "image-collage",
 ])
 
 /**
@@ -49,6 +51,7 @@ const VIDEO_TYPES = new Set<string>([
   "resize-video",
   "trim-video",
   "fade-video",
+  "video-overlay",
   "loop-video",
   "transcode-video",
   "speech-to-video",

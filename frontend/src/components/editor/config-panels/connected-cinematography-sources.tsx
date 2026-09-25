@@ -63,7 +63,7 @@ function collectSources(
         entries.push({
           key: src.id,
           icon: Video,
-          title: `${srcNodeLabel}: ${getCameraMotionLabel(motionId)}`,
+          title: `${srcNodeLabel}${t("common.labelColon")}${getCameraMotionLabel(motionId)}`,
           description: motion?.description ?? "",
           preview: art(<LookArt pickerKey="camera-motion" id={motionId} className="w-full aspect-[16/9]" width={480} fallback={<CameraMotionPreview motionId={motionId} className="w-full aspect-[16/9]" />} />),
         })
@@ -81,7 +81,7 @@ function collectSources(
           entries.push({
             key: `${src.id}:${category}`,
             icon: Frame,
-            title: `${srcNodeLabel} · ${FRAMING_CATEGORY_LABELS[category]}: ${entry.label}`,
+            title: `${srcNodeLabel} · ${FRAMING_CATEGORY_LABELS[category]}${t("common.labelColon")}${entry.label}`,
             description: entry.description,
             preview: art(<LookArt pickerKey="framing" id={id} className="w-full aspect-[16/9]" width={480} fallback={<FramingPreview framingId={id} className="w-full aspect-[16/9]" />} />),
           })
@@ -98,7 +98,7 @@ function collectSources(
           entries.push({
             key: `${src.id}:${category}`,
             icon: Lightbulb,
-            title: `${srcNodeLabel} · ${LIGHTING_CATEGORY_LABELS[category]}: ${entry.label}`,
+            title: `${srcNodeLabel} · ${LIGHTING_CATEGORY_LABELS[category]}${t("common.labelColon")}${entry.label}`,
             description: entry.description,
             preview: art(<LookArt pickerKey="lighting" id={id} className="w-full aspect-[16/9]" width={480} fallback={<LightingPreview lightingId={id} className="w-full aspect-[16/9]" />} />),
           })
@@ -115,7 +115,7 @@ function collectSources(
           entries.push({
             key: `${src.id}:${category}`,
             icon: Clock,
-            title: `${srcNodeLabel} · ${TEMPORAL_CATEGORY_LABELS[category]}: ${entry.label}`,
+            title: `${srcNodeLabel} · ${TEMPORAL_CATEGORY_LABELS[category]}${t("common.labelColon")}${entry.label}`,
             description: entry.description,
             preview: <TemporalPreview temporalId={id} className="w-full aspect-[16/9]" />,
           })
@@ -130,7 +130,7 @@ function collectSources(
         entries.push({
           key: src.id,
           icon: Aperture,
-          title: `${srcNodeLabel}: ${getLensLabel(id)}`,
+          title: `${srcNodeLabel}${t("common.labelColon")}${getLensLabel(id)}`,
           description: entry.description,
           preview: art(<LookArt pickerKey="lens" id={id} className="w-full aspect-[16/9]" width={480} fallback={<LensPreview lensId={id} className="w-full aspect-[16/9]" />} />),
         })
@@ -144,7 +144,7 @@ function collectSources(
         entries.push({
           key: src.id,
           icon: Film,
-          title: `${srcNodeLabel}: ${getCameraFormatLabel(id)}`,
+          title: `${srcNodeLabel}${t("common.labelColon")}${getCameraFormatLabel(id)}`,
           description: entry.description,
           preview: art(<LookArt pickerKey="camera-format" id={id} className="w-full aspect-[16/9]" width={480} fallback={<CameraFormatPreview cameraFormatId={id} className="w-full aspect-[16/9]" />} />),
         })
@@ -158,7 +158,7 @@ function collectSources(
         entries.push({
           key: src.id,
           icon: SwatchBook,
-          title: `${srcNodeLabel}: ${getColorLookLabel(id)}`,
+          title: `${srcNodeLabel}${t("common.labelColon")}${getColorLookLabel(id)}`,
           description: entry.description,
           preview: art(<LookArt pickerKey="color-look" id={id} className="w-full aspect-[16/9]" width={480} fallback={<ColorLookPreview colorLookId={id} className="w-full aspect-[16/9]" />} />),
         })
@@ -172,7 +172,7 @@ function collectSources(
         entries.push({
           key: src.id,
           icon: CloudFog,
-          title: `${srcNodeLabel}: ${getAtmosphereLabel(id)}`,
+          title: `${srcNodeLabel}${t("common.labelColon")}${getAtmosphereLabel(id)}`,
           description: entry.description,
           preview: art(<LookArt pickerKey="atmosphere" id={id} className="w-full aspect-[16/9]" width={480} fallback={<AtmospherePreview atmosphereId={id} className="w-full aspect-[16/9]" />} />),
         })
@@ -186,7 +186,7 @@ function collectSources(
         entries.push({
           key: src.id,
           icon: Brush,
-          title: `${srcNodeLabel}: ${getStyleLabel(id)}`,
+          title: `${srcNodeLabel}${t("common.labelColon")}${getStyleLabel(id)}`,
           description: entry.description,
           preview: art(<LookArt pickerKey="style" id={id} className="w-full aspect-[16/9]" width={480} fallback={<StylePreview styleId={id} className="w-full aspect-[16/9]" />} />),
         })
@@ -198,7 +198,7 @@ function collectSources(
         entries.push({
           key: src.id,
           icon: Palette,
-          title: `${srcNodeLabel}: ${toneText}`,
+          title: `${srcNodeLabel}${t("common.labelColon")}${toneText}`,
           description: t("paramcfg.tone"),
           preview: null,
         })
@@ -210,7 +210,7 @@ function collectSources(
         entries.push({
           key: src.id,
           icon: SlidersHorizontal,
-          title: `${srcNodeLabel}: ${motion}`,
+          title: `${srcNodeLabel}${t("common.labelColon")}${motion}`,
           description: t("field.motion"),
           preview: null,
         })
@@ -224,7 +224,7 @@ function collectSources(
         entries.push({
           key: src.id,
           icon: GitBranch,
-          title: `${srcNodeLabel}: ${labels.join(" + ")}`,
+          title: `${srcNodeLabel}${t("common.labelColon")}${labels.join(" + ")}`,
           description: primary?.description ?? "",
           preview: null,
         })
@@ -238,7 +238,7 @@ function collectSources(
         entries.push({
           key: src.id,
           icon: Sparkles,
-          title: `${srcNodeLabel}: ${labels.join(" + ")}`,
+          title: `${srcNodeLabel}${t("common.labelColon")}${labels.join(" + ")}`,
           description: primary?.description ?? "",
           preview: null,
         })
@@ -252,7 +252,7 @@ function collectSources(
         entries.push({
           key: src.id,
           icon: Footprints,
-          title: `${srcNodeLabel}: ${labels.join(" → ")}`,
+          title: `${srcNodeLabel}${t("common.labelColon")}${labels.join(" → ")}`,
           description: primary?.description ?? "",
           preview: null,
         })

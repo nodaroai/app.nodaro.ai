@@ -72,7 +72,7 @@ export function BillingAccountSummary({ account, className = "", consumptionOnly
           </div>
           {account.generations != null && (
             <div className="mt-1 text-xs text-muted-foreground">
-              {t("usage.generations")}: {formatNumber(account.generations)}
+              {t("usage.generations")}{t("common.labelColon")}{formatNumber(account.generations)}
             </div>
           )}
           {account.periodStart && (
@@ -94,7 +94,7 @@ export function BillingAccountSummary({ account, className = "", consumptionOnly
           {account.spent && (
             <div className="mt-1 text-sm font-medium">
               {t("usage.approx", { amount: money(account.spent) })}
-              {account.payg?.monthlyCap ? ` ${t("usage.monthlyCap", { cap: money(account.payg.monthlyCap) })}` : ""}
+              {account.payg?.monthlyCap ? `${t("common.fragmentGap")}${t("usage.monthlyCap", { cap: money(account.payg.monthlyCap) })}` : ""}
             </div>
           )}
           {account.periodStart && (
@@ -117,12 +117,12 @@ export function BillingAccountSummary({ account, className = "", consumptionOnly
           </div>
           {account.reserveValue && (
             <div className="mt-1 text-sm font-medium">
-              {t("usage.reserve")}: {t("usage.approx", { amount: money(account.reserveValue) })}
+              {t("usage.reserve")}{t("common.labelColon")}{t("usage.approx", { amount: money(account.reserveValue) })}
             </div>
           )}
           {account.generations != null && (
             <div className="mt-1 text-xs text-muted-foreground">
-              {t("usage.generations")}: {formatNumber(account.generations)}
+              {t("usage.generations")}{t("common.labelColon")}{formatNumber(account.generations)}
             </div>
           )}
         </div>

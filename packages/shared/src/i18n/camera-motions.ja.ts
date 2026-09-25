@@ -4,7 +4,7 @@ const map: LocaleCatalogMap = {
   // Default
   "auto": { label: "オート", description: "適切なカメラモーションをモデルに選ばせる" },
   "static": { label: "固定", description: "固定カメラ、動きなし" },
-  "handheld": { label: "ハンドヘルド", description: "自然な手持ちの揺れ" },
+  "handheld": { label: "手持ち", description: "自然な手持ちの揺れ" },
   "steadicam": { label: "ステディカム", description: "滑らかに安定した歩行ショット" },
 
   // Pan
@@ -19,7 +19,7 @@ const map: LocaleCatalogMap = {
 
   // Zoom
   "zoom-in": { label: "ズームイン", description: "被写体に向かってレンズをズームする" },
-  "zoom-out": { label: "ズームアウト", description: "被写体から離れてレンズをズームする" },
+  "zoom-out": { label: "ズームアウト", description: "レンズのズームで被写体から引いていく" },
   "crash-zoom-in": { label: "クラッシュズーム・イン", description: "ぱっと切れ味のあるウィップ式ズームイン" },
   "crash-zoom-out": { label: "クラッシュズーム・アウト", description: "ぱっと切れ味のあるウィップ式ズームアウト" },
 
@@ -27,12 +27,12 @@ const map: LocaleCatalogMap = {
   "dolly-in": { label: "ドリー・イン", description: "被写体に向かってカメラを押し込む（パララックスあり）" },
   "dolly-out": { label: "ドリー・アウト", description: "カメラを引いていく（パララックスあり）" },
   "dolly-zoom": { label: "ドリーズーム", description: "ヴァーティゴ効果：ドリーがズームと逆方向" },
-  "push-in": { label: "プッシュイン", description: "被写体への速く力強い押し込み" },
-  "pull-out": { label: "プルアウト", description: "被写体からの速く力強い引き戻し" },
-  "breathing": { label: "ブリージング・カメラ", description: "繊細で連続的なプッシュインとプルアウトの揺らぎ、有機的な手持ちの感触" },
-  "push-pull": { label: "プッシュプル／スウィング", description: "カメラが被写体に近づいてから離れる、振り子のような接近と後退" },
-  "creep-in": { label: "クリープイン", description: "ほとんど気づかれないほどゆっくりのプッシュイン、恐怖や緊張を高める" },
-  "creep-out": { label: "クリープアウト", description: "ほとんど気づかれないほどゆっくりのプルアウト、被写体を空間に孤立させる" },
+  "push-in": { label: "プッシュイン", description: "被写体へ素早く力強く寄っていく" },
+  "pull-out": { label: "プルアウト", description: "被写体から素早く力強く引いていく" },
+  "breathing": { label: "ブリージング・カメラ", description: "繊細で連続的なプッシュインとプルアウトの揺らぎ" },
+  "push-pull": { label: "プッシュプル／スウィング", description: "カメラが被写体に近づいてから離れる" },
+  "creep-in": { label: "クリープイン", description: "時間をかけた、ほとんど気づかないほどゆっくりのプッシュイン" },
+  "creep-out": { label: "クリープアウト", description: "時間をかけた、ほとんど気づかないほどゆっくりのプルアウト" },
 
   // Truck
   "truck-left": { label: "トラック・レフト", description: "カメラ本体を横方向に左へスライドさせる" },
@@ -67,32 +67,32 @@ const map: LocaleCatalogMap = {
   "lead": { label: "リード", description: "進む被写体の前方を移動する" },
   "drone-follow": { label: "ドローン・フォロー", description: "上空のドローンが被写体をトラッキング" },
   "dolly-track": { label: "ドリー・トラック", description: "被写体に並走するドリー軌道" },
-  "gimbal-walk": { label: "ジンバル・ウォーク", description: "3軸ジンバルでの滑らかな歩行ショット、浮遊感のある安定した前進運動" },
-  "ronin-glide": { label: "Ronin・グライド", description: "Ronin / Moviジンバルでのゆっくり滑らかな移動、揺れのないシネマティックな浮遊" },
-  "serpentine": { label: "サーペンタイン・トラック", description: "カメラが障害物の間をS字カーブで縫うように、蛇行する前進経路" },
+  "gimbal-walk": { label: "ジンバル・ウォーク", description: "3軸ジンバルでの滑らかな歩行ショット" },
+  "ronin-glide": { label: "Ronin グライド", description: "Ronin / Movi ジンバルでのゆっくり滑らかな移動" },
+  "serpentine": { label: "サーペンタイン・トラック", description: "カメラが障害物の間をS字カーブで縫うように進む" },
 
   // Special
   "pov": { label: "POV", description: "一人称視点" },
   "over-the-shoulder": { label: "オーバー・ザ・ショルダー", description: "キャラクターの肩越しのフレーミング" },
   "birds-eye": { label: "バーズアイ", description: "真下を見下ろす俯瞰ビュー" },
   "worms-eye": { label: "ワームズアイ", description: "極端なローアングルから見上げる" },
-  "aerial": { label: "エアリアル", description: "高高度のドローン風ショット" },
+  "aerial": { label: "空撮", description: "高高度のドローン風ショット" },
   "helicopter": { label: "ヘリコプター", description: "高高度を広くなめる空撮" },
   "fly-over": { label: "フライオーバー", description: "シーンの上を低く速く通過する空撮" },
   "flythrough": { label: "フライスルー", description: "空間を通り抜けるように飛ぶカメラ" },
   "reveal": { label: "リヴィール", description: "より広いシーンを徐々に見せる" },
   "snorricam": { label: "スノリカム", description: "体に取り付けたカメラ（被写体がフレームに固定）" },
-  "rack-focus": { label: "ラックフォーカス", description: "前景と背景の間でフォーカスを引く" },
+  "rack-focus": { label: "ラックフォーカス", description: "前景と背景の間でピントを送る" },
 
   // Modern / social
-  "handheld-vlog": { label: "ハンドヘルド・ヴログ", description: "カジュアルなヴログ風の手持ち" },
+  "handheld-vlog": { label: "手持ち Vlog", description: "カジュアルな Vlog 風の手持ち撮影" },
   "pov-walk": { label: "POVウォーク", description: "一人称の歩行POV" },
   "velocity-edit": { label: "ベロシティエディット", description: "TikTok風のスピードランプ・ペーシング" },
   "match-cut-zoom": { label: "マッチカット・ズーム", description: "同じ形にハードカットする速いズーム" },
   "screen-tap": { label: "スクリーンタップ", description: "画面上の指タップによるトランジション" },
   "phone-flip": { label: "フォンフリップ", description: "前面／背面カメラの切り替え" },
   // Location-studio extension (PR #2505 follow-up)
-  "gentle-drift": { label: "穏やかなドリフト", description: "ゆっくりとした環境的な浮遊する動き" },
+  "gentle-drift": { label: "穏やかなドリフト", description: "ゆったりと漂うような、控えめな浮遊の動き" },
   "parallax": { label: "パララックス", description: "前景と背景の奥行きが分離する横方向の動き" },
 }
 

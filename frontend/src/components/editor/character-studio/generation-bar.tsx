@@ -38,8 +38,10 @@ export function GenerationBar({ presets, models, defaultModel, disabled, disable
   const [model, setModel] = useState(defaultModel)
   const [text, setText] = useState("")
   const cost = useModelCredits(model, 0)
-  const costLabel = cost > 0 ? ` (${formatCreditUnits(cost)})` : ""
   const allCost = cost > 0 && generateAllCount ? cost * generateAllCount : 0
+  // The cost sits inside each key, so every language places its own
+  // parentheses ("Generate (10 CR)", Japanese 生成（10 CR）).
+  const generateLabel = cost > 0 ? t("studio.generateCost", { cost: formatCreditUnits(cost) }) : t("common.generate")
 
   const setModelAndNotify = (m: string) => {
     setModel(m)
@@ -66,7 +68,9 @@ export function GenerationBar({ presets, models, defaultModel, disabled, disable
                     ? t("studio.presetAlreadyGenerated", { name: p })
                     : st === "creating"
                       ? t("studio.presetGenerating", { name: p })
-                      : `${t("studio.generateNamed", { name: p })}${costLabel}`
+                      : cost > 0
+                        ? t("studio.generateNamedCost", { name: p, cost: formatCreditUnits(cost) })
+                        : t("studio.generateNamed", { name: p })
               }
               className="text-[10px] bg-[#1e293b] border border-[#334155] rounded px-2 py-0.5 text-slate-300 inline-flex items-center gap-1 transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40 data-[state=created]:opacity-70 data-[state=created]:text-emerald-300/80 data-[state=created]:border-emerald-700/40"
               onClick={() => onGenerate(p, true, model)}
@@ -85,7 +89,7 @@ export function GenerationBar({ presets, models, defaultModel, disabled, disable
             title={generateAllCount ? t("studio.generateAllCostTitle", { n: generateAllCount, each: formatCreditUnits(cost), total: formatCreditUnits(allCost) }) : undefined}
             className="text-[10px] bg-[#1e293b] border border-[#334155] rounded px-2 py-0.5 text-slate-400 ms-auto transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40"
             onClick={onGenerateAll}
-          >⟳ {t("studio.generateAll")}{allCost > 0 ? ` (${formatCreditUnits(allCost)})` : ""}</button>
+          >⟳ {allCost > 0 ? t("studio.generateAllCost", { cost: formatCreditUnits(allCost) }) : t("studio.generateAll")}</button>
         )}
       </div>
       <div className="flex gap-2 items-center">
@@ -102,10 +106,10 @@ export function GenerationBar({ presets, models, defaultModel, disabled, disable
         <button
           type="button"
           disabled={disabled || text.trim().length === 0}
-          title={disabled ? disabledHint : `${t("common.generate")}${costLabel}`}
+          title={disabled ? disabledHint : generateLabel}
           className="text-[10px] bg-[#3b82f6] text-white font-medium rounded px-4 py-1.5 transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40"
           onClick={() => { onGenerate(text.trim(), false, model); setText("") }}
-        >{t("common.generate")}{costLabel}</button>
+        >{generateLabel}</button>
       </div>
     </div>
   )

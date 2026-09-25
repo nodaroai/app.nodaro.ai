@@ -47,6 +47,7 @@ import type {
   PluginDaemon,
   PluginDaemonClientToolkit,
   PluginRedisLeaseToolkit,
+  PluginTriggersToolkit,
 } from "./daemon-contract.js"
 export type * from "./scene3d-contract.js"
 export type * from "./daemon-contract.js"
@@ -1943,6 +1944,12 @@ export interface PluginToolkit {
    * `?.`-guard it.
    */
   daemons?: PluginDaemonClientToolkit
+  /**
+   * Trigger lanes served by a hosted daemon: read a lane's active rows and
+   * start a run from one through the built-in fire-time gates. Daemon host
+   * only. ADDITIVE-OPTIONAL — `?.`-guard it.
+   */
+  triggers?: PluginTriggersToolkit
 }
 
 /**
@@ -2614,6 +2621,24 @@ export interface PluginSurroundEngine {
  */
 export type PromptTable = Record<string, string>
 
+/**
+ * Additive. One content recipe a plugin serves through `get_recipe` — the
+ * same shape a local `backend/skills/recipes/<name>/` folder carries, as
+ * DATA: `body` is the recipe's instructions (frontmatter already stripped),
+ * `files` maps a bundled reference name to its text. A `library` recipe is
+ * loadable by name but never listed (it is shared material other recipes
+ * point at, not an entry point). `files` is a plain map — lookups are exact
+ * key matches, never paths resolved against anything.
+ */
+export interface PluginRecipe {
+  readonly description: string
+  readonly triggers: readonly string[]
+  readonly library?: boolean
+  readonly body: string
+  readonly files: Readonly<Record<string, string>>
+}
+export type RecipeTable = Record<string, PluginRecipe>
+
 export interface NodaroPrivatePlugin {
   name: string
   registerRoutes?(app: FastifyInstance, tk: PluginToolkit): Promise<void>
@@ -2641,6 +2666,13 @@ export interface NodaroPrivatePlugin {
    * write wins per named member.
    */
   services?(tk: PluginToolkit): Partial<PluginServices>
+  /**
+   * Additive: content recipes served by the `get_recipe` MCP tool beside the
+   * local catalog (see `PluginRecipe`). Merged by the loader with
+   * `Object.assign`, last write wins per recipe name; a local recipe of the
+   * same name always wins over a plugin one.
+   */
+  recipes?(): RecipeTable
   /**
    * Additive: long-lived processes, run only by the daemon host
    * (`plugin-daemons.ts`) — see `PluginDaemon`. The host passes its own

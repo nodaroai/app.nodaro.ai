@@ -96,4 +96,9 @@ describe("producer-types", () => {
   it("classifies apply-edl as a video output (literal VIDEO_OUTPUT_TYPES wins over DYNAMIC 'data')", () => {
     expect(getOutputType("apply-edl")).toBe("video")
   })
+  // video-overlay renders timed image layers over a video → emits a video URL
+  // on `video-out`. Absent here, every downstream video input would reject it.
+  it("registers video-overlay as a video producer", () => {
+    expect(VIDEO_PRODUCER_TYPES.has("video-overlay")).toBe(true)
+  })
 })

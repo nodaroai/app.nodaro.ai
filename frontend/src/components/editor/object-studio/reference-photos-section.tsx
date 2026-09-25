@@ -117,21 +117,25 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
             // Original index needed for remove() to slice the correct entry
             // from the full `photos` array — filtering changes positions.
             const originalIdx = photos.indexOf(p)
+            // Shown by its label, never the stored id ("moodBoard"); a kind
+            // saved before this list changed shows as stored.
+            const labelKey: MessageKey | undefined = KIND_LABELS[p.kind]
+            const kindLabel = labelKey ? t(labelKey) : p.kind
             return (
               <div key={p.url + originalIdx} className="relative group">
                 <img
                   src={p.url}
-                  alt={p.kind}
+                  alt={kindLabel}
                   loading="lazy"
                   className="w-full aspect-square object-cover rounded border border-[#1e293b]"
                 />
                 <span className="absolute top-1 start-1 bg-black/70 text-[9px] text-white px-1 rounded">
-                  {p.kind}
+                  {kindLabel}
                 </span>
                 <button
                   type="button"
                   onClick={() => remove(originalIdx)}
-                  aria-label={t("cfgshared.removeModel", { name: p.kind })}
+                  aria-label={t("cfgshared.removeModel", { name: kindLabel })}
                   className="absolute top-1 end-1 bg-black/70 hover:bg-red-500 text-white text-[10px] w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   ✕

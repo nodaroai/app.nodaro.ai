@@ -509,11 +509,11 @@ function MetaAdsScrapeNodeComponent({ id, data, selected }: NodeProps) {
               {nodeData.errorMessage || t("node.scrapeFailed")}
               {state.kept && (
                 <>
-                  {" "}
+                  {t("common.fragmentGap")}
                   <span className="font-semibold text-[var(--meta-ads-text-2)]">
                     {t(state.kept.count === 1 ? "node.previousResultKeptOne" : "node.previousResultKeptOther", {
                       n: state.kept.count,
-                      when: state.kept.at ? `, ${relativeTime(state.kept.at, now)}` : "",
+                      when: state.kept.at ? `${t("common.listComma")}${relativeTime(state.kept.at, now)}` : "",
                     })}
                   </span>
                 </>

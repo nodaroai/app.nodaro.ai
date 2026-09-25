@@ -224,8 +224,9 @@ export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTr
         <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("cfgext.trigTelegramBot")}</Label>
         {!loadingConnections && connections.length === 0 ? (
           <p className="text-xs text-muted-foreground mt-1.5 p-2 bg-muted/30 rounded-md border border-dashed border-border">
-            {t("cfgext.trigNoTelegramBot")}{" "}
-            <a href="/integrations" className="underline">{t("cfgext.socialConnectIn", { surface: t("nav.integrations") })}</a>.
+            {t("cfgext.trigNoTelegramBot")}{t("common.fragmentGap")}
+            <a href="/integrations" className="underline">{t("cfgext.socialConnectIn", { surface: t("nav.integrations") })}</a>
+            {t("common.sentenceEnd")}
           </p>
         ) : (
           <Select

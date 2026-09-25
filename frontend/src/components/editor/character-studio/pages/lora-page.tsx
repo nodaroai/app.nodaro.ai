@@ -361,7 +361,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
               </Button>
               <span className="text-xs text-slate-500">
                 {t("studio.nOfMaxSelectedSpaced", { n: selectedCount, max: MIN_PHOTOS })}
-                {insufficientPhotos && ` — ${t("studio.selectAtLeastImages", { n: MIN_PHOTOS })}`}
+                {insufficientPhotos && `${t("common.dashJoin")}${t("studio.selectAtLeastImages", { n: MIN_PHOTOS })}`}
               </span>
             </div>
           </div>

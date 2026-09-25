@@ -69,18 +69,25 @@ export function GetCreditsModal({
             <Sparkles className="w-5 h-5 text-[#ff0073]" />
             {t("credits.getMoreCreditsTitle")}
           </DialogTitle>
+          {/* The spaces beside a figure stay literal (every language spaces a
+              number); the joins between sentence fragments come from the
+              dictionary, which sets them without spaces in Japanese. With
+              nothing to divide by, the balance sentence ends on its own key:
+              Japanese needs a verb there, which the "enough for" clause
+              otherwise supplies. */}
           <p className="text-sm text-muted-foreground">
             {t("credits.appCostPrefix")} <strong>{creditUnits(required)}</strong> {t("credits.appCostSuffix")}
-            {" "}{t("credits.youHavePrefix")} <strong>{creditUnits(balance)}</strong> {creditUnitLabel(t("credits.unit.other"))}
+            {t("common.fragmentGap")}{t("credits.youHavePrefix")} <strong>{creditUnits(balance)}</strong> {creditUnitLabel(t("credits.unit.other"))}
             {required > 0 ? (
               <>
-                {" "}{t("credits.enoughForPrefix")} <strong>{Math.floor(balance / required)}</strong>{" "}
+                {t("common.fragmentGap")}{t("credits.enoughForPrefix")} <strong>{Math.floor(balance / required)}</strong>{" "}
                 {[
                   t("credits.more"),
                   Math.floor(balance / required) === 1 ? t("credits.runUnit.one") : t("credits.runUnit.other"),
-                ].filter(Boolean).join(" ")}
+                ].filter(Boolean).join(t("common.fragmentGap"))}
+                {t("common.sentenceEnd")}
               </>
-            ) : ""}.
+            ) : t("credits.youHaveEnd")}
           </p>
         </DialogHeader>
 

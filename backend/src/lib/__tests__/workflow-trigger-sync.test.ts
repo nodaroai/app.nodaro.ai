@@ -15,6 +15,7 @@ import {
   isCronExpression,
   mergeTriggerConfig,
   normalizeScheduleConfig,
+  normalizeTelegramAccountConfig,
   normalizeTelegramConfig,
   planTriggerSync,
   type ExistingTrigger,
@@ -367,6 +368,55 @@ describe("desiredTriggersFromGraph — telegram", () => {
       telegramNode("tg3", { isActive: true }),
     ])).toEqual([
       { nodeId: "tg1", type: "telegram", config: { connectionId: "conn-1", chatIdFilter: null, messageTypeFilters: ALL_TYPES }, isActive: true },
+    ])
+  })
+})
+
+describe("the Telegram ACCOUNT lane", () => {
+  const accountNode = (id: string, data: Record<string, unknown>) => ({
+    id,
+    type: "telegram-account-trigger",
+    data: { label: "Telegram account", ...data },
+  })
+
+  it("listens only once switched on with an account picked", () => {
+    expect(normalizeTelegramAccountConfig({ accountId: "acc-1" })).toBeNull()
+    expect(normalizeTelegramAccountConfig({ isActive: true })).toBeNull()
+    expect(normalizeTelegramAccountConfig({ accountId: "  ", isActive: true })).toBeNull()
+  })
+
+  it("emits every filter, trimmed and de-duplicated, so a cleared filter never survives on the row", () => {
+    expect(
+      normalizeTelegramAccountConfig({
+        accountId: " acc-1 ",
+        isActive: true,
+        chatIds: ["-1001", " -1001 ", "@news", "", 7],
+        keywords: ["launch"],
+        includeOutgoing: "yes",
+      }),
+    ).toEqual({
+      accountId: "acc-1",
+      chatIds: ["-1001", "@news"],
+      senderIds: [],
+      messageTypeFilters: [],
+      keywords: ["launch"],
+      includeOutgoing: false,
+    })
+  })
+
+  it("projects an armed node as a telegram_account row and skips an unarmed one", () => {
+    expect(
+      desiredTriggersFromGraph([
+        accountNode("ta1", { accountId: "acc-1", isActive: true, chatIds: ["-1001"] }),
+        accountNode("ta2", { accountId: "acc-1" }),
+      ]),
+    ).toEqual([
+      {
+        nodeId: "ta1",
+        type: "telegram_account",
+        config: { accountId: "acc-1", chatIds: ["-1001"], senderIds: [], messageTypeFilters: [], keywords: [], includeOutgoing: false },
+        isActive: true,
+      },
     ])
   })
 })

@@ -43,7 +43,7 @@ function LocalePickerComponent({ className }: { readonly className?: string }) {
           variant="ghost"
           size="sm"
           aria-label={t("lang.pickerPick")}
-          title={`${t("lang.pickerLabel")}: ${current.englishName}`}
+          title={`${t("lang.pickerLabel")}${t("common.labelColon")}${current.nativeName}`}
           className={cn(
             "h-7 px-2 gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground",
             className,

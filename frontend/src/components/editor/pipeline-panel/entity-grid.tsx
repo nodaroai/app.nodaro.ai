@@ -91,7 +91,7 @@ export function EntityGrid({ pipelineId, entityType, title, mode }: Props) {
           <div className="text-sm">
             <span className="font-medium text-amber-900 dark:text-amber-200">
               {t("pipe.yourTurnDash")}
-            </span>{" "}
+            </span>{t("common.fragmentGap")}
             <span className="text-amber-800 dark:text-amber-200">
               {t("pipe.reviewBelowToContinue", { n: awaitingCount, entities: entityLabel })}
             </span>

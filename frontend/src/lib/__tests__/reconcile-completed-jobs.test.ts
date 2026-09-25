@@ -819,3 +819,32 @@ describe("a node emptied by Clear results", () => {
     expect(await computeCompletedJobPatches(scrapeRefs, scraper, scrapeJob, NOW)).toEqual([])
   })
 })
+
+describe("buildCompletedResultPatch — Video Overlay run facts (reload recovery)", () => {
+  const clipped = { layer: 0, slot: 1, code: "clipped", detail: "ends at 8 s, clipped to the video end (5.00 s)" }
+  it("puts the worker's warnings, canvas and length on the node and on the recovered result", () => {
+    const patch = buildCompletedResultPatch(
+      "video-overlay",
+      { videoUrl: "https://r2/o.mp4", warnings: [clipped], width: 1080, height: 1920, durationSec: 5 },
+      "job-vo",
+      NOW,
+    )!
+    expect(patch).toMatchObject({ generatedVideoUrl: "https://r2/o.mp4", warnings: [clipped], width: 1080, height: 1920, durationSec: 5 })
+    expect((patch.generatedResults as Array<Record<string, unknown>>)[0]).toMatchObject({ jobId: "job-vo", warnings: [clipped], durationSec: 5 })
+  })
+  it("stamps the freshness key a backend run carried on the node and on the recovered result; none → undefined (reads old)", () => {
+    const patch = buildCompletedResultPatch("video-overlay", { videoUrl: "https://r2/o.mp4", resultCompositionKey: "K1" }, "job-vo", NOW)!
+    expect(patch.resultCompositionKey).toBe("K1")
+    expect((patch.generatedResults as Array<Record<string, unknown>>)[0]).toMatchObject({ resultCompositionKey: "K1" })
+    const plain = buildCompletedResultPatch("video-overlay", { videoUrl: "https://r2/o.mp4" }, "job-vo", NOW)!
+    expect((plain.generatedResults as Array<Record<string, unknown>>)[0]!.resultCompositionKey).toBeUndefined()
+  })
+  it("no warnings in the output → an empty list (a stale line is overwritten)", () => {
+    const patch = buildCompletedResultPatch("video-overlay", { videoUrl: "https://r2/o.mp4" }, "job-vo", NOW)!
+    expect(patch.warnings).toEqual([])
+  })
+  it("other nodes get no such keys", () => {
+    const patch = buildCompletedResultPatch("generate-video-pro", { videoUrl: "https://r2/v.mp4", warnings: [clipped] }, "j", NOW)!
+    expect("warnings" in patch).toBe(false)
+  })
+})

@@ -73,6 +73,12 @@ describe("resolveInitialLocale — browser detection lands only on offered local
     })
   })
 
+  it("a Japanese browser lands on Japanese (offered)", () => {
+    withBrowserLanguages(["ja-JP", "ja"], () => {
+      expect(resolveInitialLocale()).toBe("ja")
+    })
+  })
+
   it("skips not-offered preferences and takes the first offered one", () => {
     withBrowserLanguages(["fr-FR", "he", "en"], () => {
       expect(resolveInitialLocale()).toBe("he")

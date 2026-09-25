@@ -37,3 +37,15 @@ describe("job-budget import graph", () => {
     expect(timeouts.DEFAULT_FFMPEG_TIMEOUT_MS).toBe(10 * 60 * 1000)
   })
 })
+
+// audio-sync's runtime (`audio-sync.ts`) pulls ffmpeg-utils and the media
+// proxy; the mocks above throw on either, so the registry importing it at all
+// would fail this load.
+describe("the audio-sync budget leaf", () => {
+  it("the registry reaches audio-sync's budget without loading its ffmpeg runtime", async () => {
+    const leaf = await import("../../providers/audio/audio-sync-budget.js")
+    const registry = await import("../job-budget.js")
+    expect(typeof leaf.audioSyncJobBudgetMs).toBe("function")
+    expect(registry.BUDGETED_JOB_NAMES).toContain("audio-sync")
+  })
+})

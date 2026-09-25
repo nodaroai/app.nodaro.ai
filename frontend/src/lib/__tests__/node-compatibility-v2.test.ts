@@ -181,6 +181,19 @@ describe("getCompatibleNodes / resolveTargetHandle — video-source edge-drop re
   })
 })
 
+// Video Overlay's only image inputs are its layer handles. Without "overlay" in
+// HANDLE_COMPATIBILITY.image, an image producer's edge-drop popup never listed
+// the node; Image Overlay must keep resolving to its base ("image", inputs[0]).
+describe("getCompatibleNodes / resolveTargetHandle — an image edge-drop reaches Video Overlay's first layer", () => {
+  it("offers video-overlay as a direct match for an image source and wires the overlay handle", () => {
+    const pool = [opt("video-overlay"), opt("image-overlay"), opt("text-prompt")]
+    const direct = new Set(getCompatibleNodes("image", "source", pool).direct.map((o) => o.type))
+    expect(direct.has("video-overlay")).toBe(true)
+    expect(resolveTargetHandle("video-overlay", "image", "source")).toBe("overlay")
+    expect(resolveTargetHandle("image-overlay", "image", "source")).toBe("image")
+  })
+})
+
 // suno-generate's mappable secondary text fields (field-style / field-lyrics /
 // field-title / field-negativeStyle) are TEXT inputs: dragging FROM one of their
 // input pips must offer text producers (ai-writer, text-prompt, …) — NOT the audio

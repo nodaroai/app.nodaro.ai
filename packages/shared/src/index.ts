@@ -646,6 +646,7 @@ export {
   SCHEDULE_TRIGGER_NODE_TYPE,
   WEBHOOK_TRIGGER_NODE_TYPE,
   TELEGRAM_TRIGGER_NODE_TYPE,
+  TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE,
   PROJECTED_TRIGGER_NODE_TYPES,
   isProjectedTriggerNodeType,
 } from "./trigger-node-types.js"
@@ -1224,6 +1225,7 @@ export * from "./audio-fx-presets.js"
 // --- Remotion renderer: supported font names (shared with backend Zod validation) ---
 export * from "./supported-fonts.js"
 export * from "./image-overlay-layers.js"
+export * from "./video-overlay.js"
 export * from "./image-overlay-shapes.js"
 export * from "./image-overlay-platforms.js"
 // --- Shot-sequence visual elements (text/shape/image; shared with backend Zod validation) ---

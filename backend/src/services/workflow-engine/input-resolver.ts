@@ -15,6 +15,7 @@ import {
   pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
+import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle } from "@nodaro/shared"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
 
@@ -1125,8 +1126,9 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   // `analysis` INPUT is intercepted in routeOutput before this set is consulted.)
   "video-analysis",
   "video-audit",
-  // Incoming Telegram message — text is the primary output.
+  // Incoming Telegram message (bot or connected account) — text is the primary output.
   "telegram-trigger",
+  "telegram-account-trigger",
   // Telegram Channel Feed — the recent posts' text.
   "telegram-channel-feed",
 ])
@@ -1327,6 +1329,30 @@ function routeOutput(
     return
   }
 
+  // --- Video Overlay: routed by HANDLE like Image Overlay. "video" is the
+  // base; "overlay".."overlay12" are the layer images, index-aligned with
+  // data.layers[]; the reserved JSON id "layerPlan" lands in inputs.layerPlan,
+  // which v1 does not read. A wire on an unknown / missing handle fills the
+  // base only while it is still empty (an API-authored edge still runs).
+  if (targetType === "video-overlay") {
+    const handle = edge.targetHandle ?? ""
+    if (handle === VIDEO_OVERLAY_LAYER_PLAN_HANDLE) {
+      inputs.layerPlan = output
+      return
+    }
+    const slot = videoOverlaySlotOfHandle(handle)
+    if (slot > 0) {
+      const next = [...(inputs.overlayImageUrls ?? [])]
+      next[slot - 1] = output
+      inputs.overlayImageUrls = next
+      return
+    }
+    if (handle === "video" || !inputs.videoUrl) {
+      inputs.videoUrl = output
+    }
+    return
+  }
+
   if (targetType === "image-collage") {
     inputs.imageUrls = [...(inputs.imageUrls ?? []), output]
     // Lockstep sibling of imageUrls — the payload builder aligns the node's
@@ -1499,6 +1525,20 @@ function routeOutput(
     }
   }
 
+  // --- audio-sync `sources`: routed by targetHandle BEFORE any source-type
+  // branch (else an audio edge falls into inputs.audioUrl and a video edge into
+  // inputs.videoUrl, and the node loses which recording is which). Each row
+  // keeps its source NODE id — the result's `sourceId`, and the EdlSource id an
+  // edit plan uses for the same recording. `output` is the media URL
+  // getPrimaryOutput narrowed for the edge. Gated on targetType. Mirrors the
+  // frontend node-input-resolver audio-sync branch. ---
+  if (targetType === "audio-sync" && edge.targetHandle === "sources") {
+    if (typeof output === "string" && output) {
+      inputs.audioSyncSources = [...(inputs.audioSyncSources ?? []), { nodeId: src.id, url: output }]
+    }
+    return
+  }
+
   // --- apply-edl inputs: routed by targetHandle BEFORE any source-type branch
   // (the same reason as the analysis interceptor above — otherwise the json
   // `edl`/`transcript` edges fall into inputs.prompt and the media `sources`
@@ -1611,7 +1651,7 @@ function routeOutput(
   // lane, video → video lane, audio → audio lane, and text → prompt/caption
   // (never a fake image ref). A photo message thus feeds a References/image
   // input directly; a text message feeds a prompt. ---
-  if (srcType === "telegram-trigger") {
+  if (srcType === "telegram-trigger" || srcType === "telegram-account-trigger") {
     const out = nodeStates[src.id]?.output
     const refKey = REFERENCE_HANDLE_MAP[edge.targetHandle ?? ""]
     if (out?.imageUrl && (refKey === "referenceImageUrls" || edge.targetHandle === "image" || edge.targetHandle === "references")) {

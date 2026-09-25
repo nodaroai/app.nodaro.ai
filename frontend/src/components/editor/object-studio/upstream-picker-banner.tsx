@@ -1,4 +1,5 @@
-import { getAnimal, getFurniture, getVehicle, getWeapon } from "@nodaro/shared"
+import { getAnimal, getFurniture, getVehicle, getWeapon, type I18nCatalogId } from "@nodaro/shared"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { useT, type MessageKey } from "@/lib/i18n"
 
 /**
@@ -43,6 +44,14 @@ function getCatalogLabel(selection: LegacyPickerSelection): string {
   }
 }
 
+/** The picker catalog each kind's entries (and their translations) live in. */
+const CATALOG_BY_KIND: Readonly<Record<LegacyPickerSelection["kind"], I18nCatalogId>> = {
+  animal: "animals",
+  vehicle: "vehicles",
+  furniture: "furniture",
+  weapon: "weapons",
+}
+
 function getKindLabelKey(kind: LegacyPickerSelection["kind"]): MessageKey {
   switch (kind) {
     case "animal":
@@ -58,7 +67,11 @@ function getKindLabelKey(kind: LegacyPickerSelection["kind"]): MessageKey {
 
 export function UpstreamPickerBanner({ selection, onDismiss }: UpstreamPickerBannerProps) {
   const t = useT()
-  const label = getCatalogLabel(selection)
+  // The selection's catalog label in the interface language, like the picker
+  // tiles show it — the English catalog label would sit inside a translated
+  // sentence.
+  const { resolveLabel } = useLocalizedCatalog(CATALOG_BY_KIND[selection.kind])
+  const label = resolveLabel(selection.id, getCatalogLabel(selection))
   const kindLabel = t(getKindLabelKey(selection.kind))
   return (
     <div
@@ -72,9 +85,9 @@ export function UpstreamPickerBanner({ selection, onDismiss }: UpstreamPickerBan
           {t("studio.legacyPickerDetected")}
         </div>
         <p className="mt-0.5 text-muted-foreground leading-relaxed text-slate-400">
-          {t("studio.legacyPickerCreatedWith")} <span className="font-medium text-slate-300">{kindLabel}</span> {t("studio.legacyPickerSelectionColon")}{" "}
-          <span className="text-slate-200 font-medium">{label}</span>. {t("studio.legacyPickerWirePre", { kind: kindLabel })}
-          <code className="font-mono mx-0.5">type</code> {t("studio.legacyPickerWirePost")}{" "}
+          {t("studio.legacyPickerCreatedWith")}{t("common.fragmentGap")}<span className="font-medium text-slate-300">{kindLabel}</span>{t("common.fragmentGap")}{t("studio.legacyPickerSelectionColon")}{t("common.fragmentGap")}
+          <span className="text-slate-200 font-medium">{label}</span>{t("common.sentenceEnd")}{t("common.fragmentGap")}{t("studio.legacyPickerWirePre", { kind: kindLabel })}
+          <code className="font-mono mx-0.5">type</code> {t("studio.legacyPickerWirePost")}{t("common.fragmentGap")}
           {t("studio.legacyPickerMetadataStays")}
         </p>
       </div>

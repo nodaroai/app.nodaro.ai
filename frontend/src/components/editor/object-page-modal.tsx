@@ -637,7 +637,9 @@ no shadows, professional product photography`
               {confirmingObjectDelete ? (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-red-500 max-w-[260px]">
-                    {t("entity.permanentDeleteConfirm", { name: data.objectName || t("entity.thisObject") })}
+                    {data.objectName
+                      ? t("entity.permanentDeleteConfirm", { name: data.objectName })
+                      : t("entity.permanentDeleteConfirmThisObject")}
                   </span>
                   <Button
                     variant="ghost"

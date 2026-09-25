@@ -288,6 +288,7 @@ const map: LocaleCatalogMap = {
   "face-full-beard": { label: "Полная борода", description: "Густая полная борода" },
 
   // -------------------- Skin Texture --------------------
+  "texture-natural": { label: "Натуральная", description: "Настоящие поры и естественная неоднородность" },
   "texture-smooth": { label: "Гладкая", description: "Безупречная, шелковисто гладкая кожа" },
   "texture-wrinkled": { label: "Морщинистая", description: "Состаренная, глубоко морщинистая кожа" },
   "texture-goosebumps": { label: "Мурашки", description: "Поднявшиеся мурашки на коже" },

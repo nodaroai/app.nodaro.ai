@@ -69,6 +69,8 @@ export const ACCEPTS_JSON = (sourceType: string): boolean =>
  *  extract-field has a `json` outputType, etc. */
 export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "web-scrape", "meta-ads-scrape", "extract-field", "silence-detect",
+  // audio-sync's `json` handle carries { version, reference, offsets, notes }.
+  "audio-sync",
   "list", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
   "selector",

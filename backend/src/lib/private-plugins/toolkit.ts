@@ -93,6 +93,7 @@ import { buildJobInputData } from "../job-input-data.js"
 import { formatZodError } from "../zod-error.js"
 import { insertWithIdempotencyKey } from "../idempotent-insert.js"
 import { billingPairColumns } from "../insert-job.js"
+import { firePluginTrigger, listActivePluginTriggers } from "../plugin-triggers.js"
 import { jobSourceColumns } from "../job-source.js"
 import { throwIfJobCancelled } from "../job-cancellation.js"
 import { hasCredits, hasOrganizations } from "../config.js"
@@ -1577,6 +1578,8 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       ...(opts.role === "daemon" ? { upsert: upsertAccountSecret, open: openAccountSecret } : {}),
     },
     daemons: { request: (input) => requestPluginDaemon(input) },
+    // Starting runs for any owner's trigger rows is the daemon host's alone.
+    ...(opts.role === "daemon" ? { triggers: { listActive: listActivePluginTriggers, fire: firePluginTrigger } } : {}),
     db: supabase,
     workflows: {
       writeCompatible,

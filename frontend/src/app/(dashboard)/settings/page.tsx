@@ -25,6 +25,9 @@ import {
   TEMPLATE_GROUPS,
   WRAPPER_TEMPLATE_KEY,
 } from "@/lib/prompt-templates"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
+import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
+import type { SceneNodeType } from "@/types/nodes"
 import { useUserSettings, useUpdatePublicOutputsMutation, useSaveTemplatesMutation, useUpdateNodeMenuPrefsMutation, useUpdateVariableDisplayModeMutation } from "@/hooks/queries/use-user-settings-queries"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
@@ -580,7 +583,8 @@ export default function SettingsPage() {
           {TEMPLATE_GROUPS.map((group) => (
             <TemplateGroupCard
               key={group.name}
-              name={group.name}
+              name={t(group.labelKey)}
+              nodeType={group.nodeType}
               descriptionKey={group.descriptionKey}
               generationKey={group.generationKey}
               templates={localTemplates}
@@ -827,6 +831,7 @@ type TemplateTab = "description" | "generation"
 
 function TemplateGroupCard({
   name,
+  nodeType,
   descriptionKey,
   generationKey,
   templates,
@@ -836,7 +841,10 @@ function TemplateGroupCard({
   onChange,
   onReset,
 }: {
+  /** The group's name in the interface language. */
   readonly name: string
+  /** The asset node whose Run generates this group's image. */
+  readonly nodeType: SceneNodeType
   readonly descriptionKey: string
   readonly generationKey: string
   readonly templates: Record<string, string>
@@ -847,6 +855,7 @@ function TemplateGroupCard({
   readonly onReset: (key: string) => void
 }) {
   const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const [tab, setTab] = useState<TemplateTab>("description")
 
   const activeKey = tab === "description" ? descriptionKey : generationKey
@@ -871,8 +880,8 @@ function TemplateGroupCard({
               </button>
             </TooltipTrigger>
             <TooltipContent side="right" className="max-w-xs text-xs leading-relaxed">
-              <p><strong>{t("settings.descriptionTab")}</strong> {t("settings.tooltipDescText")}</p>
-              <p className="mt-1"><strong>{t("settings.generationTab")}</strong> {t("settings.tooltipGenText", { name })}</p>
+              <p><strong>{t("settings.descriptionTab")}</strong>{t("common.dashJoin")}{t("settings.tooltipDescBody")}</p>
+              <p className="mt-1"><strong>{t("settings.generationTab")}</strong>{t("common.dashJoin")}{t("settings.tooltipGenBody", { name: localizeNode(nodeTypeDefaultLabel(nodeType)) })}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

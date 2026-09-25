@@ -4,6 +4,7 @@ import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference } from "@nodaro/shared"
+import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import type {
   WorkflowNode,
@@ -647,6 +648,8 @@ export interface FrontendResolvedInputs {
   overlayImageUrls?: (string | undefined)[];
   /** Text wired into an image-overlay node's "qrText" handle. Mirrors backend ResolvedInputs.overlayQrText. */
   overlayQrText?: string;
+  /** Video Overlay's reserved JSON layer-plan input — routed, not read in v1. Mirrors backend ResolvedInputs.layerPlan. */
+  layerPlan?: string;
   audioUrl?: string;
   audioUrl2?: string;
   audioUrls?: string[];
@@ -731,6 +734,10 @@ export interface FrontendResolvedInputs {
    *  editPlanSources. */
   silence?: string;
   editPlanSources?: Array<{ nodeId: string; url: string; kind: "video" | "audio"; duration?: number }>;
+  /** audio-sync: the recordings wired into the `sources` handle, in wire
+   *  order, each with its source NODE id (the result's `sourceId`). Mirror of
+   *  backend ResolvedInputs.audioSyncSources. */
+  audioSyncSources?: Array<{ nodeId: string; url: string }>;
   /** Fan-in input list — populated by the resolver for reduce-style targets.
    *  Carries the full upstream list (or `[singleOutput]` when upstream wasn't
    *  fanned out) so the reduce strategy can fold it into a single value.
@@ -836,7 +843,7 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   "video-upscale", "video-composer", "merge-video-audio", "still-to-video", "slideshow",
   "resize-video", "social-media-format", "speed-ramp", "loop-video",
   "fade-video", "transcode-video", "add-captions", "manual-edit",
-  "video-sfx", "remove-audio", "assemble-narrated-video",
+  "video-sfx", "remove-audio", "assemble-narrated-video", "video-overlay",
 ]);
 /** Node types whose primary output is an audio URL. */
 const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([
@@ -1489,6 +1496,27 @@ export function resolveNodeInputs(
       continue;
     }
 
+    // Video Overlay routes by HANDLE too: "video" is the base, "overlay".."overlay12"
+    // the layer images (index-aligned with data.layers[]), the reserved JSON id
+    // "layerPlan" is routed but not read in v1. An edge with no known handle
+    // fills the base only while it is empty. Mirrors backend input-resolver.ts.
+    if (node.type === "video-overlay") {
+      const handle = srcEdge?.targetHandle ?? "";
+      if (handle === VIDEO_OVERLAY_LAYER_PLAN_HANDLE) {
+        inputs.layerPlan = output;
+        continue;
+      }
+      const slot = videoOverlaySlotOfHandle(handle);
+      if (slot > 0) {
+        const next = [...(inputs.overlayImageUrls ?? [])];
+        next[slot - 1] = output;
+        inputs.overlayImageUrls = next;
+      } else if (handle === "video" || !inputs.videoUrl) {
+        inputs.videoUrl = output;
+      }
+      continue;
+    }
+
     if (node.type === "image-collage") {
       inputs.imageUrls = [...(inputs.imageUrls ?? []), output];
       inputs.imageUrlsWithSourceIds = [
@@ -1741,6 +1769,18 @@ export function resolveNodeInputs(
         ];
         continue;
       }
+    }
+
+    // audio-sync `sources`: routed by targetHandle before the source-type chain
+    // (else an audio edge lands in inputs.audioUrl and a video edge in
+    // inputs.videoUrl, and the node loses which recording is which). Each row
+    // keeps its source NODE id — the result's `sourceId`. Mirror of the backend
+    // input-resolver audio-sync branch.
+    if (node.type === "audio-sync" && srcEdge.targetHandle === "sources") {
+      if (typeof output === "string" && output) {
+        inputs.audioSyncSources = [...(inputs.audioSyncSources ?? []), { nodeId: src.id, url: output }];
+      }
+      continue;
     }
 
     // add-captions `transcript` (json) input — routed by targetHandle before the

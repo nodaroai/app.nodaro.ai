@@ -2,11 +2,13 @@ import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
 import ts from "typescript"
+import { MULTI_PICKERS, SINGLE_PICKERS } from "@/lib/picker-ui"
+import { LABEL_TABLES } from "../labels"
 
 /**
- * Handle pips are localized by looking their English label up in
- * `HANDLE_LABELS_HE` (labels.ts), so an unmapped label silently renders
- * English next to otherwise Hebrew pips. node-labels-coverage.test.ts covers
+ * Handle pips are localized by looking their English label up in each
+ * locale's `handle` table (labels.<locale>.ts, registered in LABEL_TABLES), so
+ * an unmapped label silently renders English next to otherwise translated pips. node-labels-coverage.test.ts covers
  * the target-handle registry; most OUTPUT pips (Mask, Vocals, Approved,
  * Composition …) are written straight on `<HandleWithPopover label="…">` in
  * the node components or in the `lib/*handles.ts` definition modules — this
@@ -23,13 +25,6 @@ function walk(dir: string, out: string[] = []): string[] {
     else if (/\.tsx?$/.test(entry.name) && !/\.test\./.test(entry.name)) out.push(p)
   }
   return out
-}
-
-function mappedHandleLabels(): Set<string> {
-  const labels = fs.readFileSync(path.join(SRC, "lib/i18n/labels.ts"), "utf8")
-  const block = /const HANDLE_LABELS_HE[^{]*\{([\s\S]*?)\n\}/.exec(labels)
-  if (!block) throw new Error("HANDLE_LABELS_HE block not found in labels.ts")
-  return new Set([...block[1].matchAll(/"([^"]+)":/g)].map((m) => m[1]))
 }
 
 /** String-literal labels (incl. both arms of a ternary) on every <HandleWithPopover>. */
@@ -73,17 +68,39 @@ function definitionModuleLabels(): Map<string, string> {
   return found
 }
 
-describe("HANDLE_LABELS_HE covers every pip label written in components and handle modules", () => {
+describe("every locale's handle table covers every pip label written in components and handle modules", () => {
   it(
     "no English-only pip label",
     () => {
-      const mapped = mappedHandleLabels()
       const all = new Map([...componentHandleLabels(), ...definitionModuleLabels()])
       // Floor so a reformat that hides every label fails loudly instead of passing for free.
       expect(all.size).toBeGreaterThan(80)
-      const missing = [...all].filter(([label]) => /[A-Za-z]{2,}/.test(label) && !mapped.has(label))
-      expect(missing.map(([l, where]) => `${JSON.stringify(l)}  (${where})`), "pip labels with no HANDLE_LABELS_HE entry").toEqual([])
+      const missing = Object.entries(LABEL_TABLES).flatMap(([locale, tables]) =>
+        [...all]
+          .filter(([label]) => /[A-Za-z]{2,}/.test(label) && !(label in (tables?.handle ?? {})))
+          .map(([l, where]) => `${locale}: ${JSON.stringify(l)}  (${where})`),
+      )
+      expect(missing, "pip labels with no entry in a locale's handle table").toEqual([])
     },
     TIMEOUT,
   )
+})
+
+/**
+ * A parameter picker's registry label (@nodaro/picker-ui) is its source-pip
+ * name on the canvas (`ParameterNodeShell` passes it to HandleWithPopover) and
+ * the name the published-app picker cards put in their sentences ("Search era
+ * / period…", `presentation/picker-label.ts`). It is not a string literal on the
+ * pip, so the scan above cannot see it.
+ */
+describe("every locale's handle table covers every parameter-picker registry label", () => {
+  it("no English-only picker name", () => {
+    const labels = [...new Set([...SINGLE_PICKERS, ...MULTI_PICKERS].map((m) => m.label))]
+    // Floor so an emptied or reshaped registry fails loudly instead of passing for free.
+    expect(labels.length).toBeGreaterThan(30)
+    const missing = Object.entries(LABEL_TABLES).flatMap(([locale, tables]) =>
+      labels.filter((l) => !(l in (tables?.handle ?? {}))).map((l) => `${locale}: ${JSON.stringify(l)}`),
+    )
+    expect(missing, "picker registry labels with no entry in a locale's handle table").toEqual([])
+  })
 })
