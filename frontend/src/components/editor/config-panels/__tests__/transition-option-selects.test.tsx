@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi } from "vitest"
 import { fireEvent, render, screen } from "@testing-library/react"
-import { WIPE_DIRECTION } from "@nodaro/prompts"
+import { DEBRIS_SHOWER_STYLE, GARDEN_BLOOM_STYLE, WIPE_DIRECTION } from "@nodaro/prompts"
 import type { WorkflowNode } from "@/types/nodes"
 
 // The only store consumer in this tree is the preview's hint-mode toggle.
@@ -70,11 +70,15 @@ function renderTransition(data: Record<string, unknown>, onUpdate = vi.fn()) {
   return onUpdate
 }
 
-/** The Direction dropdown, located by its column label. */
-function directionSelect(): HTMLSelectElement | undefined {
-  const label = screen.queryAllByText("Direction").find((el) => el.tagName === "LABEL")
+/** An option's dropdown, located by its column label. */
+function optionSelect(text: string): HTMLSelectElement | undefined {
+  const label = screen.queryAllByText(text).find((el) => el.tagName === "LABEL")
   return label?.parentElement?.querySelector("select") ?? undefined
 }
+const directionSelect = () => optionSelect("Direction")
+const styleSelect = () => optionSelect("Style")
+const rows = (select: HTMLSelectElement) =>
+  Array.from(select.querySelectorAll("option")).map((o) => [o.value, o.textContent])
 
 describe("the transition panel's per-row options (a wipe's direction)", () => {
   it("a wipe shows the Direction dropdown with the catalog's rows, auto first", () => {
@@ -110,5 +114,28 @@ describe("the transition panel's per-row options (a wipe's direction)", () => {
     expect(document.body.textContent).toContain(
       "linear wipe (a clean vertical edge sweeps across the frame from right to left, revealing the second shot behind it)",
     )
+  })
+})
+
+describe("the transition panel's Style (a styled row's looks)", () => {
+  it("a styled row shows Style with its looks, the default named, and stores the id", () => {
+    const onUpdate = renderTransition({ transition: "debris-shower" })
+    expect(rows(styleSelect()!)).toEqual(DEBRIS_SHOWER_STYLE.choices.map((c) => [c.id, c.label]))
+    expect(rows(styleSelect()!)[0]).toEqual(["auto", "Full cover (default)"])
+    expect(directionSelect()).toBeUndefined()
+    fireEvent.change(styleSelect()!, { target: { value: "debris-shower-light-sweep" } })
+    expect(onUpdate).toHaveBeenLastCalledWith({ style: "debris-shower-light-sweep" })
+    fireEvent.change(styleSelect()!, { target: { value: "auto" } })
+    expect(onUpdate).toHaveBeenLastCalledWith({ style: undefined })
+  })
+
+  it("two styled rows share ONE Style control; the second row's looks carry its name", () => {
+    renderTransition({ transition: ["debris-shower", "garden-bloom"], style: "garden-bloom-hedge-doors" })
+    expect(screen.queryAllByText("Style").filter((el) => el.tagName === "LABEL")).toHaveLength(1)
+    expect(rows(styleSelect()!)).toEqual([
+      ...DEBRIS_SHOWER_STYLE.choices.map((c) => [c.id, c.label]),
+      ...GARDEN_BLOOM_STYLE.choices.slice(1).map((c) => [c.id, `Garden Bloom · ${c.label}`]),
+    ])
+    expect(styleSelect()!.value).toBe("garden-bloom-hedge-doors")
   })
 })

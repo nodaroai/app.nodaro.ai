@@ -1,7 +1,7 @@
 ---
 node_type: transition
-generated_at: 2026-09-25T06:49:22.137Z
-generated_from: 524c2667b
+generated_at: 2026-09-25T11:17:11.210Z
+generated_from: 073ff7dce
 ---
 
 # Transition
@@ -22,6 +22,7 @@ generated_from: 524c2667b
 - `duration?: TransitionDuration`
 - `intensity?: TransitionIntensity`
 - `wipeDirection?: string`
+- `style?: string`
 - `preText?: string`
 - `postText?: string`
 - `hintMode?: "full" | "compact"`

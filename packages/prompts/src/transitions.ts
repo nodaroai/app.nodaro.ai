@@ -104,7 +104,10 @@ export interface TransitionOptionChoice {
 /** A per-row option (see `Transition.options`). */
 export interface TransitionOption {
   /** The node-data field the chosen id is stored under — also the template
-   *  token's name (`{wipeDirection}`). Unique across the catalog. */
+   *  token's name (`{wipeDirection}`). Unique within a row; SHARED across rows
+   *  only where the rows mean the same kind of setting (`style`, see
+   *  `TRANSITION_STYLE_FIELD`) — each row still declares its own choices, and
+   *  a value is read only by the row that declares it. */
   readonly field: string
   readonly label: string
   /** `auto` first. */
@@ -145,6 +148,86 @@ export const WIPE_DIRECTION: TransitionOption = {
       phrase: "diagonal edge sweeps across the frame from the top-right corner to the bottom-left corner" },
   ],
 }
+
+/**
+ * STYLE — a row's alternative LOOKS, each a complete description.
+ *
+ * A styled row's `promptTemplate` is the single token `{style}`, so choosing a
+ * style swaps the row's whole body, not a phrase inside it. The field is SHARED
+ * by every styled row (one document key, `style`), but each row declares its
+ * own choices, and every choice id but `auto` carries the row's id as a prefix
+ * (`debris-shower-light-sweep`), so a stored style can never mean something on
+ * another row: re-pointing the pick drops it, and a row reads a foreign id as
+ * its default.
+ *
+ * `auto` is the row's DEFAULT look — labelled with that look's name
+ * ("Full cover (default)"), never "Auto", because it is a specific look and not
+ * "the model decides". Picking it stores nothing, so a pick with no style (every
+ * pick made before styles existed) reads as the default.
+ *
+ * Every body below is the text a tested A/B take was generated from (tidied:
+ * first letter lower-cased, final full stop dropped). `term` is `""` on every
+ * choice: the row's own term leads the compact rendering whatever the style.
+ */
+function rowStyle(
+  row: string,
+  choices: ReadonlyArray<{ readonly slug?: string; readonly label: string; readonly description: string; readonly phrase: string }>,
+): TransitionOption {
+  return {
+    field: TRANSITION_STYLE_FIELD,
+    label: "Style",
+    choices: choices.map((c, i) => ({
+      id: i === 0 ? "auto" : `${row}-${c.slug}`,
+      label: i === 0 ? `${c.label} (default)` : c.label,
+      description: c.description,
+      phrase: c.phrase,
+      term: "",
+    })),
+  }
+}
+
+/** The shared node-data field every styled row stores its look under. */
+export const TRANSITION_STYLE_FIELD = "style"
+
+export const DEBRIS_SHOWER_STYLE: TransitionOption = rowStyle("debris-shower", [
+  { label: "Full cover", description: "Debris fills the whole screen, then blows past to reveal the next scene",
+    phrase: "a dense shower of loose leaves, paper scraps and dust whips across the frame from one side, close to the lens, thick enough to hide the whole picture. The camera stays where it is and the framing does not change. As the last of the debris blows past the far edge, the second shot is revealed behind it. The shot ends on the second shot, clear and fully resolved, with no debris left. The debris passes in front of the picture in one direction, and the second shot appears only once it has passed" },
+  { slug: "light-sweep", label: "Light sweep", description: "A quick scatter of debris crosses the screen; the scene has changed behind it",
+    phrase: "a shower of debris — leaves, papers, dust — sweeps across the frame in front of the camera, and once the debris clears the scene behind has changed" },
+])
+
+export const GARDEN_BLOOM_STYLE: TransitionOption = rowStyle("garden-bloom", [
+  { label: "Grow & part", description: "Flowers and vines grow over the picture, then part like curtains on the next scene",
+    phrase: "lush flowers and vines rapidly grow and bloom outward from the edges of the frame, the foliage spreads to overtake the entire image, then parts open like curtains to reveal the new scene behind" },
+  { slug: "hedge-doors", label: "Hedge doors", description: "Leafy panels close over the picture, then slide apart to the sides",
+    phrase: "vines and flowers grow rapidly inward from the edges of the frame, blooming as they spread, until leaves and blossoms cover the whole picture. The camera stays where it is and the framing does not change. The foliage then splits down the middle and draws apart toward the side edges, opening onto the second shot behind it. The shot ends on the second shot, clear and fully resolved, with no leaves or flowers left. The plants grow over the front of the picture, and the first shot stays unchanged until they cover it completely" },
+])
+
+export const SMOKE_PUFF_STYLE: TransitionOption = rowStyle("smoke-puff", [
+  { label: "Engulf", description: "Smoke billows up around the subject, and the new subject appears inside it",
+    phrase: "the subject vanishes in a soft puff of smoke that billows outward and fills the frame, the smoke then clears to reveal the new subject in the new scene" },
+  { slug: "full-cover", label: "Full cover", description: "Smoke from the subject fills the whole screen, then clears on the next scene",
+    phrase: "the first subject vanishes in a sudden soft puff of smoke that billows outward from where it stood until the smoke fills the frame. The camera stays where it is and the framing does not change. The smoke thins and clears from the centre outward, revealing the second shot with the second subject at the same place in the frame. The shot ends on the second shot, clear and fully resolved, with no smoke left. The smoke comes only from where the first subject was" },
+])
+
+export const SAKURA_PETALS_STYLE: TransitionOption = rowStyle("sakura-petals", [
+  { label: "Swirling veil", description: "A swirl of pink petals veils the picture, then drifts past",
+    phrase: "a dense storm of cherry blossom petals swirls in from one side and fills the frame in soft pink motion, the petals cluster to fully veil the image, then drift past to reveal the new scene" },
+  { slug: "side-sweep", label: "Side sweep", description: "Petals sweep across from one side and leave by the other, uncovering the next scene",
+    phrase: "a dense storm of pink cherry blossom petals swirls in from one side of the frame, close to the lens, and thickens until the petals veil the whole picture. The camera stays where it is and the framing does not change. The petals keep drifting the same way and thin out, revealing the second shot behind them. The shot ends on the second shot, clear and fully resolved, with no petals left. The petals fly across the front of the picture in one direction, and the first shot stays unchanged until they hide it completely" },
+])
+
+export const AURORA_SWEEP_STYLE: TransitionOption = rowStyle("aurora-sweep", [
+  { label: "Sky glow", description: "Aurora light glows over the scene, then fades to reveal the next one",
+    phrase: "a luminous curtain of green and violet aurora light ripples across the whole frame, and its bright bands veil the first shot. The camera stays where it is and the framing does not change. As the bands fade, the second shot is revealed behind them. The shot ends on the second shot, clear and fully resolved, with no aurora light left. The aurora glows over the front of the picture, and the second shot appears only as it fades" },
+  { slug: "veil", label: "Veil", description: "Aurora curtains drop over the whole picture, then fade to reveal the next scene",
+    phrase: "a luminous green and violet aurora curtain ripples across the entire frame, the bright bands obscure the first scene, and as the aurora dissipates the second scene resolves in the clear sky" },
+])
+
+// sand-storm: STYLE PENDING. Its default look ("Full cover", f2ab 01-B) is the
+// row's plain `promptHint`; a second look ("Light sweep") is being drafted and
+// tested. Until that tested text is approved the row declares NO style — a
+// one-choice Style menu would offer nothing. Do not add a body here before then.
 
 const optionToken = (field: string): string => `{${field}}`
 
@@ -268,24 +351,29 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "the subject crumbles into fine sand that is swept away by a gust of wind in a swirling vortex, then the sand particles converge and re-form into the new subject" },
   { id: "fire-burnup",       label: "Burn-Up",            category: "element", description: "Subject burns to embers, embers reform",
     promptHint: "the subject ignites and burns from edges inward into glowing embers and ash, the embers swirl through the frame and re-ignite into the new subject", term: "burn to embers and reform" },
-  { id: "smoke-puff",        label: "Smoke Puff",         category: "element", description: "Subject vanishes in smoke, reappears",
-    promptHint: "the subject vanishes in a soft puff of smoke that billows outward and fills the frame, the smoke then clears to reveal the new subject in the new scene" },
+  withOptionSlots({ id: "smoke-puff",        label: "Smoke Puff",         category: "element", description: "Subject vanishes in smoke, reappears",
+    promptTemplate: "{style}",
+    options: [SMOKE_PUFF_STYLE] }),
   { id: "magic-sparkles",    label: "Magic Sparkles",     category: "element", description: "Particle dissolve à la Avengers / apparition",
     promptHint: "the subject disintegrates into a cloud of glowing golden sparkles that scatter outward, then the sparkles converge from across the frame and re-coalesce into the new subject" },
   { id: "lightning-flash",   label: "Lightning Strike",   category: "element", description: "Lightning strikes, scene changes in flash",
     promptHint: "a brilliant white lightning bolt cracks across the frame with a bright flash, and when the flash subsides the scene has changed to the new setting" },
   { id: "ink-splash",        label: "Ink Splash",         category: "element", description: "Ink splashes across, scene changes",
     promptHint: "black ink splashes across the frame in expanding tendrils that fully cover the image, then the ink retracts inward and pulls back to reveal the new scene" },
+  // sand-storm: Style PENDING — see the note after `AURORA_SWEEP_STYLE`.
   { id: "sand-storm",        label: "Sand Storm",         category: "element", description: "Sand storm engulfs the frame, scene changes inside",
     promptHint: "a violent sand storm sweeps in from the side and engulfs the frame in opaque swirling ochre dust, and as the wind dies and the dust settles the second scene is revealed in the now-clear air" },
   { id: "paint-splash",      label: "Paint Splash",       category: "element", description: "Vivid paint splash covers, retracts into new scene",
     promptHint: "a vivid splash of colored paint hurls across the frame in arcing tendrils until it fully covers the image, then the paint flows and retracts inward to pull back and reveal the new scene" },
-  { id: "aurora-sweep",      label: "Aurora Sweep",       category: "element", description: "Aurora curtain sweeps across, scene changes behind",
-    promptHint: "a luminous green and violet aurora curtain ripples across the entire frame, the bright bands obscure the first scene, and as the aurora dissipates the second scene resolves in the clear sky" },
-  { id: "sakura-petals",     label: "Sakura Storm",       category: "element", description: "Cherry blossom petals storm across the frame",
-    promptHint: "a dense storm of cherry blossom petals swirls in from one side and fills the frame in soft pink motion, the petals cluster to fully veil the image, then drift past to reveal the new scene", term: "cherry blossom petal storm" },
-  { id: "garden-bloom",      label: "Garden Bloom",       category: "element", description: "Flowers bloom outward, parting to reveal new scene",
-    promptHint: "lush flowers and vines rapidly grow and bloom outward from the edges of the frame, the foliage spreads to overtake the entire image, then parts open like curtains to reveal the new scene behind" },
+  withOptionSlots({ id: "aurora-sweep",      label: "Aurora Sweep",       category: "element", description: "Aurora curtain sweeps across, scene changes behind",
+    promptTemplate: "{style}",
+    options: [AURORA_SWEEP_STYLE] }),
+  withOptionSlots({ id: "sakura-petals",     label: "Sakura Storm",       category: "element", description: "Cherry blossom petals storm across the frame",
+    promptTemplate: "{style}", term: "cherry blossom petal storm",
+    options: [SAKURA_PETALS_STYLE] }),
+  withOptionSlots({ id: "garden-bloom",      label: "Garden Bloom",       category: "element", description: "Flowers bloom outward, parting to reveal new scene",
+    promptTemplate: "{style}",
+    options: [GARDEN_BLOOM_STYLE] }),
   { id: "powder-burst",      label: "Powder Burst",       category: "element", description: "Colored powder bursts across frame and clears",
     promptHint: "a burst of vivid colored powder explodes from the center of the frame in slow motion, the cloud of pigment expands to fill the image, then drifts apart and settles to reveal the second scene" },
 
@@ -348,8 +436,9 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "a visible shockwave ripples outward across the frame distorting the image, and as the shockwave passes the scene behind it has changed to the new setting" },
   { id: "punch-into-camera", label: "Punch Into Camera",  category: "physics", description: "Fist strikes camera, scene changes",
     promptHint: "a fist or object swings rapidly toward the camera and strikes the lens with motion blur and impact frames, and the moment of impact reveals the new scene" },
-  { id: "debris-shower",     label: "Debris Shower",      category: "physics", description: "Debris flies past, scene changes behind",
-    promptHint: "a shower of debris — leaves, papers, dust — sweeps across the frame in front of the camera, and once the debris clears the scene behind has changed" },
+  withOptionSlots({ id: "debris-shower",     label: "Debris Shower",      category: "physics", description: "Debris flies past, scene changes behind",
+    promptTemplate: "{style}",
+    options: [DEBRIS_SHOWER_STYLE] }),
   { id: "gravity-flip",      label: "Gravity Flip",       category: "physics", description: "Gravity inverts, camera rotates 180",
     promptHint: "gravity inverts and the camera rotates a full 180 degrees as objects and the subject reorient to the new down, settling into the new scene oriented correctly" },
   { id: "building-explosion", label: "Building Explosion", category: "physics", description: "Structure detonates, scene shifts through smoke",

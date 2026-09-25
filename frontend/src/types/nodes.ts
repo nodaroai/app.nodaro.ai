@@ -1277,6 +1277,10 @@ export interface TransitionData extends PickerHintModeFields {
   /** A wipe's direction — a per-row option of the `wipe` catalog row
    *  (`Transition.options`); absent = `auto`. */
   wipeDirection?: string
+  /** A styled row's look — the shared per-row `style` option (debris shower,
+   *  garden bloom, …; `Transition.options`); a row-prefixed choice id, absent =
+   *  the row's default look. */
+  style?: string
   preText?: string
   postText?: string
   [key: string]: unknown

@@ -17,6 +17,10 @@ import {
 
 afterEach(() => resetCatalogPacks())
 
+/** The rows with a Style option, in catalog order. */
+const STYLED_ROWS = ["smoke-puff", "aurora-sweep", "sakura-petals", "garden-bloom", "debris-shower"]
+const OPTIONED_ROWS = ["wipe", ...STYLED_ROWS]
+
 const BODY = (phrase: string) =>
   `linear wipe (a clean ${phrase}, revealing the second shot behind it)`
 
@@ -36,11 +40,21 @@ const WIPE_BASES: Readonly<Record<string, string>> = {
 }
 
 describe("per-row transition options — the catalog", () => {
-  it("only the wipe declares an option, and it is the direction", () => {
+  it("the wipe declares the direction; the styled rows share the style field", () => {
     const withOptions = TRANSITIONS.filter((t) => t.options?.length)
-    expect(withOptions.map((t) => t.id)).toEqual(["wipe"])
+    expect(withOptions.map((t) => t.id)).toEqual(["wipe", ...STYLED_ROWS])
     expect(getTransitionOptions("wipe")).toEqual([WIPE_DIRECTION])
-    expect(TRANSITION_OPTION_FIELDS).toEqual(["wipeDirection"])
+    for (const id of STYLED_ROWS) {
+      expect(getTransitionOptions(id).map((o) => o.field)).toEqual(["style"])
+    }
+    expect(TRANSITION_OPTION_FIELDS).toEqual(["wipeDirection", "style"])
+  })
+
+  it("a field is declared at most once per row", () => {
+    for (const t of TRANSITIONS) {
+      const fields = (t.options ?? []).map((o) => o.field)
+      expect(new Set(fields).size).toBe(fields.length)
+    }
   })
 
   it("the direction's choices: auto first, then the six approved directions", () => {
@@ -189,7 +203,7 @@ describe("per-row transition options — the node data and the wire catalog", ()
         })),
       },
     ])
-    expect(options.filter((o) => o.params).map((o) => o.id)).toEqual(["wipe"])
+    expect(options.filter((o) => o.params).map((o) => o.id)).toEqual(OPTIONED_ROWS)
   })
 })
 
@@ -202,6 +216,6 @@ describe("per-row transition options — the wire projection", () => {
     expect(wipe.params![0]!.options[1]!.promptHint).toBe(
       detail === "full" ? "vertical edge sweeps across the frame from left to right" : undefined,
     )
-    expect(projected.options!.filter((o) => o.params).map((o) => o.id)).toEqual(["wipe"])
+    expect(projected.options!.filter((o) => o.params).map((o) => o.id)).toEqual(OPTIONED_ROWS)
   })
 })

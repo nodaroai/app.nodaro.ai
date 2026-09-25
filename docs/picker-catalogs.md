@@ -112,14 +112,14 @@ Transition and Character FX share the same ids (`start` / `middle` / `end` / `fu
 
 ### Per-option parameters (a wipe's direction)
 
-Some options carry a parameter that only means something for **that** option. They are published on the option itself, as `params` — the same `{ field, label, options }` shape as `dimensions`, scoped to one row. Today one row has one: the Transition catalog's `wipe` option carries `wipeDirection` (`auto`, `left-to-right`, `right-to-left`, `top-to-bottom`, `bottom-to-top`, `top-left-to-bottom-right`, `top-right-to-bottom-left`).
+Some options carry a parameter that only means something for **that** option. They are published on the option itself, as `params` — the same `{ field, label, options }` shape as `dimensions`, scoped to one row. In the Transition catalog, the `wipe` option carries `wipeDirection` (`auto`, `left-to-right`, `right-to-left`, `top-to-bottom`, `bottom-to-top`, `top-left-to-bottom-right`, `top-right-to-bottom-left`), and five rows (`debris-shower`, `garden-bloom`, `smoke-puff`, `sakura-petals`, `aurora-sweep`) each carry a `style` of their own looks. `style` is one field shared by those rows, but each row publishes its own rows under it: `auto` (the row's default look, labelled by its name, e.g. "Full cover (default)") and ids that start with the row's id (`debris-shower-light-sweep`), so read the rows from the picked option, never from another one.
 
 ```ts
 const wipe = getPickerCatalog("transition")!.options!.find((o) => o.id === "wipe")!
 wipe.params // [{ field: "wipeDirection", label: "Direction", options: [{ id: "auto", … }, { id: "left-to-right", … }, …] }]
 ```
 
-Show the control while the option is picked and store the chosen row id under `field` on the same node data (`{ transition: "wipe", wipeDirection: "left-to-right" }`). `auto` leads each list and means "send nothing". A param row's `promptHint` is the phrase it writes into the option's own description (`vertical edge sweeps across the frame from left to right`), not a clause of its own. Every other option has no `params`.
+Show the control while the option is picked and store the chosen row id under `field` on the same node data (`{ transition: "wipe", wipeDirection: "left-to-right" }`, `{ transition: "debris-shower", style: "debris-shower-light-sweep" }`). `auto` leads each list and means "send nothing". A param row's `promptHint` is the phrase it writes into the option's own description (`vertical edge sweeps across the frame from left to right`; for a style, the whole description), not a clause of its own. Every other option has no `params`.
 
 ## Multi-dimension pickers (e.g. Framing)
 
