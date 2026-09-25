@@ -57,11 +57,8 @@ describe("approved row bodies", () => {
     )
   })
 
-  it("zoom-into-mouth drops only 'the throat'", () => {
-    expect(getTransitionPromptHint("zoom-into-mouth")).toBe(
-      "the camera pushes into the subject's open mouth, the dark interior fills the frame, and the camera passes " +
-        "through into the new scene which materialises as if emerging from inside the body",
-    )
+  it("zoom-into-mouth never mentions 'the throat' (its body is pinned in the F5 block below)", () => {
+    expect(getTransitionPromptHint("zoom-into-mouth")).not.toContain("throat")
   })
 })
 
@@ -265,6 +262,72 @@ describe("F4 bodies (2026-09-25 A/B: F4 arm B)", () => {
 
   it.each(Object.keys(F4_BODIES))("%s at middle / short / natural", (id) => {
     const { term, body } = F4_BODIES[id]!
+    expect(composeTransitionHintFromConnections(id, [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      `${term} (${body}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
+    )
+  })
+})
+
+describe("F5 bodies (2026-09-25 A/B: F5 arm B)", () => {
+  // zoom-into-book, pull-out-reveal, zoom-into-mouth, walk-through-door and mask-transition: the F5
+  // drafts, tidied (first letter lower-cased, final full stop dropped). Each rendered string below is
+  // byte-identical to the clause the winning take was generated from.
+  const F5_BODIES: Record<string, { term: string; body: string }> = {
+    "zoom-into-book": {
+      term: "zoom into book",
+      body:
+        "the camera pushes down toward the illustrated page of an open book in the frame until the illustrati" +
+        "on fills the whole picture. The camera travels in one smooth line, without turning or rolling. The d" +
+        "rawn picture comes alive, gaining depth, light and movement, and becomes the second shot. The shot e" +
+        "nds inside the second shot, real and fully resolved, with no paper, ink lines or page edges left. Th" +
+        "e camera heads for the page from the start and goes into its illustration",
+    },
+    "pull-out-reveal": {
+      term: "pull-back reveal",
+      body:
+        "the camera pulls straight back fast, and the whole first shot shrinks until its edges show as the bo" +
+        "rder of a framed picture inside a larger space. The camera travels back in one smooth line, without " +
+        "turning, tilting or rolling. The larger space around the picture is the second shot, and the first s" +
+        "hot stays inside the picture. The shot ends on the second shot, with the first shot visible as a pic" +
+        "ture within it. The first shot's image stays exactly the same as it shrinks, so it reads as the same" +
+        " picture all along",
+    },
+    "zoom-into-mouth": {
+      term: "zoom into mouth",
+      body:
+        "the camera pushes straight into the first subject's open mouth until the dark interior fills the who" +
+        "le picture. The camera travels forward in one smooth line, without turning, tilting or rolling. It p" +
+        "asses through the darkness, and the second shot emerges out of it. The shot ends inside the second s" +
+        "hot, still and fully resolved, with no mouth left in view. The dark interior stays a plain darkness " +
+        "the camera passes through",
+    },
+    "walk-through-door": {
+      term: "walk through doorway",
+      body:
+        "the camera follows the first subject through a doorway in the frame, moving forward at the subject's" +
+        " pace. The camera travels straight forward, without turning, tilting or rolling. On the far side of " +
+        "the doorway the space is the second shot, a different place in different light. The shot ends in the" +
+        " second shot, fully resolved, with the doorway behind the camera. The change of place happens at the" +
+        " doorway itself, the moment the camera passes through it",
+    },
+    "mask-transition": {
+      term: "mask transition",
+      body:
+        "a dark foreground shape sweeps across the lens and fills the frame with black. The camera keeps trav" +
+        "elling forward through the black in one smooth line. It emerges from the darkness into the second sh" +
+        "ot. The shot ends in the second shot, fully resolved, with no dark shape left. The dark shape passes" +
+        " close to the lens and is gone once the second shot appears",
+    },
+  }
+
+  it.each(Object.keys(F5_BODIES))("%s renders `term (body)` at the tile-default levers", (id) => {
+    const { term, body } = F5_BODIES[id]!
+    expect(getTransitionPromptHint(id)).toBe(body)
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "full", { scope: "shot" })).toBe(`${term} (${body})`)
+  })
+
+  it.each(Object.keys(F5_BODIES))("%s at middle / short / natural", (id) => {
+    const { term, body } = F5_BODIES[id]!
     expect(composeTransitionHintFromConnections(id, [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
       `${term} (${body}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
     )
