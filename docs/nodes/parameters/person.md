@@ -6,11 +6,13 @@
 
 The Person parameter node composes a full person description by combining up to 25 independent attribute dimensions. This is the deepest picker in the registry — built for generating recurring characters, casting briefs, or detailed portraiture. Wired to an AI image/video node's `cinematography` handle. Each sub-field is optional; empty fields are dropped silently.
 
-## Compact vs Detailed view
+## Detailed vs Compact view
 
-The picker opens in **Compact** view by default: the 25 dimensions collapse into six labelled sections — **Identity**, **Body**, **Face**, **Hair**, **Skin & Eyes**, **Features** — each rendered as a row of grouped pills. Clicking a pill opens a popover with the rich option tiles for that dimension. A header toggle switches to **Detailed** view, which is the full inline tile-grid (one section per dimension, every option visible at once). The toggle is available everywhere the picker appears: the config side-panel, the config full-screen, and a published app's input card.
+Every option is shown with its own photo — the same photo in the picker, on the node card on the canvas, and in a published app's input card. The photos are served by the app itself, so they appear in every edition, self-hosted installs included. A handful of options added after the photos were made show their drawn icon or color swatch instead.
 
-The chosen mode is a **per-device preference** (persisted in `localStorage`, default Compact) — it changes only how the picker renders. It does **not** affect the saved value or the emitted prompt fragment: Compact and Detailed write the exact same `PersonValue` and compose the identical clause.
+The picker opens in **Detailed** view by default: every dimension is laid out open with its option tiles, grouped under six topics — **Identity**, **Body**, **Face**, **Hair**, **Skin & Eyes**, **Features** — each with its own heading and pick count. A row of topic buttons at the top jumps to a topic (nothing is folded away), and the search box looks across every topic at once. A header toggle switches to **Compact** view: the same six topics as collapsible sections of pills, each pill opening a popover with the option tiles for that dimension. The toggle is available everywhere the picker appears: the config side-panel, the config full-screen, and a published app's input card.
+
+The chosen view is a **per-device preference** (persisted in `localStorage`, default Detailed) — it changes only how the picker renders. It does **not** affect the saved value or the emitted prompt fragment: Detailed and Compact write the exact same `PersonValue` and compose the identical clause. When the age is a minor, adult-only options are hidden in both views and any such pick is cleared, on the card as in the prompt.
 
 ## Configuration (25 sub-fields)
 

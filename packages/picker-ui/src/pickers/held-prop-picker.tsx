@@ -8,6 +8,7 @@ import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
 import { useCuratedEntries } from "../curated.js"
+import { CharacterArtTile, characterArtGridClass } from "./character-art-tile"
 
 interface HeldPropPickerProps {
   readonly value: string | ReadonlyArray<string> | undefined
@@ -105,7 +106,7 @@ export const HeldPropPicker = memo(function HeldPropPicker({
   const anyVisible = grouped.some((g) => g.props.length > 0)
 
   return (
-    <div className={cn("flex flex-col gap-3", className)}>
+    <div className={cn("flex flex-col gap-3 @container", className)}>
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
@@ -130,49 +131,35 @@ export const HeldPropPicker = memo(function HeldPropPicker({
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
               {HELD_PROP_CATEGORY_LABELS[category]}
             </div>
-            <div role="radiogroup" aria-label={HELD_PROP_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
+            <div role={maxSelected > 1 ? "group" : "radiogroup"} aria-label={HELD_PROP_CATEGORY_LABELS[category]} className={characterArtGridClass("square")}>
               {props.map((prop) => {
                 const selectedIdx = selectedIds.indexOf(prop.id)
                 const selected = selectedIdx >= 0
-                const label = resolveLabel(prop.id, prop.label)
-                const description = resolveDescription(prop.id, prop.description)
                 return (
-                  <div key={prop.id} className="relative">
-                    <button
-                      type="button"
-                      role={maxSelected > 1 ? "checkbox" : "radio"}
-                      aria-checked={selected}
-                      title={description}
-                      onClick={() => handlePick(prop.id)}
-                      className={cn(
-                        "w-full group flex flex-col items-center gap-1 p-1.5 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
-                        selected
-                          ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
-                          : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
-                      )}
-                    >
-                      <span className="text-2xl leading-none select-none" aria-hidden="true">
-                        {emojiFor(prop)}
-                      </span>
-                      <span
-                        className={cn(
-                          "text-[10.5px] font-medium leading-tight px-0.5 pb-0.5 text-center line-clamp-2",
-                          selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
-                        )}
-                      >
-                        {label}
-                      </span>
-                    </button>
-                    {selected && (
-                      <MultiPickBadge
-                        mode={isMulti ? "multi" : "single"}
-                        index={selectedIdx}
-                        maxSelected={maxSelected}
-                        onActivate={() => activateMulti(prop.id)}
-                        onDemote={() => demoteToSingle(prop.id)}
-                      />
-                    )}
-                  </div>
+                  <CharacterArtTile
+                    key={prop.id}
+                    family="held-prop"
+                    id={prop.id}
+                    shape="square"
+                    label={resolveLabel(prop.id, prop.label)}
+                    title={resolveDescription(prop.id, prop.description)}
+                    selected={selected}
+                    multi={maxSelected > 1}
+                    onPick={() => handlePick(prop.id)}
+                    fallback={<span className="text-4xl leading-none select-none">{emojiFor(prop)}</span>}
+                    badge={
+                      selected && maxSelected > 1 ? (
+                        <MultiPickBadge
+                          mode={isMulti ? "multi" : "single"}
+                          index={selectedIdx}
+                          maxSelected={maxSelected}
+                          onActivate={() => activateMulti(prop.id)}
+                          onDemote={() => demoteToSingle(prop.id)}
+                          className={cn("top-[5px] right-[5px]", !isMulti && "bg-white dark:bg-[#111114]")}
+                        />
+                      ) : undefined
+                    }
+                  />
                 )
               })}
             </div>

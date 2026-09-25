@@ -6,6 +6,8 @@
 
 The Material parameter node describes the dominant surface or substance featured in a generation — silk, leather, brushed metal, frosted glass, marble, velvet, etc. Each entry encodes light-interaction behavior (specular, matte, refractive, translucent). Injected into the consumer's prompt via the `cinematography` handle.
 
+Every option is shown with its own photo in the picker, on the node card and in a published app.
+
 ## Configuration
 
 | Field     | Type   | Default | Description                                            |

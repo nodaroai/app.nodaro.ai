@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils"
 import { usePickerLabel } from "../picker-label"
 import {
   getParameterPickerMeta,
+  hasCharacterArt,
   useCatalogPacksVersion,
   LookPreviewStyleProvider,
   readLookPreviewStyle,
@@ -142,9 +143,11 @@ function SinglePickerCard({
   // A picker may have no icon at all, or only for some options (a rendered
   // look preview that this edition does not register) — null means "no icon".
   const iconFor = (id: string): ReactNode => meta.renderIcon?.(id) ?? null
-  // Rendered look previews read better filling the tile than in the 56px icon
-  // box; the illustrations keep the icon box they were drawn for.
-  const bigArt = useShowsLookRenders(meta.nodeType)
+  // Rendered look previews and the character pickers' photos read better
+  // filling the tile than in the 56px icon box; the illustrations keep the
+  // icon box they were drawn for.
+  const showsLookRenders = useShowsLookRenders(meta.nodeType)
+  const bigArt = showsLookRenders || hasCharacterArt(meta.catalogId)
 
   const grid = (
     <DimensionTileGrid

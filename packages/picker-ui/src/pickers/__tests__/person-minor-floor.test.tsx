@@ -117,3 +117,22 @@ describe("PersonPickerDetailed — minor-age floor", () => {
     }
   })
 })
+
+describe("Compact view — minor-age floor", () => {
+  it("clears an adult-only pick once the age is a minor, and never pictures it meanwhile", async () => {
+    const { PersonPickerCompact } = await import("../person-picker-compact")
+    const onChange = vi.fn()
+    render(<PersonPickerCompact value={{ age: "age-teen", bust: "bust-very-full" }} onChange={onChange} />)
+    // The floor runs in the Compact view too (it used to run only in Detailed).
+    expect(onChange).toHaveBeenCalledWith({ bust: undefined })
+    // Until the parent applies it, the chip still names the pick, but without the photo.
+    const chip = screen.getByRole("button", { name: /^Bust:/ })
+    expect(chip.querySelector("img")).toBeNull()
+  })
+
+  it("pictures the same pick for an adult", async () => {
+    const { PersonPickerCompact } = await import("../person-picker-compact")
+    render(<PersonPickerCompact value={{ age: "age-early-20s", bust: "bust-very-full" }} onChange={() => {}} />)
+    expect(screen.getByRole("button", { name: /^Bust:/ }).querySelector("img")).not.toBeNull()
+  })
+})

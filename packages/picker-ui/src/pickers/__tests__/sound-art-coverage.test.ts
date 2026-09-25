@@ -142,11 +142,16 @@ describe("sound picker art — files", () => {
     const referenced = new Set(
       [...ALL_KEYS].map((k) => soundArtUrl(k)!.slice(SOUND_ART_BASE.length)),
     )
-    const onDisk = readdirSync(ART_DIR).flatMap((dir) =>
-      statSync(join(ART_DIR, dir)).isDirectory()
-        ? readdirSync(join(ART_DIR, dir)).map((f) => `${dir}/${f}`)
-        : [dir],
+    // This art owns emoji/ and flags/; character/ has its own guard
+    // (character-art-coverage.test.ts).
+    const onDisk = ["emoji", "flags"].flatMap((dir) =>
+      readdirSync(join(ART_DIR, dir)).map((f) => {
+        expect(statSync(join(ART_DIR, dir, f)).isFile(), `${dir}/${f} is not a file`).toBe(true)
+        return `${dir}/${f}`
+      }),
     )
+    const stray = readdirSync(ART_DIR).filter((f) => !["emoji", "flags", "character"].includes(f))
+    expect(stray, "unexpected entries directly under picker-art/").toEqual([])
     const licenses = ["emoji/LICENSE.txt", "flags/LICENSE.txt"]
     for (const license of licenses) {
       expect(onDisk, `missing ${license}`).toContain(license)
