@@ -849,11 +849,11 @@ export function useWorkflowPersistence(projectId?: string) {
             setSaveStatus("error", "Workflow was updated on another device")
             setRemoteUpdatedAt(row.updated_at ?? `conflict:${new Date().toISOString()}`)
             const reload = loadRef.current
-            toast.error("Workflow was updated on another device", {
+            toast.error(tx("toastMsg.workflowWasUpdatedOnAnother"), {
               id: "workflow-remote-conflict",
-              description: "Your unsaved edits are still here. Reload to see the latest version.",
+              description: tx("toastMsg.yourUnsavedEditsAreStill"),
               action: reload && workflowId
-                ? { label: "Reload", onClick: () => { void reload(workflowId) } }
+                ? { label: tx("misc.reload"), onClick: () => { void reload(workflowId) } }
                 : undefined,
               duration: 10_000,
             })
@@ -899,12 +899,14 @@ export function useWorkflowPersistence(projectId?: string) {
           })
           if (contested.length > 0) {
             toast.warning(
-              `Kept your edits to: ${contested
-                .map((n) => ((n.data as Record<string, unknown>).label as string) || n.id)
-                .join(", ")}`,
+              tx("toastMsg.keptYourEditsTo", {
+                nodes: contested
+                  .map((n) => ((n.data as Record<string, unknown>).label as string) || n.id)
+                  .join(tx("common.listComma")),
+              }),
               {
                 id: "delta-rebase-contested",
-                description: "These nodes were also changed on another device — your version won.",
+                description: tx("toastMsg.theseNodesWereAlsoChanged"),
               },
             )
           }
@@ -1052,11 +1054,11 @@ export function useWorkflowPersistence(projectId?: string) {
               setRemoteUpdatedAt(`conflict:${new Date().toISOString()}`)
             }
             const reload = loadRef.current
-            toast.error("Workflow was updated on another device", {
+            toast.error(tx("toastMsg.workflowWasUpdatedOnAnother"), {
               id: "workflow-remote-conflict",
-              description: "Your unsaved edits are still here. Reload to see the latest version.",
+              description: tx("toastMsg.yourUnsavedEditsAreStill"),
               action: reload && workflowId
-                ? { label: "Reload", onClick: () => { void reload(workflowId) } }
+                ? { label: tx("misc.reload"), onClick: () => { void reload(workflowId) } }
                 : undefined,
               duration: 10_000,
             })
@@ -1450,7 +1452,7 @@ export function useWorkflowPersistence(projectId?: string) {
             .maybeSingle()
 
           if (saveError) {
-            toast.error("Failed to save synced nodes")
+            toast.error(tx("toastMsg.failedToSaveSyncedNodes"))
           } else if (sideSaved?.updated_at) {
             setLoadedUpdatedAt(sideSaved.updated_at as string)
             setLoadedVersion(typeof (sideSaved as unknown as { version?: unknown }).version === "number" ? (sideSaved as unknown as { version: number }).version : null)

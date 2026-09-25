@@ -8,6 +8,7 @@ import { sunoVariantFields } from "@/lib/suno-ids";
 import { shouldAbandonNode } from "./abandon-guard";
 import { isInputWarningCode } from "@/lib/input-warning-codes";
 import { tx } from "@/lib/i18n";
+import { localizeJobLabel } from "./job-label";
 import {
   WorkflowStaleError,
   MAX_CONSECUTIVE_POLL_FAILURES,
@@ -312,7 +313,7 @@ function handleJobCompleted(
     jobAwaitingReview: undefined,
     ...extraFields,
   });
-  guardedToast.success(`${label} complete`);
+  guardedToast.success(tx("nodeRun.complete", { label: localizeJobLabel(label) }));
   resolve(url as string);
   return true;
 }
@@ -354,7 +355,7 @@ export function pollJobWithNodeUpdate(
           resolve("");
           return;
         }
-        guardedToast.info(tx("run.jobStarted", { label }), { description: tx("run.jobIdLine", { id: jobId }) });
+        guardedToast.info(tx("run.jobStarted", { label: localizeJobLabel(label) }), { description: tx("run.jobIdLine", { id: jobId }) });
         updateNodeData(nodeId, { currentJobId: jobId });
 
         // Auto-fetch estimate for smooth progress if not provided
@@ -437,7 +438,7 @@ export function pollJobWithNodeUpdate(
                     currentJobProgress: undefined,
                     jobAwaitingReview: undefined,
                   });
-                  guardedToast.error(`${label} failed`, { description: errMsg });
+                  guardedToast.error(tx("nodeRun.failed", { label: localizeJobLabel(label) }), { description: errMsg });
                   reject(new Error(errMsg));
                 }
               } else if (job.status === "failed") {
@@ -458,7 +459,7 @@ export function pollJobWithNodeUpdate(
                   // chrome would sit on top of the block explanation.
                   jobAwaitingReview: undefined,
                 });
-                guardedToast.error(`${label} failed`, { description: errMsg });
+                guardedToast.error(tx("nodeRun.failed", { label: localizeJobLabel(label) }), { description: errMsg });
                 reject(new Error(errMsg));
               }
             } catch (err) {
@@ -496,7 +497,7 @@ export function pollJobWithNodeUpdate(
                   currentJobProgress: undefined,
                   jobAwaitingReview: undefined,
                 });
-                guardedToast.error(`Failed to check ${label} status`);
+                guardedToast.error(tx("nodeRun.failedToCheckStatus", { label: localizeJobLabel(label) }));
                 reject(err);
               }
             }
@@ -540,11 +541,11 @@ export function pollJobWithNodeUpdate(
         });
         if (!checkStorageError(err, ctx)) {
           if (isPolicyBlock) {
-            guardedToast.warning(tx("run.jobBlocked", { label }));
+            guardedToast.warning(tx("run.jobBlocked", { label: localizeJobLabel(label) }));
           } else if (isWarning) {
             guardedToast.warning(msg);
           } else {
-            guardedToast.error(`Failed to start ${label}`, { description: msg });
+            guardedToast.error(tx("nodeRun.failedToStart", { label: localizeJobLabel(label) }), { description: msg });
           }
         }
         reject(err);
@@ -578,7 +579,7 @@ export function pollImageRefineToNode(
   return new Promise<string>((resolve, reject) => {
     apiCall()
       .then(({ jobId }) => {
-        guardedToast.info(tx("run.jobStarted", { label }), { description: tx("run.jobIdLine", { id: jobId }) });
+        guardedToast.info(tx("run.jobStarted", { label: localizeJobLabel(label) }), { description: tx("run.jobIdLine", { id: jobId }) });
         updateNodeData(nodeId, { currentJobId: jobId });
 
         let pollFailures = 0;
@@ -610,7 +611,7 @@ export function pollImageRefineToNode(
                   currentJobProgress: undefined,
                   jobAwaitingReview: undefined,
                 });
-                guardedToast.error(`${label} failed`, { description: errMsg });
+                guardedToast.error(tx("nodeRun.failed", { label: localizeJobLabel(label) }), { description: errMsg });
                 reject(new Error(errMsg));
                 return;
               }
@@ -640,7 +641,7 @@ export function pollImageRefineToNode(
                 jobAwaitingReview: undefined,
                 ...(kieTaskId ? { kieTaskId } : {}),
               });
-              guardedToast.success(`${label} complete`);
+              guardedToast.success(tx("nodeRun.complete", { label: localizeJobLabel(label) }));
               resolve(url);
               return;
             }
@@ -661,7 +662,7 @@ export function pollImageRefineToNode(
                 // must not sit on top of the block explanation.
                 jobAwaitingReview: undefined,
               });
-              guardedToast.error(`${label} failed`, { description: errMsg });
+              guardedToast.error(tx("nodeRun.failed", { label: localizeJobLabel(label) }), { description: errMsg });
               reject(new Error(errMsg));
             }
           } catch (err) {
@@ -675,7 +676,7 @@ export function pollImageRefineToNode(
                 currentJobProgress: undefined,
                 jobAwaitingReview: undefined,
               });
-              guardedToast.error(`Failed to check ${label} status`);
+              guardedToast.error(tx("nodeRun.failedToCheckStatus", { label: localizeJobLabel(label) }));
               reject(err);
             }
           }
@@ -701,9 +702,9 @@ export function pollImageRefineToNode(
           jobAwaitingReview: undefined,
         });
         if (isPolicyBlock) {
-          guardedToast.warning(tx("run.jobBlocked", { label }));
+          guardedToast.warning(tx("run.jobBlocked", { label: localizeJobLabel(label) }));
         } else {
-          guardedToast.error(`Failed to start ${label}`, { description: msg });
+          guardedToast.error(tx("nodeRun.failedToStart", { label: localizeJobLabel(label) }), { description: msg });
         }
         reject(err);
       });

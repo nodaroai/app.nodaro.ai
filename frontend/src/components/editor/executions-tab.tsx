@@ -18,6 +18,7 @@ import { ExecutionDetailModal } from "./execution-detail-modal"
 import { TriggerBadge } from "@/components/library/triggers/TriggerBadge"
 import {
   STATUS_COLORS,
+  statusLabel,
   NODE_STATUS_DOT,
   JOB_TYPE_LABELS,
   formatRelativeTime,
@@ -418,7 +419,7 @@ function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
       </td>
       <td className="px-4 py-2.5">
         <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${JOB_STATUS_COLORS[job.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
-          {job.status}
+          {statusLabel(job.status)}
         </span>
       </td>
       {hasCredits() && (
@@ -501,7 +502,7 @@ function ExecutionRow({
         </td>
         <td className="px-4 py-3">
           <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[exec.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
-            {exec.status === "stopping" ? "stopping" : exec.status}
+            {statusLabel(exec.status)}
           </span>
           {exec.errorMessage && exec.status === "failed" && (
             <TooltipProvider>

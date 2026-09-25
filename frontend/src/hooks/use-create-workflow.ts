@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { resolveDefaultProjectId } from "@/lib/default-project"
+import { tx } from "@/lib/i18n"
 
 /**
  * Quick-create from the home screen: resolve the caller's default project
@@ -32,14 +33,14 @@ export function useCreateWorkflow(): {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        toast.error("Please sign in to create a workflow.")
+        toast.error(tx("toastMsg.pleaseSignInToCreate"))
         setIsCreating(false)
         return
       }
 
       const resolved = await resolveDefaultProjectId(supabase, user.id)
       if ("error" in resolved) {
-        toast.error(`Could not create workflow: ${resolved.error}`)
+        toast.error(tx("toastMsg.couldNotCreateWorkflow", { error: resolved.error }))
         setIsCreating(false)
         return
       }
@@ -55,7 +56,7 @@ export function useCreateWorkflow(): {
         .single()
 
       if (wfErr || !wf) {
-        toast.error(`Could not create workflow: ${wfErr?.message ?? "unknown error"}`)
+        toast.error(tx("toastMsg.couldNotCreateWorkflow", { error: wfErr?.message ?? tx("run.unknownError") }))
         setIsCreating(false)
         return
       }
@@ -65,7 +66,7 @@ export function useCreateWorkflow(): {
       navigate(`/projects/${wf.project_id}/workflows/${wf.id}`)
     } catch (error) {
       // A thrown client error must not leave the button spinning forever.
-      toast.error(`Could not create workflow: ${error instanceof Error ? error.message : "unknown error"}`)
+      toast.error(tx("toastMsg.couldNotCreateWorkflow", { error: error instanceof Error ? error.message : tx("run.unknownError") }))
       setIsCreating(false)
     }
   }, [isCreating, navigate])

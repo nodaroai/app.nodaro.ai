@@ -96,7 +96,7 @@ function ElementEditor({
             <div className="grid grid-cols-2 gap-2 mt-1">
               <div className="flex flex-col gap-0.5">
                 <span className="text-[10px] text-muted-foreground">{t("cost.col.type")}</span>
-                <span className="text-[10px] font-medium">{(element.animation as Record<string, unknown>)?.type as string ?? "none"}</span>
+                <span className="text-[10px] font-medium">{(element.animation as Record<string, unknown>)?.type as string ?? t("cfgext.injRefModeNone")}</span>
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-[10px] text-muted-foreground">{t("paramcfg.timingStart")}</span>

@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { TagTextarea } from "./tag-textarea"
 import { getLanguagesForModel, ALL_LANGUAGES, isV3Model } from "@/lib/audio-tags"
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
-import { SUNO_SLIDER_META, type SunoSliderMeta } from "@/lib/suno-sliders"
+import { SUNO_SLIDER_META, SUNO_SLIDER_LABEL_KEYS, SUNO_SLIDER_DESC_KEYS } from "@/lib/suno-sliders"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
@@ -122,17 +122,6 @@ const AUDIO_FX_PRESET_LABEL_KEYS: Record<AudioFxPreset, MessageKey> = {
   custom: "cfgshared.custom",
 }
 
-const SUNO_SLIDER_LABEL_KEYS: Record<SunoSliderMeta["key"], MessageKey> = {
-  styleWeight: "audiocfg.sliderStyleWeight",
-  weirdnessConstraint: "audiocfg.sliderWeirdness",
-  audioWeight: "audiocfg.sliderAudioWeight",
-}
-
-const SUNO_SLIDER_DESC_KEYS: Record<SunoSliderMeta["key"], MessageKey> = {
-  styleWeight: "audiocfg.sliderStyleWeightDesc",
-  weirdnessConstraint: "audiocfg.sliderWeirdnessDesc",
-  audioWeight: "audiocfg.sliderAudioWeightDesc",
-}
 
 const SUNO_FIELD_LABEL_KEYS: Record<SunoEditField, MessageKey> = {
   title: "audiocfg.titleOptional",
@@ -999,7 +988,7 @@ export function AudioFxConfig({ data, onUpdate }: { readonly data: AudioFxData; 
       </div>
       {isReverb && (
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.wetDryMix")}{t("common.labelColon")}{data.mix ?? "auto"}</label>
+          <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.wetDryMix")}{t("common.labelColon")}{data.mix ?? t("vidcfg.phAutoLower")}</label>
           <Slider min={0} max={100} step={1} value={[data.mix ?? 30]} onValueChange={(vals) => onUpdate({ mix: vals[0] })} />
           <p className="text-[10px] text-muted-foreground">{t("audiocfg.hintHigherRoom")}</p>
         </div>
@@ -2921,7 +2910,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
         </Select>
         {data.voiceFx && AUDIO_FX_REVERB_PRESETS.has(data.voiceFx.preset) && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="voice-fx-mix">{t("audiocfg.wetDryMix")}{t("common.labelColon")}{data.voiceFx.wetDryMix ?? "auto"}</Label>
+            <Label htmlFor="voice-fx-mix">{t("audiocfg.wetDryMix")}{t("common.labelColon")}{data.voiceFx.wetDryMix ?? t("vidcfg.phAutoLower")}</Label>
             <Slider id="voice-fx-mix" min={0} max={100} step={1} value={[data.voiceFx.wetDryMix ?? 30]} onValueChange={(vals) => onUpdate({ voiceFx: { ...data.voiceFx!, wetDryMix: vals[0] } })} />
           </div>
         )}

@@ -1,6 +1,6 @@
 # Parameter Picker Catalogs
 
-Nodaro's editor has a family of **parameter pickers** — curated, tile-grid selectors for things like Mood, Lens, Setting, Framing, Lighting, Person, Music Genre, Voice Character, and ~40 more. A picker never calls the API; it contributes a **descriptive clause** to a downstream node's prompt. (The deepest multi-dim picker, **Person**, defaults to a **Compact** grouped-pill view with a per-device **Detailed** toggle for the full tile-grid; the view mode is purely presentational and never changes the emitted clause — see the [Person node page](./nodes/parameters/person.md).)
+Nodaro's editor has a family of **parameter pickers** — curated, tile-grid selectors for things like Mood, Lens, Setting, Framing, Lighting, Person, Music Genre, Voice Character, and ~40 more. A picker never calls the API; it contributes a **descriptive clause** to a downstream node's prompt. (The deepest multi-dim picker, **Person**, defaults to a **Detailed** view that lays every dimension out open, grouped by topic, with a per-device **Compact** toggle for grouped pills; the view mode is purely presentational and never changes the emitted clause — see the [Person node page](./nodes/parameters/person.md).)
 
 Every picker's data — its options, the prompt fragment each option contributes, its categories, and its i18n keys — ships as **pure data in [`@nodaro/shared`](https://www.npmjs.com/package/@nodaro/shared)**. So you can build the exact same pickers in your own app, in your own styling, and assemble the exact same prompts, with **no API calls and no coupling to Nodaro's UI**.
 
@@ -30,7 +30,7 @@ interface PickerOption {
   category?: string         // group id (matches categoryOrder / categoryLabels)
   promptHint: string        // the clause this option contributes ("" for no-op options like "auto")
   term: string              // the short professional term compact hint mode injects ("" for no-op options); `label` is for display
-  icon?: string             // reserved; previews are app-side — render your own (see Visual)
+  icon?: string             // reserved; an option's picture is served separately — see Visual
 }
 
 interface PickerDimension {       // multi-dim pickers; also the secondary parameters of a single-dim picker
@@ -189,7 +189,22 @@ The bundles load lazily, so `registerSidecarLoaders` takes a glob of loaders (Vi
 
 ## Visual
 
-Picker `icon`/thumbnails are **not** shipped — the editor's previews are bespoke React components, and an external app should render its own visuals in its own style (the data gives you `label`, `description`, and `category` to build a rich grid). `icon?` is reserved for a future release that bakes static thumbnails into the catalog data.
+The pickers the editor shows pictures on have them for your app too:
+
+- the photos of **Person, Styling, Held Prop, Material and Animal**;
+- the art of the **music and voice** pickers (Music Genre, Music Mood, Instrumentation, Voice Character, Voice Delivery);
+- on **Nodaro Cloud** only, a still of each **look** picker's rendered preview (Style, Color / Look, Era / Period, Lens, Mood, Atmosphere, Composition Effect, Camera / Film, Framing, Lighting, Camera Motion).
+
+**Over the API** (`GET /v1/picker-catalogs/:nodeType`, `GET /v1/catalogs`, the MCP `get_picker_catalog` tool, `client.pickerCatalogs.get()`), every pictured option carries an absolute `imageUrl` on the installation you asked, and an option without a picture has none. Person and Styling also return `sections`: their topics in order, each with a round picture. The URL rules, caching and examples are in [API Integration → Pictures](./api-integration.md#pictures-imageurl-sections).
+
+**As a library**, `@nodaro/prompts` builds the same URLs from the same maps:
+
+- `pickerOptionImageUrl(catalog, field, id, { baseUrl })` for an option;
+- `pickerSectionImageUrl(topicLabel, { baseUrl })` for a Person / Styling topic.
+
+`baseUrl` is the Nodaro installation that serves the files; the pictures are files of that installation, not part of the npm package. Pass `lookPreviews: true` only against Nodaro Cloud.
+
+For every other picker, render your own visuals from `label`, `description` and `category`. `icon?` stays reserved.
 
 ## Reference
 

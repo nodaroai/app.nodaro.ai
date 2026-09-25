@@ -36,7 +36,8 @@ import { IMAGE_CRITIC_MODES, STRUCTURED_VISION_MODELS, type ImageCriticMode } fr
 import { pickerFanoutTargets } from "@nodaro/prompts"
 import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { pickerTypeLabel, ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels"
+import { pickerTypeLabel, analyzablePickerHint } from "@/lib/picker-labels"
+import { useLocaleStore } from "@/lib/locale-store"
 import { LlmModelSelect } from "./llm-model-select"
 import { ReasoningEffortSelect } from "./reasoning-effort-select"
 import { MappableField } from "./mappable-field"
@@ -597,6 +598,7 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
 
 export function DescribeToPickerConfig({ nodeId, data, onUpdate }: ConfigProps<DescribeToPickerData> & { nodeId?: string }) {
   const t = useT()
+  const locale = useLocaleStore((s) => s.locale)
   const wiredPickers = useWorkflowStore(useShallow((s) => pickerFanoutTargets(nodeId ?? "", s.edges, s.nodes)))
   return (
     <div className="flex flex-col gap-3">
@@ -604,10 +606,10 @@ export function DescribeToPickerConfig({ nodeId, data, onUpdate }: ConfigProps<D
         {wiredPickers.length > 0 ? (
           <>
             {t("scriptcfg.analyzingLabel")}{" "}
-            <span className="text-foreground">{wiredPickers.map(pickerTypeLabel).join(" · ")}</span>
+            <span className="text-foreground">{wiredPickers.map((type) => pickerTypeLabel(type, locale)).join(" · ")}</span>
           </>
         ) : (
-          t("scriptcfg.connectPickerHint", { types: ANALYZABLE_PICKER_HINT })
+          t("scriptcfg.connectPickerHint", { types: analyzablePickerHint(locale) })
         )}
       </div>
       {/* Anthropic-only: the analyzer uses forced tool-use (Anthropic-direct only). */}

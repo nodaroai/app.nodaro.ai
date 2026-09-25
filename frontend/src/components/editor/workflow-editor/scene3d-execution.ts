@@ -44,6 +44,7 @@ import {
 import { archiveSupersededResult, resolveSceneCompletion } from "@/lib/scene3d/revisions";
 import { planRevisionId } from "@/lib/scene3d/plan-view";
 import type { Scene3DRevisionContext, Scene3DRevisionEntry } from "@/types/nodes";
+import { tx } from "@/lib/i18n";
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -147,7 +148,7 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context, extr
   return new Promise<string>((resolve, reject) => {
     start()
       .then(({ jobId }) => {
-        guardedToast.info(`${label} started`, { description: `Job ID: ${jobId}` });
+        guardedToast.info(tx("run.jobStarted", { label }), { description: tx("run.jobIdLine", { id: jobId }) });
         updateNodeData(nodeId, { currentJobId: jobId });
 
         let pollFailures = 0;
@@ -249,11 +250,11 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context, extr
                 });
 
                 if (result.outcome === "park") {
-                  guardedToast.warning(`${label} finished on an older revision`, {
-                    description: "Your later edits were kept. Open the panel to review the new revision.",
+                  guardedToast.warning(tx("nodeRun.finishedOnAnOlderRevision", { label }), {
+                    description: tx("nodeRun.yourLaterEditsWereKept"),
                   });
                 } else {
-                  guardedToast.success(`${label} complete`);
+                  guardedToast.success(tx("nodeRun.complete", { label }));
                 }
                 const active = result.patch.scenePlan ?? (liveData.scenePlan as Record<string, unknown> | undefined);
                 resolve(active ? "plan-ready" : "");
@@ -308,9 +309,9 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context, extr
                   currentJobProgress: undefined,
                   sceneJobBaseRevisionId: undefined,
                 });
-                guardedToast.error(`${label} failed`, {
+                guardedToast.error(tx("nodeRun.failed", { label }), {
                   description: retained
-                    ? `${errMsg} — the draft scene it built was kept. Open the panel to review it.`
+                    ? tx("nodeRun.theDraftSceneItBuilt", { error: errMsg })
                     : errMsg,
                 });
                 reject(new Error(errMsg));
@@ -329,7 +330,7 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context, extr
                   currentJobProgress: undefined,
                   sceneJobBaseRevisionId: undefined,
                 });
-                guardedToast.error(`Failed to check ${label.toLowerCase()} status`);
+                guardedToast.error(tx("nodeRun.failedToCheckStatus", { label: label.toLowerCase() }));
                 reject(err);
               }
             }
@@ -347,7 +348,7 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context, extr
           sceneJobBaseRevisionId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          guardedToast.error(`Failed to start ${label.toLowerCase()}`, {
+          guardedToast.error(tx("nodeRun.failedToStart", { label: label.toLowerCase() }), {
             description: err instanceof Error ? err.message : String(err),
           });
         }

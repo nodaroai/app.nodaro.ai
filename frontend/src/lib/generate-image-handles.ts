@@ -118,6 +118,8 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // "pull from a channel → rewrite → publish" source. Without this, the
   // connection validator rejected it as a non-text-producer.
   "telegram-trigger",
+  // The account trigger emits the message text the same way.
+  "telegram-account-trigger",
   // telegram-channel-feed emits the recent posts' text (generatedText).
   "telegram-channel-feed",
 ])

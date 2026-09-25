@@ -24,12 +24,30 @@ export interface ProjectedCatalogOption {
   icon?: string
   /** Authored Character Motion prerequisites and sequence state. Missing means unknown. */
   motion?: CharacterMotionMetadata
+  /**
+   * Absolute URL of the option's picture (a photo, 3D emoji, flag or rendered
+   * look preview), on the installation's own host — or the Nodaro CDN for the
+   * look previews, which only Nodaro Cloud serves. Absent when the option has
+   * no picture. Content-hashed where self-hosted: a changed picture gets a new
+   * URL, so it can be cached indefinitely.
+   */
+  imageUrl?: string
 }
 
 export interface ProjectedCatalogDimension {
   field: string
   label: string
   options: ProjectedCatalogOption[]
+}
+
+/** A topic the editor groups a multi-dim catalog's settings under (Person, Styling). */
+export interface ProjectedCatalogSection {
+  /** English topic name, e.g. "Identity", "Beauty & Hair". */
+  label: string
+  /** Node-data fields of the settings in this topic, in display order. */
+  fields: readonly string[]
+  /** Absolute URL of the topic's round picture. Absent when it has none. */
+  imageUrl?: string
 }
 
 export interface ProjectedCatalog {
@@ -51,4 +69,6 @@ export interface ProjectedCatalog {
    *  single-dim catalog carries them when it has secondary parameter
    *  fields beside its main picker (transition position/duration/intensity). */
   dimensions?: ProjectedCatalogDimension[]
+  /** Person and Styling: the topics their settings are grouped under, in order. */
+  sections?: ProjectedCatalogSection[]
 }

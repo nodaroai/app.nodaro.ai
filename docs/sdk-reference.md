@@ -4673,7 +4673,8 @@ list(): Promise<{ data: PickerCatalogSummary[] }>
 
 `GET /v1/picker-catalogs` → a directory of every picker: `nodeType`, `label`,
 `catalogId`, `kind` (`"single"` / `"multi"`), `valueField` (single-dim) or
-`fields` (multi-dim), and `optionCount`.
+`fields` (multi-dim), `optionCount`, and `imageCount` — how many of its options
+carry an `imageUrl` (0 = no pictures; absent from servers that predate pictures).
 
 ```ts
 const { data } = await client.pickerCatalogs.list()
@@ -4697,7 +4698,7 @@ parameter fields beside its main picker (`transition`, `character-fx`:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `detail` | `"compact"` \| `"full"` | `"compact"` (default): `id`, `label`, `category`, `term`, `icon`. `"full"`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
+| `detail` | `"compact"` \| `"full"` | `"compact"` (default): `id`, `label`, `category`, `term`, `icon`, `imageUrl` (when the option has a picture). `"full"`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
 | `category` | `string` | Single-dim pickers: filter options to one category. |
 | `field` | `string` | Return only this dimension's field — multi-dim pickers (person / styling / framing), and the secondary parameters of a single-dim picker (transition / character-fx: `position` / `duration` / `intensity`; character-motion: `position` / `pace`). |
 
@@ -4713,6 +4714,32 @@ professional phrase to inject when you want a compact instruction instead of the
 full `promptHint` sentence. Render `label`, inject `term`; never derive one from
 the other. A no-op option (`auto` / `none`) has `term: ""` because it injects
 nothing.
+
+**Pictures.** Every option that has a picture carries an absolute **`imageUrl`**
+(`PickerOption.imageUrl`), at both detail levels; an option without one has no
+`imageUrl`. `person` and `styling` also return **`sections`**
+(`PickerCatalogSection[]`): the topics the editor groups their settings under,
+in order — `{ label, fields, imageUrl? }`, where `fields` are the settings'
+node-data fields and `imageUrl` is the topic's round picture. Photos (person,
+styling, held prop, material, animal) and the music / voice art are served by
+the installation itself, so the URLs use its public address; the rendered look
+previews come from the Nodaro CDN and only Nodaro Cloud returns them. Use the
+URLs as given — file names carry a content hash, so they can be cached for good,
+and any origin may load them. See
+[Pictures](./api-integration.md#pictures-imageurl-sections) for the full rules.
+
+```ts
+const { data } = await client.pickerCatalogs.get("person")
+for (const section of data.sections ?? []) {
+  // e.g. { label: "Identity", fields: ["type", "age", "ethnicity", "regionalAesthetic"], imageUrl }
+  const settings = data.dimensions?.filter((d) => section.fields.includes(d.field)) ?? []
+  for (const setting of settings) {
+    for (const option of setting.options) {
+      renderTile(option.label, option.imageUrl) // imageUrl may be undefined: fall back to the label
+    }
+  }
+}
+```
 
 #### `analyzeText`
 
@@ -4759,10 +4786,16 @@ curation. Public (no auth), publicly cacheable for 5 minutes.
 #### `list(opts?)`
 
 ```ts
-list(opts?: { detail?: "compact" | "full" }): Promise<{ data: ProjectedCatalog[] }>
+list(opts?: { detail?: "compact" | "full" }): Promise<CatalogsListResponse>
+// { curated: boolean; packs: number; version: number; data?: ProjectedCatalog[] }
 ```
 
 `GET /v1/catalogs` → every registered catalog projected to one flat shape.
+`data` is present only when the deployment registered catalog packs
+(`curated: true`); with none (`curated: false`) the catalogs are the bundled
+ones — read them per picker with `client.pickerCatalogs.get(nodeType)`.
+Options carry the same `imageUrl`, and person / styling the same `sections`, as
+`client.pickerCatalogs.get`.
 `detail: "compact"` (default) carries `id`, `label`, `category`, `term`, `icon`;
 `detail: "full"` additionally carries each option's `description` and
 `promptHint`. A single-dim catalog carries `options`; a multi-dim catalog
@@ -4775,7 +4808,7 @@ without a second, heavier `detail: "full"` fetch.
 
 ```ts
 const { data } = await client.catalogs.list({ detail: "full" })
-const setting = data.find((c) => c.catalogId === "setting")
+const setting = data?.find((c) => c.catalogId === "setting")
 console.log(setting?.options?.[0]?.promptHint) // full mechanism sentence
 console.log(setting?.options?.[0]?.term) // compact professional term
 ```

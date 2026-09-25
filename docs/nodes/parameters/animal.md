@@ -6,6 +6,8 @@
 
 The Animal parameter node adds a specific animal as a featured element of a generation. Each entry includes a short description that grounds the AI model on appearance and behavior. Injected into the consumer's prompt as `"featuring a {label}, {description}"` via the `cinematography` handle.
 
+Every animal is shown with its own photo in the picker, on the node card and in a published app; the few without a photo yet show an emoji of the nearest look-alike.
+
 ## Configuration
 
 | Field     | Type   | Default                  | Description                                           |

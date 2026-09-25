@@ -21,6 +21,7 @@ import {
   MAX_CONSECUTIVE_POLL_FAILURES,
   type ExecutionContext,
 } from "./types";
+import { tx } from "@/lib/i18n";
 
 // ---------------------------------------------------------------------------
 // Scene-in-script helpers
@@ -92,8 +93,8 @@ export async function handleGenerateSceneImage(
           getSceneCharacterNames(s.characters).includes(charName),
       );
       if (earliestScene !== -1 && earliestScene < sceneIndex) {
-        toast.error(`Generate Scene ${earliestScene + 1} first`, {
-          description: `Save a reference for "${charName}" before generating this scene`,
+        toast.error(tx("nodeRun.generateSceneFirst", { scene: earliestScene + 1 }), {
+          description: tx("nodeRun.saveAReferenceForBefore", { name: charName }),
         });
         return;
       }
@@ -332,7 +333,7 @@ export function handleExpandToSceneNodes(
   }
 
   store.batchAddNodesAndEdges(newNodes, newEdges);
-  toast.success(`Created ${scenes.length} Scene Nodes`);
+  toast.success(tx("nodeRun.createdSceneNodes", { count: scenes.length }));
 
   if (options.autoRun) {
     for (let i = 0; i < scenes.length; i++) {
@@ -664,7 +665,7 @@ export function handleExpandStoryboard(
 
   const totalNodes =
     scenes.length * 5 + (options.includeCombine && scenes.length > 1 ? 1 : 0);
-  toast.success(`Created ${totalNodes} nodes for ${scenes.length} scenes`);
+  toast.success(tx("nodeRun.createdNodesForScenes", { nodes: totalNodes, count: scenes.length }));
 
   if (options.autoRun) {
     for (let i = 0; i < scenes.length; i++) {
@@ -754,5 +755,5 @@ export function handleCreateSceneNode(
   store.batchAddNodesAndEdges([newNode], [newEdge]);
   store.selectNode(newNodeId);
   store.setAutoOpenEditorNodeId(newNodeId);
-  toast.success(`Created Scene Node for Scene ${scene.sceneNumber}`);
+  toast.success(tx("nodeRun.createdSceneNodeForScene", { scene: scene.sceneNumber }));
 }

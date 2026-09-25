@@ -4,12 +4,12 @@ import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
 import { MATERIALS as BASE_MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGORY_ORDER, type Material, type MaterialCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
-import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { MaterialPreview } from "../previews/material-preview"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
 import { useCuratedEntries } from "../curated.js"
+import { CharacterArtTile, characterArtGridClass } from "./character-art-tile"
 
 interface MaterialPickerProps {
   readonly value: string | ReadonlyArray<string> | undefined
@@ -57,7 +57,7 @@ export const MaterialPicker = memo(function MaterialPicker({
   const anyVisible = grouped.some((g) => g.materials.length > 0)
 
   return (
-    <div className={cn("flex flex-col gap-3", className)}>
+    <div className={cn("flex flex-col gap-3 @container", className)}>
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
@@ -82,46 +82,35 @@ export const MaterialPicker = memo(function MaterialPicker({
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
               {MATERIAL_CATEGORY_LABELS[category]}
             </div>
-            <div role="radiogroup" aria-label={MATERIAL_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
+            <div role={maxSelected > 1 ? "group" : "radiogroup"} aria-label={MATERIAL_CATEGORY_LABELS[category]} className={characterArtGridClass("square")}>
               {materials.map((material) => {
                 const selectedIdx = selectedIds.indexOf(material.id)
                 const selected = selectedIdx >= 0
-                const label = resolveLabel(material.id, material.label)
-                const description = resolveDescription(material.id, material.description)
                 return (
-                  <div key={material.id} className="relative">
-                    <button
-                      type="button"
-                      role={maxSelected > 1 ? "checkbox" : "radio"}
-                      aria-checked={selected}
-                      title={description}
-                      onClick={() => handlePick(material.id)}
-                      className={cn(
-                        "w-full group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
-                        selected
-                          ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
-                          : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
-                      )}
-                    >
-                      <MaterialPreview materialId={material.id} className="w-full aspect-square" />
-                      <FitText
-                        text={label}
-                        className={cn(
-                          "text-[10.5px] font-medium leading-tight px-1 pb-0.5 text-center",
-                          selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
-                        )}
-                      />
-                    </button>
-                    {selected && (
-                      <MultiPickBadge
-                        mode={isMulti ? "multi" : "single"}
-                        index={selectedIdx}
-                        maxSelected={maxSelected}
-                        onActivate={() => activateMulti(material.id)}
-                        onDemote={() => demoteToSingle(material.id)}
-                      />
-                    )}
-                  </div>
+                  <CharacterArtTile
+                    key={material.id}
+                    family="materials"
+                    id={material.id}
+                    shape="square"
+                    label={resolveLabel(material.id, material.label)}
+                    title={resolveDescription(material.id, material.description)}
+                    selected={selected}
+                    multi={maxSelected > 1}
+                    onPick={() => handlePick(material.id)}
+                    fallback={<MaterialPreview materialId={material.id} className="size-full" />}
+                    badge={
+                      selected && maxSelected > 1 ? (
+                        <MultiPickBadge
+                          mode={isMulti ? "multi" : "single"}
+                          index={selectedIdx}
+                          maxSelected={maxSelected}
+                          onActivate={() => activateMulti(material.id)}
+                          onDemote={() => demoteToSingle(material.id)}
+                          className={cn("top-[5px] right-[5px]", !isMulti && "bg-white dark:bg-[#111114]")}
+                        />
+                      ) : undefined
+                    }
+                  />
                 )
               })}
             </div>

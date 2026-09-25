@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { ConcurrentModificationError, generateObject } from "@/lib/api"
 import { useObjectStudioJobs, type TrackedJob } from "./use-object-studio-jobs"
 import type { ObjectStudioState } from "./use-object-studio"
+import { tx } from "@/lib/i18n"
 
 /** A completed-but-unapproved main-image candidate shown in the grid. */
 export type ObjectCandidate = { readonly jobId: string; readonly url: string }
@@ -58,7 +59,7 @@ export function useObjectCandidates(studio: ObjectStudioState): ObjectCandidates
       )
     })
     jobs.onFailed((jobId) => {
-      toast.error(`Candidate ${jobId.slice(0, 8)}… failed`)
+      toast.error(tx("studio.candidateFailedId", { id: jobId.slice(0, 8) }))
     })
   }, [jobs.onResolved, jobs.onFailed])
 
@@ -67,7 +68,7 @@ export function useObjectCandidates(studio: ObjectStudioState): ObjectCandidates
     if (!data) return
     if (studio.isApprovingMainImage) return
     if (!data.objectName.trim()) {
-      toast.error("Add an object name first")
+      toast.error(tx("toastMsg.addAnObjectNameFirst"))
       return
     }
     try {
@@ -86,7 +87,7 @@ export function useObjectCandidates(studio: ObjectStudioState): ObjectCandidates
       const jobIds: ReadonlyArray<string> =
         "jobIds" in result ? result.jobIds : "jobId" in result ? [result.jobId] : []
       if (jobIds.length === 0) {
-        toast.error("Backend returned no job ids")
+        toast.error(tx("studio.noJobIdsReturned"))
         return
       }
       for (const id of jobIds) {
@@ -100,13 +101,13 @@ export function useObjectCandidates(studio: ObjectStudioState): ObjectCandidates
   async function approve(candidateJobId: string) {
     const data = studio.stagedData
     if (!data?.objectDbId) {
-      toast.error("Save the object first")
+      toast.error(tx("toastMsg.saveTheObjectFirst"))
       return
     }
     studio.setIsApprovingMainImage(true)
     try {
       await studio.approveMainImage(candidateJobId)
-      toast.success("Main image approved")
+      toast.success(tx("studio.mainImageApproved"))
       setCandidates([])
     } catch (e) {
       if (e instanceof ConcurrentModificationError) {
@@ -114,7 +115,7 @@ export function useObjectCandidates(studio: ObjectStudioState): ObjectCandidates
         // the canonical state may already have a different main image.
         setCandidates([])
       } else {
-        toast.error("Approval failed")
+        toast.error(tx("studio.approvalFailed"))
       }
     } finally {
       studio.setIsApprovingMainImage(false)

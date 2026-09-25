@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { ConcurrentModificationError, generateCreature } from "@/lib/api"
 import { useCreatureStudioJobs, type TrackedJob } from "./use-creature-studio-jobs"
 import type { CreatureStudioState } from "./use-creature-studio"
+import { tx } from "@/lib/i18n"
 
 /** A completed-but-unapproved main-image candidate shown in the grid. */
 export type CreatureCandidate = { readonly jobId: string; readonly url: string }
@@ -54,7 +55,7 @@ export function useCreatureCandidates(studio: CreatureStudioState): CreatureCand
       )
     })
     jobs.onFailed((jobId) => {
-      toast.error(`Candidate ${jobId.slice(0, 8)}… failed`)
+      toast.error(tx("studio.candidateFailedId", { id: jobId.slice(0, 8) }))
     })
   }, [jobs.onResolved, jobs.onFailed])
 
@@ -63,7 +64,7 @@ export function useCreatureCandidates(studio: CreatureStudioState): CreatureCand
     if (!data) return
     if (studio.isApprovingMainImage) return
     if (!data.creatureName.trim()) {
-      toast.error("Add a creature name first")
+      toast.error(tx("toastMsg.addACreatureNameFirst"))
       return
     }
     try {
@@ -83,7 +84,7 @@ export function useCreatureCandidates(studio: CreatureStudioState): CreatureCand
       const jobIds: ReadonlyArray<string> =
         "jobIds" in result ? result.jobIds : "jobId" in result ? [result.jobId] : []
       if (jobIds.length === 0) {
-        toast.error("Backend returned no job ids")
+        toast.error(tx("studio.noJobIdsReturned"))
         return
       }
       for (const id of jobIds) {
@@ -97,13 +98,13 @@ export function useCreatureCandidates(studio: CreatureStudioState): CreatureCand
   async function approve(candidateJobId: string) {
     const data = studio.stagedData
     if (!data?.creatureDbId) {
-      toast.error("Save the creature first")
+      toast.error(tx("toastMsg.saveTheCreatureFirst"))
       return
     }
     studio.setIsApprovingMainImage(true)
     try {
       await studio.approveMainImage(candidateJobId)
-      toast.success("Main image approved")
+      toast.success(tx("studio.mainImageApproved"))
       setCandidates([])
     } catch (e) {
       if (e instanceof ConcurrentModificationError) {
@@ -111,7 +112,7 @@ export function useCreatureCandidates(studio: CreatureStudioState): CreatureCand
         // the canonical state may already have a different main image.
         setCandidates([])
       } else {
-        toast.error("Approval failed")
+        toast.error(tx("studio.approvalFailed"))
       }
     } finally {
       studio.setIsApprovingMainImage(false)

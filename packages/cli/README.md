@@ -120,8 +120,8 @@ nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
 nodaro models list [--kind video] [--mode i2v] [--family Google] [--featured]
 
 # Pickers — valid values for parameter-picker nodes (setting, mood, person, …)
-nodaro pickers list                                     # all picker node types + option counts
-nodaro pickers get <nodeType> [--full] [--category <c>] [--field <f>]  # one picker's valid ids
+nodaro pickers list                                     # all picker node types + option counts + pictures
+nodaro pickers get <nodeType> [--full] [--category <c>] [--field <f>]  # one picker's valid ids (+ imageUrl per option)
 nodaro pickers analyze "<text>" [--target setting,mood]  # AI Fill: pick values from a description (credit-billed)
 
 # Shots — Cine share → remix records

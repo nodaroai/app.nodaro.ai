@@ -24,7 +24,9 @@ import { AtmospherePreview } from "./previews/atmosphere-preview"
 import { StylePreview } from "./previews/style-preview"
 import { LookArt } from "./look-previews/look-art"
 import { getLookPreviewUrl } from "./look-previews/registry"
-import { getCompositionEffectLabel, getEraLabel } from "@nodaro/prompts"
+import { CharacterArt } from "./pickers/character-art-tile"
+import { characterArtUrl, type CharacterArtFamily } from "./icons/character-art"
+import { getCompositionEffectLabel, getEraLabel, getHeldPropLabel } from "@nodaro/prompts"
 
 /**
  * Icon for a picker with no drawn preview (Era, Composition Effects): the
@@ -43,6 +45,22 @@ function renderArtOrNull(pickerKey: string, id: string, label: string): ReactNod
       fallback={<span className="flex size-full items-center justify-center px-1 text-center text-[10px] leading-tight text-muted-foreground/80">{label}</span>}
     />
   ) : null
+}
+
+/**
+ * Icon for a character picker (Held Prop, Material, Animal): the option's
+ * photo — the one its picker tile shows — or `fallback` when the option has
+ * none (null lets the app card show its own label). A photo that fails to load
+ * falls back the same way, or to `label` when there is no drawn fallback.
+ */
+function characterArtOr(family: CharacterArtFamily, id: string, fallback: ReactNode, label?: string): ReactNode {
+  if (!characterArtUrl(family, id)) return fallback
+  const onError =
+    fallback ??
+    (label ? (
+      <span className="flex size-full items-center justify-center px-1 text-center text-[10px] leading-tight text-muted-foreground/80">{label}</span>
+    ) : null)
+  return <CharacterArt family={family} id={id} className="size-full rounded-[inherit]" position="50% 25%" fallback={onError} />
 }
 import { MoodEmoji } from "./previews/mood-emoji"
 import { PoseIcon } from "./previews/pose-icon"
@@ -392,7 +410,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     entries: mapCat(MATERIALS, "category"),
     groupOrder: MATERIAL_CATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: MATERIAL_CATEGORY_LABELS,
-    renderIcon: (id) => <MaterialPreview materialId={id} className="size-full" />,
+    renderIcon: (id) => characterArtOr("materials", id, <MaterialPreview materialId={id} className="size-full" />),
   },
   {
     kind: "single",
@@ -404,7 +422,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     entries: mapCat(ANIMALS, "subcategory"),
     groupOrder: ANIMAL_SUBCATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: ANIMAL_SUBCATEGORY_LABELS,
-    renderIcon: (id) => <span className="text-2xl">{ANIMAL_ICON_FOR(id)}</span>,
+    renderIcon: (id) => characterArtOr("animals", id, <span className="text-2xl">{ANIMAL_ICON_FOR(id)}</span>),
   },
   {
     kind: "single",
@@ -451,6 +469,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     entries: mapCat(HELD_PROPS, "category"),
     groupOrder: HELD_PROP_CATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: HELD_PROP_CATEGORY_LABELS,
+    renderIcon: (id) => characterArtOr("held-prop", id, null, getHeldPropLabel(id)),
   },
 ]
 

@@ -6285,6 +6285,30 @@ export type TelegramTriggerData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
 }
 
+/**
+ * Fires when a message arrives in a chosen chat of a Telegram account the
+ * owner connected (Integrations → Telegram account). Cloud; the listening runs
+ * in a private plugin. Projected on save only while `isActive` with an
+ * account and at least one chat.
+ */
+export type TelegramAccountTriggerData = {
+  [key: string]: unknown
+  label: string
+  accountId?: string
+  /** Bot-API chat ids to listen to. */
+  chatIds?: string[]
+  /** Titles of the picked chats, for the card and panel only. */
+  chatTitles?: Record<string, string>
+  /** "text" or a media kind; empty = every type. */
+  messageTypeFilters?: string[]
+  /** Case-insensitive; any one of them in the text. */
+  keywords?: string[]
+  /** The owner's own messages from their other devices. */
+  includeOutgoing?: boolean
+  isActive?: boolean
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+}
+
 export type TelegramChannelFeedData = {
   [key: string]: unknown
   label: string
@@ -6564,6 +6588,7 @@ export type SceneNodeData =
   | WebhookTriggerData
   | ScheduleTriggerData
   | TelegramTriggerData
+  | TelegramAccountTriggerData
   | TelegramChannelFeedData
   | SocialPostData
   | MusicGenreData
@@ -6766,6 +6791,7 @@ export type SceneNodeType =
   | "telegram-post"
   | "publish-social"
   | "telegram-trigger"
+  | "telegram-account-trigger"
   | "telegram-channel-feed"
   | "component"
   | "music-genre"
@@ -9849,6 +9875,22 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Telegram Trigger",
       messageTypeFilters: ["text", "photo", "video", "audio", "document"],
     } as TelegramTriggerData,
+  },
+  {
+    type: "telegram-account-trigger",
+    label: "Telegram Account Trigger",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["text", "chatId", "messageId", "senderId"],
+    defaultData: {
+      label: "Telegram Account Trigger",
+      chatIds: [],
+      messageTypeFilters: [],
+      keywords: [],
+      includeOutgoing: false,
+      isActive: false,
+    } as TelegramAccountTriggerData,
   },
   {
     type: "telegram-channel-feed",

@@ -45,7 +45,7 @@ import {
   WIDE_SLICE_SECS_PER_OUTPUT_SEC,
   AUDIO_MUX_SECS_PER_OUTPUT_SEC,
 } from "../apply-edl.js"
-import { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_TIMEOUT_MS, FFPROBE_TIMEOUT_MS } from "../ffmpeg-utils.js"
+import { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_MAX_MS, FFPROBE_TIMEOUT_MS } from "../ffmpeg-utils.js"
 
 const MIN = 60_000
 
@@ -318,7 +318,9 @@ describe("a crossfade run past the cap is cut inside one of its segments (B2)", 
 
 describe("the prep terms are the ceilings of the steps they name", () => {
   it("per source: one fetch + the audio-stream probe + probeStreamEnds (listing + 2 packet scans); once per render: the resolution and fps probes", () => {
-    expect(APPLY_EDL_PER_SOURCE_PREP_MS).toBe(DOWNLOAD_TIMEOUT_MS + 2 * FFPROBE_TIMEOUT_MS + 2 * DEFAULT_FFMPEG_TIMEOUT_MS)
+    // The fetch is charged at the download's overall ceiling (Track 0.19): a
+    // camera original can be many gigabytes, and 120 s was never a real bound.
+    expect(APPLY_EDL_PER_SOURCE_PREP_MS).toBe(DOWNLOAD_MAX_MS + 2 * FFPROBE_TIMEOUT_MS + 2 * DEFAULT_FFMPEG_TIMEOUT_MS)
     expect(APPLY_EDL_CANVAS_PROBE_MS).toBe(2 * FFPROBE_TIMEOUT_MS)
   })
 })

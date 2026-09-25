@@ -25,7 +25,7 @@ const OTHER_ACCOUNT = "22222222-2222-4222-8222-222222222222"
 const accountNode = (id: string, accountId: string, extra: Record<string, unknown> = {}) => ({
   id,
   type: "telegram-account-trigger",
-  data: { accountId, isActive: true, ...extra },
+  data: { accountId, isActive: true, chatIds: ["-1001"], ...extra },
 })
 
 function tables(existing: Array<Record<string, unknown>>, ownedAccountIds: string[]) {
@@ -78,7 +78,7 @@ describe("the account lane is the owner's to arm", () => {
     await reconcileWorkflowTriggers({
       workflowId: WF,
       userId: OWNER,
-      nodes: [accountNode("ta1", OWN_ACCOUNT, { chatIds: [], includeOutgoing: true })],
+      nodes: [accountNode("ta1", OWN_ACCOUNT, { chatIds: ["-1001", "-1002"], includeOutgoing: true })],
     })
     expect(widened).toEqual({ inserts: [], updates: [], deletes: 0 })
 

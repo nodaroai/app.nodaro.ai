@@ -9,6 +9,7 @@ import type {
 import { NODE_DEFINITIONS } from "@/types/nodes";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
+import { tx } from "@/lib/i18n";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -45,7 +46,7 @@ export function handleCreateNodesFromWriter(writerNodeId: string): void {
   const items = writerData.generatedItems;
   if (!items || items.length === 0) {
     toast.error(
-      "No generated prompts to create nodes from. Run the Prompt node first.",
+      tx("nodeRun.noGeneratedPromptsToCreate"),
     );
     return;
   }
@@ -169,16 +170,18 @@ export function handleCreateNodesFromWriter(writerNodeId: string): void {
 
   store.batchAddNodesAndEdges(newNodes, newEdges);
   store.updateNodeData(writerNodeId, { createdNodeIds: createdIds });
-  const refInfo = [
-    faceNode ? "Face" : "",
+  const refs = [
+    faceNode ? tx("nodeRun.refFace") : "",
     imageSourceNodes.length > 0
-      ? `${imageSourceNodes.length} ref image${imageSourceNodes.length !== 1 ? "s" : ""}`
+      ? tx(imageSourceNodes.length === 1 ? "nodeRun.refImagesOne" : "nodeRun.refImagesMany", { count: imageSourceNodes.length })
       : "",
   ]
     .filter(Boolean)
     .join(" + ");
   toast.success(
-    `Created ${items.length} Generate Image nodes${refInfo ? ` (with ${refInfo})` : ""}`,
+    refs
+      ? tx("nodeRun.createdImageNodesWithRefs", { count: items.length, refs })
+      : tx("nodeRun.createdImageNodes", { count: items.length }),
   );
 }
 
@@ -198,7 +201,7 @@ export async function handleRunAllWriterImageNodes(
   const writerData = writerNode.data as LLMChatData;
   const nodeIds = writerData.createdNodeIds ?? [];
   if (nodeIds.length === 0) {
-    toast.error("No image nodes to run. Create nodes first.");
+    toast.error(tx("nodeRun.noImageNodesToRun"));
     return;
   }
 
@@ -207,7 +210,7 @@ export async function handleRunAllWriterImageNodes(
     .filter((n): n is WorkflowNode => !!n && n.type === "generate-image");
 
   if (targetNodes.length === 0) {
-    toast.error("Created image nodes no longer exist on canvas.");
+    toast.error(tx("nodeRun.createdImageNodesNoLonger"));
     return;
   }
 
@@ -255,5 +258,5 @@ export async function handleRunAllWriterImageNodes(
     );
   }).length;
 
-  toast.success(`Image generation complete: ${succeeded}/${total} succeeded`);
+  toast.success(tx("nodeRun.imageGenerationCompleteSucceeded", { succeeded, total }));
 }

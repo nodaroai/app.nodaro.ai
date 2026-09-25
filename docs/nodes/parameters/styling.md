@@ -6,6 +6,10 @@
 
 The Styling parameter node composes a full styling/wardrobe descriptor — what the subject wears and how their face/hair is done. Wired to an AI image/video node's `cinematography` handle. Each sub-field is optional; empty fields are dropped silently. Useful for fashion-editorial work, character continuity, and on-brand commercial output.
 
+## The picker
+
+Every setting is laid out open with its options, grouped under four topics — **Beauty & Hair**, **Accessories**, **Wardrobe**, **Fabric & Fit** — each with its own heading and pick count. A row of topic buttons at the top jumps to a topic, and the search box looks across every topic. Every option is shown with its own photo, the same one the node card on the canvas shows; a few options added after the photos were made show their drawn icon instead. Settings that allow several picks (headwear, jewelry, hair state, wardrobe state) list every pick on the node card.
+
 ## Configuration (9 sub-fields)
 
 | Group | Sub-fields |

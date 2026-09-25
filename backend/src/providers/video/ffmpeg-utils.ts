@@ -12,19 +12,193 @@ import { config } from "../../lib/config.js"
 import { safeFetch, isPrivateOrReservedIP } from "../../lib/safe-fetch.js"
 import { csvFields } from "./ffprobe-csv.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
-import { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_TIMEOUT_MS, FFPROBE_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
+import {
+  DEFAULT_FFMPEG_TIMEOUT_MS,
+  DOWNLOAD_FLOOR_BYTES_PER_SEC,
+  DOWNLOAD_MAX_MS,
+  DOWNLOAD_MIN_BYTES_PER_WINDOW,
+  DOWNLOAD_RATE_WINDOW_MS,
+  DOWNLOAD_TIMEOUT_MS,
+  BIG_MEDIA_MAX_BYTES,
+  FFPROBE_TIMEOUT_MS,
+  downloadBodyDeadlineMs,
+} from "./ffmpeg-timeouts.js"
 
 // The ceilings live in a dependency-free leaf (see its header); re-exported so
 // every existing `ffmpeg-utils.js` import keeps working.
-export { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_TIMEOUT_MS, FFPROBE_TIMEOUT_MS }
+export {
+  DEFAULT_FFMPEG_TIMEOUT_MS,
+  DOWNLOAD_FLOOR_BYTES_PER_SEC,
+  DOWNLOAD_MAX_MS,
+  DOWNLOAD_MIN_BYTES_PER_WINDOW,
+  DOWNLOAD_RATE_WINDOW_MS,
+  DOWNLOAD_TIMEOUT_MS,
+  BIG_MEDIA_MAX_BYTES,
+  FFPROBE_TIMEOUT_MS,
+  downloadBodyDeadlineMs,
+}
 
-export async function downloadFile(url: string, dest: string, opts: { maxBytes?: number } = {}): Promise<void> {
+/** The staged limits a BIG-MEDIA download runs under (production:
+ *  `BIG_MEDIA_DOWNLOAD_LIMITS`; a test passes small ones). */
+export interface DownloadLimits {
+  /** Wait for the response (status + headers); also the least a body gets,
+   *  and the grace before the minimum rate applies — within this long of the
+   *  start the opt-in path is never stricter than the default flat bound. */
+  readonly responseMs: number
+  /** The body is checked once per window of this length ... */
+  readonly windowMs: number
+  /** ... and aborted when a window delivers fewer bytes than this (a dead or
+   *  drip-fed transfer). */
+  readonly minBytesPerWindow: number
+  /** The most it may write (unless the caller passes a smaller `maxBytes`). */
+  readonly maxBytes: number
+  /** A known-size body gets size ÷ this (at least `responseMs`). */
+  readonly floorBytesPerSec: number
+  /** Nothing — response plus body — takes longer than this. */
+  readonly maxMs: number
+}
+
+/** For callers that fetch big media — apply-edl's camera originals and the
+ *  media proxy's source (decided 2026-09-25, Track 0.19). Their URLs are
+ *  user-supplied, so the limits guard a hostile one: a minimum rate per window
+ *  (a drip-feed fails within a minute) and a byte cap (a fast one cannot fill
+ *  the disk). Every other caller keeps the flat default. */
+export const BIG_MEDIA_DOWNLOAD_LIMITS: DownloadLimits = Object.freeze({
+  responseMs: DOWNLOAD_TIMEOUT_MS,
+  windowMs: DOWNLOAD_RATE_WINDOW_MS,
+  minBytesPerWindow: DOWNLOAD_MIN_BYTES_PER_WINDOW,
+  maxBytes: BIG_MEDIA_MAX_BYTES,
+  floorBytesPerSec: DOWNLOAD_FLOOR_BYTES_PER_SEC,
+  maxMs: DOWNLOAD_MAX_MS,
+})
+
+const seconds = (ms: number) => `${Math.round(ms / 1000)} s`
+
+/**
+ * Fetch `url` to `dest`.
+ *
+ * DEFAULT: one flat `DOWNLOAD_TIMEOUT_MS` (120 s) covers the response AND the
+ * body. For the ~60 callers that fetch provider results, images and
+ * user-supplied URLs that is also their only bound — a server trickling a byte
+ * a minute holds a worker at most that long, and fills at most 120 s × link
+ * rate of disk (`maxBytes` caps it further where a caller passes one).
+ *
+ * BIG MEDIA (`opts.limits`, normally `BIG_MEDIA_DOWNLOAD_LIMITS`): a transfer
+ * runs while it keeps a minimum rate — aborted when a `windowMs` window
+ * delivers under `minBytesPerWindow` (a dead or drip-fed transfer: these
+ * callers take user-supplied URLs), when a known-size body outlasts its size at
+ * the floor rate, at `maxMs` overall, or past `maxBytes` on disk. The flat 120 s
+ * could never deliver a 3-hour camera original (~15 GB). Every timeout starts
+ * "Download timeout:" and names its limit. The rate applies only after
+ * `responseMs` (review round 3 of #1656, decided 2026-09-25): a slow source the
+ * flat 120 s delivered still arrives. The body is fetched uncompressed and a
+ * compressed one is refused — the rate counts decoded bytes, so gzip would let
+ * a drip-feed pass it at ~1000:1.
+ */
+export async function downloadFile(
+  url: string,
+  dest: string,
+  opts: { maxBytes?: number; limits?: DownloadLimits } = {},
+): Promise<void> {
   // safeFetch: callers include media-process which streams user-supplied
   // sourceUrl into ffmpeg. Without DNS-aware SSRF protection, a hostname
   // resolving to an internal IP would have the response processed and the
   // result uploaded to R2 (read-oracle). See backend/src/lib/safe-fetch.ts.
-  const response = await safeFetch(url, { timeoutMs: DOWNLOAD_TIMEOUT_MS })
+  const limits = opts.limits
+  if (!limits) {
+    const response = await safeFetch(url, { timeoutMs: DOWNLOAD_TIMEOUT_MS })
+    await saveResponse(url, dest, response, opts.maxBytes, {})
+    return
+  }
+
+  const startedAt = Date.now()
+  const ctrl = new AbortController()
+  const abortWith = (what: string) => {
+    if (!ctrl.signal.aborted) ctrl.abort(new Error(`Download timeout: ${what}: ${url}`))
+  }
+  // Every timer is OURS, so every abort names its limit; safeFetch's own timer
+  // is only a backstop set past the overall ceiling.
+  let overall: ReturnType<typeof setTimeout> | undefined = setTimeout(
+    () => abortWith(`over its ${seconds(limits.maxMs)} overall ceiling`),
+    limits.maxMs,
+  )
+  let phase: ReturnType<typeof setTimeout> | undefined = setTimeout(
+    () => abortWith(`no response within ${seconds(limits.responseMs)}`),
+    limits.responseMs,
+  )
+  let rate: ReturnType<typeof setInterval> | undefined
+  const maxBytes = Math.min(opts.maxBytes ?? Infinity, limits.maxBytes)
+  try {
+    // Identity only: camera and audio originals are never sent compressed, and
+    // a compressed body would be counted decoded by the rate window below.
+    const response = await safeFetch(url, {
+      timeoutMs: limits.maxMs + 5_000,
+      signal: ctrl.signal,
+      headers: { "accept-encoding": "identity" },
+    })
+    clearTimeout(phase)
+    const encoding = contentEncoding(response)
+    if (response.ok && encoding) {
+      await response.body?.cancel().catch(() => undefined)
+      throw new Error(`Download refused: the server sent a compressed body (Content-Encoding: ${encoding}) though an uncompressed one was requested: ${url}`)
+    }
+    await saveResponse(url, dest, response, maxBytes, {
+      // The storage client takes no signal (and has no request timeout of its
+      // own — Track 0.12), so none of our limits apply to the R2 fallback.
+      onFallback: () => { clearTimeout(overall); overall = undefined },
+      onBody: () => {
+        const size = Number(response.headers?.get?.("content-length") ?? NaN)
+        const known = Number.isFinite(size) && size > 0
+        const bodyMs = downloadBodyDeadlineMs(known ? size : undefined, {
+          minMs: limits.responseMs, floorBytesPerSec: limits.floorBytesPerSec, maxMs: limits.maxMs,
+        })
+        phase = setTimeout(
+          () => abortWith(`longer than ${seconds(bodyMs)} for its size (${known ? `${Math.round(size / (1024 * 1024))} MB` : "unknown"})`),
+          bodyMs,
+        )
+        // Minimum rate: every window must deliver `minBytesPerWindow` — once
+        // `responseMs` has passed since the start, when the default path would
+        // itself have given up.
+        let windowBytes = 0
+        rate = setInterval(() => {
+          if (Date.now() - startedAt >= limits.responseMs && windowBytes < limits.minBytesPerWindow) {
+            abortWith(`too slow — ${windowBytes} bytes in the last ${seconds(limits.windowMs)}, under the ${limits.minBytesPerWindow} minimum`)
+          }
+          windowBytes = 0
+        }, limits.windowMs)
+        return (n: number) => { windowBytes += n }
+      },
+    })
+  } catch (err) {
+    // Our own abort reason says what happened; the fetch/stream layers would
+    // otherwise surface a bare "This operation was aborted".
+    if (ctrl.signal.aborted && ctrl.signal.reason instanceof Error) throw ctrl.signal.reason
+    throw err
+  } finally {
+    clearTimeout(overall)
+    clearTimeout(phase)
+    clearInterval(rate)
+  }
+}
+
+/** The response's content coding, or "" when its body is sent as is. */
+function contentEncoding(response: Response): string {
+  const value = (response.headers?.get?.("content-encoding") ?? "").trim().toLowerCase()
+  return value === "identity" ? "" : value
+}
+
+/** Write an already-fetched response to `dest` (both download paths). */
+async function saveResponse(
+  url: string,
+  dest: string,
+  response: Response,
+  maxBytes: number | undefined,
+  hooks: { readonly onFallback?: () => void; readonly onBody?: () => (bytes: number) => void },
+): Promise<void> {
   if (!response.ok) {
+    // Never leave a failed response streaming: a 4xx/5xx whose body keeps
+    // coming would otherwise hold its connection until the fetch timer fires.
+    await response.body?.cancel().catch(() => undefined)
     // Cloudflare can negative-cache a 404 per-edge for 40-55min on freshly
     // finalized media (incidents 2026-06-10/12). When the URL is OUR public
     // bucket, bypass the edge and stream straight from the R2 origin —
@@ -37,30 +211,44 @@ export async function downloadFile(url: string, dest: string, opts: { maxBytes?:
       const { r2KeyFromOurUrl, downloadR2ObjectToFile } = await import("../../lib/storage.js")
       const key = r2KeyFromOurUrl(url)
       if (key) {
+        hooks.onFallback?.()
         await downloadR2ObjectToFile(key, dest)
         return
       }
     }
     throw new Error(`Failed to download: ${url} (${response.status})`)
   }
-  const nodeStream = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
-  const { maxBytes } = opts
-  if (maxBytes !== undefined && maxBytes > 0) {
+  const capped = maxBytes !== undefined && maxBytes > 0 && Number.isFinite(maxBytes)
+  const announced = Number(response.headers?.get?.("content-length") ?? NaN)
+  if (capped && !contentEncoding(response) && announced > maxBytes) {
+    // A body that says up front it is over the cap fails at the headers
+    // (unencoded only: an encoded length is not the size on disk).
+    await response.body?.cancel().catch(() => undefined)
+    throw new Error(`Download exceeds ${Math.round(maxBytes / (1024 * 1024))} MB: ${url}`)
+  }
+  const count = hooks.onBody?.()
+  const stages: Array<NodeJS.ReadableStream | NodeJS.ReadWriteStream | NodeJS.WritableStream> = [
+    Readable.fromWeb(response.body as import("stream/web").ReadableStream),
+  ]
+  if (count) {
+    // Every chunk counts toward the current rate window.
+    stages.push(new Transform({ transform(chunk: Buffer, _enc, cb) { count(chunk.length); cb(null, chunk) } }))
+  }
+  if (capped) {
     // Byte cap for callers that fetch attacker-choosable URLs: the stream is
     // aborted as soon as the cap is crossed, so a hostile host cannot fill the
     // worker's tmpdir at line rate (each write is the caller's own work dir).
     let total = 0
-    const counter = new Transform({
+    stages.push(new Transform({
       transform(chunk: Buffer, _enc, cb) {
         total += chunk.length
         if (total > maxBytes) cb(new Error(`Download exceeds ${Math.round(maxBytes / (1024 * 1024))} MB: ${url}`))
         else cb(null, chunk)
       },
-    })
-    await pipeline(nodeStream, counter, createWriteStream(dest))
-    return
+    }))
   }
-  await pipeline(nodeStream, createWriteStream(dest))
+  stages.push(createWriteStream(dest))
+  await (pipeline as (...s: unknown[]) => Promise<void>)(...stages)
 }
 
 // FIFO semaphore serializes ffmpeg spawns so fan-out doesn't launch N ffmpeg

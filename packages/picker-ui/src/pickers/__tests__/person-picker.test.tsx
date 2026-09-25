@@ -273,15 +273,23 @@ describe("PersonPicker (wrapper — Compact/Detailed toggle)", () => {
     expect(setSpy).toHaveBeenCalledWith("detailed")
   })
 
-  it("persists the chosen mode to localStorage key nodaro:person-picker-mode", () => {
+  it("persists the chosen mode to localStorage key nodaro:person-picker-view", () => {
     // No helper spy here — exercise the real guarded persistence end-to-end.
     render(<PersonPicker value={{}} onChange={() => {}} />)
     const group = getModeGroup()
-    fireEvent.click(within(group).getByRole("radio", { name: /^Detailed$/i }))
-    expect(window.localStorage.getItem("nodaro:person-picker-mode")).toBe("detailed")
-
     fireEvent.click(within(group).getByRole("radio", { name: /^Compact$/i }))
-    expect(window.localStorage.getItem("nodaro:person-picker-mode")).toBe("compact")
+    expect(window.localStorage.getItem("nodaro:person-picker-view")).toBe("compact")
+
+    fireEvent.click(within(group).getByRole("radio", { name: /^Detailed$/i }))
+    expect(window.localStorage.getItem("nodaro:person-picker-view")).toBe("detailed")
+  })
+
+  it("opens on the open Detailed view when nothing is stored", () => {
+    render(<PersonPicker value={{}} onChange={() => {}} />)
+    const group = getModeGroup()
+    expect(within(group).getByRole("radio", { name: /^Detailed$/i })).toHaveAttribute("aria-checked", "true")
+    // Every topic is laid out open — a Face setting is visible without any click.
+    expect(screen.getByRole("switch", { name: /Enable Jawline/i })).toBeInTheDocument()
   })
 })
 
@@ -492,18 +500,19 @@ describe("PersonPickerCompact (popover behaviors)", () => {
  * compact popover is non-modal and relies on Popover + @radix-ui/react-dialog
  * resolving to ONE hoisted `react-dismissable-layer`, so picking a popover
  * option must dismiss only the popover — NEVER the Dialog underneath. This test
- * renders the realistic `PersonPicker` (compact by default) inside a real
- * Dialog, opens a pill popover, clicks an option, and asserts the Dialog
- * content is still mounted.
+ * renders the realistic `PersonPicker` (switched to its Compact view, the one
+ * with popovers) inside a real Dialog, opens a pill popover, clicks an option,
+ * and asserts the Dialog content is still mounted.
  */
 describe("PersonPicker inside a Dialog (app-card nesting invariant)", () => {
   beforeEach(() => {
-    // Restore any prefs spy a prior describe block left installed so the default
-    // compact mode (getStickyPersonPickerMode) genuinely drives this render, then
-    // clear the per-device pref key so it falls back to that default.
+    // Restore any prefs spy a prior describe block left installed, then store
+    // the Compact view through the real per-device pref key so it drives this
+    // render (the default is the open Detailed view, which has no popovers).
     vi.restoreAllMocks()
     try {
       window.localStorage.clear()
+      window.localStorage.setItem("nodaro:person-picker-view", "compact")
     } catch {
       /* ignore */
     }
@@ -515,7 +524,7 @@ describe("PersonPicker inside a Dialog (app-card nesting invariant)", () => {
     render(
       <Dialog open>
         <DialogContent aria-label="Person input card">
-          {/* default mode is compact (getStickyPersonPickerMode) */}
+          {/* the stored view is compact (getStickyPersonPickerMode) */}
           <PersonPicker value={{}} onChange={onChange} />
         </DialogContent>
       </Dialog>,

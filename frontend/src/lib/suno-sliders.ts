@@ -1,3 +1,5 @@
+import type { MessageKey } from "@/lib/i18n"
+
 /** Single source of copy for Suno's advanced mix sliders — rendered by both the
  *  config panel (audio-configs) and the on-node Mix popover. Copy verified
  *  against Suno's documented sliders. */
@@ -16,3 +18,20 @@ export const SUNO_SLIDER_META: readonly SunoSliderMeta[] = [
   { key: "weirdnessConstraint", label: "Weirdness", description: "How far Suno strays from genre norms.", default: 0, min: 0, max: 1, step: 0.01 },
   { key: "audioWeight", label: "Audio Weight", description: "How strongly a wired voice-persona / reference steers the song.", default: 0.5, min: 0, max: 1, step: 0.01 },
 ]
+
+/**
+ * The sliders' label and help line in the interface language. Every render
+ * site (config panel, on-node Mix popover) translates through these; the
+ * English above stays the source text other modules and tests read.
+ */
+export const SUNO_SLIDER_LABEL_KEYS: Record<SunoSliderMeta["key"], MessageKey> = {
+  styleWeight: "audiocfg.sliderStyleWeight",
+  weirdnessConstraint: "audiocfg.sliderWeirdness",
+  audioWeight: "audiocfg.sliderAudioWeight",
+}
+
+export const SUNO_SLIDER_DESC_KEYS: Record<SunoSliderMeta["key"], MessageKey> = {
+  styleWeight: "audiocfg.sliderStyleWeightDesc",
+  weirdnessConstraint: "audiocfg.sliderWeirdnessDesc",
+  audioWeight: "audiocfg.sliderAudioWeightDesc",
+}

@@ -40,6 +40,7 @@ import { migratePersonNodes } from "@/lib/person-value-migration"
 import { migrateDescribeToPickerNodes } from "@/lib/describe-to-picker-migration"
 import { migratePickerSourceHandle, isTileGridPickerType } from "@/lib/picker-handles"
 import { runtimeFreecutUrl } from "@/lib/runtime-config"
+import { tx } from "@/lib/i18n"
 
 /**
  * Migrate legacy image node types to the new split types.
@@ -219,7 +220,7 @@ function getNodeOutputForPreview(
     return value ? { type: "text", value: value.trim() } : null
   }
 
-  if (t === "telegram-trigger") {
+  if (t === "telegram-trigger" || t === "telegram-account-trigger") {
     const triggerData = d.__triggerData as Record<string, unknown> | undefined
     const fields: Record<string, string> = {
       text: String((triggerData?.text ?? d.text) || ""),
@@ -228,6 +229,8 @@ function getNodeOutputForPreview(
       audioUrl: String((triggerData?.audioUrl ?? d.audioUrl) || ""),
       chatId: String((triggerData?.chatId ?? d.chatId) || ""),
       messageId: String((triggerData?.messageId ?? d.messageId) || ""),
+      senderId: String((triggerData?.senderId ?? d.senderId) || ""),
+      chatType: String((triggerData?.chatType ?? d.chatType) || ""),
     }
     const value = sourceHandle ? fields[sourceHandle] : fields.text
     return value ? { type: classifyPreviewValue(t, value, sourceHandle), value } : null
@@ -2313,8 +2316,8 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
           const shown = typeof window !== "undefined" && window.localStorage.getItem("genimg-handles-v2-picker-toast")
           if (!shown) {
             void import("sonner").then(({ toast }) => {
-              toast.info("Generate Image picker handles split", {
-                description: "Pickers now route by family: aesthetic ones (lens, lighting, style…) on the new Look handle, subject/mood/props (person, animal, mood…) on the new Elements handle. Both tail-append to your prompt at runtime — drag a picker to either handle to use it.",
+              toast.info(tx("toastMsg.generateImagePickerHandlesSplit"), {
+                description: tx("toastMsg.pickersNowRouteByFamily"),
                 duration: 12000,
               })
             }).catch(() => {})
@@ -3318,7 +3321,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
               ),
             }))
           })
-          import("sonner").then(({ toast }) => toast.success("Thumbnail set"))
+          import("sonner").then(({ toast }) => toast.success(tx("toastMsg.thumbnailSet")))
         })
     })
   },

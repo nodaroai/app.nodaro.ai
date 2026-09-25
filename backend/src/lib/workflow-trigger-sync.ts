@@ -186,7 +186,7 @@ export function normalizeTelegramConfig(
  * A Telegram ACCOUNT trigger's row config, or null when it must not listen.
  *
  * Same rule as the bot lane: nothing is projected until the node is switched on
- * (`isActive === true`) with an account picked — listening is reading the
+ * (`isActive === true`) with an account and at least one chat picked — listening is reading the
  * owner's chats, so it starts only when they ask. Every filter is emitted,
  * never omitted (see normalizeTelegramConfig): an omitted key would keep a
  * filter the user just cleared standing on the row. Whether the account is
@@ -196,10 +196,12 @@ export function normalizeTelegramAccountConfig(
   data: Record<string, unknown>,
 ): Record<string, unknown> | null {
   const accountId = trimmed(data.accountId)
-  if (!accountId || data.isActive !== true) return null
+  const chatIds = stringList(data.chatIds)
+  // No chat picked is not "every chat": a personal account's whole inbox is never a default.
+  if (!accountId || data.isActive !== true || chatIds.length === 0) return null
   return {
     accountId,
-    chatIds: stringList(data.chatIds),
+    chatIds,
     senderIds: stringList(data.senderIds),
     messageTypeFilters: stringList(data.messageTypeFilters),
     keywords: stringList(data.keywords),

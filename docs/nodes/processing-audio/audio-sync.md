@@ -102,7 +102,7 @@ On the canvas, the price follows the number of recordings wired into **Sources**
 - Recordings must share some sound (at least 2 seconds of overlap). A recording with none gets a `notes` line and confidence `0`.
 - The reference must have sound — it is the clock everything is measured on. A reference without an audio track fails the run with a message naming it; any other source without one just gets its own `confidence` `0` row.
 - Drift is reported, not corrected.
-- Very large files (several gigabytes) can run out of time while being fetched on their first run. Until that limit is raised, use a smaller export (an audio-only file is enough) for such recordings.
+- A recording is fetched in full on its first run, up to 64 GB and up to an hour, as long as it keeps arriving at about 2 Mbit/s or faster (slower than that for a whole minute, and the fetch is abandoned). Later runs reuse the prepared audio.
 
 ## API
 

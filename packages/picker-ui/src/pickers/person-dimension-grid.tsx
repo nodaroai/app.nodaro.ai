@@ -17,6 +17,8 @@ import { cn } from "../lib/cn"
 import { ColorSwatch } from "./color-swatch"
 import { getPersonSwatch } from "./color-swatches"
 import { MultiPickBadge } from "./multi-pick-ui"
+import { CharacterArtTile, characterArtGridClass } from "./character-art-tile"
+import { characterArtShape, characterArtUrl, type CharacterArtShape } from "../icons/character-art"
 import {
   FacialHairIcon,
   FaceShapeIcon,
@@ -40,20 +42,33 @@ export const COMPACT_GROUP_LABELS: Record<string, string> = {
 }
 const compactGroupLabel = (g: string): string => COMPACT_GROUP_LABELS[g] ?? g
 
-export function renderEntryIcon(dimension: PersonDimension, entry: Person): JSX.Element | null {
-  if (dimension === "facial-hair") return <FacialHairIcon facialHairId={entry.id} className="size-6" />
-  if (dimension === "face-shape") return <FaceShapeIcon id={entry.id} className="size-6" />
-  if (dimension === "jawline") return <JawlineIcon id={entry.id} className="size-6" />
+export function renderEntryIcon(dimension: PersonDimension, entry: Person, className = "size-6"): JSX.Element | null {
+  if (dimension === "facial-hair") return <FacialHairIcon facialHairId={entry.id} className={className} />
+  if (dimension === "face-shape") return <FaceShapeIcon id={entry.id} className={className} />
+  if (dimension === "jawline") return <JawlineIcon id={entry.id} className={className} />
   if (
     dimension === "eye-shape" ||
     dimension === "eyelid-type" ||
     dimension === "canthal-tilt" ||
     dimension === "eye-spacing"
   )
-    return <EyeShapeIcon id={entry.id} className="size-6" />
-  if (dimension === "nose" || dimension === "nose-tip") return <NoseIcon id={entry.id} className="size-6" />
-  if (dimension === "lip-fullness" || dimension === "lip-shape") return <LipsIcon id={entry.id} className="size-6" />
+    return <EyeShapeIcon id={entry.id} className={className} />
+  if (dimension === "nose" || dimension === "nose-tip") return <NoseIcon id={entry.id} className={className} />
+  if (dimension === "lip-fullness" || dimension === "lip-shape") return <LipsIcon id={entry.id} className={className} />
   return null
+}
+
+/**
+ * The photo shape a dimension's tiles use, or undefined when none of its
+ * entries has a photo (a deployment's pack dimension, say) — those keep the
+ * compact chip grid. Read from the whole dimension, not the search results,
+ * so the layout never flips while the user types.
+ */
+export function personPhotoShape(dimension: PersonDimension): CharacterArtShape | undefined {
+  const hasPhotos = (getRegisteredPeople() as readonly Person[]).some(
+    (p) => p.dimension === dimension && characterArtUrl("person", p.id) !== undefined,
+  )
+  return hasPhotos ? characterArtShape("person", dimension) : undefined
 }
 
 export function EntryChip({
@@ -71,6 +86,7 @@ export function EntryChip({
   onPick,
   onActivateMulti,
   onDemoteToSingle,
+  photoShape,
 }: {
   readonly dimension: PersonDimension
   readonly entry: Person
@@ -88,20 +104,63 @@ export function EntryChip({
   readonly onPick: (id: string) => void
   readonly onActivateMulti: (id: string) => void
   readonly onDemoteToSingle: (id: string) => void
+  /** Set when the dimension shows photos: the tile becomes a photo tile of this shape. */
+  readonly photoShape?: CharacterArtShape
 }) {
   const swatch = getPersonSwatch(entry.id)
-  const icon = renderEntryIcon(dimension, entry)
   // Resolved label uses shortLabel as English fallback (compact display); when
   // a localized translation exists, it takes precedence.
   const resolvedLabel = resolveLabel(entry.id, entry.shortLabel ?? entry.label)
   const resolvedDescription = resolveDescription(entry.id, entry.description)
+  const title = enabled ? resolvedDescription : `${resolvedDescription} (click to enable ${label})`
+  const badge =
+    multi && selected ? (
+      <MultiPickBadge
+        mode={isMultiData ? "multi" : "single"}
+        index={selectedIndex}
+        maxSelected={maxSelected}
+        onActivate={() => onActivateMulti(entry.id)}
+        onDemote={() => onDemoteToSingle(entry.id)}
+        // Over a photo the outlined `+` needs a ground to read.
+        className={cn("top-[5px] right-[5px]", !isMultiData && "bg-white dark:bg-[#111114]")}
+      />
+    ) : undefined
+
+  if (photoShape) {
+    return (
+      <CharacterArtTile
+        family="person"
+        id={entry.id}
+        shape={photoShape}
+        label={resolvedLabel}
+        ariaLabel={resolveLabel(entry.id, entry.label)}
+        title={title}
+        selected={selected}
+        multi={multi}
+        onPick={() => onPick(entry.id)}
+        // As before photos: a Person tile never closes the full-screen
+        // settings on a double-click (the Compact popover lives in a portal).
+        stopDoubleClick
+        fallback={
+          swatch ? (
+            <ColorSwatch value={swatch} className="size-10" />
+          ) : (
+            renderEntryIcon(dimension, entry, "size-10 text-gray-500 dark:text-[#9a9aa4]")
+          )
+        }
+        badge={badge}
+      />
+    )
+  }
+
+  const icon = renderEntryIcon(dimension, entry)
   return (
     <div className="relative">
       <button
         type="button"
         role={multi ? "checkbox" : "radio"}
         aria-checked={selected}
-        title={enabled ? resolvedDescription : `${resolvedDescription} (click to enable ${label})`}
+        title={title}
         onClick={() => onPick(entry.id)}
         onDoubleClick={(e) => e.stopPropagation()}
         className={cn(
@@ -157,6 +216,7 @@ export function TabbedEntryGrid({
   onPick,
   onActivateMulti,
   onDemoteToSingle,
+  photoShape,
 }: {
   readonly dimension: PersonDimension
   readonly entries: ReadonlyArray<Person>
@@ -171,6 +231,8 @@ export function TabbedEntryGrid({
   readonly onPick: (id: string) => void
   readonly onActivateMulti: (id: string) => void
   readonly onDemoteToSingle: (id: string) => void
+  /** The dimension's photo shape (see personPhotoShape); undefined keeps chips. */
+  readonly photoShape?: CharacterArtShape
 }) {
   const { groupOrder, byGroup } = useMemo(() => {
     const order: string[] = []
@@ -216,7 +278,7 @@ export function TabbedEntryGrid({
   const activeEntries = byGroup.get(effectiveActive) ?? []
 
   return (
-    <div className={cn("flex flex-col gap-2 transition-opacity", !checked && "opacity-40")}>
+    <div className={cn("flex flex-col gap-2 transition-opacity", !checked && !photoShape && "opacity-40")}>
       {/* Group tabs — underline style (active group sits on a pink underline,
           inactive groups are bare text). Reads cleaner than boxed buttons
           when there are 7+ groups stacking. */}
@@ -266,7 +328,7 @@ export function TabbedEntryGrid({
       <div
         role={multi ? "group" : "radiogroup"}
         aria-label={`${label} — ${effectiveActive}`}
-        className="grid grid-cols-3 gap-1.5"
+        className={photoShape ? characterArtGridClass(photoShape) : "grid grid-cols-3 gap-1.5"}
       >
         {activeEntries.map((entry) => {
           const idx = selectedIds.indexOf(entry.id)
@@ -287,6 +349,7 @@ export function TabbedEntryGrid({
               onPick={onPick}
               onActivateMulti={onActivateMulti}
               onDemoteToSingle={onDemoteToSingle}
+              photoShape={photoShape}
             />
           )
         })}
@@ -459,30 +522,28 @@ export function PersonDimensionGrid({
 
   const isAge = dimension === "age"
   const isAgeCustom = isAge && value.age === "age-custom"
+  const photoShape = personPhotoShape(dimension)
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-col gap-2 border-t-[3px] border-border/40">
-        {/* Branded headline as a settings row: label on the left, Switch on
-            the right, space between. Reads like a standard "section · toggle"
-            control instead of a centered banner.
-            border-t on the wrapper + mt-5 on the header give a clear visual
-            divider with breathing room before each section title. */}
-        <div className="flex items-center justify-between gap-2 px-0.5 mt-5">
+    <div className="flex flex-col gap-1.5 @container">
+      <div className="flex flex-col gap-3 border-t border-[#ececf1] pt-4 dark:border-white/[.07]">
+        {/* The music pickers' section row: pink headline, "pick up to N"
+            for a multi-pick setting, and the enable Switch at the end. */}
+        <div className="flex items-center gap-2.5 px-0.5">
           <label
             htmlFor={switchId}
             className={cn(
-              "text-[18px] font-semibold uppercase tracking-wide select-none cursor-pointer transition-colors",
+              "select-none text-[15px] font-bold uppercase tracking-[.02em] transition-colors @min-[520px]:text-[17px]",
+              onToggleEnabled ? "cursor-pointer" : "cursor-default",
               checked ? "text-[#ff0073]" : "text-muted-foreground/60",
             )}
           >
             {baseLabel}
-            {multi && checked && (
-              <span className="ml-2 text-[10px] font-normal normal-case tracking-normal text-muted-foreground">
-                pick up to {maxSelected}
-              </span>
-            )}
           </label>
+          {multi && (
+            <span className="text-[10px] text-[#6b6b75] dark:text-[#9a9aa6]">pick up to {maxSelected}</span>
+          )}
+          <div className="flex-1" />
           {onToggleEnabled && (
             <Switch
               id={switchId}
@@ -500,6 +561,7 @@ export function PersonDimensionGrid({
                 }
               }}
               aria-label={`Enable ${baseLabel}`}
+              className="data-[state=checked]:bg-[#ff0073]"
             />
           )}
         </div>
@@ -518,12 +580,19 @@ export function PersonDimensionGrid({
             onPick={pick}
             onActivateMulti={activateMulti}
             onDemoteToSingle={demoteToSingle}
+            photoShape={photoShape}
           />
         ) : (
           <div
             role={multi ? "group" : "radiogroup"}
             aria-label={label}
-            className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}
+            className={cn(
+              photoShape ? characterArtGridClass(photoShape) : "grid grid-cols-3 gap-1.5",
+              "transition-opacity",
+              // Photos stay at full strength: a click picks straight away, and
+              // the grey headline + switch already say the setting is off.
+              !checked && !photoShape && "opacity-40",
+            )}
           >
             {entries.map((entry) => {
               const idx = selectedIds.indexOf(entry.id)
@@ -544,6 +613,7 @@ export function PersonDimensionGrid({
                   onPick={pick}
                   onActivateMulti={activateMulti}
                   onDemoteToSingle={demoteToSingle}
+                  photoShape={photoShape}
                 />
               )
             })}

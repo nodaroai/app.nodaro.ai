@@ -34,6 +34,7 @@ import {
 } from "./types";
 import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, RUN_START_RESET } from "./poll-job";
 import { shouldAbandonNode } from "./abandon-guard";
+import { tx } from "@/lib/i18n";
 
 /** Extract kieTaskId from output data for downstream video chaining. */
 const extractKieTaskId = (od: Record<string, unknown>) => {
@@ -536,8 +537,8 @@ export function runScriptGeneration(
           resolve("");
           return;
         }
-        guardedToast.info("Script generation started", {
-          description: `Job ID: ${jobId}`,
+        guardedToast.info(tx("nodeRun.scriptGenerationStarted"), {
+          description: tx("run.jobIdLine", { id: jobId }),
         });
         updateNodeData(nodeId, { currentJobId: jobId });
 
@@ -590,7 +591,7 @@ export function runScriptGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                 });
-                guardedToast.success("Script generated", {
+                guardedToast.success(tx("nodeRun.scriptGenerated"), {
                   description: script?.title,
                 });
                 resolve(script?.title || "");
@@ -602,7 +603,7 @@ export function runScriptGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                guardedToast.error("Script generation failed", {
+                guardedToast.error(tx("nodeRun.scriptGenerationFailed"), {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
@@ -620,7 +621,7 @@ export function runScriptGeneration(
                   executionStatus: "failed",
                   currentJobId: undefined,
                 });
-                guardedToast.error("Failed to check script generation status");
+                guardedToast.error(tx("nodeRun.failedToCheckScriptGeneration"));
                 reject(err);
               }
             }
@@ -633,8 +634,8 @@ export function runScriptGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          guardedToast.error("Failed to start script generation", {
-            description: err instanceof Error ? err.message : "Unknown error",
+          guardedToast.error(tx("apiErr.startScriptGeneration"), {
+            description: err instanceof Error ? err.message : tx("lib.unknownError"),
           });
         }
         reject(err);
@@ -680,8 +681,8 @@ export function runLottiePlanGeneration(
           resolve("");
           return;
         }
-        guardedToast.info("Lottie generation started", {
-          description: `Job ID: ${jobId}`,
+        guardedToast.info(tx("nodeRun.lottieGenerationStarted"), {
+          description: tx("run.jobIdLine", { id: jobId }),
         });
         updateNodeData(nodeId, { currentJobId: jobId });
 
@@ -718,7 +719,7 @@ export function runLottiePlanGeneration(
                   lottieUrl: job.output_data?.lottieUrl as string | undefined,
                   currentJobId: undefined,
                 });
-                guardedToast.success("Lottie animation generated");
+                guardedToast.success(tx("nodeRun.lottieAnimationGenerated"));
                 resolve("plan-ready");
               } else if (job.status === "failed") {
                 ctx.untrackInterval(poll);
@@ -728,7 +729,7 @@ export function runLottiePlanGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                guardedToast.error("Lottie generation failed", {
+                guardedToast.error(tx("nodeRun.lottieGenerationFailed"), {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
@@ -746,7 +747,7 @@ export function runLottiePlanGeneration(
                   executionStatus: "failed",
                   currentJobId: undefined,
                 });
-                guardedToast.error("Failed to check Lottie generation status");
+                guardedToast.error(tx("nodeRun.failedToCheckLottieGeneration"));
                 reject(err);
               }
             }
@@ -759,8 +760,8 @@ export function runLottiePlanGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          guardedToast.error("Failed to start Lottie generation", {
-            description: err instanceof Error ? err.message : "Unknown error",
+          guardedToast.error(tx("nodeRun.failedToStartLottieGeneration"), {
+            description: err instanceof Error ? err.message : tx("lib.unknownError"),
           });
         }
         reject(err);

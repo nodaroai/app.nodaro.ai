@@ -1,5 +1,12 @@
-import { SOUND_ART } from "./sound-art-map"
-import { SOUND_ART_FILES } from "./sound-art-files.generated"
+import {
+  PICKER_ART_PATH,
+  SOUND_ART,
+  soundArtFilePath,
+  type SoundArtCatalogId,
+  type SoundArtFields,
+  type SoundArtKey,
+  type SoundArtMap,
+} from "@nodaro/prompts"
 
 /**
  * Pictures for the options of the five music / voice pickers (Music Genre,
@@ -8,28 +15,10 @@ import { SOUND_ART_FILES } from "./sound-art-files.generated"
  * The files are self-hosted under `frontend/public/picker-art/` (Fluent Emoji
  * 3D and flag-icons, both MIT — see the LICENSE.txt beside them), so they load
  * same-origin in every edition, offline installs included. Their names carry a
- * content hash, which is what lets the server cache them as immutable.
+ * content hash, which is what lets the server cache them as immutable. The map
+ * lives in @nodaro/prompts (picker-art/), the single source the API reads too.
  */
-
-/** The dimension fields of each catalog that carries art. */
-export interface SoundArtFields {
-  "music-genre": "genre" | "subgenre" | "era"
-  "music-mood": "energy" | "emotion" | "vibe"
-  instrumentation: "instruments" | "production" | "vocalPresence" | "singingStyle"
-  "voice-character": "age" | "gender" | "language" | "accent" | "timbre"
-  "voice-delivery": "pace" | "emotion" | "archetype"
-}
-
-export type SoundArtCatalogId = keyof SoundArtFields
-
-/** `emoji/<slug>` or `flags/<code>` — a key of SOUND_ART_FILES. */
-export type SoundArtKey = `emoji/${string}` | `flags/${string}`
-
-export type SoundArtMap = {
-  readonly [C in SoundArtCatalogId]: {
-    readonly [F in SoundArtFields[C]]: Readonly<Record<string, SoundArtKey>>
-  }
-}
+export type { SoundArtCatalogId, SoundArtFields, SoundArtKey, SoundArtMap }
 
 /** Which catalog dimension a picker section renders — typos fail `tsc`. */
 export type SoundArtRef = {
@@ -42,11 +31,10 @@ export interface SoundArt {
 }
 
 /** Root-relative, so the picture is always served by the app's own origin. */
-export const SOUND_ART_BASE = "/picker-art/"
+export const SOUND_ART_BASE = PICKER_ART_PATH
 
 export function soundArtUrl(key: SoundArtKey): string | undefined {
-  const file = (SOUND_ART_FILES as Readonly<Record<string, string>>)[key]
-  return file ? SOUND_ART_BASE + file : undefined
+  return soundArtFilePath(key)
 }
 
 /** The picture for one option, or undefined (the tile then shows its label only). */

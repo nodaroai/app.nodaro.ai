@@ -43,11 +43,14 @@
  * the budget grows with the source COUNT only (2 sources ≈ 3 h, 6 ≈ 9 h of
  * hung-detector bound; a real run on cached proxies takes seconds per source).
  *
- * Pure: imports only the apply-edl and audio-sync budget leaves and the
- * engine's constants.
+ * silence-detect joins with Track 0.19: its media proxy's source fetch now runs
+ * under the big-media limits (up to an hour for a multi-gigabyte original),
+ * which the 90-minute default no longer covers — a fixed ~2 h bound.
+ * Pure: imports only the budget leaves and the engine's constants.
  */
 import { applyEdlJobBudgetMs } from "../providers/video/apply-edl-budget.js"
 import { audioSyncJobBudgetMs } from "../providers/audio/audio-sync-budget.js"
+import { silenceDetectJobBudgetMs } from "../providers/audio/silence-detect-budget.js"
 import {
   NODE_TIMEOUT_MS,
   POLL_ABSOLUTE_TIMEOUT_MS,
@@ -60,6 +63,7 @@ type JobBudgetFn = (data: unknown) => number | undefined
 const DECLARED_JOB_BUDGETS: Readonly<Record<string, JobBudgetFn>> = Object.freeze({
   "apply-edl": applyEdlJobBudgetMs,
   "audio-sync": audioSyncJobBudgetMs,
+  "silence-detect": silenceDetectJobBudgetMs,
 })
 
 /** Every job name that can declare a budget — the `job_type` filter a row

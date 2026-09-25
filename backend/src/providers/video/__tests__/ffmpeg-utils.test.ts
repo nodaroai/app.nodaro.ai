@@ -96,7 +96,8 @@ vi.mock("node:stream/promises", () => ({
   pipeline: mocks.pipeline,
 }))
 
-vi.mock("node:stream", () => ({
+vi.mock("node:stream", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:stream")>()), // a real Transform (the stall watch)
   Readable: { fromWeb: mocks.readableFromWeb },
 }))
 
@@ -141,6 +142,7 @@ vi.mock("@/lib/config.js", () => ({
 // ---------------------------------------------------------------------------
 
 import {
+  BIG_MEDIA_DOWNLOAD_LIMITS,
   downloadFile,
   runFfmpeg,
   withFfmpegSlot,
@@ -226,7 +228,7 @@ describe("REMOTION_INPUT_VIDEO_ARGS", () => {
 // ===========================================================================
 
 describe("downloadFile", () => {
-  it("uses safeFetch (SSRF-protected) with a 120s timeout", async () => {
+  it("by default uses safeFetch (SSRF-protected) with one flat 120 s timeout — unchanged for the ~60 ordinary callers", async () => {
     mocks.safeFetch.mockResolvedValueOnce({
       ok: true,
       body: {} as never,
@@ -236,6 +238,18 @@ describe("downloadFile", () => {
 
     expect(mocks.safeFetch).toHaveBeenCalledWith("https://example.com/video.mp4", {
       timeoutMs: 120_000,
+    })
+  })
+
+  it("with big-media limits, carries its own abort signal, sets safeFetch's timer past the overall ceiling (a backstop only) and asks for an uncompressed body", async () => {
+    mocks.safeFetch.mockResolvedValueOnce({ ok: true, body: {} as never, headers: new Headers() })
+
+    await downloadFile("https://example.com/video.mp4", "/tmp/out.mp4", { limits: BIG_MEDIA_DOWNLOAD_LIMITS })
+
+    expect(mocks.safeFetch).toHaveBeenCalledWith("https://example.com/video.mp4", {
+      timeoutMs: 60 * 60_000 + 5_000,
+      signal: expect.any(AbortSignal),
+      headers: { "accept-encoding": "identity" },
     })
   })
 

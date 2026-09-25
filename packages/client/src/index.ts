@@ -85,6 +85,8 @@ export {
   type ProjectedCatalog,
   type ProjectedCatalogOption,
   type ProjectedCatalogDimension,
+  type ProjectedCatalogSection,
+  type CatalogsListResponse,
 } from "./resources/catalogs.js"
 export { ModelsResource, type ModelSummary, type ModelsListResult, type ListModelsOptions } from "./resources/models.js"
 export {
@@ -164,6 +166,7 @@ export type {
   PickerDimension,
   PickerCatalog,
   PickerCatalogSummary,
+  PickerCatalogSection,
   GetPickerCatalogOptions,
 } from "./resources/picker-catalogs.js"
 
