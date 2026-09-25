@@ -830,6 +830,130 @@ await check("the 3D capabilities document reports Pro unavailable and no authori
 })
 
 // ---------------------------------------------------------------------------
+// Video Overlay: the local ffmpeg lane
+//
+// Rendered on the install itself — no provider key, no credits — so a keyless
+// community install must run it end to end, refuse a bad timing before any
+// job exists, and fail an unfetchable layer image with a message a node card
+// can show. The fixtures are the repo's demo assets, uploaded through the app:
+// the worker fetches the install's own storage, while a localhost URL is
+// refused by design (SSRF guard), so hosting them on the probe would not work.
+// ---------------------------------------------------------------------------
+
+const OVERLAY_RENDER = "Video Overlay renders on a keyless install — no key, no credits"
+const OVERLAY_REFUSAL = "Video Overlay refuses end ≤ start with a renderable 400"
+const OVERLAY_UNREACHABLE = "a Video Overlay job whose image cannot be fetched fails with a renderable message"
+
+/** Upload one of the repo's demo assets through POST /v1/upload; returns its stored URL. */
+async function uploadDemoAsset(file, mime) {
+  const bytes = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../frontend/public/demo-assets", file))
+  const form = new FormData()
+  form.append("file", new Blob([bytes], { type: mime }), file)
+  const res = await fetch(`${BASE}/v1/upload`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${ctx.token}` },
+    body: form,
+  })
+  const text = await res.text()
+  let json
+  try {
+    json = text ? JSON.parse(text) : undefined
+  } catch {
+    json = undefined
+  }
+  assert(res.status < 300, `uploading ${file} failed (${res.status}): ${text.slice(0, 200)}`)
+  const url = json?.data?.url
+  assert(typeof url === "string" && /^https?:\/\//.test(url), `uploading ${file} returned no url: ${text.slice(0, 200)}`)
+  return url
+}
+
+/** Follow a job until it is completed / failed, or the wait budget runs out. */
+async function waitForJob(jobId) {
+  const deadline = Date.now() + JOB_TIMEOUT_MS
+  let last = null
+  while (Date.now() < deadline) {
+    const { json } = await api(`/v1/jobs/${jobId}/status`, { token: ctx.token })
+    last = json?.data
+    if (last?.status === "failed" || last?.status === "completed") break
+    await new Promise((r) => setTimeout(r, 2000))
+  }
+  return last
+}
+
+await check(OVERLAY_RENDER, async () => {
+  const videoUrl = await uploadDemoAsset("scene-clip.mp4", "video/mp4")
+  ctx.overlayBaseUrl = videoUrl
+  const imageUrl = await uploadDemoAsset("scene-image.jpg", "image/jpeg")
+  const submitted = await api("/v1/video-overlay", {
+    method: "POST",
+    token: ctx.token,
+    body: { videoUrl, layers: [{ imageUrl, start: 0.5, end: 2.5, preset: "card" }] },
+  })
+  assert(submitted.status === 200, `POST /v1/video-overlay expected 200, got ${submitted.status}: ${submitted.text.slice(0, 300)}`)
+  const jobId = submitted.json?.jobId
+  assert(jobId, `no jobId in response: ${submitted.text.slice(0, 200)}`)
+  const last = await waitForJob(jobId)
+  assert(last?.status !== "failed", `job ${jobId} FAILED — the local lane needs no key: "${last?.error_message}"`)
+  assert(last?.status === "completed", `job ${jobId} is "${last?.status}" after ${JOB_TIMEOUT_MS / 1000}s`)
+  const out = last?.output_data?.videoUrl
+  assert(
+    typeof out === "string" && /^https?:\/\//.test(out),
+    `completed job has no output_data.videoUrl: ${JSON.stringify(last?.output_data).slice(0, 200)}`,
+  )
+  const media = await fetch(out)
+  assert(media.ok, `result URL answered ${media.status}: ${out}`)
+  const type = media.headers.get("content-type") ?? ""
+  const bytes = (await media.arrayBuffer()).byteLength
+  assert(type.startsWith("video/"), `result content-type is "${type}", not a video: ${out}`)
+  assert(bytes > 1024, `result is ${bytes} bytes — too small to be a real video: ${out}`)
+  return `completed, ${bytes}B ${type}`
+})
+
+await check(OVERLAY_REFUSAL, async () => {
+  // Refused by the route before any fetch, so the URLs never need to exist.
+  const res = await api("/v1/video-overlay", {
+    method: "POST",
+    token: ctx.token,
+    body: {
+      videoUrl: "https://example.com/overlay-smoke/base.mp4",
+      layers: [{ imageUrl: "https://example.com/overlay-smoke/card.png", start: 3, end: 2 }],
+    },
+  })
+  assert(res.status === 400, `POST /v1/video-overlay expected 400, got ${res.status}: ${res.text.slice(0, 300)}`)
+  assert(
+    res.json?.error?.code === "validation_error",
+    `expected error.code "validation_error", got ${JSON.stringify(res.json?.error?.code)}`,
+  )
+  assert(res.json?.jobId === undefined, `the refusal carried a job handle: ${res.text.slice(0, 200)}`)
+  assertRenderable(res.json?.error?.message, "video-overlay refusal")
+  assert(/after start/.test(res.json.error.message), `the refusal does not name the rule: "${res.json.error.message}"`)
+  return `400 — "${res.json.error.message}"`
+})
+
+await check(OVERLAY_UNREACHABLE, async () => {
+  if (!ctx.overlayBaseUrl) {
+    return skip(OVERLAY_UNREACHABLE, "no uploaded base video — the render check failed before its upload")
+  }
+  const submitted = await api("/v1/video-overlay", {
+    method: "POST",
+    token: ctx.token,
+    // `.invalid` never resolves (RFC 2606): the route accepts it, the worker cannot fetch it.
+    body: { videoUrl: ctx.overlayBaseUrl, layers: [{ imageUrl: "https://overlay-smoke.invalid/card.png", start: 0 }] },
+  })
+  assert(submitted.status === 200, `POST /v1/video-overlay expected 200, got ${submitted.status}: ${submitted.text.slice(0, 300)}`)
+  const jobId = submitted.json?.jobId
+  assert(jobId, `no jobId in response: ${submitted.text.slice(0, 200)}`)
+  const last = await waitForJob(jobId)
+  assert(
+    last?.status === "failed",
+    `job ${jobId} is "${last?.status}" — an unfetchable layer image must fail the job, never render without it or strand`,
+  )
+  assertRenderable(last.error_message, "video-overlay unfetchable-image error_message")
+  assert(/could not be fetched/.test(last.error_message), `the message does not say what failed: "${last.error_message}"`)
+  return `failed with: "${last.error_message}"`
+})
+
+// ---------------------------------------------------------------------------
 
 const failed = results.filter((r) => r.status === "fail")
 const skipped = results.filter((r) => r.status === "skip")

@@ -133,7 +133,7 @@ const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/
  * is the single choke point (both pad sites + the future slideshow reuse),
  * so validation can't be bypassed by a path that skips the route.
  */
-function padHexToFfmpeg(padColor: string): string {
+export function padHexToFfmpeg(padColor: string): string {
   return HEX_COLOR_RE.test(padColor) ? padColor.replace("#", "0x") : "0x000000"
 }
 

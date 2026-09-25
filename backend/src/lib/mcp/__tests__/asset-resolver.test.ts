@@ -163,3 +163,15 @@ describe("resolveAssetId", () => {
     ).rejects.toThrow(/connection reset/)
   })
 })
+
+describe("resolveAssetId — overlay chains", () => {
+  it.each(["image-overlay", "image-collage"])("a %s job resolves as an image (image_overlay → overlay_images)", async (jobType) => {
+    mockJob({ id: "j1", user_id: "u1", job_type: jobType, output_data: { imageUrl: "https://r2/composite.png" } })
+    await expect(resolveAssetId({ assetId: "j1", userId: "u1", expectedKind: "image" })).resolves.toBe("https://r2/composite.png")
+  })
+
+  it("a video-overlay job resolves as a video (overlay_images → add_captions)", async () => {
+    mockJob({ id: "j2", user_id: "u1", job_type: "video-overlay", output_data: { videoUrl: "https://r2/overlaid.mp4" } })
+    await expect(resolveAssetId({ assetId: "j2", userId: "u1", expectedKind: "video" })).resolves.toBe("https://r2/overlaid.mp4")
+  })
+})

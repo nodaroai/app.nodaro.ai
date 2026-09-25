@@ -376,6 +376,12 @@ const CAPTION_TEXT_SEMANTICS_BYTES = 192
 // 186 B of headroom it had before.
 const STUDIO_CLIP_START_END_MODE_BYTES = 89
 const JOB_ENVELOPE_INPUT_BYTES = 256
+// RAISED by overlay_images (Video Overlay) and nothing else — one NEW core,
+// execute-scoped tool. It is UNGATED, so BOTH the cloud/all AND the
+// community/all membership fixtures name it, and the total rises by the
+// tool's full serialized size. measured by this suite: 3_805 B, well under
+// the 8_192 B per-tool budget.
+const VIDEO_OVERLAY_TOOL_BYTES = 3_805
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -406,7 +412,8 @@ export const TOOL_WIRE_BUDGET = {
     CAPTION_DOCTRINE_TO_SKILL_BYTES +
     CAPTION_TEXT_SEMANTICS_BYTES +
     STUDIO_CLIP_START_END_MODE_BYTES +
-    JOB_ENVELOPE_INPUT_BYTES,
+    JOB_ENVELOPE_INPUT_BYTES +
+    VIDEO_OVERLAY_TOOL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

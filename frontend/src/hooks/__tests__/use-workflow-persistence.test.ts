@@ -103,7 +103,8 @@ vi.mock("@/hooks/use-workflow-store", () => {
 // Import under test (after mocks)
 // ---------------------------------------------------------------------------
 
-import { useWorkflowPersistence, TERMINAL_RESTORABLE_STATUSES, executionSettledAt } from "../use-workflow-persistence"
+import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
+import { useWorkflowPersistence, TERMINAL_RESTORABLE_STATUSES, executionSettledAt, applyCompletedExecutionResults, applyBackendExecutionState } from "../use-workflow-persistence"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1801,5 +1802,108 @@ describe("Scene3D workflow reload", () => {
     expect(byId.recorded.sceneHistory).toEqual(recorded)
     expect(byId.recorded.scenePendingPlan).toBeUndefined()
     expect(manual.revisionId).toBe(REV_A)
+  })
+})
+
+describe("applyCompletedExecutionResults — Video Overlay run facts", () => {
+  it("a run that finished while the editor was closed lands its warnings, canvas and length on the node and the result", () => {
+    const skipped = { layer: 1, slot: 2, code: "skipped", detail: "starts at 9 s, after the video ends (5.00 s)" }
+    const nodes = [{ id: "vo", type: "video-overlay", position: { x: 0, y: 0 }, data: { label: "Video Overlay" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+    const [out] = applyCompletedExecutionResults(
+      nodes,
+      { vo: { status: "completed", output: { videoUrl: "https://cdn/o.mp4", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 } } },
+      null,
+    )
+    const data = out!.data as Record<string, unknown>
+    expect(data).toMatchObject({ generatedVideoUrl: "https://cdn/o.mp4", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 })
+    expect((data.generatedResults as Array<Record<string, unknown>>)[0]).toMatchObject({ url: "https://cdn/o.mp4", warnings: [skipped] })
+  })
+
+  it("stamps the freshness key a backend run carried on the node and the result", () => {
+    const nodes = [{ id: "vo", type: "video-overlay", position: { x: 0, y: 0 }, data: { label: "Video Overlay" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+    const [out] = applyCompletedExecutionResults(nodes, { vo: { status: "completed", output: { videoUrl: "https://cdn/k.mp4", resultCompositionKey: "K1" } } }, null)
+    const data = out!.data as Record<string, unknown>
+    expect(data.resultCompositionKey).toBe("K1")
+    expect((data.generatedResults as Array<Record<string, unknown>>)[0]).toMatchObject({ url: "https://cdn/k.mp4", resultCompositionKey: "K1" })
+  })
+})
+
+// A list fan-out's rows are separate compositions (one per list item): each row
+// carries the key of the composition that produced it (row-aligned with
+// listResults), never the node's.
+describe("Video Overlay list fan-out rows — each row's own freshness key (both load-time lanes)", () => {
+  const nodes = () => [{ id: "vo", type: "video-overlay", position: { x: 0, y: 0 }, data: { label: "Video Overlay" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+  const state = {
+    status: "completed" as const,
+    output: {
+      videoUrl: "https://cdn/a.mp4",
+      resultCompositionKey: "KA",
+      listResults: ["https://cdn/a.mp4", "", "https://cdn/c.mp4"],
+      listResultCompositionKeys: ["KA", "", "KC"],
+    },
+  }
+  const rowKeys = (data: Record<string, unknown>) =>
+    Object.fromEntries((data.generatedResults as Array<Record<string, unknown>>).map((r) => [r.url, r.resultCompositionKey]))
+
+  it("applyCompletedExecutionResults (a run that finished while the editor was closed)", () => {
+    const [out] = applyCompletedExecutionResults(nodes(), { vo: state }, null)
+    expect(rowKeys(out!.data as Record<string, unknown>)).toEqual({ "https://cdn/a.mp4": "KA", "https://cdn/c.mp4": "KC" })
+  })
+
+  it("applyBackendExecutionState (a reload while the run is still active)", () => {
+    const [out] = applyBackendExecutionState(nodes(), { vo: state })
+    expect(rowKeys(out!.data as Record<string, unknown>)).toEqual({ "https://cdn/a.mp4": "KA", "https://cdn/c.mp4": "KC" })
+  })
+})
+
+
+// A single-node Run whose job finished while the tab was closed lands through
+// syncNodeResultsFromDB's completed branch FIRST — once it has a result,
+// reconcile skips the node — so that branch must carry the job's run facts
+// (the freshness key the REST job echoes, warnings, canvas) like every other lane.
+describe("syncNodeResultsFromDB — a Video Overlay single-node Run that finished while the tab was closed", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const skipped = { layer: 1, slot: 2, code: "skipped", detail: "starts after the video ends" }
+  const completedJob = {
+    id: VALID_UUID,
+    status: "completed",
+    output_data: { videoUrl: "https://cdn/vo.mp4", resultCompositionKey: "K1", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 },
+    error_message: null,
+  }
+
+  async function loadWith(generatedResults: Record<string, unknown>[]) {
+    const nodes = [
+      makeNode({
+        id: "vo",
+        type: "video-overlay",
+        data: { label: "Video Overlay", executionStatus: "running", currentJobId: VALID_UUID, generatedResults },
+      }),
+    ]
+    mockGetBatchJobStatus.mockResolvedValue([completedJob])
+    setupSupabaseLoad({ id: "w1", name: "Test", nodes, edges: [], settings: {} })
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+    return getSyncedNodes()[0].data as Record<string, unknown>
+  }
+
+  it("prepends a fresh result stamped with the key the job carried", async () => {
+    const data = await loadWith([])
+    const results = data.generatedResults as Array<Record<string, unknown>>
+    expect(results[0]).toMatchObject({ url: "https://cdn/vo.mp4", jobId: VALID_UUID })
+    expect(videoOverlayResultFresh("K1", results[0])).toBe(true)
+    expect(data).toMatchObject({ resultCompositionKey: "K1", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 })
+  })
+
+  it("stamps the key on the job's existing url-less row when it fills the url", async () => {
+    const data = await loadWith([{ url: "", timestamp: "2026-01-01", jobId: VALID_UUID }])
+    const results = data.generatedResults as Array<Record<string, unknown>>
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({ url: "https://cdn/vo.mp4", warnings: [skipped] })
+    expect(videoOverlayResultFresh("K1", results[0])).toBe(true)
   })
 })

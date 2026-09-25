@@ -189,6 +189,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "video-analysis": { inputs: ["video"], outputs: ["json", "text"] },
   "video-audit": { inputs: ["video", "analysis"], outputs: ["json", "text"] },
   "video-composer": { inputs: ["in"], outputs: ["composition"] },
+  "video-overlay": { inputs: ["video", "overlay", "overlay2", "overlay3", "overlay4", "overlay5", "overlay6", "overlay7", "overlay8", "overlay9", "overlay10", "overlay11", "overlay12"], outputs: ["video-out"] },
   "video-retake": { inputs: ["video", "prompt", "look"], outputs: ["video"] },
   "video-sfx": { inputs: ["prompt", "negative", "video"], outputs: ["video"] },
   "video-to-video": { inputs: ["video", "cinematography", "prompt", "negative", "imageReferences", "audioReferences"], outputs: ["video"] },

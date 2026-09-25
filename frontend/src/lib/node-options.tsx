@@ -1110,6 +1110,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "image-edit-retouch",
     keywords: ["overlay", "logo", "watermark", "badge", "sticker", "composite", "layer", "place image", "banner", "thumbnail"],
   },
+  {
+    type: "video-overlay",
+    label: "Video Overlay",
+    icon: <Layers className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-titles-graphics",
+    keywords: ["overlay", "logo", "watermark", "product shot", "screenshot", "card", "b-roll", "picture-in-picture", "ugc", "badge"],
+  },
   // Processing — Video
   {
     type: "combine-videos",

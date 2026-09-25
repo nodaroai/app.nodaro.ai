@@ -1040,6 +1040,8 @@ const VIDEO_RESULT_TYPES = new Set([
   "speed-ramp",
   "loop-video",
   "fade-video",
+  // Video Overlay: timed image layers over a video — generatedVideoUrl + per-result `url`.
+  "video-overlay",
   "transcode-video",
   "manual-edit",
   // Remove Audio: video in → silent video out (stores generatedVideoUrl).
@@ -1658,6 +1660,23 @@ export function buildNodeOutputFromJobData(
       output.json = plan
       if (Array.isArray(plan)) output.listResults = plan.map((c) => JSON.stringify(c))
     }
+  }
+
+  // Video Overlay: the worker's warnings, output canvas, length and the DAG
+  // run's freshness key ride on the node output, so a backend run (Execute All, Run from here, schedule,
+  // webhook, app) paints the same "Last run" line the single-node Run does.
+  // Type-gated: `width` / `height` / `warnings` are too generic to promote
+  // into DIRECT_OUTPUT_KEYS for every node.
+  if (nodeType === "video-overlay") {
+    if (Array.isArray(outputData.warnings)) output.warnings = outputData.warnings as NodeOutput["warnings"]
+    if (typeof outputData.width === "number" && typeof outputData.height === "number") {
+      output.width = outputData.width
+      output.height = outputData.height
+    }
+    if (typeof outputData.durationSec === "number") output.durationSec = outputData.durationSec
+    // The freshness key a DAG run stamped — the node compares it with its
+    // current settings' key, so this run's result reads fresh, not "Result (old)".
+    if (typeof outputData.resultCompositionKey === "string") output.resultCompositionKey = outputData.resultCompositionKey
   }
 
   // Normalize generatedText -> text (image-to-text, ai-writer store output as generatedText)

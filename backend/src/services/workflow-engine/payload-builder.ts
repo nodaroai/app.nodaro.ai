@@ -2,6 +2,7 @@ import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import {
   pro3DRenderShotStills, assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle, clampEditPlanClipCount } from "@nodaro/shared"
+import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 /**
@@ -184,6 +185,7 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   "speed-ramp": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "loop-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "fade-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "video-overlay": { anyOf: ["videoUrl"], kind: "video", noun: "a base video" },
   "transcode-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "add-captions": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "edit-video-pro": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
@@ -6072,6 +6074,36 @@ export function buildPayload(
         upstreamDuration: resolvedInputs.videoDuration,
         usageLogId,
       })
+
+    case "video-overlay": {
+      // The ONE node → request assembly both engines run (@nodaro/shared):
+      // per slot the wired handle's image, else the layer's own imageUrl; a
+      // wired slot with no settings is the default corner badge (D2 — on this
+      // path an untouched slot is undefined, never {}); empty slots dropped;
+      // `slot` stamped; presets expanded. Then the shared validator: a throw
+      // here lands before the credit reservation (node-executor deletes the
+      // placeholder row), exactly like the route's 400.
+      const overlayData = data as VideoOverlayNodeFields
+      const wiredImageUrls = resolvedInputs.overlayImageUrls ?? []
+      const request = assembleVideoOverlayRequest({
+        videoUrl: resolvedInputs.videoUrl ?? "",
+        data: overlayData,
+        wiredImageUrls,
+      })
+      const verdict = validateVideoOverlayRequest(request)
+      if (!verdict.ok) throw new Error(`Video Overlay: ${formatVideoOverlayError(verdict)}`)
+      // The freshness key the canvas compares against (`resultCompositionKey`):
+      // the SAME shared function over the same inputs the canvas uses — the
+      // resolved base, each slot's `wired ?? imageUrl`, the STORED settings
+      // (never the expanded request). The worker echoes it into output_data,
+      // so a backend run of the current settings reads fresh on the node.
+      const resultCompositionKey = videoOverlayCompositionKey({
+        baseUrl: resolvedInputs.videoUrl,
+        sources: videoOverlaySlotSources(overlayData.layers, wiredImageUrls),
+        data: overlayData,
+      })
+      return ffmpegResult("video-overlay", { jobId, ...request, resultCompositionKey, usageLogId })
+    }
 
     case "fade-video":
       return ffmpegResult("fade-video", {

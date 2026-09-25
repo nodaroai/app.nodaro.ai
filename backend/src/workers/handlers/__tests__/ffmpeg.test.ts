@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
   const mockSpeedRamp = vi.fn().mockResolvedValue("/tmp/speed-work/output.mp4")
   const mockLoopVideo = vi.fn().mockResolvedValue({ outputPath: "/tmp/loop-work/output.mp4" })
   const mockFadeVideo = vi.fn().mockResolvedValue("/tmp/fade-work/output.mp4")
+  const mockRenderVideoOverlay = vi.fn()
   const mockSmartLoopCut = vi.fn().mockResolvedValue({
     videoPath: "/tmp/slc-work/output.mp4", chosenFrameIndex: 184, psnr: 38, sourceFrameCount: 192, fps: 24,
   })
@@ -71,6 +72,7 @@ const mocks = vi.hoisted(() => {
     mockSpeedRamp,
     mockLoopVideo,
     mockFadeVideo,
+    mockRenderVideoOverlay,
     mockSmartLoopCut,
     mockCreateWorkDir,
     mockDownloadFile,
@@ -178,6 +180,10 @@ vi.mock("@/providers/video/loop-video.js", () => ({
 
 vi.mock("@/providers/video/fade-video.js", () => ({
   fadeVideo: mocks.mockFadeVideo,
+}))
+
+vi.mock("@/providers/video/video-overlay.js", () => ({
+  renderVideoOverlay: mocks.mockRenderVideoOverlay,
 }))
 
 vi.mock("../../shared.js", () => ({
@@ -1372,5 +1378,62 @@ describe("combine-videos handler — transitions[] + edgeFades", () => {
     const passed = mocks.mockCombineVideos.mock.calls[0][0] as Record<string, unknown>
     expect(passed.transitions).toBeUndefined()
     expect(passed.edgeFades).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// video-overlay — the handler owns its work dir (spec §4.2 steps 1 and 10)
+// ---------------------------------------------------------------------------
+
+describe("video-overlay handler", () => {
+  const handler = ffmpegHandlers["video-overlay"]
+  const data = { videoUrl: "https://cdn.example/base.mp4", layers: [{ imageUrl: "https://cdn.example/a.png", start: 0 }] }
+  const rendered = {
+    outputPath: "/tmp/video-overlay-work/output.mp4",
+    warnings: [{ layer: 0, code: "clipped", detail: "ends at 9 s, clipped to the video end (5.00 s)" }],
+    width: 1080,
+    height: 1920,
+    durationSec: 5,
+  }
+
+  beforeEach(() => {
+    mocks.mockCreateWorkDir.mockResolvedValueOnce("/tmp/video-overlay-work")
+  })
+
+  it("renders in its own work dir, completes with warnings + canvas + duration, then removes the dir", async () => {
+    mocks.mockRenderVideoOverlay.mockResolvedValueOnce(rendered)
+    await handler(makeJob("video-overlay", data) as never, makeCtx())
+    expect(mocks.mockCreateWorkDir).toHaveBeenCalledWith("video-overlay")
+    expect(mocks.mockRenderVideoOverlay).toHaveBeenCalledWith(expect.objectContaining(data), "/tmp/video-overlay-work")
+    expect(mocks.mockCompleteFfmpegVideoJob).toHaveBeenCalledWith(
+      "/tmp/video-overlay-work/output.mp4",
+      expect.objectContaining({ jobId: "job-1" }),
+      { warnings: rendered.warnings, width: 1080, height: 1920, durationSec: 5 },
+    )
+    expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/video-overlay-work")
+  })
+
+  it("echoes the payload's freshness key (a DAG stamp or the canvas key a REST Run sent) into output_data (resultCompositionKey)", async () => {
+    mocks.mockRenderVideoOverlay.mockResolvedValueOnce(rendered)
+    await handler(makeJob("video-overlay", { ...data, resultCompositionKey: "K1" }) as never, makeCtx())
+    expect(mocks.mockCompleteFfmpegVideoJob).toHaveBeenCalledWith(
+      "/tmp/video-overlay-work/output.mp4",
+      expect.objectContaining({ jobId: "job-1" }),
+      { warnings: rendered.warnings, width: 1080, height: 1920, durationSec: 5, resultCompositionKey: "K1" },
+    )
+  })
+
+  it("removes the work dir when the render refuses (nothing is uploaded)", async () => {
+    mocks.mockRenderVideoOverlay.mockRejectedValueOnce(new Error("layers[0]: image could not be fetched"))
+    await expect(handler(makeJob("video-overlay", data) as never, makeCtx())).rejects.toThrow("layers[0]: image could not be fetched")
+    expect(mocks.mockCompleteFfmpegVideoJob).not.toHaveBeenCalled()
+    expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/video-overlay-work")
+  })
+
+  it("removes the work dir when the upload fails (completeFfmpegVideoJob cleans only on its own success)", async () => {
+    mocks.mockRenderVideoOverlay.mockResolvedValueOnce(rendered)
+    mocks.mockCompleteFfmpegVideoJob.mockRejectedValueOnce(new Error("R2 put failed"))
+    await expect(handler(makeJob("video-overlay", data) as never, makeCtx())).rejects.toThrow("R2 put failed")
+    expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/video-overlay-work")
   })
 })

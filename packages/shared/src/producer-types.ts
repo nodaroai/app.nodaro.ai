@@ -94,6 +94,9 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // is a composition producer — omitting it here is the "cannot connect the
   // outputs" bug, and its `composition` handle is typed separately.
   "pro-3d-render",
+  // Video Overlay: timed image layers over a video in one local FFmpeg pass
+  // (the base audio copied) — emits a video URL on `video-out`.
+  "video-overlay",
 ])
 
 /**

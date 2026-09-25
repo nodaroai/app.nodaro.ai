@@ -1,4 +1,4 @@
-import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData } from "@/types/nodes";
+import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData, ProbedVideoInfo } from "@/types/nodes";
 import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
@@ -61,6 +61,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "assemble-narrated-video": 40,
   "image-collage": 20,
   "image-overlay": 10,
+  "video-overlay": 20,
   "merge-video-audio": 20,
   "trim-audio": 10,
   "split-media": 20,
@@ -519,7 +520,7 @@ export function estimateNodeCredits(
     // (the reserve is computed server-side from the real length), and a stale
     // window only exists for the moment between rewire and the hook's re-probe.
     const probed = node.data.probedYoutube as { url: string; durationSec: number } | undefined
-    const probedWired = node.data.probedVideo as { url: string; durationSec: number } | undefined
+    const probedWired = node.data.probedVideo as ProbedVideoInfo | undefined
     const durationSec =
       (probed && probed.url === node.data.youtubeUrl ? probed.durationSec : undefined) ??
       probedWired?.durationSec
@@ -537,7 +538,7 @@ export function estimateNodeCredits(
     // can only ever quote the same row. No YouTube alternative on this node, so
     // there is no probedYoutube fallback to consider. Unknown duration →
     // buildVideoAuditCreditId's own 600s ceiling composite (never a bare id).
-    const probedWired = node.data.probedVideo as { url: string; durationSec: number } | undefined
+    const probedWired = node.data.probedVideo as ProbedVideoInfo | undefined
     const creditId = buildVideoAuditCreditId({
       analysisProvided: videoAuditAnalysisWired(node.id, edges),
       durationSec: probedWired?.durationSec,
@@ -616,6 +617,7 @@ export const EXECUTABLE_TYPES = new Set([
   "assemble-narrated-video",
   "image-collage",
   "image-overlay",
+  "video-overlay",
   "merge-video-audio",
   "still-to-video",
   "slideshow",

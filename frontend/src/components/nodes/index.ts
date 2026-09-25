@@ -113,6 +113,7 @@ import { ApplyEdlNode } from "./apply-edl-node";
 import { EditPlanNode } from "./edit-plan-node";
 import { ImageCollageNode } from "./image-collage-node";
 import { ImageOverlayNode } from "./image-overlay-node";
+import { VideoOverlayNode } from "./video-overlay-node";
 import { AssembleNarratedVideoNode } from "./assemble-narrated-video-node";
 import { MergeVideoAudioNode } from "./merge-video-audio-node";
 import { AddCaptionsNode } from "./add-captions-node";
@@ -323,6 +324,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "edit-plan": EditPlanNode,
   "image-collage": ImageCollageNode,
   "image-overlay": ImageOverlayNode,
+  "video-overlay": VideoOverlayNode,
   "assemble-narrated-video": AssembleNarratedVideoNode,
   "merge-video-audio": MergeVideoAudioNode,
   "add-captions": AddCaptionsNode,

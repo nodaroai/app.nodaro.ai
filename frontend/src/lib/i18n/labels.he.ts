@@ -138,6 +138,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Assemble Narrated Video": "הרכבת וידאו עם קריינות",
   "Image Collage": "קולאז׳ תמונות",
   "Image Overlay": "שכבת תמונה",
+  "Video Overlay": "שכבה על וידאו",
   "Merge Video & Audio": "מיזוג וידאו ואודיו",
   "Add Captions": "הוספת כתוביות",
   "Resize Video": "שינוי גודל וידאו",

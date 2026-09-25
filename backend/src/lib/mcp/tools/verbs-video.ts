@@ -4,6 +4,7 @@ import { resolveAssetId } from "../asset-resolver.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
+import { registerOverlayImagesVerb } from "./verbs-video-overlay.js"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../../connected-reference-schema.js"
 import {
   parseJobId,
@@ -2433,6 +2434,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       })
     },
   )
+
+  // ── overlay_images (Video Overlay) — its own module ──
+  registerOverlayImagesVerb({ server, session, fastify })
 
   // ── motion_transfer ──
   // Drives a character image with the motion of a driver video. KIE provides

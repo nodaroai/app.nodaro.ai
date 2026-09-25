@@ -1,7 +1,7 @@
 ---
 node_type: video-analysis
-generated_at: 2026-09-21T19:12:09.613Z
-generated_from: 09788c987
+generated_at: 2026-09-24T14:14:07.724Z
+generated_from: e31839944
 ---
 
 # Video Analysis
@@ -22,7 +22,7 @@ generated_from: 09788c987
 - `videoUrl?: string`
 - `youtubeUrl?: string`
 - `probedYoutube?: { url: string; durationSec: number }`
-- `probedVideo?: { url: string; durationSec: number }`
+- `probedVideo?: ProbedVideoInfo`
 - `llmModel?: string`
 - `reasoningEffort?: LlmReasoningEffort`
 - `advancedMode?: boolean`

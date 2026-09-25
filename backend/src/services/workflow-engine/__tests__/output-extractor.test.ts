@@ -887,6 +887,37 @@ describe("extractAllGeneratedResults", () => {
 // masked the whole frame). Covers all three extractor paths.
 // ---------------------------------------------------------------------------
 
+describe("video-overlay run facts on the node output (backend runs)", () => {
+  const warning = { layer: 1, slot: 2, code: "skipped", detail: "starts at 9 s, after the video ends (5.00 s)" }
+
+  it("buildNodeOutputFromJobData copies warnings, the output canvas and the length", () => {
+    const out = buildNodeOutputFromJobData(
+      { videoUrl: "https://cdn/o.mp4", warnings: [warning], width: 1080, height: 1920, durationSec: 5 },
+      "video-overlay",
+    )
+    expect(out).toMatchObject({ videoUrl: "https://cdn/o.mp4", warnings: [warning], width: 1080, height: 1920, durationSec: 5 })
+  })
+
+  it("copies the freshness key the DAG payload stamped (resultCompositionKey) onto the node output", () => {
+    const out = buildNodeOutputFromJobData({ videoUrl: "https://cdn/o.mp4", resultCompositionKey: "K1" }, "video-overlay")
+    expect(out.resultCompositionKey).toBe("K1")
+    // An unstamped job (a REST call that sent no key) carries none.
+    expect(buildNodeOutputFromJobData({ videoUrl: "https://cdn/o.mp4" }, "video-overlay").resultCompositionKey).toBeUndefined()
+    expect(buildNodeOutputFromJobData({ videoUrl: "https://cdn/o.mp4", resultCompositionKey: 7 }, "video-overlay").resultCompositionKey).toBeUndefined()
+  })
+
+  it("is type-gated: another node's width / height / warnings are not promoted", () => {
+    const out = buildNodeOutputFromJobData(
+      { imageUrl: "https://cdn/i.png", warnings: [warning], width: 10, height: 10, durationSec: 1 },
+      "image-overlay",
+    )
+    expect(out.warnings).toBeUndefined()
+    expect(out.width).toBeUndefined()
+    expect(out.durationSec).toBeUndefined()
+    expect(buildNodeOutputFromJobData({ imageUrl: "https://cdn/i.png", resultCompositionKey: "K" }, "image-overlay").resultCompositionKey).toBeUndefined()
+  })
+})
+
 describe("generate-mask dual output (mask vs image handle)", () => {
   it("getPrimaryOutput routes the 'mask' handle to maskUrl, default/'image' to imageUrl", () => {
     const out: NodeOutput = { imageUrl: "https://cdn/src.png", maskUrl: "https://cdn/mask.png" }

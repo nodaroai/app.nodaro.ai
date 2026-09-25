@@ -1557,6 +1557,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "speed-ramp:smooth": 50, // motion-compensated interpolation (minterpolate) — 5-20x slower than fast
   "loop-video": 10,
   "fade-video": 10,
+  // Video Overlay — timed image layers over a video in one local FFmpeg pass
+  // (no provider cost). Flat per run, whatever the layer count or length.
+  "video-overlay": 20,
   // Still to Video — one still + one audio → MP4 via local ffmpeg (no
   // provider cost). Deliberately ZERO credits: the free bridge from a still
   // into the video pipeline. The 0-cost reservation path still creates a

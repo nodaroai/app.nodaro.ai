@@ -5,6 +5,7 @@ import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
+import type { ExpandedVideoOverlayRequest } from "@nodaro/shared"
 import type { Pro3DRenderQuote, Pro3DRenderSource, ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
 import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
 export type { CommunityCard } from "@nodaro/shared"
@@ -3391,6 +3392,27 @@ export async function imageOverlayApi(params: {
     body,
     workflowId: true,
     label: "Failed to start image overlay",
+  })
+}
+
+/**
+ * Video Overlay: a base video + 1–20 timed image layers → one MP4 (local
+ * FFmpeg). The body is the shared wire contract — the canvas builds it with
+ * `assembleVideoOverlayRequest` (@nodaro/shared), the same assembly the DAG
+ * engine runs — so `slot` rides on every layer and worker messages name it.
+ */
+export async function videoOverlayApi(
+  params: ExpandedVideoOverlayRequest & {
+    userId?: string
+    /** The canvas's freshness key — echoed into the job's output_data (a result restored after a reload reads fresh). */
+    resultCompositionKey?: string
+  },
+): Promise<{ jobId: string }> {
+  const { userId, ...request } = params
+  return apiJson("/v1/video-overlay", {
+    body: { ...request, ...(userId ? { userId } : {}) },
+    workflowId: true,
+    label: "Failed to start video overlay",
   })
 }
 

@@ -1,4 +1,4 @@
-import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, resolveTopazUpscale, applyDefaultVideoSelection } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
@@ -457,7 +457,7 @@ export function getModelIdentifier(
   // bucket (never the smart ceiling).
   if (nodeType === "video-analysis") {
     const probedYoutube = data.probedYoutube as { url: string; durationSec: number } | undefined
-    const probedVideo = data.probedVideo as { url: string; durationSec: number } | undefined
+    const probedVideo = data.probedVideo as ProbedVideoInfo | undefined
     const durationSec =
       (probedYoutube && probedYoutube.url === data.youtubeUrl ? probedYoutube.durationSec : undefined) ??
       probedVideo?.durationSec
@@ -473,7 +473,7 @@ export function getModelIdentifier(
   // from the EDGES (videoAuditAnalysisWired); the duration from the node's
   // url-bound probe, exactly as estimateNodeCredits reads them.
   if (nodeType === "video-audit") {
-    const probedVideo = data.probedVideo as { url: string; durationSec: number } | undefined
+    const probedVideo = data.probedVideo as ProbedVideoInfo | undefined
     return buildVideoAuditCreditId({
       analysisProvided: videoAuditAnalysisWired(node.id, edges),
       durationSec: probedVideo?.durationSec,

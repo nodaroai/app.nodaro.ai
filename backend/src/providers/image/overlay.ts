@@ -27,7 +27,15 @@ import sharp from "sharp"
 import { cleanupWorkDir, createWorkDir, downloadFile, withFfmpegSlot } from "../video/ffmpeg-utils.js"
 import { settledWithLimit } from "../../lib/settled-with-limit.js"
 import { probeImageSize } from "./collage.js"
-import { OVERLAY_MAX_LAYERS, OVERLAY_HANDLE_IDS, OVERLAY_MAX_LAYER_EDGE, OVERLAY_PIXEL_LIMIT } from "./overlay-contract.js"
+import {
+  OVERLAY_MAX_LAYERS,
+  OVERLAY_HANDLE_IDS,
+  OVERLAY_MAX_LAYER_EDGE,
+  OVERLAY_PIXEL_LIMIT,
+  OVERLAY_MAX_DOWNLOAD_BYTES,
+  OVERLAY_MAX_TOTAL_LAYER_PIXELS,
+} from "./overlay-contract.js"
+import { isSvgBuffer as isSvg } from "./svg-sniff.js"
 import {
   OVERLAY_ANCHORS,
   type OverlayAnchor,
@@ -60,9 +68,9 @@ const MAX_CANVAS_EDGE = 8192
 const PIXEL_LIMIT = OVERLAY_PIXEL_LIMIT
 /** Sum of every layer box (px) one job may rasterise — 12 full-bleed 8K layers
  *  would otherwise hold ~3 GB of PNG buffers for one flat-priced run. */
-const MAX_TOTAL_LAYER_PIXELS = 400_000_000
+const MAX_TOTAL_LAYER_PIXELS = OVERLAY_MAX_TOTAL_LAYER_PIXELS
 /** Per-file download cap — matches the upload route's image limit. */
-const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024
+const MAX_DOWNLOAD_BYTES = OVERLAY_MAX_DOWNLOAD_BYTES
 /** The sharp phase runs inside the shared ffmpeg slot; a runaway render must
  *  not hold that slot forever. */
 const RENDER_TIMEOUT_MS = 180_000
@@ -358,14 +366,6 @@ function toSharpColor(hex: string, alpha = 1): { r: number; g: number; b: number
   const raw = hex.replace(/^#/, "")
   const ok = /^[0-9a-fA-F]{6}$/.test(raw) ? raw : "000000"
   return { r: parseInt(ok.slice(0, 2), 16), g: parseInt(ok.slice(2, 4), 16), b: parseInt(ok.slice(4, 6), 16), alpha }
-}
-
-function isSvg(buf: Buffer): boolean {
-  // 4 KB, not 512 B: a licence comment or a long XML preamble before <svg>
-  // must not demote a vector logo to the raster path (blurry — the exact bug
-  // this node exists to avoid).
-  const head = buf.subarray(0, 4096).toString("utf8").trimStart()
-  return head.startsWith("<svg") || (head.startsWith("<?xml") && head.includes("<svg")) || (head.startsWith("<!--") && head.includes("<svg"))
 }
 
 /**

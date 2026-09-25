@@ -61,6 +61,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "face": { faceRef: "face" },
   "face-swap": { video: "video" },
   "fade-video": { video: "video" },
+  "video-overlay": { "video-out": "video" },
   "still-to-video": { video: "video" },
   "gif-to-video": { video: "video" },
   "slideshow": { video: "video" },

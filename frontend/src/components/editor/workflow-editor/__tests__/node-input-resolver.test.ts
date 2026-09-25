@@ -1339,3 +1339,42 @@ describe("resolveNodeInputs — video-to-video reference handles", () => {
     expect(inputs.referenceAudioUrls).toEqual(["https://ref.mp3"])
   })
 })
+
+// ---------------------------------------------------------------------------
+// video-overlay — routed by TARGET HANDLE, never by source type: the frontend
+// twin of backend video-overlay-wiring.test.ts's resolver cases (spec §6 row
+// 18). A drift between the two resolvers would otherwise go unnoticed.
+// ---------------------------------------------------------------------------
+
+describe("resolveNodeInputs — video-overlay", () => {
+  const edge = (source: string, targetHandle: string | null) => ({
+    id: `${source}->vo:${targetHandle ?? ""}`, source, target: "vo", sourceHandle: null, targetHandle,
+  })
+
+  it("routes the base to videoUrl, each layer handle to its index, and layerPlan aside", () => {
+    const target = makeNode("vo", "video-overlay")
+    const base = makeNode("b", "upload-video", { url: "https://x/base.mp4" })
+    const l1 = makeNode("l1", "upload-image", { url: "https://x/card1.png" })
+    const l3 = makeNode("l3", "upload-image", { url: "https://x/card3.png" })
+    const plan = makeNode("p", "text-prompt", { text: '[{"start":1}]' })
+    const inputs = resolveNodeInputs(
+      target,
+      [base, l1, l3, plan, target],
+      [edge("b", "video"), edge("l1", "overlay"), edge("l3", "overlay3"), edge("p", "layerPlan")] as any,
+    )
+    expect(inputs.videoUrl).toBe("https://x/base.mp4")
+    expect(inputs.overlayImageUrls).toEqual(["https://x/card1.png", undefined, "https://x/card3.png"])
+    expect(inputs.layerPlan).toBe('[{"start":1}]')
+    expect(inputs.imageUrl).toBeUndefined()
+  })
+
+  it("only the real layer handles index a layer; an edge with no handle fills the base while it is empty", () => {
+    const target = makeNode("vo", "video-overlay")
+    const base = makeNode("b", "upload-video", { url: "https://x/base.mp4" })
+    const other = makeNode("o", "upload-video", { url: "https://x/other.mp4" })
+    const stray = makeNode("s", "upload-image", { url: "https://x/stray.png" })
+    const inputs = resolveNodeInputs(target, [base, other, stray, target], [edge("b", null), edge("o", null), edge("s", "overlay13")] as any)
+    expect(inputs.videoUrl).toBe("https://x/base.mp4")
+    expect(inputs.overlayImageUrls).toBeUndefined()
+  })
+})

@@ -19,6 +19,7 @@ import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { NodeDoubleClickAction } from "@/lib/node-double-click-action"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
+import { videoOverlayConnectPatch } from "@/lib/video-overlay-connect"
 import { ensureNodePositions } from "@/lib/node-position"
 import { findNonOverlappingPosition, nodeRect, DEFAULT_PLACEMENT_SIZE } from "@/lib/find-free-position"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
@@ -1375,6 +1376,18 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
         }
       }
 
+      // Video Overlay (D3): a wire into a layer handle CLEARS that layer's own
+      // imageUrl — the wire replaces it, so a stored layer never carries both
+      // and disconnecting later empties the slot instead of resurfacing a
+      // hidden URL. Here, not in the panel: the panel may not be mounted.
+      const videoOverlayTarget = newNodes.find((n) => n.id === connection.target && n.type === "video-overlay")
+      if (videoOverlayTarget) {
+        const patch = videoOverlayConnectPatch(videoOverlayTarget.data as { layers?: unknown }, connection.targetHandle)
+        if (patch) {
+          newNodes = newNodes.map((n) => (n.id === videoOverlayTarget.id ? { ...n, data: { ...n.data, ...patch } } : n))
+        }
+      }
+
       // Collect node (spec §5.2.1): when a new edge connects to a Collect's
       // "in" handle, append the source node id to data.order so the Collect's
       // output preserves connection order (and the config panel reflects it).
@@ -2499,6 +2512,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
         "combine-videos", "merge-video-audio", "add-captions", "resize-video",
         "social-media-format", "trim-video", "render-video", "speed-ramp",
         "loop-video", "fade-video", "transcode-video", "manual-edit", "video-sfx",
+        "video-overlay",
       ])
       // Suno nodes that have a typed `voice` target — used to route legacy
       // suno-voice → suno-* edges to the right slot. Matches the set of

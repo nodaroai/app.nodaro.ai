@@ -5,6 +5,9 @@ import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
+import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
+import { videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output";
+import { VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH, assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources } from "@nodaro/shared";
 import {
   generateMusicApi,
   textToAudioApi,
@@ -60,6 +63,7 @@ import {
   mergeVideoAudioApi,
   imageCollageApi,
   imageOverlayApi,
+  videoOverlayApi,
   assembleNarratedVideo,
   trimAudioApi,
   splitMediaApi,
@@ -188,6 +192,7 @@ import type {
   AssembleNarratedVideoData,
   ImageCollageData,
   ImageOverlayData,
+  VideoOverlayData,
   MergeVideoAudioData,
   TrimAudioData,
   SplitMediaData,
@@ -6570,6 +6575,54 @@ function executeNodeCore(
         ...(typeof od.width === "number" && typeof od.height === "number" ? { width: od.width, height: od.height } : {}),
         overlayComposition: overlayCompositionKey(overlayData),
       }),
+    );
+  }
+
+  if (node.type === "video-overlay") {
+    const d = node.data as VideoOverlayData;
+    // The base is ONLY the resolved `video` handle — never overrideMediaUrl.
+    // list-execution passes every row's URL as the override whichever handle
+    // the list is wired to, so a List of images fanned into a layer handle
+    // would replace the base video (the backend DAG has no override: engine
+    // parity, spec §7). A List wired to `video` still fans out: the resolver
+    // already puts that row's video into inputs.videoUrl. Same as Image Overlay.
+    const baseUrl = inputs.videoUrl;
+    if (!baseUrl) {
+      toast.error(`Node "${d.label}": no base video connected (video handle)`);
+      return Promise.reject(new Error("Video Overlay needs a base video"));
+    }
+    // The ONE assembly both engines run (@nodaro/shared): per slot the wired
+    // image, else the layer's own imageUrl; a wired slot with no settings is
+    // the default corner badge (D2); empty slots dropped; `slot` stamped;
+    // presets expanded. Mirrors backend payload-builder.ts case "video-overlay".
+    const wired = inputs.overlayImageUrls ?? [];
+    const request = assembleVideoOverlayRequest({ videoUrl: baseUrl, data: d, wiredImageUrls: wired });
+    const verdict = validateVideoOverlayRequest(request);
+
+    if (!verdict.ok) {
+      toast.error(`Node "${d.label}": ${videoOverlayIssueText(verdict, tx)}`);
+      return Promise.reject(new Error(formatVideoOverlayError(verdict)));
+    }
+    // Stamped on the result: a later change to the base, a slot's image or any
+    // setting marks it "Result (old)" — the node computes the same key, and a
+    // backend DAG run stamps it too (payload-builder, one shared function).
+    // It also rides on the request (within the route's bound): the worker
+    // echoes it into output_data, so a run that lands after a page reload
+    // (restore / reconcile read the REST job) reads fresh as well.
+    const resultCompositionKey = videoOverlayCompositionKey({ baseUrl, sources: videoOverlaySlotSources(d.layers ?? [], wired), data: d });
+    const sentKey = resultCompositionKey.length <= VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH ? { resultCompositionKey } : {};
+    setUserPromptTemplate(undefined);
+    return runProcessingNode(
+      node.id,
+      () => videoOverlayApi({ ...request, userId: ctx.userId, ...sentKey }),
+      "generatedVideoUrl",
+      "Video Overlay",
+      ctx,
+      // The worker's warnings, output canvas and length ride on the node and the result.
+      // ONE mapping with every backend / restore lane (lib/video-overlay-run-output).
+      // The canvas key goes AFTER the spread: the job echoes the same key, or
+      // none when it was past the route's bound.
+      (od) => ({ ...videoOverlayRunOutputFields(od), resultCompositionKey }),
     );
   }
 

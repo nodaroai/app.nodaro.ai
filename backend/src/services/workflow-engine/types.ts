@@ -6,7 +6,7 @@ import type { MediaItem } from "../social/platforms/index.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import type { Caption } from "@remotion/captions"
 import type { ErrorHint } from "../../lib/safety-block.js"
-import type { NodeExecutionStatus, NodeExecutionStateWire } from "@nodaro/shared"
+import type { NodeExecutionStatus, NodeExecutionStateWire, VideoOverlayWarning } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
@@ -78,6 +78,13 @@ export interface NodeOutput {
    * item / item:N / range / Bundle and every list node index.
    */
   alignedListResults?: string[]
+  /**
+   * Video Overlay list fan-out: each row's own freshness key
+   * (`videoOverlayCompositionKey` of the composition that produced that row),
+   * ROW-ALIGNED with `listResults` — "" where the row has none. Absent when no
+   * iteration carried a key. The canvas stamps each result row with it.
+   */
+  listResultCompositionKeys?: string[]
   /** Selector node `picked` output channel (selected items). */
   pickedResults?: string[]
   /** Selector node `rest` output channel (items NOT picked). */
@@ -133,6 +140,14 @@ export interface NodeOutput {
   panelUrls?: readonly string[]
   /** 3D Render Pro: one still per shot of the exported composition, in shot order. */
   shotStills?: ReadonlyArray<{ shotIndex: number; frame: number; assetId: string; url: string }>
+  /** Video Overlay: the worker's warnings (clipped / skipped / …) — the node's "Last run" line. */
+  warnings?: ReadonlyArray<VideoOverlayWarning>
+  /** Video Overlay: the output canvas and length. */
+  width?: number
+  height?: number
+  durationSec?: number
+  /** Video Overlay: the freshness key the DAG payload stamped (`videoOverlayCompositionKey`). */
+  resultCompositionKey?: string
 }
 
 /**
@@ -314,10 +329,14 @@ export interface ResolvedInputs {
    *  the wire's index-aligned imageSizes array. Mirrors
    *  videoUrlsWithSourceIds; pushed in lockstep with imageUrls. */
   imageUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>
-  /** Image Overlay: overlay image URLs keyed by HANDLE index — overlay → [0],
-   *  overlay2 → [1], … overlay12 → [11]. Sparse when a middle handle is unwired;
-   *  the payload builder skips the holes and aligns data.layers[i] by index. */
+  /** Image Overlay and Video Overlay: layer image URLs keyed by HANDLE index —
+   *  overlay → [0], overlay2 → [1], … overlay12 → [11]. Sparse when a middle
+   *  handle is unwired; the payload builder skips the holes and aligns
+   *  data.layers[i] by index. */
   overlayImageUrls?: (string | undefined)[]
+  /** Video Overlay's reserved JSON layer-plan input (VIDEO_OVERLAY_LAYER_PLAN_HANDLE).
+   *  Routed, never read in v1 — no pip renders for it yet. */
+  layerPlan?: string
   /** Text wired into an image-overlay node's "qrText" handle (fills its fromInput QR layers). */
   overlayQrText?: string
 

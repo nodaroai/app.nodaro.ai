@@ -4144,6 +4144,47 @@ audio, the output duration is the audio's duration (equal split unless
 proportionally, disclosed in the job output). Without audio: N ×
 `perImageDuration`, silent output. For a single image use `stillToVideo`.
 
+#### `videoOverlay(input)`
+
+```ts
+videoOverlay(input: VideoOverlayRequest): Promise<{ jobId: string }>
+
+// VideoOverlayRequest (from @nodaro/shared)
+{
+  videoUrl: string
+  layers: Array<{                 // 1–20
+    imageUrl: string
+    start: number                 // seconds, 0–3600
+    end?: number                  // seconds, after start; omitted = to the end of the video
+    preset?: "card" | "corner-badge" | "full-frame"
+    corner?: "top-left" | "top-right" | "bottom-left" | "bottom-right"   // corner-badge; default bottom-right
+    anchor?: OverlayAnchor        // the nine image-overlay anchors
+    x?: number                    // −100..100, % of the output frame width
+    y?: number                    // −100..100, % of the output frame height
+    width?: number                // 1..100, % of the output frame width
+    height?: number               // 1..100; omitted = follows the image's aspect
+    fit?: "contain" | "cover"
+    opacity?: number              // 0..1
+    animate?: boolean             // default true
+    zIndex?: number               // 0..100
+  }>
+  outputAspect?: "16:9" | "9:16" | "1:1" | "4:5"
+  baseFit?: "contain" | "cover"   // with outputAspect; default cover
+  backgroundColor?: string        // #RRGGBB, with outputAspect; default #000000
+}
+```
+
+Place 1–20 timed image layers over a video (`POST /v1/video-overlay`) —
+locally rendered (FFmpeg) in one pass, **20 credits** per run whatever the
+layer count or length; the base audio is kept untouched. An explicit box
+field overrides the preset, and a layer with neither is a corner badge
+(bottom-right, or the `corner` it names). Without `outputAspect` the output
+keeps the video's own size and frame rate. Poll `jobs.get(jobId)`: the output carries `videoUrl`, `thumbnailUrl`,
+`width`, `height`, `durationSec` and `warnings[]`
+(`{ layer?, slot?, code, detail }` — `clipped`, `skipped`,
+`animated_first_frame`, `audio_reencoded`). Full reference:
+[Video Overlay](./nodes/processing-video/video-overlay.md).
+
 #### `saveToStorage(input)`
 
 ```ts

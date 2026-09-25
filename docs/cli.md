@@ -276,7 +276,7 @@ nodaro voice dub --audio <url> --target-language <code> [--source-language <code
 nodaro voice clones list [--json]                        # clones made before cloning was retired
 nodaro voice clones delete <id> [--json]
 
-# Media — ingestion + compositing: social-video import, trim, caption burn-in, still-to-video, slideshow, image collage, image overlay, save-to-storage, metadata probe
+# Media — ingestion + compositing: social-video import, trim, caption burn-in, still-to-video, slideshow, image collage, image overlay, video overlay, save-to-storage, metadata probe
 nodaro media download <url> [--max-height <px>] [--section <a-b>] [--watch] [--json]
                                                          # YouTube / TikTok / Instagram / X / Facebook → your storage. --section fetches only
                                                          # that time range (seconds). --watch streams live progress (no job to poll later).
@@ -330,6 +330,12 @@ nodaro media overlay <imageUrl> [layerUrls...] [--layers-file <path>] [--anchor 
 nodaro media overlay-placement <imageUrl> [--intent <text>] [--aspect <ratio>] [--safe-area <x,y,w,h>] [--json]
                                                          # asks a vision model WHERE one layer should go and answers in the same percent units —
                                                          # anchor, x, y, width + a one-line reason. Synchronous (no job to poll); one image-to-text call.
+nodaro media video-overlay <videoUrl> [layerUrls...] [--at <start[-end]>...] [--preset card|corner-badge|full-frame] [--corner top-left|top-right|bottom-left|bottom-right] [--layers-file <path>] [--aspect 16:9|9:16|1:1|4:5] [--base-fit cover|contain] [--background-color <hex>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # 1-20 timed image layers over a video in one local FFmpeg render (no AI), 20 credits; the base
+                                                         # audio is kept untouched. One --at per positional layer URL, in order ("3" = from 3 s to the end,
+                                                         # "1.2-2.6"); --preset/--corner apply to every positional layer. --layers-file takes the full API
+                                                         # layers array instead (per-layer boxes, opacity, animate, zIndex). --base-fit and --background-color
+                                                         # need --aspect. See docs/nodes/processing-video/video-overlay.md.
 nodaro media save <url> [--filename <name>] [--type image|video|audio] [--watch] [--poll-interval <ms>] [--json]
 
 # Audio — the primitives Voice Changer Pro composes, standalone, plus speech-to-text

@@ -86,6 +86,7 @@ import { audioFxRoutes } from "./routes/audio-fx.js"
 import { speedRampRoutes } from "./routes/speed-ramp.js"
 import { loopVideoRoutes } from "./routes/loop-video.js"
 import { fadeVideoRoutes } from "./routes/fade-video.js"
+import { videoOverlayRoutes } from "./routes/video-overlay.js"
 import { stillToVideoRoutes } from "./routes/still-to-video.js"
 import { gifToVideoRoutes } from "./routes/gif-to-video.js"
 import { slideshowRoutes } from "./routes/slideshow.js"
@@ -522,6 +523,7 @@ export async function buildApp() {
   await app.register(speedRampRoutes)
   await app.register(loopVideoRoutes)
   await app.register(fadeVideoRoutes)
+  await app.register(videoOverlayRoutes)
   await app.register(stillToVideoRoutes)
   await app.register(gifToVideoRoutes)
   await app.register(slideshowRoutes)

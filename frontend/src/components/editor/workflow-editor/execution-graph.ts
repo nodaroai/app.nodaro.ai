@@ -540,6 +540,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "loop-video" ||
     type === "gif-to-video" ||
     type === "fade-video" ||
+    type === "video-overlay" ||
     type === "manual-edit" ||
     type === "transcode-video" ||
     type === "remove-audio"
@@ -1099,6 +1100,7 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "loop-video",
   "gif-to-video",
   "fade-video",
+  "video-overlay",
   "transcode-video",
   "manual-edit",
   "video-sfx",

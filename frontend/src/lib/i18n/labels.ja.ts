@@ -134,6 +134,7 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Assemble Narrated Video": "ナレーション付き動画を合成",
   "Image Collage": "画像コラージュ",
   "Image Overlay": "画像オーバーレイ",
+  "Video Overlay": "動画オーバーレイ",
   "Merge Video & Audio": "動画とオーディオを結合",
   "Add Captions": "字幕を追加",
   "Resize Video": "動画をリサイズ",

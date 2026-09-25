@@ -244,7 +244,7 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = new Set<string>([
   // never finalizeJobWithMedia.
   "combine-videos", "assemble-narrated-video", "image-collage", "image-overlay",
   "merge-video-audio", "trim-audio", "trim-video", "extract-frame",
-  "speed-ramp", "loop-video", "fade-video", "still-to-video",
+  "speed-ramp", "loop-video", "fade-video", "video-overlay", "still-to-video",
   "gif-to-video", "slideshow", "resize-video", "adjust-volume",
   "audio-fx", "add-captions", "mix-audio", "combine-audio",
   "transcode-video", "social-media-format", "split-media",

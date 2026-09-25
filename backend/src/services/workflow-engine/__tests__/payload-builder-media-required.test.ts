@@ -17,7 +17,7 @@ import type { SimpleNode, ResolvedInputs } from "../types.js"
 /** Measured on frontend/src/components/editor/workflow-editor/execute-node.ts
  *  @ origin/dev d7815542 with the window+regex in the last test below. Bump it
  *  ONLY together with a new table row or a justified PARITY_EXEMPT entry. */
-const FRONTEND_MEDIA_REFUSAL_COUNT = 84 // +2 image-overlay: base image (table row) + overlay layers (the case throws its own); +1 silence-detect (audio/video source, table row); +1 apply-edl (the "connect an EDL" guard over-matches "connect a"; JSON-input guard, exempt below); +1 edit-plan (the "connect a transcript" guard over-matches "connect a"; JSON-input guard, exempt below)
+const FRONTEND_MEDIA_REFUSAL_COUNT = 85 // +1 video-overlay: base video (table row); +2 image-overlay: base image (table row) + overlay layers (the case throws its own); +1 silence-detect (audio/video source, table row); +1 apply-edl (the "connect an EDL" guard over-matches "connect a"; JSON-input guard, exempt below); +1 edit-plan (the "connect a transcript" guard over-matches "connect a"; JSON-input guard, exempt below)
 
 const JOB = "job-media-required"
 const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
@@ -319,6 +319,7 @@ describe("required media inputs", () => {
       "generate-mask",           // :5739 no image connected
       "image-collage",           // :5907 need at least 2 image inputs
       "image-overlay",           // no base image connected + no overlay image connected
+      "video-overlay",           // no base video connected (the layer refusals speak the shared validator's codes)
       "combine-videos",          // :6002 need at least 2 video inputs
       "apply-edl",               // "connect an EDL to the EDL input" — a json-input guard, not media (exempt below)
       "edit-plan",               // "connect a transcript to the Transcript input" — a json-input guard, not media (exempt below)

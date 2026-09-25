@@ -31,6 +31,7 @@ import { combineAudio } from "../../providers/video/combine-audio.js"
 import { speedRamp } from "../../providers/video/speed-ramp.js"
 import { loopVideo } from "../../providers/video/loop-video.js"
 import { fadeVideo } from "../../providers/video/fade-video.js"
+import { renderVideoOverlay, type VideoOverlayJobPayload } from "../../providers/video/video-overlay.js"
 import { stillToVideo } from "../../providers/video/still-to-video.js"
 import { gifToVideo } from "../../providers/video/gif-to-video.js"
 import { slideshow } from "../../providers/video/slideshow.js"
@@ -457,6 +458,29 @@ const handleFadeVideo: HandlerFn = async function handleFadeVideo(job, ctx) {
   const outputPath = await fadeVideo({ videoUrl, fadeIn, fadeInDuration, fadeOut, fadeOutDuration, color })
   await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegVideoJob(outputPath, ctx)
+}
+
+const handleVideoOverlay: HandlerFn = async function handleVideoOverlay(job, ctx) {
+  const payload = job.data as { jobId: string } & VideoOverlayJobPayload
+  console.log(`[worker] video-overlay ${ctx.jobId}: ${payload.layers?.length ?? 0} layer(s)${payload.outputAspect ? `, ${payload.outputAspect}` : ""}`)
+  // The handler owns the work dir (spec §4.2 step 1): completeFfmpegVideoJob
+  // removes it only when its own upload succeeds, so this finally covers a
+  // refused image, a failed render and a failed R2 put alike.
+  const workDir = await createWorkDir("video-overlay")
+  try {
+    const render = await renderVideoOverlay(payload, workDir)
+    await setJobProgress(job, ctx.jobId, 80)
+    await completeFfmpegVideoJob(render.outputPath, ctx, {
+      warnings: render.warnings,
+      width: render.width,
+      height: render.height,
+      durationSec: render.durationSec,
+      // The run's freshness key (a DAG stamp, or the canvas key a REST Run sent) rides to the node (output-extractor / the restore lanes).
+      ...(typeof payload.resultCompositionKey === "string" ? { resultCompositionKey: payload.resultCompositionKey } : {}),
+    })
+  } finally {
+    await cleanupWorkDir(workDir)
+  }
 }
 
 const handleResizeVideo: HandlerFn = async function handleResizeVideo(job, ctx) {
@@ -1442,6 +1466,7 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "speed-ramp": handleSpeedRamp,
   "loop-video": handleLoopVideo,
   "fade-video": handleFadeVideo,
+  "video-overlay": handleVideoOverlay,
   "still-to-video": handleStillToVideo,
   "gif-to-video": handleGifToVideo,
   "slideshow": handleSlideshow,

@@ -50,6 +50,7 @@ import { findRevision, resolveSceneCompletion } from "@/lib/scene3d/revisions"
 import { planRevisionId } from "@/lib/scene3d/plan-view"
 import { isScrapeNodeType, scrapeJobNeedsApplying, scrapeResultPatch } from "@/components/nodes/scrape-result-recovery"
 import { settledBeforeClear } from "@/lib/results-cleared"
+import { videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import type { GeneratedResult, Scene3DRevisionEntry, WorkflowNode } from "@/types/nodes"
 
 /** The single-entry nodeState a completed single-node job carries (backend
@@ -403,12 +404,16 @@ export function buildCompletedResultPatch(
   if (!url) return null
 
   const thumbnailUrl = typeof output.thumbnailUrl === "string" ? output.thumbnailUrl : undefined
-  const result: GeneratedResult = { url, thumbnailUrl, timestamp, jobId }
+  // Video Overlay: the worker's warnings / canvas / length, on the node and the
+  // result — the same mapping every other lane writes (lib/video-overlay-run-output).
+  const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(output) : undefined
+  const result: GeneratedResult = { url, thumbnailUrl, timestamp, jobId, ...(overlayRun ?? {}) }
 
   const patch: Record<string, unknown> = {
     executionStatus: "completed",
     generatedResults: [result],
     activeResultIndex: 0,
+    ...(overlayRun ?? {}),
   }
   if (videoUrl) patch.generatedVideoUrl = videoUrl
   else if (imageUrl) {
