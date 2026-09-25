@@ -231,6 +231,46 @@ describe("F3 bodies (2026-09-25 A/B: F3 arm B)", () => {
   })
 })
 
+describe("F4 bodies (2026-09-25 A/B: F4 arm B)", () => {
+  // building-explosion and vehicle-explosion: the F4 drafts, tidied (first letter lower-cased, final
+  // full stop dropped). Each rendered string below is byte-identical to the clause the winning take was
+  // generated from.
+  const F4_BODIES: Record<string, { term: string; body: string }> = {
+    "building-explosion": {
+      term: "building explosion",
+      body:
+        "the largest structure in the frame detonates in a massive fireball, and debris and dust plume outwar" +
+        "d until they fill the whole picture. The camera stays where it is and the framing does not change. A" +
+        "s the dust cloud clears, the second shot is revealed in its place. The shot ends on the second shot," +
+        " clear and fully resolved, with no dust or debris left. The blast comes from that structure itself, " +
+        "and the second shot appears only as the dust clears",
+    },
+    "vehicle-explosion": {
+      term: "vehicle explosion",
+      body:
+        "a vehicle in the frame bursts into a violent explosion of fire and twisted metal, and the fireball b" +
+        "illows toward the lens until orange flame fills the whole picture. The camera stays where it is and " +
+        "the framing does not change. The flame gives way to thick smoke, and as the smoke parts the second s" +
+        "hot is revealed. The shot ends on the second shot, clear and fully resolved, with no fire or smoke l" +
+        "eft. The explosion comes from that vehicle itself, and the second shot appears only as the smoke par" +
+        "ts",
+    },
+  }
+
+  it.each(Object.keys(F4_BODIES))("%s renders `term (body)` at the tile-default levers", (id) => {
+    const { term, body } = F4_BODIES[id]!
+    expect(getTransitionPromptHint(id)).toBe(body)
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "full", { scope: "shot" })).toBe(`${term} (${body})`)
+  })
+
+  it.each(Object.keys(F4_BODIES))("%s at middle / short / natural", (id) => {
+    const { term, body } = F4_BODIES[id]!
+    expect(composeTransitionHintFromConnections(id, [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      `${term} (${body}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
+    )
+  })
+})
+
 describe("L1 — a cut spans nothing, so `full` adds no clause", () => {
   it.each(INSTANT_IDS)("%s + full renders no position clause", (id) => {
     const out = composeTransitionHintFromConnections(id, [], [], { position: "full", duration: "short", intensity: "natural" })
