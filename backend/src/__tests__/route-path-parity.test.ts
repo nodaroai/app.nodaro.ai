@@ -241,6 +241,7 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   "/v1/telegram-accounts/:p",
   "/v1/telegram-accounts/:p/pause",
   "/v1/telegram-accounts/:p/resume",
+  "/v1/telegram-accounts/:p/chats",
   "/v1/telegram-accounts/consent",
   "/v1/telegram-accounts/login",
   "/v1/telegram-accounts/login/:p",

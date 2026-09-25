@@ -215,7 +215,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "automate-triggers",
     label: "Triggers",
     tab: "automate",
-    types: ["schedule-trigger", "webhook-trigger", "telegram-trigger"],
+    types: ["schedule-trigger", "webhook-trigger", "telegram-trigger", "telegram-account-trigger"],
   },
   {
     id: "automate-get-content",

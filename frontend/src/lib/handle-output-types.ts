@@ -134,6 +134,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   // media alongside server-side) — typed "text" so it wires into prompt/
   // caption inputs. "control" made the labeled Message output unconnectable.
   "telegram-trigger": { out: "text" },
+  "telegram-account-trigger": { out: "text" },
   // The Posts handle emits the recent channel posts' text.
   "telegram-channel-feed": { out: "text" },
   "text-to-audio": { audio: "audio" },

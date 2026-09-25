@@ -9405,6 +9405,21 @@ export async function cancelTelegramLogin(attemptId: string): Promise<void> {
 }
 
 /** `loggedOut: false` means the row is gone but Telegram could not be told — the owner ends it from Devices. */
+/** One of a connected account's chats, as the trigger's chat picker lists them. */
+export interface TelegramChatSummary {
+  readonly chatId: string
+  readonly type: "private" | "group" | "supergroup" | "channel"
+  readonly title: string
+  readonly username?: string
+  readonly lastMessageAt?: string
+  /** No message in 30+ days. */
+  readonly dormant: boolean
+}
+
+export function listTelegramAccountChats(accountId: string): Promise<{ chats: TelegramChatSummary[] }> {
+  return apiRequest(`/v1/telegram-accounts/${encodeURIComponent(accountId)}/chats`, "Failed to load the account's chats")
+}
+
 export function disconnectTelegramAccount(id: string): Promise<{ deleted: boolean; loggedOut: boolean }> {
   return apiRequest(`/v1/telegram-accounts/${encodeURIComponent(id)}`, "Failed to disconnect the account", { method: "DELETE" })
 }

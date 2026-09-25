@@ -219,7 +219,7 @@ function getNodeOutputForPreview(
     return value ? { type: "text", value: value.trim() } : null
   }
 
-  if (t === "telegram-trigger") {
+  if (t === "telegram-trigger" || t === "telegram-account-trigger") {
     const triggerData = d.__triggerData as Record<string, unknown> | undefined
     const fields: Record<string, string> = {
       text: String((triggerData?.text ?? d.text) || ""),
@@ -228,6 +228,8 @@ function getNodeOutputForPreview(
       audioUrl: String((triggerData?.audioUrl ?? d.audioUrl) || ""),
       chatId: String((triggerData?.chatId ?? d.chatId) || ""),
       messageId: String((triggerData?.messageId ?? d.messageId) || ""),
+      senderId: String((triggerData?.senderId ?? d.senderId) || ""),
+      chatType: String((triggerData?.chatType ?? d.chatType) || ""),
     }
     const value = sourceHandle ? fields[sourceHandle] : fields.text
     return value ? { type: classifyPreviewValue(t, value, sourceHandle), value } : null

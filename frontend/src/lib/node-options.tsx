@@ -209,6 +209,16 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "automate-triggers",
   },
   {
+    type: "telegram-account-trigger",
+    label: "Telegram Account Trigger",
+    icon: <Send className="h-4 w-4" />,
+    category: "Triggers",
+    group: "automate-triggers",
+    // Preview: the connected-account feature is admin-only until GA.
+    adminOnly: true,
+    keywords: ["telegram", "account", "channel", "group", "message", "listen", "userbot"],
+  },
+  {
     type: "telegram-channel-feed",
     label: "Telegram Channel Feed",
     icon: <Rss className="h-4 w-4" />,
