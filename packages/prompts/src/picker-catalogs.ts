@@ -81,7 +81,8 @@ import { ANIMALS, ANIMAL_SUBCATEGORY_LABELS, ANIMAL_SUBCATEGORY_ORDER, getAnimal
 import { VEHICLES, VEHICLE_SUBCATEGORY_LABELS, VEHICLE_SUBCATEGORY_ORDER } from "@nodaro/shared"
 import { WEAPONS, WEAPON_SUBCATEGORY_LABELS, WEAPON_SUBCATEGORY_ORDER } from "@nodaro/shared"
 import { FURNITURE, FURNITURE_SUBCATEGORY_LABELS, FURNITURE_SUBCATEGORY_ORDER } from "@nodaro/shared"
-import type { ProjectedCatalog, ProjectedCatalogOption, ProjectedCatalogDimension } from "@nodaro/shared"
+import type { ProjectedCatalog, ProjectedCatalogOption, ProjectedCatalogDimension, ProjectedCatalogSection } from "@nodaro/shared"
+import { pickerOptionImageUrl, pickerSectionImageUrl, type PickerImageOptions } from "./picker-art/images.js"
 import { HELD_PROPS, HELD_PROP_CATEGORY_LABELS, HELD_PROP_CATEGORY_ORDER } from "./held-prop.js"
 import { FRAMINGS, FRAMING_FIELD_BY_CATEGORY, FRAMING_CATEGORY_LABELS } from "./framing.js"
 import { LIGHTINGS, LIGHTING_FIELD_BY_CATEGORY, LIGHTING_CATEGORY_ORDER, LIGHTING_CATEGORY_LABELS } from "./lighting.js"
@@ -89,6 +90,7 @@ import { TEMPORALS, TEMPORAL_FIELD_BY_CATEGORY, TEMPORAL_CATEGORY_LABELS } from 
 import { EXPOSURE_SETTINGS, EXPOSURE_FIELD_BY_CATEGORY, EXPOSURE_CATEGORY_LABELS } from "./exposure-settings.js"
 import { PEOPLE, PERSON_FIELD_BY_DIMENSION, PERSON_DIMENSION_ORDER, PERSON_DIMENSION_LABELS } from "./person.js"
 import { STYLINGS, STYLING_FIELD_BY_DIMENSION, STYLING_DIMENSION_ORDER, STYLING_DIMENSION_LABELS } from "./styling.js"
+import { catalogTopics } from "./catalog-sections.js"
 import { MUSIC_GENRES, MUSIC_ERAS } from "./music-genre.js"
 import { MUSIC_ENERGIES, MUSIC_EMOTIONS, MUSIC_VIBES } from "./music-mood.js"
 import { INSTRUMENTS, PRODUCTION_STYLES, VOCAL_PRESENCE, SINGING_STYLES } from "./instrumentation.js"
@@ -908,23 +910,41 @@ export interface PickerCatalogSummary {
   readonly fields?: readonly string[]
   /** single: options.length; multi: sum of every dimension's options. */
   readonly optionCount: number
+  /** How many of those options carry an `imageUrl` (0 without picture options). */
+  readonly imageCount: number
 }
 
-/** Lightweight directory of every picker catalog — no option payloads. */
-export function summarizePickerCatalogs(): readonly PickerCatalogSummary[] {
-  return getRegisteredPickerCatalogs().map((c) => ({
-    nodeType: c.nodeType,
-    label: c.label,
-    catalogId: c.catalogId,
-    kind: c.kind,
-    valueField: c.valueField,
-    fields: c.fields,
-    // Every option the detail call will return, whichever kind — a single-dim
-    // catalog with secondary dimensions carries both.
-    optionCount:
-      (c.options?.length ?? 0) +
-      (c.dimensions?.reduce((n, d) => n + d.options.length, 0) ?? 0),
-  }))
+/** Every (field, option) pair a catalog's detail call returns, whichever kind. */
+function everyOption(c: PickerCatalog): ReadonlyArray<{ readonly field: string | undefined; readonly option: PickerOption }> {
+  return [
+    ...(c.options ?? []).map((option) => ({ field: c.valueField, option })),
+    ...(c.dimensions ?? []).flatMap((d) => d.options.map((option) => ({ field: d.field, option }))),
+  ]
+}
+
+/**
+ * Lightweight directory of every picker catalog — no option payloads. With
+ * `images`, `imageCount` says how many options the detail call pictures.
+ */
+export function summarizePickerCatalogs(opts: { readonly images?: PickerImageOptions } = {}): readonly PickerCatalogSummary[] {
+  return getRegisteredPickerCatalogs().map((c) => {
+    const all = everyOption(c)
+    const images = opts.images
+    return {
+      nodeType: c.nodeType,
+      label: c.label,
+      catalogId: c.catalogId,
+      kind: c.kind,
+      valueField: c.valueField,
+      fields: c.fields,
+      // Every option the detail call will return, whichever kind — a single-dim
+      // catalog with secondary dimensions carries both.
+      optionCount: all.length,
+      imageCount: images
+        ? all.filter(({ field, option }) => pickerOptionImageUrl(c, field, option.id, images) !== undefined).length
+        : 0,
+    }
+  })
 }
 
 export type PickerCatalogDetail = "compact" | "full"
@@ -936,6 +956,12 @@ export interface ProjectPickerCatalogOptions {
   readonly category?: string
   /** multi-dim: keep only this dimension field. */
   readonly field?: string
+  /**
+   * Attach each option's absolute `imageUrl` (and the Person / Styling topic
+   * pictures). Left out, no option carries one — the caller (the API) knows
+   * which host this installation is reached at, the package does not.
+   */
+  readonly images?: PickerImageOptions
 }
 
 // The projection shape now lives in `@nodaro/shared` (Apache) as the tag-free
@@ -946,10 +972,12 @@ export type ProjectedPickerOption = ProjectedCatalogOption
 export type ProjectedPickerDimension = ProjectedCatalogDimension
 export type ProjectedPickerCatalog = ProjectedCatalog
 
-function projectOption(o: PickerOption, detail: PickerCatalogDetail): ProjectedPickerOption {
+function projectOption(o: PickerOption, detail: PickerCatalogDetail, imageUrl?: string): ProjectedPickerOption {
   // `term` rides at BOTH detail levels: a thin client renders `label` and
   // injects `term`, so compact must carry it — it is what makes compact hint
-  // mode possible without a second round-trip for the full payload.
+  // mode possible without a second round-trip for the full payload. So does
+  // `imageUrl` (display data), present only when the option has a picture.
+  const extras = { ...(o.motion ? { motion: o.motion } : {}), ...(imageUrl ? { imageUrl } : {}) }
   return detail === "full"
     ? {
         id: o.id,
@@ -959,9 +987,25 @@ function projectOption(o: PickerOption, detail: PickerCatalogDetail): ProjectedP
         promptHint: o.promptHint,
         term: o.term,
         icon: o.icon,
-        ...(o.motion ? { motion: o.motion } : {}),
+        ...extras,
       }
-    : { id: o.id, label: o.label, category: o.category, term: o.term, icon: o.icon, ...(o.motion ? { motion: o.motion } : {}) }
+    : { id: o.id, label: o.label, category: o.category, term: o.term, icon: o.icon, ...extras }
+}
+
+/**
+ * The topics a catalog's settings are grouped under in the editor (Person,
+ * Styling), as node-data fields; only the fields the catalog has are listed.
+ */
+function catalogSections(c: PickerCatalog, images: PickerImageOptions | undefined): ProjectedCatalogSection[] | undefined {
+  const source = catalogTopics(c.catalogId)
+  if (!source) return undefined
+  const present = new Set((c.dimensions ?? []).map((d) => d.field))
+  return source
+    .map((s) => {
+      const imageUrl = images ? pickerSectionImageUrl(s.label, images) : undefined
+      return { label: s.label, fields: s.fields.filter((f) => present.has(f)), ...(imageUrl ? { imageUrl } : {}) }
+    })
+    .filter((s) => s.fields.length > 0)
 }
 
 /** Project a catalog to the wire shape: compact by default, optional category/field filter. */
@@ -981,17 +1025,20 @@ export function projectPickerCatalog(
     categoryLabels: c.categoryLabels,
     detail,
   }
+  const images = opts.images
+  const imageOf = (field: string | undefined, o: PickerOption) =>
+    images ? pickerOptionImageUrl(c, field, o.id, images) : undefined
   const projectDims = (dims: readonly PickerDimension[]) =>
     dims.map((d) => ({
       field: d.field,
       label: d.label,
-      options: d.options.map((o) => projectOption(o, detail)),
+      options: d.options.map((o) => projectOption(o, detail, imageOf(d.field, o))),
     }))
 
   if (c.kind === "single") {
     let options = c.options ?? []
     if (opts.category) options = options.filter((o) => o.category === opts.category)
-    const projected = { ...base, options: options.map((o) => projectOption(o, detail)) }
+    const projected = { ...base, options: options.map((o) => projectOption(o, detail, imageOf(c.valueField, o))) }
     // A single-dim catalog may still carry secondary parameter dimensions
     // (transition's position/duration/intensity). They are additive — a
     // consumer reading only `options` is unaffected — but dropping them here
@@ -1003,7 +1050,8 @@ export function projectPickerCatalog(
   }
   let dims = c.dimensions ?? []
   if (opts.field) dims = dims.filter((d) => d.field === opts.field)
-  return { ...base, fields: c.fields, dimensions: projectDims(dims) }
+  const sections = catalogSections(c, images)
+  return { ...base, fields: c.fields, dimensions: projectDims(dims), ...(sections ? { sections } : {}) }
 }
 
 /**
@@ -1011,6 +1059,6 @@ export function projectPickerCatalog(
  * `/v1/catalogs` wire shape. This is what the `GET /v1/catalogs` route and its
  * SDK resource serve, so a deployment's vendored packs are reflected verbatim.
  */
-export function projectAllCatalogs(opts: { detail?: PickerCatalogDetail } = {}): ProjectedCatalog[] {
-  return getRegisteredPickerCatalogs().map((c) => projectPickerCatalog(c, { detail: opts.detail }))
+export function projectAllCatalogs(opts: { detail?: PickerCatalogDetail; images?: PickerImageOptions } = {}): ProjectedCatalog[] {
+  return getRegisteredPickerCatalogs().map((c) => projectPickerCatalog(c, { detail: opts.detail, images: opts.images }))
 }

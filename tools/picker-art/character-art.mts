@@ -1,7 +1,7 @@
 #!/usr/bin/env -S npx --no tsx
 // Builds the character-picker photos (frontend/public/picker-art/character/)
 // and writes the content-hashed file map
-// packages/picker-ui/src/icons/character-art-files.generated.ts.
+// packages/prompts/src/picker-art/character-art-files.generated.ts.
 //
 // Dev-time only: the output is committed, so CI and the Docker build never run
 // this. Give it a folder of new or replacement pictures:
@@ -35,7 +35,7 @@ if (process.env.CI) {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..")
 const WORK_DIR = join(ROOT, "tools/picker-art/.work")
 const OUT_DIR = join(ROOT, "frontend/public/picker-art/character")
-const GENERATED_TS = join(ROOT, "packages/picker-ui/src/icons/character-art-files.generated.ts")
+const GENERATED_TS = join(ROOT, "packages/prompts/src/picker-art/character-art-files.generated.ts")
 
 const CATALOG_FAMILIES = ["person", "styling", "held-prop", "materials", "animals"] as const
 const SECTIONS = "sections"

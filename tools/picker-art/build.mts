@@ -2,7 +2,7 @@
 // Builds the self-hosted music / voice picker art (frontend/public/picker-art/
 // emoji/ and flags/) from the pinned upstream sources in
 // tools/picker-art/sources.json, and writes the
-// content-hashed file map packages/picker-ui/src/icons/sound-art-files.generated.ts.
+// content-hashed file map packages/prompts/src/picker-art/sound-art-files.generated.ts.
 //
 // Dev-time only: the output is committed, so CI and the Docker build never run
 // this. Run it after editing sources.json or sound-art-map.ts:
@@ -35,7 +35,7 @@ const SOURCES_PATH = join(ROOT, "tools/picker-art/sources.json")
 const MANIFEST_PATH = join(ROOT, "tools/picker-art/manifest.json")
 const WORK_DIR = join(ROOT, "tools/picker-art/.work")
 const OUT_DIR = join(ROOT, "frontend/public/picker-art")
-const GENERATED_TS = join(ROOT, "packages/picker-ui/src/icons/sound-art-files.generated.ts")
+const GENERATED_TS = join(ROOT, "packages/prompts/src/picker-art/sound-art-files.generated.ts")
 const MAX_BYTES = 4 * 1024 * 1024
 
 type Kind = "emoji" | "flags"
@@ -138,7 +138,7 @@ async function encode(kind: Kind, buf: Buffer): Promise<Buffer> {
 
 /** Every asset key the art map references — the build fails on any without a source. */
 async function referencedKeys(): Promise<ReadonlySet<string>> {
-  const mod = (await import(pathToFileURL(join(ROOT, "packages/picker-ui/src/icons/sound-art-map.ts")).href)) as {
+  const mod = (await import(pathToFileURL(join(ROOT, "packages/prompts/src/picker-art/sound-art-map.ts")).href)) as {
     SOUND_ART: Record<string, Record<string, Record<string, string>>>
   }
   const keys = new Set<string>()

@@ -33,7 +33,7 @@ import {
   characterSectionSlug,
   type CharacterArtFamily,
 } from "../../icons/character-art"
-import { CHARACTER_ART_FILES } from "../../icons/character-art-files.generated"
+import { CHARACTER_ART_FILES } from "@nodaro/prompts"
 import { STYLING_TOPICS } from "../styling-topics"
 
 // Hashing ~1,100 files takes a few seconds on a loaded runner.

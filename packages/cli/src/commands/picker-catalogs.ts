@@ -13,7 +13,7 @@ export function pickerCatalogsCommand(): Command {
 
   cmd
     .command("list")
-    .description("list all picker node types + option counts")
+    .description("list all picker node types + option counts (and how many options have a picture)")
     .option("--profile <name>")
     .option("--json")
     .action(async (opts: GlobalOpts) => {
@@ -31,8 +31,9 @@ export function pickerCatalogsCommand(): Command {
             kind: c.kind,
             field: c.valueField ?? (c.fields?.join("+") ?? ""),
             options: c.optionCount,
+            images: c.imageCount ?? 0,
           })),
-          ["nodeType", "label", "kind", "field", "options"],
+          ["nodeType", "label", "kind", "field", "options", "images"],
         )
       } catch (err) {
         handleError(err)
@@ -93,7 +94,11 @@ Examples:
   $ nodaro pickers list
   $ nodaro pickers get setting
   $ nodaro pickers get setting --full --category Urban
-  $ nodaro pickers get person --field hairColor`,
+  $ nodaro pickers get person --field hairColor
+  $ nodaro pickers get person --json | jq '.dimensions[].options[] | {id, imageUrl}'
+
+Options that have a picture carry an absolute imageUrl; person and styling also
+return their topics (sections), each with its round picture.`,
     )
     .action(
       async (

@@ -153,10 +153,12 @@ nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--fa
 #   table shows id, kind, family, modes, credit tiers, featured ★ and the doctrine ✓ flag; --json for the full sheets
 
 # Pickers — valid values for parameter-picker nodes (setting, mood, person, …)
-nodaro pickers list [--json]                            # all picker node types + option counts
+nodaro pickers list [--json]                            # all picker node types + option counts + how many options have a picture
 nodaro pickers get <nodeType> [--full] [--category <c>] [--field <f>] [--json]
-#   default (compact) carries id, label, category, term, icon — `term` is the short
-#   professional phrase compact hint mode injects ("" for a no-op auto/none option)
+#   default (compact) carries id, label, category, term, icon, imageUrl — `term` is the short
+#   professional phrase compact hint mode injects ("" for a no-op auto/none option);
+#   `imageUrl` is the option's picture (absolute, absent when it has none), and
+#   person / styling add `sections` — their topics, each with its round picture
 #   --full adds each option's description + the prompt fragment it injects
 #   --category filters a single-dim picker; --field picks one dimension of a multi-dim picker (person/styling/framing)
 nodaro pickers analyze "<text>" [--target <types>] [--instructions <text>] [--model <id>] [--effort <level>] [--json]

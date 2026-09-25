@@ -1802,8 +1802,8 @@ idempotent, no side effects. Call it before writing a picker node's value field
 in `update_workflow_json` so you set a real catalog id instead of guessing.
 
 - **No `node_type`** → a directory of every picker: `nodeType`, `label`, `kind`
-  (`single` / `multi`), `valueField` (single-dim) or `fields` (multi-dim), and
-  `optionCount`.
+  (`single` / `multi`), `valueField` (single-dim) or `fields` (multi-dim),
+  `optionCount`, and `imageCount` (how many options have a picture).
 - **With `node_type`** → that picker's catalog of valid ids. An unknown type
   returns an error listing the valid picker types.
 
@@ -1812,7 +1812,7 @@ in `update_workflow_json` so you set a real catalog id instead of guessing.
 | Field | Type | Notes |
 |-------|------|-------|
 | `node_type` | string | Picker node type, e.g. `"setting"` (kebab-case, from `start_workflow_editor`'s catalog). Omit to list every picker. |
-| `detail` | enum `compact` / `full` | `compact` (default): `id`, `label`, `category`, `term`, `icon`. `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
+| `detail` | enum `compact` / `full` | `compact` (default): `id`, `label`, `category`, `term`, `icon`, `imageUrl` (when the option has a picture). `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
 | `category` | string | Single-dim pickers: filter options to one category. |
 | `field` | string | Return only this dimension's field — multi-dim pickers (person / styling / framing), and the secondary parameters of a single-dim picker (transition / character-fx: position / duration / intensity; character-motion: position / pace). |
 
@@ -1821,6 +1821,31 @@ professional phrase to write into a prompt when you want a compact instruction
 (`"whip pan left"`), where `label` is display-only and `promptHint` is the full
 mechanism sentence. It is `""` for a no-op (`auto` / `none`) option that injects
 nothing — so compact prompt assembly needs no `detail: "full"` round-trip.
+
+Options that have a picture carry an absolute **`imageUrl`** — show it to the
+user as is, never build one from an id — and `person` / `styling` also return
+**`sections`**: their topics, in order, each `{ label, fields, imageUrl? }`.
+Example (`node_type: "person"`, trimmed):
+
+```json
+{
+  "nodeType": "person",
+  "sections": [
+    { "label": "Identity", "fields": ["type", "age", "ethnicity", "regionalAesthetic"],
+      "imageUrl": "https://app.nodaro.ai/picker-art/character/sections/identity.2d5ec1a4.webp" }
+  ],
+  "dimensions": [
+    { "field": "type", "label": "Type", "options": [
+      { "id": "man", "label": "Man", "term": "man",
+        "imageUrl": "https://app.nodaro.ai/picker-art/character/person/man.441363db.webp" }
+    ] }
+  ]
+}
+```
+
+The host is the installation's own public address; rendered look-picker
+previews (Nodaro CDN) are returned on Nodaro Cloud only. Rules:
+[Pictures](../api-integration.md#pictures-imageurl-sections).
 
 See [Parameter Picker Catalogs](../picker-catalogs.md) for the underlying
 `@nodaro/shared` data and the prompt-fragment helpers.
