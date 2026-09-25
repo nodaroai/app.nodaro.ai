@@ -108,6 +108,19 @@ fx.dimensions     // [{ field: "position", … }, { field: "duration", … }, { 
 
 Transition and Character FX share the same ids (`start` / `middle` / `end` / `full`, `instant` / `short` / `medium` / `long`, `subtle` / `natural` / `dynamic` / `crazy`) but **not** the same wording — a transition *occurs* and *spans* the clip, an effect *manifests* and *persists* — so always read the rows from the node's own catalog. Character Motion shares the position ids and adds pace ids (`slow-motion` / `slow` / `natural` / `fast` / `explosive`) with its own wording — a movement *begins* and *plays out*.
 
+<a id="per-option-parameters-a-wipes-direction"></a>
+
+### Per-option parameters (a wipe's direction)
+
+Some options carry a parameter that only means something for **that** option. They are published on the option itself, as `params` — the same `{ field, label, options }` shape as `dimensions`, scoped to one row. Today one row has one: the Transition catalog's `wipe` option carries `wipeDirection` (`auto`, `left-to-right`, `right-to-left`, `top-to-bottom`, `bottom-to-top`, `top-left-to-bottom-right`, `top-right-to-bottom-left`).
+
+```ts
+const wipe = getPickerCatalog("transition")!.options!.find((o) => o.id === "wipe")!
+wipe.params // [{ field: "wipeDirection", label: "Direction", options: [{ id: "auto", … }, { id: "left-to-right", … }, …] }]
+```
+
+Show the control while the option is picked and store the chosen row id under `field` on the same node data (`{ transition: "wipe", wipeDirection: "left-to-right" }`). `auto` leads each list and means "send nothing". A param row's `promptHint` is the phrase it writes into the option's own description (`vertical edge sweeps across the frame from left to right`), not a clause of its own. Every other option has no `params`.
+
 ## Multi-dimension pickers (e.g. Framing)
 
 Some pickers set **several** independent fields at once — Framing is shot size **and** angle **and** coverage **and** composition **and** vantage. Each catalog exposes `dimensions`, one `{ field, label, options }` per field.

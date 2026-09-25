@@ -1273,6 +1273,9 @@ export interface TransitionData extends PickerHintModeFields {
   position?: TransitionPosition
   duration?: TransitionDuration
   intensity?: TransitionIntensity
+  /** A wipe's direction — a per-row option of the `wipe` catalog row
+   *  (`Transition.options`); absent = `auto`. */
+  wipeDirection?: string
   preText?: string
   postText?: string
   [key: string]: unknown

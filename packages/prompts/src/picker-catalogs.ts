@@ -129,6 +129,17 @@ export interface PickerOption {
    * duration" — the safe reading, since the composer then behaves as before.
    */
   readonly instant?: true
+  /**
+   * PER-OPTION PARAMETERS — extra node-data fields that apply only while THIS
+   * option is picked, each with its own rows (Transitions: a wipe's
+   * `wipeDirection`; see `Transition.options`). Same shape as the catalog's
+   * `dimensions`, but scoped to the row that declares them: a consumer shows
+   * the control while the row is picked and stores the chosen row id under
+   * `field` beside the pick. The `auto` row leads each list and means "send
+   * nothing"; a row's `promptHint` is the phrase it writes into the option's
+   * description, not a clause of its own. Absent on every other option.
+   */
+  readonly params?: readonly PickerDimension[]
   /** Only present if the source catalog entry already carries a data icon/emoji/thumbnail field. */
   readonly icon?: string
 }
@@ -184,6 +195,18 @@ interface BaseCatalogEntry {
   readonly adultOnly?: true
   /** Transitions: see `Transition.instant`. Propagated into the flattened option as `instant: true`. */
   readonly instant?: boolean
+  /** Transitions: see `Transition.options`. Propagated as the option's `params`. */
+  readonly options?: ReadonlyArray<{
+    readonly field: string
+    readonly label: string
+    readonly choices: ReadonlyArray<{
+      readonly id: string
+      readonly label: string
+      readonly description: string
+      readonly phrase: string
+      readonly term: string
+    }>
+  }>
 }
 
 /**
@@ -213,6 +236,19 @@ function toOptions<T extends BaseCatalogEntry>(
     if (categoryField) opt.category = e[categoryField] as unknown as string
     if (e.adultOnly) opt.adultOnly = true
     if (e.instant) opt.instant = true
+    if (e.options?.length) {
+      opt.params = e.options.map((o) => ({
+        field: o.field,
+        label: o.label,
+        options: o.choices.map((c) => ({
+          id: c.id,
+          label: c.label,
+          description: c.description,
+          promptHint: c.phrase,
+          term: c.term,
+        })),
+      }))
+    }
     return opt as PickerOption
   })
 }
@@ -950,6 +986,22 @@ function projectOption(o: PickerOption, detail: PickerCatalogDetail): ProjectedP
   // `term` rides at BOTH detail levels: a thin client renders `label` and
   // injects `term`, so compact must carry it — it is what makes compact hint
   // mode possible without a second round-trip for the full payload.
+  const projected = projectOptionFields(o, detail)
+  // Per-option params (a wipe's direction) ride at both detail levels too: an
+  // id-only client needs the rows to offer the control at all.
+  return o.params
+    ? {
+        ...projected,
+        params: o.params.map((d) => ({
+          field: d.field,
+          label: d.label,
+          options: d.options.map((p) => projectOption(p, detail)),
+        })),
+      }
+    : projected
+}
+
+function projectOptionFields(o: PickerOption, detail: PickerCatalogDetail): ProjectedPickerOption {
   return detail === "full"
     ? {
         id: o.id,

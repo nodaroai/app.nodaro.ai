@@ -23,6 +23,13 @@ export interface PickerOption {
   icon?: string
   /** Authored Character Motion prerequisites and sequence state. Missing means unknown. */
   motion?: CharacterMotionMetadata
+  /**
+   * Per-option parameters — node-data fields that apply only while THIS option
+   * is picked (the Transition catalog's `wipe` → `wipeDirection`). Same shape
+   * as a catalog's `dimensions`, at both detail levels; `auto` leads each list
+   * and means "send nothing". Absent on every other option.
+   */
+  params?: PickerDimension[]
 }
 
 export interface PickerDimension {

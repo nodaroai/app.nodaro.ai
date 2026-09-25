@@ -36,7 +36,7 @@ import { buildStylingHints } from "./styling.js"
 import { buildTemporalHints } from "./temporal.js"
 import { composeCameraMotionHintFromConnections } from "./camera-motions.js"
 import { joinHintFragments } from "./hint-join.js"
-import { composeTransitionHintFromConnections, type TransitionDuration, type TransitionIntensity, type TransitionPosition, type TransitionTiming } from "./transitions.js"
+import { composeTransitionHintFromConnections, readTransitionOptionValues, type TransitionDuration, type TransitionIntensity, type TransitionPosition, type TransitionTiming } from "./transitions.js"
 import { composeCharacterFxHintFromConnections, type CharacterFxDuration, type CharacterFxIntensity, type CharacterFxPosition, type CharacterFxTiming } from "./character-fx.js"
 import { composeCharacterMotionHintFromConnections, type CharacterMotionPace, type CharacterMotionPosition, type CharacterMotionTiming } from "./character-motion.js"
 import { containsMinorAgeHint, isMinorAge } from "./age-floor.js"
@@ -227,8 +227,11 @@ function resolveParameterHint(
       duration:  asStr(data.duration)  as TransitionDuration  | undefined,
       intensity: asStr(data.intensity) as TransitionIntensity | undefined,
     }
+    // A picked row's own options (a wipe's `wipeDirection`), off the same node data.
+    const optionValues = readTransitionOptionValues(data)
+    const hintOptions = optionValues ? { optionValues } : undefined
     if (!ctx) {
-      return withCustomText(data, composeTransitionHintFromConnections(transitionId, [], [], timing, mode))
+      return withCustomText(data, composeTransitionHintFromConnections(transitionId, [], [], timing, mode, hintOptions))
     }
     const startHints: string[] = []
     const endHints: string[] = []
@@ -241,7 +244,7 @@ function resolveParameterHint(
       if      (edge.targetHandle === "startState") startHints.push(hint)
       else if (edge.targetHandle === "endState")   endHints.push(hint)
     }
-    return withCustomText(data, composeTransitionHintFromConnections(transitionId, startHints, endHints, timing, mode))
+    return withCustomText(data, composeTransitionHintFromConnections(transitionId, startHints, endHints, timing, mode, hintOptions))
   }
 
   if (node.type === "character-fx") {

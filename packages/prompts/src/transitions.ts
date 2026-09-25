@@ -65,6 +65,119 @@ export interface Transition {
    * anti-blend instruction that made the model render a true single-frame cut.
    */
   readonly instant?: boolean
+  /**
+   * PER-ROW OPTIONS — extra choices that only mean something for THIS
+   * transition (a wipe's direction), each written into the row's own hint.
+   *
+   * Unlike the timing scales (every row has a position), an option is declared
+   * by the row that reads it, so it never appears beside a transition it would
+   * not change. The row authors `promptTemplate` — its hint with one
+   * `{<field>}` token per option — and `promptHint` is DERIVED from it with
+   * every option on its `auto` choice (see `withOptionSlots`), so a reader of
+   * the plain `promptHint` (the picker catalog, the analyzer, a catalog pack)
+   * always sees a finished sentence and never a token.
+   *
+   * The choice's `phrase` is what fills the token, so the row BODY and the
+   * option WORDING are separate: a reworded body keeps its options as long as
+   * it keeps the token. `transition-options.test.ts` pins that every template
+   * carries exactly one token per option and no other.
+   */
+  readonly options?: ReadonlyArray<TransitionOption>
+  /** The hint with a `{<field>}` token per `options` entry — see `options`. */
+  readonly promptTemplate?: string
+}
+
+/**
+ * One choice of a per-row option. `auto` leads every option and is the choice
+ * `promptHint` is written with: picking it (or picking nothing) sends no value.
+ */
+export interface TransitionOptionChoice {
+  readonly id: string
+  readonly label: string
+  readonly description: string
+  /** The words that fill the row template's `{<field>}` token. */
+  readonly phrase: string
+  /** The compact term for the choice ("left to right"); `""` on `auto`. */
+  readonly term: string
+}
+
+/** A per-row option (see `Transition.options`). */
+export interface TransitionOption {
+  /** The node-data field the chosen id is stored under — also the template
+   *  token's name (`{wipeDirection}`). Unique across the catalog. */
+  readonly field: string
+  readonly label: string
+  /** `auto` first. */
+  readonly choices: ReadonlyArray<TransitionOptionChoice>
+}
+
+/**
+ * The chosen option ids, keyed by `TransitionOption.field`
+ * (`{ wipeDirection: "left-to-right" }`). One flat record for a whole pick: a
+ * row reads only the fields it declares, so the other row of a two-pick, or a
+ * value left behind by an earlier pick, changes nothing.
+ */
+export type TransitionOptionValues = Readonly<Record<string, string | undefined>>
+
+/**
+ * The wipe's direction. The phrase is the edge AND its travel, so the row's
+ * body is free to change around it (`a clean {wipeDirection}, revealing …`).
+ * `auto` names no orientation at all — a straight edge — and is what a pick
+ * with no direction has always meant.
+ */
+export const WIPE_DIRECTION: TransitionOption = {
+  field: "wipeDirection",
+  label: "Direction",
+  choices: [
+    { id: "auto", label: "Auto", description: "Let the model choose the direction", term: "",
+      phrase: "straight edge sweeps across the frame" },
+    { id: "left-to-right", label: "Left → Right", description: "A vertical edge travels from the left side to the right", term: "left to right",
+      phrase: "vertical edge sweeps across the frame from left to right" },
+    { id: "right-to-left", label: "Right → Left", description: "A vertical edge travels from the right side to the left", term: "right to left",
+      phrase: "vertical edge sweeps across the frame from right to left" },
+    { id: "top-to-bottom", label: "Top → Bottom", description: "A horizontal edge travels down from the top", term: "top to bottom",
+      phrase: "horizontal edge sweeps down the frame from top to bottom" },
+    { id: "bottom-to-top", label: "Bottom → Top", description: "A horizontal edge travels up from the bottom", term: "bottom to top",
+      phrase: "horizontal edge sweeps up the frame from bottom to top" },
+    { id: "top-left-to-bottom-right", label: "Top-left → Bottom-right", description: "A diagonal edge travels from the top-left corner to the bottom-right", term: "top-left to bottom-right",
+      phrase: "diagonal edge sweeps across the frame from the top-left corner to the bottom-right corner" },
+    { id: "top-right-to-bottom-left", label: "Top-right → Bottom-left", description: "A diagonal edge travels from the top-right corner to the bottom-left", term: "top-right to bottom-left",
+      phrase: "diagonal edge sweeps across the frame from the top-right corner to the bottom-left corner" },
+  ],
+}
+
+const optionToken = (field: string): string => `{${field}}`
+
+/**
+ * Fill a template's option tokens: each option's chosen choice when `values`
+ * names one of its ids, its `auto` choice otherwise (an unknown id included).
+ */
+function fillOptionSlots(
+  template: string,
+  options: ReadonlyArray<TransitionOption>,
+  values?: TransitionOptionValues,
+): string {
+  let out = template
+  for (const option of options) {
+    const picked = values?.[option.field]
+    const choice =
+      option.choices.find((c) => c.id === picked) ?? option.choices[0]
+    out = out.split(optionToken(option.field)).join(choice?.phrase ?? "")
+  }
+  return out
+}
+
+/**
+ * Author a row that has options: the row is written with its `promptTemplate`,
+ * and its `promptHint` is the template on every `auto` choice.
+ */
+function withOptionSlots(
+  row: Omit<Transition, "promptHint"> & {
+    readonly promptTemplate: string
+    readonly options: ReadonlyArray<TransitionOption>
+  },
+): Transition {
+  return { ...row, promptHint: fillOptionSlots(row.promptTemplate, row.options) }
 }
 
 /**
@@ -112,8 +225,9 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "smash cut: an abrupt jarring transition between two visually or tonally contrasting shots with no fade, on a beat" , instant: true },
   { id: "iris",              label: "Iris",              category: "standard", description: "Circular iris closes, then opens on second",
     promptHint: "iris transition: a circular vignette closes inward over the first shot until the frame is black, then opens outward to reveal the second shot", term: "iris wipe" },
-  { id: "wipe",              label: "Wipe",              category: "standard", description: "Linear wipe replaces first shot",
-    promptHint: "linear wipe transition: a clean diagonal line sweeps across the frame, revealing the second shot behind it", term: "linear wipe" },
+  withOptionSlots({ id: "wipe", label: "Wipe",              category: "standard", description: "Linear wipe replaces first shot",
+    promptTemplate: "linear wipe transition: a clean {wipeDirection}, revealing the second shot behind it", term: "linear wipe",
+    options: [WIPE_DIRECTION] }),
   { id: "roll-transition",   label: "Roll",              category: "standard", description: "Frame rolls 90-180°, second shot upright on landing",
     promptHint: "the frame rolls along the camera axis with a smooth 90 to 180 degree rotation, motion-blurred during the roll, and as the rotation completes the new shot is upright and stable in frame", term: "camera roll transition" },
   { id: "seamless-match",    label: "Seamless Match",    category: "standard", description: "Hidden cut disguised by matched motion and color",
@@ -319,8 +433,54 @@ export function getTransitionLabel(id: string | undefined | null, fallback?: str
   return (id ?? "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-export function getTransitionPromptHint(id: string | undefined | null): string {
-  return getTransition(id)?.promptHint ?? ""
+/**
+ * The row's hint. With `values`, a row that declares `options` is written with
+ * the chosen choices in its template (an absent or unknown choice reads as
+ * `auto`, which IS `promptHint`); every other row ignores them.
+ *
+ * A catalog pack that REWROTE the row's hint owns its words: its text has no
+ * token to fill, so it is returned as written and the options add nothing.
+ */
+export function getTransitionPromptHint(
+  id: string | undefined | null,
+  values?: TransitionOptionValues,
+): string {
+  const t = getTransition(id)
+  if (!t) return ""
+  if (!values || !t.promptTemplate || !t.options?.length) return t.promptHint
+  if (t.promptHint !== fillOptionSlots(t.promptTemplate, t.options)) return t.promptHint
+  return fillOptionSlots(t.promptTemplate, t.options, values)
+}
+
+/** The per-row options a transition declares (`[]` for most rows, an unknown
+ *  id and `auto`). Reads through `getTransition`, like every other getter. */
+export function getTransitionOptions(
+  id: string | undefined | null,
+): ReadonlyArray<TransitionOption> {
+  return getTransition(id)?.options ?? []
+}
+
+/** Every option field any row declares, in catalog order — what a node-data
+ *  reader collects into `TransitionOptionValues`. */
+export const TRANSITION_OPTION_FIELDS: ReadonlyArray<string> = Array.from(
+  new Set(TRANSITIONS.flatMap((t) => (t.options ?? []).map((o) => o.field))),
+)
+
+/**
+ * Collect `TransitionOptionValues` from a node-data-shaped record: every
+ * declared option field whose value is a non-empty string. Validation against
+ * a row's choices happens at render (an unknown id reads as `auto`).
+ */
+export function readTransitionOptionValues(
+  data: Readonly<Record<string, unknown>> | undefined | null,
+): TransitionOptionValues | undefined {
+  if (!data) return undefined
+  const out: Record<string, string> = {}
+  for (const field of TRANSITION_OPTION_FIELDS) {
+    const v = data[field]
+    if (typeof v === "string" && v.length > 0) out[field] = v
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 /**
@@ -385,8 +545,8 @@ const normalizePhrase = (s: string): string => s.trim().toLowerCase().replace(/\
  * any comma-separated item that merely restates the term dropped (`none`'s
  * "no transition, hard cut, instantaneous switch …" loses its "hard cut").
  */
-function transitionHintBody(id: string, term: string): string {
-  const hint = getTransitionPromptHint(id).replace(LEADING_LABEL, "").trim()
+function transitionHintBody(id: string, term: string, values?: TransitionOptionValues): string {
+  const hint = getTransitionPromptHint(id, values).replace(LEADING_LABEL, "").trim()
   const t = normalizePhrase(term)
   return hint
     .split(/,\s*/)
@@ -403,10 +563,10 @@ function transitionHintBody(id: string, term: string): string {
  * `; INSTANT_CUT_CLAUSE` inside the parentheses. A row whose hint is just its
  * term (or empty) renders as the term alone; an unknown id or "auto" as "".
  */
-function transitionFragment(id: string, withCutClause: boolean): string {
+function transitionFragment(id: string, withCutClause: boolean, values?: TransitionOptionValues): string {
   const term = getTransitionTerm(id)
   if (!term) return ""
-  const inner = [transitionHintBody(id, term), withCutClause ? INSTANT_CUT_CLAUSE : ""]
+  const inner = [transitionHintBody(id, term, values), withCutClause ? INSTANT_CUT_CLAUSE : ""]
     .filter((part) => part.length > 0)
     .join("; ")
   return inner.length > 0 && normalizePhrase(inner) !== normalizePhrase(term)
@@ -436,16 +596,21 @@ function transitionFragment(id: string, withCutClause: boolean): string {
  * Studio's transition clauses) and the direction registry's `transition` row
  * (the server fold of `direction.transition`), so both paths word a transition
  * identically.
+ *
+ * `values` are the per-row option choices (`TransitionOptionValues`) — a wipe's
+ * direction. The direction registry passes none, so a `direction.transition`
+ * wipe reads as `auto`.
  */
 export function renderTransitionBases(
   ids: ReadonlyArray<string>,
   _mode: PickerHintMode = "full",
+  values?: TransitionOptionValues,
 ): string[] {
   // Only ids that contribute a fragment count — a no-op "auto" beside a cut
   // must not make the pick look non-instant.
   const picked = ids.filter((id) => getTransitionTerm(id).length > 0)
   const instant = isInstantTransition(picked)
-  return picked.map((id, i) => transitionFragment(id, instant && i === 0))
+  return picked.map((id, i) => transitionFragment(id, instant && i === 0, values))
 }
 
 // ---------------------------------------------------------------------------
@@ -528,6 +693,9 @@ export type TransitionHintScope = "clip" | "shot"
 
 export interface TransitionHintOptions {
   readonly scope?: TransitionHintScope
+  /** The per-row option choices (a wipe's `wipeDirection`) — see
+   *  `Transition.options`. Absent, every row reads as `auto`. */
+  readonly optionValues?: TransitionOptionValues
 }
 
 /**
@@ -571,7 +739,9 @@ const INTENSITY_CLAUSES = clausesOf(TRANSITION_INTENSITIES)
  * @param options `scope: "shot"` when the hint is folded into one shot's time
  *   window of a multi-shot prompt — the position clause then says "of this
  *   shot" instead of "of the clip" (and `full`, on a non-cut, "spans this
- *   entire shot"). Omitted, the wording is the clip's.
+ *   entire shot"). Omitted, the wording is the clip's. `optionValues` are the
+ *   per-row option choices (a wipe's direction), written into the row's own
+ *   description; omitted, every row reads as `auto`.
  */
 export function composeTransitionHintFromConnections(
   transitionId: string | ReadonlyArray<string> | undefined,
@@ -584,7 +754,7 @@ export function composeTransitionHintFromConnections(
   const ids = Array.isArray(transitionId)
     ? Array.from(new Set(transitionId)).slice(0, 2)
     : transitionId ? [transitionId] : []
-  const baseHints = renderTransitionBases(ids, mode)
+  const baseHints = renderTransitionBases(ids, mode, options?.optionValues)
   if (baseHints.length === 0) return ""
   // Same "contributes a fragment" filter `renderTransitionBases` applies.
   const instant = isInstantTransition(ids.filter((id) => getTransitionTerm(id).length > 0))

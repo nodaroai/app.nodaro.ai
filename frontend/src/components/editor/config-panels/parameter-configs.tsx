@@ -81,7 +81,8 @@ import { SettingPicker } from "@/lib/picker-ui"
 import { LoopSubjectPicker } from "@/lib/picker-ui"
 import { PersonPicker } from "@/lib/picker-ui"
 import { MOODS as BASE_MOODS, POSES as BASE_POSES, buildFramingHints, getLensPromptHint, getCameraFormatPromptHint, buildLightingHints, getColorLookPromptHint, buildAtmosphereHints, buildActionFxHints, getStylePromptHint, getSettingPromptHint, getLoopSubjectPromptHint, buildMoodHints, buildPoseHints, buildStylingHints, buildTemporalHints, buildMaterialHints, getPhotoGenrePromptHint, getBackdropPromptHint, buildHeldPropHints, buildPhotographerHints, buildAestheticHints, getEraPromptHint, buildExposureHints, getRenderQualityPromptHint, getCompositionEffectPromptHint, buildPostProcessHints, buildPersonHints, TRANSITION_POSITIONS, TRANSITION_DURATIONS, TRANSITION_INTENSITIES, CHARACTER_FX_POSITIONS, CHARACTER_FX_DURATIONS, CHARACTER_FX_INTENSITIES, CHARACTER_MOTION_POSITIONS, CHARACTER_MOTION_PACES, CHARACTER_MOTION_MAX_PICKS } from "@nodaro/prompts"
-import { getAnimal, getVehicle, getWeapon, getFurniture } from "@nodaro/shared"
+import { getAnimal, getVehicle, getWeapon, getFurniture, pickIds } from "@nodaro/shared"
+import { getTransitionOptions, type TransitionOption } from "@nodaro/prompts"
 import { LookArt, MoodEmoji, useShowsLookRenders } from "@/lib/picker-ui"
 import { LookPreviewStyleSwitch } from "@/components/nodes/look-preview-style"
 import { DimensionTileGrid } from "@/lib/picker-ui"
@@ -1467,8 +1468,41 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
           </div>
         ))}
       </div>
+
+      {/* The picked rows' OWN options (a wipe's direction) — declared by the
+          catalog row, so the control appears only beside a transition it
+          changes. `auto` stores nothing. */}
+      {transitionOptionsFor(data.transition).map((option) => (
+        <div key={option.field} className="flex flex-col gap-1">
+          <Label className="text-[10px] uppercase">{option.label}</Label>
+          <Select
+            value={typeof data[option.field] === "string" && data[option.field] ? (data[option.field] as string) : "auto"}
+            onValueChange={(v) => onUpdate({ [option.field]: v === "auto" ? undefined : v })}
+          >
+            <SelectTrigger className="h-8 text-xs" aria-label={option.label}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {option.choices.map((choice) => (
+                <SelectItem key={choice.id} value={choice.id} title={choice.description}>
+                  {choice.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ))}
     </div>
   )
+}
+
+/** The per-row options of every picked transition (a wipe's direction), each
+ *  field once, in pick order — see `Transition.options`. */
+function transitionOptionsFor(value: string | string[] | undefined): ReadonlyArray<TransitionOption> {
+  const seen = new Set<string>()
+  return pickIds(value).flatMap((id) => getTransitionOptions(id)).filter((o) => {
+    if (seen.has(o.field)) return false
+    seen.add(o.field)
+    return true
+  })
 }
 
 export function CharacterFxConfig({ data, onUpdate }: ConfigProps<CharacterFxData>) {

@@ -16,6 +16,7 @@ Unlike the `transition` field on the Combine Videos node (which is an FFmpeg pos
 | Position | select | `"auto"` | Where in the clip the transition occurs: `auto` / `start` / `middle` / `end` / `full`. |
 | Duration | select | `"auto"` | How long the transition lasts: `auto` / `instant` / `short` (~1s) / `medium` (~2s) / `long` (~3s). Ignored for a cut (see below). |
 | Intensity | select | `"auto"` | Energy/character of the transition: `auto` / `subtle` / `natural` / `dynamic` / `crazy`. Ignored for a cut (see below). |
+| Direction | select | `"auto"` | **Wipe only** — shown while `wipe` is picked, stored as `wipeDirection`: `auto` / `left-to-right` / `right-to-left` / `top-to-bottom` / `bottom-to-top` / `top-left-to-bottom-right` / `top-right-to-bottom-left`. See [Wipe direction](#wipe-direction). |
 | Pre Text | text | empty | Free-form text prepended to the composed hint. |
 | Post Text | text | empty | Free-form text appended to the composed hint. |
 | Hint mode  | select       | `full`    | Does not change how the transition itself is written — always `<name> (<description>)` (see below). It still sets the detail level of the pickers wired into `startState` / `endState`. See [Prompt hint mode](./README.md#prompt-hint-mode). |
@@ -35,6 +36,22 @@ Position, Duration and Intensity are catalogs, not free values: the `transition`
 - Position still applies — where the cut lands is a real choice — except `full`: a single-frame cut cannot span the whole clip, so `full` adds nothing to the prompt. `start`, `middle` and `end` still place the cut.
 
 When two transitions are picked and only one is a cut, no anti-blend instruction is added and Duration and Intensity are kept. The picker catalog marks the cut rows `instant: true` on their options, and `@nodaro/prompts` exports `isInstantTransition(id)`, so a client can hide the Duration and Intensity controls for them.
+
+<a id="wipe-direction"></a>
+
+**Wipe direction.** The `wipe` transition has one extra setting of its own, **Direction**, stored on the node as `wipeDirection`. It changes the words inside the wipe's parentheses and nothing else — the levers still follow them:
+
+| `wipeDirection` | The wipe as the prompt reads it |
+|---|---|
+| `auto` (or absent) | `linear wipe (a clean straight edge sweeps across the frame, revealing the second shot behind it)` |
+| `left-to-right` | `linear wipe (a clean vertical edge sweeps across the frame from left to right, revealing the second shot behind it)` |
+| `right-to-left` | `linear wipe (a clean vertical edge sweeps across the frame from right to left, revealing the second shot behind it)` |
+| `top-to-bottom` | `linear wipe (a clean horizontal edge sweeps down the frame from top to bottom, revealing the second shot behind it)` |
+| `bottom-to-top` | `linear wipe (a clean horizontal edge sweeps up the frame from bottom to top, revealing the second shot behind it)` |
+| `top-left-to-bottom-right` | `linear wipe (a clean diagonal edge sweeps across the frame from the top-left corner to the bottom-right corner, revealing the second shot behind it)` |
+| `top-right-to-bottom-left` | `linear wipe (a clean diagonal edge sweeps across the frame from the top-right corner to the bottom-left corner, revealing the second shot behind it)` |
+
+A wipe saved before Direction existed reads as `auto`. The picker catalog publishes the rows on the `wipe` option as `params` (see [Per-option parameters](../../picker-catalogs.md#per-option-parameters-a-wipes-direction)); `@nodaro/prompts` callers pass the choice as `composeTransitionHintFromConnections(id, startHints, endHints, timing, mode, { optionValues: { wipeDirection: "left-to-right" } })`. A wipe sent in the `direction` field of a video request has no direction setting and reads as `auto`.
 
 ## Catalog (82 entries across 8 categories)
 

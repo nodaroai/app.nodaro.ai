@@ -1,4 +1,4 @@
-import { composeCameraMotionHintFromConnections, composeTransitionHintFromConnections, type TransitionTiming, composeCharacterFxHintFromConnections, type CharacterFxTiming, composeCharacterMotionHintFromConnections, type CharacterMotionTiming, getParameterPromptHint } from "@nodaro/prompts"
+import { composeCameraMotionHintFromConnections, composeTransitionHintFromConnections, readTransitionOptionValues, type TransitionTiming, composeCharacterFxHintFromConnections, type CharacterFxTiming, composeCharacterMotionHintFromConnections, type CharacterMotionTiming, getParameterPromptHint } from "@nodaro/prompts"
 import { extractReferencedLabels, canonicalVarName, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge, TransitionData, CharacterFxData, CharacterMotionData } from "@/types/nodes"
 import { collectCharacterElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
@@ -80,7 +80,12 @@ export function composeTransitionHintForNode(
     duration:  data.duration,
     intensity: data.intensity,
   }
-  return composeTransitionHintFromConnections(data.transition, startHints, endHints, timing)
+  // A picked row's own options (a wipe's `wipeDirection`), off the same node data.
+  const optionValues = readTransitionOptionValues(data)
+  return composeTransitionHintFromConnections(
+    data.transition, startHints, endHints, timing, undefined,
+    optionValues ? { optionValues } : undefined,
+  )
 }
 
 /**
