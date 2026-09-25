@@ -1,8 +1,15 @@
 import type { ProposedChange } from "@nodaro/shared"
-import { useT, tx, type TFunction } from "@/lib/i18n"
+import { useT, tx, type MessageKey, type TFunction } from "@/lib/i18n"
 
 type EditPatch = Extract<ProposedChange, { change_type: "edit_artifact" }>
 export type DiffOp = EditPatch["json_patch"][number]
+
+/** The JSON Patch verb in words; the operation id itself is never shown. */
+const OP_KEYS: Readonly<Record<DiffOp["op"], MessageKey>> = {
+  add: "pipe.diffOpAdd",
+  replace: "pipe.diffOpReplace",
+  remove: "pipe.diffOpRemove",
+}
 
 /**
  * Phase 1D.2b — Render an `edit_artifact` JSON Patch as a short list of
@@ -47,6 +54,9 @@ export function DiffRenderer({ ops }: { ops: DiffOp[] }) {
 export function describeOp(op: DiffOp, t: TFunction = tx): string {
   const { op: kind, path } = op
   const value = "value" in op ? op.value : undefined
+  // An op outside the schema's enum (a newer server) shows its raw id.
+  const opKey: MessageKey | undefined = OP_KEYS[kind]
+  const opWord = opKey ? t(opKey) : kind
 
   // Scenes
   const sceneSummary = path.match(/^\/scenes\/(\d+)\/summary$/)
@@ -78,7 +88,7 @@ export function describeOp(op: DiffOp, t: TFunction = tx): string {
   if (sceneFallback) {
     return t("pipe.diffSceneField", {
       n: Number(sceneFallback[1]) + 1,
-      op: kind,
+      op: opWord,
       field: sceneFallback[2] ?? "",
       tail: kind !== "remove" ? t("pipe.diffArrowValue", { value: truncate(value) }) : "",
     })
@@ -109,7 +119,7 @@ export function describeOp(op: DiffOp, t: TFunction = tx): string {
   if (castFallback) {
     return t("pipe.diffCastField", {
       n: Number(castFallback[1]) + 1,
-      op: kind,
+      op: opWord,
       field: castFallback[2] ?? "",
       tail: kind !== "remove" ? t("pipe.diffArrowValue", { value: truncate(value) }) : "",
     })
@@ -136,7 +146,7 @@ export function describeOp(op: DiffOp, t: TFunction = tx): string {
   if (locFallback) {
     return t("pipe.diffLocationField", {
       n: Number(locFallback[1]) + 1,
-      op: kind,
+      op: opWord,
       field: locFallback[2] ?? "",
       tail: kind !== "remove" ? t("pipe.diffArrowValue", { value: truncate(value) }) : "",
     })
@@ -159,7 +169,7 @@ export function describeOp(op: DiffOp, t: TFunction = tx): string {
   if (objFallback) {
     return t("pipe.diffObjectField", {
       n: Number(objFallback[1]) + 1,
-      op: kind,
+      op: opWord,
       field: objFallback[2] ?? "",
       tail: kind !== "remove" ? t("pipe.diffArrowValue", { value: truncate(value) }) : "",
     })
@@ -186,8 +196,8 @@ export function describeOp(op: DiffOp, t: TFunction = tx): string {
 
   // Generic fallback for unknown paths
   return kind === "remove"
-    ? `${kind} ${path}`
-    : `${kind} ${path} → ${truncate(value)}`
+    ? `${opWord} ${path}`
+    : `${opWord} ${path} → ${truncate(value)}`
 }
 
 function truncate(v: unknown, max = 80): string {

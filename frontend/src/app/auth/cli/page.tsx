@@ -106,15 +106,17 @@ export default function AuthCliPage() {
 
         <h1 className="mb-2 text-2xl font-semibold">{t("cli.authorizeTitle")}</h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          {t("cli.signInAs")}{" "}
+          {t("cli.signInPre")}{" "}
           <span className="font-medium text-foreground">{user?.email}</span>{" "}
-          {t("cli.signInOn")}{" "}
-          <span className="font-medium text-foreground">{deviceLabel}</span>?
+          {t("cli.signInMid")}{" "}
+          <span className="font-medium text-foreground">{deviceLabel}</span>
+          {t("cli.signInPost")}
         </p>
 
         <div className="mb-6 rounded-md border bg-muted/40 p-4 text-xs text-muted-foreground">
-          {t("cli.tokenNotice")}{" "}
-          <a href="/settings/api" className="underline">{t("cli.settingsApiLink")}</a>.
+          {t("cli.tokenNotice")}{t("common.fragmentGap")}
+          <a href="/settings/api" className="underline">{t("cli.settingsApiLink")}</a>
+          {t("common.sentenceEnd")}
         </div>
 
         {done ? (

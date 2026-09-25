@@ -11,7 +11,7 @@ const map: LocaleCatalogMap = {
   "sony-venice": { description: "デュアルベースISOのフルフレーム・シネマ" },
   "blackmagic-pocket-6k": { description: "RAW撮影のインディー向けシネマカメラ" },
   "red-komodo": { description: "コンパクトな6Kアクション・シネマカメラ" },
-  "dslr": { description: "シャープなビデオDSLRルック" },
+  "dslr": { label: "デジタル一眼レフ", description: "シャープなビデオDSLRルック" },
   "mirrorless-a7iii": { description: "モダンなハイブリッド・ミラーレス" },
   "canon-r5": { description: "高解像度のファッション・エディトリアル向けミラーレス" },
   "hasselblad-medium-format": { description: "エディトリアル中判フォーマット" },
@@ -28,9 +28,9 @@ const map: LocaleCatalogMap = {
   "disposable-camera": { label: "使い捨てカメラ", description: "90年代／2000年代の使い切りフィルム" },
   "toy-camera-holga": { label: "トイカメラ（Holga）", description: "ローファイなHolga／Lomoのプラスチックレンズ" },
   "tintype-wet-plate": { label: "ティンタイプ／ウェットプレート", description: "ヴィンテージのウェットプレート・コロジオン法" },
-  "daguerreotype": { label: "ダゲレオタイプ", description: "1840年代の銀盤鏡面プロセス" },
+  "daguerreotype": { label: "ダゲレオタイプ", description: "1840年代の銀板鏡面プロセス" },
   "security-cam": { label: "防犯カメラ（CCTV）", description: "CCTVの魚眼とタイムスタンプオーバーレイ" },
-  "bw-film": { label: "白黒フィルム", description: "白黒フィルムのストック" },
+  "bw-film": { label: "白黒フィルム", description: "白黒のフィルムストック" },
   "iphone": { description: "モダンなスマホカメラのルック" },
 }
 

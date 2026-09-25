@@ -53,7 +53,7 @@ function LanguageSwitcherComponent() {
           side="top"
           className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
         >
-          {`${t("lang.label")}: ${current.englishName}`}
+          {`${t("lang.label")}${t("common.labelColon")}${current.nativeName}`}
         </TooltipContent>
       </Tooltip>
       <PopoverContent className="w-56 p-1" align="end" side="top" sideOffset={4}>

@@ -157,7 +157,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       if (unreachable.length > 0) {
         const n = unreachable.length
         toast.warning(
-          t("editor.unreachableExportWarn", { n, suffix: n === 1 ? "" : "s", refs: describeMediaRefNodes(unreachable) }),
+          t(n === 1 ? "editor.unreachableExportWarnOne" : "editor.unreachableExportWarnMany", { n, refs: describeMediaRefNodes(unreachable) }),
           { duration: 12_000 },
         )
       }
@@ -202,7 +202,9 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       const created = await importWorkflow({ ...toWorkflowExportPayload(data), projectId: projectId! })
       const assetCount = (data.assets?.characters.length ?? 0) + (data.assets?.objects.length ?? 0) + (data.assets?.locations.length ?? 0)
       const report = created.importReport
-      const copied = report?.rehosted ? t("editor.mediaCopiedSuffix", { n: report.rehosted, suffix: report.rehosted === 1 ? "" : "s" }) : ""
+      const copied = report?.rehosted
+        ? t(report.rehosted === 1 ? "editor.mediaCopiedOne" : "editor.mediaCopiedMany", { n: report.rehosted })
+        : ""
       toast.success((assetCount > 0 ? t("editor.importedWithAssetsCount", { n: assetCount }) : t("editor.importedPlain")) + copied)
       // Media this instance could not fetch stays as-is and those nodes will
       // not run until it is re-uploaded here (#866).
@@ -210,7 +212,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       if (unreachable.length > 0) {
         const n = unreachable.length
         toast.warning(
-          t("editor.unreachableImportWarn", { n, suffix: n === 1 ? "" : "s", refs: describeMediaRefNodes(unreachable) }),
+          t(n === 1 ? "editor.unreachableImportWarnOne" : "editor.unreachableImportWarnMany", { n, refs: describeMediaRefNodes(unreachable) }),
           { duration: 12_000 },
         )
       }
@@ -234,7 +236,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
     if (unreachable.length > 0) {
       const n = unreachable.length
       toast.warning(
-        t("editor.unreachableImportWarn", { n, suffix: n === 1 ? "" : "s", refs: describeMediaRefNodes(unreachable) }),
+        t(n === 1 ? "editor.unreachableImportWarnOne" : "editor.unreachableImportWarnMany", { n, refs: describeMediaRefNodes(unreachable) }),
         { duration: 12_000 },
       )
     }

@@ -15,6 +15,7 @@ import { inferPromptContext } from "@/lib/prompt-context"
 import { hasCredits } from "@/lib/edition"
 import { isMultiColumnList } from "@/lib/list-loop-migration"
 import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 
 // Lazy-load the picker card: it pulls the full parameter-picker registry (~40
 // catalogs, incl. person.ts) which would otherwise bloat the public app-runner
@@ -78,7 +79,11 @@ function InputCardInner({
   edges,
   variant,
 }: InputCardProps) {
-  const label = getNodeLabel(node)
+  // The card's title is the node's name as the canvas header shows it: a
+  // default label in the interface language, a rename as typed. It also
+  // fills the cards' own sentences ("Enter tone…").
+  const localizeNode = useLocalizeNodeLabel()
+  const label = localizeNode(getNodeLabel(node))
   const t = useT()
   const data = node.data as Record<string, unknown>
   const effectiveMaxItems = Math.min((data.maxItems as number) ?? 10, DEFAULT_SYSTEM_MAX_FANOUT)

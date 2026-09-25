@@ -2002,7 +2002,7 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
         className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
       >
         {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className={cn("w-3 h-3", isRtl && "rotate-180")} />}
-        {t("proccfg.advancedSettings")} {isDefault && t("proccfg.usingDefaults")}
+        {t("proccfg.advancedSettings")}{t("common.fragmentGap")}{isDefault && t("proccfg.usingDefaults")}
       </button>
 
       {showAdvanced && (

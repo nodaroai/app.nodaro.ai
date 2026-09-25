@@ -646,7 +646,9 @@ centered composition, high quality, single character`
               {confirmingCharacterDelete ? (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-red-500 max-w-[260px]">
-                    {t("entity.permanentDeleteConfirm", { name: data.characterName || t("entity.thisCharacter") })}
+                    {data.characterName
+                      ? t("entity.permanentDeleteConfirm", { name: data.characterName })
+                      : t("entity.permanentDeleteConfirmThisCharacter")}
                   </span>
                   <Button
                     variant="ghost"

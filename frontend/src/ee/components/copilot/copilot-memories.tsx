@@ -163,7 +163,7 @@ function MemoriesDialog({ onClose }: { onClose: () => void }) {
                 <button
                   type="button"
                   onClick={() => void forget(memory.id)}
-                  aria-label={`${t(K.memoriesDelete)}: ${memory.content.slice(0, 40)}`}
+                  aria-label={`${t(K.memoriesDelete)}${t("common.labelColon")}${memory.content.slice(0, 40)}`}
                   className="flex-none mt-0.5 inline-flex items-center gap-1 text-[11px] text-[var(--copilot-muted)] hover:text-[var(--copilot-fail)]"
                 >
                   <Trash2 className="w-3 h-3" strokeWidth={2} aria-hidden />

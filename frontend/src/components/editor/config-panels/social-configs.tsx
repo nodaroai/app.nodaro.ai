@@ -244,18 +244,20 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
           {chatIdHelpOpen && (
             <div className="mt-2 rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#252525] p-3 text-[11px] leading-relaxed text-gray-600 dark:text-gray-300 space-y-2">
               {/* Keyed per text run so the <code> tokens (identifiers, never
-                  translated) keep their styling and their place in the sentence. */}
+                  translated) keep their styling and their place in the sentence.
+                  A literal space sits beside a code token (every language
+                  spaces one); the dictionary joiners carry the rest. */}
               <p>
-                <b>{t("cfgext.socialHelpPublicChannel")}</b> {t("cfgext.socialHelpUseIts")} <code>@username</code> {t("cfgext.socialHelpPartAfter")}{" "}
-                <code>t.me/</code>. {t("cfgext.kling3ExampleLabel")} <code>t.me/mychannel</code> → <code>@mychannel</code>.
+                <b>{t("cfgext.socialHelpPublicChannel")}</b>{t("common.fragmentGap")}{t("cfgext.socialHelpUseIts")} <code>@username</code> {t("cfgext.socialHelpPartAfter")}{t("common.fragmentGap")}
+                <code>t.me/</code>{t("common.sentenceEnd")}{t("common.fragmentGap")}{t("cfgext.kling3ExampleLabel")}{t("common.fragmentGap")}<code>t.me/mychannel</code> → <code>@mychannel</code>{t("common.sentenceEnd")}
               </p>
               <p>
-                <b>{t("cfgext.socialHelpPrivateChannel")}</b> {t("cfgext.socialHelpNumericId")} <code>-100…</code> {t("cfgext.socialHelpAddBot")}{" "}
-                <code className="break-all">api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> {t("cfgext.socialHelpInBrowser")} <code>"chat":&#123;"id":-100…&#125;</code>. {t("cfgext.socialHelpOrForward")} <code>@getidsbot</code>.)
+                <b>{t("cfgext.socialHelpPrivateChannel")}</b>{t("common.fragmentGap")}{t("cfgext.socialHelpNumericId")} <code>-100…</code> {t("cfgext.socialHelpAddBot")}{" "}
+                <code className="break-all">api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> {t("cfgext.socialHelpInBrowser")}{t("common.fragmentGap")}<code>"chat":&#123;"id":-100…&#125;</code>{t("common.sentenceEnd")}{t("common.fragmentGap")}{t("cfgext.socialHelpOrForwardPre")} <code>@getidsbot</code>{t("cfgext.socialHelpOrForwardPost")}
               </p>
               <p className="text-amber-600 dark:text-amber-400">
-                {t("cfgext.socialHelpEitherWay")}{" "}
-                <b>{t("cfgext.socialHelpAdmin")}</b> {t("cfgext.socialHelpWithPermission")}
+                {t("cfgext.socialHelpEitherWay")}{t("common.fragmentGap")}
+                <b>{t("cfgext.socialHelpAdmin")}</b>{t("common.fragmentGap")}{t("cfgext.socialHelpWithPermission")}
               </p>
             </div>
           )}

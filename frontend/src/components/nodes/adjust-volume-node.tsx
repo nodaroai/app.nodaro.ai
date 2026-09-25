@@ -118,7 +118,7 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
             ))}
           </div>
         )}
-        <p className="text-muted-foreground">{nodeData.volume}%{nodeData.normalize ? ` ${t("node.normalized")}` : ""}</p>
+        <p className="text-muted-foreground">{nodeData.volume}%{nodeData.normalize ? `${t("common.fragmentGap")}${t("node.normalized")}` : ""}</p>
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="adjust-volume" handleId="in" type="target" position={Position.Left} label="Media" color={FFMPEG_COLORS.media} icon={<AudioLines />} side="left" top="calc(100% - 24px)" accepts={ACCEPTS_MEDIA} />

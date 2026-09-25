@@ -139,7 +139,7 @@ export default function ImageEditingBody({
                 </div>
                 <p className="ied-critic-body">
                   {t(CRITIC_LINE)}
-                  {critic.threshold !== null && ` ${t("tut.thresholdN", { n: critic.threshold })}`}
+                  {critic.threshold !== null && `${t("common.fragmentGap")}${t("tut.thresholdN", { n: critic.threshold })}`}
                 </p>
               </div>
             )}

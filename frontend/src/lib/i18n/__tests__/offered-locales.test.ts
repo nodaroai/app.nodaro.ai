@@ -18,11 +18,13 @@ import { registeredChromeLocales } from ".."
  * stub dictionary must never leak into it.
  */
 describe("offered locales — derived from chrome-dictionary coverage", () => {
-  it("English and Hebrew are offered (both dictionaries are complete)", () => {
+  it("English, Hebrew and Japanese are offered (their dictionaries are complete)", () => {
     expect(isOfferedLocale("en")).toBe(true)
     expect(isOfferedLocale("he")).toBe(true)
+    expect(isOfferedLocale("ja")).toBe(true)
     expect(chromeCoverage("en")).toBe(1)
     expect(chromeCoverage("he")).toBeGreaterThanOrEqual(CHROME_COMPLETE_RATIO)
+    expect(chromeCoverage("ja")).toBeGreaterThanOrEqual(CHROME_COMPLETE_RATIO)
   })
 
   it("a stub dictionary is NOT offered — German sits at well under 1% coverage", () => {
@@ -60,6 +62,7 @@ describe("offered locales — derived from chrome-dictionary coverage", () => {
 describe("languageMenuRows — the current locale stays visible even when not offered", () => {
   it("returns exactly the offered languages when the current one is offered", () => {
     expect(languageMenuRows("he")).toEqual(offeredLanguages())
+    expect(languageMenuRows("ja")).toEqual(offeredLanguages())
     expect(languageMenuRows("en")).toEqual(offeredLanguages())
   })
 

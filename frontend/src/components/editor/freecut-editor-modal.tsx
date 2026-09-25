@@ -406,7 +406,8 @@ function EditorUnreachable({ url }: { readonly url: string }) {
         {isLocal ? (
           <p className="text-white/60 text-xs leading-relaxed">
             {t("mediaed.unreachableLocalA")} <span className="font-mono">{url}</span>{t("mediaed.unreachableLocalB")}{" "}
-            <span className="font-mono">FREECUT_URL</span>.
+            <span className="font-mono">FREECUT_URL</span>
+            {t("common.sentenceEnd")}
           </p>
         ) : (
           <p className="text-white/60 text-xs leading-relaxed">

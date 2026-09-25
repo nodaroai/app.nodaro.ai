@@ -421,7 +421,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
           <SelectContent>
             {mergedWorkflows.map((w) => (
               <SelectItem key={w.id} value={w.id}>
-                {w.name}{w.id === workflowId ? ` ${t("cfgext.subwfCurrent")}` : ""}{" "}
+                {w.name}{w.id === workflowId ? `${t("common.fragmentGap")}${t("cfgext.subwfCurrent")}` : ""}{t("common.fragmentGap")}
                 {w.routes.length === 1
                   ? t("cfgext.subwfRouteCountOne", { count: w.routes.length })
                   : t("cfgext.subwfRouteCount", { count: w.routes.length })}

@@ -41,7 +41,7 @@ export function AppearancePage({ state, jobs }: StudioPageProps<CharacterStudioS
         </div>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
           {t("studio.anchorSetExplainer")}
-          {!hasPortrait && ` ${t("studio.approvePortraitFirstAngles")}`}
+          {!hasPortrait && `${t("common.fragmentGap")}${t("studio.approvePortraitFirstAngles")}`}
         </p>
       </div>
       <div>

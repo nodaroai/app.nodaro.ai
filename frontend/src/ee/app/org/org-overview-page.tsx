@@ -157,8 +157,8 @@ export default function OrgOverviewPage() {
 
         {!workspaces.isLoading && !workspaces.error && live.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            {`${t("org.noPluralYet", { plural: workspacesWord.toLowerCase() })}.`}
-            {isAdmin && orgStatus === "active" && ` ${t("org.createOneHint")}`}
+            {`${t("org.noPluralYet", { plural: workspacesWord.toLowerCase() })}${t("common.sentenceEnd")}`}
+            {isAdmin && orgStatus === "active" && `${t("common.fragmentGap")}${t("org.createOneHint")}`}
           </p>
         )}
 

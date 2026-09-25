@@ -144,7 +144,8 @@ export function ImageOverlayEditor({ nodeId, open, onOpenChange, initialSelected
                 aria-label={t("overlayPlatform.label")}
               >
                 <MonitorSmartphone className="w-4 h-4 shrink-0" aria-hidden />
-                <span className="shrink-0">{t("overlayEditor.platform")}:</span>
+                {/* The trigger's gap spaces the value, so the colon carries no trailing space. */}
+                <span className="shrink-0">{t("overlayEditor.platform")}{t("common.labelColon").trimEnd()}</span>
                 <span className="truncate max-w-[16rem]">{platform ? `${localizeOption(platform.label)} · ${platform.width}×${platform.height}` : t("overlayEditor.choosePlatform")}</span>
               </SelectTrigger>
               <SelectContent>
@@ -174,7 +175,7 @@ export function ImageOverlayEditor({ nodeId, open, onOpenChange, initialSelected
           </div>
           <span className="text-[11px] text-muted-foreground ms-auto me-10">
             {platform
-              ? `${t("proccfg.overlay.outputSize")}: ${platform.width} × ${platform.height}`
+              ? `${t("proccfg.overlay.outputSize")}${t("common.labelColon")}${platform.width} × ${platform.height}`
               : upstream.baseSize ? t("proccfg.overlay.baseSize", { w: upstream.baseSize.w, h: upstream.baseSize.h }) : ""}
           </span>
         </div>

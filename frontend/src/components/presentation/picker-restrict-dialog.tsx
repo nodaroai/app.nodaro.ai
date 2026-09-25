@@ -16,6 +16,7 @@ import { usePickerDir } from "@/lib/locale-store"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { SingleDimParameterPickerMeta } from "@/lib/picker-ui"
+import { usePickerLabel } from "./picker-label"
 
 interface PickerRestrictDialogProps {
   open: boolean
@@ -45,6 +46,7 @@ export function PickerRestrictDialog({
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog(meta.catalogId)
   const [query, setQuery] = useState("")
   const t = useT()
+  const pickerLabel = usePickerLabel(meta)
 
   const allIds = useMemo(() => meta.entries.map((e) => e.id), [meta.entries])
 
@@ -109,7 +111,7 @@ export function PickerRestrictDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Filter className="size-4 text-[#ff0073]" />
-            {t("present.restrictLabel", { label: meta.label })}
+            {t("present.restrictLabel", { label: pickerLabel })}
           </DialogTitle>
         </DialogHeader>
 
@@ -144,11 +146,11 @@ export function PickerRestrictDialog({
         <div className="relative shrink-0 mb-2">
           <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
           <Input
-            placeholder={t("present.searchLabelPlaceholder", { label: meta.label.toLowerCase() })}
+            placeholder={t("present.searchLabelPlaceholder", { label: pickerLabel.toLowerCase() })}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="ps-8 h-9 text-sm"
-            aria-label={t("present.searchLabel", { label: meta.label })}
+            aria-label={t("present.searchLabel", { label: pickerLabel })}
           />
         </div>
 

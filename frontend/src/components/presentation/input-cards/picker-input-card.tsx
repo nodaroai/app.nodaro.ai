@@ -26,6 +26,7 @@ import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { usePickerDir } from "@/lib/locale-store"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
+import { usePickerLabel } from "../picker-label"
 import {
   getParameterPickerMeta,
   useCatalogPacksVersion,
@@ -106,6 +107,7 @@ function SinglePickerCard({
   const { resolveLabel, resolveDescription } = useLocalizedCatalog(meta.catalogId)
   const [modalOpen, setModalOpen] = useState(false)
   const t = useT()
+  const pickerLabel = usePickerLabel(meta)
 
   const field = meta.valueField
 
@@ -164,7 +166,7 @@ function SinglePickerCard({
           </div>
         )
       }}
-      searchPlaceholder={t("present.searchLabelPlaceholder", { label: meta.label.toLowerCase() })}
+      searchPlaceholder={t("present.searchLabelPlaceholder", { label: pickerLabel.toLowerCase() })}
       catalog={meta.catalogId}
       gridClassName="grid grid-cols-3 sm:grid-cols-4 gap-2"
       iconClassName={bigArt ? "w-full aspect-square" : undefined}
@@ -196,7 +198,7 @@ function SinglePickerCard({
                     {iconFor(currentValue)}
                   </div>
                 )}
-                <SelectValue placeholder={t("present.selectLabelPlaceholder", { label: meta.label.toLowerCase() })}>
+                <SelectValue placeholder={t("present.selectLabelPlaceholder", { label: pickerLabel.toLowerCase() })}>
                   <span className="truncate text-sm">{selectedLabel}</span>
                 </SelectValue>
               </div>
@@ -257,7 +259,7 @@ function SinglePickerCard({
               "size-14 shrink-0 rounded-lg overflow-hidden bg-muted/30 border border-border flex items-center justify-center transition-colors",
               !readOnly && "hover:border-[#ff0073]/50 cursor-pointer",
             )}
-            aria-label={t("present.changeLabel", { label: meta.label })}
+            aria-label={t("present.changeLabel", { label: pickerLabel })}
           >
             {iconFor(currentValue) ?? (
               <span className="text-[10px] font-medium text-muted-foreground/80 text-center px-1 leading-tight">
@@ -305,7 +307,7 @@ function SinglePickerCard({
         <Dialog open={modalOpen} onOpenChange={setModalOpen}>
           <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-auto" dir={dir}>
             <DialogHeader>
-              <DialogTitle>{t("present.selectLabelTitle", { label: meta.label })}</DialogTitle>
+              <DialogTitle>{t("present.selectLabelTitle", { label: pickerLabel })}</DialogTitle>
             </DialogHeader>
             {grid}
           </DialogContent>
@@ -349,6 +351,7 @@ function MultiPickerCard({
   const { resolveLabel } = useLocalizedCatalog(meta.catalogId)
   const [modalOpen, setModalOpen] = useState(false)
   const t = useT()
+  const pickerLabel = usePickerLabel(meta)
 
   // Build the value object from the right source — fullscreen reads from
   // inputValues first, falls back to node.data for unset fields.
@@ -418,12 +421,12 @@ function MultiPickerCard({
             !readOnly && "hover:border-[#ff0073]/50 cursor-pointer",
           )}
           dir={dir}
-          aria-label={t("present.configureLabel", { label: meta.label })}
+          aria-label={t("present.configureLabel", { label: pickerLabel })}
         >
           <span className="flex-1 min-w-0 truncate">
             {summaryParts.length === 0 ? (
               <span className="text-muted-foreground italic">
-                {t("present.configureLabelHint", { label: meta.label.toLowerCase() })}
+                {t("present.configureLabelHint", { label: pickerLabel.toLowerCase() })}
               </span>
             ) : (
               <span className="text-foreground">{summaryParts.join(" · ")}</span>
@@ -435,7 +438,7 @@ function MultiPickerCard({
         <Dialog open={modalOpen} onOpenChange={setModalOpen}>
           <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-auto" dir={dir}>
             <DialogHeader>
-              <DialogTitle>{t("present.configureLabel", { label: meta.label })}</DialogTitle>
+              <DialogTitle>{t("present.configureLabel", { label: pickerLabel })}</DialogTitle>
             </DialogHeader>
             <Picker value={value} onChange={handlePatch} />
           </DialogContent>
@@ -460,11 +463,11 @@ function MultiPickerCard({
               "flex-1 min-w-0 rounded-lg bg-muted/30 border border-border px-3 py-2 text-start transition-colors",
               !readOnly && "hover:border-[#ff0073]/50 cursor-pointer",
             )}
-            aria-label={t("present.configureLabel", { label: meta.label })}
+            aria-label={t("present.configureLabel", { label: pickerLabel })}
           >
             {summaryParts.length === 0 ? (
               <p className="text-sm text-muted-foreground italic">
-                {t("present.noLabelSelected", { label: meta.label.toLowerCase() })}
+                {t("present.noLabelSelected", { label: pickerLabel.toLowerCase() })}
               </p>
             ) : (
               <p className="text-sm text-foreground line-clamp-2">
@@ -488,7 +491,7 @@ function MultiPickerCard({
         <Dialog open={modalOpen} onOpenChange={setModalOpen}>
           <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-auto" dir={dir}>
             <DialogHeader>
-              <DialogTitle>{t("present.configureLabel", { label: meta.label })}</DialogTitle>
+              <DialogTitle>{t("present.configureLabel", { label: pickerLabel })}</DialogTitle>
             </DialogHeader>
             <Picker value={value} onChange={handlePatch} />
           </DialogContent>

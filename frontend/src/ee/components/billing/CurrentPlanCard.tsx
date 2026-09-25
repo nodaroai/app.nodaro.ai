@@ -127,7 +127,7 @@ export function CurrentPlanCard({
         <div className="mb-5 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
           <Calendar className="h-4 w-4 text-amber-500 flex-shrink-0" />
           <p className="text-sm text-amber-700 dark:text-amber-400">
-            {tr("billing.cancelScheduledPrefix")}{" "}
+            {tr("billing.cancelScheduledPrefix")}{tr("common.fragmentGap")}
             <strong>{formatDate(scheduledCancelDate)}</strong>{tr("billing.cancelScheduledSuffix")}
           </p>
         </div>

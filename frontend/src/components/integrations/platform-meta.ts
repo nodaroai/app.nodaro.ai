@@ -33,13 +33,33 @@ const PLATFORM_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
 }
 
 /**
+ * The backend registry's media kinds (`MediaKind`: image, video, carousel,
+ * story, text) in words. A kind added there before this map catches up shows
+ * its id rather than nothing.
+ */
+const MEDIA_KIND_KEYS: Readonly<Record<string, MessageKey>> = {
+  image: "integ.mediaImage",
+  video: "integ.mediaVideo",
+  carousel: "integ.mediaCarousel",
+  story: "integ.mediaStory",
+  text: "integ.mediaText",
+}
+
+/**
  * A network the registry added but this map has not caught up with still gets
  * a sentence, derived from its declared media capabilities — the grid has
  * always been allowed to grow from the backend alone.
  */
 export function describeProvider(provider: SocialProviderInfo, t: TFunction): string {
   const key: MessageKey | undefined = PLATFORM_DESCRIPTIONS[provider.id]
-  return key ? t(key) : t("integ.platformDescFallback", { media: provider.capabilities.media.join(", ") })
+  if (key) return t(key)
+  const media = provider.capabilities.media
+    .map((kind) => {
+      const kindKey: MessageKey | undefined = MEDIA_KIND_KEYS[kind]
+      return kindKey ? t(kindKey) : kind
+    })
+    .join(t("common.listComma"))
+  return t("integ.platformDescFallbackMedia", { media })
 }
 
 export { PLATFORM_DESCRIPTIONS }

@@ -32,21 +32,10 @@ import { ChatPanel } from "./chat/chat-panel"
 import { creditUnits } from "@/lib/credit-units"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { useT, tx } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
-
-/** Dictionary key of the human-readable label for each pipeline stage (ordered). */
-const STAGE_LABEL_KEYS: Record<PipelineStageName, MessageKey> = {
-  script: "pipe.stageLabelScript",
-  characters: "pipe.stageLabelCharacters",
-  objects: "pipe.stageLabelObjects",
-  locations: "pipe.stageLabelLocations",
-  shot_list: "pipe.stageLabelShotList",
-  scene_images: "pipe.stageLabelSceneImages",
-  animate_audio_edit: "pipe.stageLabelAnimateAudio",
-  post_merge: "pipe.stageLabelPostMerge",
-}
+import { STAGE_LABEL_KEYS, stageLabel } from "./stage-labels"
 
 /**
  * Phase 1D.2c-b-i — pipeline stages at or after `scene_images`. Used to
@@ -598,7 +587,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
             {t("pipe.originalPipeline")}
           </button>
           <span className="text-muted-foreground/70">
-            {t("pipe.branchedAtStage", { stage: pipeline.branched_from_stage ?? "" })}
+            {t("pipe.branchedAtStageLabel", { stage: stageLabel(pipeline.branched_from_stage ?? "", t) })}
           </span>
         </div>
       )}

@@ -140,7 +140,7 @@ export default function AppRunnerPage() {
           <DialogTitle>{t("runner.moveToArchive")}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          {t("runner.archiveDescPre")} <Link to="/archived-runs" className="underline">{t("runner.archivedRuns")}</Link>.
+          {t("runner.archiveDescPre")}{t("common.fragmentGap")}<Link to="/archived-runs" className="underline">{t("runner.archivedRuns")}</Link>{t("common.sentenceEnd")}
         </p>
         <DialogFooter className="flex gap-2 sm:justify-end">
           <Button variant="outline" onClick={() => runSlots.setDeleteConfirmSlotId(null)} autoFocus>

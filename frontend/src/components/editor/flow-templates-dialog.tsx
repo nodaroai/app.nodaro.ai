@@ -101,7 +101,7 @@ export function FlowTemplatesDialog({
           {TEMPLATE_GROUPS.map((group) => (
             <FlowTemplateGroupCard
               key={group.name}
-              name={group.name}
+              name={t(group.labelKey)}
               descriptionKey={group.descriptionKey}
               generationKey={group.generationKey}
               draft={draft}

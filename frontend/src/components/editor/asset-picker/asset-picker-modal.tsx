@@ -417,8 +417,8 @@ function DupChoicePanel({
   return (
     <div className="px-5 flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">
-        {clones.length === 1 ? t("entity.dupHaveCopyOne") : t("entity.dupHaveCopiesMany", { n: clones.length })}{" "}
-        <span className="font-medium text-foreground">{listingTitle}</span> {t("entity.dupInLibraryTail")}
+        {clones.length === 1 ? t("entity.dupHaveCopyOne") : t("entity.dupHaveCopiesMany", { n: clones.length })}{t("common.fragmentGap")}
+        <span className="font-medium text-foreground">{listingTitle}</span>{t("common.fragmentGap")}{t("entity.dupInLibraryTail")}
       </p>
       <div className="grid grid-cols-3 gap-2 max-h-[300px] overflow-y-auto">
         {clones.map((c) => {

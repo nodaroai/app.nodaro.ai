@@ -101,8 +101,9 @@ export function CharactersPanel({ pipelineId, plan, mode }: Props) {
         {t("pipe.characterNofM", { n: approvedCount + skippedCount + 1, total: totalCount })}
         {(approvedCount > 0 || skippedCount > 0) && (
           <span className="ms-1">
-            ({t("pipe.nApproved", { n: approvedCount })}
-            {skippedCount > 0 && t("pipe.nSkippedSuffix", { n: skippedCount })})
+            {skippedCount > 0
+              ? t("pipe.nApprovedSkippedParen", { n: approvedCount, skipped: skippedCount })
+              : t("pipe.nApprovedParen", { n: approvedCount })}
           </span>
         )}
       </div>
@@ -293,10 +294,10 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
         >
           <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-800 dark:text-amber-200">
-            <span className="font-medium">{name}</span>{" "}
+            <span className="font-medium">{name}</span>{t("common.fragmentGap")}
             {sceneRefs.length === 1
-              ? t("pipe.appearsInScene", { scenes: sceneRefs.join(", ") })
-              : t("pipe.appearsInScenes", { scenes: sceneRefs.join(", ") })}
+              ? t("pipe.appearsInScene", { scenes: sceneRefs.join(t("common.listComma")) })
+              : t("pipe.appearsInScenes", { scenes: sceneRefs.join(t("common.listComma")) })}
           </div>
         </div>
       )}

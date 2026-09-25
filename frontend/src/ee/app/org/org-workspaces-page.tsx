@@ -139,7 +139,7 @@ export default function OrgWorkspacesPage() {
 
       {!workspaces.isLoading && !workspaces.error && all.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          {`${t("org.noPluralYet", { plural: workspacesWord.toLowerCase() })}.`}
+          {`${t("org.noPluralYet", { plural: workspacesWord.toLowerCase() })}${t("common.sentenceEnd")}`}
         </p>
       )}
 

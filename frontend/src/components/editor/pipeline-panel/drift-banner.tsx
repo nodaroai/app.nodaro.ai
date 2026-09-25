@@ -4,6 +4,7 @@ import type { PipelineDriftSummary } from "@nodaro/shared"
 import { Button } from "@/components/ui/button"
 import { CriticBanner } from "./_critic-banner"
 import { useT } from "@/lib/i18n"
+import { stageLabel } from "./stage-labels"
 
 interface Props {
   readonly drift: PipelineDriftSummary | null
@@ -39,11 +40,10 @@ export function DriftBanner({ drift, onFork, onDismiss }: Props) {
       onDismiss={onDismiss}
       header={
         <div className="font-medium text-amber-900 dark:text-amber-200">
-          {t("pipe.canvasDriftAt")}{" "}
-          <span className="font-mono">{drift.stageName}</span>
+          {t("pipe.canvasDriftAtStage", { stage: stageLabel(drift.stageName, t) })}
           {driftedCount > 0 && (
             <span className="text-amber-700 dark:text-amber-300">
-              {" — "}
+              {t("common.dashJoin")}
               {driftedCount === 1
                 ? t("pipe.affectedEntityOne", { n: driftedCount })
                 : t("pipe.affectedEntities", { n: driftedCount })}

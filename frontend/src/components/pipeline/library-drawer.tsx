@@ -136,8 +136,8 @@ export function LibraryDrawer({
         {tab === "featured" && (
           <>
             <p className="rounded-md border border-[#2a2a2a] p-2 font-mono text-[10px] text-muted-foreground">
-              <span className="text-[#ff0073]">ⓘ</span> {t("pipe.cinemaFeaturedInfoPre")}{" "}
-              <span className="text-foreground">{t("pipe.cinemaUseInShotQuoted")}</span> {t("pipe.cinemaFeaturedInfoPost")}
+              <span className="text-[#ff0073]">ⓘ</span> {t("pipe.cinemaFeaturedInfoPre")}{t("common.fragmentGap")}
+              <span className="text-foreground">{t("pipe.cinemaUseInShotQuoted")}</span>{t("common.fragmentGap")}{t("pipe.cinemaFeaturedInfoPost")}
             </p>
             {featured.map((f) => (
               <Card

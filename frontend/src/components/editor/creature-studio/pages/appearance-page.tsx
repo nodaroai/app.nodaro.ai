@@ -145,7 +145,7 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
         {/* Generate */}
         <section>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-slate-400">{t("creature.candidates")}:</span>
+            <span className="text-[11px] text-slate-400">{t("studio.candidatesColon")}</span>
             <div className="flex gap-1" role="group" aria-label={t("creature.candidateCountAria")}>
               {([1, 2, 4] as const).map((n) => (
                 <button

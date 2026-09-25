@@ -535,7 +535,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           />
           <p className="text-[10px] text-muted-foreground">
             {t("audiocfg.hintV6Duration")}
-            {getEffectiveSunoCustomMode(data) ? "." : t("audiocfg.hintV6DurationInactive")}
+            {getEffectiveSunoCustomMode(data) ? t("common.sentenceEnd") : t("audiocfg.hintV6DurationInactive")}
           </p>
         </div>
       )}
@@ -927,7 +927,7 @@ export function SunoInheritedHint({ what, manual, inherited, sourceLabel }: {
   return (
     <p id={sunoInheritedHintId(what)} className="text-[10px] text-muted-foreground" data-testid={`suno-inherited-${what}`}>
       {manual?.trim()
-        ? <>{t("audiocfg.inheritedPrecedencePre", { what })} <span className="font-mono text-foreground/80">{inherited}</span> {t("audiocfg.inheritedPrecedencePost")}</>
+        ? <>{t(what === "task" ? "audiocfg.inheritedPrecedencePreTask" : "audiocfg.inheritedPrecedencePreTrack")} <span className="font-mono text-foreground/80">{inherited}</span> {t("audiocfg.inheritedPrecedencePost")}</>
         : <>{t("audiocfg.inheritedFromPre", { from })} <span className="font-mono text-foreground/80">{inherited}</span> {t("audiocfg.inheritedFromPost")}</>}
     </p>
   )
@@ -996,7 +996,7 @@ export function AudioFxConfig({ data, onUpdate }: { readonly data: AudioFxData; 
       </div>
       {isReverb && (
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.wetDryMix")}: {data.mix ?? "auto"}</label>
+          <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.wetDryMix")}{t("common.labelColon")}{data.mix ?? "auto"}</label>
           <Slider min={0} max={100} step={1} value={[data.mix ?? 30]} onValueChange={(vals) => onUpdate({ mix: vals[0] })} />
           <p className="text-[10px] text-muted-foreground">{t("audiocfg.hintHigherRoom")}</p>
         </div>
@@ -1004,11 +1004,11 @@ export function AudioFxConfig({ data, onUpdate }: { readonly data: AudioFxData; 
       {(isCustom || data.preset === "echo") && (
         <>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.delayMs")}: {data.delayMs ?? 250}</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.delayMs")}{t("common.labelColon")}{data.delayMs ?? 250}</label>
             <Slider min={20} max={2000} step={10} value={[data.delayMs ?? 250]} onValueChange={(vals) => onUpdate({ delayMs: vals[0] })} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.decay")}: {data.decay ?? 0.4}</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.decay")}{t("common.labelColon")}{data.decay ?? 0.4}</label>
             <Slider min={0.1} max={0.9} step={0.05} value={[data.decay ?? 0.4]} onValueChange={(vals) => onUpdate({ decay: vals[0] })} />
           </div>
         </>
@@ -1016,11 +1016,11 @@ export function AudioFxConfig({ data, onUpdate }: { readonly data: AudioFxData; 
       {isCustom && (
         <>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.eqLow")}: {data.eqLow ?? 0}</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.eqLow")}{t("common.labelColon")}{data.eqLow ?? 0}</label>
             <Slider min={-20} max={20} step={1} value={[data.eqLow ?? 0]} onValueChange={(vals) => onUpdate({ eqLow: vals[0] })} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.eqHigh")}: {data.eqHigh ?? 0}</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.eqHigh")}{t("common.labelColon")}{data.eqHigh ?? 0}</label>
             <Slider min={-20} max={20} step={1} value={[data.eqHigh ?? 0]} onValueChange={(vals) => onUpdate({ eqHigh: vals[0] })} />
           </div>
         </>
@@ -1037,17 +1037,17 @@ export function SilenceDetectConfig({ data, onUpdate }: { readonly data: Silence
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silenceThreshold")}: {thresholdDb}</label>
+        <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silenceThreshold")}{t("common.labelColon")}{thresholdDb}</label>
         <Slider min={-60} max={-10} step={1} value={[thresholdDb]} onValueChange={(vals) => onUpdate({ thresholdDb: vals[0] })} />
         <p className="text-[10px] text-muted-foreground">{t("audiocfg.silenceThresholdHint")}</p>
       </div>
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silenceMinSilence")}: {minSilenceMs}</label>
+        <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silenceMinSilence")}{t("common.labelColon")}{minSilenceMs}</label>
         <Slider min={100} max={3000} step={50} value={[minSilenceMs]} onValueChange={(vals) => onUpdate({ minSilenceMs: vals[0] })} />
         <p className="text-[10px] text-muted-foreground">{t("audiocfg.silenceMinSilenceHint")}</p>
       </div>
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silencePadding")}: {padMs}</label>
+        <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silencePadding")}{t("common.labelColon")}{padMs}</label>
         <Slider min={0} max={1000} step={10} value={[padMs]} onValueChange={(vals) => onUpdate({ padMs: vals[0] })} />
         <p className="text-[10px] text-muted-foreground">{t("audiocfg.silencePaddingHint")}</p>
       </div>
@@ -2429,7 +2429,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
       </div>
       <ProviderAudioTagWarning provider={ttsProvider} fieldValues={[data.text]} />
       <div>
-        <Label>{t("audiocfg.loudness")}: {data.loudness?.toFixed(1) ?? "0.0"}</Label>
+        <Label>{t("audiocfg.loudness")}{t("common.labelColon")}{data.loudness?.toFixed(1) ?? "0.0"}</Label>
         <Input
           type="range"
           min={-1}
@@ -2445,7 +2445,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
         </div>
       </div>
       <div>
-        <Label>{t("field.guidanceScale")}: {data.guidanceScale ?? 5}</Label>
+        <Label>{t("field.guidanceScale")}{t("common.labelColon")}{data.guidanceScale ?? 5}</Label>
         <Input
           type="range"
           min={0}
@@ -2854,18 +2854,18 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
         </Select>
         {data.voiceFx && AUDIO_FX_REVERB_PRESETS.has(data.voiceFx.preset) && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="voice-fx-mix">{t("audiocfg.wetDryMix")}: {data.voiceFx.wetDryMix ?? "auto"}</Label>
+            <Label htmlFor="voice-fx-mix">{t("audiocfg.wetDryMix")}{t("common.labelColon")}{data.voiceFx.wetDryMix ?? "auto"}</Label>
             <Slider id="voice-fx-mix" min={0} max={100} step={1} value={[data.voiceFx.wetDryMix ?? 30]} onValueChange={(vals) => onUpdate({ voiceFx: { ...data.voiceFx!, wetDryMix: vals[0] } })} />
           </div>
         )}
         {data.voiceFx && (data.voiceFx.preset === "echo" || data.voiceFx.preset === "custom") && (
           <>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="voice-fx-delay">{t("audiocfg.delayMs")}: {data.voiceFx.delayMs ?? 250}</Label>
+              <Label htmlFor="voice-fx-delay">{t("audiocfg.delayMs")}{t("common.labelColon")}{data.voiceFx.delayMs ?? 250}</Label>
               <Slider id="voice-fx-delay" min={20} max={2000} step={10} value={[data.voiceFx.delayMs ?? 250]} onValueChange={(vals) => onUpdate({ voiceFx: { ...data.voiceFx!, delayMs: vals[0] } })} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="voice-fx-decay">{t("audiocfg.decay")}: {data.voiceFx.decay ?? 0.4}</Label>
+              <Label htmlFor="voice-fx-decay">{t("audiocfg.decay")}{t("common.labelColon")}{data.voiceFx.decay ?? 0.4}</Label>
               <Slider id="voice-fx-decay" min={0} max={1} step={0.05} value={[data.voiceFx.decay ?? 0.4]} onValueChange={(vals) => onUpdate({ voiceFx: { ...data.voiceFx!, decay: vals[0] } })} />
             </div>
           </>

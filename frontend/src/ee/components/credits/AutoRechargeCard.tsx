@@ -128,7 +128,7 @@ export function AutoRechargeCard({ frameless = false }: { frameless?: boolean } 
             {t("credits.autoRecharge")}
           </h3>
           <p style={{ fontSize: 13.5, color: "var(--blg-t2-dim)", marginTop: 2 }}>
-            {t("credits.autoRechargeDescPrefix")} <span style={{ color: "var(--blg-cyan-text)", fontWeight: 600 }}>{t("credits.autoRechargeDescBalance")}</span>{" "}
+            {t("credits.autoRechargeDescPrefix")}{t("common.fragmentGap")}<span style={{ color: "var(--blg-cyan-text)", fontWeight: 600 }}>{t("credits.autoRechargeDescBalance")}</span>{t("common.fragmentGap")}
             {t("credits.autoRechargeDescSuffix")}
           </p>
         </div>

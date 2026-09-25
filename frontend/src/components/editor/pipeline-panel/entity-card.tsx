@@ -345,19 +345,19 @@ export function EntityCard({
           <div className="text-xs text-amber-800 dark:text-amber-200">
             {variantError ? (
               <>
-                <span className="font-medium">{t("pipe.variantGenFailed")}</span>{" "}
+                <span className="font-medium">{t("pipe.variantGenFailed")}</span>{t("common.fragmentGap")}
                 {variantError}
               </>
             ) : variantsFailedCount > 0 ? (
               <>
                 <span className="font-medium">
                   {t("pipe.variantsFailedCount", { failed: variantsFailedCount, total: variantsTotalCount })}
-                </span>{" "}
+                </span>{t("common.fragmentGap")}
                 {t("pipe.retryRegenerateMissing")}
               </>
             ) : (
               <>
-                <span className="font-medium">{t("pipe.variantsNotGenerated")}</span>{" "}
+                <span className="font-medium">{t("pipe.variantsNotGenerated")}</span>{t("common.fragmentGap")}
                 {t("pipe.variantsNotGeneratedDesc")}
               </>
             )}

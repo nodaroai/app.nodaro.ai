@@ -112,8 +112,9 @@ export default function InvitationPage() {
                 {preview.inviterName ? t("org.inviterInvitedYou", { name: preview.inviterName }) : t("org.youHaveBeenInvited")}
               </h1>
               <p className="text-sm text-muted-foreground">
-                {t("org.toJoin")} <span className="font-medium text-foreground">{place}</span>
-                {preview.workspaceName ? ` — ${t("org.aWorkspace", { workspace: (vocabulary.workspace ?? t("org.workspaceWord")).toLowerCase() })}` : ""}.
+                {t("org.toJoin")}{t("common.fragmentGap")}<span className="font-medium text-foreground">{place}</span>
+                {preview.workspaceName ? t("org.aWorkspaceSuffix", { workspace: (vocabulary.workspace ?? t("org.workspaceWord")).toLowerCase() }) : ""}
+                {t("common.sentenceEnd")}
               </p>
               <p className="text-xs text-muted-foreground">
                 {t("org.sentToEmail", { email: preview.email })}
@@ -171,7 +172,9 @@ function goneMessage(preview: InvitationPreview | null, t: TFunction): string {
 function acceptFailureMessage(code: string, preview: InvitationPreview | null): string {
   switch (code) {
     case "email_mismatch":
-      return tx("org.inviteEmailMismatch", { email: preview?.email ?? tx("org.aDifferentAddress") })
+      return preview?.email != null
+        ? tx("org.inviteEmailMismatch", { email: preview.email })
+        : tx("org.inviteEmailMismatchUnknown")
     case "invitation_expired":
       return tx("org.inviteExpired")
     case "invitation_revoked":

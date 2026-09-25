@@ -206,7 +206,7 @@ export function getNodeTypeDisplayName(type: string): string {
 
 /**
  * The label the palette PERSISTS for a node type (`NODE_DEFINITIONS[].label`,
- * mirrored into `defaultData.label`) — the exact string `NODE_LABELS_HE` is
+ * mirrored into `defaultData.label`) — the exact string the `node` label tables are
  * keyed by. The Label field's round-trip (show localized → commit English)
  * compares against THIS, so it can never disagree with what the node stores.
  */

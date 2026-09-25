@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import { useT, tx } from "@/lib/i18n"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 import type { ObjectReferencePhoto, ObjectReferencePhotoKind } from "@/types/nodes"
 
 /**
@@ -24,13 +24,15 @@ const KINDS: ReadonlyArray<ObjectReferencePhotoKind> = [
   "other",
 ]
 
-const KIND_LABELS: Readonly<Record<ObjectReferencePhotoKind, string>> = {
-  front: "front",
-  side: "side",
-  detail: "detail",
-  context: "context",
-  moodBoard: "mood board",
-  other: "other",
+// The same keys as the object studio: a kind shows by its label, never by the
+// id ("moodBoard") it is stored as.
+const KIND_LABELS: Readonly<Record<ObjectReferencePhotoKind, MessageKey>> = {
+  front: "studio.kindFront",
+  side: "studio.kindSide",
+  detail: "studio.kindDetail",
+  context: "studio.kindContext",
+  moodBoard: "studio.kindMoodBoard",
+  other: "studio.otherLower",
 }
 
 const MAX_PHOTOS = 20
@@ -53,7 +55,8 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
   const visiblePhotos = q
     ? photos.filter((p) => {
         const filename = p.url.split("/").pop()?.toLowerCase() ?? ""
-        const label = KIND_LABELS[p.kind]?.toLowerCase() ?? ""
+        const labelKey = KIND_LABELS[p.kind]
+        const label = labelKey ? t(labelKey).toLowerCase() : ""
         return (
           p.kind.toLowerCase().includes(q) ||
           label.includes(q) ||
@@ -114,21 +117,24 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
             // Original index needed for remove() to slice the correct entry
             // from the full `photos` array — filtering changes positions.
             const originalIdx = photos.indexOf(p)
+            // A kind saved before this list changed shows as stored.
+            const labelKey: MessageKey | undefined = KIND_LABELS[p.kind]
+            const kindLabel = labelKey ? t(labelKey) : p.kind
             return (
               <div key={p.url + originalIdx} className="relative group">
                 <img
                   src={p.url}
-                  alt={p.kind}
+                  alt={kindLabel}
                   loading="lazy"
                   className="w-full aspect-square object-cover rounded border border-[#1e293b]"
                 />
                 <span className="absolute top-1 start-1 bg-black/70 text-[9px] text-white px-1 rounded">
-                  {p.kind}
+                  {kindLabel}
                 </span>
                 <button
                   type="button"
                   onClick={() => remove(originalIdx)}
-                  aria-label={t("creature.removeNameAria", { name: p.kind })}
+                  aria-label={t("creature.removeNameAria", { name: kindLabel })}
                   className="absolute top-1 end-1 bg-black/70 hover:bg-red-500 text-white text-[10px] w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   ✕
@@ -158,7 +164,7 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
           className="text-[11px] bg-[#1a1d27] border border-[#1e293b] rounded px-2 py-1.5 text-slate-300"
         >
           {KINDS.map((k) => (
-            <option key={k} value={k}>{k}</option>
+            <option key={k} value={k}>{t(KIND_LABELS[k])}</option>
           ))}
         </select>
         <input

@@ -215,7 +215,7 @@ export function InviteMembersDialog({
               </p>
               {parsed.invalid.length > 0 && (
                 <p className="text-xs text-destructive">
-                  {t("org.notAnAddress", { list: parsed.invalid.slice(0, 5).join(", ") })}
+                  {t("org.notAnAddress", { list: parsed.invalid.slice(0, 5).join(t("common.listComma")) })}
                   {parsed.invalid.length > 5 ? ` ${t("org.andNMore", { n: parsed.invalid.length - 5 })}` : ""}
                 </p>
               )}
@@ -276,7 +276,7 @@ function summarize(parsed: ParsedEmails, tooMany: boolean, t: TFunction): string
   if (parsed.valid.length === 0) return t("org.noAddressesYet")
   const parts = [parsed.valid.length === 1 ? t("org.oneAddress") : t("org.nAddresses", { n: parsed.valid.length })]
   if (parsed.duplicates > 0) parts.push(t("org.nRepeated", { n: parsed.duplicates }))
-  return `${parts.join(", ")}.`
+  return `${parts.join(t("common.listComma"))}${t("common.sentenceEnd")}`
 }
 
 function sendLabel(count: number, t: TFunction): string {

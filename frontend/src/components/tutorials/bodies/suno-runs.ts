@@ -119,6 +119,6 @@ export function describeChange(
     const other = previous.inputs.find((p) => p.kind === input.kind)
     return other && other.picks.join("|") !== input.picks.join("|")
   })
-  if (changed.length) return t("tut.sunoChangeChanged", { names: changed.map((c) => nameOf(c.kind)).join(", ") })
+  if (changed.length) return t("tut.sunoChangeChanged", { names: changed.map((c) => nameOf(c.kind)).join(t("common.listComma")) })
   return t("tut.sunoChangeSame")
 }

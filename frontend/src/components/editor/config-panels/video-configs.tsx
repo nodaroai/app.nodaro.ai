@@ -4307,7 +4307,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           <p className="text-[11px] text-muted-foreground">
             {GVP_ANCHOR_MODE_HINTS()[data.anchorMode ?? "auto"]}
             {hasWiredEndFrame
-              ? ` ${t("vidcfg.anchorReferenceUnavailable")}`
+              ? `${t("common.fragmentGap")}${t("vidcfg.anchorReferenceUnavailable")}`
               : ""}
           </p>
         </div>
@@ -5181,7 +5181,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
         className="text-xs text-muted-foreground hover:text-foreground transition-colors text-start"
         onClick={() => setShowAdvanced(!showAdvanced)}
       >
-        {showAdvanced ? t("addnode.hide") : t("addnode.show")} {t("vidcfg.advancedSettings")}
+        {showAdvanced ? t("vidcfg.hideAdvancedSettings") : t("vidcfg.showAdvancedSettings")}
       </button>
 
       {showAdvanced && (

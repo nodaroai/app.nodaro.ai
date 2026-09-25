@@ -208,9 +208,12 @@ export default function PricingPage() {
               <p style={{ fontSize: 15, color: "var(--blg-t2)", margin: "8px 0 0", maxWidth: 560 }}>
                 {currentPlanName && (
                   <>
+                    {/* The plan name is a Latin product name, so the space
+                        before it stays in every language; the gap after the
+                        sentence comes from the dictionary. */}
                     {t("pricing.onPlanPrefix")}{" "}
                     <span style={{ color: "var(--blg-t1)", fontWeight: 600 }}>{currentPlanName}</span>
-                    {t("pricing.onPlanSuffix")}{" "}
+                    {t("pricing.onPlanSuffix")}{t("common.fragmentGap")}
                   </>
                 )}
                 {t("pricing.subscribeSubtitle")}
@@ -470,18 +473,18 @@ export default function PricingPage() {
                 <div style={{ fontSize: 18, fontWeight: 600 }}>
                   {user ? (
                     <>
-                      {t("pricing.onThisPlanPrefix")}{" "}
+                      {t("pricing.onThisPlanPrefix")}{t("common.fragmentGap")}
                       <span style={{ fontWeight: 800 }}>
                         {t("pricing.freeCreditsCount", { credits: formatNumber(creditUnits(freeTier.credits)) })}
-                      </span>{" "}
+                      </span>{t("common.fragmentGap")}
                       {t("pricing.includedAtSignup")}
                     </>
                   ) : (
                     <>
-                      {t("pricing.tryEverythingPrefix")}{" "}
+                      {t("pricing.tryEverythingPrefix")}{t("common.fragmentGap")}
                       <span style={{ fontWeight: 800 }}>
                         {t("pricing.freeCreditsCount", { credits: formatNumber(creditUnits(freeTier.credits)) })}
-                      </span>{" "}
+                      </span>{t("common.fragmentGap")}
                       {t("pricing.noCreditCardSuffix")}
                     </>
                   )}
