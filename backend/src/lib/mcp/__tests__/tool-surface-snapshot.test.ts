@@ -389,6 +389,16 @@ const VIDEO_OVERLAY_TOOL_BYTES = 3_805
 // size; well under the 8_192 B per-tool budget, and the list keeps exactly the
 // headroom it had before.
 const AUDIO_SYNC_TOOL_BYTES = 2_200
+// RAISED by the three UGC video builders (build_ugc_creator / build_ugc_clips /
+// build_ugc_cards) and nothing else — three NEW cloud-only tools, registered
+// inside the hasCredits() block and ungated by scope, so cloud/all, cloud/jobs
+// and cloud/none name them and the community sets do not. measured by this
+// suite: 1_322 + 1_291 + 1_140 = 3_753 B, each far under the 8_192 B per-tool
+// budget (no outputSchema, and only spent_job_ids carries a description).
+const UGC_BUILDER_TOOL_BYTES = 3_753
+// get_recipe's description gains one sentence saying the listing includes the
+// UGC website video on Nodaro Cloud. measured by this suite: +136 B.
+const GET_RECIPE_UGC_SENTENCE_BYTES = 136
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -421,7 +431,9 @@ export const TOOL_WIRE_BUDGET = {
     STUDIO_CLIP_START_END_MODE_BYTES +
     JOB_ENVELOPE_INPUT_BYTES +
     VIDEO_OVERLAY_TOOL_BYTES +
-    AUDIO_SYNC_TOOL_BYTES,
+    AUDIO_SYNC_TOOL_BYTES +
+    UGC_BUILDER_TOOL_BYTES +
+    GET_RECIPE_UGC_SENTENCE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

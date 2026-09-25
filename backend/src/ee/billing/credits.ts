@@ -10,7 +10,8 @@ import { authorizeExternalReservation, deliverExternalWalletSettlements, externa
 // keeps every branch below inert there.
 import { allowanceEnforcementActive, deploymentPayerActive } from "../../lib/deployment-payer.js"
 import { attemptAutoRecharge } from "./auto-recharge.js"
-import { applyOrgEntitlements } from "./org-entitlements.js"
+import { applyOrgEntitlements, effectiveTierOf, payerProfileId, spendGates } from "./org-entitlements.js"
+import { modelAvailabilityRefusal } from "./model-availability.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
@@ -18,7 +19,7 @@ import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/apply-edl-plan.js
 import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { PIPELINE_PINNABLE_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveEffectiveTier, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_BUCKET_MINUTES, buildEditPlanCreditId, type EditPlanTier } from "@nodaro/shared"
+import { PIPELINE_PINNABLE_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_BUCKET_MINUTES, buildEditPlanCreditId, type EditPlanTier } from "@nodaro/shared"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
@@ -1801,11 +1802,6 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   "audio-sync": (data) => audioSyncCreditId(Array.isArray(data.sources) ? data.sources.length : Number.NaN),
 }
 
-// Tier order for restriction checks. payg ranks above free and below basic:
-// inert while all model_pricing.tier_restriction seeds are null, but keeps an
-// admin-set "basic and up" restriction meaning "not for payg" deliberately.
-const TIER_ORDER = ["free", "payg", "basic", "standard", "pro", "business"]
-
 // ============================================================
 // Helper Functions
 // ============================================================
@@ -1815,25 +1811,6 @@ const TIER_ORDER = ["free", "payg", "basic", "standard", "pro", "business"]
  */
 function creditsDisabled(): boolean {
   return !hasCredits()
-}
-
-/**
- * Effective-tier adapter for profile rows. The derivation itself lives in
- * @nodaro/shared (`resolveEffectiveTier`): stored "free" with net lifetime
- * top-ups > 0 derives "payg"; every other stored tier passes through.
- * Entitlement sites call this; billing/provisioning writers use
- * `resolveStoredTier` (payg must never be written anywhere).
- */
-function effectiveTierOf(profile: {
-  tier?: string | null
-  subscription_tier?: string | null
-  lifetime_topup_credits: number
-}): string {
-  return resolveEffectiveTier({
-    tier: profile.tier ?? null,
-    subscription_tier: profile.subscription_tier ?? null,
-    lifetime_topup_credits: profile.lifetime_topup_credits,
-  })
 }
 
 /**
@@ -2232,9 +2209,7 @@ export class CreditsService {
     // carry the resolved deployment context but do not pass through the route
     // guard, which already loads the payer's profile. The requester still owns
     // the job and remains the identity passed to the shared credit check.
-    const profileUserId = surface?.billingContext?.payer === "deployment"
-      ? surface.billingContext.payerId
-      : userId
+    const profileUserId = payerProfileId(userId, surface?.billingContext)
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("tier, subscription_tier, lifetime_topup_credits, subscription_credits, topup_credits, daily_spent_credits, last_daily_reset, app_credits_allowance")
@@ -2280,59 +2255,32 @@ export class CreditsService {
       ? { ...dbPricing, creditCost: creditOverride }
       : dbPricing
 
-    if (!pricing.isEnabled) {
-      return {
-        allowed: false,
-        error: "This model is currently disabled",
-      }
-    }
-
     const userTier = effectiveTierOf(profile)
     // Pool-aware web spending (D1 v2): on consumer surfaces a payg account
     // spends its FREE pool only, under full free-tier semantics — the topup
     // pool is invisible here and stays redeemable via the developer surfaces.
-    // Resolved here (not by callers) so the surface flag can be threaded
-    // dumbly: for free users the restriction is vacuous, for subscribers it
-    // must not apply.
     //
     // P14: a workspace payer swaps every profile-derived gate for the org
     // entitlement grade — through the ONE helper both spend sites share, so
     // the preflight and the reservation can never disagree. Without a
     // workspace context the gates are the pre-P14 derivation, verbatim.
-    const gates = applyOrgEntitlements(
-      { userTier, webFree: Boolean(surface?.webFreeMode) && userTier === "payg" },
-      surface?.billingContext,
-    )
+    // `spendGates` is also what the UGC quote decides a model under.
+    const gates = spendGates(userTier, surface ?? {})
     const webFree = gates.webFree
     const isFree = gates.freeSemantics
     const watermark = gates.watermarkable && FREE_TIER_RESTRICTIONS.watermark
 
-    // Check tier restriction (from model_pricing table). A workspace payer is
-    // gated at the org grade (`tierForGates`), not the member's personal tier
-    // — a free-tier student's class run may use what the class may use.
-    if (pricing.tierRestriction) {
-      const userTierIndex = TIER_ORDER.indexOf(gates.tierForGates)
-      const requiredTierIndex = TIER_ORDER.indexOf(pricing.tierRestriction)
-
-      if (userTierIndex < requiredTierIndex) {
-        return {
-          allowed: false,
-          error: `This model requires ${pricing.tierRestriction} tier or higher. Please upgrade your plan.`,
-          watermark,
-        }
-      }
-    }
-
-    // Free tier: blocked models
-    if (isFree) {
-      const blockedModels = FREE_TIER_RESTRICTIONS.blockedModels as readonly string[]
-      if (blockedModels.includes(modelIdentifier)) {
-        return {
-          allowed: false,
-          error: "This model requires a paid subscription. Upgrade to Basic or higher.",
-          watermark,
-        }
-      }
+    // The admin switch, then the tier restriction (from model_pricing table),
+    // then the free-tier blocklist — through the ONE helper the UGC quote
+    // also refuses with. A workspace payer is gated at the org grade
+    // (`tierForGates`, and no free-tier semantics), not the member's personal
+    // tier — a free-tier student's class run may use what the class may use.
+    // A disabled model's refusal carries no watermark, as before.
+    const unavailable = modelAvailabilityRefusal(modelIdentifier, pricing, gates)
+    if (unavailable) {
+      return unavailable.reason === "disabled"
+        ? { allowed: false, error: unavailable.error }
+        : { allowed: false, error: unavailable.error, watermark }
     }
 
     // Calculate total balance. In web-free mode the topup pool is excluded —

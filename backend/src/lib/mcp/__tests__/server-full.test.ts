@@ -273,6 +273,12 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // (charges nothing, persists nothing). Same posture as get_node_skill.
     expect(names).toContain("get_recast_authoring_skill")
     expect(names).toContain("validate_recast_script")
+    // build_ugc_creator / build_ugc_clips / build_ugc_cards: the UGC video
+    // builders — cloud-only, ungated by scope (free; they generate nothing).
+    // Using a saved Character checks assets:read inside the tool itself.
+    expect(names).toContain("build_ugc_creator")
+    expect(names).toContain("build_ugc_clips")
+    expect(names).toContain("build_ugc_cards")
     // …but the priced/persisting recast verbs stay scope-gated.
     expect(names).not.toContain("import_recast_script")
     expect(names).not.toContain("start_recast")

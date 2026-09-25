@@ -20,6 +20,7 @@ import { registerUploadTools } from "./tools/upload.js"
 import { registerFilmDirectorTool } from "./tools/film-director.js"
 import { registerRecastTools } from "./tools/recast.js"
 import { registerStudioProductionTools } from "./tools/studio-production.js"
+import { registerUgcTools } from "./tools/ugc.js"
 import { registerSkillLoaders } from "./tools/skill-loaders.js"
 import { registerPipelineTools } from "./tools/pipelines.js"
 import { registerReduce } from "./tools/reduce.js"
@@ -205,6 +206,10 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
     // the cloud plugin, so off-cloud the whole family answers `not_available`.
     // The installed plugin is the feature detect; there is no separate flag.
     registerStudioProductionTools({ server, session, fastify: opts.fastify })
+    // UGC video builders: Cloud-only for the same reason — the `/v1/ugc/*`
+    // routes are the cloud plugin's. Ungated by scope (free, they generate
+    // nothing); using a saved Character checks `assets:read` inside the tool.
+    registerUgcTools({ server, session, fastify: opts.fastify })
   }
   registerReduce({ server, session, fastify: opts.fastify })
   registerPromptHelper({ server, session, fastify: opts.fastify })

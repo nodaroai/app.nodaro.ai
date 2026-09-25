@@ -338,3 +338,53 @@ describe("deployment payer rung — the per-request hook (real Fastify)", () => 
     expect(res.json().ctx).toBeNull()
   })
 })
+
+// ---------------------------------------------------------------------------
+// requestBillingContext — the hook's decision, callable where no request
+// passed through the hook (the UGC quote, which must price under the payer a
+// spend request of the same MCP session would be stamped with)
+// ---------------------------------------------------------------------------
+
+const { requestBillingContext } = await import("../billing-context.js")
+
+describe("requestBillingContext — the per-request decision, shared with the hook", () => {
+  afterEach(() => __resetDeploymentPayerForTests())
+
+  it("deployment payer active: the deployment context, zero plugin calls", async () => {
+    const resolve = vi.fn(async () => WS_CTX)
+    h.services.billing = { resolve }
+    __setDeploymentPayerForTests("payer-acct")
+    expect(await requestBillingContext({ userId: "u-1", workspaceId: "ws-1", internal: true, isAppRun: false })).toEqual({
+      payer: "deployment",
+      userId: "u-1",
+      payerId: "payer-acct",
+      entitlements: DEP_ENT,
+    })
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it("no capable service: absent (personal downstream), as the hook leaves it", async () => {
+    h.services.billing = undefined
+    expect(await requestBillingContext({ userId: "u-1", workspaceId: "ws-1", internal: true, isAppRun: false })).toBeUndefined()
+  })
+
+  it("trivially personal: no workspace and no workflow, the plugin never asked", async () => {
+    const resolve = vi.fn(async () => WS_CTX)
+    h.services.billing = { resolve }
+    expect(await requestBillingContext({ userId: "u-1", internal: true, isAppRun: false })).toEqual({ payer: "user", userId: "u-1" })
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it("a workspace reaches the resolver exactly as the hook sends it; the internal lane carries no workflow", async () => {
+    const resolve = vi.fn(async () => WS_CTX)
+    h.services.billing = { resolve }
+    expect(await requestBillingContext({ userId: "u-1", workspaceId: "ws-1", internal: true, isAppRun: false })).toBe(WS_CTX)
+    expect(resolve).toHaveBeenCalledWith({
+      userId: "u-1",
+      explicitWorkspaceId: "ws-1",
+      workflowId: undefined,
+      isAppRun: false,
+      internal: true,
+    })
+  })
+})
