@@ -1,5 +1,17 @@
 # @nodaro/shared
 
+## 3.13.0
+
+### Minor Changes
+
+- 02a08ae: Add `TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE` (`"telegram-account-trigger"`) to `PROJECTED_TRIGGER_NODE_TYPES`: a workflow saved with that node now has its trigger row projected like the schedule, webhook and bot-trigger nodes.
+- e379928: Picker catalogs: add Bare Face makeup, At-Home Casual outfit, Bathroom and Car Interior settings, and Natural skin texture.
+- 7872bd7: Video Overlay: `video-overlay` joins `VIDEO_PRODUCER_TYPES`, and a new wire-contract module ships its layer and request types, bounds, placement presets, `DEFAULT_VIDEO_OVERLAY_LAYER`, the write-boundary normaliser (`expandVideoOverlayPresets`, `clearWiredVideoOverlayImageUrls`, `normalizeVideoOverlayNodes`), the shared geometry (`resolveVideoOverlayGeometry`, `videoOverlayCanvas`), the engine assembly (`assembleVideoOverlayRequest`), the validator (`validateVideoOverlayRequest`, `formatVideoOverlayError`) and the result-freshness key both engines stamp on a run's result (`videoOverlaySlotSources`, `videoOverlayCompositionKey`, `VideoOverlayComposition`, and `VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH`, the bound the REST route accepts the canvas key under).
+
+### Patch Changes
+
+- 161a68a: Correct the Japanese picker-catalog translations. Mistranslated labels and descriptions are fixed, for example ages in the Person catalog, furniture names, lens focal-length names, hair and body terms, and film and photography terms. Katakana false friends are replaced with the terms Japanese creators use, and descriptions written against older English copy are brought in line with the current English. Catalog ids and English copy are unchanged.
+
 ## 3.12.1
 
 ### Patch Changes
