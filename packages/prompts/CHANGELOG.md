@@ -1,5 +1,20 @@
 # @nodaro/prompts
 
+## 1.26.0
+
+### Minor Changes
+
+- e379928: Picker catalogs: add Bare Face makeup, At-Home Casual outfit, Bathroom and Car Interior settings, and Natural skin texture.
+
+### Patch Changes
+
+- 0e7624c: Transitions `dissolve-to-mist`, `water-splash`, `pixelate-reform` and `polygon-shatter` get new descriptions: the first subject itself becomes the material (mist, water, square blocks, flat-shaded chunks) at its place in the frame, the camera and framing stay put, and the material reforms into the second subject at the same place as the second shot appears behind it. The old bodies let the effect happen around the subject or turned the change of setting into a crossfade. No other row changes.
+- Updated dependencies [161a68a]
+- Updated dependencies [02a08ae]
+- Updated dependencies [e379928]
+- Updated dependencies [7872bd7]
+  - @nodaro/shared@3.13.0
+
 ## 1.25.1
 
 ### Patch Changes

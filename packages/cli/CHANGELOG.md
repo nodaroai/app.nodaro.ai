@@ -1,5 +1,23 @@
 # @nodaro/cli
 
+## 1.22.0
+
+### Minor Changes
+
+- 7872bd7: Video Overlay: `client.media.videoOverlay(input)` (`POST /v1/video-overlay`) places 1–20 timed image layers over a video, and `nodaro media video-overlay <videoUrl> [layerUrls...]` exposes it (`--at <start[-end]>` per layer, `--preset`, `--corner`, `--layers-file`, `--aspect`, `--base-fit`, `--background-color`, `--watch`).
+
+### Patch Changes
+
+- Updated dependencies [161a68a]
+- Updated dependencies [02a08ae]
+- Updated dependencies [0e7624c]
+- Updated dependencies [e379928]
+- Updated dependencies [7872bd7]
+- Updated dependencies [7872bd7]
+  - @nodaro/shared@3.13.0
+  - @nodaro/prompts@1.26.0
+  - @nodaro/sdk@2.15.0
+
 ## 1.21.0
 
 ### Minor Changes
