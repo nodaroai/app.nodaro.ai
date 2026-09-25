@@ -29,6 +29,7 @@ import { fileURLToPath } from "node:url"
 import { dirname, resolve } from "node:path"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { McpSession } from "../session.js"
+import { getPluginRecipes } from "../../private-plugins/recipe-registry.js"
 import { z } from "zod"
 
 export interface RecipeMeta {
@@ -154,7 +155,55 @@ export function loadRecipeFile(name: string, relPath: string): string | null {
 /** Cached at module load — no per-invocation directory walk. */
 const CATALOG = loadRecipeCatalog()
 
-export function registerRecipeTool(server: McpServer, _session: McpSession): void {
+/**
+ * The recipes a session can discover: the local catalog, plus (cloud
+ * installs) recipes a private plugin provides through `recipes()`. Plugin
+ * `library` recipes are loadable by name but never listed. A local recipe
+ * wins a name collision (the plugin one is dropped with a warning), and a
+ * plugin name that is not strict kebab-case is ignored. First-party
+ * (copilot) sessions see the local catalog only.
+ */
+export function listRecipes(session: McpSession): RecipeMeta[] {
+  const local = CATALOG
+  if (session.firstParty) return local
+  const plugin = getPluginRecipes()
+  const localNames = new Set(local.map((r) => r.name))
+  const remote = Object.entries(plugin)
+    .filter(([name, r]) => !r.library && !localNames.has(name) && NAME_RE.test(name))
+    .map(([name, r]) => ({ name, description: r.description, triggers: [...r.triggers] }))
+  for (const name of Object.keys(plugin)) {
+    if (localNames.has(name)) console.warn(`[recipes] plugin recipe "${name}" shadowed by a local recipe`)
+  }
+  return [...local, ...remote]
+}
+
+/**
+ * Load a recipe body (no `file`) or one bundled file, local first. A local
+ * recipe is read off disk with the traversal guards above; a plugin recipe is
+ * an exact own-key lookup on both axes — its name in the registry and its
+ * `file` in its `files` map — so a prototype name (`constructor`) or a
+ * path-shaped key (`../x`, `/etc/passwd`) is simply a miss.
+ *
+ * `localOnly` stops before the plugin lookup: first-party (copilot) sessions
+ * cannot reach the tools plugin recipes drive, so for them a plugin recipe,
+ * library or file is a miss on the load path exactly as it is on the list.
+ */
+export function loadAnyRecipe(name: string, file?: string, opts?: { localOnly?: boolean }): string | null {
+  if (!NAME_RE.test(name)) return null
+  const isLocal = CATALOG.some((r) => r.name === name)
+  if (isLocal) return file ? loadRecipeFile(name, file) : loadRecipe(name)
+  if (opts?.localOnly) return null
+  // Own-key lookup on the name axis too: a plain index would resolve a
+  // prototype name like `constructor` to Object.prototype's member.
+  const table = getPluginRecipes()
+  if (!Object.prototype.hasOwnProperty.call(table, name)) return null
+  const remote = table[name]
+  if (!remote) return null
+  if (!file) return remote.body
+  return Object.prototype.hasOwnProperty.call(remote.files, file) ? remote.files[file] : null
+}
+
+export function registerRecipeTool(server: McpServer, session: McpSession): void {
   // No scope gate — pure content delivery, same posture as
   // start_workflow_editor / get_node_skill / start_video_director. The
   // actions a recipe instructs the LLM to take (e.g. assemble_narrated_video)
@@ -173,17 +222,17 @@ export function registerRecipeTool(server: McpServer, _session: McpSession): voi
     },
     async (args: { recipe?: string; file?: string }) => {
       if (!args.recipe) {
-        const list = CATALOG.map((r) => `- **${r.name}** — ${r.description}\n  triggers: ${r.triggers.join(", ")}`).join("\n")
+        const list = listRecipes(session).map((r) => `- **${r.name}** — ${r.description}\n  triggers: ${r.triggers.join(", ")}`).join("\n")
         return { content: [{ type: "text" as const, text: list ? `Available recipes:\n${list}` : "No recipes available." }] }
       }
       if (args.file) {
-        const f = loadRecipeFile(args.recipe, args.file)
+        const f = loadAnyRecipe(args.recipe, args.file, { localOnly: session.firstParty })
         if (f == null) return { isError: true as const, content: [{ type: "text" as const, text: `No file '${args.file}' in recipe '${args.recipe}'.` }] }
         return { content: [{ type: "text" as const, text: f }] }
       }
-      const body = loadRecipe(args.recipe)
+      const body = loadAnyRecipe(args.recipe, undefined, { localOnly: session.firstParty })
       if (body == null) {
-        const names = CATALOG.map((r) => r.name).join(", ") || "(none)"
+        const names = listRecipes(session).map((r) => r.name).join(", ") || "(none)"
         return { isError: true as const, content: [{ type: "text" as const, text: `No recipe '${args.recipe}'. Available: ${names}.` }] }
       }
       return { content: [{ type: "text" as const, text: body }] }

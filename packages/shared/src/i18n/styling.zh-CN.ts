@@ -9,6 +9,7 @@ const map: LocaleCatalogMap = {
   "makeup-editorial": { label: "大片妆",         description: "前卫先锋的时装妆容" },
   "makeup-goth":      { label: "哥特妆",         description: "黑暗哥特妆容" },
   "makeup-dewy":      { label: "水光妆",         description: "光泽鲜活的肌肤为主" },
+  "makeup-bare": { label: "素颜", description: "完全不化妆" },
 
   // -------------------- Eyewear --------------------
   "eyewear-sunglasses": { label: "墨镜",         description: "通用的深色太阳镜" },
@@ -176,6 +177,7 @@ const map: LocaleCatalogMap = {
   "outfit-one-piece-swim":{ label: "连体泳衣",   description: "贴身连体泳衣" },
   "outfit-lingerie":      { label: "内衣套装",   description: "成套内衣" },
   "outfit-pajamas":       { label: "睡衣",       description: "柔软棉质睡衣套装" },
+  "outfit-casual-home": { label: "居家休闲", description: "柔软T恤或针织衫配宽松长裤" },
   "outfit-bathrobe":      { label: "浴袍",       description: "厚毛圈浴袍" },
   "outfit-kimono":        { label: "和服",       description: "传统日式和服" },
   "outfit-ballerina":     { label: "芭蕾舞服",   description: "古典芭蕾舞服" },

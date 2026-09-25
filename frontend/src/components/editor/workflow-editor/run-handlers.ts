@@ -27,6 +27,7 @@ import { nestedWordTimingsPreflight } from "./sub-workflow-preflight";
 import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, unwrapEditPlanOutput } from "@nodaro/shared"
 import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
+import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire } from "@nodaro/shared"
 import { collapseExpandedClones } from "./execution-graph";
 import { shouldAbandonNode } from "./abandon-guard";
@@ -999,6 +1000,21 @@ function applyRestoredJobCompletion(
     return;
   }
 
+  // audio-sync: the offsets are `output_data.json` (→ `data.generatedJson`),
+  // not a media URL — same recovery gap as the analysis branch above.
+  if (nodeType === "audio-sync") {
+    const json = job.output_data?.json;
+    updateNodeData(nodeId, {
+      executionStatus: "completed",
+      ...(json && typeof json === "object" ? { generatedJson: json } : {}),
+      currentJobId: undefined,
+      currentJobProgress: undefined,
+      jobAwaitingReview: undefined,
+    });
+    toast.success(tx("run.backgroundJobCompleted"));
+    return;
+  }
+
   // edit-plan: same JSON-result recovery gap — the EDL plan is the top-level
   // output_data, unwrapped onto generatedJson (clips → bare Edl[], fans out).
   // ONE unwrap rule shared with the live path + backend (unwrapEditPlanOutput).
@@ -1023,10 +1039,14 @@ function applyRestoredJobCompletion(
     job.output_data?.imageUrl ??
     job.output_data?.videoUrl ??
     job.output_data?.audioUrl;
+  // Video Overlay: the worker's warnings / canvas / length, on the node and the
+  // result — the same mapping the live run writes (lib/video-overlay-run-output).
+  const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(job.output_data) : undefined;
   const newResult: GeneratedResult = {
     url: (outputUrl as string) ?? "",
     timestamp: new Date().toISOString(),
     jobId,
+    ...(overlayRun ?? {}),
   };
 
   const updates: Record<string, unknown> = {
@@ -1038,6 +1058,7 @@ function applyRestoredJobCompletion(
     // An approve goes pending_review -> completed with no intervening tick, so
     // the terminal write is the only place the hold flag can be cleared.
     jobAwaitingReview: undefined,
+    ...(overlayRun ?? {}),
   };
 
   if (job.output_data?.imageUrl) {
@@ -1384,6 +1405,14 @@ interface NodeExecutionState {
       sourceNodeLabel: string;
     }>;
     _outputResults?: Record<string, string>;
+    /** Video Overlay: the worker's warnings, output canvas and length, and a DAG run's freshness key. Mirrors backend NodeOutput. */
+    warnings?: readonly unknown[];
+    width?: number;
+    height?: number;
+    durationSec?: number;
+    resultCompositionKey?: string;
+    /** Video Overlay list fan-out: each row's own freshness key, row-aligned with listResults. */
+    listResultCompositionKeys?: string[];
   };
   error?: string;
   /** Stable billing-refusal code (backend reserve-errors.ts) — branch on this, never on text. */
@@ -1511,6 +1540,11 @@ function syncNodeStatesToStore(
         // Voice id, stems, alignment, combined / split text: ONE mapping, shared
         // with the two load-time restore lanes so they cannot drift again (#1547).
         Object.assign(updates, namedRunOutputFields(state.output));
+        // Video Overlay: warnings / canvas / length OVERWRITE the node's (a run
+        // with none clears an earlier run's "Last run" line) and ride on the new
+        // result entry — the same mapping the single-node Run writes.
+        const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(state.output) : undefined;
+        if (overlayRun) Object.assign(updates, overlayRun);
         if (state.output.text && !state.output.combinedText) {
           updates.generatedText = state.output.text;
           const prevTextResults = (data.generatedResults ?? []) as Array<{ text?: string; jobId?: string }>;
@@ -1605,14 +1639,17 @@ function syncNodeStatesToStore(
         const prev = (data.generatedResults ?? []) as GeneratedResult[];
         const existingUrls = new Set(prev.map((r) => r.url));
 
-        // List/loop fan-out: one URL per iteration, each with its own jobId.
+        // List/loop fan-out: one URL per iteration, each with its own jobId
+        // (and, on Video Overlay, the key of its own composition).
         if (listResultUrls.length > 1) {
+          const rowFields = videoOverlayListRowFields(nodeType, state.output);
           const newResults = listResultUrls
             .filter((url) => !existingUrls.has(url))
             .map((url, i) => ({
               url,
               timestamp: new Date().toISOString(),
               jobId: state.jobIds?.[i] ?? `exec-${node.id}-${i}`,
+              ...rowFields(url),
             }));
           if (newResults.length > 0) {
             updates.generatedResults = [...newResults, ...prev];
@@ -1649,6 +1686,7 @@ function syncNodeStatesToStore(
                   url: outputUrl,
                   timestamp: new Date().toISOString(),
                   jobId: state.jobId ?? `exec-${node.id}`,
+                  ...(overlayRun ?? {}),
                 },
                 ...prev,
               ];

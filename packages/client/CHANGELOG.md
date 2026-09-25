@@ -1,5 +1,27 @@
 # @nodaro/sdk
 
+## 2.16.0
+
+### Minor Changes
+
+- 0634fd8: Add `client.edit.audioSync({ sources, reference? })` (`POST /v1/audio-sync`): measure how far apart the clocks of 2–6 recordings of one conversation are, from their sound. The finished job's `output_data.json` is an `AudioSyncResult` — `{ version, reference, offsets: [{ sourceId, offsetMs, confidence, driftMsPerHour }], notes }`, with `referenceMs = sourceMs + offsetMs`. New types: `AudioSyncInput`, `AudioSyncSource`, `AudioSyncOffset`, `AudioSyncResult`.
+
+## 2.15.0
+
+### Minor Changes
+
+- 7872bd7: Video Overlay: `client.media.videoOverlay(input)` (`POST /v1/video-overlay`) places 1–20 timed image layers over a video, and `nodaro media video-overlay <videoUrl> [layerUrls...]` exposes it (`--at <start[-end]>` per layer, `--preset`, `--corner`, `--layers-file`, `--aspect`, `--base-fit`, `--background-color`, `--watch`).
+
+### Patch Changes
+
+- Updated dependencies [161a68a]
+- Updated dependencies [02a08ae]
+- Updated dependencies [0e7624c]
+- Updated dependencies [e379928]
+- Updated dependencies [7872bd7]
+  - @nodaro/shared@3.13.0
+  - @nodaro/prompts@1.26.0
+
 ## 2.14.0
 
 ### Minor Changes

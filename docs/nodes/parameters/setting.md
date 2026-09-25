@@ -1,6 +1,6 @@
 # Setting
 
-> Pick a setting from a curated 63-entry catalog grouped into indoor, urban, nature, and fantastical. Emits a setting-description prompt fragment.
+> Pick a setting from a curated 66-entry catalog grouped into indoor, urban, nature, and fantastical. Emits a setting-description prompt fragment.
 
 ## Overview
 
@@ -15,7 +15,7 @@ The Setting parameter node lets you describe where a shot takes place by picking
 | Post Text| text   | empty      | Free-form text appended to the composed hint.                                                        |
 | Hint mode  | select   | `full`       | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
-## Catalog (63 entries across 4 categories)
+## Catalog (66 entries across 4 categories)
 
 | Category | Theme |
 |---|---|

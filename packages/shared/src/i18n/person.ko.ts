@@ -288,6 +288,7 @@ const map: LocaleCatalogMap = {
   "face-full-beard": { label: "풀 비어드", description: "두껍고 풍성한 수염입니다" },
 
   // -------------------- Skin Texture --------------------
+  "texture-natural": { label: "자연스러운", description: "실제 모공과 자연스러운 차이" },
   "texture-smooth": { label: "매끄러운", description: "흠 없이 매끄러운 피부입니다" },
   "texture-wrinkled": { label: "주름진", description: "깊은 주름이 있는 노화된 피부입니다" },
   "texture-goosebumps": { label: "닭살", description: "피부에 솟아오른 닭살입니다" },

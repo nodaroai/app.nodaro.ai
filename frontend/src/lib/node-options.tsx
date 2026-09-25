@@ -905,7 +905,15 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     label: "Silence Detect",
     icon: <VolumeX className="h-4 w-4" />,
     category: "AI",
-    group: "audio-clean-separate",
+    group: "audio-analyze",
+  },
+  {
+    type: "audio-sync",
+    label: "Audio Sync",
+    icon: <AudioWaveform className="h-4 w-4" />,
+    category: "AI",
+    group: "audio-analyze",
+    keywords: ["sync", "multicam", "align recordings", "clock offset", "line up cameras", "podcast", "drift"],
   },
   {
     type: "text-to-dialogue",
@@ -1109,6 +1117,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Processing",
     group: "image-edit-retouch",
     keywords: ["overlay", "logo", "watermark", "badge", "sticker", "composite", "layer", "place image", "banner", "thumbnail"],
+  },
+  {
+    type: "video-overlay",
+    label: "Video Overlay",
+    icon: <Layers className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-titles-graphics",
+    keywords: ["overlay", "logo", "watermark", "product shot", "screenshot", "card", "b-roll", "picture-in-picture", "ugc", "badge"],
   },
   // Processing — Video
   {

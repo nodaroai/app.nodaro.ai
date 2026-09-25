@@ -1,7 +1,7 @@
 import type { CompositeLayerConfig } from "@/types/nodes"
 import { useT } from "@/lib/i18n"
 
-const LAYER_COLORS = [
+export const LAYER_COLORS = [
   "#3B82F6", // blue
   "#10B981", // emerald
   "#F59E0B", // amber

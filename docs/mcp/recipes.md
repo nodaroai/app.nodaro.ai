@@ -75,6 +75,8 @@ Recipes live on disk under `backend/skills/recipes/<name>/`, loaded at runtime (
 catalog is read once at server startup) — no database, no deploy-time registration beyond
 adding the folder.
 
+Cloud installs may list additional recipes provided by private plugins; they load the same way.
+
 **Folder layout:**
 
 ```

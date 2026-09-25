@@ -36,11 +36,18 @@ export const SINGLE_NODE_RESTORE_MAX_AGE_MS = 30 * 60 * 1000
  *  declared budget, and its worker's heartbeat stops at that budget, so a
  *  restored poll still ends on the cron-written failure of a hung render.
  *  Stated residual: a render still running more than 6 h after it was queued
- *  is not re-attached on a reload (it still completes into My Library). */
+ *  is not re-attached on a reload (it still completes into My Library).
+ *
+ *  `audio-sync` joins on the same footing (podcast B3): it declares a
+ *  source-count budget of hours (every step at its own ceiling, since it cannot
+ *  see its sources' lengths up front), and a first run over long, uncached
+ *  camera files proxies each one before correlating — a reload during that
+ *  must still re-attach the poll. */
 export const LONG_RUNNING_NODE_TYPES: ReadonlySet<string> = new Set([
   "generate-video-pro",
   "edit-video-pro",
   "apply-edl",
+  "audio-sync",
 ])
 export const LONG_RUNNING_RESTORE_MAX_AGE_MS = 6 * 60 * 60 * 1000 // 6h
 

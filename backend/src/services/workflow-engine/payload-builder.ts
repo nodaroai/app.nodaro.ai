@@ -2,6 +2,7 @@ import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import {
   pro3DRenderShotStills, assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle, clampEditPlanClipCount } from "@nodaro/shared"
+import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 /**
@@ -35,6 +36,8 @@ import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { buildEffectiveEdl, validateEffectiveEdl } from "../../lib/apply-edl-plan.js"
+import { audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
+import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES } from "../../providers/audio/audio-sync-budget.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import {
   appendScene3DStillScopingLines,
@@ -184,6 +187,7 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   "speed-ramp": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "loop-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "fade-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "video-overlay": { anyOf: ["videoUrl"], kind: "video", noun: "a base video" },
   "transcode-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "add-captions": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "edit-video-pro": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
@@ -5957,6 +5961,51 @@ export function buildPayload(
         usageLogId,
       })
 
+    case "audio-sync": {
+      // Measure 2–6 recordings' clock offsets. The source NODE id is each
+      // recording's id (the result's `sourceId`, the EdlSource id an edit plan
+      // mints for the same recording). Ordered by the config-panel `sourceOrder`
+      // (listed first, then unlisted in wire order — the edit-plan / combine-
+      // videos precedent, the SAME order the single-node Run applies), one row
+      // per upstream node.
+      const wiredRaw = resolvedInputs.audioSyncSources ?? []
+      const srcOrder = Array.isArray(data.sourceOrder) ? (data.sourceOrder as unknown[]).filter((v): v is string => typeof v === "string") : []
+      const ordered = srcOrder.length
+        ? [
+            ...srcOrder.flatMap((nid) => wiredRaw.filter((w) => w.nodeId === nid)),
+            ...wiredRaw.filter((w) => !srcOrder.includes(w.nodeId)),
+          ]
+        : wiredRaw
+      const seen = new Set<string>()
+      const sources = ordered
+        .filter((row) => (seen.has(row.nodeId) ? false : (seen.add(row.nodeId), true)))
+        .map((row) => ({ id: row.nodeId, url: row.url }))
+      // Fail fast, BEFORE the reserve — the orchestrated path bypasses the
+      // route's Zod (mirrors the two frontend refusals in execute-node).
+      const label = typeof data.label === "string" && data.label.trim() ? data.label : "Audio Sync"
+      if (sources.length < AUDIO_SYNC_MIN_SOURCES) {
+        throw new Error(`audio-sync: node "${label}" needs at least ${AUDIO_SYNC_MIN_SOURCES} recordings — connect them to the Sources input`)
+      }
+      if (sources.length > AUDIO_SYNC_MAX_SOURCES) {
+        throw new Error(`audio-sync: node "${label}" takes at most ${AUDIO_SYNC_MAX_SOURCES} recordings — ${sources.length} are connected to the Sources input`)
+      }
+      const unfetchable = sources.find((s) => !safeUrlSchema.safeParse(s.url).success)
+      if (unfetchable) {
+        throw new Error(`audio-sync: node "${label}" received something that is not a media URL from "${unfetchable.id}" — check the connection feeding its Sources input`)
+      }
+      // A reference that is no longer connected (its source was unwired) falls
+      // back to the default — the first source — exactly as the config panel
+      // shows it; the result names the reference it actually used.
+      const reference = typeof data.reference === "string" && sources.some((s) => s.id === data.reference)
+        ? data.reference
+        : undefined
+      return ffmpegResult(
+        "audio-sync",
+        { jobId, sources, ...(reference ? { reference } : {}), usageLogId },
+        audioSyncCreditId(sources.length),
+      )
+    }
+
     case "remove-audio":
       return ffmpegResult("remove-audio", {
         jobId,
@@ -6072,6 +6121,36 @@ export function buildPayload(
         upstreamDuration: resolvedInputs.videoDuration,
         usageLogId,
       })
+
+    case "video-overlay": {
+      // The ONE node → request assembly both engines run (@nodaro/shared):
+      // per slot the wired handle's image, else the layer's own imageUrl; a
+      // wired slot with no settings is the default corner badge (D2 — on this
+      // path an untouched slot is undefined, never {}); empty slots dropped;
+      // `slot` stamped; presets expanded. Then the shared validator: a throw
+      // here lands before the credit reservation (node-executor deletes the
+      // placeholder row), exactly like the route's 400.
+      const overlayData = data as VideoOverlayNodeFields
+      const wiredImageUrls = resolvedInputs.overlayImageUrls ?? []
+      const request = assembleVideoOverlayRequest({
+        videoUrl: resolvedInputs.videoUrl ?? "",
+        data: overlayData,
+        wiredImageUrls,
+      })
+      const verdict = validateVideoOverlayRequest(request)
+      if (!verdict.ok) throw new Error(`Video Overlay: ${formatVideoOverlayError(verdict)}`)
+      // The freshness key the canvas compares against (`resultCompositionKey`):
+      // the SAME shared function over the same inputs the canvas uses — the
+      // resolved base, each slot's `wired ?? imageUrl`, the STORED settings
+      // (never the expanded request). The worker echoes it into output_data,
+      // so a backend run of the current settings reads fresh on the node.
+      const resultCompositionKey = videoOverlayCompositionKey({
+        baseUrl: resolvedInputs.videoUrl,
+        sources: videoOverlaySlotSources(overlayData.layers, wiredImageUrls),
+        data: overlayData,
+      })
+      return ffmpegResult("video-overlay", { jobId, ...request, resultCompositionKey, usageLogId })
+    }
 
     case "fade-video":
       return ffmpegResult("fade-video", {

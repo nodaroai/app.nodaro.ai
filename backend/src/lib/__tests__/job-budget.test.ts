@@ -17,6 +17,7 @@ import {
   workflowCapMs,
 } from "../job-budget.js"
 import { applyEdlRenderBudgetMs } from "../../providers/video/apply-edl-budget.js"
+import { audioSyncRenderBudgetMs } from "../../providers/audio/audio-sync-budget.js"
 import { NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS, WORKFLOW_TIMEOUT_MS } from "../../services/workflow-engine/types.js"
 
 const MIN = 60_000
@@ -74,8 +75,26 @@ describe("declaredJobBudgetMs — the one per-job budget both readers call", () 
     expect(declaredJobBudgetMs("apply-edl", { edl: { version: 1, clock: "master", sources: [src], segments: [ok, null] } })).toBeUndefined()
   })
 
-  it("registers exactly apply-edl today", () => {
-    expect([...BUDGETED_JOB_NAMES]).toEqual(["apply-edl"])
+  it("audio-sync: the budget of its source COUNT, off the payload or a jobs row's input_data alike", () => {
+    const sources = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `n${i}`, url: `https://f.test/${i}.m4a` }))
+    expect(declaredJobBudgetMs("audio-sync", { sources: sources(2) })).toBe(audioSyncRenderBudgetMs(2))
+    expect(declaredJobBudgetMs("audio-sync", { sources: sources(6), reference: "n3" })).toBe(audioSyncRenderBudgetMs(6))
+    const payload = { jobId: "j", sources: sources(4), usageLogId: "u" }
+    expect(declaredJobBudgetMs("audio-sync", { ...payload, type: "audio-sync", node_id: "n" })).toBe(declaredJobBudgetMs("audio-sync", payload))
+    // More sources can only lengthen it, and every size is past the default node ceiling.
+    expect(audioSyncRenderBudgetMs(3)).toBeGreaterThan(audioSyncRenderBudgetMs(2))
+    expect(audioSyncRenderBudgetMs(2)).toBeGreaterThan(NODE_TIMEOUT_MS)
+  })
+
+  it("audio-sync: declares nothing for a payload it cannot read (fewer than two sources, no array)", () => {
+    expect(declaredJobBudgetMs("audio-sync", {})).toBeUndefined()
+    expect(declaredJobBudgetMs("audio-sync", null)).toBeUndefined()
+    expect(declaredJobBudgetMs("audio-sync", { sources: [{ id: "a", url: "https://f.test/a.wav" }] })).toBeUndefined()
+    expect(declaredJobBudgetMs("audio-sync", { sources: "a,b" })).toBeUndefined()
+  })
+
+  it("registers exactly apply-edl and audio-sync today", () => {
+    expect([...BUDGETED_JOB_NAMES]).toEqual(["apply-edl", "audio-sync"])
   })
 })
 

@@ -4,6 +4,7 @@ import { resolveAssetId } from "../asset-resolver.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
+import { registerOverlayImagesVerb } from "./verbs-video-overlay.js"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../../connected-reference-schema.js"
 import {
   parseJobId,
@@ -2434,6 +2435,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
+  // ── overlay_images (Video Overlay) — its own module ──
+  registerOverlayImagesVerb({ server, session, fastify })
+
   // ── motion_transfer ──
   // Drives a character image with the motion of a driver video. KIE provides
   // multiple providers; default `kling` matches the route default.
@@ -3046,6 +3050,57 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         label: "Silence detect",
         widgetKind: "generic",
         widgetData: { prompt: "(silence detect)" },
+      })
+    },
+  )
+
+  // ── audio_sync (podcast editing — CORE, ungated) ──
+  // Keyless: measures how far apart 2–6 recordings' clocks are by
+  // cross-correlating their audio, so a multicam edit lines up without typed
+  // offsets. The offsets land in the job's output_data.json (D19 sign — the
+  // shape `mergeEdlSourceOffsets` folds into an EDL). Core verb: registers on
+  // EVERY install, like silence_detect.
+  server.registerTool(
+    "audio_sync",
+    {
+      title: "Audio Sync",
+      description:
+        "Measure how far apart the clocks of 2-6 recordings of one conversation are (camera " +
+        "files and/or a master mic) by cross-correlating their audio. `sources` is a list of " +
+        "`{ id, url }` (audio OR video URLs, unique ids); `reference` (one of the ids, default " +
+        "the first) is the clock every offset is measured against. Returns a job_id - poll " +
+        "`get_job`; the result is `output_data.json` = `{ reference, offsets: [{ sourceId, " +
+        "offsetMs, confidence, driftMsPerHour }], notes }`, where referenceMs = sourceMs + " +
+        "offsetMs. Low confidence or drift is reported in `notes`, never corrected. Priced per " +
+        "source aligned to the reference.",
+      inputSchema: {
+        sources: z
+          .array(z.object({
+            id: z.string().min(1).max(200).describe("Your id for this recording - echoed back as the offset's sourceId."),
+            url: z.string().url().describe("Audio OR video URL - the audio track is read either way."),
+          }))
+          .min(2)
+          .max(6)
+          .describe("The 2-6 recordings to align, each with a unique id."),
+        reference: z.string().min(1).max(200).optional().describe("The id of the source every offset is measured against. Default: the first source."),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
+    },
+    async (args) => {
+      const payload: Record<string, unknown> = {
+        sources: args.sources,
+        ...(args.reference !== undefined ? { reference: args.reference } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, {
+        url: "/v1/audio-sync",
+        payload,
+        label: "Audio sync",
+        widgetKind: "generic",
+        widgetData: { prompt: `(audio sync, ${args.sources.length} sources)` },
       })
     },
   )

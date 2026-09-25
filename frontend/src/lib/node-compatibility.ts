@@ -27,6 +27,9 @@ const TYPED_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set([
   // source handle; its source-direction popover consults TARGET_HANDLE_ACCEPTS
   // (like web-scrape) so data consumers surface as candidates.
   "silence-detect",
+  // audio-sync emits { version, reference, offsets, notes } JSON on its `json`
+  // source handle — same source-direction rule as silence-detect.
+  "audio-sync",
   // video-analysis emits scene-breakdown JSON on its `json` source handle;
   // its source-direction popover must consult TARGET_HANDLE_ACCEPTS (same as
   // web-scrape) so data consumers surface as candidates.
@@ -88,7 +91,10 @@ const MOTION_ONLY_PICKER_TYPES: ReadonlySet<string> = VIDEO_ONLY_PARAMETER_NODE_
  */
 export const HANDLE_COMPATIBILITY: Record<string, readonly string[]> = {
   // Media outputs → typed media inputs
-  image: ["image", "startFrame", "endFrame", "background", "media", "face", "ref-image"],
+  // "overlay": Video Overlay's first layer handle — its only image input, so
+  // without it an image producer's edge-drop popup never lists the node
+  // (Image Overlay still resolves to "image", its inputs[0]).
+  image: ["image", "startFrame", "endFrame", "background", "media", "face", "ref-image", "overlay"],
   // `videoReferences` is generate-video's only video input (video-to-video refs);
   // without it, dragging a video output onto canvas dropped generate-video from
   // the Add Node popup and resolveTargetHandle fell back to a phantom "in".

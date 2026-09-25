@@ -113,6 +113,7 @@ import { ApplyEdlNode } from "./apply-edl-node";
 import { EditPlanNode } from "./edit-plan-node";
 import { ImageCollageNode } from "./image-collage-node";
 import { ImageOverlayNode } from "./image-overlay-node";
+import { VideoOverlayNode } from "./video-overlay-node";
 import { AssembleNarratedVideoNode } from "./assemble-narrated-video-node";
 import { MergeVideoAudioNode } from "./merge-video-audio-node";
 import { AddCaptionsNode } from "./add-captions-node";
@@ -122,6 +123,7 @@ import { TrimAudioNode } from "./trim-audio-node";
 import { SplitMediaNode } from "./split-media-node";
 import { ExtractAudioNode } from "./extract-audio-node";
 import { SilenceDetectNode } from "./silence-detect-node";
+import { AudioSyncNode } from "./audio-sync-node";
 import { RemoveAudioNode } from "./remove-audio-node";
 import { MixAudioNode } from "./mix-audio-node";
 import { CombineAudioNode } from "./combine-audio-node";
@@ -323,6 +325,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "edit-plan": EditPlanNode,
   "image-collage": ImageCollageNode,
   "image-overlay": ImageOverlayNode,
+  "video-overlay": VideoOverlayNode,
   "assemble-narrated-video": AssembleNarratedVideoNode,
   "merge-video-audio": MergeVideoAudioNode,
   "add-captions": AddCaptionsNode,
@@ -332,6 +335,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "split-media": SplitMediaNode,
   "extract-audio": ExtractAudioNode,
   "silence-detect": SilenceDetectNode,
+  "audio-sync": AudioSyncNode,
   "remove-audio": RemoveAudioNode,
   "mix-audio": MixAudioNode,
   "combine-audio": CombineAudioNode,

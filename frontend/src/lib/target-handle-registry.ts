@@ -1,5 +1,6 @@
 import { ANALYZABLE_PICKER_TYPES } from "@nodaro/prompts"
 import { OVERLAY_HANDLE_IDS } from "@/types/nodes"
+import { VIDEO_OVERLAY_HANDLE_IDS } from "@nodaro/shared"
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
 import { GENERATE_VIDEO_INPUT_HANDLES, isValidGenerateVideoConnection } from "./generate-video-handles"
 import { GENERATE_VIDEO_PRO_INPUT_HANDLES, isValidGenerateVideoProConnection } from "./generate-video-pro-handles"
@@ -31,6 +32,7 @@ import {
   isValidPaintMaskConnection,
   isValidImageCollageConnection,
   isValidImageOverlayConnection,
+  isValidVideoOverlayConnection,
   isValidUpscaleImageConnection,
   isValidRemoveBackgroundConnection,
   isValidFaceSwapConnection,
@@ -378,6 +380,10 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "merge-video-audio":  [{ handleId: "in", label: "Video + Audio", accepts: ACCEPTS_MEDIA }],
   "adjust-volume":      [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],
   "silence-detect":     [{ handleId: "in", label: "Audio or Video", accepts: ACCEPTS_MEDIA }],
+  // Audio Sync: 2–6 recordings (audio or video) on one ordered `sources` handle
+  // — mirrors its dedicated branch in connection-validation.ts (like
+  // apply-edl's `sources`, not an ffmpeg-family `in` handle).
+  "audio-sync":         [{ handleId: "sources", label: "Sources", accepts: ACCEPTS_MEDIA }],
 
   // Assemble Narrated Video — TWO distinct typed handles (video clips list,
   // voice audio list) rather than the ffmpeg family's shared single `in`, so
@@ -627,6 +633,10 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "image", label: IMAGE_PRODUCER_HANDLE_LABELS["image-overlay"].image, accepts: (s) => isValidImageOverlayConnection("image", s) },
     ...OVERLAY_HANDLE_IDS.map((h) => ({ handleId: h, label: IMAGE_PRODUCER_HANDLE_LABELS["image-overlay"][h], accepts: (s: string) => isValidImageOverlayConnection(h, s) })),
     { handleId: "qrText", label: IMAGE_PRODUCER_HANDLE_LABELS["image-overlay"].qrText, accepts: (s) => isValidImageOverlayConnection("qrText", s) },
+  ],
+  "video-overlay": [
+    { handleId: "video", label: IMAGE_PRODUCER_HANDLE_LABELS["video-overlay"].video, accepts: (s) => isValidVideoOverlayConnection("video", s) },
+    ...VIDEO_OVERLAY_HANDLE_IDS.map((h) => ({ handleId: h, label: IMAGE_PRODUCER_HANDLE_LABELS["video-overlay"][h], accepts: (s: string) => isValidVideoOverlayConnection(h, s) })),
   ],
   "upscale-image": [
     { handleId: "image", label: IMAGE_PRODUCER_HANDLE_LABELS["upscale-image"].image, accepts: (s) => isValidUpscaleImageConnection("image", s) },

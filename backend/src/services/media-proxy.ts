@@ -31,14 +31,31 @@ import {
   createWorkDir,
   cleanupWorkDir,
   downloadFile,
+  hasAudioStream,
   runFfmpeg,
 } from "../providers/video/ffmpeg-utils.js"
+import { MEDIA_PROXY_FFMPEG_TIMEOUT_MS } from "../providers/video/ffmpeg-timeouts.js"
+import { DeterministicJobError } from "../lib/deterministic-job-error.js"
 import {
   getR2ObjectSize,
   r2KeyFromOurUrl,
   r2Url,
   uploadLocalFileToR2Key,
 } from "../lib/storage.js"
+
+/** An AUDIO proxy was asked of a source with no audio track (a picture-only
+ *  camera file). Checked on the downloaded file, before encoding — ffmpeg would
+ *  otherwise fail with "Output file does not contain any stream". Deterministic:
+ *  it depends only on the input, so a job that lets it propagate
+ *  (silence-detect) fails once instead of re-downloading the file for every
+ *  retry. A caller that can use the other sources (audio-sync) catches it by
+ *  class. */
+export class MediaHasNoAudioError extends DeterministicJobError {
+  constructor(readonly sourceUrl: string) {
+    super("the source has no audio track")
+    this.name = "MediaHasNoAudioError"
+  }
+}
 
 /** Kinds of proxy a caller can ask for. */
 export type MediaProxyKind = "audio" | "video"
@@ -66,10 +83,6 @@ const AUDIO_PROXY = { sampleRateHz: 16_000, bitrate: "64k", ext: "m4a", contentT
 /** Video proxy: 360p, low fps, no audio — for detection / review. */
 const VIDEO_PROXY = { height: 360, defaultFps: 15, crf: 30, ext: "mp4", contentType: "video/mp4" } as const
 
-/** A 3-hour 360p / 16 kHz proxy encode can run well past the default 10-minute
- *  per-spawn ffmpeg timeout. 45 minutes is a generous ceiling; the encode is
- *  faster-than-realtime at these settings, so this is a backstop, not a target. */
-const PROXY_FFMPEG_TIMEOUT_MS = 45 * 60_000
 
 /** The stable identity a proxy is keyed on: our own object key when the source
  *  is an R2 URL (content-addressed per job), else the URL verbatim. */
@@ -77,21 +90,37 @@ function sourceIdentity(sourceUrl: string): string {
   return r2KeyFromOurUrl(sourceUrl) ?? sourceUrl
 }
 
-/** Content-addressed cache key. The variant (kind + fps for video) is part of
- *  the key so an audio proxy, a 2-fps detection proxy and a 15-fps review proxy
- *  of the same source never collide. */
+/** Version of the AUDIO proxy's recipe, part of its key so a change to how it
+ *  is made re-encodes once instead of serving the old file. v2 (2026-09-25)
+ *  keeps the source's own clock — see `buildProxyArgs`. */
+const AUDIO_PROXY_VERSION = 2
+
+/** Content-addressed cache key. The variant (kind + fps for video, the recipe
+ *  version for audio) is part of the key so an audio proxy, a 2-fps detection
+ *  proxy and a 15-fps review proxy of the same source never collide. */
 export function mediaProxyKey(sourceUrl: string, kind: MediaProxyKind, fps?: number): string {
-  const variant = kind === "video" ? `video@${fps ?? VIDEO_PROXY.defaultFps}fps` : "audio"
+  const variant = kind === "video" ? `video@${fps ?? VIDEO_PROXY.defaultFps}fps` : `audio-v${AUDIO_PROXY_VERSION}`
   const hash = createHash("sha256").update(`${sourceIdentity(sourceUrl)}::${variant}`).digest("hex").slice(0, 40)
   const ext = kind === "audio" ? AUDIO_PROXY.ext : VIDEO_PROXY.ext
   return `proxies/${hash}/${variant}.${ext}`
 }
 
-function buildProxyArgs(kind: MediaProxyKind, src: string, out: string, fps: number): string[] {
+/** The proxy's ffmpeg arguments. Exported for the real-ffmpeg tests. */
+export function buildProxyArgs(kind: MediaProxyKind, src: string, out: string, fps: number): string[] {
   if (kind === "audio") {
     return [
       "-y", "-i", src,
       "-vn", // drop video
+      // Keep the SOURCE's clock (the one apply-edl cuts on): a file whose audio
+      // starts after its picture (a stream-copy trim, a camera's late mic), or
+      // that drops samples mid-stream (a recorder losing 40 ms at a time), has
+      // gaps the encoder would close — so every time read off the proxy
+      // (audio-sync's offsets, silence ranges) slid early by them. Fill every
+      // gap from 10 ms with silence (drop any overlap) so proxy time = source
+      // time; jitter under 10 ms is left alone, never warped. Measured on the
+      // pinned 8.1.2: normal files unchanged sample for sample; late audio,
+      // mid-stream gaps and staircase dropouts within 10 ms of apply-edl's read.
+      "-af", "aresample=async=1:min_hard_comp=0.01:first_pts=0",
       "-ac", "1",
       "-ar", String(AUDIO_PROXY.sampleRateHz),
       "-c:a", "aac", "-b:a", AUDIO_PROXY.bitrate,
@@ -133,9 +162,10 @@ export async function ensureMediaProxy(
   try {
     const src = join(workDir, "source")
     await downloadFile(sourceUrl, src)
+    if (kind === "audio" && !(await hasAudioStream(src))) throw new MediaHasNoAudioError(sourceUrl)
     const proxyExt = kind === "audio" ? AUDIO_PROXY.ext : VIDEO_PROXY.ext
     const out = join(workDir, `proxy.${proxyExt}`)
-    await runFfmpeg(buildProxyArgs(kind, src, out, fps), opts.timeoutMs ?? PROXY_FFMPEG_TIMEOUT_MS)
+    await runFfmpeg(buildProxyArgs(kind, src, out, fps), opts.timeoutMs ?? MEDIA_PROXY_FFMPEG_TIMEOUT_MS)
     const contentType = kind === "audio" ? AUDIO_PROXY.contentType : VIDEO_PROXY.contentType
     const url = await uploadLocalFileToR2Key(out, key, contentType)
     return { url, key, kind, cached: false }

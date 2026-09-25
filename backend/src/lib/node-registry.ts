@@ -1,4 +1,4 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, MOTION_TRANSFER_PROVIDERS, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, MOTION_TRANSFER_PROVIDERS, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
@@ -160,6 +160,10 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "video-analysis": { ids: familyIds("video-analysis") },
   "video-audit": { ids: familyIds("video-audit") },
   "edit-plan": { ids: familyIds("edit-plan") },
+  "audio-sync": {
+    ids: familyIds("audio-sync"),
+    note: "Priced per source aligned to the reference: 10 × (sources − 1), 2 to 6 sources.",
+  },
   // ── Processing / composition ──
   "add-captions": {
     ids: familyIds("add-captions"),
@@ -1282,6 +1286,13 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     { key: "maskMode", type: "select", options: ["none", "layers", "around", "outside"] },
     { key: "maskSpread", type: "number" },
   ] } },
+  { type: "video-overlay", label: "Video Overlay", category: "processing", description: "Place up to 20 timed image layers — logos, product shots, screenshots, cards — over a video in one local FFmpeg pass; the base audio is kept untouched. Each layer has start / end seconds (no end = to the end of the video) and a placement: a preset (card · corner-badge with a corner · full-frame) or a box in PERCENT of the output frame (anchor, x, y, width, optional height, fit contain / cover), plus opacity, animate (0.15 s fade and slight scale) and zIndex. An explicit box field overrides the preset; a layer with neither is a corner badge (bottom-right, or the corner it names). Base video ← the video handle; layer images ← overlay, overlay2 … overlay12 (index-aligned with layers[]; layers 13 and up carry an imageUrl). Optional outputAspect (16:9 / 9:16 / 1:1 / 4:5) with baseFit and backgroundColor; without it the output keeps the video's own size and frame rate. Layers past the end are clipped or skipped and an animated image renders its first frame — both reported in the output's warnings[]. Price: 20 credits per run.", outputType: "video", creditCost: 20, inputSchema: { fields: [
+    { key: "videoUrl", type: "video-url", required: true },
+    { key: "layers", type: "json", required: true },
+    { key: "outputAspect", type: "select", options: [...VIDEO_OVERLAY_OUTPUT_ASPECTS] },
+    { key: "baseFit", type: "select", options: [...VIDEO_OVERLAY_FITS] },
+    { key: "backgroundColor", type: "text" },
+  ] } },
   { type: "merge-video-audio", label: "Merge Video + Audio", category: "processing", description: "Mux a video and an audio track.", outputType: "video" },
   { type: "still-to-video", label: "Still to Video", category: "processing", description: "Turn one still image + one audio track into an MP4 with an optional motion effect (zoom / pan / Ken Burns). Local FFmpeg — no provider, no GPU, zero credits. The output duration is the audio's duration (no duration field).", outputType: "video", creditCost: 0, inputSchema: { fields: [
     { key: "imageUrl", type: "image-url", required: true },
@@ -1329,6 +1340,11 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "extract-audio", label: "Extract Audio", category: "processing", description: "Demux the audio track from a video to a standalone MP3.", outputType: "audio" },
   // outputType: data — emits { version, ranges:[{startMs,endMs}], durationMs } JSON on the `json` handle (creditCost auto-filled from STATIC_CREDIT_COSTS).
   { type: "silence-detect", label: "Silence Detect", category: "processing", description: "Detect silent spans in an audio or video track (local FFmpeg silencedetect) and emit them as source-clock ranges.", outputType: "data" },
+  { type: "audio-sync", label: "Audio Sync", category: "processing", description: "Measure how far apart the clocks of 2-6 recordings of one conversation are (camera files and/or a master mic), by cross-correlating their audio, so a multicam edit lines up without typed offsets. Wire the recordings (audio or video) into `sources`; `reference` picks the source every offset is measured against (default: the first). Emits { version, reference, offsets: [{ sourceId, offsetMs, confidence, driftMsPerHour }], notes } with referenceMs = sourceMs + offsetMs; drift is measured and warned, never corrected. Priced per source aligned to the reference. Local ffmpeg, keyless.", outputType: "data", creditCost: creditBandFor("audio-sync"), inputSchema: { fields: [
+    // The source every offset is measured against: one of the wired sources'
+    // node ids. Unset (or no longer wired) → the first source.
+    { key: "reference", type: "string" },
+  ] } },
   { type: "adjust-volume", label: "Adjust Volume", category: "processing", description: "Change audio volume with optional normalize and fade-in / fade-out transitions (FFmpeg). (creditCost auto-filled from STATIC_CREDIT_COSTS = 1)", outputType: "audio" },
   {
     type: "audio-fx",

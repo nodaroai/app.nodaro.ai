@@ -133,4 +133,27 @@ describe("assembleFanOutResult", () => {
     expect(r.genuineFailure).not.toBeInstanceOf(DrainAbortError)
     expect(r.output.listResults).toEqual(["a", ""])
   })
+
+  // Video Overlay fan-out: each row is its own composition (its own list item),
+  // so each row carries its OWN freshness key — never the primary's.
+  it("carries each iteration's own resultCompositionKey, row-aligned with listResults ('' where none)", () => {
+    const r = assembleFanOutResult(
+      [
+        ok(0, "https://v/0.mp4", { output: { videoUrl: "https://v/0.mp4", resultCompositionKey: "K0" } }),
+        fail("layer image could not be fetched"),
+        ok(2, "https://v/2.mp4", { output: { videoUrl: "https://v/2.mp4", resultCompositionKey: "K2" } }),
+      ],
+      3,
+    )
+    expect(r.output.listResults).toEqual(["https://v/0.mp4", "", "https://v/2.mp4"])
+    expect(r.output.listResultCompositionKeys).toEqual(["K0", "", "K2"])
+    // The node-level key stays the primary's (iteration 0).
+    expect(r.output.resultCompositionKey).toBe("K0")
+  })
+
+  it("no iteration carries a key → no listResultCompositionKeys (every other node type)", () => {
+    const r = assembleFanOutResult([ok(0, "https://img/0.png"), ok(1, "https://img/1.png")], 2)
+    expect(r.output).not.toHaveProperty("listResultCompositionKeys")
+  })
 })
+

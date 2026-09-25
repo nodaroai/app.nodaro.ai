@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../safe-fetch.js", () => ({ safeFetch: mocks.safeFetch }))
 vi.mock("../sleep.js", () => ({ sleep: mocks.sleep }))
 
-const { fetchOwnMedia, isOwnMediaUrl, OWN_MEDIA_RETRY_DELAYS_MS } = await import(
+const { fetchOwnMedia, isOwnMediaUrl, cacheBustedUrl, OWN_MEDIA_RETRY_DELAYS_MS } = await import(
   "../fetch-own-media.js"
 )
 
@@ -71,7 +71,7 @@ describe("fetch-own-media", () => {
       expect(mocks.sleep).toHaveBeenCalledTimes(1)
       expect(mocks.sleep).toHaveBeenCalledWith(OWN_MEDIA_RETRY_DELAYS_MS[0])
       // The init is carried into the retry unchanged.
-      expect(mocks.safeFetch).toHaveBeenLastCalledWith(OWN, { timeoutMs: 30_000 })
+      expect(mocks.safeFetch.mock.calls[1][1]).toEqual({ timeoutMs: 30_000 })
     })
 
     it("5xx then 200 on our own host: retried too", async () => {
@@ -124,6 +124,28 @@ describe("fetch-own-media", () => {
       expect(mocks.safeFetch).toHaveBeenCalledTimes(1)
     })
 
+    it("first attempt uses the plain URL; every retry a distinct cache-busted one", async () => {
+      // The media paths edge-cache a 404 for a year: re-asking the SAME URL
+      // re-reads the cached 404, so only a URL the edge has never seen can
+      // reach the origin.
+      mocks.safeFetch.mockResolvedValue(reply(404))
+      await fetchOwnMedia(OWN)
+      const urls = mocks.safeFetch.mock.calls.map((c) => String(c[0]))
+      expect(urls[0]).toBe(OWN)
+      const retries = urls.slice(1)
+      expect(retries).toHaveLength(OWN_MEDIA_RETRY_DELAYS_MS.length)
+      for (const u of retries) {
+        expect(u.startsWith(`${OWN}?cb=`)).toBe(true)
+      }
+      expect(new Set(retries).size).toBe(retries.length)
+    })
+
+    it("a first-try 200 never touches the URL", async () => {
+      mocks.safeFetch.mockResolvedValue(reply(200))
+      await fetchOwnMedia(`${OWN}?v=2`)
+      expect(mocks.safeFetch).toHaveBeenCalledWith(`${OWN}?v=2`, {})
+    })
+
     it("never logs the object path (keys can carry signed query values)", async () => {
       const warn = vi.mocked(console.warn)
       mocks.safeFetch.mockResolvedValue(reply(404))
@@ -132,6 +154,33 @@ describe("fetch-own-media", () => {
       expect(logged).toContain("cdn.nodaro.test")
       expect(logged).not.toContain("signature")
       expect(logged).not.toContain("/images/")
+    })
+  })
+
+  describe("cacheBustedUrl", () => {
+    it("adds a query when the URL has none", () => {
+      expect(cacheBustedUrl(OWN, 2)).toMatch(/^https:\/\/cdn\.nodaro\.test\/images\/abc\.png\?cb=2-[a-z0-9]+$/)
+    })
+
+    it("preserves an existing query byte-for-byte and appends after it", () => {
+      const withQuery = `${OWN}?v=a%20b&x=1+2`
+      const busted = cacheBustedUrl(withQuery, 3)
+      expect(busted.startsWith(`${withQuery}&cb=3-`)).toBe(true)
+    })
+
+    it("keeps a fragment after the query", () => {
+      const busted = cacheBustedUrl(`${OWN}?v=1#t=5`, 2)
+      expect(busted).toMatch(/\?v=1&cb=2-[a-z0-9]+#t=5$/)
+    })
+
+    it("is different on every call", () => {
+      expect(cacheBustedUrl(OWN, 2)).not.toBe(cacheBustedUrl(OWN, 2))
+    })
+
+    it("leaves a pre-signed URL and an unparsable URL untouched", () => {
+      const signed = `${OWN}?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=abc`
+      expect(cacheBustedUrl(signed, 2)).toBe(signed)
+      expect(cacheBustedUrl("not a url", 2)).toBe("not a url")
     })
   })
 })

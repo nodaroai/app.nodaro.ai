@@ -101,9 +101,10 @@ vi.mock("../reference-sheet-stage-a.js", () => ({ ensureWorkflowSheetPanels: vi.
 
 import { executeNode } from "../node-executor.js"
 import { NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../types.js"
-import type { SimpleNode, OrchestratorContext } from "../types.js"
+import type { SimpleNode, OrchestratorContext, ResolvedInputs } from "../types.js"
 import { BUDGETED_JOB_NAMES, declaredJobBudgetMs } from "../../../lib/job-budget.js"
 import { applyEdlRenderBudgetMs } from "../../../providers/video/apply-edl-budget.js"
+import { audioSyncRenderBudgetMs } from "../../../providers/audio/audio-sync-budget.js"
 
 const MINUTE = 60_000
 
@@ -162,9 +163,9 @@ async function advance(ms: number): Promise<void> {
   }
 }
 
-function run(node: SimpleNode, ctx: OrchestratorContext) {
+function run(node: SimpleNode, ctx: OrchestratorContext, inputs: ResolvedInputs = {}) {
   const settled: Array<{ ok: boolean; value: unknown }> = []
-  const done = executeNode(node, {}, [], [node], {}, ctx).then(
+  const done = executeNode(node, inputs, [], [node], {}, ctx).then(
     (v) => settled.push({ ok: true, value: v }),
     (e) => settled.push({ ok: false, value: e }),
   )
@@ -295,6 +296,43 @@ describe("an apply-edl node with a long EDL runs under its declared budget", () 
   }, 60_000)
 })
 
+describe("an audio-sync node runs under the budget its source count declares", () => {
+  it("dispatched as audio-sync over its wired sources, reserved per source aligned, held to the declared budget", async () => {
+    const node: SimpleNode = { id: "sync", type: "audio-sync", data: { label: "Audio Sync", reference: "cam" } }
+    const inputs: ResolvedInputs = {
+      audioSyncSources: [
+        { nodeId: "mic", url: "https://media.test/mic.m4a" },
+        { nodeId: "cam", url: "https://media.test/cam.mp4" },
+        { nodeId: "wide", url: "https://media.test/wide.mp4" },
+      ],
+    }
+    db.jobRecord = { status: "processing", output_data: null, error_message: null, progress: 10 }
+    const ctx = makeCtx()
+    const { settled, done } = run(node, ctx, inputs)
+    await advance(1 * MINUTE)
+
+    expect(mockVideoAdd).toHaveBeenCalledTimes(1)
+    const [jobName, payload] = mockVideoAdd.mock.calls[0] as [string, Record<string, unknown>]
+    expect(jobName).toBe("audio-sync")
+    expect(payload.sources).toEqual([
+      { id: "mic", url: "https://media.test/mic.m4a" },
+      { id: "cam", url: "https://media.test/cam.mp4" },
+      { id: "wide", url: "https://media.test/wide.mp4" },
+    ])
+    expect(payload.reference).toBe("cam")
+    expect(mockReserveCredits.mock.calls[0]?.some((a: unknown) => a === "audio-sync:3src")).toBe(true)
+    const budget = declaredJobBudgetMs(jobName, payload)!
+    expect(budget).toBe(audioSyncRenderBudgetMs(3))
+    expect(ctx.budgetExcessMs).toBe(budget - NODE_TIMEOUT_MS)
+
+    await advance(94 * MINUTE)
+    expect(settled).toHaveLength(0)
+    await advance(budget - 95 * MINUTE + 1 * MINUTE)
+    await done
+    expect((settled[0].value as Error).message).toMatch(timeoutNaming(budget))
+  }, 60_000)
+})
+
 describe("an ADOPTED in-flight job (orchestrator resume) polls under the budget its row declares", () => {
   it("not cancelled at minute 90, and the resumed run's cap grows by the same excess", async () => {
     const budget = 4 * 60 * MINUTE
@@ -368,7 +406,20 @@ describe("every registered budgeted job is dispatched under its node type's own 
   // NODE type in `job_type` until the video worker's pickup overwrites it with
   // the job name. The row readers (stale sweeps, component waits) therefore
   // need the two to be the same string for every budgeted type.
-  const FIXTURES: Record<string, () => SimpleNode> = { "apply-edl": () => applyEdlNode(3) }
+  // A fixture is the node plus the inputs its upstream wiring would resolve to
+  // (audio-sync reads its recordings off the resolved `sources` edges).
+  const FIXTURES: Record<string, () => { node: SimpleNode; inputs?: ResolvedInputs }> = {
+    "apply-edl": () => ({ node: applyEdlNode(3) }),
+    "audio-sync": () => ({
+      node: { id: "sync", type: "audio-sync", data: { label: "Audio Sync" } },
+      inputs: {
+        audioSyncSources: [
+          { nodeId: "mic", url: "https://media.test/mic.m4a" },
+          { nodeId: "cam", url: "https://media.test/cam.mp4" },
+        ],
+      },
+    }),
+  }
 
   it("has a dispatch fixture for every registered name, and each dispatches as its node type", async () => {
     for (const name of BUDGETED_JOB_NAMES) {
@@ -376,8 +427,8 @@ describe("every registered budgeted job is dispatched under its node type's own 
       expect(make, `add a dispatch fixture for budgeted job "${name}"`).toBeTypeOf("function")
       mockVideoAdd.mockClear()
       db.jobRecord = { status: "completed", output_data: { videoUrl: "https://out.test/x.mp4" }, error_message: null, progress: 100 }
-      const node = make()
-      const { done } = run(node, makeCtx())
+      const { node, inputs } = make()
+      const { done } = run(node, makeCtx(), inputs)
       await advance(1 * MINUTE)
       await done
       expect(mockVideoAdd.mock.calls[0]?.[0]).toBe(node.type)

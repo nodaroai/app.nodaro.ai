@@ -16,6 +16,7 @@ import {
   EXECUTION_DATA_KEYS,
   SCHEDULE_TRIGGER_NODE_TYPE,
   normalizeNodeModelParams,
+  normalizeVideoOverlayNodes,
   stripTransientRuntimeData,
   validateSubWorkflowRoutes,
   type GenericNode,
@@ -376,7 +377,16 @@ function prepare(
   // draft substituted into the validation graph, which is never written.)
   const wired = stampAssetRefs(stripped, existingById, assets)
   const normalized = normalizeNodeModelParams(wired.nodes)
-  const positioned = applyLayout(normalized.nodes, fullNodes, fullEdges, new Set(addedNodeIds))
+  // Video Overlay (every write, every video-overlay node of the prospective
+  // graph): presets expanded, and a layer whose `overlay<i>` handle the full
+  // edge list wires keeps no stored `imageUrl`. A stored node that an
+  // edge-only edit wires is not among the upserts — it joins them, or its
+  // stale `imageUrl` would stay in the database.
+  const overlaid = normalizeVideoOverlayNodes(normalized.nodes, fullEdges)
+  const storedOverlays = survivingNodes.filter((n) => n.type === "video-overlay")
+  const healedStored = normalizeVideoOverlayNodes(storedOverlays, fullEdges)
+  const pulledIn = healedStored.filter((n, i) => n !== storedOverlays[i])
+  const positioned = applyLayout([...overlaid, ...pulledIn], fullNodes, fullEdges, new Set(addedNodeIds))
   const orderedUpserts = orderParentFirst(positioned)
 
   // Nothing may leave here still holding an unresolved pointer: the run engine

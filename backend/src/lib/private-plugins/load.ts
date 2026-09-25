@@ -12,6 +12,7 @@ import type {
   PluginToolkit,
   PrivatePluginsModule,
   PromptTable,
+  RecipeTable,
 } from "./types.js"
 
 /**
@@ -78,6 +79,13 @@ export interface LoadPrivatePluginsResult {
    */
   services: PluginServices
   /**
+   * Merged from each loaded plugin's `recipes()` — last write wins per recipe
+   * name. Also published to `getPluginRecipes()` (a leaf registry, so the
+   * `get_recipe` MCP tool reads it without importing this loader's toolkit
+   * graph).
+   */
+  recipes: RecipeTable
+  /**
    * Present only when `opts.daemons` asked for it: every plugin's daemons,
    * in plugin order, already validated as a hostable list (unique, well-formed
    * names). Absent after a failed load — the host reads that as none.
@@ -96,6 +104,8 @@ export interface LoadPrivatePluginsResult {
 let pluginServices: PluginServices = {}
 export { getPluginEngines } from "./engine-registry.js"
 import { setPluginEngines } from "./engine-registry.js"
+export { getPluginRecipes } from "./recipe-registry.js"
+import { setPluginRecipes } from "./recipe-registry.js"
 
 /**
  * The private plugins' service surface, or `{}` when no plugin provided one
@@ -115,11 +125,12 @@ function emptyResult(): LoadPrivatePluginsResult {
   // later one failed.
   pluginServices = {}
   setPluginEngines({})
+  setPluginRecipes({})
   // Fresh object per call — loadPrivatePlugins() is called from more than
   // one boot path (app.ts + video-worker.ts, Task 10), and callers merge
   // into `handlers` (e.g. Object.assign(allHandlers, handlers)). Sharing one
   // mutable object across calls would alias that merge across processes.
-  return { handlers: {}, loaded: [], engines: {}, prompts: {}, services: {} }
+  return { handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {} }
 }
 
 function isOptionalMode(): boolean {
@@ -238,6 +249,7 @@ export async function loadPrivatePlugins(
   const engines: PluginEngines = {}
   const prompts: PromptTable = {}
   const services: PluginServices = {}
+  const recipes: RecipeTable = {}
   let daemons: readonly PluginDaemon[] = []
 
   for (const plugin of plugins) {
@@ -266,6 +278,9 @@ export async function loadPrivatePlugins(
       if (plugin.services) {
         Object.assign(services, plugin.services(getToolkit()))
       }
+      if (plugin.recipes) {
+        Object.assign(recipes, plugin.recipes())
+      }
       if (plugin.prompts) {
         const pluginPrompts = plugin.prompts()
         Object.assign(prompts, pluginPrompts)
@@ -288,7 +303,16 @@ export async function loadPrivatePlugins(
 
   pluginServices = services
   setPluginEngines(engines)
-  return { handlers, loaded, engines, prompts, services, ...(opts.daemons ? { daemons: [...daemons] } : {}) }
+  setPluginRecipes(recipes)
+  return {
+    handlers,
+    loaded,
+    engines,
+    prompts,
+    services,
+    recipes,
+    ...(opts.daemons ? { daemons: [...daemons] } : {}),
+  }
 }
 
 /**

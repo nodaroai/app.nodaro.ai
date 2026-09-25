@@ -8,6 +8,7 @@ const map: LocaleCatalogMap = {
   "bedroom": { label: "غرفة نوم", description: "غرفة نوم حميمية" },
   "living-room": { label: "غرفة معيشة", description: "غرفة معيشة سكنية مريحة" },
   "kitchen": { label: "مطبخ", description: "مطبخ منزلي دافئ بضوء صباحي" },
+  "bathroom": { label: "حمّام", description: "حمّام منزلي مشرق" },
   "hotel-room": { label: "غرفة فندق", description: "غرفة فندق أنيقة بإطلالة على المدينة" },
   "restaurant": { label: "مطعم", description: "مطعم حميمي بإضاءة شموع" },
   "nightclub": { label: "ناد ليلي", description: "ناد مظلم بليزر ودخان" },
@@ -19,6 +20,7 @@ const map: LocaleCatalogMap = {
   "warehouse": { label: "مستودع صناعي", description: "مستودع شاسع بنوافذ سقف" },
   "subway-car": { label: "عربة مترو", description: "داخل مترو متحرك" },
   "taxi": { label: "داخل تاكسي", description: "المقعد الخلفي لتاكسي مدينة في الليل" },
+  "car-interior": { label: "داخل السيارة", description: "المقعد الأمامي لسيارة متوقفة" },
   "cathedral": { label: "كاتدرائية", description: "داخل كاتدرائية قوطية" },
   "art-gallery": { label: "معرض فني", description: "معرض White-Cube مبسط" },
 

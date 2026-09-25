@@ -65,6 +65,64 @@ describe("approved row bodies", () => {
   })
 })
 
+describe("F1 bodies — the subject becomes the material and reforms (2026-09-25 A/B, arm B won)", () => {
+  // The approved drafts, tidied to read like every other row inside `term (…)`:
+  // first letter lower-cased, final full stop dropped. Nothing else differs from the draft.
+  const F1_BODIES: Record<string, { term: string; body: string }> = {
+    "dissolve-to-mist": {
+      term: "dissolve to mist",
+      body:
+        "the first subject loses its solid form and turns into a soft cloud of fine mist, starting at its " +
+        "edges and working inward. The camera stays where it is and the framing does not change. The mist " +
+        "drifts through the frame and thins until the first shot is gone, then gathers again at the same " +
+        "place in the frame and condenses into the second subject as the second shot appears behind it. The " +
+        "shot ends on the second subject, solid and fully resolved, with no mist left. The second subject " +
+        "forms only out of the gathered mist",
+    },
+    "water-splash": {
+      term: "water splash",
+      body:
+        "the first subject turns to water and collapses into a splashing cascade that spreads across the " +
+        "lower part of the frame. The camera stays where it is and the framing does not change. The water " +
+        "surges upward at the same place in the frame and takes the shape of the second subject, while the " +
+        "second shot appears behind it as the spray falls away. The shot ends on the second subject, solid " +
+        "and fully resolved, with no water left on it. The second subject forms only out of the rising water",
+    },
+    "pixelate-reform": {
+      term: "pixelate and reform",
+      body:
+        "the first subject breaks into large square mosaic blocks, and the blocks scatter outward across the " +
+        "frame. The camera stays where it is and the framing does not change. The blocks fly back, lock " +
+        "together at the same place in the frame and sharpen into the second subject, while the second shot " +
+        "appears behind them. The shot ends on the second subject, fully sharp, with no blocks left. Only the " +
+        "subject turns into blocks; the surroundings change as the blocks clear",
+    },
+    "polygon-shatter": {
+      term: "polygon shatter",
+      body:
+        "the first subject fractures into large opaque flat-shaded chunks, like the facets of a low-polygon " +
+        "model, and the chunks burst outward in slow motion. The camera stays where it is and the framing " +
+        "does not change. The chunks turn around mid-flight and fly back along clean straight paths, locking " +
+        "together at the same place in the frame into the shape of the second subject, while the second shot " +
+        "appears behind them. The shot ends on the second subject, solid and fully resolved, with no loose " +
+        "chunks left. The chunks stay opaque and matte throughout, like painted blocks",
+    },
+  }
+
+  it.each(Object.keys(F1_BODIES))("%s renders `term (body)` at the tile-default levers", (id) => {
+    const { term, body } = F1_BODIES[id]!
+    expect(getTransitionPromptHint(id)).toBe(body)
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "full", { scope: "shot" })).toBe(`${term} (${body})`)
+  })
+
+  it.each(Object.keys(F1_BODIES))("%s at middle / short / natural", (id) => {
+    const { term, body } = F1_BODIES[id]!
+    expect(composeTransitionHintFromConnections(id, [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      `${term} (${body}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
+    )
+  })
+})
+
 describe("L1 — a cut spans nothing, so `full` adds no clause", () => {
   it.each(INSTANT_IDS)("%s + full renders no position clause", (id) => {
     const out = composeTransitionHintFromConnections(id, [], [], { position: "full", duration: "short", intensity: "natural" })

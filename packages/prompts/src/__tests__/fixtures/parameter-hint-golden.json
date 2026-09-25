@@ -1831,7 +1831,7 @@
           "hairColor": "hair-platinum",
           "eyebrows": "brows-natural",
           "skinTone": "skin-very-fair",
-          "skinTexture": "texture-smooth",
+          "skinTexture": "texture-natural",
           "eyeColor": "eyes-brown",
           "eyeState": "eye-state-closed",
           "facialHair": "face-clean-shaven",
@@ -1839,7 +1839,7 @@
         }
       },
       "ctx": null,
-      "expected": "a man, a baby under 1 year old, of Asian descent, a California beach aesthetic — laid-back beach-town vibe, golden-hour sun-warmed energy, easy carefree mood, petite, lean build, an oval face shape, a strong, sharply defined jawline, almond-shaped eyes, a straight nose, thin lips, with chapped, cracked, weather-worn dry lips, a shaved bald head, platinum blonde hair, very pale and icy, natural eyebrows, very fair pale skin, with flawless, silky smooth skin, brown eyes, with eyes fully closed in a peaceful expression, clean-shaven, wearing glasses"
+      "expected": "a man, a baby under 1 year old, of Asian descent, a California beach aesthetic — laid-back beach-town vibe, golden-hour sun-warmed energy, easy carefree mood, petite, lean build, an oval face shape, a strong, sharply defined jawline, almond-shaped eyes, a straight nose, thin lips, with chapped, cracked, weather-worn dry lips, a shaved bald head, platinum blonde hair, very pale and icy, natural eyebrows, very fair pale skin, with natural, unretouched skin — visible pores and small, even variation in tone, brown eyes, with eyes fully closed in a peaceful expression, clean-shaven, wearing glasses"
     },
     {
       "key": "person/last-of-each",
@@ -2518,17 +2518,17 @@
       "expected": "set in a cozy coffee shop interior with warm pendant lights, exposed brick walls and steam drifting over espresso machines"
     },
     {
-      "key": "setting/id:park",
+      "key": "setting/id:neon-alley",
       "note": "single-dim catalog id",
       "node": {
         "id": "n1",
         "type": "setting",
         "data": {
-          "setting": "park"
+          "setting": "neon-alley"
         }
       },
       "ctx": null,
-      "expected": "set in a leafy urban park with winding footpaths, wooden benches, tall shade trees, people lounging on grass and sunlight filtering through leaves"
+      "expected": "set in a rain-soaked neon-lit alley in a Tokyo-style nightlife district with glowing kanji signs, steam vents and reflective puddles"
     },
     {
       "key": "setting/id:wasteland",
@@ -2674,7 +2674,7 @@
         "id": "n1",
         "type": "styling",
         "data": {
-          "makeup": "makeup-dewy",
+          "makeup": "makeup-bare",
           "hairCut": "cut-sisterlocks",
           "hairTreatment": "treatment-rooted",
           "hairState": "hair-flowing",
@@ -2694,7 +2694,7 @@
         }
       },
       "ctx": null,
-      "expected": "with dewy makeup, glowing fresh skin and minimal coverage, in thin neat sisterlocks, with a rooted look — visible darker roots blending into lighter lengths, with hair flowing freely, strands cascading and rippling with subtle movement, wearing wraparound sport sunglasses, wearing a wide-brim Western cowboy hat with a creased crown, wearing a thin metallic body chain draped across the torso, with classic French tip manicure, with warrior war paint streaked across the face, dressed in a long flowing caftan robe, a full-length garment worn across the Middle East and North Africa, wearing a strapless bandeau top wrapped across the chest, in fitted lycra bike shorts ending mid-thigh, wearing a plush fur coat with a deep textured pile, with bunched knit leg warmers stacked over the calves, in woven jute-sole espadrilles with a canvas upper, a casual summer shoe, wearing glossy latex with a high-shine liquid look clinging to the body, the outfit composed of multiple stacked layers, each piece visible at the edges"
+      "expected": "with a completely bare face, no makeup at all, in thin neat sisterlocks, with a rooted look — visible darker roots blending into lighter lengths, with hair flowing freely, strands cascading and rippling with subtle movement, wearing wraparound sport sunglasses, wearing a wide-brim Western cowboy hat with a creased crown, wearing a thin metallic body chain draped across the torso, with classic French tip manicure, with warrior war paint streaked across the face, dressed in a long flowing caftan robe, a full-length garment worn across the Middle East and North Africa, wearing a strapless bandeau top wrapped across the chest, in fitted lycra bike shorts ending mid-thigh, wearing a plush fur coat with a deep textured pile, with bunched knit leg warmers stacked over the calves, in woven jute-sole espadrilles with a canvas upper, a casual summer shoe, wearing glossy latex with a high-shine liquid look clinging to the body, the outfit composed of multiple stacked layers, each piece visible at the edges"
     },
     {
       "key": "styling/mid-of-each",
@@ -2703,7 +2703,7 @@
         "id": "n1",
         "type": "styling",
         "data": {
-          "makeup": "makeup-bold-lips",
+          "makeup": "makeup-editorial",
           "hairCut": "cut-side-swept",
           "hairTreatment": "treatment-sombre",
           "hairState": "hair-voluminous",
@@ -2723,7 +2723,7 @@
         }
       },
       "ctx": null,
-      "expected": "with bold lips, a strong red or dark lipstick as the focal point, side-swept across the face with strands falling over one eye, with sombré — a subtle, soft ombré gradient, with hair full of volume, blown out and bouncy with body and lift at the roots, wearing round wire-frame glasses, John Lennon style, wearing a striped pharaonic nemes headdress with a golden uraeus cobra at the brow, wearing a black leather choker fitted close around the throat, with dark black nail polish, with tribal-inspired face markings, wrapped in a plush terrycloth bathrobe tied at the waist, wearing a thin satin camisole with delicate spaghetti straps, in casual mid-thigh shorts, wearing a quilted puffer jacket with horizontal baffles and a stand-up collar, with lace-topped thigh-high stockings cinched mid-thigh, in polished leather penny loafers, wearing warm woven wool with a soft matte surface and visible fibers, the top neatly tucked into the bottom"
+      "expected": "with avant-garde editorial makeup, artistic and unconventional, side-swept across the face with strands falling over one eye, with sombré — a subtle, soft ombré gradient, with hair full of volume, blown out and bouncy with body and lift at the roots, wearing round wire-frame glasses, John Lennon style, wearing a striped pharaonic nemes headdress with a golden uraeus cobra at the brow, wearing a black leather choker fitted close around the throat, with dark black nail polish, with tribal-inspired face markings, wrapped in a plush terrycloth bathrobe tied at the waist, wearing a thin satin camisole with delicate spaghetti straps, in casual mid-thigh shorts, wearing a quilted puffer jacket with horizontal baffles and a stand-up collar, with lace-topped thigh-high stockings cinched mid-thigh, in polished leather penny loafers, wearing warm woven wool with a soft matte surface and visible fibers, the top neatly tucked into the bottom"
     },
     {
       "key": "styling/one-dimension",

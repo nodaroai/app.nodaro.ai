@@ -20,6 +20,7 @@ import { refreshEntityNodes } from "@/lib/entity-node-data"
 import { settledBeforeClear } from "@/lib/results-cleared"
 import { createTriggerSyncTracker, syncTriggersAfterSave, type TriggerSyncTracker } from "@/lib/trigger-sync-after-save"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
+import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 
 /**
  * Execution statuses whose `node_states` are worth restoring onto the canvas on
@@ -87,6 +88,14 @@ interface NodeExecutionState {
     /** Fan-in (reduce / Choose Best) aggregated value + strategy meta. */
     result?: string
     reduceMeta?: Record<string, unknown>
+    /** Video Overlay: the worker's warnings, output canvas and length, and a DAG run's freshness key. Mirrors backend NodeOutput. */
+    warnings?: readonly unknown[]
+    width?: number
+    height?: number
+    durationSec?: number
+    resultCompositionKey?: string
+    /** Video Overlay list fan-out: each row's own freshness key, row-aligned with listResults. */
+    listResultCompositionKeys?: string[]
   }
   error?: string
   /** Stable billing-refusal code — mirrors backend NodeExecutionState. */
@@ -235,11 +244,17 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
     if (job.status === "completed") {
       // Job completed - update node with result
       const outputUrl = job.output_data?.imageUrl ?? job.output_data?.videoUrl ?? job.output_data?.audioUrl
+      // Video Overlay: the job's run facts (warnings, canvas, length and the
+      // freshness key the REST job echoes) on the node and the result — the
+      // same mapping every other landing lane writes. This lane lands a run
+      // that finished while the tab was closed FIRST; once it has a result,
+      // reconcile skips the node, so leaving them off here would read "Result (old)".
+      const overlayRun = node.type === "video-overlay" ? videoOverlayRunOutputFields(job.output_data) : undefined
 
       // Update the result with the URL if it was missing
       const updatedResults = results.map((r, i) => {
         if (i === 0 && r.jobId === job.id && !r.url && outputUrl) {
-          return { ...r, url: outputUrl }
+          return { ...r, url: outputUrl, ...(overlayRun ?? {}) }
         }
         return r
       })
@@ -247,7 +262,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       // If the job was tracked by currentJobId but has no result entry, prepend one
       const hasResultForJob = updatedResults.some(r => r.jobId === job.id)
       if (!hasResultForJob && outputUrl) {
-        updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id })
+        updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id, ...(overlayRun ?? {}) })
       }
 
       const newData: Record<string, unknown> = {
@@ -257,6 +272,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
         activeResultIndex: 0,
         currentJobId: undefined,
         currentJobProgress: undefined,
+        ...(overlayRun ?? {}),
       }
 
       // Set the appropriate URL field based on output type
@@ -376,7 +392,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
  * Apply backend execution node states to frontend nodes.
  * Maps orchestrator nodeStates → node.data.executionStatus + output URLs.
  */
-function applyBackendExecutionState(
+export function applyBackendExecutionState(
   nodes: WorkflowNode[],
   nodeStates: Record<string, NodeExecutionState>,
 ): WorkflowNode[] {
@@ -409,6 +425,9 @@ function applyBackendExecutionState(
         // Voice id, stems, alignment, combined / split text — under the names
         // their readers use (#1547: this lane used to invent its own).
         Object.assign(data, namedRunOutputFields(state.output))
+        // Video Overlay: warnings / canvas / length — the live run's mapping.
+        const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(state.output) : undefined
+        if (overlayRun) Object.assign(data, overlayRun)
 
         // Build generated result entries from the output
         const listResultUrls = (state.output.listResults ?? []).filter(
@@ -418,13 +437,16 @@ function applyBackendExecutionState(
         const existingUrls = new Set(results.map(r => r.url))
 
         if (listResultUrls.length > 1) {
-          // Fan-out: multiple results from list execution
+          // Fan-out: multiple results from list execution — on Video Overlay
+          // each row carries its own composition's key.
+          const rowFields = videoOverlayListRowFields(nodeType, state.output)
           const newResults = listResultUrls
             .filter((url: string) => !existingUrls.has(url))
             .map((url: string, i: number) => ({
               url,
               timestamp: new Date().toISOString(),
               jobId: `exec-${node.id}-${i}`,
+              ...rowFields(url),
             }))
           if (newResults.length > 0) {
             data.generatedResults = [...newResults, ...results]
@@ -440,7 +462,7 @@ function applyBackendExecutionState(
           const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
           if (outputUrl && !existingUrls.has(outputUrl)) {
             data.generatedResults = [
-              { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}` },
+              { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}) },
               ...results,
             ]
             data.activeResultIndex = 0
@@ -535,6 +557,9 @@ export function applyCompletedExecutionResults(
     // Voice id, stems, alignment, combined / split text — under the names
     // their readers use (#1547: this lane used to invent its own).
     Object.assign(newData, namedRunOutputFields(state.output))
+    // Video Overlay: warnings / canvas / length — the live run's mapping.
+    const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(state.output) : undefined
+    if (overlayRun) Object.assign(newData, overlayRun)
     // Choose Best (reduce): winner + the judge's reasoning, same fields the
     // single-node Run writes (execute-node.ts) — mirrors syncNodeStatesToStore.
     if (nodeType === "reduce" && typeof state.output.result === "string") {
@@ -547,14 +572,17 @@ export function applyCompletedExecutionResults(
       (u: string) => u && u.startsWith("http"),
     )
     if (listResultUrls.length > 1) {
-      // Fan-out: multiple results from list execution
+      // Fan-out: multiple results from list execution — on Video Overlay each
+      // row carries its own composition's key.
       const existingUrls = new Set(existingResults.map(r => r.url))
+      const rowFields = videoOverlayListRowFields(nodeType, state.output)
       const newResults = listResultUrls
         .filter((url: string) => !existingUrls.has(url))
         .map((url: string, i: number) => ({
           url,
           timestamp: new Date().toISOString(),
           jobId: `exec-${node.id}-${i}`,
+          ...rowFields(url),
         }))
       if (newResults.length > 0) {
         newData.generatedResults = [...newResults, ...existingResults]
@@ -568,7 +596,7 @@ export function applyCompletedExecutionResults(
       newData.__listCompleted = state.output.listResults!.length
     } else if (outputUrl) {
       newData.generatedResults = [
-        { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}` },
+        { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}) },
         ...existingResults,
       ]
       newData.activeResultIndex = 0

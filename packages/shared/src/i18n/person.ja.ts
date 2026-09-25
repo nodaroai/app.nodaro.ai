@@ -288,6 +288,7 @@ const map: LocaleCatalogMap = {
   "face-full-beard": { label: "フルビアード", description: "厚いフルビアード" },
 
   // Skin texture
+  "texture-natural": { label: "ナチュラル", description: "本物の毛穴と自然なムラ" },
   "texture-smooth": { label: "滑らか", description: "完璧で絹のように滑らかな肌" },
   "texture-wrinkled": { label: "シワのある", description: "歳を重ね深いシワが刻まれた肌" },
   "texture-goosebumps": { label: "鳥肌", description: "肌に鳥肌が立つ" },

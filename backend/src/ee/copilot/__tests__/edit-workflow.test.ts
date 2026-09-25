@@ -16,6 +16,7 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 
 const { runEditWorkflow, EditRejected } = await import("../tools/edit-workflow.js")
+import { expandVideoOverlayLayer } from "@nodaro/shared"
 import type { CopilotToolContext } from "../tools/types.js"
 
 const emitted: Array<{ type: string; data: Record<string, unknown> }> = []
@@ -275,5 +276,48 @@ describe("edit_workflow — write pipeline", () => {
     await expect(
       runEditWorkflow(ctx, { note: "one more", upsertNodes: [{ id: "extra", type: "text-prompt", data: {} }] }),
     ).rejects.toThrow(/limit is 250/)
+  })
+})
+
+describe("edit_workflow — Video Overlay (D10)", () => {
+  const OWN = "https://r2.test/own.png"
+  const overlayNode = (layers: unknown[]) => ({
+    id: "vo",
+    type: "video-overlay",
+    position: { x: 400, y: 0 },
+    data: { label: "Video Overlay", layerCount: 4, layers },
+  })
+
+  it("an edge-only edit that wires a layer clears that stored layer's imageUrl", async () => {
+    graphState.nodes = [
+      { id: "img", type: "upload-image", position: { x: 0, y: 0 }, data: { imageUrl: "https://r2.test/wired.png" } },
+      overlayNode([{ imageUrl: "https://r2.test/stale.png", start: 1, preset: "card" }, { imageUrl: OWN, start: 2 }]),
+    ]
+
+    await runEditWorkflow(ctx, {
+      note: "show the photo as layer 1",
+      upsertEdges: [{ source: "img", sourceHandle: "image", target: "vo", targetHandle: "overlay" }],
+    })
+
+    const args = rpcMock.mock.calls[0]![1] as {
+      p_upsert_nodes: Array<{ id: string; position?: unknown; data: { layers: Array<Record<string, unknown>> } }>
+    }
+    const vo = args.p_upsert_nodes.find((n) => n.id === "vo")
+    expect(vo).toBeDefined()
+    expect(vo!.position).toEqual({ x: 400, y: 0 })
+    expect(vo!.data.layers[0]).toEqual(expandVideoOverlayLayer({ start: 1, preset: "card" }))
+    expect(vo!.data.layers[1]).toEqual(expandVideoOverlayLayer({ imageUrl: OWN, start: 2 }))
+  })
+
+  it("does not rewrite a stored video-overlay node that is already normalised", async () => {
+    graphState.nodes = [
+      { id: "p1", type: "text-prompt", data: { prompt: "a cat" } },
+      overlayNode([expandVideoOverlayLayer({ imageUrl: OWN, start: 2 })]),
+    ]
+
+    await runEditWorkflow(ctx, { note: "retype", patchNodes: [{ id: "p1", data: { prompt: "a dog" } }] })
+
+    const args = rpcMock.mock.calls[0]![1] as { p_upsert_nodes: Array<{ id: string }> }
+    expect(args.p_upsert_nodes.map((n) => n.id)).toEqual(["p1"])
   })
 })

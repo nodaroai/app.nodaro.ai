@@ -45,7 +45,7 @@ import {
   getVideoResolutionOptions,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { availableReasoningEfforts, isSeedanceVideoEditProvider, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS } from "@nodaro/shared"
+import { availableReasoningEfforts, isSeedanceVideoEditProvider, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS, VIDEO_OVERLAY_OUTPUT_ASPECTS } from "@nodaro/shared"
 import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 
@@ -646,6 +646,23 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
         v === "none"
           ? { numbered: undefined }
           : { numbered: true, badgePosition: v === "top-right" ? "top-right" : undefined },
+    },
+  ],
+  // ── Video Overlay (output aspect only — every layer lever lives in the panel) ──
+  // "Source" = no outputAspect: the video's own size and frame rate. The ratios
+  // are the shared wire contract (VIDEO_OVERLAY_OUTPUT_ASPECTS, the panel's list
+  // too), so the strip can never offer an aspect the route refuses. "Source"
+  // clears baseFit and the padding colour WITH the aspect — exactly what the
+  // panel's "Same as video" writes — because without an aspect they are refused
+  // (fit_without_aspect, spec §3.5). Switching between two ratios keeps them.
+  "video-overlay": [
+    {
+      field: "outputAspect",
+      ariaLabel: "Aspect",
+      icon: Ratio,
+      options: [{ value: "source", label: "Source" }, ...VIDEO_OVERLAY_OUTPUT_ASPECTS.map((a) => ({ value: a, label: a }))],
+      read: (data) => (typeof data.outputAspect === "string" && data.outputAspect !== "" ? data.outputAspect : "source"),
+      write: (value) => (value === "source" ? { outputAspect: undefined, baseFit: undefined, backgroundColor: undefined } : { outputAspect: value }),
     },
   ],
   // ── Assemble Narrated Video (voice / ambient / max-slow — per original

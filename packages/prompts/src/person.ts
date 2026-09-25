@@ -694,6 +694,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "face-five-oclock-shadow", label: "Five-O'Clock Shadow", dimension: "facial-hair", description: "Heavier daily growth — denser than light stubble", promptHint: "a five-o'clock shadow, daily growth heavier than light stubble" },
 
   // -------------------- Skin Texture --------------------
+  { id: "texture-natural",    label: "Natural",     dimension: "skin-texture", description: "Real pores and natural variation", promptHint: "with natural, unretouched skin — visible pores and small, even variation in tone", term: "natural unretouched skin" },
   { id: "texture-smooth",     label: "Smooth",      dimension: "skin-texture", description: "Flawless, silky smooth skin", promptHint: "with flawless, silky smooth skin", term: "flawless smooth skin" },
   { id: "texture-wrinkled",   label: "Wrinkled",    dimension: "skin-texture", description: "Aged, deeply lined skin",     promptHint: "with deep wrinkles and aged skin texture", term: "deeply wrinkled aged skin" },
   { id: "texture-goosebumps", label: "Goosebumps",  dimension: "skin-texture", description: "Raised goosebumps on skin",   promptHint: "with goosebumps raised on the skin" },

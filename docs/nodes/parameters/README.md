@@ -99,8 +99,11 @@ no hint-mode toggle.
 ## Preview pictures: real or illustration
 
 On nodaro.ai, the Look and Camera pickers picture each option with a real
-render: the same base frame put through that option (for Camera Motion, a
-short clip that plays while you hover the still). Each of those pickers also
+render: the same base frame put through that option. For Camera Motion it is a
+short silent clip that loops over its still wherever the option is pictured —
+the picker, the canvas node and a published app's input card (icon-size spots
+such as a dropdown's items show the still); with reduced motion turned on in
+your OS, only the still shows. Each of those pickers also
 has a drawn illustration, and you can pick which one a node shows.
 
 **Which pickers.** Camera Motion, Color / Look, Style, Lens, Lighting,

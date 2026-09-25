@@ -295,6 +295,7 @@ const map: LocaleCatalogMap = {
   "face-full-beard": { label: "זקן מלא", description: "זקן עבה ומלא" },
 
   // Skin Texture
+  "texture-natural": { label: "טבעי", description: "נקבוביות אמיתיות ושונוּת טבעית" },
   "texture-smooth": { label: "חלק", description: "עור חלק כמשי, ללא רבב" },
   "texture-wrinkled": { label: "מקומט", description: "עור מבוגר ומקומט עמוק" },
   "texture-goosebumps": { label: "סמרמורת", description: "סמרמורת בולטת על העור" },

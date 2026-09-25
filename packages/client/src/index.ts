@@ -501,6 +501,10 @@ export { EditResource } from "./resources/edit.js"
 export type {
   EditJobResult,
   SilenceDetectInput,
+  AudioSyncInput,
+  AudioSyncSource,
+  AudioSyncOffset,
+  AudioSyncResult,
   ApplyEdlInput,
   EditPlanInput,
   EditPlanSource,

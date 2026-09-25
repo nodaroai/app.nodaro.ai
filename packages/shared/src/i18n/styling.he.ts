@@ -9,6 +9,7 @@ const map: LocaleCatalogMap = {
   "makeup-editorial": { label: "אדיטוריאלי", description: "איפור אופנה אוונגרדי" },
   "makeup-goth": { label: "גות'", description: "אסתטיקה גות' כהה" },
   "makeup-dewy": { label: "זוהר טלול", description: "פוקוס על עור רענן זוהר" },
+  "makeup-bare": { label: "פנים חשופות", description: "בלי איפור בכלל" },
 
   // Eyewear
   "eyewear-sunglasses": { label: "משקפי שמש", description: "משקפי שמש כהים כלליים" },
@@ -176,6 +177,7 @@ const map: LocaleCatalogMap = {
   "outfit-one-piece-swim": { label: "בגד ים שלם", description: "בגד ים שלם מוצמד" },
   "outfit-lingerie": { label: "סט לבני נשים", description: "סט לבני נשים תואם" },
   "outfit-pajamas": { label: "פיג'מה", description: "סט פיג'מה כותנה רך" },
+  "outfit-casual-home": { label: "ביתי נינוח", description: "חולצה רכה או סריג עם מכנסיים נוחים" },
   "outfit-bathrobe": { label: "חלוק רחצה", description: "חלוק רחצה רך מבד מגבת" },
   "outfit-kimono": { label: "קימונו", description: "קימונו יפני מסורתי" },
   "outfit-ballerina": { label: "בלרינה", description: "תלבושת בלרינה קלאסית" },

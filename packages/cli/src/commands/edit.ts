@@ -1,6 +1,6 @@
 import { Command } from "commander"
 import { readFileSync } from "node:fs"
-import type { Edl, Transcript, EditPlanSource, EditPlanInput, SilenceRanges } from "@nodaro/sdk"
+import type { Edl, Transcript, EditPlanSource, EditPlanInput, SilenceRanges, AudioSyncSource } from "@nodaro/sdk"
 import { buildClient, handleError } from "../client.js"
 import { warn, type OutputOpts } from "../output.js"
 import { reportQueuedJob, collectVariadic } from "../util.js"
@@ -52,9 +52,19 @@ function parseSourceSpec(spec: string, index: number): EditPlanSource {
   return { id: `source-${index + 1}`, url: spec, kind: "video" }
 }
 
+/**
+ * Parse one `--source <[id=]url>` spec for `edit audio-sync`. `id=` before the
+ * URL names the recording (its offset's `sourceId`); without it the id is
+ * minted from the row's position (`source-1`, `source-2`, …).
+ */
+function parseAudioSyncSource(spec: string, index: number): AudioSyncSource {
+  const named = /^([^=\s]{1,200})=(https?:\/\/.+)$/.exec(spec)
+  return named ? { id: named[1]!, url: named[2]! } : { id: `source-${index + 1}`, url: spec }
+}
+
 export function editCommand(): Command {
   const cmd = new Command("edit").description(
-    "editorial primitives for podcast / long-form video — detect silence, apply an EDL, plan a cut",
+    "editorial primitives for podcast / long-form video — detect silence, sync recordings, apply an EDL, plan a cut",
   )
 
   // ── silence-detect ────────────────────────────────────────────────────────
@@ -86,6 +96,56 @@ export function editCommand(): Command {
             watch: opts.watch,
             pollInterval: opts.pollInterval,
             note: "silence-detect",
+          })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  // ── audio-sync ────────────────────────────────────────────────────────────
+  cmd
+    .command("audio-sync")
+    .description("measure how far apart 2-6 recordings' clocks are, from their sound (keyless)")
+    .option(
+      "--source <[id=]url>",
+      "a recording (audio or video) as url or id=url (repeatable, 2-6); ids are minted as source-N when omitted",
+      collectVariadic,
+    )
+    .option("--sources-file <file>", "JSON array of { id, url } rows (overrides --source)")
+    .option("--reference <id>", "the source every offset is measured against (default: the first)")
+    .option("--watch", "poll the job until it finishes")
+    .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
+    .option("--profile <name>")
+    .option("--json")
+    .action(
+      async (opts: GlobalOpts & WatchOpts & { source?: string[]; sourcesFile?: string; reference?: string }) => {
+        let sources: AudioSyncSource[]
+        if (opts.sourcesFile) {
+          const parsed = readJsonFile(opts.sourcesFile)
+          if (!Array.isArray(parsed)) {
+            warn(`--sources-file ${opts.sourcesFile} must contain a JSON array of { id, url } rows`)
+            process.exit(1)
+          }
+          sources = parsed as AudioSyncSource[]
+        } else {
+          sources = (opts.source ?? []).map(parseAudioSyncSource)
+        }
+        if (sources.length < 2 || sources.length > 6) {
+          warn(`audio-sync takes 2-6 recordings — pass --source <url> (repeatable) or --sources-file <file> (got ${sources.length})`)
+          process.exit(1)
+        }
+        try {
+          const client = buildClient(opts.profile)
+          const result = await client.edit.audioSync({
+            sources,
+            ...(opts.reference !== undefined ? { reference: opts.reference } : {}),
+          })
+          await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
+            json: opts.json,
+            watch: opts.watch,
+            pollInterval: opts.pollInterval,
+            note: `audio-sync (${sources.length} sources)`,
           })
         } catch (err) {
           handleError(err)

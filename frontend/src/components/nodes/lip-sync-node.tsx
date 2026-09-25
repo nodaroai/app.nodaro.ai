@@ -83,6 +83,7 @@ const VIDEO_OUTPUT_TYPES = [
   "speed-ramp",
   "loop-video",
   "fade-video",
+  "video-overlay",
   "suno-music-video",
 ]
 

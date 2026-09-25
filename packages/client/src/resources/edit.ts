@@ -54,6 +54,65 @@ export interface SilenceDetectInput {
   workflowId?: string
 }
 
+/** One recording for {@link EditResource.audioSync}. */
+export interface AudioSyncSource {
+  /**
+   * Your id for this recording (1–200 chars, unique within the request) —
+   * echoed back as its offset's `sourceId`. Use the id your EDL gives the same
+   * recording (`EdlSource.id`) and the result folds straight into it.
+   */
+  id: string
+  /** An audio OR video URL — the audio track is read either way. */
+  url: string
+}
+
+export interface AudioSyncInput {
+  /** The 2–6 recordings of one conversation to line up (camera files and/or a master mic). */
+  sources: AudioSyncSource[]
+  /**
+   * The id of the source every offset is measured against (its own offset is
+   * 0). Must be one of `sources`' ids; default: the first source.
+   */
+  reference?: string
+  /** Optionally associate this run with a workflow execution (display only). */
+  workflowId?: string
+}
+
+/** One recording's measured clock offset in an {@link AudioSyncResult}. */
+export interface AudioSyncOffset {
+  /** The recording's `id` from the request. */
+  sourceId: string
+  /**
+   * Where this recording sits on the reference's clock, in integer ms:
+   * `referenceMs = sourceMs + offsetMs` (the EDL's D19 sign — the value
+   * `EdlSource.offsetMs` takes when the reference is the master).
+   */
+  offsetMs: number
+  /** 0–1. Below 0.5 a `notes` line asks for a check by ear. */
+  confidence: number
+  /**
+   * Measured clock drift against the reference, in ms gained per hour; `null`
+   * when the shared stretch was too short to measure it. Drift is reported,
+   * never corrected — the offset is taken at the middle of the overlap.
+   */
+  driftMsPerHour: number | null
+}
+
+/**
+ * An audio-sync job's `output_data.json`. It is NOT what
+ * {@link EditResource.audioSync} returns (that is `{ jobId }`); fetch the
+ * finished job and read its `output_data.json`.
+ */
+export interface AudioSyncResult {
+  /** Wire version of the payload. */
+  version: number
+  /** The source every offset is measured against (its own offset is 0). */
+  reference: string
+  offsets: AudioSyncOffset[]
+  /** Human-readable warnings: low confidence, measured drift, no shared sound. */
+  notes: string[]
+}
+
 export interface ApplyEdlInput {
   /** The edit decision list to render. Media resolves from each `edl.sources[i].url`. */
   edl: Edl
@@ -147,8 +206,8 @@ export interface EditPlanInput {
 /**
  * Phase-1 editorial primitives for podcast / long-form video editing.
  *
- * - {@link silenceDetect} and {@link applyEdl} are core nodes available on every
- *   edition.
+ * - {@link silenceDetect}, {@link audioSync} and {@link applyEdl} are core nodes
+ *   available on every edition.
  * - {@link editPlan} is a Cloud-edition transcript-driven planner.
  * - {@link remapTranscript} is a PURE local transform (no request) — the same
  *   remap `applyEdl` performs on its `transcript`, exposed for callers that hold
@@ -171,6 +230,25 @@ export class EditResource {
         ...(input.thresholdDb !== undefined ? { thresholdDb: input.thresholdDb } : {}),
         ...(input.minSilenceMs !== undefined ? { minSilenceMs: input.minSilenceMs } : {}),
         ...(input.padMs !== undefined ? { padMs: input.padMs } : {}),
+        ...(input.workflowId !== undefined ? { workflowId: input.workflowId } : {}),
+      },
+    })
+  }
+
+  /**
+   * Measure how far apart the clocks of 2–6 recordings of one conversation are
+   * (`POST /v1/audio-sync`), by cross-correlating their audio — keyless, one
+   * ffmpeg decode per source. The finished job's `output_data.json` is an
+   * {@link AudioSyncResult}. A malformed request (fewer than 2 or more than 6
+   * sources, a repeated id, a `reference` that is not one of the ids) throws a
+   * typed `NodaroError` (400, `code: "validation_error"`) before any credits
+   * are reserved.
+   */
+  audioSync(input: AudioSyncInput): Promise<EditJobResult> {
+    return this.client.request("POST", "/v1/audio-sync", {
+      body: {
+        sources: input.sources.map((s) => ({ id: s.id, url: s.url })),
+        ...(input.reference !== undefined ? { reference: input.reference } : {}),
         ...(input.workflowId !== undefined ? { workflowId: input.workflowId } : {}),
       },
     })

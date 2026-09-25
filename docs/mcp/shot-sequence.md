@@ -151,8 +151,8 @@ timings in **seconds**. Costs **3 credits**.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `audio_url` | string (URL) | HTTPS URL to the narration audio. Either `audio_url` or `audio_asset_id` is required. |
-| `audio_asset_id` | string (UUID) | Asset ID of an existing audio file. Either `audio_url` or `audio_asset_id` is required. |
+| `audio_url` | string (URL) | HTTPS URL to the narration audio, or to a video whose speech track should be aligned. Either `audio_url` or `audio_asset_id` is required. |
+| `audio_asset_id` | string (UUID) | ID of an existing audio or video job. Either `audio_url` or `audio_asset_id` is required. |
 | `transcript` | string | The exact narration script; must match the audio word-for-word. |
 
 **Returns:** `{ job_id: string }`

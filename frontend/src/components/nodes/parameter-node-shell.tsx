@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Eye, FileText, Layers as LayersIcon } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
@@ -38,6 +38,63 @@ interface ParameterNodeShellProps {
   /** Content rendered above the (display-mode-toggled) children and kept
    *  visible in all display modes — e.g. the picker-json "Update" button. */
   readonly headerSlot?: ReactNode
+}
+
+/** A picker card is never narrower than this (the long-standing default). */
+export const PARAMETER_NODE_MIN_WIDTH = 220
+
+/** Layout width in fractional px (`offsetWidth` is snapped to whole px). */
+function layoutWidth(el: HTMLElement): number {
+  return parseFloat(getComputedStyle(el).width) || el.offsetWidth
+}
+
+/**
+ * The narrowest node on which the toggle row (Prompt hint + Picks / Prompt /
+ * Both) still fits on ONE line: the controls' own widths, the row gap, the
+ * content padding and the card border. Measured, not hard-coded, so it holds
+ * for every locale's labels (Hebrew's are ~35px wider than English's), follows
+ * a label change, and never goes stale when a control is added to the row.
+ *
+ * Widths are read as fractional layout px and the total rounded UP once, plus
+ * 1px of slack: flex-wrap breaks on the fractional width, so an integer sum
+ * (offsetWidth) could land a hair short and wrap the row anyway. Layout px are
+ * unaffected by the node's own zoom transform. Without layout (jsdom) the
+ * floor is the base minimum.
+ */
+function useToggleRowMinWidth(
+  rowRef: RefObject<HTMLDivElement | null>,
+  contentRef: RefObject<HTMLDivElement | null>,
+  deps: ReadonlyArray<unknown>,
+): { readonly min: number; readonly border: number } {
+  const [needed, setNeeded] = useState({ width: 0, border: 0 })
+  useLayoutEffect(() => {
+    const row = rowRef.current
+    const content = contentRef.current
+    if (!row || !content) return
+    const measure = () => {
+      const controls = Array.from(row.children) as HTMLElement[]
+      const gap = parseFloat(getComputedStyle(row).columnGap) || 0
+      const rowWidth = controls.reduce((sum, c) => sum + layoutWidth(c), 0) + gap * Math.max(0, controls.length - 1)
+      const contentStyle = getComputedStyle(content)
+      const padding = (parseFloat(contentStyle.paddingLeft) || 0) + (parseFloat(contentStyle.paddingRight) || 0)
+      // The card is the nearest ancestor with a border (BaseNode's `border-2`);
+      // read it rather than mirroring the class, so a border change cannot
+      // silently shift the floor.
+      let border = 0
+      for (let el = content.parentElement; el; el = el.parentElement) {
+        const cs = getComputedStyle(el)
+        border = (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0)
+        if (border > 0) break
+      }
+      setNeeded({ width: rowWidth > 0 ? Math.ceil(rowWidth + padding + border) + 1 : 0, border })
+    }
+    measure()
+    if (typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(measure)
+    for (const control of Array.from(row.children)) observer.observe(control)
+    return () => observer.disconnect()
+  }, deps)
+  return { min: Math.max(PARAMETER_NODE_MIN_WIDTH, needed.width), border: needed.border }
 }
 
 export const PARAMETER_DEFAULT_INPUT_HANDLES: ReadonlyArray<HandleConfig> = [
@@ -162,14 +219,42 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   const labelRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const naturalContentRef = useRef<HTMLDivElement>(null)
+  const toggleRowRef = useRef<HTMLDivElement>(null)
   const visualHeight = node?.height
+  const zoom = (data.zoom as number | undefined) ?? 1.0
+
+  // The node is at least as wide as its toggle row on one line (logical px).
+  // The resizer gets the same floor, in visual px like the rest of its
+  // geometry, so a resize can never wrap the row either.
+  const { min: nodeMinWidth, border: cardBorder } = useToggleRowMinWidth(toggleRowRef, contentRef, [showHintModeToggle])
+  const visualMinWidth = Math.round(nodeMinWidth * zoom)
+  // A node saved narrower than that (resized before the row grew, a group
+  // resize, or a locale with wider labels) is raised TO the floor — never
+  // cleared: a zoomed node must always carry a width (its box is what the
+  // resizer, run strip and minimap see), and a deliberate resize keeps its
+  // intent instead of snapping back to the picks' natural width.
+  const savedWidth = node?.width
+  // A height the user chose (rf-resized) is kept; a derived one is cleared so
+  // the card re-fits the row that just went from two lines to one.
+  const userResized = typeof node?.className === "string" && node.className.includes("rf-resized")
+  useEffect(() => {
+    if (savedWidth === undefined || savedWidth >= visualMinWidth) return
+    updateNode(id, userResized ? { width: visualMinWidth } : { width: visualMinWidth, height: undefined })
+  }, [id, savedWidth, visualMinWidth, userResized, updateNode])
+  // What the content div (inside the card border) may demand: the floor, or
+  // the saved width if that is still narrower (read-only access, where the
+  // store write above is refused) — then the row wraps inside the card
+  // instead of being clipped at its edge.
+  const contentMinWidth = savedWidth !== undefined && savedWidth < visualMinWidth
+    ? Math.max(0, savedWidth / zoom - cardBorder)
+    : nodeMinWidth - cardBorder
   useAutoMeasureForZoom({
     innerRef: wrapperRef,
     labelRef,
-    zoom: ((data.zoom as number | undefined) ?? 1.0),
+    zoom,
     visualHeight,
     onMeasured: (visualH) => updateNode(id, { height: visualH }),
-    triggerKey: `${displayMode}|${hintMode}|${(data.zoom as number | undefined) ?? 1.0}`,
+    triggerKey: `${displayMode}|${hintMode}|${zoom}`,
   })
 
   // ResizeObserver on the natural content wrapper (no h-full) — when picks
@@ -225,7 +310,15 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   }, [node, incomingFingerprint])
 
   return (
-    <div ref={wrapperRef} className={cn("group", fluidWidth ? "relative w-full h-full" : "relative max-w-[220px]")}>
+    <div
+      ref={wrapperRef}
+      className={cn("group relative", fluidWidth && "w-full h-full")}
+      // Compact (non-fluid) pickers stay capped at the minimum: exactly wide
+      // enough for the toggle row, never wider — but never narrower than a
+      // width the node already carries (the floor can shrink after a locale
+      // switch; the card must keep filling the node's box).
+      style={fluidWidth ? undefined : { maxWidth: savedWidth !== undefined ? Math.max(nodeMinWidth, savedWidth / zoom) : nodeMinWidth }}
+    >
       <div ref={labelRef}>
         <EditableNodeLabel
           label={label}
@@ -241,7 +334,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
         category="parameter"
         credits={0}
         selected={selected}
-        minWidth={220}
+        minWidth={visualMinWidth}
         hideHeader
         handles={handles}
         topToolbarContent={
@@ -264,6 +357,10 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
           // natural content in the cleared-height state, so the
           // h-full-causes-growth issue doesn't apply.
           className={cn(fluidWidth ? "px-3 pt-0 pb-3 flex flex-col gap-2 h-full" : "px-3 pt-0 pb-3 flex flex-col gap-2")}
+          // The one place the toggle row's width reaches the card: the row
+          // itself is `width: 0` (below), so this measured floor — not the
+          // row's intrinsic size — is what keeps the node one line wide.
+          style={{ minWidth: contentMinWidth }}
         >
           {/* Mode toggle (Picks / Prompt / Both) — pinned to top of body,
               zero padding above, zero margin below. Reserves its space via
@@ -277,9 +374,12 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
             //
             // `width: 0; min-width: 100%` (same idiom as the prompt preview
             // below): the row spans the node but contributes NOTHING to
-            // intrinsic width, so adding the hint-mode control here can
-            // never widen a 220px picker. Display mode stays right-aligned;
-            // the hint-mode control takes the freed left edge.
+            // intrinsic width — the node's floor comes from measuring the
+            // controls (useToggleRowMinWidth), which keeps the row on one
+            // line without letting it fight the picks for the natural width.
+            // Display mode stays right-aligned; the hint-mode control takes
+            // the freed left edge.
+            ref={toggleRowRef}
             className={cn(
               "nopan toggle-row relative top-[4px] flex flex-wrap items-center gap-1 mb-0 transition-opacity",
               // Display mode is always right-aligned; the hint-mode control,

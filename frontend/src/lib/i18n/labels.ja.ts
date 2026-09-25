@@ -134,6 +134,7 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Assemble Narrated Video": "ナレーション付き動画を合成",
   "Image Collage": "画像コラージュ",
   "Image Overlay": "画像オーバーレイ",
+  "Video Overlay": "動画オーバーレイ",
   "Merge Video & Audio": "動画とオーディオを結合",
   "Add Captions": "字幕を追加",
   "Resize Video": "動画をリサイズ",
@@ -142,6 +143,7 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Split into Chunks": "チャンクに分割",
   "Extract Audio": "オーディオを抽出",
   "Silence Detect": "無音検出",
+  "Audio Sync": "音声同期",
   "Apply EDL": "EDL 適用",
   "Edit Plan": "編集プラン",
   "Remove Audio": "オーディオを削除",
@@ -212,6 +214,7 @@ const NODE_LABELS_JA: Record<string, string> = {
 }
 
 const HANDLE_LABELS_JA: Record<string, string> = {
+  "Offsets": "オフセット",
   "QR link": "QR リンク",
   "Extend Source": "延長元",
   "Source video": "元動画",

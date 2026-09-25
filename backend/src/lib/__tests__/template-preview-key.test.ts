@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest"
 import { templatePreviewKey, templatePreviewPrefix } from "../template-preview-key.js"
 
 // A re-published cover has to reach viewers. The CDN caches every object for a
-// year, immutable, with no purge, so the durable preview copy must move to a
+// year, immutable, with no automated purge (single-file purge exists in the
+// Cloudflare dashboard/API), so the durable preview copy must move to a
 // new key whenever the cover changes — and only then.
 describe("templatePreviewKey", () => {
   const id = "c6f1ccf2-f637-4ed8-a313-af42be25dd36"

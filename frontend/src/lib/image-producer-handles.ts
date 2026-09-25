@@ -16,7 +16,7 @@
  * rejects edges the backend resolver would happily route at runtime
  * (same drift fix #2823 / #2827 applied to image/video/audio).
  */
-import { VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, VIDEO_OVERLAY_HANDLE_IDS } from "@nodaro/shared"
 import { TEXT_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, IDENTITY_TYPES } from "./generate-image-handles"
 import { OVERLAY_HANDLE_IDS } from "@/types/nodes"
 
@@ -158,6 +158,21 @@ export function isValidImageOverlayConnection(
   return false
 }
 
+// ─── video-overlay ─────────────────────────────────────────────────────
+// Base video on `video`; up to twelve image layers on `overlay`..`overlay12`
+// (the same ids Image Overlay renders). Two rules in one predicate: the base
+// takes a video producer, every layer handle an image producer — each OR'd
+// with the dynamic sources. The reserved `layerPlan` id renders no pip in v1,
+// so nothing may connect to it. Output: video.
+export function isValidVideoOverlayConnection(
+  targetHandleId: string,
+  sourceType: string,
+): boolean {
+  if (targetHandleId === "video") return ACCEPTS_VIDEO_OR_DYN(sourceType)
+  if ((VIDEO_OVERLAY_HANDLE_IDS as readonly string[]).includes(targetHandleId)) return ACCEPTS_IMAGE_OR_DYN(sourceType)
+  return false
+}
+
 // ─── upscale-image ─────────────────────────────────────────────────────
 // Single image input. Source: image (renamed from `out`).
 export function isValidUpscaleImageConnection(
@@ -243,6 +258,7 @@ export const IMAGE_PRODUCER_HANDLE_LABELS: Record<string, Record<string, string>
   "image-collage":     { in: "Image" },
   // qrText: the QR link handle (text) — rendered only while a QR layer reads its link from the workflow.
   "image-overlay":     { image: "Base", ...Object.fromEntries(OVERLAY_HANDLE_IDS.map((h, i) => [h, `Layer ${i + 1}`])), qrText: "QR link" },
+  "video-overlay":     { video: "Video", ...Object.fromEntries(VIDEO_OVERLAY_HANDLE_IDS.map((h, i) => [h, `Layer ${i + 1}`])) },
   "upscale-image":     { image: "Image" },
   "remove-background": { image: "Image" },
   "face-swap":         { face: "Face", video: "Video" },

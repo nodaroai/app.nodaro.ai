@@ -124,6 +124,7 @@ const NODE_TYPE_TO_TOOL: Record<string, string> = {
   "suno-convert-wav": "suno_convert_wav",
   "suno-upload-extend": "suno_upload_extend",
   "suno-separate": "suno_separate_stems",
+  "video-overlay": "overlay_images",
 }
 
 /**
