@@ -514,6 +514,8 @@ All billing code lives under `backend/src/ee/billing/` and `backend/src/ee/route
 **Library:** `GET /v1/library` -- Storage summary, filter by type, cursor pagination, bulk delete.
 Files: `backend/src/routes/library.ts`
 
+**Never GET a CDN media URL before its job is complete.** Media keys are predictable (`videos/<jobId>.mp4`, see `mediaObjectKey`), and the CDN currently caches R2's 404 at the Cloudflare edge for a year (`public, max-age=31536000, immutable`) under the media paths (`images/`, `videos/`, `audios/`, `uploads/`). One premature GET poisons that URL at that edge location even after the object lands. So: wait on job status (`jobs.getStatus` / MCP `get_job` / `wait_for_job`) and read `outputUrl` only once the job is `completed` — never poll the CDN URL itself. If a probe is unavoidable, use HEAD (never edge-cached) or add a cache-busting query (`fetchOwnMedia` does this on every retry). A URL already stuck on a cached 404 needs a single-file purge (Cloudflare dashboard: Caching → Purge Cache → Custom Purge, or the purge API); there is no automated purge.
+
 ---
 
 ## SSE Backend (`backend/src/lib/sse.ts`)

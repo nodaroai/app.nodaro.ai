@@ -273,8 +273,9 @@ export function allOwnedObjects(
  * Best-effort deletion of the objects a blocked/rejected job produced.
  *
  * Deletion is NOT the security boundary and the docs say so: the bucket is
- * public-read with a one-year immutable cache and there is no purge, so a URL
- * an edge already served cannot be recalled. NULL `output_data` is the boundary.
+ * public-read with a one-year immutable cache and there is no automated purge
+ * (single-file purge exists in the Cloudflare dashboard/API), so a URL an edge
+ * already served cannot be recalled automatically. NULL `output_data` is the boundary.
  * Deleting is still right — it removes a guessable object for the overwhelmingly
  * common case where nobody guessed it, and stops it accruing storage cost
  * forever. A delete failure logs and changes no verdict.
