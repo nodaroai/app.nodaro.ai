@@ -11,12 +11,12 @@ import {
   audioSyncJobBudgetMs,
   audioSyncRenderBudgetMs,
 } from "../audio-sync-budget.js"
-import { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_TIMEOUT_MS, FFPROBE_TIMEOUT_MS, MEDIA_PROXY_FFMPEG_TIMEOUT_MS } from "../../video/ffmpeg-timeouts.js"
+import { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_MAX_MS, DOWNLOAD_TIMEOUT_MS, FFPROBE_TIMEOUT_MS, MEDIA_PROXY_FFMPEG_TIMEOUT_MS } from "../../video/ffmpeg-timeouts.js"
 
 describe("audio-sync liveness budget", () => {
   it("per source: the source fetch + audio-track probe + proxy encode (cache miss), the proxy fetch, the probe, the envelope decode, two decodes per fine window", () => {
     expect(AUDIO_SYNC_PER_SOURCE_BUDGET_MS).toBe(
-      DOWNLOAD_TIMEOUT_MS + FFPROBE_TIMEOUT_MS + MEDIA_PROXY_FFMPEG_TIMEOUT_MS
+      DOWNLOAD_MAX_MS + FFPROBE_TIMEOUT_MS + MEDIA_PROXY_FFMPEG_TIMEOUT_MS
       + DOWNLOAD_TIMEOUT_MS
       + FFPROBE_TIMEOUT_MS
       + AUDIO_SYNC_ENVELOPE_DECODE_TIMEOUT_MS

@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 vi.mock("../../providers/video/ffmpeg-utils.js", () => ({
   createWorkDir: vi.fn().mockResolvedValue("/tmp/media-proxy-work"),
   cleanupWorkDir: vi.fn().mockResolvedValue(undefined),
+  BIG_MEDIA_DOWNLOAD_LIMITS: { responseMs: 1, windowMs: 1, minBytesPerWindow: 1, maxBytes: 1, floorBytesPerSec: 1, maxMs: 1 },
   downloadFile: vi.fn().mockResolvedValue(undefined),
   hasAudioStream: vi.fn().mockResolvedValue(true),
   runFfmpeg: vi.fn().mockResolvedValue(""),
@@ -60,6 +61,8 @@ describe("ensureMediaProxy — cache miss", () => {
     const r = await ensureMediaProxy(SRC, "audio")
     expect(r.cached).toBe(false)
     expect(downloadFile).toHaveBeenCalledOnce()
+    // The original behind a proxy is big media: the staged limits (Track 0.19).
+    expect(vi.mocked(downloadFile).mock.calls[0][2]).toEqual({ limits: expect.objectContaining({ maxMs: expect.any(Number) }) })
     const [args, timeout] = vi.mocked(runFfmpeg).mock.calls[0]
     const a = args.join(" ")
     expect(a).toContain("-vn")

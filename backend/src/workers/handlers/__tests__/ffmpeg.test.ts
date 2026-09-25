@@ -799,9 +799,19 @@ describe("apply-edl handler liveness budget", () => {
     expect(ffmpegHandlers["apply-edl"]!.livenessBudgetMs!(makeJob("apply-edl", {}) as never)).toBeUndefined()
   })
 
-  it("apply-edl and audio-sync are the only ffmpeg handlers that DECLARE a liveness budget (the others fit the default cap)", () => {
+  it("apply-edl, audio-sync and silence-detect are the only ffmpeg handlers that DECLARE a liveness budget (the others fit the default cap)", () => {
     const declaring = Object.entries(ffmpegHandlers).filter(([, h]) => typeof h.livenessBudgetMs === "function").map(([k]) => k)
-    expect(declaring.sort()).toEqual(["apply-edl", "audio-sync"])
+    expect(declaring.sort()).toEqual(["apply-edl", "audio-sync", "silence-detect"])
+  })
+
+  // Track 0.19: its media proxy may fetch a multi-gigabyte original (up to an
+  // hour), past the 90-minute default — so it declares its steps' ceilings.
+  it("silence-detect declares the registry's budget for its payload — past the 90-minute default cap", () => {
+    const handler = ffmpegHandlers["silence-detect"]!
+    const data = { audioUrl: "https://media.test/episode.m4a" }
+    const budget = handler.livenessBudgetMs!(makeJob("silence-detect", data) as never)
+    expect(budget).toBe(declaredJobBudgetMs("silence-detect", data))
+    expect(budget!).toBeGreaterThan(90 * 60_000)
   })
 })
 
