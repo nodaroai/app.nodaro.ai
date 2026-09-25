@@ -2244,6 +2244,8 @@ export const he: ChromeDict = {
   "paramcfg.eGPauseGatherComposure": "למשל עצירה, התאפסות",
   "paramcfg.eGTrailOff": "למשל דעיכה בסוף המשפט",
   "paramcfg.tone": "טון",
+  "paramcfg.transitionDefaultLook": "מראה ברירת מחדל",
+  "paramcfg.transitionDefaultLookHint": "כל מעבר שומר על מראה ברירת המחדל שלו",
   "paramcfg.eGDramaticPlayfulDark": "למשל דרמטי, שובב, אפל",
   "paramcfg.styleDescription": "תיאור סגנון",
   "paramcfg.eGStudioGhibliWatercolor": "למשל צבעי מים בסגנון Studio Ghibli...",

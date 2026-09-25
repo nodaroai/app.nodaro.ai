@@ -2263,6 +2263,8 @@ export const en = {
   "paramcfg.eGPauseGatherComposure": "e.g. pause, gather composure",
   "paramcfg.eGTrailOff": "e.g. trail off",
   "paramcfg.tone": "Tone",
+  "paramcfg.transitionDefaultLook": "Default look",
+  "paramcfg.transitionDefaultLookHint": "Each transition keeps its own default look",
   "paramcfg.eGDramaticPlayfulDark": "e.g. dramatic, playful, dark",
   "paramcfg.styleDescription": "Style Description",
   "paramcfg.eGStudioGhibliWatercolor": "e.g. Studio Ghibli watercolor...",

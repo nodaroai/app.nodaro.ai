@@ -1521,7 +1521,9 @@ function transitionOptionsFor(value: string | string[] | undefined): ReadonlyArr
       // The one `auto` entry now stands for EACH row's default look, so it is
       // named neutrally rather than after the first row's look.
       const choices = seen.choices.map((c) =>
-        c.id === "auto" ? { ...c, label: "Default look", description: "Each transition keeps its own default look" } : c,
+        c.id === "auto"
+          ? { ...c, label: tx("paramcfg.transitionDefaultLook"), description: tx("paramcfg.transitionDefaultLookHint") }
+          : c,
       )
       byField.set(option.field, { ...seen, choices: [...choices, ...extra] })
     }
