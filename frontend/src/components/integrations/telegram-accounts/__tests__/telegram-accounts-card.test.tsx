@@ -132,24 +132,40 @@ describe("account actions", () => {
 })
 
 describe("the connect wizard", () => {
-  it("shows the served terms, and Continue stays off until they are accepted and the keys are well-formed", async () => {
+  it("Continue is never a silent grey button: pressing it names what is missing and goes there", async () => {
     api.start.mockResolvedValue({ attemptId: "33333333-3333-4333-8333-333333333333", state: { status: "pending", loginUrl: "tg://login?token=abc", expiresAt: 1 } })
     renderCard()
     fireEvent.click(await screen.findByRole("button", { name: /connect account/i }))
     const dialog = await screen.findByRole("dialog")
     expect(await within(dialog).findByText("Your own account acts.")).toBeInTheDocument()
 
+    // Nothing filled in: nothing is flagged yet, and Continue can be pressed.
     const next = within(dialog).getByRole("button", { name: /continue/i })
-    expect(next).toBeDisabled()
+    expect(next).toBeEnabled()
+    expect(within(dialog).queryByText(/tick this box to continue/i)).toBeNull()
 
+    fireEvent.click(next)
+    expect(within(dialog).getByText(/enter the api_id/i)).toBeInTheDocument()
+    expect(within(dialog).getByText(/enter the api_hash/i)).toBeInTheDocument()
+    expect(within(dialog).getByText(/tick this box to continue/i)).toBeInTheDocument()
+    expect(document.activeElement).toBe(within(dialog).getByLabelText("api_id"))
+    expect(api.start).not.toHaveBeenCalled()
+
+    // A malformed value says so while typing; a good one clears its message.
     fireEvent.change(within(dialog).getByLabelText("api_id"), { target: { value: "123456" } })
     fireEvent.change(within(dialog).getByLabelText("api_hash"), { target: { value: "not-a-hash" } })
     expect(within(dialog).getByText(/32 letters and digits/i)).toBeInTheDocument()
     fireEvent.change(within(dialog).getByLabelText("api_hash"), { target: { value: "b".repeat(32) } })
-    expect(next).toBeDisabled() // terms not accepted yet
+    expect(within(dialog).queryByText(/enter the api_(id|hash)/i)).toBeNull()
+
+    // Only the agreement is left: Continue goes to it.
+    fireEvent.click(next)
+    expect(within(dialog).getByText(/tick this box to continue/i)).toBeInTheDocument()
+    expect(document.activeElement).toBe(within(dialog).getByRole("checkbox"))
+    expect(api.start).not.toHaveBeenCalled()
 
     fireEvent.click(within(dialog).getByRole("checkbox"))
-    expect(next).toBeEnabled()
+    expect(within(dialog).queryByText(/tick this box to continue/i)).toBeNull()
     fireEvent.click(next)
 
     await waitFor(() =>

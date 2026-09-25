@@ -4,16 +4,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useT } from "@/lib/i18n"
+import { cn } from "@/lib/utils"
 import type { TelegramConsent } from "@/lib/api"
 import { FORM_ERROR_MESSAGE } from "./login-messages"
 import type { FormError } from "./use-telegram-login"
 
 /**
  * The wizard's first step: the terms (served by the server — their copy is
- * not the app's), the owner's own api_id / api_hash, and how to sign in.
- * QR is first and recommended: for a freshly created api_id, Telegram may
- * deliver a phone code only inside an already signed-in Telegram app, never
- * by SMS — the phone option says so up front.
+ * not the app's), the owner's own api_id / api_hash, how to sign in, and —
+ * right above Continue, where the eye already is — the box that accepts the
+ * terms. QR is first and recommended: for a freshly created api_id, Telegram
+ * may deliver a phone code only inside an already signed-in Telegram app,
+ * never by SMS — the phone option says so up front.
+ *
+ * Continue is never a silent grey button: pressing it with something missing
+ * names each missing thing where it is (`showMissing`) and focuses the first.
  */
 
 export interface ConnectFormValues {
@@ -32,14 +37,25 @@ export const isValidApiHash = (value: string) => /^[0-9a-fA-F]{32}$/.test(value.
 export const normalizePhone = (value: string) => value.replace(/[\s\-()]/g, "")
 export const isValidPhone = (value: string) => /^\+?\d{7,15}$/.test(normalizePhone(value))
 
+/** Element ids of the form's fields, in the order they appear on screen. */
+export const FIELD_IDS = {
+  apiId: "tg-api-id",
+  apiHash: "tg-api-hash",
+  phone: "tg-phone",
+  agreed: "tg-consent",
+} as const
+
+/** The first field (in screen order) that still stops Continue, or null when the form is complete. */
+export function firstMissingField(values: ConnectFormValues): (typeof FIELD_IDS)[keyof typeof FIELD_IDS] | null {
+  if (!isValidApiId(values.apiId)) return FIELD_IDS.apiId
+  if (!isValidApiHash(values.apiHash)) return FIELD_IDS.apiHash
+  if (values.method === "phone" && !isValidPhone(values.phone)) return FIELD_IDS.phone
+  if (!values.agreed) return FIELD_IDS.agreed
+  return null
+}
+
 export function canSubmit(values: ConnectFormValues, consent: TelegramConsent | undefined): boolean {
-  return (
-    values.agreed &&
-    consent !== undefined &&
-    isValidApiId(values.apiId) &&
-    isValidApiHash(values.apiHash) &&
-    (values.method === "qr" || isValidPhone(values.phone))
-  )
+  return consent !== undefined && firstMissingField(values) === null
 }
 
 interface ConnectFormProps {
@@ -47,14 +63,18 @@ interface ConnectFormProps {
   readonly onChange: (patch: Partial<ConnectFormValues>) => void
   readonly consent: TelegramConsent | undefined
   readonly consentLoading: boolean
+  /** Continue was pressed with something missing: say what, where it is. */
+  readonly showMissing: boolean
   readonly error?: FormError
 }
 
-export function ConnectForm({ values, onChange, consent, consentLoading, error }: ConnectFormProps) {
+export function ConnectForm({ values, onChange, consent, consentLoading, showMissing, error }: ConnectFormProps) {
   const t = useT()
-  const showApiIdError = values.apiId !== "" && !isValidApiId(values.apiId)
-  const showApiHashError = values.apiHash !== "" && !isValidApiHash(values.apiHash)
-  const showPhoneError = values.method === "phone" && values.phone !== "" && !isValidPhone(values.phone)
+  // A malformed value is flagged while typing; an empty one only once Continue was pressed.
+  const apiIdError = fieldError(values.apiId, isValidApiId, showMissing)
+  const apiHashError = fieldError(values.apiHash, isValidApiHash, showMissing)
+  const phoneError = values.method === "phone" ? fieldError(values.phone, isValidPhone, showMissing) : null
+  const agreedError = showMissing && !values.agreed
 
   return (
     <div className="flex flex-col gap-5">
@@ -76,17 +96,6 @@ export function ConnectForm({ values, onChange, consent, consentLoading, error }
             ))}
           </ul>
         )}
-        <div className="flex items-center gap-2 pt-1">
-          <Checkbox
-            id="tg-consent"
-            checked={values.agreed}
-            disabled={!consent}
-            onCheckedChange={(checked) => onChange({ agreed: checked === true })}
-          />
-          <label htmlFor="tg-consent" className="cursor-pointer text-sm">
-            {t("tgacct.consent.agree")}
-          </label>
-        </div>
       </section>
 
       <section aria-labelledby="tg-keys-title" className="flex flex-col gap-2">
@@ -107,31 +116,39 @@ export function ConnectForm({ values, onChange, consent, consentLoading, error }
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[140px_1fr]">
           <div className="flex flex-col gap-1">
-            <Label htmlFor="tg-api-id">{t("tgacct.apiId")}</Label>
+            <Label htmlFor={FIELD_IDS.apiId}>{t("tgacct.apiId")}</Label>
             <Input
-              id="tg-api-id"
+              id={FIELD_IDS.apiId}
               inputMode="numeric"
               autoComplete="off"
               dir="ltr"
               value={values.apiId}
-              aria-invalid={showApiIdError}
+              aria-invalid={apiIdError !== null}
               onChange={(e) => onChange({ apiId: e.target.value })}
             />
-            {showApiIdError && <p className="text-[11px] text-destructive">{t("tgacct.apiIdInvalid")}</p>}
+            {apiIdError && (
+              <p className="text-[11px] text-destructive">
+                {t(apiIdError === "missing" ? "tgacct.apiIdRequired" : "tgacct.apiIdInvalid")}
+              </p>
+            )}
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="tg-api-hash">{t("tgacct.apiHash")}</Label>
+            <Label htmlFor={FIELD_IDS.apiHash}>{t("tgacct.apiHash")}</Label>
             <Input
-              id="tg-api-hash"
+              id={FIELD_IDS.apiHash}
               type="password"
               autoComplete="off"
               spellCheck={false}
               dir="ltr"
               value={values.apiHash}
-              aria-invalid={showApiHashError}
+              aria-invalid={apiHashError !== null}
               onChange={(e) => onChange({ apiHash: e.target.value })}
             />
-            {showApiHashError && <p className="text-[11px] text-destructive">{t("tgacct.apiHashInvalid")}</p>}
+            {apiHashError && (
+              <p className="text-[11px] text-destructive">
+                {t(apiHashError === "missing" ? "tgacct.apiHashRequired" : "tgacct.apiHashInvalid")}
+              </p>
+            )}
           </div>
         </div>
       </section>
@@ -162,20 +179,50 @@ export function ConnectForm({ values, onChange, consent, consentLoading, error }
         </RadioGroup>
         {values.method === "phone" && (
           <div className="flex flex-col gap-1 ps-6">
-            <Label htmlFor="tg-phone">{t("tgacct.phone")}</Label>
+            <Label htmlFor={FIELD_IDS.phone}>{t("tgacct.phone")}</Label>
             <Input
-              id="tg-phone"
+              id={FIELD_IDS.phone}
               type="tel"
               autoComplete="tel"
               dir="ltr"
               value={values.phone}
-              aria-invalid={showPhoneError}
+              aria-invalid={phoneError !== null}
               onChange={(e) => onChange({ phone: e.target.value })}
             />
-            {showPhoneError && <p className="text-[11px] text-destructive">{t("tgacct.phoneInvalid")}</p>}
+            {phoneError && (
+              <p className="text-[11px] text-destructive">
+                {t(phoneError === "missing" ? "tgacct.phoneRequired" : "tgacct.phoneInvalid")}
+              </p>
+            )}
           </div>
         )}
       </section>
+
+      <div
+        className={cn(
+          "flex flex-col gap-1 rounded-lg border p-3",
+          agreedError ? "border-destructive bg-destructive/5" : "bg-muted/30",
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={FIELD_IDS.agreed}
+            checked={values.agreed}
+            disabled={!consent}
+            aria-invalid={agreedError}
+            aria-describedby={agreedError ? "tg-consent-error" : undefined}
+            onCheckedChange={(checked) => onChange({ agreed: checked === true })}
+          />
+          <label htmlFor={FIELD_IDS.agreed} className="cursor-pointer text-sm font-medium">
+            {t("tgacct.consent.agree")}
+          </label>
+        </div>
+        {agreedError && (
+          <p id="tg-consent-error" className="ps-6 text-[11px] text-destructive">
+            {t("tgacct.consent.required")}
+          </p>
+        )}
+      </div>
 
       {error && (
         <p role="alert" className="rounded-md bg-destructive/10 p-2.5 text-xs text-destructive">
@@ -184,4 +231,10 @@ export function ConnectForm({ values, onChange, consent, consentLoading, error }
       )}
     </div>
   )
+}
+
+/** "missing" (empty, once Continue was pressed), "invalid" (typed but malformed), or null. */
+function fieldError(value: string, isValid: (value: string) => boolean, showMissing: boolean): "missing" | "invalid" | null {
+  if (value.trim() === "") return showMissing ? "missing" : null
+  return isValid(value) ? null : "invalid"
 }

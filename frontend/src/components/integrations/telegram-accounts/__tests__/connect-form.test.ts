@@ -6,7 +6,9 @@
 import { describe, it, expect } from "vitest"
 import {
   EMPTY_FORM,
+  FIELD_IDS,
   canSubmit,
+  firstMissingField,
   isValidApiHash,
   isValidApiId,
   isValidPhone,
@@ -65,5 +67,20 @@ describe("canSubmit", () => {
     expect(canSubmit({ ...READY, method: "qr", phone: "" }, CONSENT)).toBe(true)
     expect(canSubmit({ ...READY, method: "phone", phone: "" }, CONSENT)).toBe(false)
     expect(canSubmit({ ...READY, method: "phone", phone: "+15550001234" }, CONSENT)).toBe(true)
+  })
+})
+
+describe("firstMissingField", () => {
+  it("walks the form in screen order — keys, then phone, then the agreement", () => {
+    expect(firstMissingField(EMPTY_FORM)).toBe(FIELD_IDS.apiId)
+    expect(firstMissingField({ ...EMPTY_FORM, apiId: "1" })).toBe(FIELD_IDS.apiHash)
+    expect(firstMissingField({ ...READY, agreed: false })).toBe(FIELD_IDS.agreed)
+    expect(firstMissingField({ ...READY, method: "phone", phone: "", agreed: false })).toBe(FIELD_IDS.phone)
+    expect(firstMissingField(READY)).toBeNull()
+  })
+
+  it("a malformed value stops Continue exactly like an empty one", () => {
+    expect(firstMissingField({ ...READY, apiHash: "short" })).toBe(FIELD_IDS.apiHash)
+    expect(firstMissingField({ ...READY, method: "phone", phone: "12" })).toBe(FIELD_IDS.phone)
   })
 })

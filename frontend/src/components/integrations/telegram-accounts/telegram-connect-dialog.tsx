@@ -16,7 +16,7 @@ import { useT } from "@/lib/i18n"
 import { useUserLocale } from "@/lib/locale-store"
 import { getTelegramConsent } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
-import { ConnectForm, EMPTY_FORM, canSubmit, normalizePhone, type ConnectFormValues } from "./connect-form"
+import { ConnectForm, EMPTY_FORM, firstMissingField, normalizePhone, type ConnectFormValues } from "./connect-form"
 import { FAILURE_MESSAGE } from "./login-messages"
 import { TelegramQrCode } from "./telegram-qr-code"
 import { useTelegramLogin } from "./use-telegram-login"
@@ -41,6 +41,8 @@ export function TelegramConnectDialog({ open, onOpenChange, onConnected }: Teleg
   const t = useT()
   const login = useTelegramLogin({ onConnected })
   const [values, setValues] = useState<ConnectFormValues>(EMPTY_FORM)
+  // Continue was pressed with something missing — the form then names each missing thing.
+  const [showMissing, setShowMissing] = useState(false)
   const [code, setCode] = useState("")
   const [password, setPassword] = useState("")
   // The terms in the app's language; one version covers every translation.
@@ -66,6 +68,7 @@ export function TelegramConnectDialog({ open, onOpenChange, onConnected }: Teleg
   const close = () => {
     if (view.step !== "done") login.cancel()
     setValues(EMPTY_FORM)
+    setShowMissing(false)
     setCode("")
     setPassword("")
     onOpenChange(false)
@@ -73,12 +76,20 @@ export function TelegramConnectDialog({ open, onOpenChange, onConnected }: Teleg
 
   const startOver = () => {
     login.cancel()
+    setShowMissing(false)
     setCode("")
     setPassword("")
   }
 
   const submitForm = () => {
-    if (!consent.data || !canSubmit(values, consent.data)) return
+    if (!consent.data) return
+    // Never a silent no: name what is missing and take the owner to the first of it.
+    const missing = firstMissingField(values)
+    if (missing) {
+      setShowMissing(true)
+      document.getElementById(missing)?.focus()
+      return
+    }
     void login.start({
       method: values.method,
       apiId: values.apiId.trim(),
@@ -107,6 +118,7 @@ export function TelegramConnectDialog({ open, onOpenChange, onConnected }: Teleg
             onChange={(patch) => setValues((current) => ({ ...current, ...patch }))}
             consent={consent.data}
             consentLoading={consent.isLoading}
+            showMissing={showMissing}
             {...(view.error ? { error: view.error } : {})}
           />
         )}
@@ -211,8 +223,9 @@ export function TelegramConnectDialog({ open, onOpenChange, onConnected }: Teleg
               <Button variant="outline" onClick={close}>
                 {t("tgacct.cancel")}
               </Button>
+              {/* Continue stays enabled on an incomplete form: pressing it says what is missing. */}
               {view.step === "form" && (
-                <Button onClick={submitForm} disabled={login.busy || !canSubmit(values, consent.data)}>
+                <Button onClick={submitForm} disabled={login.busy || !consent.data}>
                   {login.busy && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
                   {t("tgacct.continue")}
                 </Button>
