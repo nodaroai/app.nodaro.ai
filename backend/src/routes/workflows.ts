@@ -335,6 +335,8 @@ async function syncTriggersForSavedWorkflow(
     userId: ownerId,
     nodes: row.nodes as readonly GraphNode[] | undefined,
     vouchNodeIds: ownerSession && vouchNodeIds && vouchNodeIds.length > 0 ? vouchNodeIds : undefined,
+    // Any of the owner's own sessions or tokens — never an editor of a shared workflow.
+    ownerActing: req.userId === ownerId,
   })
   if (result.error) {
     req.log.warn({ err: result.error, workflowId }, "workflow trigger sync failed")

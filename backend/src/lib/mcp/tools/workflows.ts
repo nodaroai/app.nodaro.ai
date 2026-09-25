@@ -20,7 +20,8 @@ import { reconcileWorkflowTriggers, type GraphNode } from "../../workflow-trigge
  */
 async function projectTriggers(workflowId: string, ownerId: string, nodes: unknown): Promise<void> {
   if (!Array.isArray(nodes)) return
-  const result = await reconcileWorkflowTriggers({ workflowId, userId: ownerId, nodes: nodes as readonly GraphNode[] })
+  // MCP tools only reach the session user's own workflows, so the saver is the owner.
+  const result = await reconcileWorkflowTriggers({ workflowId, userId: ownerId, nodes: nodes as readonly GraphNode[], ownerActing: true })
   if (result.error) console.warn(`[mcp] workflow trigger sync failed for ${workflowId}: ${result.error}`)
 }
 import { mcpInject } from "../internal-request.js"

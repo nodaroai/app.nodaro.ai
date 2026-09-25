@@ -1125,8 +1125,9 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   // `analysis` INPUT is intercepted in routeOutput before this set is consulted.)
   "video-analysis",
   "video-audit",
-  // Incoming Telegram message — text is the primary output.
+  // Incoming Telegram message (bot or connected account) — text is the primary output.
   "telegram-trigger",
+  "telegram-account-trigger",
   // Telegram Channel Feed — the recent posts' text.
   "telegram-channel-feed",
 ])
@@ -1611,7 +1612,7 @@ function routeOutput(
   // lane, video → video lane, audio → audio lane, and text → prompt/caption
   // (never a fake image ref). A photo message thus feeds a References/image
   // input directly; a text message feeds a prompt. ---
-  if (srcType === "telegram-trigger") {
+  if (srcType === "telegram-trigger" || srcType === "telegram-account-trigger") {
     const out = nodeStates[src.id]?.output
     const refKey = REFERENCE_HANDLE_MAP[edge.targetHandle ?? ""]
     if (out?.imageUrl && (refKey === "referenceImageUrls" || edge.targetHandle === "image" || edge.targetHandle === "references")) {

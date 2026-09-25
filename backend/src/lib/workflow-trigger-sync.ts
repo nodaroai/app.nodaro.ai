@@ -31,6 +31,7 @@ import { isDeepStrictEqual } from "node:util"
 import {
   SCHEDULE_TRIGGER_NODE_TYPE,
   TELEGRAM_TRIGGER_NODE_TYPE,
+  TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE,
   WEBHOOK_TRIGGER_NODE_TYPE,
   isCronExpression,
   isValidTimezone,
@@ -40,6 +41,7 @@ import {
 } from "@nodaro/shared"
 import { supabase } from "./supabase.js"
 import { isMissingColumnError } from "./postgrest-errors.js"
+import { getRuntimeEnv } from "./runtime-env.js"
 import {
   ensureBotRegistration,
   syncBotRegistration,
@@ -50,10 +52,10 @@ import {
 
 export { SCHEDULE_TRIGGER_NODE_TYPE, TELEGRAM_TRIGGER_NODE_TYPE, WEBHOOK_TRIGGER_NODE_TYPE, isCronExpression }
 
-export type SyncedTriggerType = "schedule" | "webhook" | "telegram"
+export type SyncedTriggerType = "schedule" | "webhook" | "telegram" | "telegram_account"
 
 /** The row types this module owns. A row of any other type is nobody's here. */
-const SYNCED_TRIGGER_TYPES: readonly SyncedTriggerType[] = ["schedule", "webhook", "telegram"]
+const SYNCED_TRIGGER_TYPES: readonly SyncedTriggerType[] = ["schedule", "webhook", "telegram", "telegram_account"]
 
 export interface GraphNode {
   readonly id?: unknown
@@ -180,6 +182,37 @@ export function normalizeTelegramConfig(
   }
 }
 
+/**
+ * A Telegram ACCOUNT trigger's row config, or null when it must not listen.
+ *
+ * Same rule as the bot lane: nothing is projected until the node is switched on
+ * (`isActive === true`) with an account picked — listening is reading the
+ * owner's chats, so it starts only when they ask. Every filter is emitted,
+ * never omitted (see normalizeTelegramConfig): an omitted key would keep a
+ * filter the user just cleared standing on the row. Whether the account is
+ * the owner's own is checked where the message arrives, not trusted from here.
+ */
+export function normalizeTelegramAccountConfig(
+  data: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const accountId = trimmed(data.accountId)
+  if (!accountId || data.isActive !== true) return null
+  return {
+    accountId,
+    chatIds: stringList(data.chatIds),
+    senderIds: stringList(data.senderIds),
+    messageTypeFilters: stringList(data.messageTypeFilters),
+    keywords: stringList(data.keywords),
+    includeOutgoing: data.includeOutgoing === true,
+  }
+}
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const items = value.filter((v): v is string => typeof v === "string").map((v) => v.trim())
+  return [...new Set(items.filter((v) => v !== ""))]
+}
+
 /** Every trigger the graph asks for, in node order. */
 export function desiredTriggersFromGraph(nodes: readonly GraphNode[] | undefined): DesiredTrigger[] {
   const desired: DesiredTrigger[] = []
@@ -209,6 +242,13 @@ export function desiredTriggersFromGraph(nodes: readonly GraphNode[] | undefined
         // returns null until the node's Activate button was pressed, so an
         // un-activated node never reaches this list and its row is released.
         desired.push({ nodeId, type: "telegram", config, isActive: true })
+      }
+    } else if (nodeType === TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE) {
+      const config = normalizeTelegramAccountConfig(data)
+      if (config) {
+        seen.add(nodeId)
+        // Armed once desired, like the bot lane; nothing to register outside.
+        desired.push({ nodeId, type: "telegram_account", config, isActive: true })
       }
     }
   }
@@ -474,7 +514,9 @@ async function insertTriggerRows(
   rows: readonly TriggerRowInsert[],
   vouched: ReadonlySet<string>,
 ): Promise<string | undefined> {
-  const isVouched = (r: TriggerRowInsert): boolean => r.type !== "telegram" && vouched.has(String(r.config.nodeId))
+  // A message lane is started by whoever writes to the chat, never by the owner — never vouched.
+  const isVouched = (r: TriggerRowInsert): boolean =>
+    r.type !== "telegram" && r.type !== "telegram_account" && vouched.has(String(r.config.nodeId))
   const vouchedRows = rows.filter(isVouched)
   const plainRows = rows.filter((r) => !isVouched(r))
 
@@ -513,6 +555,29 @@ function collectTelegramReleases(
   }
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * The account ids among the graph's Telegram ACCOUNT triggers that are the
+ * owner's own connected accounts in this environment (the generic
+ * `plugin_account_secrets` store), or null when that cannot be read — the
+ * caller then leaves the lane untouched rather than guess.
+ */
+async function ownedAccountIds(desired: readonly DesiredTrigger[], userId: string): Promise<Set<string> | null> {
+  const wanted = [
+    ...new Set(desired.filter((t) => t.type === "telegram_account").map((t) => String(t.config.accountId))),
+  ].filter((id) => UUID.test(id))
+  if (wanted.length === 0) return new Set()
+  const { data, error } = await supabase
+    .from("plugin_account_secrets")
+    .select("id")
+    .in("id", wanted)
+    .eq("user_id", userId)
+    .eq("runtime_env", getRuntimeEnv())
+  if (error) return null
+  return new Set((data ?? []).map((row: { id: string }) => row.id))
+}
+
 /**
  * Project the graph's trigger nodes onto `workflow_triggers`. Call AFTER the
  * workflow row is written. Never throws: the save has already happened, and a
@@ -532,11 +597,23 @@ export async function reconcileWorkflowTriggers(params: {
    * owner's next autosave must not launder that into a vouched schedule.
    */
   readonly vouchNodeIds?: ReadonlyArray<string>
+  /**
+   * The save was made by the workflow's OWNER. Only such a save may create,
+   * change or remove a Telegram ACCOUNT trigger — the lane reads the owner's
+   * own messages, so an editor saving a shared workflow must never arm, widen
+   * or re-point it (rows are always written under the owner, whoever saved).
+   * Absent or false: rows of that lane are left exactly as stored.
+   */
+  readonly ownerActing?: boolean
 }): Promise<ReconcileResult> {
   const { workflowId, userId, nodes } = params
   const vouched = new Set(params.vouchNodeIds ?? [])
   try {
-    const desired = desiredTriggersFromGraph(nodes)
+    const accountLane = params.ownerActing === true ? await ownedAccountIds(desiredTriggersFromGraph(nodes), userId) : null
+    // Not the owner, or the ownership read failed: the account lane is out of this save's reach.
+    const desired = desiredTriggersFromGraph(nodes).filter(
+      (t) => t.type !== "telegram_account" || (accountLane !== null && accountLane.has(String(t.config.accountId))),
+    )
 
     const { data: rows, error: listError } = await supabase
       .from("workflow_triggers")
@@ -547,7 +624,7 @@ export async function reconcileWorkflowTriggers(params: {
 
     if (listError) return { ...EMPTY, error: listError.message }
 
-    const existing = (rows ?? []) as ExistingTrigger[]
+    const existing = ((rows ?? []) as ExistingTrigger[]).filter((r) => r.type !== "telegram_account" || accountLane !== null)
     // Nothing on either side: the overwhelmingly common save. No writes.
     if (desired.length === 0 && existing.length === 0) return EMPTY
 

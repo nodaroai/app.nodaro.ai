@@ -63,6 +63,16 @@ SELECT pg_temp.assert_eq('service_role — the backend — can write telegram',
   (SELECT type FROM workflow_triggers WHERE id = 'e0000000-0000-4000-8000-000000000c24'), 'telegram');
 RESET ROLE;
 
+-- 1c. The account lane (migration 441): a trigger row, and the execution a fire
+--     inserts — BOTH checks were widened together.
+INSERT INTO workflow_triggers (id, workflow_id, user_id, type, config) VALUES
+  ('e0000000-0000-4000-8000-000000000c26', 'd0000000-0000-4000-8000-000000000c21', '00000000-0000-4000-8000-000000000c21', 'telegram_account', '{"accountId":"22222222-2222-4222-8222-222222222222","nodeId":"tga1"}');
+SELECT pg_temp.assert_eq('a telegram_account trigger row exists after insert',
+  (SELECT type FROM workflow_triggers WHERE id = 'e0000000-0000-4000-8000-000000000c26'), 'telegram_account');
+INSERT INTO workflow_executions (id, workflow_id, user_id, status, trigger_type) VALUES
+  ('f0000000-0000-4000-8000-000000000c26', 'd0000000-0000-4000-8000-000000000c21', '00000000-0000-4000-8000-000000000c21', 'pending', 'telegram_account');
+SELECT pg_temp.assert_eq('an execution can carry trigger_type telegram_account',
+  (SELECT trigger_type FROM workflow_executions WHERE id = 'f0000000-0000-4000-8000-000000000c26'), 'telegram_account');
 -- 2. Still a CHECK: a lane nobody declared is refused, not silently stored.
 DO $$
 BEGIN

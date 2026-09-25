@@ -194,6 +194,7 @@ const SOURCE_NODE_TYPES = new Set([
   "webhook-trigger",
   "schedule-trigger",
   "telegram-trigger",
+  "telegram-account-trigger",
   "sub-workflow-input",
   // suno-voice — configured once via setup modal; emits stored voiceId at
   // workflow runtime without any execution. Without this, the orchestrator
@@ -298,6 +299,7 @@ const TRIGGER_NODE_TYPE_BY_LANE: Readonly<Record<string, string>> = {
   schedule: "schedule-trigger",
   webhook: "webhook-trigger",
   telegram: "telegram-trigger",
+  telegram_account: "telegram-account-trigger",
 }
 
 /**

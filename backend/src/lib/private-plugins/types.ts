@@ -47,6 +47,7 @@ import type {
   PluginDaemon,
   PluginDaemonClientToolkit,
   PluginRedisLeaseToolkit,
+  PluginTriggersToolkit,
 } from "./daemon-contract.js"
 export type * from "./scene3d-contract.js"
 export type * from "./daemon-contract.js"
@@ -1943,6 +1944,12 @@ export interface PluginToolkit {
    * `?.`-guard it.
    */
   daemons?: PluginDaemonClientToolkit
+  /**
+   * Trigger lanes served by a hosted daemon: read a lane's active rows and
+   * start a run from one through the built-in fire-time gates. Daemon host
+   * only. ADDITIVE-OPTIONAL — `?.`-guard it.
+   */
+  triggers?: PluginTriggersToolkit
 }
 
 /**

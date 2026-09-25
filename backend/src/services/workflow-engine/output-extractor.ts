@@ -372,7 +372,10 @@ export function extractSourceNodeOutput(
       return { text: (triggerData.timestamp as string) ?? new Date().toISOString() }
     }
 
-    case "telegram-trigger": {
+    // The account lane carries the same message shape as the bot lane, plus
+    // who sent it and what kind of chat it came from.
+    case "telegram-trigger":
+    case "telegram-account-trigger": {
       const td = triggerData || {}
       const output: NodeOutput = {}
       if (td.text) output.text = td.text as string
@@ -383,6 +386,8 @@ export function extractSourceNodeOutput(
       const paramOutputs: Record<string, string> = {}
       if (td.chatId) paramOutputs["chatId"] = td.chatId as string
       if (td.messageId) paramOutputs["messageId"] = td.messageId as string
+      if (td.senderId) paramOutputs["senderId"] = td.senderId as string
+      if (td.chatType) paramOutputs["chatType"] = td.chatType as string
       if (Object.keys(paramOutputs).length > 0) output.paramOutputs = paramOutputs
       return Object.keys(output).length > 0 ? output : { text: JSON.stringify(td) }
     }

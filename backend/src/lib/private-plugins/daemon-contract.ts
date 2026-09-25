@@ -232,3 +232,66 @@ export interface PluginAccountSecretsToolkit {
     id: string
   }): Promise<{ row: PluginAccountSecretRow; secret: Record<string, string> } | null>
 }
+
+/**
+ * The trigger lanes a hosted daemon may serve. A lane is listed here only
+ * when its rows are projected from the graph like the built-in lanes (the
+ * CHECK on `workflow_triggers.type` and `workflow_executions.trigger_type`
+ * admits it) and nothing else fires them.
+ */
+export type PluginTriggerLane = "telegram_account"
+
+/** An active `workflow_triggers` row of a plugin lane. */
+export interface PluginTriggerRow {
+  id: string
+  workflowId: string
+  userId: string
+  /** The node the row was projected from (`config.nodeId`), when it names one. */
+  nodeId: string | null
+  config: Record<string, unknown>
+}
+
+export interface PluginTriggerFireInput {
+  /**
+   * The row to fire. The host reads its workflow, owner and node from the
+   * row itself — a daemon names a trigger, never a workflow or a user.
+   */
+  triggerId: string
+  /**
+   * The account the event arrived on. The host fires only when the row still
+   * names this account and the account belongs to the row's owner — the
+   * daemon's view may be up to one refresh stale.
+   */
+  accountId: string
+  /** What the trigger node emits to the run (the message). JSON, ≤ 64 KB. */
+  triggerData: Record<string, unknown>
+  /**
+   * Unique per owner within the lane: a second fire with the same key starts
+   * nothing (`duplicate`) — at-least-once delivery becomes exactly-once runs.
+   */
+  idempotencyKey: string
+}
+
+export type PluginTriggerFireResult =
+  | { fired: true; executionId: string }
+  /**
+   * `duplicate`: that key already started a run. `inactive`: the row is gone,
+   * paused or not a plugin lane. `refused`: the owner may no longer run the
+   * workflow (one visible failed row is recorded). `degraded`: the payer could
+   * not be resolved safely, so nothing was billed or run. `throttled`: the
+   * trigger is over its rate or already has the most runs in flight.
+   */
+  | { fired: false; reason: "duplicate" | "inactive" | "refused" | "degraded" | "throttled" }
+
+/**
+ * Trigger lanes for a hosted daemon — in the daemon host's toolkit only.
+ * `fire` passes the fire-time gates
+ * every built-in lane passes (access, payer at fire time, the degraded-billing
+ * refusal, idempotency) before it inserts the execution and queues it; a
+ * daemon cannot skip one.
+ */
+export interface PluginTriggersToolkit {
+  /** Active rows of one lane, across all owners (the daemon serves them all). */
+  listActive(query: { type: PluginTriggerLane }): Promise<PluginTriggerRow[]>
+  fire(input: PluginTriggerFireInput): Promise<PluginTriggerFireResult>
+}
