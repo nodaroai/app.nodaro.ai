@@ -16,7 +16,7 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { CachedImage } from "@/components/ui/cached-image"
 import { buildScenePrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
-import { TTS_VOICES } from "@/lib/tts-voices"
+import { TTS_VOICES, ttsVoiceLabel } from "@/lib/tts-voices"
 import { textToSpeech, getJobStatusLean } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry, SceneLocationEntry, GenerateScriptData, WorkflowNode, AudioAssignment } from "@/types/nodes"
@@ -1131,7 +1131,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                 <SelectContent position="popper" className="z-[9999] max-h-48">
                   <SelectItem value="__auto__">{t("scenecfg.autoVoice")}</SelectItem>
                   {TTS_VOICES.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                    <SelectItem key={v.id} value={v.id}>{ttsVoiceLabel(v)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

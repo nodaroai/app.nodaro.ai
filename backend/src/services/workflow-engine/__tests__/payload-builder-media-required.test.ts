@@ -17,7 +17,7 @@ import type { SimpleNode, ResolvedInputs } from "../types.js"
 /** Measured on frontend/src/components/editor/workflow-editor/execute-node.ts
  *  @ origin/dev d7815542 with the window+regex in the last test below. Bump it
  *  ONLY together with a new table row or a justified PARITY_EXEMPT entry. */
-const FRONTEND_MEDIA_REFUSAL_COUNT = 86 // +1 video-overlay: base video (table row); +2 image-overlay: base image (table row) + overlay layers (the case throws its own); +1 silence-detect (audio/video source, table row); +1 apply-edl (the "connect an EDL" guard over-matches "connect a"; JSON-input guard, exempt below); +1 edit-plan (the "connect a transcript" guard over-matches "connect a"; JSON-input guard, exempt below); +1 audio-sync ("connect at least 2 recordings" — a source-COUNT guard, exempt below)
+const FRONTEND_MEDIA_REFUSAL_COUNT = 84 // recounted, same guards: the refusals moved into the i18n dictionary and are now read from there, not from a 3-line source window (which over-matched 2 neighbouring lines); +1 video-overlay: base video (table row); +2 image-overlay: base image (table row) + overlay layers (the case throws its own); +1 silence-detect (audio/video source, table row); +1 apply-edl (the "connect an EDL" guard over-matches "connect a"; JSON-input guard, exempt below); +1 edit-plan (the "connect a transcript" guard over-matches "connect a"; JSON-input guard, exempt below); +1 audio-sync ("connect at least 2 recordings" — a source-COUNT guard, exempt below)
 
 const JOB = "job-media-required"
 const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
@@ -415,11 +415,13 @@ describe("required media inputs", () => {
    * pins the count instead. Reading a frontend source by relative path at test
    * time is the established pattern (lib/__tests__/node-registry-sync.test.ts).
    *
-   * The window+regex is a TRIPWIRE, not a classifier: it over-matches slightly
-   * (a "no prompt — … or connect a cinematography source" refusal trips the
-   * `connect a` arm) and under-matches the `need at least N` cardinality
-   * guards. That is fine — any movement in the number forces a human back to
-   * this file, which is the whole job.
+   * Each refusal is a `nodeRunError(<label>, "<key>")` call whose English
+   * lives in the frontend dictionary, so the regex runs on that text. It is a
+   * TRIPWIRE, not a classifier: it over-matches slightly (a "no prompt — … or
+   * connect a cinematography source" refusal trips the `connect a` arm) and
+   * under-matches the `need at least N` cardinality guards. That is fine — any
+   * movement in the number forces a human back to this file, which is the
+   * whole job.
    */
   it("pins the frontend's media-refusal count so a NEW guard fails the build", () => {
     // backend/src/services/workflow-engine/__tests__/ → up 5 → repo root
@@ -428,14 +430,15 @@ describe("required media inputs", () => {
       join(REPO_ROOT, "frontend/src/components/editor/workflow-editor/execute-node.ts"),
       "utf8",
     )
-    const lines = src.split("\n")
+    const dictionary = readFileSync(join(REPO_ROOT, "frontend/src/lib/i18n/en.ts"), "utf8")
+    const englishOf = (key: string): string | undefined =>
+      dictionary.match(new RegExp(`^\\s*"${key.replace(/\./g, "\\.")}":\\s*"((?:[^"\\\\]|\\\\.)*)"`, "m"))?.[1]
     const MEDIA_REFUSAL = /no .*(image|video|audio|media|GIF)|connect (a|two|at least)/i
     let count = 0
-    for (let i = 0; i < lines.length; i++) {
-      if (!lines[i].includes('Node "${')) continue
-      // 3-line window: the refusal's message often wraps onto its own line.
-      const window = lines.slice(Math.max(0, i - 1), i + 2).join("\n")
-      if (MEDIA_REFUSAL.test(window)) count++
+    for (const call of src.matchAll(/nodeRunError\([\s\S]*?"(nodeRun\.[A-Za-z0-9]+)"/g)) {
+      const english = englishOf(call[1])
+      expect(english, `${call[1]} is not in the frontend dictionary`).toBeDefined()
+      if (MEDIA_REFUSAL.test(english ?? "")) count++
     }
     expect(
       count,

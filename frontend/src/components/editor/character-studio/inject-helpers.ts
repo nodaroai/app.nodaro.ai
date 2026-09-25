@@ -18,6 +18,7 @@ import { toast } from "sonner"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { CharacterNodeData } from "@/types/nodes"
 import type { AssetCardItem } from "./asset-card"
+import { tx } from "@/lib/i18n"
 
 interface InjectOpts {
   /** Source character node id — drives placement of the new upload node. */
@@ -47,10 +48,10 @@ export function injectAssetAsCanvasNode({ sourceCharacterNodeId, item, isVideo }
   }
   const id = store.addNode(nodeType, position, initialData)
   if (!id) {
-    toast.error("Could not add node — workflow store rejected the create.")
+    toast.error(tx("toastMsg.couldNotAddNodeWorkflow"))
     return
   }
-  toast.success("Added to canvas")
+  toast.success(tx("toastMsg.addedToCanvas"))
 }
 
 /**

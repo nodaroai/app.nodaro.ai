@@ -879,7 +879,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                           <span className="text-[9px] text-[#ff0073]">*</span>
                         </div>
                         <p className="text-[10px] text-muted-foreground/70 mb-1.5 leading-relaxed">
-                          {t("kling3.elementDescPre")} <span className="font-mono">@{el.name || "name"}</span> {t("kling3.elementDescPost")}
+                          {t("kling3.elementDescPre")} <span className="font-mono">@{el.name || t("utilcfg.phParamName")}</span> {t("kling3.elementDescPost")}
                         </p>
                         <textarea
                           value={el.description}

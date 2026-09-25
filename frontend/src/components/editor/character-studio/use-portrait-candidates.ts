@@ -9,6 +9,7 @@ import type {
   PortraitCandidate,
 } from "./portrait-candidate-grid"
 import { DEFAULT_IMAGE_MODEL } from "./expressions-tab"
+import { tx } from "@/lib/i18n"
 
 const POLL_MS = 2000
 
@@ -153,7 +154,7 @@ export function usePortraitCandidates(state: CharacterStudioState): PortraitCand
       characterId = await state.ensureSaved()
     } catch (e) {
       setGenBusy(false)
-      toast.error(e instanceof Error ? e.message : "Could not save character.")
+      toast.error(e instanceof Error ? e.message : tx("studio.couldNotSaveCharacter"))
       return
     }
     try {
@@ -191,7 +192,7 @@ export function usePortraitCandidates(state: CharacterStudioState): PortraitCand
       }
     } catch (e) {
       setGenBusy(false)
-      toast.error(e instanceof Error ? e.message : "Generation failed.")
+      toast.error(e instanceof Error ? e.message : tx("studio.generationFailedDot"))
     }
   }
 
@@ -212,7 +213,7 @@ export function usePortraitCandidates(state: CharacterStudioState): PortraitCand
       }
       setPortraitCandidates([])
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Approval failed — retry?")
+      toast.error(e instanceof Error ? e.message : tx("toastMsg.approvalFailedRetry"))
     }
   }
 

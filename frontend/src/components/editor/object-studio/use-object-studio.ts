@@ -16,6 +16,7 @@ import type {
   ObjectRealtimeRow,
 } from "@/types/nodes"
 import { useObjectRealtimeSync } from "./use-object-realtime-sync"
+import { tx } from "@/lib/i18n"
 
 /**
  * Object Studio — staged state hook.
@@ -230,16 +231,16 @@ export function useObjectStudio(nodeId: string): ObjectStudioState {
           : prev,
       )
       invalidate()
-      toast.success("Saved")
+      toast.success(tx("common.saved"))
       return result.id
     } catch (e) {
       if (e instanceof ConcurrentModificationError) {
         // 409 path: reload canonical state so the user can re-apply edits
         // over fresh data instead of clobbering the concurrent writer.
-        toast.error("Object was modified in another tab — reloaded")
+        toast.error(tx("toastMsg.objectWasModifiedInAnother"))
         await refetchAndRestage()
       } else {
-        toast.error("Save failed")
+        toast.error(tx("editor.saveFailed"))
       }
       throw e
     } finally {
@@ -299,7 +300,7 @@ export function useObjectStudio(nodeId: string): ObjectStudioState {
         return result
       } catch (e) {
         if (e instanceof ConcurrentModificationError) {
-          toast.error("Someone else just approved this — refreshed")
+          toast.error(tx("toastMsg.someoneElseJustApprovedThis"))
           await refetchAndRestage()
         }
         throw e

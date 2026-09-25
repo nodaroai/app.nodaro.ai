@@ -988,7 +988,7 @@ export function AudioFxConfig({ data, onUpdate }: { readonly data: AudioFxData; 
       </div>
       {isReverb && (
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.wetDryMix")}{t("common.labelColon")}{data.mix ?? "auto"}</label>
+          <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.wetDryMix")}{t("common.labelColon")}{data.mix ?? t("vidcfg.phAutoLower")}</label>
           <Slider min={0} max={100} step={1} value={[data.mix ?? 30]} onValueChange={(vals) => onUpdate({ mix: vals[0] })} />
           <p className="text-[10px] text-muted-foreground">{t("audiocfg.hintHigherRoom")}</p>
         </div>
@@ -2910,7 +2910,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
         </Select>
         {data.voiceFx && AUDIO_FX_REVERB_PRESETS.has(data.voiceFx.preset) && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="voice-fx-mix">{t("audiocfg.wetDryMix")}{t("common.labelColon")}{data.voiceFx.wetDryMix ?? "auto"}</Label>
+            <Label htmlFor="voice-fx-mix">{t("audiocfg.wetDryMix")}{t("common.labelColon")}{data.voiceFx.wetDryMix ?? t("vidcfg.phAutoLower")}</Label>
             <Slider id="voice-fx-mix" min={0} max={100} step={1} value={[data.voiceFx.wetDryMix ?? 30]} onValueChange={(vals) => onUpdate({ voiceFx: { ...data.voiceFx!, wetDryMix: vals[0] } })} />
           </div>
         )}
