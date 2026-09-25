@@ -21,7 +21,7 @@ Unlike the `transition` field on the Combine Videos node (which is an FFmpeg pos
 | Post Text | text | empty | Free-form text appended to the composed hint. |
 | Hint mode  | select       | `full`    | Does not change how the transition itself is written — always `<name> (<description>)` (see below). It still sets the detail level of the pickers wired into `startState` / `endState`. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
-All four enum fields default to `auto`, which contributes no prompt text. Setting them to non-`auto` values appends descriptive clauses to the composed hint.
+All the enum fields (Transition, Position, Duration, Intensity and the wipe's Direction) default to `auto`, which contributes no prompt text. Setting Position, Duration or Intensity appends a descriptive clause to the composed hint; Direction changes the wipe's own description.
 
 Position, Duration and Intensity are catalogs, not free values: the `transition` picker catalog exposes them as `dimensions` beside its `options` (`GET /v1/picker-catalogs/transition`, `client.pickerCatalogs.get("transition")`, the MCP `get_picker_catalog` tool, or `TRANSITION_POSITIONS` / `TRANSITION_DURATIONS` / `TRANSITION_INTENSITIES` from `@nodaro/prompts`), each row carrying the exact clause it injects. The [Character FX](./character-fx.md) node has the same three fields with the same ids but its own wording — read each node's own rows. See [Parameter Picker Catalogs](../../picker-catalogs.md#single-dimension-pickers-with-secondary-parameters-transition-character-fx).
 
