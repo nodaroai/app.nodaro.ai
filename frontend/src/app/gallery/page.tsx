@@ -717,7 +717,7 @@ export default function GalleryPage() {
           showCloseButton={false}
           className={cn(
             "p-0 overflow-hidden gap-0 top-0 start-0 translate-x-0 translate-y-0 max-w-full h-[100dvh] w-full rounded-none border-0",
-            !isFullscreen && "sm:top-[50%] sm:start-[50%] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-3xl sm:h-auto sm:rounded-lg sm:border",
+            !isFullscreen && "sm:top-[50%] sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-3xl sm:h-auto sm:rounded-lg sm:border",
           )}
         >
           <DialogTitle className="sr-only">{t("common.preview")}</DialogTitle>
