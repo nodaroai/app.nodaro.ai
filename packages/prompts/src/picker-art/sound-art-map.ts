@@ -3,11 +3,12 @@
 // content-hashed file it resolves to lives in sound-art-files.generated.ts
 // (written by tools/picker-art/build.mts from tools/picker-art/sources.json).
 //
-// Adding a catalog option? Give it a key here (reuse an existing one or add a
+// Served to the app (picker-ui) and, as absolute URLs, over the API / SDK / MCP
+// (picker-art/images.ts). Adding a catalog option? Give it a key here (reuse an existing one or add a
 // source to sources.json and re-run the build script). The coverage test fails
 // until every option has one. At runtime an option without a key simply
 // renders its label.
-import type { SoundArtMap } from "./sound-art"
+import type { SoundArtMap } from "./sound-art-types.js"
 
 export const SOUND_ART = {
   "music-genre": {

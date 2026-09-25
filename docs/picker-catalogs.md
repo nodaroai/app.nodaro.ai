@@ -30,7 +30,7 @@ interface PickerOption {
   category?: string         // group id (matches categoryOrder / categoryLabels)
   promptHint: string        // the clause this option contributes ("" for no-op options like "auto")
   term: string              // the short professional term compact hint mode injects ("" for no-op options); `label` is for display
-  icon?: string             // reserved; previews are app-side — render your own (see Visual)
+  icon?: string             // reserved; an option's picture is served separately — see Visual
 }
 
 interface PickerDimension {       // multi-dim pickers; also the secondary parameters of a single-dim picker
@@ -189,7 +189,22 @@ The bundles load lazily, so `registerSidecarLoaders` takes a glob of loaders (Vi
 
 ## Visual
 
-Picker `icon`/thumbnails are **not** shipped — the editor's previews are bespoke React components, and an external app should render its own visuals in its own style (the data gives you `label`, `description`, and `category` to build a rich grid). `icon?` is reserved for a future release that bakes static thumbnails into the catalog data.
+The pickers the editor shows pictures on have them for your app too:
+
+- the photos of **Person, Styling, Held Prop, Material and Animal**;
+- the art of the **music and voice** pickers (Music Genre, Music Mood, Instrumentation, Voice Character, Voice Delivery);
+- on **Nodaro Cloud** only, a still of each **look** picker's rendered preview (Style, Color / Look, Era / Period, Lens, Mood, Atmosphere, Composition Effect, Camera / Film, Framing, Lighting, Camera Motion).
+
+**Over the API** (`GET /v1/picker-catalogs/:nodeType`, `GET /v1/catalogs`, the MCP `get_picker_catalog` tool, `client.pickerCatalogs.get()`), every pictured option carries an absolute `imageUrl` on the installation you asked, and an option without a picture has none. Person and Styling also return `sections`: their topics in order, each with a round picture. The URL rules, caching and examples are in [API Integration → Pictures](./api-integration.md#pictures-imageurl-sections).
+
+**As a library**, `@nodaro/prompts` builds the same URLs from the same maps:
+
+- `pickerOptionImageUrl(catalog, field, id, { baseUrl })` for an option;
+- `pickerSectionImageUrl(topicLabel, { baseUrl })` for a Person / Styling topic.
+
+`baseUrl` is the Nodaro installation that serves the files; the pictures are files of that installation, not part of the npm package. Pass `lookPreviews: true` only against Nodaro Cloud.
+
+For every other picker, render your own visuals from `label`, `description` and `category`. `icon?` stays reserved.
 
 ## Reference
 

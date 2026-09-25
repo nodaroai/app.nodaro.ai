@@ -1,8 +1,15 @@
-import { CHARACTER_ART_FILES } from "./character-art-files.generated"
+import {
+  CHARACTER_ART_FILES,
+  CHARACTER_ART_PATH,
+  characterArtPath,
+  characterSectionArtPath,
+  characterSectionSlug,
+  type CharacterArtFamily,
+} from "@nodaro/prompts"
 
 /**
  * Photos for the options of the character pickers (Person, Styling, Held Prop,
- * Material, Animal) and the round icons of their sections.
+ * Material, Animal) and the round icons of their topics.
  *
  * The files are self-hosted under `frontend/public/picker-art/character/`
  * (built by tools/picker-art/character-art.mts), so they load same-origin in
@@ -10,22 +17,20 @@ import { CHARACTER_ART_FILES } from "./character-art-files.generated"
  * which is what lets the server cache them as immutable.
  *
  * One photo per option id: the key is the picker catalog id + the option id,
- * so there is no hand-kept map to drift. An option without a photo (added
- * after the art was made) renders its fallback wherever the photo would be.
+ * so there is no hand-kept map to drift. The map and the path rules live in
+ * @nodaro/prompts (picker-art/), the single source the API reads too. An option
+ * without a photo (added after the art was made) renders its fallback
+ * wherever the photo would be.
  */
-export type CharacterArtFamily = "person" | "styling" | "held-prop" | "materials" | "animals"
+export type { CharacterArtFamily }
+export { characterSectionSlug }
 
 /** Root-relative, so the picture is always served by the app's own origin. */
-export const CHARACTER_ART_BASE = "/picker-art/character/"
-
-function urlFor(family: string, id: string): string | undefined {
-  const stem = CHARACTER_ART_FILES[family]?.[id]
-  return stem ? `${CHARACTER_ART_BASE}${family}/${stem}.webp` : undefined
-}
+export const CHARACTER_ART_BASE = CHARACTER_ART_PATH
 
 /** The photo of one option, or undefined (the caller shows its fallback). */
 export function characterArtUrl(family: CharacterArtFamily, id: string): string | undefined {
-  return urlFor(family, id)
+  return characterArtPath(family, id)
 }
 
 /** Whether any option of the family has a photo. */
@@ -33,14 +38,9 @@ export function hasCharacterArt(family: string): family is CharacterArtFamily {
   return family !== "sections" && Object.keys(CHARACTER_ART_FILES[family] ?? {}).length > 0
 }
 
-/** "Skin & Eyes" → "skin-eyes": the file name of a section's round icon. */
-export function characterSectionSlug(sectionLabel: string): string {
-  return sectionLabel.toLowerCase().replace(/&/g, " ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
-}
-
-/** The round icon of a picker section (by its English label), or undefined. */
+/** The round icon of a picker topic (by its English label), or undefined. */
 export function characterSectionIconUrl(sectionLabel: string): string | undefined {
-  return urlFor("sections", characterSectionSlug(sectionLabel))
+  return characterSectionArtPath(sectionLabel)
 }
 
 /**

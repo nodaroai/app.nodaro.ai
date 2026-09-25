@@ -1811,7 +1811,7 @@ discovery (`Cache-Control: public, max-age=300`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/picker-catalogs` | Directory of every picker (`{ data: PickerCatalogSummary[] }`) — each `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount }`. |
+| `GET` | `/v1/picker-catalogs` | Directory of every picker (`{ data: PickerCatalogSummary[] }`) — each `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount, imageCount }`; `imageCount` is how many of its options carry an `imageUrl` (0 = no pictures). |
 | `GET` | `/v1/picker-catalogs/:nodeType` | One picker's catalog (`{ data: PickerCatalog }`). 404 `not_found` for an unknown type. |
 
 `GET /v1/picker-catalogs/:nodeType` accepts these query params (a bad value
@@ -1819,7 +1819,7 @@ returns 400 `validation_error`):
 
 | Param | Values | Purpose |
 |---|---|---|
-| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`. `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
+| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`, `imageUrl` (when the option has a picture). `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
 | `category` | string | Single-dim pickers: filter options to one category. |
 | `field` | string | Return only this dimension's field — multi-dim pickers (person / styling / framing), and the secondary parameters of a single-dim picker (transition / character-fx: `position` / `duration` / `intensity`; character-motion: `position` / `pace`). |
 
@@ -1839,6 +1839,52 @@ catalogs that ship as pure data in [`@nodaro/shared`](https://www.npmjs.com/pack
 [Parameter Picker Catalogs](picker-catalogs.md)); the REST endpoints exist for
 clients that can't.
 
+#### Pictures (`imageUrl`, `sections`)
+
+Every option that has a picture carries an **absolute** `imageUrl`, at both
+detail levels, in `options` and in `dimensions[].options` alike; an option
+without one simply has no `imageUrl`. These are the pictures the editor's
+pickers show:
+
+| Pickers | Picture |
+|---|---|
+| `person`, `styling`, `held-prop`, `material`, `animal` | A photo, WebP, up to 480px wide. |
+| `music-genre`, `music-mood`, `instrumentation`, `voice-character`, `voice-delivery` | A 3D emoji (WebP, 128px) or a flag (WebP, 120px wide). |
+| Look pickers (`style`, `color-look`, `lens`, `framing`, `lighting`, `mood`, `camera-format`, `camera-motion`, …) | Nodaro Cloud only: a 480px still of the rendered preview from the Nodaro CDN (a frame of the clip for `camera-motion`). A self-hosted install returns none. |
+
+- **Host.** Self-hosted pictures are served by the installation itself under
+  `/picker-art/`, so `imageUrl` uses its public address — `PUBLIC_URL`
+  (Nodaro Cloud: `https://app.nodaro.ai`; a self-hosted install: its own
+  `PUBLIC_URL`, e.g. `http://localhost:3000`). Use the URL as given; never
+  build one from an option id.
+- **Caching.** File names carry a content hash, so a changed picture gets a
+  new URL; they are served with `Cache-Control: public, max-age=31536000,
+  immutable` and `Access-Control-Allow-Origin: *` (usable from `<img>`,
+  `fetch` and canvas on any origin).
+- **Topics.** `person` and `styling` also return `sections`: the topics the
+  editor groups their settings under, in order — each `{ label, fields,
+  imageUrl? }`, where `fields` are the node-data fields of the settings in
+  that topic (`Identity` → `type`, `age`, `ethnicity`, `regionalAesthetic`)
+  and `imageUrl` is the topic's round picture.
+
+```bash
+curl -s https://app.nodaro.ai/v1/picker-catalogs/person | jq '.data.sections[0], .data.dimensions[0].options[0]'
+```
+
+```json
+{ "label": "Identity", "fields": ["type", "age", "ethnicity", "regionalAesthetic"],
+  "imageUrl": "https://app.nodaro.ai/picker-art/character/sections/identity.2d5ec1a4.webp" }
+{ "id": "man", "label": "Man", "term": "man",
+  "imageUrl": "https://app.nodaro.ai/picker-art/character/person/man.441363db.webp" }
+```
+
+A look picker on Nodaro Cloud (`/v1/picker-catalogs/mood`):
+
+```json
+{ "id": "happy", "label": "Happy", "category": "positive", "term": "happy expression",
+  "imageUrl": "https://cdn.nodaro.ai/cdn-cgi/image/width=480,format=auto,quality=80/images/710df65a-3c1e-485b-b8b7-29f7b3baf479.png" }
+```
+
 ### Catalogs (server-driven projection)
 
 `GET /v1/catalogs` returns **every** picker catalog in one call, projected to a
@@ -1852,15 +1898,15 @@ catalogs. Public, no auth, same 5-minute cache (`Cache-Control: public, max-age=
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/catalogs` | Every registered catalog (`{ data: ProjectedCatalog[] }`). |
+| `GET` | `/v1/catalogs` | Every registered catalog: `{ curated, packs, version, data? }`. `data: ProjectedCatalog[]` is present only when the deployment registered catalog packs (`curated: true`); with none (`curated: false`) the catalogs are the bundled ones, served per picker by `/v1/picker-catalogs/:nodeType`. |
 
 Query param (a bad value returns 400 `validation_error`):
 
 | Param | Values | Purpose |
 |---|---|---|
-| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`. `full`: additionally includes each option's `description` and `promptHint`. |
+| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`, `imageUrl` (when the option has a picture). `full`: additionally includes each option's `description` and `promptHint`. |
 
-Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, defaultValue?, categoryOrder?, categoryLabels?, detail, options?, fields?, dimensions? }` — single-dim catalogs carry `options`; multi-dim catalogs carry `dimensions` (one `{ field, label, options }` per field); a single-dim catalog with secondary parameter fields (`transition`, `character-fx`: `position` / `duration` / `intensity`; `character-motion`: `position` / `pace`) carries both. Each option is `{ id, label, category?, term, icon?, description?, promptHint? }`; `term` rides at **both** detail levels so a thin client can render `label` and inject the compact professional term without a second `detail=full` fetch. The shape is deliberately tag/policy-free.
+Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, defaultValue?, categoryOrder?, categoryLabels?, detail, options?, fields?, dimensions?, sections? }` — single-dim catalogs carry `options`; multi-dim catalogs carry `dimensions` (one `{ field, label, options }` per field); a single-dim catalog with secondary parameter fields (`transition`, `character-fx`: `position` / `duration` / `intensity`; `character-motion`: `position` / `pace`) carries both. Each option is `{ id, label, category?, term, icon?, imageUrl?, description?, promptHint? }` — `imageUrl` and `sections` follow the [picture rules above](#pictures-imageurl-sections); `term` rides at **both** detail levels so a thin client can render `label` and inject the compact professional term without a second `detail=full` fetch. The shape is deliberately tag/policy-free.
 
 ### Text → pickers (AI Fill)
 

@@ -21,7 +21,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { PICKER_CATALOGS } from "@nodaro/prompts"
 import { SOUND_ART, SOUND_ART_BASE, soundArtUrl, type SoundArtCatalogId, type SoundArtKey } from "../../icons/sound-art"
-import { SOUND_ART_FILES } from "../../icons/sound-art-files.generated"
+import { SOUND_ART_FILES } from "@nodaro/prompts"
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "..")
 const PUBLIC_DIR = join(REPO_ROOT, "frontend", "public")

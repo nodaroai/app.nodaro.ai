@@ -231,7 +231,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "explosion-blast",   label: "Explosion Blast",    category: "physics", description: "Explosion wipes frame, new scene emerges",
     promptHint: "an explosion erupts from the center of the frame with a bright fireball that expands to fill the frame, and as the fireball dissipates the new scene is revealed" },
   { id: "shockwave",         label: "Shockwave",          category: "physics", description: "Shockwave ripples across, scene changes",
-    promptHint: "a visible shockwave ripples outward across the frame distorting the image, and as the shockwave passes the scene behind it has changed to the new setting" },
+    promptHint: "a flash at the exact centre of the frame bursts into a sharp, bright ring that races past every edge in a moment, trailing a smear of motion blur behind its rim and warping the picture as it goes. The camera stays where it is and the picture stays level. The second shot shows only inside the ring and the first only outside it, with the bright ring as the one hard border and no blending anywhere" },
   { id: "punch-into-camera", label: "Punch Into Camera",  category: "physics", description: "Fist strikes camera, scene changes",
     promptHint: "a fist or object swings rapidly toward the camera and strikes the lens with motion blur and impact frames, and the moment of impact reveals the new scene" },
   { id: "debris-shower",     label: "Debris Shower",      category: "physics", description: "Debris flies past, scene changes behind",

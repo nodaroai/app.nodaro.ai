@@ -467,6 +467,24 @@ export const STYLING_DIMENSION_ORDER: ReadonlyArray<StylingDimension> = [
   "wardrobe-state",
 ]
 
+/**
+ * The Styling picker's topics, in display order (mirrors PERSON_DIMENSION_SECTIONS):
+ * every dimension belongs to exactly one — styling-sections.test.ts fails the build
+ * when a new dimension is left out or listed twice. The editor lays the open
+ * picker out by these, and the API serves them as the catalog's `sections`.
+ */
+export interface StylingDimensionSection {
+  readonly label: string
+  readonly dimensions: ReadonlyArray<StylingDimension>
+}
+
+export const STYLING_DIMENSION_SECTIONS: ReadonlyArray<StylingDimensionSection> = [
+  { label: "Beauty & Hair", dimensions: ["makeup", "hair-cut", "hair-treatment", "hair-state", "nails", "face-paint"] },
+  { label: "Accessories",   dimensions: ["eyewear", "headwear", "jewelry"] },
+  { label: "Wardrobe",      dimensions: ["outfit", "top", "bottom", "outerwear", "legwear", "footwear"] },
+  { label: "Fabric & Fit",  dimensions: ["fabric", "wardrobe-state"] },
+]
+
 export const STYLING_DIMENSION_LABELS: Readonly<Record<StylingDimension, string>> = {
   makeup: "Makeup",
   eyewear: "Eyewear",

@@ -99,3 +99,6 @@ export * from "./character-motion-diagnostics.js"
 
 // --- Per-ad creative analysis for the social scraper nodes ---
 export * from "./ad-creative-analysis.js"
+
+// --- Picker art: option pictures + topic icons (editor and API) ---
+export * from "./picker-art/index.js"

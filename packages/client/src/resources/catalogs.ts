@@ -20,6 +20,13 @@ export interface ProjectedCatalogOption {
    */
   term?: string
   icon?: string
+  /**
+   * Absolute URL of the option's picture — a photo, 3D emoji, flag or (Nodaro
+   * Cloud only) rendered look preview — on the installation's own host, or the
+   * Nodaro CDN for look previews. Absent when the option has no picture. Use it
+   * as given: file names carry a content hash, so it can be cached for good.
+   */
+  imageUrl?: string
 }
 export interface ProjectedCatalogDimension {
   field: string
@@ -39,14 +46,36 @@ export interface ProjectedCatalog {
   options?: ProjectedCatalogOption[]
   fields?: string[]
   dimensions?: ProjectedCatalogDimension[]
+  /** person and styling: the topics their settings are grouped under, in order, each with its picture. */
+  sections?: ProjectedCatalogSection[]
+}
+
+/** A topic a multi-dim catalog's settings are grouped under in the editor (person, styling). */
+export interface ProjectedCatalogSection {
+  label: string
+  fields: string[]
+  imageUrl?: string
+}
+
+/**
+ * `GET /v1/catalogs`. `data` is present only when the deployment registered
+ * catalog packs (`curated: true`); with none the catalogs are the bundled
+ * ones — read them per picker with `client.pickerCatalogs.get(nodeType)`.
+ */
+export interface CatalogsListResponse {
+  curated: boolean
+  packs: number
+  version: number
+  data?: ProjectedCatalog[]
 }
 
 export class CatalogsResource {
   constructor(private client: NodaroClient) {}
 
   /** Every catalog, projected & pack-composed (honors the deployment's
-   *  registered vendored packs). Cached publicly 5 min. */
-  list(opts: { detail?: "compact" | "full" } = {}): Promise<{ data: ProjectedCatalog[] }> {
+   *  registered vendored packs). Cached publicly 5 min. `data` is absent
+   *  when the deployment registered no packs (`curated: false`). */
+  list(opts: { detail?: "compact" | "full" } = {}): Promise<CatalogsListResponse> {
     const qs = opts.detail ? `?detail=${opts.detail}` : ""
     return this.client.request("GET", `/v1/catalogs${qs}`)
   }
