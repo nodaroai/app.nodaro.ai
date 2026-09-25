@@ -1,5 +1,16 @@
 # @nodaro/cli
 
+## 1.23.0
+
+### Minor Changes
+
+- 0634fd8: Add `nodaro edit audio-sync --source <[id=]url> … [--sources-file <file>] [--reference <id>]`: measure how far apart the clocks of 2–6 recordings of one conversation are, from their sound (keyless on every edition).
+
+### Patch Changes
+
+- Updated dependencies [0634fd8]
+  - @nodaro/sdk@2.16.0
+
 ## 1.22.0
 
 ### Minor Changes
