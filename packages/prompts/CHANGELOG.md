@@ -1,5 +1,25 @@
 # @nodaro/prompts
 
+## 1.27.0
+
+### Minor Changes
+
+- 029f594: Picker options now come with their pictures. Every option that has a picture carries an absolute `imageUrl` in `GET /v1/picker-catalogs/:nodeType`, `GET /v1/catalogs` and the MCP `get_picker_catalog` tool: the photos of the Person, Styling, Held Prop, Material and Animal pickers and the art of the music and voice pickers, served by the installation itself on its public address, plus — on Nodaro Cloud only — a still of each look picker's rendered preview from the Nodaro CDN. An option without a picture has no `imageUrl`. Person and Styling also return `sections`: the topics their settings are grouped under, in order, each with its round picture. The directory (`GET /v1/picker-catalogs`) adds `imageCount` per picker.
+
+  - `@nodaro/shared`: `ProjectedCatalogOption.imageUrl`, `ProjectedCatalog.sections`, `ProjectedCatalogSection`.
+  - `@nodaro/prompts`: the picture maps move here (`CHARACTER_ART_FILES`, `SOUND_ART`, `SOUND_ART_FILES`, `LOOK_PREVIEW_SETS`) with their path helpers, `STYLING_DIMENSION_SECTIONS`, and an `images` option on `projectPickerCatalog`, `projectAllCatalogs` and `summarizePickerCatalogs` (`imageCount` on `PickerCatalogSummary`).
+  - `@nodaro/sdk`: `PickerOption.imageUrl`, `PickerCatalog.sections` (`PickerCatalogSection`), `PickerCatalogSummary.imageCount`; the same on the `catalogs` types. `client.catalogs.list()` now returns `CatalogsListResponse` — `{ curated, packs, version, data? }` — which is what the server has always sent: `data` is absent when the deployment registered no catalog packs.
+  - `@nodaro/cli`: `nodaro pickers list` shows how many options of each picker have a picture.
+
+### Patch Changes
+
+- fe35884: Transitions `sun-glare`, `lens-crack` and `lightning-flash` get new descriptions. The glare floods the lens from one corner until the picture washes out, then clears to the second shot; the crack spreads into a web of fracture lines on the lens while everything behind it stays whole; the lightning bolt's flash turns the whole picture white and the second shot appears as the white fades. The camera and framing stay put in all three. No other row changes.
+- 6bfd179: Transitions `building-explosion` and `vehicle-explosion` get new descriptions. The largest structure in the frame (or a vehicle in it) explodes, and its dust (or flame, then smoke) fills the whole picture while the camera and framing stay put; the second shot appears only as it clears. No other row changes.
+- 9f90e8c: Transitions `zoom-into-book`, `pull-out-reveal`, `zoom-into-mouth`, `walk-through-door` and `mask-transition` get new descriptions. Each names one steady camera path (no turning, tilting or rolling), says where the shot ends (inside or in the second shot, fully resolved, with nothing of the portal left) and pins the mechanism: the camera heads for the book's page from the start; the whole first shot shrinks into a framed picture inside the second; the mouth's interior stays a plain darkness; the change of place happens at the doorway itself; a dark foreground shape passes close to the lens and is gone once the second shot appears. No other row changes.
+- 79609a9: Transition `shockwave` gets a new description: a flash at the centre of the frame bursts into a sharp, bright ring that races past every edge in a moment, trailing motion blur and warping the picture as it goes, with the second shot only inside the ring and the first only outside it. The camera and framing stay put. No other row changes.
+- Updated dependencies [029f594]
+  - @nodaro/shared@3.14.0
+
 ## 1.26.1
 
 ### Patch Changes
