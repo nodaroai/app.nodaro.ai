@@ -133,7 +133,8 @@ describe("the transition panel's Style (a styled row's looks)", () => {
     renderTransition({ transition: ["debris-shower", "garden-bloom"], style: "garden-bloom-hedge-doors" })
     expect(screen.queryAllByText("Style").filter((el) => el.tagName === "LABEL")).toHaveLength(1)
     expect(rows(styleSelect()!)).toEqual([
-      ...DEBRIS_SHOWER_STYLE.choices.map((c) => [c.id, c.label]),
+      ["auto", "Default look"],
+      ...DEBRIS_SHOWER_STYLE.choices.slice(1).map((c) => [c.id, c.label]),
       ...GARDEN_BLOOM_STYLE.choices.slice(1).map((c) => [c.id, `Garden Bloom · ${c.label}`]),
     ])
     expect(styleSelect()!.value).toBe("garden-bloom-hedge-doors")

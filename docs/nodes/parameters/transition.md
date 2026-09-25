@@ -71,7 +71,7 @@ A wipe saved before Direction existed reads as `auto`. The picker catalog publis
 | `debris-shower` | Full cover (default) | `auto` (or absent) | Debris fills the whole screen, then blows past to reveal the next scene |
 | `debris-shower` | Light sweep | `debris-shower-light-sweep` | A quick scatter of debris crosses the screen; the scene has changed behind it |
 
-A pick saved before Style existed has no `style` and reads as the row's default look. The picker catalog publishes each row's looks on its option as `params` (field `style`); `@nodaro/prompts` callers pass the choice as `composeTransitionHintFromConnections(id, startHints, endHints, timing, mode, { optionValues: { style: "debris-shower-light-sweep" } })`. On the canvas, a two-pick of two styled rows shows one Style control holding both rows' looks; the one stored value styles its own row, and the other row keeps its default. A row sent in the `direction` field of a video request has no style setting and reads as its default.
+A pick saved before Style existed has no `style` and reads as the row's default look. The picker catalog publishes each row's looks on its option as `params` (field `style`); `@nodaro/prompts` callers pass the choice as `composeTransitionHintFromConnections(id, startHints, endHints, timing, mode, { optionValues: { style: "debris-shower-light-sweep" } })`. On the canvas, a two-pick of two styled rows shows one Style control holding both rows' looks, its first entry named "Default look" (each row keeps its own default); the one stored value styles its own row, and the other row keeps its default. A row sent in the `direction` field of a video request has no style setting and reads as its default.
 
 ## Catalog (82 entries across 8 categories)
 

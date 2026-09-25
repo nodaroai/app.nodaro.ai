@@ -1500,7 +1500,8 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
  *
  * A field is one node-data key, so a two-pick of two rows that both declare it
  * (two styled rows) gets ONE control: its rows are the first row's, then the
- * second's own choices named after their row ("Garden Bloom · Hedge doors").
+ * second's own choices named after their row ("Garden Bloom · Hedge doors"),
+ * and the shared `auto` entry reads "Default look" (it is each row's default).
  * Choice ids carry their row's id, so the one stored value styles the row it
  * belongs to and the other row keeps its default look.
  */
@@ -1517,7 +1518,12 @@ function transitionOptionsFor(value: string | string[] | undefined): ReadonlyArr
       const extra = option.choices
         .filter((c) => !known.has(c.id))
         .map((c) => ({ ...c, label: `${getTransitionLabel(id)} · ${c.label}` }))
-      byField.set(option.field, { ...seen, choices: [...seen.choices, ...extra] })
+      // The one `auto` entry now stands for EACH row's default look, so it is
+      // named neutrally rather than after the first row's look.
+      const choices = seen.choices.map((c) =>
+        c.id === "auto" ? { ...c, label: "Default look", description: "Each transition keeps its own default look" } : c,
+      )
+      byField.set(option.field, { ...seen, choices: [...choices, ...extra] })
     }
   }
   return [...byField.values()]
