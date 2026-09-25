@@ -4,6 +4,7 @@ import { Keyboard } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Kbd } from "@/components/ui/kbd"
 import { useT } from "@/lib/i18n"
+import { SHORTCUT_CATEGORY_KEYS, SHORTCUT_DESCRIPTION_KEYS, type ShortcutId } from "@/lib/shortcut-copy"
 import {
   SHORTCUTS,
   SHORTCUT_CATEGORIES,
@@ -46,12 +47,14 @@ export function ShortcutsHelpModal({ open, onOpenChange }: ShortcutsHelpModalPro
             return (
               <section key={cat}>
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#ff0073]">
-                  {cat}
+                  {t(SHORTCUT_CATEGORY_KEYS[cat])}
                 </h3>
                 <ul className="space-y-1.5">
                   {items.map((d) => (
                     <li key={d.id} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="text-muted-foreground">{d.description}</span>
+                      <span className="text-muted-foreground">
+                        {t(SHORTCUT_DESCRIPTION_KEYS[d.id as ShortcutId])}
+                      </span>
                       <span className="flex shrink-0 items-center gap-1">
                         {formatBindingCaps(d.bindings[0], isMac).map((cap, i) => (
                           <Kbd key={i}>{cap}</Kbd>

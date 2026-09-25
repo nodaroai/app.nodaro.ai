@@ -88,7 +88,7 @@ describe("executionBudgetExcessMs", () => {
   it("sums the excess of the execution's budgeted child jobs — through the same per-job budget", async () => {
     const long = applyEdlRow(180)
     const alsoLong = applyEdlRow(150, "audio")
-    const short = applyEdlRow(2)
+    const short = applyEdlRow(2, "audio") // one source, audio only: its budget (~86 min) fits inside 90
     db.childJobs.set("exec-1", [long, alsoLong, short, { job_type: "generate-image", input_data: {} }])
     db.nodeStates.set("exec-1", {})
     const total = await executionBudgetExcessMs("exec-1")

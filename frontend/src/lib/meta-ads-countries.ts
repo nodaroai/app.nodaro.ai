@@ -1,8 +1,10 @@
 /**
  * Country picker for the Meta Ads node — the Ad Library's `country` filter
- * takes an ISO 3166-1 alpha-2 code or `ALL`. Names are proper nouns and stay
- * English in every locale (the "All countries" entry is localized by the
- * panel). UI data only — deliberately not in `@nodaro/shared` (published).
+ * takes an ISO 3166-1 alpha-2 code or `ALL`. The names here are the English
+ * display; other interface languages render the browser's own name for the code
+ * (`countryDisplayName`), so no dictionary has to list countries. The "All
+ * countries" entry is localized by the panel. UI data only — deliberately not
+ * in `@nodaro/shared` (published).
  */
 export const META_ADS_COUNTRIES: ReadonlyArray<{ readonly code: string; readonly name: string }> = [
   { code: "US", name: "United States" },
@@ -51,4 +53,25 @@ export const META_ADS_COUNTRIES: ReadonlyArray<{ readonly code: string; readonly
 
 export function metaAdsCountryName(code: string | undefined): string | undefined {
   return META_ADS_COUNTRIES.find((c) => c.code === code)?.name
+}
+
+const regionNamesByLocale = new Map<string, Intl.DisplayNames | null>()
+
+/**
+ * A country's name in the interface language: the English list above for
+ * English, the browser's `Intl.DisplayNames` otherwise (日本 → "アメリカ合衆国").
+ * Falls back to the English name where the browser has no name for the code.
+ */
+export function countryDisplayName(country: { readonly code: string; readonly name: string }, locale: string): string {
+  if (locale === "en") return country.name
+  if (!regionNamesByLocale.has(locale)) {
+    let names: Intl.DisplayNames | null = null
+    try {
+      names = new Intl.DisplayNames([locale], { type: "region" })
+    } catch {
+      names = null
+    }
+    regionNamesByLocale.set(locale, names)
+  }
+  return regionNamesByLocale.get(locale)?.of(country.code) ?? country.name
 }

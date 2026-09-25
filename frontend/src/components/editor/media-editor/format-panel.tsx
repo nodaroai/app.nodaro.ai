@@ -48,7 +48,7 @@ export function FormatPanel({
         {t("mediaed.advanced")}
         {format && (
           <span className="ms-auto text-[#ff0073] text-[10px]">
-            &rarr; {format.toUpperCase()}
+            {isRtl ? "←" : "→"} {format.toUpperCase()}
           </span>
         )}
       </button>

@@ -8,6 +8,7 @@ import {
   getTierPriceId,
   getAnnualSavingsDollars,
   type BillingCycle,
+  type TierFeature,
 } from "@/lib/pricing-data"
 import { startCheckout, startLoadCheckout } from "@/lib/checkout"
 import { toast } from "sonner"
@@ -39,7 +40,7 @@ const TIER_AUDIENCE_KEY: Record<string, MessageKey> = {
 }
 
 /** Credits get their own mono line on the card, so drop the feature restating them. */
-const CREDITS_FEATURE_RE = /^\d[\d,]* credits \/ month/
+const CREDITS_FEATURE_KEY: MessageKey = "pricing.feat.creditsPerMonth"
 
 interface SectionHeaderRowProps {
   readonly dotColor: string
@@ -65,6 +66,9 @@ function SectionHeaderRow({ dotColor, labelColor, label, note, margin }: Section
 
 export default function PricingPage() {
   const t = useT()
+  /** A tier feature in the interface language, its numbers formatted for the locale. */
+  const featureText = (f: TierFeature): string =>
+    t(f.key, f.vars && Object.fromEntries(Object.entries(f.vars).map(([k, v]) => [k, typeof v === "number" ? formatNumber(v) : v])))
 
   // Editions without billing have nothing to sell here — and the ?plan=
   // effect below auto-starts a Stripe checkout with no click, which 404s on a
@@ -171,7 +175,7 @@ export default function PricingPage() {
     if (loadingTier === tierId) return t("pricing.processing")
     if (tierId === currentTierId) return t("pricing.currentPlan")
     if (currentTierId) return t("pricing.switchPlan")
-    return PRICING_TIERS.find((tr) => tr.id === tierId)?.cta ?? t("pricing.cta.subscribe")
+    return t(PRICING_TIERS.find((tr) => tr.id === tierId)?.cta ?? "pricing.cta.subscribe")
   }
 
   const annual = billingCycle === "annual"
@@ -315,7 +319,7 @@ export default function PricingPage() {
               const priceId = getTierPriceId(tier, billingCycle)
               const savingsDollars = getAnnualSavingsDollars(tier)
               const disabled = tier.id === currentTierId || loadingTier === tier.id || subLoading
-              const cardFeatures = tier.features.filter((f) => !CREDITS_FEATURE_RE.test(f))
+              const cardFeatures = tier.features.filter((f) => f.key !== CREDITS_FEATURE_KEY)
 
               return (
                 <div
@@ -398,7 +402,7 @@ export default function PricingPage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 13, flex: 1 }}>
                     {cardFeatures.map((f) => (
                       <div
-                        key={f}
+                        key={f.key}
                         style={{
                           display: "flex",
                           gap: 10,
@@ -408,7 +412,7 @@ export default function PricingPage() {
                         }}
                       >
                         <span style={{ color: PINK, fontSize: 13, lineHeight: 1.4 }}>✓</span>
-                        <span>{f}</span>
+                        <span>{featureText(f)}</span>
                       </div>
                     ))}
                   </div>
@@ -498,7 +502,7 @@ export default function PricingPage() {
                     marginTop: 10,
                   }}
                 >
-                  {freeTier.features.join(" · ").toUpperCase()}
+                  {freeTier.features.map(featureText).join(" · ").toUpperCase()}
                 </div>
               </div>
               {user ? (

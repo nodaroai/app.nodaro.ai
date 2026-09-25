@@ -1232,6 +1232,9 @@ const handleAudioSync: HandlerFn = async function handleAudioSync(job, ctx) {
 // orchestrator sizes an audio-sync node's ceilings from the same call on the
 // same payload (the budget leaf is `providers/audio/audio-sync-budget.ts`).
 handleAudioSync.livenessBudgetMs = (job) => declaredJobBudgetMs("audio-sync", job.data)
+// Its media proxy may fetch a multi-gigabyte original (Track 0.19): past the
+// 90-minute default, so it declares its steps' ceilings like audio-sync.
+handleSilenceDetect.livenessBudgetMs = (job) => declaredJobBudgetMs("silence-detect", job.data)
 
 const handleExtractAudio: HandlerFn = async function handleExtractAudio(job, ctx) {
   const { videoUrl } = job.data as { jobId: string; videoUrl: string }

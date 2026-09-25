@@ -52,7 +52,7 @@ const PARAM_TYPE_MARK: Record<WebhookParam["type"], string> = {
  * came with the workflow, and every webhook / Telegram trigger, need a lock.
  * The panel cannot tell which schedule is which, so it says both.
  */
-const UNATTENDED_TRIGGER_TYPES: ReadonlySet<string> = new Set(["schedule-trigger", "webhook-trigger", "telegram-trigger"])
+const UNATTENDED_TRIGGER_TYPES: ReadonlySet<string> = new Set(["schedule-trigger", "webhook-trigger", "telegram-trigger", "telegram-account-trigger"])
 
 export function WebhookOutputConfig({ data, onUpdate, nodes }: ConfigProps<WebhookOutputData>) {
   const t = useT()

@@ -19,7 +19,7 @@
  */
 import type { Edl, EdlSegment } from "@nodaro/shared"
 import { edlDurationMs } from "@nodaro/shared"
-import { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_TIMEOUT_MS, FFPROBE_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
+import { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_MAX_MS, FFPROBE_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
 
 /** How a render is split into chunks. Both the render (`ApplyEdlOptions`
  *  extends this) and its budget read the same options, so they plan the same
@@ -320,11 +320,13 @@ export function chunkRenderTimeoutMs(edl: Edl, segs: readonly PlanSegment[], rea
 }
 
 /** Per referenced source, run in sequence before the first chunk: one fetch
- *  (`downloadFile`'s ceiling), then `hasAudioStream` (one ffprobe), then
+ *  (`downloadFile`'s overall ceiling, `DOWNLOAD_MAX_MS` — a camera original can
+ *  be many gigabytes; a dead transfer fails on its own stall guard long before),
+ *  then `hasAudioStream` (one ffprobe), then
  *  `probeStreamEnds` — its stream listing (one ffprobe) plus up to two per-track
  *  packet scans, each with the default ffmpeg watchdog. */
 export const APPLY_EDL_PER_SOURCE_PREP_MS =
-  DOWNLOAD_TIMEOUT_MS + 2 * FFPROBE_TIMEOUT_MS + 2 * DEFAULT_FFMPEG_TIMEOUT_MS
+  DOWNLOAD_MAX_MS + 2 * FFPROBE_TIMEOUT_MS + 2 * DEFAULT_FFMPEG_TIMEOUT_MS
 
 /** Once per VIDEO render, before the first chunk: the picture-canvas probes —
  *  resolution, then fps, each run across every video source in parallel, each

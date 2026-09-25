@@ -246,7 +246,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     const triggerData = data.__triggerData as Record<string, unknown> | undefined;
     return (triggerData?.timestamp as string | undefined)?.trim();
   }
-  if (type === "telegram-trigger") {
+  if (type === "telegram-trigger" || type === "telegram-account-trigger") {
     const triggerData = data.__triggerData as Record<string, unknown> | undefined;
     const fields: Record<string, string> = {
       text: String((triggerData?.text ?? data.text) || ""),
@@ -255,6 +255,8 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       audioUrl: String((triggerData?.audioUrl ?? data.audioUrl) || ""),
       chatId: String((triggerData?.chatId ?? data.chatId) || ""),
       messageId: String((triggerData?.messageId ?? data.messageId) || ""),
+      senderId: String((triggerData?.senderId ?? data.senderId) || ""),
+      chatType: String((triggerData?.chatType ?? data.chatType) || ""),
     };
     if (sourceHandle && fields[sourceHandle] !== undefined) {
       return fields[sourceHandle] || undefined;

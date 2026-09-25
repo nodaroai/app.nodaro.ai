@@ -11,6 +11,7 @@
  */
 import {
   DEFAULT_FFMPEG_TIMEOUT_MS,
+  DOWNLOAD_MAX_MS,
   DOWNLOAD_TIMEOUT_MS,
   FFPROBE_TIMEOUT_MS,
   MEDIA_PROXY_FFMPEG_TIMEOUT_MS,
@@ -31,15 +32,16 @@ export const AUDIO_SYNC_WINDOW_DECODE_TIMEOUT_MS = 2 * 60_000
 export const AUDIO_SYNC_FINE_WINDOWS = 3
 
 /** Ceiling of everything one source costs, in the order the node runs it: its
- *  audio proxy on a cache miss (`ensureMediaProxy` fetches the source, checks it
- *  has an audio track — one ffprobe — then encodes it), the proxy fetch, the
- *  duration probe, the envelope decode, and —
+ *  audio proxy on a cache miss (`ensureMediaProxy` fetches the source under the
+ *  big-media download ceiling, checks it has an audio track — one ffprobe — then
+ *  encodes it), the proxy fetch (the flat 120 s: a 16 kHz mono proxy is small),
+ *  the duration probe, the envelope decode, and —
  *  for each fine window — a reference window and a source window decode.
  *  Correlation itself is in-process arithmetic well inside the per-source slack.
  *  Not counted, as for every storage call: the proxy's R2 upload (the R2 client
  *  has no request timeout — Track 0.12). */
 export const AUDIO_SYNC_PER_SOURCE_BUDGET_MS =
-  DOWNLOAD_TIMEOUT_MS + FFPROBE_TIMEOUT_MS + MEDIA_PROXY_FFMPEG_TIMEOUT_MS + DOWNLOAD_TIMEOUT_MS + FFPROBE_TIMEOUT_MS
+  DOWNLOAD_MAX_MS + FFPROBE_TIMEOUT_MS + MEDIA_PROXY_FFMPEG_TIMEOUT_MS + DOWNLOAD_TIMEOUT_MS + FFPROBE_TIMEOUT_MS
   + AUDIO_SYNC_ENVELOPE_DECODE_TIMEOUT_MS
   + AUDIO_SYNC_FINE_WINDOWS * 2 * AUDIO_SYNC_WINDOW_DECODE_TIMEOUT_MS
 

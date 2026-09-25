@@ -121,8 +121,8 @@ function edl(minutes: number): Edl {
   } as unknown as Edl
 }
 
-function applyEdlNode(minutes: number): SimpleNode {
-  return { id: "cut", type: "apply-edl", data: { edl: edl(minutes), output: "video", quality: "final" } }
+function applyEdlNode(minutes: number, output: "video" | "audio" = "video"): SimpleNode {
+  return { id: "cut", type: "apply-edl", data: { edl: edl(minutes), output, quality: "final" } }
 }
 function vaNode(): SimpleNode {
   return { id: "va", type: "video-analysis", data: { youtubeUrl: "https://youtu.be/abc123" } }
@@ -208,10 +208,12 @@ describe("a node that declares no budget keeps today's ceilings EXACTLY", () => 
   }, 30_000)
 
   it("an apply-edl whose budget fits inside 90 minutes: the default ceilings too", async () => {
-    // One minute of output: its dispatch-time budget (every chunk charged at the
-    // 4K30 liveness canvas) is ~55 min — inside NODE_TIMEOUT_MS.
-    const node = applyEdlNode(1)
-    expect(applyEdlRenderBudgetMs(edl(1))).toBeLessThanOrEqual(NODE_TIMEOUT_MS)
+    // A one-minute AUDIO render of one source: its source's prep (a download
+    // charged at the 60-minute ceiling, Track 0.19, plus the probes) and one
+    // chunk come to ~86 min — inside NODE_TIMEOUT_MS. (Any video render with a
+    // source no longer fits: the canvas probes take it past 90.)
+    const node = applyEdlNode(1, "audio")
+    expect(applyEdlRenderBudgetMs(edl(1), { output: "audio" })).toBeLessThanOrEqual(NODE_TIMEOUT_MS)
     db.jobRecord = { status: "processing", output_data: null, error_message: null, progress: 10 }
     const ctx = makeCtx()
     const { settled, done } = run(node, ctx)
@@ -418,6 +420,10 @@ describe("every registered budgeted job is dispatched under its node type's own 
           { nodeId: "cam", url: "https://media.test/cam.mp4" },
         ],
       },
+    }),
+    "silence-detect": () => ({
+      node: { id: "silence", type: "silence-detect", data: { label: "Silence Detect" } },
+      inputs: { audioUrl: "https://media.test/episode.m4a" },
     }),
   }
 

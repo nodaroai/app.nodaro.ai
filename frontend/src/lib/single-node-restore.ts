@@ -42,12 +42,14 @@ export const SINGLE_NODE_RESTORE_MAX_AGE_MS = 30 * 60 * 1000
  *  source-count budget of hours (every step at its own ceiling, since it cannot
  *  see its sources' lengths up front), and a first run over long, uncached
  *  camera files proxies each one before correlating — a reload during that
- *  must still re-attach the poll. */
+ *  must still re-attach the poll. `silence-detect` too (Track 0.19): its media
+ *  proxy may fetch a multi-gigabyte original first, and it declares ~2 h. */
 export const LONG_RUNNING_NODE_TYPES: ReadonlySet<string> = new Set([
   "generate-video-pro",
   "edit-video-pro",
   "apply-edl",
   "audio-sync",
+  "silence-detect",
 ])
 export const LONG_RUNNING_RESTORE_MAX_AGE_MS = 6 * 60 * 60 * 1000 // 6h
 

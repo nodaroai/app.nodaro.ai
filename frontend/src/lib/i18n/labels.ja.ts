@@ -201,6 +201,7 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Publish to Social": "SNS に公開",
   "Telegram Channel Feed": "Telegram チャンネルフィード",
   "Telegram Trigger": "Telegram トリガー",
+  "Telegram Account Trigger": "Telegram アカウントトリガー",
   "Teleport Send": "テレポート送信",
   "Teleport Receive": "テレポート受信",
   "Router": "ルーター",

@@ -221,6 +221,7 @@ import {
   WebhookTriggerConfig,
   ScheduleTriggerConfig,
   TelegramTriggerConfig,
+  TelegramAccountTriggerConfig,
   TelegramChannelFeedConfig,
   InstagramPostConfig,
   TiktokPostConfig,
@@ -550,6 +551,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "telegram-post": return <TelegramPostConfig {...configProps} />
     case "publish-social": return <PublishSocialConfig {...configProps} />
     case "telegram-trigger": return <TelegramTriggerConfig {...configProps} />
+    case "telegram-account-trigger": return <TelegramAccountTriggerConfig {...configProps} />
     case "telegram-channel-feed": return <TelegramChannelFeedConfig {...configProps} />
     case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
     case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />

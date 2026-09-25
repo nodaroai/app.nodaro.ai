@@ -30,6 +30,7 @@ import { join } from "node:path"
 import {
   createWorkDir,
   cleanupWorkDir,
+  BIG_MEDIA_DOWNLOAD_LIMITS,
   downloadFile,
   hasAudioStream,
   runFfmpeg,
@@ -161,7 +162,8 @@ export async function ensureMediaProxy(
   const workDir = await createWorkDir("media-proxy")
   try {
     const src = join(workDir, "source")
-    await downloadFile(sourceUrl, src)
+    // The ORIGINAL behind a proxy is big media: the staged limits (Track 0.19).
+    await downloadFile(sourceUrl, src, { limits: BIG_MEDIA_DOWNLOAD_LIMITS })
     if (kind === "audio" && !(await hasAudioStream(src))) throw new MediaHasNoAudioError(sourceUrl)
     const proxyExt = kind === "audio" ? AUDIO_PROXY.ext : VIDEO_PROXY.ext
     const out = join(workDir, `proxy.${proxyExt}`)

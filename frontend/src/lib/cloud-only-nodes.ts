@@ -47,4 +47,7 @@ export const CLOUD_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
   // no relay fronts, and it settles credits — a credit-less edition has
   // nothing to charge and nothing to call.
   "pro-3d-render",
+  // Telegram account trigger: listens through an account held by a private
+  // plugin daemon on the cloud; no relay fronts it.
+  "telegram-account-trigger",
 ])

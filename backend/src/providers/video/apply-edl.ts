@@ -37,6 +37,7 @@ import { join } from "node:path"
 import type { Edl, EdlSegment, EdlSource } from "@nodaro/shared"
 import { edlDurationMs } from "@nodaro/shared"
 import {
+  BIG_MEDIA_DOWNLOAD_LIMITS,
   downloadFile,
   runFfmpeg,
   runFfprobe,
@@ -780,7 +781,9 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
       const src = edl.sources.find((s) => s.id === id)
       if (!src) throw new Error(`apply-edl: segment references unknown source "${id}"`)
       const localPath = join(workDir, `src-${sourcePaths.size}.${src.kind === "audio" ? "m4a" : "mp4"}`)
-      await downloadFile(src.url, localPath)
+      // A source original can be many gigabytes (a 3-hour camera file ~15 GB):
+      // the staged big-media limits, not the flat 120 s (Track 0.19).
+      await downloadFile(src.url, localPath, { limits: BIG_MEDIA_DOWNLOAD_LIMITS })
       sourcePaths.set(id, localPath)
       audioPresent.set(id, await hasAudioStream(localPath))
       // The one per-source measurement that lets the window check below be

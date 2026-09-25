@@ -207,6 +207,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Publish to Social": "פרסום לרשתות",
   "Telegram Channel Feed": "פיד ערוץ טלגרם",
   "Telegram Trigger": "טריגר טלגרם",
+  "Telegram Account Trigger": "טריגר חשבון טלגרם",
   "Teleport Send": "שיגור טלפורט",
   "Teleport Receive": "קליטת טלפורט",
   "Router": "נתב",

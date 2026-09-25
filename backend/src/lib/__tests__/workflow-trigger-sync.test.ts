@@ -382,7 +382,10 @@ describe("the Telegram ACCOUNT lane", () => {
   it("listens only once switched on with an account picked", () => {
     expect(normalizeTelegramAccountConfig({ accountId: "acc-1" })).toBeNull()
     expect(normalizeTelegramAccountConfig({ isActive: true })).toBeNull()
-    expect(normalizeTelegramAccountConfig({ accountId: "  ", isActive: true })).toBeNull()
+    expect(normalizeTelegramAccountConfig({ accountId: "  ", isActive: true, chatIds: ["-1001"] })).toBeNull()
+    // No chat picked is not "every chat".
+    expect(normalizeTelegramAccountConfig({ accountId: "acc-1", isActive: true })).toBeNull()
+    expect(normalizeTelegramAccountConfig({ accountId: "acc-1", isActive: true, chatIds: ["  "] })).toBeNull()
   })
 
   it("emits every filter, trimmed and de-duplicated, so a cleared filter never survives on the row", () => {
