@@ -231,15 +231,16 @@ describe("F3 bodies (2026-09-25 A/B: F3 arm B)", () => {
   })
 })
 
-describe("shockwave body (2026-09-25 rework: shockwave2 D2)", () => {
-  // The D2 draft as tested: a bright opaque ring is the one hard border between the shots. The rendered
-  // string at the tile default is byte-identical to the clause the winning take was generated from.
+describe("shockwave body (2026-09-25 rework: shockwave3 E1)", () => {
+  // The E1 draft as tested: a flash bursts into a bright opaque ring that races past every edge, the ring
+  // the one hard border between the shots. The rendered string at the tile default is byte-identical to
+  // the clause the winning take was generated from.
   const TERM = "shockwave"
   const BODY =
-    "a sharp, bright ring bursts from the exact centre of the frame and grows fast until it passes every " +
-    "edge, warping the picture along its rim. The camera stays where it is and the picture stays level. T" +
-    "he second shot shows only inside the ring and the first only outside it, with the bright ring as the" +
-    " one hard border and no blending anywhere"
+    "a flash at the exact centre of the frame bursts into a sharp, bright ring that races past every edge" +
+    " in a moment, trailing a smear of motion blur behind its rim and warping the picture as it goes. The" +
+    " camera stays where it is and the picture stays level. The second shot shows only inside the ring an" +
+    "d the first only outside it, with the bright ring as the one hard border and no blending anywhere"
 
   it("renders `term (body)` at the tile-default levers", () => {
     expect(getTransitionPromptHint("shockwave")).toBe(BODY)
