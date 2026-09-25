@@ -293,14 +293,14 @@ function FlowTemplateCard({
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h4 className="text-sm font-semibold">{info.label}</h4>
+            <h4 className="text-sm font-semibold">{t(info.labelKey)}</h4>
             {hasOverride && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
                 {t("flowtpl.override")}
               </span>
             )}
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">{info.description}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t(info.descriptionKey)}</p>
         </div>
 
         {hasOverride && (

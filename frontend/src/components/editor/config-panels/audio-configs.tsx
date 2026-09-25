@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { TagTextarea } from "./tag-textarea"
 import { getLanguagesForModel, ALL_LANGUAGES, isV3Model } from "@/lib/audio-tags"
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
-import { SUNO_SLIDER_META, type SunoSliderMeta } from "@/lib/suno-sliders"
+import { SUNO_SLIDER_META, SUNO_SLIDER_LABEL_KEYS, SUNO_SLIDER_DESC_KEYS } from "@/lib/suno-sliders"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
@@ -122,17 +122,6 @@ const AUDIO_FX_PRESET_LABEL_KEYS: Record<AudioFxPreset, MessageKey> = {
   custom: "cfgshared.custom",
 }
 
-const SUNO_SLIDER_LABEL_KEYS: Record<SunoSliderMeta["key"], MessageKey> = {
-  styleWeight: "audiocfg.sliderStyleWeight",
-  weirdnessConstraint: "audiocfg.sliderWeirdness",
-  audioWeight: "audiocfg.sliderAudioWeight",
-}
-
-const SUNO_SLIDER_DESC_KEYS: Record<SunoSliderMeta["key"], MessageKey> = {
-  styleWeight: "audiocfg.sliderStyleWeightDesc",
-  weirdnessConstraint: "audiocfg.sliderWeirdnessDesc",
-  audioWeight: "audiocfg.sliderAudioWeightDesc",
-}
 
 const SUNO_FIELD_LABEL_KEYS: Record<SunoEditField, MessageKey> = {
   title: "audiocfg.titleOptional",

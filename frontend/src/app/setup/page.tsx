@@ -14,6 +14,7 @@ import { ProviderKeyTile } from "./provider-key-tile"
 import { NodaroScopeDialog } from "@/components/integrations/nodaro-scope-dialog"
 import { Link } from "react-router-dom"
 import { useT, type MessageKey } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 
 /**
  * /setup — self-host install health screen.
@@ -350,6 +351,8 @@ const ENV_TEMPLATE = `# Nodaro self-host \u2014 provider keys. Paste into the .e
 export default function SetupPage() {
   const [status, setStatus] = useState<SetupStatus | null>(null)
   const t = useT()
+  // The CTA arrows point the way the page reads.
+  const forward = useAppDir() === "rtl" ? "←" : "→"
   const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
   // The post-connect choice (4b): an OAuth Connect that started from /setup
   // bounces back to /setup?nodaro=connected — ask how the new connection
@@ -824,7 +827,7 @@ export default function SetupPage() {
                             opacity: connectPending ? 0.75 : 1,
                           }}
                         >
-                          {connectPending ? t("setup.openingNodaro") : <>{st.cta} &rarr;</>}
+                          {connectPending ? t("setup.openingNodaro") : <>{st.cta} {forward}</>}
                         </button>
                       ) : (
                         <a
@@ -840,7 +843,7 @@ export default function SetupPage() {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {st.cta} &rarr;
+                          {st.cta} {forward}
                         </a>
                       )}
                       {st.altKeys && (
@@ -1176,7 +1179,7 @@ export default function SetupPage() {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {t("dash.connectNodaro")} &rarr;
+                      {t("dash.connectNodaro")} {forward}
                     </a>
                   ) : (
                     <button
@@ -1196,7 +1199,7 @@ export default function SetupPage() {
                         opacity: connectPending ? 0.75 : 1,
                       }}
                     >
-                      {connectPending ? t("setup.openingNodaro") : <>{t("dash.connectNodaro")} &rarr;</>}
+                      {connectPending ? t("setup.openingNodaro") : <>{t("dash.connectNodaro")} {forward}</>}
                     </button>
                   )
                 )}

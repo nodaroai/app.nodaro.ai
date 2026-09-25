@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest"
+import { en } from "@/lib/i18n/en"
 import {
   SYSTEM_PROMPT_TEMPLATES,
   TEMPLATE_GROUPS,
@@ -32,9 +33,9 @@ describe("SYSTEM_PROMPT_TEMPLATES", () => {
 
   it("every template has required fields", () => {
     for (const [, info] of Object.entries(SYSTEM_PROMPT_TEMPLATES)) {
-      expect(info.label).toBeTruthy()
+      expect(info.labelKey in en).toBe(true)
       expect(info.template).toBeTruthy()
-      expect(info.description).toBeTruthy()
+      expect(info.descriptionKey in en).toBe(true)
       expect(Array.isArray(info.variables)).toBe(true)
     }
   })

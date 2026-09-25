@@ -30,10 +30,10 @@ import {
   type MetaAdsScrapeStatus,
 } from "@nodaro/shared"
 import { useT, tx } from "@/lib/i18n"
-import { useAppDir } from "@/lib/locale-store"
+import { useAppDir, useLocaleStore } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
 import type { MetaAdsScrapeNodeData } from "@/types/nodes"
-import { META_ADS_COUNTRIES } from "@/lib/meta-ads-countries"
+import { META_ADS_COUNTRIES, countryDisplayName } from "@/lib/meta-ads-countries"
 import { relativeTime } from "@/components/nodes/web-scrape-run-state"
 import { MetaAdMedia } from "@/components/nodes/meta-ad-media"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
@@ -133,6 +133,7 @@ export function MetaAdsScrapeConfig(props: ConfigProps<MetaAdsScrapeNodeData>) {
 
 function MetaAdsScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<MetaAdsScrapeNodeData>) {
   const t = useT()
+  const locale = useLocaleStore((s) => s.locale)
   const mode: MetaAdsNodeMode = metaAdsNodeMode(data.mode)
   const count = typeof data.count === "number" ? data.count : META_ADS_SCRAPE_DEFAULT_COUNT
   const selectedPlatforms = Array.isArray(data.platforms) ? data.platforms.filter((p): p is string => typeof p === "string") : []
@@ -235,7 +236,7 @@ function MetaAdsScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapF
             <SelectContent>
               <SelectItem value="ALL">{t("cfgext.metaAdsAllCountries")}</SelectItem>
               {META_ADS_COUNTRIES.map((c) => (
-                <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
+                <SelectItem key={c.code} value={c.code}>{countryDisplayName(c, locale)}</SelectItem>
               ))}
             </SelectContent>
           </Select>

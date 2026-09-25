@@ -6,6 +6,7 @@ import type { NodeRefItem } from "@/lib/node-refs"
 import type { VariableDisplayMode } from "./types"
 import { renderNodeRefs } from "@/lib/render-node-refs"
 import { useT, tx } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 import { optimizedImageUrl } from "@/lib/image"
 import { computeFlipPosition } from "@/lib/flip-position"
 import { PROMPT_EDITOR_PORTAL_PROPS } from "@/lib/prompt-editor-portal"
@@ -299,6 +300,7 @@ function nodeTypeCategory(type: string): string {
 
 export function TagTextarea(props: TagTextareaProps) {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const { value, onChange, placeholder, rows, className, maxLength, nodeRefs, referenceImages, displayMode = "raw", refMap, snippets } = props
   const tagMode: "audio" | "suno" | "none" = props.tagMode ?? "none"
   const provider = props.tagMode === "audio" ? props.provider : undefined
@@ -1193,7 +1195,7 @@ export function TagTextarea(props: TagTextareaProps) {
                     selectSuggestion(item)
                   }}
                 >
-                  <span className="font-medium">&larr; {item.label}</span>
+                  <span className="font-medium">{isRtl ? "→" : "←"} {item.label}</span>
                 </button>
               )
             }
