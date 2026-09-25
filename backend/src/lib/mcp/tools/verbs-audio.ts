@@ -21,7 +21,7 @@ import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MO
  *  provider enum, so disabling this lane in @nodaro/shared fails the build here
  *  instead of 400ing every MCP transcribe call at the route. It is word-level,
  *  which is what makes `output_data.json.words` dependable for MCP callers. */
-const MCP_TRANSCRIBE_PROVIDER: TranscribeProvider = "elevenlabs-stt"
+export const MCP_TRANSCRIBE_PROVIDER: TranscribeProvider = "elevenlabs-stt"
 
 /**
  * Suno versions as the MCP verbs describe them — one string, reused by every

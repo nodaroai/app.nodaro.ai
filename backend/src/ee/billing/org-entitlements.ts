@@ -16,6 +16,7 @@
 // received a workspace context would answer "allowed" out of a budget it
 // never debits — a free proxy with no one paying. See
 // `check-only-credit-guard.test.ts`, which pins that exclusion.
+import { resolveEffectiveTier } from "@nodaro/shared"
 import type { BillingContext } from "../../lib/billing-context.js"
 
 /** Profile-derived inputs, computed by the caller exactly as before P14. */
@@ -118,4 +119,55 @@ export function applyOrgEntitlements(
     dailyCapOff: capIsAlwaysNull === null,
     watermarkable: ent.watermark,
   }
+}
+
+/**
+ * Effective-tier adapter for profile rows. The derivation itself lives in
+ * @nodaro/shared (`resolveEffectiveTier`): stored "free" with net lifetime
+ * top-ups > 0 derives "payg"; every other stored tier passes through.
+ * Entitlement sites call this; billing/provisioning writers use
+ * `resolveStoredTier` (payg must never be written anywhere).
+ */
+export function effectiveTierOf(profile: {
+  tier?: string | null
+  subscription_tier?: string | null
+  lifetime_topup_credits: number
+}): string {
+  return resolveEffectiveTier({
+    tier: profile.tier ?? null,
+    subscription_tier: profile.subscription_tier ?? null,
+    lifetime_topup_credits: profile.lifetime_topup_credits,
+  })
+}
+
+/**
+ * The gates the guard's preflight (`checkCreditsWithProfile`) decides a run
+ * under, from the personal tier of the profile in hand and the spend surface.
+ * Pool-aware web spending (D1 v2): on a consumer surface a payg account
+ * spends its FREE pool only, under full free-tier semantics — resolved here
+ * against payg-ness so the surface flag can be threaded dumbly (for free
+ * users it is vacuous, for subscribers it must not apply). A billing context
+ * then swaps the profile-derived gates for its grade (`applyOrgEntitlements`).
+ *
+ * The UGC quote calls this too, so it refuses a model under exactly the gates
+ * the guard will apply when the call is made.
+ */
+export function spendGates(
+  userTier: string,
+  surface: { webFreeMode?: boolean; billingContext?: BillingContext },
+): EffectiveBillingGates {
+  return applyOrgEntitlements(
+    { userTier, webFree: Boolean(surface.webFreeMode) && userTier === "payg" },
+    surface.billingContext,
+  )
+}
+
+/**
+ * Whose profile a spend check reads: under a deployment payer the PAYER
+ * account's (its pools gate the run, and its row is what the reservation
+ * debits), otherwise the requester's. A workspace payer keeps the requester's
+ * row — its gates come from the org grade, not from any profile.
+ */
+export function payerProfileId(userId: string, ctx: BillingContext | undefined): string {
+  return ctx?.payer === "deployment" ? ctx.payerId : userId
 }

@@ -27,7 +27,11 @@ const SANCTIONED_RAW_TIER_READERS = new Set([
  *  and the SELECT fragment each must fetch (the compile-error mechanism
  *  cannot see untyped supabase selects — this pins them textually). */
 const EFFECTIVE_SITES: Array<{ file: string; mustContain: string[] }> = [
-  { file: "ee/billing/credits.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },
+  // credits.ts and the UGC quote derive through `effectiveTierOf` (org-entitlements.ts),
+  // the adapter over the shared helper that the guard's gates (`spendGates`) sit beside.
+  { file: "ee/billing/org-entitlements.ts", mustContain: ["resolveEffectiveTier"] },
+  { file: "ee/billing/credits.ts", mustContain: ["effectiveTierOf", "lifetime_topup_credits"] },
+  { file: "ee/lib/ugc-quote.ts", mustContain: ["effectiveTierOf", "lifetime_topup_credits"] },
   { file: "ee/lib/credit-guard-impl.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },
   { file: "ee/pipelines/create-pipeline.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },
   { file: "ee/pipelines/engine.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },

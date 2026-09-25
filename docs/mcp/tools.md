@@ -25,7 +25,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workspaces:read` | `list_workspaces` |
 | `workspaces:write` | `select_workspace` |
 
-**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_video_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`, `list_shot_shapes`, `get_shot_shape`, `list_brand_presets`, `get_recipe`, `get_studio_production_skill`
+**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_video_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`, `list_shot_shapes`, `get_shot_shape`, `list_brand_presets`, `get_recipe`, `get_studio_production_skill`, `get_recast_authoring_skill` (Cloud only), `validate_recast_script` (Cloud only), `build_ugc_creator` (Cloud only), `build_ugc_clips` (Cloud only), `build_ugc_cards` (Cloud only)
 
 The workspace scopes are deliberately **not** granted to tokens issued before
 organizations existed: consenting to an app back then could not have meant
@@ -591,7 +591,7 @@ prompt with no questions round-trip.
 | `modify_video` | Video-to-video transformation — apply a style or prompt transformation to an existing clip. Accepts `video_url`/`video_asset_id`, `prompt`, `model`, `resolution`, `seed` plus per-model levers (`duration`, `aspect_ratio`, `audio`, `multi_shots`, `reference_image_url`). **`seedance-2-5`** is a whole-clip EDIT: your prompt is sent as `edit @video_1 as follows: …`, the result keeps the source clip's length and aspect ratio (clip must be 4–30 s), and `reference_image_urls` (up to 30) attaches images you cite positionally as `{image:1}`, `{image:2}` in the prompt. It is billed like a Generate Video Seedance 2.5 reference-video run — input + output seconds on the `-ref` ladder, reserved for the longest clip and settled to the delivered length (see [Video to Video](../nodes/ai-video/video-to-video.md#seedance-25-edit--credits)). |
 | `relight_video` | Relight & switch/composite a clip from its own pixels (Beeble SwitchX). Accepts `video_url`/`video_asset_id` + `prompt` and/or `reference_image_url`, `alpha_mode` (auto/fill/select/custom), `mask_url`, `alpha_keyframe_index`, `max_resolution` (720/1080), `seed`. |
 | `trim_video` | Trim a video to a start/end timestamp. Accepts `video_url`, `start`, `end`. |
-| `combine_videos` | Concatenate multiple video clips with optional transitions. Accepts `video_urls[]`, `transition`, `transition_duration`. |
+| `combine_videos` | Concatenate multiple video clips with optional transitions. Accepts `videos[]`, `transition`, `transition_duration`. |
 | `assemble_narrated_video` | Fit N ordered (clip, voice) blocks into one narrated MP4 — a shorter voice is centered over its clip with silence padding, a longer voice slows the clip to fit (capped, holding the last frame beyond the cap); audio is never cropped. Accepts `blocks[]` (1–60, each `video_url`/`video_asset_id` + optional `audio_url`/`audio_asset_id`), `voice_volume` (default 100), `clip_audio_volume` (default 40), `max_slowdown` (default 1.5), `trim_start_frames`, `trim_end_frames`. |
 | `merge_video_audio` | Merge a video track and an audio track into a single output file. |
 | `still_to_video` | One still image + one audio track → MP4 (local FFmpeg, zero credits). The output length is the audio's length — no duration parameter. Optional `motion` (zoom / pan / ken-burns) + `intensity`, `resolution`, `aspect_ratio`, `fps`, `fit`/`pad_color`. |
@@ -637,6 +637,9 @@ prompt with no questions round-trip.
 | `voice_studio_shot` | (Cloud only) Speak a line over a scene — the voiceover lane. Give the `text`; pick a `voice_id` from `list_voices` or let the scene's own voice settings stand. Costs a text-to-speech run; the route waits and answers with the updated production. Needs both `workflows:write` and `workflows:execute`. |
 | `revoice_studio_clip` | (Cloud only) Replace the voices inside a scene's current motion — the dialogue is re-performed and mixed back over the same picture. Takes a `plan` naming which speaker gets which voice (see the operating skill). Spends credits and returns a job id; the new mix reaches the scene only on your next `get_studio_production` (`get_job` / `wait_for_job` land nothing). Needs both `workflows:write` and `workflows:execute`. |
 | `score_studio_production` | (Cloud only) Write the film a soundtrack from a `prompt` describing the music — one track for the whole production, not per scene. Spends credits and returns a job id; the track reaches the production only on your next `get_studio_production` (`get_job` / `wait_for_job` land nothing). Needs both `workflows:write` and `workflows:execute`. |
+| `build_ugc_creator` | (Cloud only) Prepares the creator for a UGC-style video — newly sampled, a saved Character, or the caller's own photo — and returns the arguments for the next generation call. Ungated and free; using a saved Character needs `assets:read`. Used by the ugc-website recipe (get_recipe). |
+| `build_ugc_clips` | (Cloud only) Checks a UGC video script — every problem at once, each with a fix — and returns one `generate_video` call per clip, the call that joins them, and a credit quote for the rest of the video. Ungated, free. Used by the ugc-website recipe (get_recipe). |
+| `build_ugc_cards` | (Cloud only) Times the screenshot cards and captions from word timings (`forced_alignment` or `transcribe`) and returns the `overlay_images` layers and the `add_captions` segments. Ungated, free. Used by the ugc-website recipe (get_recipe). |
 
 **Seedance 2 (`model: "seedance-2"`)** accepts `resolution: "4k"` and `aspect_ratio: "adaptive"` (plus `"21:9"`) on `generate_video` / `animate_image` — both fields are free strings, forwarded to the route unaltered. The other variants are resolution-capped: `seedance-2-fast` and `seedance-2-mini` are **480p / 720p only** (no 1080p, no 4K), while `seedance-2-5` spans **480p / 720p / 1080p** (no 4K; 1080p added 2026-08-17). **`seedance-2-5`** also trades 4K for length — up to **30s in one call** vs 15s — and accepts 30 image / 10 video / 10 audio references. Frame inputs and references coexist — when any reference (image / video / audio) is wired alongside `image_url` / `end_frame_url`, the frames become **prompt-directed `Image N` references** rather than pinned endpoints; the resolver decides the mode, so there is no toggle. Reference **videos** are billed `unit × (input + output)` duration — the per-second `-ref` rate (see the [Generate Video node pricing](../nodes/ai-video/generate-video.md)) is scaled by the probed input-video duration plus the output duration, so longer source clips reserve more.
 
@@ -1771,7 +1774,9 @@ instructs the LLM to take are scope-gated by their own tools. The
 `video-explainer` recipe is for explainers told through generated animated
 footage; for kinetic-typography/motion-graphics explainers use
 `start_video_director` instead. When the user hasn't specified a style, the
-recipe itself asks (see [Content Recipes](./recipes.md)).
+recipe itself asks (see [Content Recipes](./recipes.md)). On Nodaro Cloud the
+listing also includes a UGC website video: a creator talking to camera about a
+site, with its screenshots as cards.
 
 **Input:**
 
