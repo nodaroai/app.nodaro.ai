@@ -123,6 +123,67 @@ describe("F1 bodies — the subject becomes the material and reforms (2026-09-25
   })
 })
 
+describe("F2 + vortex bodies (2026-09-25 A/B: F2 arm B, vortex rework D2)", () => {
+  // sand-storm, paint-splash and aurora-sweep: the F2 drafts, tidied (first letter lower-cased, final
+  // full stop dropped). vortex-swirl: the rework's D2 body, as tested. Each rendered string below is
+  // byte-identical to the clause the winning take was generated from.
+  const F2_BODIES: Record<string, { term: string; body: string }> = {
+    "sand-storm": {
+      term: "sand storm",
+      body:
+        "a wall of opaque, swirling ochre sand sweeps in from one side of the frame and surges across it " +
+        "until the whole picture is hidden in dust. The camera stays where it is and the framing does not " +
+        "change. The dust then thins and sinks away toward the lower edge of the frame, revealing the second " +
+        "shot behind it. The shot ends on the second shot, clear and fully resolved, with no dust left. The " +
+        "first shot stays as it is until the sand covers it completely, and the second shot appears only as " +
+        "the dust clears",
+    },
+    "paint-splash": {
+      term: "paint splash",
+      body:
+        "vivid splashes of coloured paint fly across the frame in arcing streaks and pile over one another " +
+        "until the whole picture is covered in wet paint. The camera stays where it is and the framing does " +
+        "not change. The paint then gathers toward the centre of the frame and shrinks to nothing, uncovering" +
+        " the second shot from the edges inward. The shot ends on the second shot, clean and fully resolved, " +
+        "with no paint left. The paint lies on the surface of the picture itself, and the second shot appears" +
+        " only where the paint has gone",
+    },
+    "aurora-sweep": {
+      term: "aurora sweep",
+      body:
+        "a luminous curtain of green and violet aurora light ripples across the whole frame, and its bright " +
+        "bands veil the first shot. The camera stays where it is and the framing does not change. As the " +
+        "bands fade, the second shot is revealed behind them. The shot ends on the second shot, clear and " +
+        "fully resolved, with no aurora light left. The aurora glows over the front of the picture, and the " +
+        "second shot appears only as it fades",
+    },
+    "vortex-swirl": {
+      term: "vortex swirl",
+      body:
+        "only the first subject twists, winding around its own centre like wrung cloth into a tight narrow " +
+        "column at the same place in the frame, turning faster as it narrows, while the surroundings stay " +
+        "upright and still. the camera is locked on a tripod head planted in one spot, holding the frame " +
+        "level from start to finish. the column then unwinds in the same direction and opens into the shape " +
+        "of the second subject, while the second shot appears around it. the shot ends on the second subject," +
+        " solid and fully resolved, with nothing left turning. the twist stays inside the outline of the " +
+        "subject, and the edges of the frame stay square and still",
+    },
+  }
+
+  it.each(Object.keys(F2_BODIES))("%s renders `term (body)` at the tile-default levers", (id) => {
+    const { term, body } = F2_BODIES[id]!
+    expect(getTransitionPromptHint(id)).toBe(body)
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "full", { scope: "shot" })).toBe(`${term} (${body})`)
+  })
+
+  it.each(Object.keys(F2_BODIES))("%s at middle / short / natural", (id) => {
+    const { term, body } = F2_BODIES[id]!
+    expect(composeTransitionHintFromConnections(id, [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      `${term} (${body}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
+    )
+  })
+})
+
 describe("L1 — a cut spans nothing, so `full` adds no clause", () => {
   it.each(INSTANT_IDS)("%s + full renders no position clause", (id) => {
     const out = composeTransitionHintFromConnections(id, [], [], { position: "full", duration: "short", intensity: "natural" })
