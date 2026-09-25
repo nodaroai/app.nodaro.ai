@@ -413,8 +413,8 @@ export const LOOK_PREVIEW_SETS = {
     "underwater-caustics": "https://cdn.nodaro.ai/images/85be921e-d20a-42d3-8712-cc4e627b5f8b.png",
     bioluminescence: "https://cdn.nodaro.ai/images/838f5a17-3277-4e6e-b84e-d5c50e895250.png",
   },
-  // Camera motion renders are CLIPS: tiles show a still frame and play a small
-  // silent encode on hover (see LookArt / media-url.ts).
+  // Camera motion renders are CLIPS: tiles loop a small silent encode over a
+  // still frame while on screen (see LookArt / media-url.ts).
   "camera-motion": {
     static: "https://cdn.nodaro.ai/videos/70ae8a77-6988-420d-b178-4a2778ac5821.mp4",
     handheld: "https://cdn.nodaro.ai/videos/fc5fed73-856f-4c91-9653-b4f440f1fcb5.mp4",
