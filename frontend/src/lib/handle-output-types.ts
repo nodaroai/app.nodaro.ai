@@ -162,6 +162,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "voice-remix": { audio: "audio" },
   "web-scrape": { json: "look" },
   "silence-detect": { json: "look" },
+  "audio-sync": { json: "look" },
   "meta-ads-scrape": { json: "look", text: "text", image: "image", video: "video" },
   "instagram-scrape": { json: "look", text: "text", image: "image", video: "video" },
   "webhook-output": { out: "approve" },

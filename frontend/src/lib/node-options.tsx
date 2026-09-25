@@ -905,7 +905,15 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     label: "Silence Detect",
     icon: <VolumeX className="h-4 w-4" />,
     category: "AI",
-    group: "audio-clean-separate",
+    group: "audio-analyze",
+  },
+  {
+    type: "audio-sync",
+    label: "Audio Sync",
+    icon: <AudioWaveform className="h-4 w-4" />,
+    category: "AI",
+    group: "audio-analyze",
+    keywords: ["sync", "multicam", "align recordings", "clock offset", "line up cameras", "podcast", "drift"],
   },
   {
     type: "text-to-dialogue",

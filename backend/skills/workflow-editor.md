@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-09-24T15:05:51.108Z
-generated_from: 586dd7fb7
+generated_at: 2026-09-25T07:41:50.549Z
+generated_from: 237c9d07a
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -88,6 +88,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `audio-fx` — Audio FX
 - `audio-isolation` — Voice Extractor
 - `audio-separation` — Audio Separation
+- `audio-sync` — Audio Sync
 - `backdrop` — Backdrop
 - `camera-format` — Camera / Film Stock
 - `camera-motion` — Camera Motion

@@ -690,6 +690,13 @@ export function getPrimaryOutput(
     return output.json === undefined ? undefined : JSON.stringify(output.json)
   }
 
+  // Audio-sync: single `json` output handle carrying { version, reference,
+  // offsets, notes }. Stringified for generic text/json consumers, exactly like
+  // silence-detect's ranges.
+  if (sourceType === "audio-sync") {
+    return output.json === undefined ? undefined : JSON.stringify(output.json)
+  }
+
   // Meta Ads scraper: `json` (the whole ad array, stringified for text
   // consumers) plus the FEATURED ad's `text` / `image` / `video` — the route
   // writes those three onto output_data, and extractSavedNodeOutput re-derives
@@ -1376,6 +1383,13 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // so a skipped / "Run from here" node hydrates the json handle from saved
   // node data without re-running the ffmpeg pass.
   if (type === "silence-detect") {
+    const json = data.generatedJson
+    return json === undefined ? undefined : { json }
+  }
+
+  // Audio-sync: the same single `json` output, persisted on data.generatedJson,
+  // so a skipped / "Run from here" node hydrates its offsets without re-running.
+  if (type === "audio-sync") {
     const json = data.generatedJson
     return json === undefined ? undefined : { json }
   }

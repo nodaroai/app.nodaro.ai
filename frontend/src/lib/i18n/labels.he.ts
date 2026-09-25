@@ -147,6 +147,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Split into Chunks": "פיצול למקטעים",
   "Extract Audio": "חילוץ אודיו",
   "Silence Detect": "זיהוי שקט",
+  "Audio Sync": "סנכרון אודיו",
   "Apply EDL": "החלת רשימת עריכה",
   "Edit Plan": "תוכנית עריכה",
   "Remove Audio": "הסרת אודיו",
@@ -221,6 +222,7 @@ const NODE_LABELS_HE: Record<string, string> = {
 }
 
 const HANDLE_LABELS_HE: Record<string, string> = {
+  "Offsets": "היסטים",
   "QR link": "קישור QR",
   "Extend Source": "מקור להרחבה",
   "Source video": "וידאו מקור",

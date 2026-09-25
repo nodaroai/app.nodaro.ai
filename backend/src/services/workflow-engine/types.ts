@@ -451,6 +451,11 @@ export interface ResolvedInputs {
    *  (role/speakers/offsetMs/kind override) into the plugin's `sources[]`. Richer
    *  than apply-edl's positional `sources`. */
   editPlanSources?: Array<{ nodeId: string; url: string; kind: "video" | "audio"; duration?: number }>
+  /** audio-sync: the recordings wired into the `sources` handle, in wire order,
+   *  each carrying its source NODE id — which becomes the result's `sourceId`
+   *  (the same id an edit plan mints as that recording's EdlSource id). The
+   *  payload builder orders them by the node's `sourceOrder`. */
+  audioSyncSources?: Array<{ nodeId: string; url: string }>
 }
 
 // ---------------------------------------------------------------------------

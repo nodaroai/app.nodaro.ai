@@ -1000,6 +1000,21 @@ function applyRestoredJobCompletion(
     return;
   }
 
+  // audio-sync: the offsets are `output_data.json` (→ `data.generatedJson`),
+  // not a media URL — same recovery gap as the analysis branch above.
+  if (nodeType === "audio-sync") {
+    const json = job.output_data?.json;
+    updateNodeData(nodeId, {
+      executionStatus: "completed",
+      ...(json && typeof json === "object" ? { generatedJson: json } : {}),
+      currentJobId: undefined,
+      currentJobProgress: undefined,
+      jobAwaitingReview: undefined,
+    });
+    toast.success(tx("run.backgroundJobCompleted"));
+    return;
+  }
+
   // edit-plan: same JSON-result recovery gap — the EDL plan is the top-level
   // output_data, unwrapped onto generatedJson (clips → bare Edl[], fans out).
   // ONE unwrap rule shared with the live path + backend (unwrapEditPlanOutput).

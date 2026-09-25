@@ -37,6 +37,7 @@ import type {
   SunoSeparateData,
   AudioSeparationData,
   SilenceDetectNodeData,
+  AudioSyncNodeData,
   AudioFxData,
   SunoMusicVideoData,
   SunoMashupData,
@@ -84,10 +85,12 @@ import { WaveformAudioPlayer } from "@/components/audio-player"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
 import { buildConnectedRefsFromSources } from "./connected-refs-builder"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
-import { useLocalizeModelDescription, useLocalizeOptionLabel } from "@/lib/i18n/labels"
+import { useLocalizeModelDescription, useLocalizeNodeLabel, useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowEdge } from "@/types/nodes"
 import type { ConfigProps } from "./types"
+import { ConnectedMediaList, applyMediaOrder } from "./connected-media-list"
+import { AUDIO_SYNC_SOURCES_HANDLE } from "@/lib/audio-sync"
 
 // Hoisted to avoid creating a fresh empty array on every render — preserves
 // referential equality so memoised children don't re-run.
@@ -1050,6 +1053,70 @@ export function SilenceDetectConfig({ data, onUpdate }: { readonly data: Silence
         <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silencePadding")}{t("common.labelColon")}{padMs}</label>
         <Slider min={0} max={1000} step={10} value={[padMs]} onValueChange={(vals) => onUpdate({ padMs: vals[0] })} />
         <p className="text-[10px] text-muted-foreground">{t("audiocfg.silencePaddingHint")}</p>
+      </div>
+    </div>
+  )
+}
+
+/** The reference Select's value for "no explicit reference" (the first source). */
+const AUDIO_SYNC_FIRST_SOURCE = "__first__"
+
+export function AudioSyncConfig({ data, onUpdate, sources }: ConfigProps<AudioSyncNodeData>) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
+  // Only the recordings wired into `sources` belong here, one row per upstream
+  // node (the node id IS the recording's id in the result).
+  const recordings = useMemo(() => {
+    const seen = new Set<string>()
+    return sources.filter((s) => s.targetHandle === AUDIO_SYNC_SOURCES_HANDLE && !seen.has(s.id) && (seen.add(s.id), true))
+  }, [sources])
+  const ordered = applyMediaOrder(recordings, data.sourceOrder ?? [])
+  const reference = data.reference && recordings.some((r) => r.id === data.reference) ? data.reference : undefined
+  const recordingIds = recordings.map((r) => r.id).join("\u0000")
+
+  // Fail-safe: a reference whose recording was unwired is cleared, so the panel
+  // shows what a run will do (measure against the first source) — the runtime
+  // makes the same call itself (payload-builder / execute-node), so this is the
+  // display half, not the invariant.
+  useEffect(() => {
+    if (data.reference && recordings.length > 0 && !recordings.some((r) => r.id === data.reference)) {
+      onUpdate({ reference: undefined })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingIds, data.reference])
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[11px] text-muted-foreground">{t("audiocfg.audioSyncHint")}</p>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>{t("audiocfg.audioSyncSources")}</Label>
+        <ConnectedMediaList
+          sources={recordings}
+          mediaOrder={data.sourceOrder ?? []}
+          onUpdateOrder={(order) => onUpdate({ sourceOrder: order })}
+          mediaType="any"
+          primaryLabel={reference ? undefined : t("audiocfg.audioSyncReference")}
+          emptyMessage={t("audiocfg.audioSyncSourcesEmpty")}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>{t("audiocfg.audioSyncReference")}</Label>
+        <Select
+          value={reference ?? AUDIO_SYNC_FIRST_SOURCE}
+          onValueChange={(v) => onUpdate({ reference: v === AUDIO_SYNC_FIRST_SOURCE ? undefined : v })}
+          disabled={recordings.length === 0}
+        >
+          <SelectTrigger aria-label={t("audiocfg.audioSyncReferenceAria")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={AUDIO_SYNC_FIRST_SOURCE}>{t("audiocfg.audioSyncReferenceFirst")}</SelectItem>
+            {ordered.map((r) => (
+              <SelectItem key={r.id} value={r.id}>{localizeNode(r.label)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground">{t("audiocfg.audioSyncReferenceHint")}</p>
       </div>
     </div>
   )

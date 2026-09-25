@@ -27,6 +27,9 @@ const TYPED_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set([
   // source handle; its source-direction popover consults TARGET_HANDLE_ACCEPTS
   // (like web-scrape) so data consumers surface as candidates.
   "silence-detect",
+  // audio-sync emits { version, reference, offsets, notes } JSON on its `json`
+  // source handle — same source-direction rule as silence-detect.
+  "audio-sync",
   // video-analysis emits scene-breakdown JSON on its `json` source handle;
   // its source-direction popover must consult TARGET_HANDLE_ACCEPTS (same as
   // web-scrape) so data consumers surface as candidates.

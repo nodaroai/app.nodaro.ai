@@ -107,14 +107,15 @@ describe("poll-loop wrapper coverage", () => {
     ).toEqual([])
   })
 
-  it("the 24 node-owning sites are actually wrapped (not merely absent)", () => {
+  it("the 25 node-owning sites are actually wrapped (not merely absent)", () => {
     // A rename or a deleted loop would make the guard above pass vacuously.
     // Counted as CALLS (`await getJobStatusLeanForNode(`) so poll-job.ts's own
     // function DECLARATION doesn't inflate its number. Keyed by path relative
     // to components/editor, since the scan is no longer one directory.
     const expected: Record<string, number> = {
       "workflow-editor/asset-executors.ts": 5,
-      "workflow-editor/execute-node.ts": 12,
+      // +1 audio-sync (podcast B3).
+      "workflow-editor/execute-node.ts": 13,
       "workflow-editor/node-executors.ts": 2,
       // pollJobWithNodeUpdate + pollImageRefineToNode (the reference-board
       // refine / region-edit lane, wrapped after it was found outside) +

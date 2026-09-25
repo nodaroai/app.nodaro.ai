@@ -358,6 +358,10 @@ nodaro audio transcribe --audio <url> [--provider elevenlabs-stt|incredibly-fast
 
 # Edit — editorial primitives for podcast / long-form video
 nodaro edit silence-detect <audioUrl> [--threshold-db=-35] [--min-silence-ms <ms>] [--pad-ms <ms>] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit audio-sync (--source <[id=]url> ... | --sources-file <file.json>) [--reference <id>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # 2-6 recordings (audio or video); ids default to source-1, source-2, …
+                                                         # output_data.json = { reference, offsets: [{ sourceId, offsetMs, confidence,
+                                                         # driftMsPerHour }], notes } with referenceMs = sourceMs + offsetMs.
 nodaro edit apply-edl --edl <file.json> [--transcript <file.json>] [--source <url> ...] [--output video|audio] [--quality proxy|final] [--crossfade-ms <ms>] [--watch] [--poll-interval <ms>] [--json]
 nodaro edit plan --mode tighten|clips|chapters --plan-tier economy|standard|premium --transcript <file.json> (--source <url[@audio|@video]> ... | --sources-file <file.json>) [--silence <file.json>] [--instructions <text>] [--style-guide <text>] [--count <n>] [--target-duration-sec <n>] [--target-aspect 16:9|9:16|1:1|4:5] [--platform <name>] [--watch] [--poll-interval <ms>] [--json]
 

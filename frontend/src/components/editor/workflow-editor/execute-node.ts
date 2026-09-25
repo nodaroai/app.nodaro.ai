@@ -5,6 +5,7 @@ import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
+import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
 import { videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output";
 import { VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH, assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources } from "@nodaro/shared";
@@ -70,6 +71,7 @@ import {
   extractAudioApi,
   removeAudioApi,
   silenceDetectApi,
+  audioSyncApi,
   trimVideoApi,
   extractFrameApi,
   transcodeVideoApi,
@@ -199,6 +201,7 @@ import type {
   ExtractAudioData,
   RemoveAudioData,
   SilenceDetectNodeData,
+  AudioSyncNodeData,
   TrimVideoData,
   ExtractFrameData,
   TranscodeVideoData,
@@ -7171,6 +7174,113 @@ function executeNodeCore(
           });
           if (!checkStorageError(err, ctx)) {
             guardedToast.error("Failed to start silence detect", {
+              description: err instanceof Error ? err.message : "Unknown error",
+            });
+          }
+          reject(err);
+        });
+    });
+  }
+
+  if (node.type === "audio-sync") {
+    const d = node.data as AudioSyncNodeData;
+    // One row per upstream recording, ordered by the config-panel sourceOrder
+    // (listed first, then wire order) — the SAME order the backend payload
+    // builder applies. The source NODE id is each recording's id.
+    const sources = orderAudioSyncSources(inputs.audioSyncSources ?? [], d.sourceOrder)
+      .map((row) => ({ id: row.nodeId, url: row.url }));
+    if (sources.length < AUDIO_SYNC_MIN_SOURCES) {
+      toast.error(`Node "${d.label}": connect at least ${AUDIO_SYNC_MIN_SOURCES} recordings to the "Sources" input`);
+      return Promise.reject(new Error("audio-sync requires at least two sources"));
+    }
+    if (sources.length > AUDIO_SYNC_MAX_SOURCES) {
+      toast.error(`Node "${d.label}": at most ${AUDIO_SYNC_MAX_SOURCES} recordings can be synced (${sources.length} are connected)`);
+      return Promise.reject(new Error("audio-sync takes at most six sources"));
+    }
+    // A reference whose recording was unwired falls back to the first source,
+    // exactly as the backend does for a workflow run.
+    const reference = effectiveAudioSyncReference(d.reference, sources.map((s) => s.id));
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(node.id, { ...RUN_START_RESET, generatedJson: undefined, currentJobProgress: undefined });
+    setUserPromptTemplate(undefined);
+    return new Promise<string>((resolve, reject) => {
+      audioSyncApi({ sources, reference, userId: ctx.userId })
+        .then(({ jobId }) => {
+          guardedToast.info("Audio sync started", { description: `Job ID: ${jobId}` });
+          updateNodeData(node.id, { currentJobId: jobId });
+
+          let pollFailures = 0;
+          const poll = ctx.trackInterval(
+            setInterval(async () => {
+              if (ctx.isWorkflowStale()) {
+                ctx.untrackInterval(poll);
+                reject(new WorkflowStaleError());
+                return;
+              }
+              try {
+                const job = await getJobStatusLeanForNode(jobId, node.id);
+                pollFailures = 0;
+                if (job.status === "processing" && job.progress != null) {
+                  updateProgressIfChanged(node.id, job.progress, updateNodeData);
+                }
+                if (job.status === "completed" || job.status === "failed") {
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    ctx.untrackInterval(poll);
+                    resolve("");
+                    return;
+                  }
+                }
+                if (job.status === "completed") {
+                  ctx.untrackInterval(poll);
+                  const json = (job.output_data as Record<string, unknown> | undefined)?.json;
+                  updateNodeData(node.id, {
+                    executionStatus: "completed",
+                    generatedJson: json,
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  guardedToast.success("Audio sync complete");
+                  resolve(json === undefined ? "" : JSON.stringify(json));
+                } else if (job.status === "failed") {
+                  ctx.untrackInterval(poll);
+                  const errMsg = job.error_message ?? "Audio sync failed";
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    errorMessage: errMsg,
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  guardedToast.error("Audio sync failed", { description: errMsg });
+                  reject(new Error(errMsg));
+                }
+              } catch (err) {
+                pollFailures++;
+                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                  ctx.untrackInterval(poll);
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    resolve("");
+                    return;
+                  }
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  guardedToast.error("Failed to check audio sync status");
+                  reject(err);
+                }
+              }
+            }, 2000),
+          );
+        })
+        .catch((err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            currentJobId: undefined,
+            currentJobProgress: undefined,
+          });
+          if (!checkStorageError(err, ctx)) {
+            guardedToast.error("Failed to start audio sync", {
               description: err instanceof Error ? err.message : "Unknown error",
             });
           }

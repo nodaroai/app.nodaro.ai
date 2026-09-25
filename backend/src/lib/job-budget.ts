@@ -38,9 +38,16 @@
  * so `declaredJobBudgetMs(row.job_type, row.input_data)` reads a row the way
  * the orchestrator read the payload (`input_data` is that payload, spread).
  *
- * Pure: imports only the apply-edl budget leaf and the engine's constants.
+ * audio-sync joins (podcast B3): it cannot see its sources' lengths until it
+ * has fetched them, so its leaf charges every step at its own fixed ceiling —
+ * the budget grows with the source COUNT only (2 sources ≈ 3 h, 6 ≈ 9 h of
+ * hung-detector bound; a real run on cached proxies takes seconds per source).
+ *
+ * Pure: imports only the apply-edl and audio-sync budget leaves and the
+ * engine's constants.
  */
 import { applyEdlJobBudgetMs } from "../providers/video/apply-edl-budget.js"
+import { audioSyncJobBudgetMs } from "../providers/audio/audio-sync-budget.js"
 import {
   NODE_TIMEOUT_MS,
   POLL_ABSOLUTE_TIMEOUT_MS,
@@ -52,6 +59,7 @@ type JobBudgetFn = (data: unknown) => number | undefined
 
 const DECLARED_JOB_BUDGETS: Readonly<Record<string, JobBudgetFn>> = Object.freeze({
   "apply-edl": applyEdlJobBudgetMs,
+  "audio-sync": audioSyncJobBudgetMs,
 })
 
 /** Every job name that can declare a budget — the `job_type` filter a row

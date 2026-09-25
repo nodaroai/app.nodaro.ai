@@ -858,13 +858,15 @@ function getParallelOrderField(
 ): string | undefined {
   if (direction !== "target") return undefined
   if (!nodeType) return undefined
-  if (handleId !== "references" && handleId !== "in") return undefined
+  if (handleId !== "references" && handleId !== "in" && handleId !== "sources") return undefined
   switch (`${nodeType}:${handleId}`) {
     case "generate-image:references":   return "referenceImageOrder"
     case "combine-videos:in":           return "clipOrder"
     case "mix-audio:in":                return "trackOrder"
     case "combine-audio:in":            return "segmentOrder"
     case "image-collage:in":            return "imageOrder"
+    // audio-sync's order decides the default reference (the first source).
+    case "audio-sync:sources":          return "sourceOrder"
     // merge-video-audio is INTENTIONALLY OMITTED. Its `data.trackSettings`
     // is keyed by sourceNodeId (object), not order — the backend
     // (payload-builder.ts) and frontend runtime (execute-node.ts:4401)

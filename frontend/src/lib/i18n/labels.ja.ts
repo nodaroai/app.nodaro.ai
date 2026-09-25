@@ -143,6 +143,7 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Split into Chunks": "チャンクに分割",
   "Extract Audio": "オーディオを抽出",
   "Silence Detect": "無音検出",
+  "Audio Sync": "音声同期",
   "Apply EDL": "EDL 適用",
   "Edit Plan": "編集プラン",
   "Remove Audio": "オーディオを削除",
@@ -213,6 +214,7 @@ const NODE_LABELS_JA: Record<string, string> = {
 }
 
 const HANDLE_LABELS_JA: Record<string, string> = {
+  "Offsets": "オフセット",
   "QR link": "QR リンク",
   "Extend Source": "延長元",
   "Source video": "元動画",

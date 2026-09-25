@@ -108,7 +108,8 @@ describe("run-start patches reset the whole run state", () => {
     // Without this, deleting a loop — or renaming the constant — would make the
     // guard above pass vacuously.
     const expected: Record<string, number> = {
-      "workflow-editor/execute-node.ts": 29,
+      // +1 audio-sync (podcast B3).
+      "workflow-editor/execute-node.ts": 30,
       "workflow-editor/asset-executors.ts": 5,
       "workflow-editor/component-executor.ts": 1,
       "workflow-editor/list-execution.ts": 1,

@@ -401,6 +401,150 @@ await check("a keyless LLM route refuses cleanly", async () => {
   return `${status} ${code}`
 })
 
+// ---------------------------------------------------------------------------
+// Audio Sync: a CORE node that must SUCCEED keyless (podcast B3)
+//
+// The keyless checks above assert that paid lanes fail honestly. The podcast
+// primitives are the other half of the edition's promise: local FFmpeg nodes
+// that need no key at all. Audio Sync is the one that exercises the whole
+// keyless media lane end to end — an upload into the install's own storage,
+// the worker fetching it back through the app origin, the shared audio proxy,
+// in-process correlation, a json result — so it runs here for real on two
+// short synthetic recordings of one "conversation", the second started 1.5 s
+// later. Nothing is spent: the node has no provider.
+// ---------------------------------------------------------------------------
+
+/** Deterministic PRNG, so the two recordings share the same "voice". */
+function mulberry32(seed) {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/**
+ * A 16 kHz mono 16-bit WAV of a synthetic "conversation": noise gated on and
+ * off at random every 20 ms (so its onsets never repeat — a clean correlation
+ * peak), under a faint hiss of its own. `leadSilenceSec` starts the same
+ * conversation that much later — a second recorder switched on first.
+ */
+function syntheticConversationWav({ seconds, leadSilenceSec = 0, gain = 1 }) {
+  const rate = 16_000
+  const frame = Math.round(rate * 0.02)
+  const voice = mulberry32(7)
+  const gate = mulberry32(11)
+  const hiss = mulberry32(leadSilenceSec > 0 ? 29 : 23)
+  const total = Math.round(seconds * rate)
+  const lead = Math.round(leadSilenceSec * rate)
+  const samples = new Int16Array(total)
+  let on = false
+  for (let i = 0; i < total; i++) {
+    const k = i - lead
+    let v = (hiss() * 2 - 1) * 0.01
+    if (k >= 0) {
+      if (k % frame === 0) on = gate() > 0.55
+      v += (voice() * 2 - 1) * (on ? 0.5 : 0.03) * gain
+    }
+    samples[i] = Math.max(-32768, Math.min(32767, Math.round(v * 32767)))
+  }
+  const data = Buffer.from(samples.buffer)
+  const header = Buffer.alloc(44)
+  header.write("RIFF", 0)
+  header.writeUInt32LE(36 + data.length, 4)
+  header.write("WAVE", 8)
+  header.write("fmt ", 12)
+  header.writeUInt32LE(16, 16) // PCM chunk size
+  header.writeUInt16LE(1, 20) // PCM
+  header.writeUInt16LE(1, 22) // mono
+  header.writeUInt32LE(rate, 24)
+  header.writeUInt32LE(rate * 2, 28) // byte rate
+  header.writeUInt16LE(2, 32) // block align
+  header.writeUInt16LE(16, 34) // bits per sample
+  header.write("data", 36)
+  header.writeUInt32LE(data.length, 40)
+  return Buffer.concat([header, data])
+}
+
+/** Upload one file through the app's own upload route; returns its stored URL. */
+async function uploadFile(name, bytes, type) {
+  const form = new FormData()
+  form.append("file", new Blob([bytes], { type }), name)
+  const res = await fetch(`${BASE}/v1/upload`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${ctx.token}` },
+    body: form,
+  })
+  const text = await res.text()
+  let json
+  try {
+    json = text ? JSON.parse(text) : undefined
+  } catch {
+    json = undefined
+  }
+  assert(res.ok, `upload of ${name} failed (${res.status}): ${text.slice(0, 300)}`)
+  const url = json?.data?.url ?? json?.url
+  assert(typeof url === "string" && url.length > 0, `upload of ${name} returned no url: ${text.slice(0, 200)}`)
+  return url
+}
+
+await check("Audio Sync lines up two recordings on a keyless install (a core node, no provider)", async () => {
+  const { status, json } = await api("/v1/nodes")
+  assert(status === 200, `GET /v1/nodes expected 200, got ${status}`)
+  assert(
+    (json?.data ?? []).some((n) => n?.type === "audio-sync"),
+    "audio-sync is a core node but discovery does not advertise it",
+  )
+
+  const micUrl = await uploadFile("smoke-mic.wav", syntheticConversationWav({ seconds: 24 }), "audio/wav")
+  const camUrl = await uploadFile(
+    "smoke-cam.wav",
+    syntheticConversationWav({ seconds: 24, leadSilenceSec: 1.5, gain: 0.4 }),
+    "audio/wav",
+  )
+
+  const submitted = await api("/v1/audio-sync", {
+    method: "POST",
+    token: ctx.token,
+    body: { sources: [{ id: "mic", url: micUrl }, { id: "cam", url: camUrl }] },
+  })
+  assert(submitted.status < 300, `submit failed (${submitted.status}): ${submitted.text.slice(0, 300)}`)
+  const jobId = submitted.json?.jobId
+  assert(jobId, `no jobId in response: ${JSON.stringify(submitted.json).slice(0, 200)}`)
+
+  const started = Date.now()
+  const deadline = started + JOB_TIMEOUT_MS
+  let last = null
+  while (Date.now() < deadline) {
+    const { json: s } = await api(`/v1/jobs/${jobId}/status`, { token: ctx.token })
+    last = s?.data
+    if (last?.status === "failed" || last?.status === "completed") break
+    await new Promise((r) => setTimeout(r, 2000))
+  }
+  assert(last?.status !== "failed", `job ${jobId} FAILED on a keyless install: "${last?.error_message}"`)
+  assert(last?.status === "completed", `job ${jobId} is "${last?.status}" after ${JOB_TIMEOUT_MS / 1000}s`)
+
+  const result = last?.output_data?.json
+  assert(result && typeof result === "object", `completed job has no output_data.json: ${JSON.stringify(last?.output_data).slice(0, 200)}`)
+  assert(result.reference === "mic", `reference should default to the first source, got ${JSON.stringify(result.reference)}`)
+  const by = Object.fromEntries((result.offsets ?? []).map((o) => [o.sourceId, o]))
+  assert(by.mic?.offsetMs === 0, `the reference's own offset must be 0: ${JSON.stringify(by.mic)}`)
+  // The camera started 1.5 s later: its second 0 is the mic's second 1.5, so
+  // referenceMs = sourceMs + offsetMs gives −1500.
+  const cam = by.cam
+  assert(cam && Math.abs(cam.offsetMs - -1500) <= 20, `camera offset should be −1500 ms (±20), got ${JSON.stringify(cam)}`)
+  assert(cam.confidence >= 0.5, `camera confidence should be ≥ 0.5 on identical sound, got ${JSON.stringify(cam)}`)
+
+  const full = await api(`/v1/jobs/${jobId}`, { token: ctx.token })
+  const credits = (full.json?.data ?? full.json)?.credits
+  assert(!(typeof credits === "number" && credits > 0), `community job carries a credit charge (${credits})`)
+
+  return `cam at ${cam.offsetMs} ms (confidence ${cam.confidence}) in ${Math.round((Date.now() - started) / 1000)}s, no key, no credits`
+})
+
 /**
  * Transient generation-vendor hosts that must never appear in a PERSISTED
  * result URL — workers re-host every result into the install's own storage

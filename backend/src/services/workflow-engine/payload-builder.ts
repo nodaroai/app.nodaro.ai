@@ -36,6 +36,8 @@ import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { buildEffectiveEdl, validateEffectiveEdl } from "../../lib/apply-edl-plan.js"
+import { audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
+import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES } from "../../providers/audio/audio-sync-budget.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import {
   appendScene3DStillScopingLines,
@@ -5958,6 +5960,51 @@ export function buildPayload(
         padMs: data.padMs,
         usageLogId,
       })
+
+    case "audio-sync": {
+      // Measure 2–6 recordings' clock offsets. The source NODE id is each
+      // recording's id (the result's `sourceId`, the EdlSource id an edit plan
+      // mints for the same recording). Ordered by the config-panel `sourceOrder`
+      // (listed first, then unlisted in wire order — the edit-plan / combine-
+      // videos precedent, the SAME order the single-node Run applies), one row
+      // per upstream node.
+      const wiredRaw = resolvedInputs.audioSyncSources ?? []
+      const srcOrder = Array.isArray(data.sourceOrder) ? (data.sourceOrder as unknown[]).filter((v): v is string => typeof v === "string") : []
+      const ordered = srcOrder.length
+        ? [
+            ...srcOrder.flatMap((nid) => wiredRaw.filter((w) => w.nodeId === nid)),
+            ...wiredRaw.filter((w) => !srcOrder.includes(w.nodeId)),
+          ]
+        : wiredRaw
+      const seen = new Set<string>()
+      const sources = ordered
+        .filter((row) => (seen.has(row.nodeId) ? false : (seen.add(row.nodeId), true)))
+        .map((row) => ({ id: row.nodeId, url: row.url }))
+      // Fail fast, BEFORE the reserve — the orchestrated path bypasses the
+      // route's Zod (mirrors the two frontend refusals in execute-node).
+      const label = typeof data.label === "string" && data.label.trim() ? data.label : "Audio Sync"
+      if (sources.length < AUDIO_SYNC_MIN_SOURCES) {
+        throw new Error(`audio-sync: node "${label}" needs at least ${AUDIO_SYNC_MIN_SOURCES} recordings — connect them to the Sources input`)
+      }
+      if (sources.length > AUDIO_SYNC_MAX_SOURCES) {
+        throw new Error(`audio-sync: node "${label}" takes at most ${AUDIO_SYNC_MAX_SOURCES} recordings — ${sources.length} are connected to the Sources input`)
+      }
+      const unfetchable = sources.find((s) => !safeUrlSchema.safeParse(s.url).success)
+      if (unfetchable) {
+        throw new Error(`audio-sync: node "${label}" received something that is not a media URL from "${unfetchable.id}" — check the connection feeding its Sources input`)
+      }
+      // A reference that is no longer connected (its source was unwired) falls
+      // back to the default — the first source — exactly as the config panel
+      // shows it; the result names the reference it actually used.
+      const reference = typeof data.reference === "string" && sources.some((s) => s.id === data.reference)
+        ? data.reference
+        : undefined
+      return ffmpegResult(
+        "audio-sync",
+        { jobId, sources, ...(reference ? { reference } : {}), usageLogId },
+        audioSyncCreditId(sources.length),
+      )
+    }
 
     case "remove-audio":
       return ffmpegResult("remove-audio", {

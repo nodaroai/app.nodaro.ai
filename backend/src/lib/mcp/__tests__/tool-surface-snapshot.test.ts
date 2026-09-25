@@ -382,6 +382,13 @@ const JOB_ENVELOPE_INPUT_BYTES = 256
 // tool's full serialized size. measured by this suite: 3_805 B, well under
 // the 8_192 B per-tool budget.
 const VIDEO_OVERLAY_TOOL_BYTES = 3_805
+// RAISED 2026-09-25 by audio_sync (podcast B3) and nothing else — one NEW core,
+// execute-scoped tool, UNGATED like silence_detect, so BOTH the cloud/all AND
+// the community/all membership fixtures move (each names it). Measured by this
+// suite: 365_147 total − 362_947 base = 2_200 B, the tool's full serialized
+// size; well under the 8_192 B per-tool budget, and the list keeps exactly the
+// headroom it had before.
+const AUDIO_SYNC_TOOL_BYTES = 2_200
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -413,7 +420,8 @@ export const TOOL_WIRE_BUDGET = {
     CAPTION_TEXT_SEMANTICS_BYTES +
     STUDIO_CLIP_START_END_MODE_BYTES +
     JOB_ENVELOPE_INPUT_BYTES +
-    VIDEO_OVERLAY_TOOL_BYTES,
+    VIDEO_OVERLAY_TOOL_BYTES +
+    AUDIO_SYNC_TOOL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

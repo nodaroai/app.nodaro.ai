@@ -386,6 +386,12 @@ export function buildCompletedResultPatch(
   // run's own patch so the card, the counts and the kept-last-good contract are
   // identical however the result arrived.
   if (nodeType && isScrapeNodeType(nodeType)) return scrapeResultPatch(nodeType, output.json, jobId)
+  // audio-sync: its offsets are `output_data.json` → `data.generatedJson`, not a
+  // media URL (type-gated like the analysis branch above).
+  if (nodeType === "audio-sync") {
+    if (!output.json || typeof output.json !== "object") return null
+    return { executionStatus: "completed", generatedJson: output.json }
+  }
   // edit-plan: the EDL plan is the top-level output_data (an Edl for tighten, an
   // EdlClipSet for clips, a { version, chapters } for chapters) + viaNodaroCloud.
   // Unwrap it onto generatedJson (clips → bare Edl[], which fans out) — the ONE

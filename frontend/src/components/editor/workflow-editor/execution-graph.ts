@@ -12,6 +12,7 @@ import type {
   SelectorNodeData,
   WebScrapeNodeData,
   SilenceDetectNodeData,
+  AudioSyncNodeData,
   VideoAnalysisNodeData,
   VideoAuditNodeData,
   DescribeToPickerData,
@@ -741,6 +742,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     }
     return undefined;
   }
+  if (type === "audio-sync") {
+    const d = node.data as AudioSyncNodeData;
+    // Single json handle carrying { version, reference, offsets, notes } —
+    // stringified exactly like silence-detect's ranges below.
+    if (sourceHandle === "json" || !sourceHandle) {
+      return d.generatedJson === undefined ? undefined : JSON.stringify(d.generatedJson);
+    }
+    return undefined;
+  }
   if (type === "silence-detect") {
     const d = node.data as SilenceDetectNodeData;
     // Single json handle carrying { version, ranges, durationMs } — stringify
@@ -1158,6 +1168,8 @@ export function detectPreviewItemType(
   // media URL — classify it as data so its preview isn't mis-typed by the URL
   // fallthrough below.
   if (nodeType === "silence-detect") return "data"
+  // audio-sync emits its offsets as JSON, never a media URL.
+  if (nodeType === "audio-sync") return "data"
   // edit-plan emits an EDL plan (json), never a media URL — classify as data.
   if (nodeType === "edit-plan") return "data"
   // apply-edl `json` handle = the remapped Transcript (data). Its media handle

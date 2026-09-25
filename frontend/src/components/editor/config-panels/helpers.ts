@@ -4,6 +4,7 @@ import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedB
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
+import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import type { LlmFeature } from "@nodaro/shared"
 /** Every node type whose output is prose/text. Used to build the compatible
  *  source list for any text-shaped field so the MappableField dropdown is
@@ -478,6 +479,14 @@ export function getModelIdentifier(
       analysisProvided: videoAuditAnalysisWired(node.id, edges),
       durationSec: probedVideo?.durationSec,
     })
+  }
+
+  // Audio Sync: priced per source aligned to the reference — `audio-sync:<n>src`
+  // from the number of recordings wired into `sources` (the SAME count the
+  // node's pill and estimateNodeCredits read, lib/audio-sync). Without edges it
+  // quotes the 6-source ceiling rather than the cheapest row.
+  if (nodeType === "audio-sync") {
+    return audioSyncCreditId(audioSyncWiredSourceCount(node.id, edges))
   }
 
   // Edit Plan: mode × tier × duration-bucket composite — the SAME id the reserve

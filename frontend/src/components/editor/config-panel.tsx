@@ -137,6 +137,7 @@ import {
   SunoSeparateConfig,
   AudioSeparationConfig,
   SilenceDetectConfig,
+  AudioSyncConfig,
   SunoMusicVideoConfig,
   SunoMashupConfig,
   SunoReplaceSectionConfig,
@@ -270,7 +271,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post", "publish-social",
   "component",
   // FFmpeg processing (tiered credits)
-  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "apply-edl", "edit-plan", "assemble-narrated-video", "image-collage", "image-overlay", "video-overlay", "trim-audio", "split-media", "extract-audio", "silence-detect", "remove-audio", "trim-video", "extract-frame",
+  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "apply-edl", "edit-plan", "assemble-narrated-video", "image-collage", "image-overlay", "video-overlay", "trim-audio", "split-media", "extract-audio", "silence-detect", "audio-sync", "remove-audio", "trim-video", "extract-frame",
   "speed-ramp", "loop-video", "gif-to-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume", "audio-fx",
   "add-captions", "mix-audio", "combine-audio",
 ])
@@ -495,6 +496,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "split-media": return <SplitMediaConfig {...configProps} />
     case "extract-audio": return <ExtractAudioConfig {...configProps} />
     case "silence-detect": return <SilenceDetectConfig {...configProps} />
+    case "audio-sync": return <AudioSyncConfig {...configProps} />
     case "remove-audio": return <RemoveAudioConfig {...configProps} />
     case "mix-audio": return <MixAudioConfig {...configProps} />
     case "combine-audio": return <CombineAudioConfig {...configProps} />

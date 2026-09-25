@@ -37,6 +37,7 @@ import { gifToVideo } from "../../providers/video/gif-to-video.js"
 import { slideshow } from "../../providers/video/slideshow.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { detectSilence } from "../../providers/audio/silence-detect.js"
+import { audioSync } from "../../providers/audio/audio-sync.js"
 import { config } from "../../lib/config.js"
 import { syntheticCaptionsFromText, transcribeSegmentsToCaptions, transcriptToCaptions } from "../../providers/audio/captions-mappers.js"
 import {
@@ -1200,6 +1201,38 @@ const handleSilenceDetect: HandlerFn = async function handleSilenceDetect(job, c
   console.log(`[worker] Job ${ctx.jobId} completed: ${result.ranges.length} silence range(s)`)
 }
 
+/**
+ * audio-sync: measure 2–6 recordings' clock offsets against the reference
+ * (default: the first source). A SYNC local analysis like silence-detect — the
+ * result is JSON on `output_data.json`, read + stringified by the DAG
+ * extractors exactly like silence-detect's ranges.
+ */
+const handleAudioSync: HandlerFn = async function handleAudioSync(job, ctx) {
+  const { sources, reference } = job.data as {
+    jobId: string
+    sources: Array<{ id: string; url: string }>
+    reference?: string
+  }
+  console.log(`[worker] audio-sync ${ctx.jobId}: ${sources.length} sources, reference=${reference ?? sources[0]?.id}`)
+
+  const result = await audioSync(sources, reference)
+  await setJobProgress(job, ctx.jobId, 100)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { json: result },
+  })
+  if (!ok) return
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${result.offsets.length} offsets against "${result.reference}"${result.notes.length > 0 ? `, ${result.notes.length} note(s)` : ""}`)
+}
+// Each source is proxied, fetched, probed and decoded before any correlation,
+// so a run over long uncached sources can outlive the heartbeat's default cap.
+// Declared THROUGH the job-budget registry, never computed here: the
+// orchestrator sizes an audio-sync node's ceilings from the same call on the
+// same payload (the budget leaf is `providers/audio/audio-sync-budget.ts`).
+handleAudioSync.livenessBudgetMs = (job) => declaredJobBudgetMs("audio-sync", job.data)
+
 const handleExtractAudio: HandlerFn = async function handleExtractAudio(job, ctx) {
   const { videoUrl } = job.data as { jobId: string; videoUrl: string }
   console.log(`[worker] extract-audio ${ctx.jobId}`)
@@ -1482,4 +1515,5 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "extract-audio": handleExtractAudio,
   "remove-audio": handleRemoveAudio,
   "silence-detect": handleSilenceDetect,
+  "audio-sync": handleAudioSync,
 }

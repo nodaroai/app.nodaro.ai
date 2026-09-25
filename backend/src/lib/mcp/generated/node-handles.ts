@@ -23,6 +23,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "audio-fx": { inputs: ["in"], outputs: ["audio"] },
   "audio-isolation": { inputs: ["audio"], outputs: ["audio"] },
   "audio-separation": { inputs: ["audio"], outputs: ["audio"] },
+  "audio-sync": { inputs: ["sources"], outputs: ["json"] },
   "backdrop": { inputs: ["in"], outputs: ["out"] },
   "camera-format": { inputs: ["in", "picker-json"], outputs: ["out"] },
   "camera-motion": { inputs: ["in"], outputs: ["out"] },

@@ -1525,6 +1525,20 @@ function routeOutput(
     }
   }
 
+  // --- audio-sync `sources`: routed by targetHandle BEFORE any source-type
+  // branch (else an audio edge falls into inputs.audioUrl and a video edge into
+  // inputs.videoUrl, and the node loses which recording is which). Each row
+  // keeps its source NODE id — the result's `sourceId`, and the EdlSource id an
+  // edit plan uses for the same recording. `output` is the media URL
+  // getPrimaryOutput narrowed for the edge. Gated on targetType. Mirrors the
+  // frontend node-input-resolver audio-sync branch. ---
+  if (targetType === "audio-sync" && edge.targetHandle === "sources") {
+    if (typeof output === "string" && output) {
+      inputs.audioSyncSources = [...(inputs.audioSyncSources ?? []), { nodeId: src.id, url: output }]
+    }
+    return
+  }
+
   // --- apply-edl inputs: routed by targetHandle BEFORE any source-type branch
   // (the same reason as the analysis interceptor above — otherwise the json
   // `edl`/`transcript` edges fall into inputs.prompt and the media `sources`

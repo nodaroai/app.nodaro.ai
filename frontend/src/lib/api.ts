@@ -3583,6 +3583,23 @@ export async function silenceDetectApi(
   })
 }
 
+/** POST /v1/audio-sync — measure 2–6 recordings' clock offsets against
+ *  `reference` (default: the first source). Each source's `id` comes back as
+ *  its offset's `sourceId`; on the canvas it is the upstream node id. */
+export async function audioSyncApi(
+  params: { sources: ReadonlyArray<{ id: string; url: string }>; reference?: string; userId?: string },
+): Promise<{ jobId: string }> {
+  const { sources, reference, userId } = params
+  const body: Record<string, unknown> = { sources: sources.map((s) => ({ id: s.id, url: s.url })) }
+  if (reference !== undefined) body.reference = reference
+  if (userId) body.userId = userId
+  return apiJson("/v1/audio-sync", {
+    body,
+    workflowId: true,
+    label: "Failed to start audio-sync",
+  })
+}
+
 export async function trimVideoApi(
   videoUrl: string,
   startTime: number,

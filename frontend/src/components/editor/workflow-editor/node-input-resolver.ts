@@ -734,6 +734,10 @@ export interface FrontendResolvedInputs {
    *  editPlanSources. */
   silence?: string;
   editPlanSources?: Array<{ nodeId: string; url: string; kind: "video" | "audio"; duration?: number }>;
+  /** audio-sync: the recordings wired into the `sources` handle, in wire
+   *  order, each with its source NODE id (the result's `sourceId`). Mirror of
+   *  backend ResolvedInputs.audioSyncSources. */
+  audioSyncSources?: Array<{ nodeId: string; url: string }>;
   /** Fan-in input list — populated by the resolver for reduce-style targets.
    *  Carries the full upstream list (or `[singleOutput]` when upstream wasn't
    *  fanned out) so the reduce strategy can fold it into a single value.
@@ -1765,6 +1769,18 @@ export function resolveNodeInputs(
         ];
         continue;
       }
+    }
+
+    // audio-sync `sources`: routed by targetHandle before the source-type chain
+    // (else an audio edge lands in inputs.audioUrl and a video edge in
+    // inputs.videoUrl, and the node loses which recording is which). Each row
+    // keeps its source NODE id — the result's `sourceId`. Mirror of the backend
+    // input-resolver audio-sync branch.
+    if (node.type === "audio-sync" && srcEdge.targetHandle === "sources") {
+      if (typeof output === "string" && output) {
+        inputs.audioSyncSources = [...(inputs.audioSyncSources ?? []), { nodeId: src.id, url: output }];
+      }
+      continue;
     }
 
     // add-captions `transcript` (json) input — routed by targetHandle before the

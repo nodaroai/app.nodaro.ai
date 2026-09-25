@@ -5071,13 +5071,14 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 
 ### `client.edit`
 
-Phase-1 editorial primitives for podcast / long-form video editing. Three
+Editorial primitives for podcast / long-form video editing. Four
 request methods return `{ jobId }` (`EditJobResult`) — poll with
 [`client.jobs.getStatus(jobId)`](#getstatusid) — plus one pure local helper.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
 | `silenceDetect(input)` | `POST /v1/silence-detect` | Keyless ffmpeg silence pass over an audio **or** video source. |
+| `audioSync(input)` | `POST /v1/audio-sync` | Keyless: measure how far apart 2–6 recordings' clocks are, from their sound. |
 | `applyEdl(input)` | `POST /v1/apply-edl` | Render an edit decision list (EDL) into a video or audio cut. |
 | `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
@@ -5101,6 +5102,54 @@ silenceDetect(input: SilenceDetectInput): Promise<EditJobResult>
 The finished job's `output_data.json` is a `SilenceRanges` object
 (`{ version, ranges: [{ startMs, endMs }], durationMs }`) — pass that whole
 object as `editPlan`'s `silence`.
+
+#### `audioSync(input)`
+
+```ts
+audioSync(input: AudioSyncInput): Promise<EditJobResult>
+```
+
+**`AudioSyncInput`:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sources` | `AudioSyncSource[]` | yes | 2–6 recordings of one conversation. Each: `{ id, url }` — `id` (1–200 chars, unique) comes back as the offset's `sourceId`; `url` is an audio **or** video source. Use the ids your EDL gives the same recordings. |
+| `reference` | `string` | no | The id of the source every offset is measured against (its own offset is `0`). Must be one of `sources`' ids. Default: the first source. |
+| `workflowId` | `string` | no | Execution-history display. |
+
+The finished job's `output_data.json` is an `AudioSyncResult`:
+
+```ts
+{
+  version: number
+  reference: string            // the source every offset is measured against
+  offsets: Array<{
+    sourceId: string
+    offsetMs: number           // referenceMs = sourceMs + offsetMs (integer ms)
+    confidence: number         // 0–1; below 0.5 a note asks for a check by ear
+    driftMsPerHour: number | null // measured, never corrected; null when the overlap was too short
+  }>
+  notes: string[]              // low confidence, drift past 33 ms over the overlap, no shared sound
+}
+```
+
+With the master recording as `reference`, each `offsetMs` is exactly that
+source's `EdlSource.offsetMs` (`masterMs = sourceMs + offsetMs`). Credits:
+`10 × (sources − 1)` — 2 sources 10, 4 sources 30, 6 sources 50. A malformed
+request (fewer than 2 or more than 6 sources, a repeated id, a `reference`
+that is not one of the ids) throws a `NodaroError` (status 400,
+`code: "validation_error"`) naming the problem, before any credits are
+reserved.
+
+```ts
+const { jobId } = await client.edit.audioSync({
+  sources: [
+    { id: "mic", url: micUrl },
+    { id: "camA", url: camAUrl },
+  ],
+})
+const sync = (await client.jobs.getStatus(jobId)).data.output_data.json // AudioSyncResult
+```
 
 #### `applyEdl(input)`
 

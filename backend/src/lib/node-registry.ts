@@ -160,6 +160,10 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "video-analysis": { ids: familyIds("video-analysis") },
   "video-audit": { ids: familyIds("video-audit") },
   "edit-plan": { ids: familyIds("edit-plan") },
+  "audio-sync": {
+    ids: familyIds("audio-sync"),
+    note: "Priced per source aligned to the reference: 10 × (sources − 1), 2 to 6 sources.",
+  },
   // ── Processing / composition ──
   "add-captions": {
     ids: familyIds("add-captions"),
@@ -1336,6 +1340,11 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "extract-audio", label: "Extract Audio", category: "processing", description: "Demux the audio track from a video to a standalone MP3.", outputType: "audio" },
   // outputType: data — emits { version, ranges:[{startMs,endMs}], durationMs } JSON on the `json` handle (creditCost auto-filled from STATIC_CREDIT_COSTS).
   { type: "silence-detect", label: "Silence Detect", category: "processing", description: "Detect silent spans in an audio or video track (local FFmpeg silencedetect) and emit them as source-clock ranges.", outputType: "data" },
+  { type: "audio-sync", label: "Audio Sync", category: "processing", description: "Measure how far apart the clocks of 2-6 recordings of one conversation are (camera files and/or a master mic), by cross-correlating their audio, so a multicam edit lines up without typed offsets. Wire the recordings (audio or video) into `sources`; `reference` picks the source every offset is measured against (default: the first). Emits { version, reference, offsets: [{ sourceId, offsetMs, confidence, driftMsPerHour }], notes } with referenceMs = sourceMs + offsetMs; drift is measured and warned, never corrected. Priced per source aligned to the reference. Local ffmpeg, keyless.", outputType: "data", creditCost: creditBandFor("audio-sync"), inputSchema: { fields: [
+    // The source every offset is measured against: one of the wired sources'
+    // node ids. Unset (or no longer wired) → the first source.
+    { key: "reference", type: "string" },
+  ] } },
   { type: "adjust-volume", label: "Adjust Volume", category: "processing", description: "Change audio volume with optional normalize and fade-in / fade-out transitions (FFmpeg). (creditCost auto-filled from STATIC_CREDIT_COSTS = 1)", outputType: "audio" },
   {
     type: "audio-fx",

@@ -40,6 +40,18 @@ const mocks = vi.hoisted(() => {
   const mockShouldRunOnCloud = vi.fn().mockResolvedValue(false)
   const mockRunJobOnCloud = vi.fn().mockResolvedValue({ text: "hi", words: [{ text: "hi", startMs: 0, endMs: 900 }] })
 
+  // audio-sync (the DSP itself is covered by its own e2e suite)
+  const AUDIO_SYNC_RESULT = {
+    version: 1,
+    reference: "mic",
+    offsets: [
+      { sourceId: "mic", offsetMs: 0, confidence: 1, driftMsPerHour: 0 },
+      { sourceId: "cam", offsetMs: 7500, confidence: 0.93, driftMsPerHour: 1.2 },
+    ],
+    notes: [],
+  }
+  const mockAudioSync = vi.fn().mockResolvedValue(AUDIO_SYNC_RESULT)
+
   // Shared helpers
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
@@ -57,6 +69,8 @@ const mocks = vi.hoisted(() => {
   const mockFrom = vi.fn().mockReturnValue({ update: mockUpdate })
 
   return {
+    AUDIO_SYNC_RESULT,
+    mockAudioSync,
     mockUploadFileToR2,
     mockTranscribe,
     mockShouldRunOnCloud,
@@ -123,6 +137,10 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
 
 vi.mock("@/providers/audio/transcribe.js", () => ({
   transcribe: mocks.mockTranscribe,
+}))
+
+vi.mock("@/providers/audio/audio-sync.js", () => ({
+  audioSync: mocks.mockAudioSync,
 }))
 
 vi.mock("@/providers/nodaro/run-on-cloud.js", () => ({
@@ -206,6 +224,7 @@ vi.mock("../../shared.js", () => ({
 import { ffmpegHandlers } from "../ffmpeg.js"
 import { applyEdlRenderBudgetMs } from "@/providers/video/apply-edl.js"
 import { BUDGETED_JOB_NAMES, declaredJobBudgetMs } from "@/lib/job-budget.js"
+import { audioSyncRenderBudgetMs } from "@/providers/audio/audio-sync-budget.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -780,9 +799,60 @@ describe("apply-edl handler liveness budget", () => {
     expect(ffmpegHandlers["apply-edl"]!.livenessBudgetMs!(makeJob("apply-edl", {}) as never)).toBeUndefined()
   })
 
-  it("is the only ffmpeg handler that DECLARES a liveness budget (the others fit the default cap)", () => {
+  it("apply-edl and audio-sync are the only ffmpeg handlers that DECLARE a liveness budget (the others fit the default cap)", () => {
     const declaring = Object.entries(ffmpegHandlers).filter(([, h]) => typeof h.livenessBudgetMs === "function").map(([k]) => k)
-    expect(declaring).toEqual(["apply-edl"])
+    expect(declaring.sort()).toEqual(["apply-edl", "audio-sync"])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// audio-sync — handler + liveness budget
+// ---------------------------------------------------------------------------
+
+describe("audio-sync handler", () => {
+  const handler = ffmpegHandlers["audio-sync"]!
+  const sources = [
+    { id: "mic", url: "https://media.test/mic.m4a" },
+    { id: "cam", url: "https://media.test/cam.mp4" },
+  ]
+
+  it("measures the sources against the reference, stores the result as output_data.json, commits the reserve", async () => {
+    await handler(makeJob("audio-sync", { sources, reference: "mic", usageLogId: "usage-1" }) as never, makeCtx())
+    expect(mocks.mockAudioSync).toHaveBeenCalledWith(sources, "mic")
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", { output_data: { json: mocks.AUDIO_SYNC_RESULT } })
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+  })
+
+  it("passes no reference through when none was chosen (the provider defaults to the first source)", async () => {
+    await handler(makeJob("audio-sync", { sources }) as never, makeCtx())
+    expect(mocks.mockAudioSync).toHaveBeenCalledWith(sources, undefined)
+  })
+
+  it("a cancelled job stores nothing and commits nothing", async () => {
+    mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
+    await handler(makeJob("audio-sync", { sources }) as never, makeCtx())
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("a failed measurement throws (the worker fails + refunds) and commits nothing", async () => {
+    mocks.mockAudioSync.mockRejectedValueOnce(new Error("audio-sync: needs 2–6 sources, got 1"))
+    await expect(handler(makeJob("audio-sync", { sources: sources.slice(0, 1) }) as never, makeCtx())).rejects.toThrow(/needs 2–6 sources/)
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("declares the budget of its source COUNT (every step at its own ceiling) — past the 90-minute default cap", () => {
+    const budget = handler.livenessBudgetMs!(makeJob("audio-sync", { sources }) as never)
+    expect(budget).toBe(audioSyncRenderBudgetMs(2))
+    expect(budget!).toBeGreaterThan(90 * 60_000)
+    const six = handler.livenessBudgetMs!(makeJob("audio-sync", { sources: Array.from({ length: 6 }, (_, i) => ({ id: `s${i}`, url: `https://m.test/${i}.wav` })) }) as never)
+    expect(six).toBe(audioSyncRenderBudgetMs(6))
+    expect(six!).toBeGreaterThan(budget!)
+  })
+
+  it("declares nothing (keeps the default cap) for a payload with fewer than two sources", () => {
+    expect(handler.livenessBudgetMs!(makeJob("audio-sync", {}) as never)).toBeUndefined()
+    expect(handler.livenessBudgetMs!(makeJob("audio-sync", { sources: sources.slice(0, 1) }) as never)).toBeUndefined()
   })
 })
 
@@ -807,6 +877,7 @@ describe("handler liveness budget ⇔ job-budget registry (the orchestrator's nu
     segments: Array.from({ length: minutes }, (_, i) => ({ id: `s${i}`, inMs: i * 60_000, outMs: (i + 1) * 60_000, video: "A" })),
     ...extra,
   })
+  const audioSources = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `n${i}`, url: `https://f.test/${i}.m4a` }))
   const payloads: Array<Record<string, unknown>> = [
     { edl: edl(180), output: "video", quality: "final", usageLogId: "u-1", transcript: "{}" },
     { edl: edl(180), output: "audio", quality: "final" },
@@ -814,6 +885,11 @@ describe("handler liveness budget ⇔ job-budget registry (the orchestrator's nu
     { edl: edl(300), output: "bogus" },
     { edl: { segments: "nope" } },
     {},
+    // audio-sync's payloads (the DAG's and the route's: sources + reference).
+    { sources: audioSources(2), reference: "n1", usageLogId: "u-2" },
+    { sources: audioSources(6) },
+    { sources: audioSources(1) },
+    { sources: "nope" },
   ]
 
   it("every declaring handler returns the registry's budget for the same payload", () => {

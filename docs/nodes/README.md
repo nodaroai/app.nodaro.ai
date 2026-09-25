@@ -66,7 +66,8 @@ the foot of the list.
 | **Voices** | Voice Changer · Voice Changer Pro · Voice Design · Voice Remix · Dubbing |
 | **Music** | Suno Create Music · Generate Music · Suno Lyrics · Suno Cover · Suno Extend · Suno Mashup · Suno Replace Section · Suno Add Vocals · Suno Add Instrumental · Suno Upload Extend · Suno Style Boost · Suno Convert WAV |
 | **Sound Effects** | Text to Audio |
-| **Clean & Separate** | Voice Extractor · Audio Separation · Suno Separate · Silence Detect |
+| **Clean & Separate** | Voice Extractor · Audio Separation · Suno Separate |
+| **Analyze** | Silence Detect · Audio Sync |
 | **Edit Audio** | Trim Audio · Combine Audio · Mix Audio · Adjust Volume · Audio FX |
 | **Transcribe** | Transcribe · Forced Alignment |
 
@@ -413,6 +414,7 @@ FFmpeg-based audio manipulation.
 | [Merge Video & Audio](./processing-audio/merge-video-audio.md) | Combine video with audio tracks | Add voiceover, music, or sound effects to video |
 | [Extract Audio](./processing-audio/extract-audio.md) | Demux a video's audio track to MP3 | Pull audio from a video for transcription, dubbing, or reuse |
 | [Silence Detect](./processing-audio/silence-detect.md) | Detect silent spans in audio or video and emit them as source-clock ranges (10 CR, keyless) | Find dead air and long pauses before an editing pass; feed a downstream tighten/edit step |
+| [Audio Sync](./processing-audio/audio-sync.md) | Measure how far apart 2–6 recordings' clocks are, from their sound (10 × (sources − 1) CR, keyless) | Line up a multicam podcast's cameras and master mic before planning the edit |
 | [Trim Audio](./processing-audio/trim-audio.md) | Extract section of audio file | Cut specific time range from audio |
 | [Mix Audio](./processing-audio/mix-audio.md) | Blend multiple audio tracks with levels | Layer voice, music, and SFX with volume control |
 | [Combine Audio](./processing-audio/combine-audio.md) | Concatenate audio tracks end-to-end, with per-segment trim | Join clips sequentially (vs. Mix Audio's layering) |

@@ -128,6 +128,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "split-media": "Split into Chunks",
   "extract-audio": "Extract Audio",
   "silence-detect": "Silence Detect",
+  "audio-sync": "Audio Sync",
   "remove-audio": "Remove Audio",
   "mix-audio": "Mix Audio",
   "combine-audio": "Combine Audio",

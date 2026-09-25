@@ -21,3 +21,9 @@ export const DOWNLOAD_TIMEOUT_MS = 120_000
 
 /** Wall-clock ceiling of one `runFfprobe` call (its execFile watchdog). */
 export const FFPROBE_TIMEOUT_MS = 120_000
+
+/** Per-spawn ceiling of the media-proxy encode (`services/media-proxy.ts`): a
+ *  3-hour 360p / 16 kHz proxy can run well past `DEFAULT_FFMPEG_TIMEOUT_MS`.
+ *  Faster than real time at those settings, so a backstop, not a target. Here
+ *  so a pure budget (audio-sync's) counts the proxy step at the same number. */
+export const MEDIA_PROXY_FFMPEG_TIMEOUT_MS = 45 * 60_000
