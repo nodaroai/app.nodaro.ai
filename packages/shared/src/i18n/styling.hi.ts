@@ -9,6 +9,7 @@ const map: LocaleCatalogMap = {
   "makeup-editorial": { label: "Editorial", description: "Avant-garde fashion makeup" },
   "makeup-goth": { label: "Goth", description: "गहरा goth aesthetic" },
   "makeup-dewy": { label: "Dewy Glow", description: "चमकती ताज़ा त्वचा पर ध्यान" },
+  "makeup-bare": { label: "बिना मेकअप", description: "बिल्कुल मेकअप नहीं" },
 
   // -------------------- Eyewear --------------------
   "eyewear-sunglasses": { label: "Sunglasses", description: "साधारण गहरे sunglasses" },
@@ -176,6 +177,7 @@ const map: LocaleCatalogMap = {
   "outfit-one-piece-swim": { label: "One-Piece Swimsuit", description: "Fitted one-piece swimsuit" },
   "outfit-lingerie": { label: "Lingerie Set", description: "मेल खाता lingerie set" },
   "outfit-pajamas": { label: "Pajamas", description: "मुलायम सूती pajama set" },
+  "outfit-casual-home": { label: "घर का आरामदेह", description: "नरम टी या निट के साथ ढीली पैंट" },
   "outfit-bathrobe": { label: "Bathrobe", description: "Plush terrycloth robe" },
   "outfit-kimono": { label: "Kimono", description: "पारंपरिक जापानी kimono" },
   "outfit-ballerina": { label: "Ballerina", description: "क्लासिक ballerina costume" },

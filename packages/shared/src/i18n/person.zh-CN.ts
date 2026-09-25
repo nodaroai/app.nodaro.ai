@@ -295,6 +295,7 @@ const map: LocaleCatalogMap = {
   "face-full-beard":   { label: "络腮胡",       description: "浓密的络腮胡" },
 
   // -------------------- Skin Texture --------------------
+  "texture-natural": { label: "自然", description: "真实毛孔与自然差异" },
   "texture-smooth":     { label: "光滑",         description: "无瑕、丝滑光滑的皮肤" },
   "texture-wrinkled":   { label: "皱纹",         description: "苍老、布满细纹的皮肤" },
   "texture-goosebumps": { label: "起鸡皮疙瘩",   description: "皮肤上起的鸡皮疙瘩" },

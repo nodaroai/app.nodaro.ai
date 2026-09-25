@@ -1,6 +1,6 @@
 # Person
 
-> Multi-dim picker for 25 person attributes (type, age, ethnicity, regional aesthetic, body — frame, mass, bust, waist, hips, silhouette — face shape, hair, eyes, skin, features, ...) totaling 546 catalog options. Emits a detailed person-description prompt fragment.
+> Multi-dim picker for 25 person attributes (type, age, ethnicity, regional aesthetic, body — frame, mass, bust, waist, hips, silhouette — face shape, hair, eyes, skin, features, ...) totaling 575 catalog options. Emits a detailed person-description prompt fragment.
 
 ## Overview
 
@@ -37,7 +37,7 @@ Each sub-field has its own catalog of options. Example values:
 
 ## Catalog
 
-546 catalog options distributed across the 25 fields. The picker UI splits each dimension into its own tab/section for navigation.
+575 catalog options distributed across the 25 fields. The picker UI splits each dimension into its own tab/section for navigation.
 
 ## Inputs & Outputs
 

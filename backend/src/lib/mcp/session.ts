@@ -57,6 +57,11 @@ export interface McpSession {
    * the pool figure, every programmatic session of the same account may not.
    * Absent ⇒ false ⇒ refused, which is the safe default for a field a new
    * caller might forget.
+   *
+   * Also read by `tools/recipes.ts`: plugin-provided recipes are hidden from
+   * first-party (Workflow Copilot) sessions — neither listed nor loadable by
+   * name — because the Copilot's tool allowlist cannot reach the tools those
+   * recipes need.
    */
   readonly firstParty: boolean
 }

@@ -1605,12 +1605,14 @@ the full model.
 
 **Scope:** `workflows:execute`
 
-Align a known transcript to an audio clip (ElevenLabs forced alignment),
-returning per-word start/end timings. Returns a `job_id`; the alignment array
-is in `output_data.alignment`. Use the result to drive element reveals in
-`resolve_shot_sequence`.
+Align a known transcript to an audio or video clip (ElevenLabs forced
+alignment), returning per-word start/end timings. A video source has its speech
+track extracted before alignment, so a talking-head clip can be aligned
+directly. Returns a `job_id`; the alignment array is in `output_data.alignment`.
+Use the result to drive element reveals in `resolve_shot_sequence`.
 
-**Input:** `audio_url` or `audio_asset_id`, `transcript`
+**Input:** `audio_url` (an audio or video URL) or `audio_asset_id` (an audio or
+video job id), `transcript`
 
 ---
 

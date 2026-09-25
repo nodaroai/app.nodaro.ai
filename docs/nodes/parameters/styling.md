@@ -1,6 +1,6 @@
 # Styling
 
-> Multi-dim picker for makeup + eyewear + headwear + hair (cut + treatment) + jewelry + nails + face-paint + fabric (262 catalog options across 9 fields). Emits a styling-descriptor prompt fragment.
+> Multi-dim picker for makeup + eyewear + headwear + hair (cut + treatment) + jewelry + nails + face-paint + fabric (274 catalog options across 9 fields). Emits a styling-descriptor prompt fragment.
 
 ## Overview
 
@@ -32,7 +32,7 @@ Example values:
 
 ## Catalog
 
-262 catalog options distributed across the 9 fields.
+274 catalog options distributed across the 9 fields.
 
 ## Inputs & Outputs
 

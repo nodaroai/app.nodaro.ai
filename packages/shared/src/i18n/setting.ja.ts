@@ -9,6 +9,7 @@ const map: LocaleCatalogMap = {
   "bedroom": { label: "寝室", description: "プライベートな雰囲気の寝室" },
   "living-room": { label: "リビングルーム", description: "居心地のよい住宅のリビングルーム" },
   "kitchen": { label: "キッチン", description: "朝の光が差し込む暖かな家庭のキッチン" },
+  "bathroom": { label: "バスルーム", description: "明るい自宅の浴室" },
   "hotel-room": { label: "ホテルの部屋", description: "市街の眺めが広がるエレガントなホテルの部屋" },
   "restaurant": { label: "レストラン", description: "キャンドルが灯る、こぢんまりとしたレストラン" },
   "nightclub": { label: "ナイトクラブ", description: "レーザーと煙のある暗いクラブ" },
@@ -20,6 +21,7 @@ const map: LocaleCatalogMap = {
   "warehouse": { label: "工業倉庫", description: "天窓のある広大な倉庫" },
   "subway-car": { label: "地下鉄車両", description: "走行中の地下鉄の車内" },
   "taxi": { label: "タクシー車内", description: "夜の市街タクシーの後部座席" },
+  "car-interior": { label: "車内", description: "停車中の車の前席" },
   "cathedral": { label: "大聖堂", description: "ゴシック様式の大聖堂の内部" },
   "art-gallery": { label: "アートギャラリー", description: "ミニマリストのホワイトキューブ・ギャラリー" },
 

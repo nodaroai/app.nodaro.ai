@@ -9,6 +9,7 @@ const map: LocaleCatalogMap = {
   "makeup-editorial": { label: "Editorial", description: "Maquillaje de moda vanguardista" },
   "makeup-goth": { label: "Gótico", description: "Estética gótica oscura" },
   "makeup-dewy": { label: "Brillo Húmedo", description: "Foco de piel fresca y brillante" },
+  "makeup-bare": { label: "Rostro natural", description: "Sin nada de maquillaje" },
 
   // -------------------- Eyewear --------------------
   "eyewear-sunglasses": { label: "Lentes de Sol", description: "Lentes de sol oscuros genéricos" },
@@ -170,6 +171,7 @@ const map: LocaleCatalogMap = {
   "outfit-one-piece-swim": { label: "Traje de Baño Entero", description: "Traje de baño entero ajustado" },
   "outfit-lingerie": { label: "Conjunto de Lencería", description: "Conjunto de lencería a juego" },
   "outfit-pajamas": { label: "Pijamas", description: "Conjunto suave de pijama de algodón" },
+  "outfit-casual-home": { label: "Casual en casa", description: "Camiseta o punto con pantalón cómodo" },
   "outfit-bathrobe": { label: "Bata de Baño", description: "Bata de toalla mullida" },
   "outfit-kimono": { label: "Kimono", description: "Kimono japonés tradicional" },
   "outfit-ballerina": { label: "Bailarina", description: "Disfraz clásico de bailarina" },

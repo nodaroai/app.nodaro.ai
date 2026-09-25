@@ -9,6 +9,7 @@ const map: LocaleCatalogMap = {
   "bedroom": { label: "Quarto", description: "Quarto íntimo" },
   "living-room": { label: "Sala de Estar", description: "Sala de estar residencial e aconchegante" },
   "kitchen": { label: "Cozinha", description: "Cozinha de casa quente com luz da manhã" },
+  "bathroom": { label: "Banheiro", description: "Banheiro doméstico claro" },
   "hotel-room": { label: "Quarto de Hotel", description: "Quarto de hotel elegante com vista da cidade" },
   "restaurant": { label: "Restaurante", description: "Restaurante íntimo iluminado por velas" },
   "nightclub": { label: "Boate", description: "Boate escura com lasers e fumaça" },
@@ -20,6 +21,7 @@ const map: LocaleCatalogMap = {
   "warehouse": { label: "Galpão Industrial", description: "Galpão imenso com claraboias" },
   "subway-car": { label: "Vagão de Metrô", description: "Interior de vagão de metrô em movimento" },
   "taxi": { label: "Interior de Táxi", description: "Banco traseiro de um táxi à noite na cidade" },
+  "car-interior": { label: "Interior do carro", description: "Banco da frente de um carro parado" },
   "cathedral": { label: "Catedral", description: "Interior de catedral gótica" },
   "art-gallery": { label: "Galeria de Arte", description: "Galeria minimalista em cubo branco" },
 

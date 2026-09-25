@@ -9,6 +9,7 @@ const map: LocaleCatalogMap = {
   "bedroom": { label: "침실", description: "친밀한 침실입니다" },
   "living-room": { label: "거실", description: "아늑한 가정용 거실입니다" },
   "kitchen": { label: "주방", description: "아침 햇살이 비치는 따뜻한 가정용 주방입니다" },
+  "bathroom": { label: "욕실", description: "밝은 가정집 욕실" },
   "hotel-room": { label: "호텔 객실", description: "도시 전망의 우아한 호텔 객실입니다" },
   "restaurant": { label: "레스토랑", description: "촛불이 켜진 친밀한 레스토랑입니다" },
   "nightclub": { label: "나이트클럽", description: "레이저와 연기로 가득한 어두운 클럽입니다" },
@@ -20,6 +21,7 @@ const map: LocaleCatalogMap = {
   "warehouse": { label: "산업용 창고", description: "천창이 있는 거대한 창고입니다" },
   "subway-car": { label: "지하철 객차", description: "움직이는 지하철 객차의 내부입니다" },
   "taxi": { label: "택시 내부", description: "밤 시간 도시 택시의 뒷좌석입니다" },
+  "car-interior": { label: "차 안", description: "주차된 차의 앞좌석" },
   "cathedral": { label: "대성당", description: "고딕 양식의 대성당 내부입니다" },
   "art-gallery": { label: "아트 갤러리", description: "미니멀한 화이트 큐브 갤러리입니다" },
 

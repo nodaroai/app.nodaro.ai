@@ -196,7 +196,7 @@ Visual style, mood, color, atmosphere, and aesthetic pickers. Wire into an AI im
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Setting](./parameters/setting.md) | Pick from 63 settings across indoor/urban/nature/fantastical | Establish where a shot takes place |
+| [Setting](./parameters/setting.md) | Pick from 66 settings across indoor/urban/nature/fantastical | Establish where a shot takes place |
 | [Atmosphere](./parameters/atmosphere.md) | Pick atmospheric conditions (fog, rain, smoke, ...) from 40 entries | Add weather, particles, and light scattering to a scene |
 | [Style](./parameters/style.md) | Pick a visual style preset (cinematic, anime, oil-painting, ...) from 48 entries | Lock the overall aesthetic register |
 | [Color / Look](./parameters/color-look.md) | Pick a color-grading look (warm, teal-orange, bleached, ...) from 41 entries | Set the chromatic signature of a frame |
@@ -247,8 +247,8 @@ Pickers that combine multiple independent dimensions into a single descriptor.
 |------|-------------|-------------|
 | [Framing](./parameters/framing.md) | Multi-dim: shot size + angle + coverage + composition + vantage (72 options across 5 fields) | Per-shot framing direction |
 | [Lighting](./parameters/lighting.md) | Multi-dim: time-of-day + style + direction (72 options across 3 fields) | Compose a full lighting setup |
-| [Person](./parameters/person.md) | Multi-dim: 21 attributes (type, age, ethnicity, regional aesthetic, build, face, hair, eyes, skin, …) — 547 options | Casting brief / recurring-character generation |
-| [Styling](./parameters/styling.md) | Multi-dim: makeup + eyewear + headwear + hair + jewelry + nails + face-paint + fabric (262 options across 9 fields) | Fashion-editorial / character continuity |
+| [Person](./parameters/person.md) | Multi-dim: 21 attributes (type, age, ethnicity, regional aesthetic, build, face, hair, eyes, skin, …) — 575 options | Casting brief / recurring-character generation |
+| [Styling](./parameters/styling.md) | Multi-dim: makeup + eyewear + headwear + hair + jewelry + nails + face-paint + fabric (274 options across 9 fields) | Fashion-editorial / character continuity |
 | [Temporal](./parameters/temporal.md) | Multi-dim: speed + freeze + direction + shutter (18 options across 4 fields) | Time-based effects (slow-mo, freeze, reverse) |
 | [Exposure Settings](./parameters/exposure-settings.md) | Multi-dim: aperture + shutter speed + ISO (20 options across 3 fields) | Photographic exposure-triangle direction |
 

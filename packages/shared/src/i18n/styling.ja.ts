@@ -9,6 +9,7 @@ const map: LocaleCatalogMap = {
   "makeup-editorial": { label: "エディトリアル", description: "アヴァンギャルドなファッションメイク" },
   "makeup-goth": { label: "ゴス", description: "ダークなゴスの美意識" },
   "makeup-dewy": { label: "ツヤ肌", description: "輝く瑞々しい肌に焦点" },
+  "makeup-bare": { label: "すっぴん", description: "メイクなし" },
 
   // Eyewear
   "eyewear-sunglasses": { label: "サングラス", description: "一般的なダークサングラス" },
@@ -170,6 +171,7 @@ const map: LocaleCatalogMap = {
   "outfit-one-piece-swim": { label: "ワンピース水着", description: "体にフィットしたワンピース水着" },
   "outfit-lingerie": { label: "ランジェリーセット", description: "揃いのランジェリーセット" },
   "outfit-pajamas": { label: "パジャマ", description: "柔らかなコットンのパジャマセット" },
+  "outfit-casual-home": { label: "部屋着カジュアル", description: "Tシャツやニットにゆったりパンツ" },
   "outfit-bathrobe": { label: "バスローブ", description: "ふっくらとしたパイル地のバスローブ" },
   "outfit-kimono": { label: "着物", description: "伝統的な日本の着物" },
   "outfit-ballerina": { label: "バレリーナ", description: "クラシックなバレリーナの衣装" },

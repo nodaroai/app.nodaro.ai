@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => {
   const mockRemixVoice = vi.fn().mockResolvedValue({ audioUrl: "https://example.com/remix.mp3" })
   const mockDesignVoice = vi.fn().mockResolvedValue({ audioUrl: "https://example.com/design.mp3", generatedVoiceId: "voice-123" })
   const mockForcedAlignment = vi.fn().mockResolvedValue({ words: [] })
+  const mockForcedAlignmentFromBuffer = vi.fn().mockResolvedValue({ alignment: [] })
   const mockUploadFileToR2 = vi.fn().mockResolvedValue("https://r2.example.com/video/job-1.mp4")
   const mockExtractAudioTrack = vi.fn().mockResolvedValue({ audioPath: "/tmp/vc/audio.mp3", workDir: "/tmp/vc" })
   const mockDirectVoiceChanger = vi.fn().mockResolvedValue(Buffer.from("revoiced-audio"))
@@ -82,6 +83,7 @@ const mocks = vi.hoisted(() => {
     mockRemixVoice,
     mockDesignVoice,
     mockForcedAlignment,
+    mockForcedAlignmentFromBuffer,
     mockUploadFileToR2,
     mockExtractAudioTrack,
     mockDirectVoiceChanger,
@@ -117,7 +119,11 @@ vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({ directElevenLabsTTS: mo
 vi.mock("@/providers/elevenlabs/direct-dialogue.js", () => ({ directElevenLabsDialogue: mocks.mockDirectElevenLabsDialogue }))
 vi.mock("@/providers/kie/audio.js", () => ({ KieAudioProvider: mocks.mockKieAudioProvider }))
 vi.mock("@/providers/elevenlabs/voice-changer.js", () => ({ voiceChangerFromUrl: mocks.mockVoiceChangerFromUrl, directVoiceChanger: mocks.mockDirectVoiceChanger }))
-vi.mock("@/providers/video/extract-audio-track.js", () => ({ extractAudioTrack: mocks.mockExtractAudioTrack }))
+vi.mock("@/providers/video/extract-audio-track.js", async (importOriginal) => ({
+  // Real NoAudioTrackError: the forced-alignment handler classifies with instanceof.
+  ...(await importOriginal<typeof import("@/providers/video/extract-audio-track.js")>()),
+  extractAudioTrack: mocks.mockExtractAudioTrack,
+}))
 vi.mock("@/providers/video/merge-video-audio.js", () => ({ mergeVideoAudio: mocks.mockMergeVideoAudio }))
 vi.mock("@/providers/video/ffmpeg-utils.js", () => ({ cleanupWorkDir: mocks.mockCleanupWorkDir, probeMediaStreams: mocks.mockProbeMediaStreams, createWorkDir: vi.fn().mockResolvedValue("/tmp/dub-wd") }))
 vi.mock("node:fs", () => ({ promises: { readFile: mocks.mockFsReadFile, writeFile: vi.fn().mockResolvedValue(undefined) } }))
@@ -130,7 +136,10 @@ vi.mock("@/providers/elevenlabs/dubbing.js", () => ({
 }))
 vi.mock("@/providers/elevenlabs/voice-remix.js", () => ({ remixVoice: mocks.mockRemixVoice }))
 vi.mock("@/providers/elevenlabs/voice-design.js", () => ({ designVoice: mocks.mockDesignVoice }))
-vi.mock("@/providers/elevenlabs/forced-alignment.js", () => ({ forcedAlignment: mocks.mockForcedAlignment }))
+vi.mock("@/providers/elevenlabs/forced-alignment.js", () => ({
+  forcedAlignment: mocks.mockForcedAlignment,
+  forcedAlignmentFromBuffer: mocks.mockForcedAlignmentFromBuffer,
+}))
 vi.mock("@/providers/audio/transcribe.js", () => ({ transcribe: mocks.mockTranscribe }))
 vi.mock("@/providers/audio/youtube-extractor.js", () => ({
   extractYouTubeAudio: mocks.mockExtractYouTubeAudio,
@@ -184,6 +193,10 @@ import { __resetSurfaceProfileCacheForTests } from "../../../lib/surface-profile
 // skip-vs-refund. Asserting on it proves the refund decision without re-mocking
 // the credit pipeline.
 import { isPostProcessingError } from "../../../lib/post-processing-error.js"
+// Real classifier — the exact predicate video-worker uses to fail a job now
+// (no BullMQ retries) instead of on the final attempt.
+import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
+import { NoAudioTrackError } from "../../../providers/video/extract-audio-track.js"
 
 function makeJob(name: string, data: Record<string, unknown> = {}) {
   return { name, data: { jobId: "job-1", ...data }, id: "bull-1", updateProgress: vi.fn() }
@@ -765,17 +778,104 @@ describe("voice-design handler", () => {
 describe("forced-alignment handler", () => {
   const handler = audioAIHandlers["forced-alignment"]
 
+  // Every test here starts from an AUDIO source with empty queues: the global
+  // `vi.clearAllMocks()` clears calls only, never a queued `…Once` value, so a
+  // value one test queued and did not consume would answer the next test.
+  // Video tests opt in with `mockProbeMediaStreams.mockResolvedValueOnce`.
+  beforeEach(() => {
+    mocks.mockProbeMediaStreams.mockReset().mockResolvedValue({ hasVideo: false, hasAudio: true })
+    mocks.mockForcedAlignment.mockReset().mockResolvedValue({ alignment: [] })
+    mocks.mockForcedAlignmentFromBuffer.mockReset().mockResolvedValue({ alignment: [] })
+    mocks.mockExtractAudioTrack.mockReset().mockResolvedValue({ audioPath: "/tmp/vc/audio.mp3", workDir: "/tmp/vc" })
+    mocks.mockFsReadFile.mockReset().mockResolvedValue(Buffer.from("source-audio"))
+  })
+
   it("marks provider_call_started_at with elevenlabs-sync before upstream call (Phase 5.1)", async () => {
     mocks.mockForcedAlignment.mockResolvedValueOnce({ alignment: [{ text: "hi", start: 0, end: 1 }] })
     const job = makeJob("forced-alignment", { audioUrl: "https://example.com/audio.mp3", transcript: "hi" })
     await handler(job as never, makeCtx())
 
+    // Proven audio branch (both branches stamp, so the stamp alone says nothing).
+    expect(mocks.mockForcedAlignment).toHaveBeenCalledWith("https://example.com/audio.mp3", "hi")
+    expect(mocks.mockExtractAudioTrack).not.toHaveBeenCalled()
     expect(mocks.mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         provider_kind: "elevenlabs-sync",
         provider_call_started_at: expect.any(String),
       }),
     )
+  })
+
+  it("a silent video fails deterministically with alignment wording, before the provider", async () => {
+    mocks.mockProbeMediaStreams.mockResolvedValueOnce({ hasVideo: true, hasAudio: false })
+    mocks.mockExtractAudioTrack.mockRejectedValueOnce(new NoAudioTrackError())
+    const err = await handler(
+      makeJob("forced-alignment", { audioUrl: "https://example.com/silent.mp4", transcript: "hi" }) as never,
+      makeCtx(),
+    ).then(() => undefined, (e: unknown) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toBe(
+      "This video has no audio track to align. Use a clip with speech, or pass the audio directly.",
+    )
+    expect((err as Error).message).not.toMatch(/revoice/i)
+    // Final now (failed + refunded, no BullMQ retries) — and pre-provider, so refunded.
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(isPostProcessingError(err)).toBe(false)
+    expect(mocks.mockForcedAlignmentFromBuffer).not.toHaveBeenCalled()
+    expect(mocks.mockForcedAlignment).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+  })
+
+  it("any other extraction failure passes through unchanged (still retryable)", async () => {
+    mocks.mockProbeMediaStreams.mockResolvedValueOnce({ hasVideo: true, hasAudio: true })
+    mocks.mockExtractAudioTrack.mockRejectedValueOnce(new Error("download failed (503)"))
+    const err = await handler(
+      makeJob("forced-alignment", { audioUrl: "https://example.com/clip.mp4", transcript: "hi" }) as never,
+      makeCtx(),
+    ).then(() => undefined, (e: unknown) => e)
+    expect((err as Error).message).toBe("download failed (503)")
+    expect(isDeterministicJobError(err)).toBe(false)
+  })
+
+  it("a keyless install fails on the missing key before probing, downloading or demuxing", async () => {
+    config.ELEVENLABS_API_KEY = ""
+    await expect(
+      handler(makeJob("forced-alignment", { audioUrl: "https://example.com/clip.mp4", transcript: "hi" }) as never, makeCtx()),
+    ).rejects.toThrow(/ELEVENLABS_API_KEY/)
+    expect(mocks.mockProbeMediaStreams).not.toHaveBeenCalled()
+    expect(mocks.mockExtractAudioTrack).not.toHaveBeenCalled()
+    expect(mocks.mockFsReadFile).not.toHaveBeenCalled()
+    expect(mocks.mockForcedAlignment).not.toHaveBeenCalled()
+    expect(mocks.mockForcedAlignmentFromBuffer).not.toHaveBeenCalled()
+    expect(mocks.mockUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ provider_kind: "elevenlabs-sync" }))
+  })
+
+  it("extracts audio from a video source and aligns the extracted track", async () => {
+    mocks.mockProbeMediaStreams.mockResolvedValueOnce({ hasVideo: true, hasAudio: true })
+    mocks.mockExtractAudioTrack.mockResolvedValueOnce({ audioPath: "/tmp/fa/audio.mp3", workDir: "/tmp/fa" })
+    mocks.mockFsReadFile.mockResolvedValueOnce(Buffer.from("mp3"))
+    mocks.mockForcedAlignmentFromBuffer.mockResolvedValueOnce({ alignment: [{ word: "hi", start: 0, end: 0.4 }] })
+    await handler(makeJob("forced-alignment", { audioUrl: "https://example.com/clip.mp4", transcript: "hi" }) as never, makeCtx())
+    expect(mocks.mockExtractAudioTrack).toHaveBeenCalledWith("https://example.com/clip.mp4")
+    expect(mocks.mockForcedAlignmentFromBuffer).toHaveBeenCalledWith(Buffer.from("mp3"), "hi")
+    expect(mocks.mockForcedAlignment).not.toHaveBeenCalled()
+    expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/fa")
+  })
+
+  it("an audio source goes straight to the URL path", async () => {
+    mocks.mockProbeMediaStreams.mockResolvedValueOnce({ hasVideo: false, hasAudio: true })
+    mocks.mockForcedAlignment.mockResolvedValueOnce({ alignment: [] })
+    await handler(makeJob("forced-alignment", { audioUrl: "https://example.com/a.mp3", transcript: "hi" }) as never, makeCtx())
+    expect(mocks.mockExtractAudioTrack).not.toHaveBeenCalled()
+  })
+
+  it("cleans up the work dir when alignment throws", async () => {
+    mocks.mockProbeMediaStreams.mockResolvedValueOnce({ hasVideo: true, hasAudio: true })
+    mocks.mockExtractAudioTrack.mockResolvedValueOnce({ audioPath: "/tmp/fb/audio.mp3", workDir: "/tmp/fb" })
+    mocks.mockFsReadFile.mockResolvedValueOnce(Buffer.from("mp3"))
+    mocks.mockForcedAlignmentFromBuffer.mockRejectedValueOnce(new Error("422"))
+    await expect(handler(makeJob("forced-alignment", { audioUrl: "https://e.com/c.mp4", transcript: "hi" }) as never, makeCtx())).rejects.toThrow("422")
+    expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/fb")
   })
 })
 

@@ -62,7 +62,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `motion` | Motion | parameter | Define the motion intensity level for connected video generation nodes | `in`:any | `out`:param | NO |
 | `music-genre` | Music Genre | parameter | Pick a music genre (single or up to 3 for fusion) with optional subgenre and era | `in`:any | `out`:audio | NO |
 | `music-mood` | Music Mood | parameter | Pick energy + emotion + vibe for music generation | `in`:any | `out`:audio | NO |
-| `person` | Person | parameter | Multi-dim picker for person attributes — type, age, ethnicity, build, body proportions, face shape, jawline, cheekbones, facial fullness, eyes (shape, eyelid type, canthal tilt, spacing, brow distance), nose, nose tip, lip fullness, lip shape, hair, eyebrows, skin, facial hair, distinctive features (~573 options across 29 fields, incl. a dedicated facial-geometry layer) | `picker-json`:picker-json | `out`:look | NO |
+| `person` | Person | parameter | Multi-dim picker for person attributes — type, age, ethnicity, build, body proportions, face shape, jawline, cheekbones, facial fullness, eyes (shape, eyelid type, canthal tilt, spacing, brow distance), nose, nose tip, lip fullness, lip shape, hair, eyebrows, skin, facial hair, distinctive features (~575 options across 29 fields, incl. a dedicated facial-geometry layer) | `picker-json`:picker-json | `out`:look | NO |
 | `photo-genre` | Photo Genre | parameter | Pick a photography genre from 46 entries (fashion-editorial, street, macro, documentary, ...) | `in`:any | `out`:look | NO |
 | `photographer` | Photographer / Artist Style | parameter | Pick from 67 photographers, artists, directors, illustrators, or painters (Tim Walker, Deakins, Lubezki, Ghibli, Rutkowski, ...) | `in`:any | `out`:look | NO |
 | `pose` | Pose | parameter | Pick a pose from 81 entries across categories (standing, sitting, action, dynamic) | `in`:any | `out`:look | NO |
@@ -70,10 +70,10 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `provider` | Provider | parameter | Select an AI provider and model (image / video / voice / script) to override the default provider on connected generation nodes | `in`:any | `provider`:param | NO |
 | `render-quality` | Render Quality | parameter | Pick a render-pipeline preset from 24 entries (raytracing, octane, unreal, blender, ...) | `in`:any | `out`:look | NO |
 | `scene-count` | Scene Count | parameter | Specify the number of scenes for script generation nodes | `in`:any | `scene_count`:param | NO |
-| `setting` | Setting | parameter | Pick a setting from 63 entries across 4 categories (indoor, urban, nature, fantastical) | `in`:any | `out`:look | NO |
+| `setting` | Setting | parameter | Pick a setting from 66 entries across 4 categories (indoor, urban, nature, fantastical) | `in`:any | `out`:look | NO |
 | `style` | Style | parameter | Pick a style preset from 48 entries (cinematic, anime, oil-painting, photoreal, ...) | `in`:any | `out`:look | NO |
 | `style-guide` | Style Guide | parameter | Define visual style reference text for consistent aesthetics across AI generation nodes in a workflow | `in`:any | `style_guide`:param | NO |
-| `styling` | Styling | parameter | Multi-dim picker for makeup + eyewear + headwear + hair cut/treatment + jewelry + nails + face-paint + fabric (262 catalog options across 9 fields) | `in`:any, `picker-json`:picker-json | `out`:look | NO |
+| `styling` | Styling | parameter | Multi-dim picker for makeup + eyewear + headwear + hair cut/treatment + jewelry + nails + face-paint + fabric (274 catalog options across 9 fields) | `in`:any, `picker-json`:picker-json | `out`:look | NO |
 | `suno-voice` | Suno Voice | parameter | Create a custom voice persona from a recording | — | `voicePersona`:identity | NO |
 | `temporal` | Temporal | parameter | Multi-dim picker for temporal-speed + freeze + direction + shutter (18 catalog options across 4 fields) | `in`:any | `out`:look | NO |
 | `tone` | Tone | parameter | Define a tone or style modifier text (e.g., "cinematic", "cheerful") to influence connected AI nodes | `in`:any | `tone`:text | NO |
