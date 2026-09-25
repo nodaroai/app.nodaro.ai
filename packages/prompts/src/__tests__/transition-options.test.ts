@@ -18,7 +18,9 @@ import {
 afterEach(() => resetCatalogPacks())
 
 /** The rows with a Style option, in catalog order. */
-const STYLED_ROWS = ["smoke-puff", "aurora-sweep", "sakura-petals", "garden-bloom", "debris-shower"]
+const STYLED_ROWS = [
+  "smoke-puff", "sand-storm", "aurora-sweep", "sakura-petals", "garden-bloom", "debris-shower", "white-flash",
+]
 const OPTIONED_ROWS = ["wipe", ...STYLED_ROWS]
 
 const BODY = (phrase: string) =>

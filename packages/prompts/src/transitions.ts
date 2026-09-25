@@ -224,10 +224,19 @@ export const AURORA_SWEEP_STYLE: TransitionOption = rowStyle("aurora-sweep", [
     phrase: "a luminous green and violet aurora curtain ripples across the entire frame, the bright bands obscure the first scene, and as the aurora dissipates the second scene resolves in the clear sky" },
 ])
 
-// sand-storm: STYLE PENDING. Its default look ("Full cover", f2ab 01-B) is the
-// row's plain `promptHint`; a second look ("Light sweep") is being drafted and
-// tested. Until that tested text is approved the row declares NO style — a
-// one-choice Style menu would offer nothing. Do not add a body here before then.
+export const SAND_STORM_STYLE: TransitionOption = rowStyle("sand-storm", [
+  { label: "Full cover", description: "A wall of sand hides the whole picture, then clears on the next scene",
+    phrase: "a wall of opaque, swirling ochre sand sweeps in from one side of the frame and surges across it until the whole picture is hidden in dust. The camera stays where it is and the framing does not change. The dust then thins and sinks away toward the lower edge of the frame, revealing the second shot behind it. The shot ends on the second shot, clear and fully resolved, with no dust left. The first shot stays as it is until the sand covers it completely, and the second shot appears only as the dust clears" },
+  { slug: "light-sweep", label: "Light sweep", description: "A streak of blown sand crosses the screen with the next scene already behind it",
+    phrase: "a narrow streak of blown sand races across the frame close to the lens in one direction. The first shot stays clear ahead of the streak and the second shot is already clear behind it. The camera stays where it is and the framing does not change. The shot ends on the second shot, fully resolved, with no sand left" },
+])
+
+export const WHITE_FLASH_STYLE: TransitionOption = rowStyle("white-flash", [
+  { label: "Flash", description: "A camera flash pops the picture to white, holds, then fades down on the next scene",
+    phrase: "a bright camera-flash bloom fills the whole frame with pure white. The camera stays where it is and the framing does not change. The white holds for a clear beat, then fades down to reveal the second shot. The shot ends on the second shot, fully resolved, with no white haze left. The first shot is gone once the frame is white, and the second shot appears only out of the white" },
+  { slug: "overexposure", label: "Overexposure", description: "The picture blooms to white and resolves into the next scene",
+    phrase: "a bright camera-flash bloom fills the frame with pure white, holds for a fraction of a second, then resolves into the new scene" },
+])
 
 const optionToken = (field: string): string => `{${field}}`
 
@@ -360,9 +369,9 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "a brilliant white lightning bolt cracks across the frame with a bright flash, and when the flash subsides the scene has changed to the new setting" },
   { id: "ink-splash",        label: "Ink Splash",         category: "element", description: "Ink splashes across, scene changes",
     promptHint: "black ink splashes across the frame in expanding tendrils that fully cover the image, then the ink retracts inward and pulls back to reveal the new scene" },
-  // sand-storm: Style PENDING — see the note after `AURORA_SWEEP_STYLE`.
-  { id: "sand-storm",        label: "Sand Storm",         category: "element", description: "Sand storm engulfs the frame, scene changes inside",
-    promptHint: "a wall of opaque, swirling ochre sand sweeps in from one side of the frame and surges across it until the whole picture is hidden in dust. The camera stays where it is and the framing does not change. The dust then thins and sinks away toward the lower edge of the frame, revealing the second shot behind it. The shot ends on the second shot, clear and fully resolved, with no dust left. The first shot stays as it is until the sand covers it completely, and the second shot appears only as the dust clears" },
+  withOptionSlots({ id: "sand-storm",        label: "Sand Storm",         category: "element", description: "Sand storm engulfs the frame, scene changes inside",
+    promptTemplate: "{style}",
+    options: [SAND_STORM_STYLE] }),
   { id: "paint-splash",      label: "Paint Splash",       category: "element", description: "Vivid paint splash covers, retracts into new scene",
     promptHint: "vivid splashes of coloured paint fly across the frame in arcing streaks and pile over one another until the whole picture is covered in wet paint. The camera stays where it is and the framing does not change. The paint then gathers toward the centre of the frame and shrinks to nothing, uncovering the second shot from the edges inward. The shot ends on the second shot, clean and fully resolved, with no paint left. The paint lies on the surface of the picture itself, and the second shot appears only where the paint has gone" },
   withOptionSlots({ id: "aurora-sweep",      label: "Aurora Sweep",       category: "element", description: "Aurora curtain sweeps across, scene changes behind",
@@ -455,8 +464,9 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   // ============================================================================
   // LIGHT — 8 entries — flash and lens FX
   // ============================================================================
-  { id: "white-flash",       label: "White Flash",        category: "light", description: "Frame blooms to white",
-    promptHint: "a bright camera-flash bloom fills the frame with pure white, holds for a fraction of a second, then resolves into the new scene" },
+  withOptionSlots({ id: "white-flash",       label: "White Flash",        category: "light", description: "Frame blooms to white",
+    promptTemplate: "{style}",
+    options: [WHITE_FLASH_STYLE] }),
   { id: "lens-flare-swipe",  label: "Lens Flare Swipe",   category: "light", description: "Anamorphic lens flare swipes",
     promptHint: "a horizontal anamorphic lens flare sweeps across the frame from one side to the other, and as it crosses the frame the scene behind it has changed to the new setting" },
   { id: "light-streak",      label: "Light Streak",       category: "light", description: "Light streak wipes across",

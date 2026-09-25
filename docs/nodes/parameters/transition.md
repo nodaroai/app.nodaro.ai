@@ -17,7 +17,7 @@ Unlike the `transition` field on the Combine Videos node (which is an FFmpeg pos
 | Duration | select | `"auto"` | How long the transition lasts: `auto` / `instant` / `short` (~1s) / `medium` (~2s) / `long` (~3s). Ignored for a cut (see below). |
 | Intensity | select | `"auto"` | Energy/character of the transition: `auto` / `subtle` / `natural` / `dynamic` / `crazy`. Ignored for a cut (see below). |
 | Direction | select | `"auto"` | **Wipe only** — shown while `wipe` is picked, stored as `wipeDirection`: `auto` / `left-to-right` / `right-to-left` / `top-to-bottom` / `bottom-to-top` / `top-left-to-bottom-right` / `top-right-to-bottom-left`. See [Wipe direction](#wipe-direction). |
-| Style | select | the row's default look | **Styled rows only** (`debris-shower`, `garden-bloom`, `smoke-puff`, `sakura-petals`, `aurora-sweep`) — shown while one is picked, stored as `style`. Each row has its own looks; the first is the row's default, labelled by its name ("Full cover (default)"). See [Style](#style). |
+| Style | select | the row's default look | **Styled rows only** (`debris-shower`, `garden-bloom`, `smoke-puff`, `sakura-petals`, `aurora-sweep`, `sand-storm`, `white-flash`) — shown while one is picked, stored as `style`. Each row has its own looks; the first is the row's default, labelled by its name ("Full cover (default)"). See [Style](#style). |
 | Pre Text | text | empty | Free-form text prepended to the composed hint. |
 | Post Text | text | empty | Free-form text appended to the composed hint. |
 | Hint mode  | select       | `full`    | Does not change how the transition itself is written — always `<name> (<description>)` (see below). It still sets the detail level of the pickers wired into `startState` / `endState`. See [Prompt hint mode](./README.md#prompt-hint-mode). |
@@ -56,12 +56,14 @@ A wipe saved before Direction existed reads as `auto`. The picker catalog publis
 
 <a id="style"></a>
 
-**Style.** Five rows have more than one tested look, offered as **Style** and stored on the node as `style`. A style replaces the row's whole description inside the parentheses; the row's name and the levers stay as they are. The field is shared, but every row declares its own looks, and every id except `auto` starts with the row's id, so a style never carries over to another row: a value that is not one of the picked row's looks reads as the default.
+**Style.** Seven rows have more than one tested look, offered as **Style** and stored on the node as `style`. A style replaces the row's whole description inside the parentheses; the row's name and the levers stay as they are. The field is shared, but every row declares its own looks, and every id except `auto` starts with the row's id, so a style never carries over to another row: a value that is not one of the picked row's looks reads as the default.
 
 | Row | Style | `style` | What it looks like |
 |---|---|---|---|
 | `smoke-puff` | Engulf (default) | `auto` (or absent) | Smoke billows up around the subject, and the new subject appears inside it |
 | `smoke-puff` | Full cover | `smoke-puff-full-cover` | Smoke from the subject fills the whole screen, then clears on the next scene |
+| `sand-storm` | Full cover (default) | `auto` (or absent) | A wall of sand hides the whole picture, then clears on the next scene |
+| `sand-storm` | Light sweep | `sand-storm-light-sweep` | A streak of blown sand crosses the screen with the next scene already behind it |
 | `aurora-sweep` | Sky glow (default) | `auto` (or absent) | Aurora light glows over the scene, then fades to reveal the next one |
 | `aurora-sweep` | Veil | `aurora-sweep-veil` | Aurora curtains drop over the whole picture, then fade to reveal the next scene |
 | `sakura-petals` | Swirling veil (default) | `auto` (or absent) | A swirl of pink petals veils the picture, then drifts past |
@@ -70,6 +72,8 @@ A wipe saved before Direction existed reads as `auto`. The picker catalog publis
 | `garden-bloom` | Hedge doors | `garden-bloom-hedge-doors` | Leafy panels close over the picture, then slide apart to the sides |
 | `debris-shower` | Full cover (default) | `auto` (or absent) | Debris fills the whole screen, then blows past to reveal the next scene |
 | `debris-shower` | Light sweep | `debris-shower-light-sweep` | A quick scatter of debris crosses the screen; the scene has changed behind it |
+| `white-flash` | Flash (default) | `auto` (or absent) | A camera flash pops the picture to white, holds, then fades down on the next scene |
+| `white-flash` | Overexposure | `white-flash-overexposure` | The picture blooms to white and resolves into the next scene |
 
 A pick saved before Style existed has no `style` and reads as the row's default look. The picker catalog publishes each row's looks on its option as `params` (field `style`); `@nodaro/prompts` callers pass the choice as `composeTransitionHintFromConnections(id, startHints, endHints, timing, mode, { optionValues: { style: "debris-shower-light-sweep" } })`. On the canvas, a two-pick of two styled rows shows one Style control holding both rows' looks, its first entry named "Default look" (each row keeps its own default); the one stored value styles its own row, and the other row keeps its default. A row sent in the `direction` field of a video request has no style setting and reads as its default.
 
