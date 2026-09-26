@@ -19,6 +19,7 @@ export {
 } from "./offered-locales"
 
 export { formatDate, formatDateTime, formatNumber, formatTime, uiLocale } from "./format"
+export { interpolateNodes } from "./interpolate-nodes"
 
 /** Locale ids that have a registered chrome dict (empty or not). */
 export function registeredChromeLocales(): LocaleId[] {
