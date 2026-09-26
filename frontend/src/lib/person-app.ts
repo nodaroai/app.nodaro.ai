@@ -16,8 +16,8 @@ export function personAppBaseUrl(): string {
  * hash; flagship-apps.test.tsx fails if they drift from the picker's map.
  */
 export const PERSON_APP_COLLAGE: ReadonlyArray<string> = [
-  "/picker-art/character/person/supermodel.f62fa13c.webp",
-  "/picker-art/character/person/silver-fox.991735a5.webp",
-  "/picker-art/character/person/graceful-woman.f9be86fc.webp",
-  "/picker-art/character/person/elf-woman.b583edd6.webp",
+  "/picker-art/character/person/supermodel.09201ad9.webp",
+  "/picker-art/character/person/silver-fox.a88e888d.webp",
+  "/picker-art/character/person/graceful-woman.a68a59e0.webp",
+  "/picker-art/character/person/elf-woman.d16020ff.webp",
 ]
