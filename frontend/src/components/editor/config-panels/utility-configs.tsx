@@ -193,7 +193,7 @@ export function SplitTextConfig({ data, onUpdate }: { data: SplitTextData; onUpd
           className="h-7 text-xs"
           onClick={() => onUpdate({ trimWhitespace: data.trimWhitespace === false })}
         >
-          {data.trimWhitespace !== false ? t("audiocfg.normalizationOn") : t("audiocfg.normalizationOff")}
+          {data.trimWhitespace !== false ? t("common.stateOn") : t("common.stateOff")}
         </Button>
       </div>
 
@@ -205,7 +205,7 @@ export function SplitTextConfig({ data, onUpdate }: { data: SplitTextData; onUpd
           className="h-7 text-xs"
           onClick={() => onUpdate({ removeEmpty: data.removeEmpty === false })}
         >
-          {data.removeEmpty !== false ? t("audiocfg.normalizationOn") : t("audiocfg.normalizationOff")}
+          {data.removeEmpty !== false ? t("common.stateOn") : t("common.stateOff")}
         </Button>
       </div>
 
@@ -1856,7 +1856,7 @@ export function MergeListsConfig({ data, onUpdate }: ConfigProps<MergeListsNodeD
           className="h-7 text-xs"
           onClick={() => onUpdate({ deduplicate: !dedupeOn })}
         >
-          {dedupeOn ? t("audiocfg.normalizationOn") : t("audiocfg.normalizationOff")}
+          {dedupeOn ? t("common.stateOn") : t("common.stateOff")}
         </Button>
       </div>
 

@@ -415,7 +415,7 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
             className="flex-1 bg-transparent border-none outline-none text-base text-[#1E293B] dark:text-white placeholder:text-[#94A3B8]"
           />
           <span className="text-[10px] text-[#94A3B8] shrink-0 tabular-nums">
-            {hits.length} {hits.length === 1 ? t("addnode.unitNode") : t("addnode.unitNodes")}
+            {t(hits.length === 1 ? "addnode.nodeCountOne" : "addnode.nodeCountMany", { n: hits.length })}
           </span>
           <button
             type="button"

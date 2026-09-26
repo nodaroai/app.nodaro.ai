@@ -19,13 +19,15 @@ import type { LocaleLabelTables } from "./label-tables"
 import { LABELS_HE } from "./labels.he"
 import { LABELS_JA } from "./labels.ja"
 import { PRESET_CONTENT_JA } from "./preset-content.ja"
+import { LABELS_KO } from "./labels.ko"
+import { PRESET_CONTENT_KO } from "./preset-content.ko"
 import { translate } from "./index"
 
 /**
  * Every locale's label tables. The coverage guards iterate this registry, so a
  * locale added here is checked for complete tables the day it is added.
  */
-export const LABEL_TABLES: Readonly<Partial<Record<LocaleId, LocaleLabelTables>>> = { he: LABELS_HE, ja: LABELS_JA }
+export const LABEL_TABLES: Readonly<Partial<Record<LocaleId, LocaleLabelTables>>> = { he: LABELS_HE, ja: LABELS_JA, ko: LABELS_KO }
 
 /** Translate a node's display label for a locale; unknown/custom labels pass through. */
 export function localizeNodeLabel(label: string, locale: LocaleId): string {
@@ -127,7 +129,7 @@ export function useLocalizeOptionLabel(): (label: string) => string {
  * Partial per locale — a preset with no entry falls back to the catalog's
  * English, so upstream additions never render blank.
  */
-export const PRESET_CONTENT_MAPS: Readonly<Partial<Record<LocaleId, Record<string, PresetCopy>>>> = { he: PRESET_CONTENT_HE, ja: PRESET_CONTENT_JA }
+export const PRESET_CONTENT_MAPS: Readonly<Partial<Record<LocaleId, Record<string, PresetCopy>>>> = { he: PRESET_CONTENT_HE, ja: PRESET_CONTENT_JA, ko: PRESET_CONTENT_KO }
 
 /** Hook: returns a preset-copy resolver bound to the current locale.
  *  Stable across renders (memoized on locale) so callers can list it in

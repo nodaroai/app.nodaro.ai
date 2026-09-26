@@ -179,7 +179,7 @@ const sunoModelControl = (): QuickConfigControl => ({
  *  Undefined reads as "With vocals" — executor treats `instrumental ?? false`. */
 const sunoInstrumentalControl = (): QuickConfigControl => ({
   field: "instrumental",
-  ariaLabel: tx("audiocfg.instrumental"),
+  ariaLabel: tx("audiocfg.instrumentalToggle"),
   icon: Music2,
   boolean: true,
   options: [

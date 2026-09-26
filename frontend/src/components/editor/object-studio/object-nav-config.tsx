@@ -31,25 +31,25 @@ type J = ObjectStudioJobs
 export const OBJECT_STUDIO_NAV: StudioNavConfig<S, J> = {
   accentActiveClassName: "text-[#22d3ee] bg-[#0e2730] border-e-2 border-[#22d3ee]",
   groups: [
-    { label: "Resources", pages: [
-      { key: "references", label: "References", icon: "📷", Component: ReferencesPage },
+    { label: "studioNav.resources", pages: [
+      { key: "references", label: "studioNav.references", icon: "📷", Component: ReferencesPage },
     ] },
-    { label: "Identity", pages: [
-      { key: "appearance", label: "Appearance", icon: "📦", Component: AppearancePage },
+    { label: "studioNav.identity", pages: [
+      { key: "appearance", label: "studioNav.exterior", icon: "📦", Component: AppearancePage },
     ] },
-    { label: "Composition", pages: [
-      { key: "angles", label: "Angles", icon: "📐", Component: AnglesPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.angles) }) },
+    { label: "studioNav.composition", pages: [
+      { key: "angles", label: "studioNav.angles", icon: "📐", Component: AnglesPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.angles) }) },
     ] },
-    { label: "Variants", pages: [
-      { key: "materials", label: "Materials", icon: "🧪", Component: MaterialsPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.materials) }) },
-      { key: "variations", label: "Variations", icon: "✨", Component: VariationsPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.variations) }) },
+    { label: "studioNav.variants", pages: [
+      { key: "materials", label: "studioNav.materials", icon: "🧪", Component: MaterialsPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.materials) }) },
+      { key: "variations", label: "studioNav.variations", icon: "✨", Component: VariationsPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.variations) }) },
     ] },
-    { label: "Motion", pages: [
-      { key: "motion", label: "Motion", icon: "🎬", Component: MotionPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.motionClips) }) },
+    { label: "studioNav.motion", pages: [
+      { key: "motion", label: "studioNav.motion", icon: "🎬", Component: MotionPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.motionClips) }) },
     ] },
-    { label: "Sheet", pages: [
-      { key: "sheet", label: "Sheet", icon: "📋", Component: SheetPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.sheets) }) },
-      { key: "board", label: "Board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.boards) }) },
+    { label: "studioNav.sheet", pages: [
+      { key: "sheet", label: "studioNav.sheet", icon: "📋", Component: SheetPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.sheets) }) },
+      { key: "board", label: "studioNav.board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.boards) }) },
     ] },
   ],
 }

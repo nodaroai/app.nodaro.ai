@@ -2457,6 +2457,21 @@ html, body {
   --default-font-family: 'Geist Variable', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', 'Noto Sans CJK JP', 'Noto Sans JP', system-ui, sans-serif;
 }
 
+/* Korean: Geist has no Hangul either. The Korean system faces come before the
+   generic fallback, for the same weights and metrics on every machine:
+   - Apple SD Gothic Neo on macOS and iOS
+   - Malgun Gothic on Windows
+   - Noto Sans CJK KR on Android and Linux
+   Korean wraps between words (eojeol), like English, not between syllables:
+   keep-all stops a word breaking in the middle, and break-word still breaks
+   one that would overflow its box. That only matters in a narrow cell, and it
+   does not change how wide a box sizes itself. */
+:root:lang(ko) {
+  --default-font-family: 'Geist Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans CJK KR', 'Noto Sans KR', system-ui, sans-serif;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
 
 
 /* Welcome credits popup: the soft pink radial glow at the top of the card. */

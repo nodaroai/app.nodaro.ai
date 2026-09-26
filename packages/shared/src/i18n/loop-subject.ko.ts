@@ -8,7 +8,7 @@ const map: LocaleCatalogMap = {
   "starfield":        { label: "별밭" },
   "fireplace":        { label: "벽난로" },
   "rain":             { label: "유리창의 비" },
-  "snowfall":         { label: "눈" },
+  "snowfall":         { label: "내리는 눈" },
   "lightning-storm":  { label: "번개 폭풍" },
   "galaxy":           { label: "은하" },
   "nebula":           { label: "성운" },

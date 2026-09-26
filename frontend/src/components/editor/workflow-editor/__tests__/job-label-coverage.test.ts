@@ -30,6 +30,17 @@ function passedLabels(): Array<{ readonly file: string; readonly label: string }
         const arg = node.arguments[LABEL_ARG[node.expression.text]]
         if (arg && (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg))) found.push({ file: name, label: arg.text })
       }
+      // runScene3DJob takes its label as a property of one options object.
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "runScene3DJob") {
+        const options = node.arguments[0]
+        if (options && ts.isObjectLiteralExpression(options)) {
+          for (const prop of options.properties) {
+            if (ts.isPropertyAssignment(prop) && prop.name.getText() === "label" && ts.isStringLiteral(prop.initializer)) {
+              found.push({ file: name, label: prop.initializer.text })
+            }
+          }
+        }
+      }
       ts.forEachChild(node, visit)
     }
     visit(source)

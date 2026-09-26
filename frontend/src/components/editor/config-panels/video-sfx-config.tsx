@@ -219,7 +219,7 @@ export function VideoSfxConfig({
           <SelectContent>
             {[1, 2, 3, 4].map((n) => (
               <SelectItem key={n} value={String(n)}>
-                {n} {n === 1 ? t("cfgext.sfxTake") : t("cfgext.sfxTakes")}
+                {t(n === 1 ? "cfgext.sfxTakeCountOne" : "cfgext.sfxTakeCountMany", { n })}
               </SelectItem>
             ))}
           </SelectContent>

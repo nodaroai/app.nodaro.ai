@@ -69,6 +69,7 @@ const LATIN_OK: ReadonlySet<string> = new Set<string>([
   "proccfg.overlay.formatWebp",
   "project.studioBadge",
   "scene.gifLabel",
+  "studioNav.lora",
   "scenecfg.opt.sciFi",
   "tgacct.apiHash",
   "tgacct.apiId",

@@ -79,6 +79,12 @@ describe("resolveInitialLocale — browser detection lands only on offered local
     })
   })
 
+  it("a Korean browser lands on Korean (offered)", () => {
+    withBrowserLanguages(["ko-KR", "ko"], () => {
+      expect(resolveInitialLocale()).toBe("ko")
+    })
+  })
+
   it("skips not-offered preferences and takes the first offered one", () => {
     withBrowserLanguages(["fr-FR", "he", "en"], () => {
       expect(resolveInitialLocale()).toBe("he")

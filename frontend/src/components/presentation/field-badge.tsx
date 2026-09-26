@@ -15,7 +15,7 @@ function resolveDisplayValue(field: ExposableField, value: unknown, t: TFunction
       return match ? match.label : strVal
     }
     case "toggle":
-      return value ? t("present.on") : t("node.off")
+      return value ? t("common.stateOn") : t("common.stateOff")
     case "slider":
       return String(value ?? field.min ?? 0)
     case "text":

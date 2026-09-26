@@ -632,7 +632,7 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
                       {t("present.arrayInputs")}
                     </p>
                     <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073]">
-                      {t("common.new")}
+                      {t("dash.new")}
                     </span>
                   </div>
                   {arrayNodes.map((node) => {
