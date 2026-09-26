@@ -1859,6 +1859,41 @@ export interface PluginPipelinesToolkit {
   getSnapshot(pipelineId: string, userId: string): Promise<PipelineSnapshot | null>
 }
 
+/**
+ * One server-sent event a plugin route may write: the subset of the app's
+ * `StreamEvent` (`lib/sse.ts`) plugin streams carry today. A new member needs
+ * its app-side twin in `StreamEvent` first.
+ */
+export type PluginSseEvent =
+  | { type: "field"; data: { field: string; value: string | string[] } }
+  | { type: "done"; data: Record<string, unknown> }
+  | { type: "error"; data: { code: string; message: string } }
+
+/** An open event stream on a plugin route's response (`lib/sse.ts`'s `SSEController`). */
+export interface PluginSseController {
+  sendEvent(event: PluginSseEvent): void
+  /** An SSE comment line (a keepalive ping). */
+  sendComment(text?: string): void
+  /** End the stream. Writes after this, or after the client left, are no-ops. */
+  close(): void
+  /** True after close() or once the client disconnected. */
+  readonly isClosed: boolean
+}
+
+/**
+ * Server-sent events on a plugin route, written by the app's own helper: one
+ * JSON object per `data:` line, a blank line between events, keepalive
+ * comments, and origin-checked CORS headers (the raw write bypasses
+ * Fastify's CORS hook).
+ */
+export interface PluginSseToolkit {
+  /**
+   * Open the stream. It writes `200 text/event-stream` at once, so every
+   * plain HTTP error (auth, validation, credits) must be sent BEFORE this.
+   */
+  create(req: FastifyRequest, reply: FastifyReply): Promise<PluginSseController>
+}
+
 // ============================================================================
 // PluginToolkit — the full dependency-injection surface handed to every plugin
 // ============================================================================
@@ -1950,6 +1985,12 @@ export interface PluginToolkit {
    * only. ADDITIVE-OPTIONAL — `?.`-guard it.
    */
   triggers?: PluginTriggersToolkit
+  /**
+   * Server-sent events on a plugin route's response, in the app's own
+   * convention. ADDITIVE-OPTIONAL — `?.`-guard it; an older host has none,
+   * so a route that can stream answers JSON there.
+   */
+  sse?: PluginSseToolkit
 }
 
 /**

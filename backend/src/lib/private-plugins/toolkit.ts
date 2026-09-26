@@ -8,6 +8,7 @@ import { readPublicVideoFrame } from "../public-video-frame.js"
 import { isStorageConfigured } from "../storage.js"
 import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
 import { completeStructuredMetered } from "./llm-metered.js"
+import { createSSEStream } from "../sse.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
 import { createScene3DPlaybackToolkit } from "./scene3d-playback-toolkit.js"
@@ -1580,6 +1581,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     daemons: { request: (input) => requestPluginDaemon(input) },
     // Starting runs for any owner's trigger rows is the daemon host's alone.
     ...(opts.role === "daemon" ? { triggers: { listActive: listActivePluginTriggers, fire: firePluginTrigger } } : {}),
+    sse: { create: (req, reply) => createSSEStream(req, reply) },
     db: supabase,
     workflows: {
       writeCompatible,

@@ -1,15 +1,17 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { buildMultiPickerAnalyzerSpec, applyMinorAgeFloorToPickerValues, PICKER_TYPES, type PickerType, type PickerGaps } from "@nodaro/prompts"
-import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, STRUCTURED_VISION_MODELS } from "@nodaro/shared"
+import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, STRUCTURED_VISION_MODELS, type LlmModelDef } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { prefetchAsBase64 } from "../lib/anthropic-image.js"
-import { llmCompleteStructured, type LlmContentBlock } from "../lib/llm-client.js"
+import { llmCompleteStructured, llmStreamStructured, type LlmContentBlock, type LlmRequest } from "../lib/llm-client.js"
+import { createSSEStream, type SSEController } from "../lib/sse.js"
+import { createPickerFieldStream } from "../lib/picker-field-stream.js"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -168,6 +170,142 @@ export function buildSystemPrompt(legend: string, instructions?: string, otherPi
     .join("\n")
 }
 
+/** One analysis once its job exists and its credits are reserved — what both
+ *  the JSON answer and the streamed answer act on. */
+interface Analysis {
+  req: FastifyRequest
+  jobId: string
+  userId: string
+  imageUrl: string
+  targetPickers: PickerType[]
+  model: LlmModelDef
+  body: z.infer<typeof describeToPickerBody>
+}
+
+/** Stream only when the caller asks for it: an `Accept` naming `text/event-stream`. */
+function wantsEventStream(req: FastifyRequest): boolean {
+  return (req.headers.accept ?? "").toLowerCase().includes("text/event-stream")
+}
+
+/** The analyzer call: one request, whichever way the answer is delivered.
+ *  With `onToolJson`, the first attempt streams its tool input there. */
+async function runAnalyzer(analysis: Analysis, onToolJson?: (partialJson: string) => void) {
+  const { schema, toolName, legend, otherPickersLegend } = buildMultiPickerAnalyzerSpec(analysis.targetPickers)
+  const imageBlock = await prefetchAsBase64(analysis.imageUrl)
+  const content: LlmContentBlock[] = [imageBlock, { type: "text", text: "Analyze the subject and emit the picker JSON." }]
+  const request: LlmRequest = {
+    modelId: analysis.model.id,
+    system: buildSystemPrompt(legend, analysis.body.instructions, otherPickersLegend),
+    messages: [{ role: "user", content }],
+    reasoningEffort: analysis.body.reasoningEffort,
+    ...resolveLlmParams(analysis.body),
+  }
+  return onToolJson
+    ? llmStreamStructured(request, schema, { schemaName: toolName, onToolJson })
+    : llmCompleteStructured(request, schema, { schemaName: toolName })
+}
+
+/** Floor, persist, bill and record catalog gaps, in that order, then return
+ *  the answer's body. */
+async function completeAnalysis(
+  analysis: Analysis,
+  { output, inputTokens, outputTokens }: { output: unknown; inputTokens: number; outputTokens: number },
+) {
+  const { jobId, userId, imageUrl, targetPickers } = analysis
+  const { gaps, ...pickerJson } = output as Record<string, unknown> & { gaps?: PickerGaps }
+  // W1-a: a minor person value floors the styling/pose/mood values from
+  // the same analysis (the per-picker cleanup only sees its own patch).
+  const flooredPickerJson = applyMinorAgeFloorToPickerValues(pickerJson as Record<string, unknown>)
+
+  await supabase
+    .from("jobs")
+    .update({
+      status: "completed",
+      output_data: { json: flooredPickerJson, targetPickers, usage: { inputTokens, outputTokens } },
+    })
+    .eq("id", jobId)
+    .eq("user_id", userId)
+  await commitReservedCreditsForJob(jobId)
+
+  // Persist catalog-gap feedback (best-effort — never breaks the analysis).
+  // Parallel so a 0-8 gap batch doesn't add serial RPC latency to the response.
+  // Two sinks: the aggregate counters (picker_catalog_gaps) and one
+  // per-incident app_report carrying the image link + app origin.
+  const missingReport = buildMissingPickerReport(gaps, {
+    imageUrl,
+    llmModel: analysis.model.id,
+    targetPickers,
+    origin: analysis.body.origin,
+    userId,
+    jobId,
+  })
+  await Promise.all([
+    ...buildGapRecords(gaps, flooredPickerJson, userId).map(async (rec) => {
+      const { error: gapErr } = await supabase.rpc("record_picker_catalog_gap", rec)
+      if (gapErr) analysis.req.log.warn({ err: gapErr.message }, "picker gap upsert failed")
+    }),
+    ...(missingReport ? [insertAppReport(missingReport)] : []),
+  ])
+
+  return { jobId, pickerJson: flooredPickerJson, gaps }
+}
+
+/** Fail the job and refund its reservation; returns the message to report. */
+async function failAnalysis(analysis: Analysis, err: unknown): Promise<string> {
+  const message = err instanceof Error ? err.message : "Picker analysis failed"
+  await supabase.from("jobs").update({ status: "failed", output_data: { error: message } }).eq("id", analysis.jobId).eq("user_id", analysis.userId)
+  await refundReservedCreditsForJob(analysis.jobId)
+  return message
+}
+
+/**
+ * The streamed answer (`Accept: text/event-stream`): the same analysis, job
+ * and reservation as the JSON answer, delivered as server-sent events. It
+ * opens only after everything a plain HTTP error reports (validation, auth,
+ * credits) has passed.
+ *
+ * - `field`: `{ field: "<picker>.<dimension>", value }`, one per detail the
+ *   moment the model has finished writing it, in the analyzer's own
+ *   coordinates (`pickerJson[picker][dimension]`). Provisional, and never a
+ *   value the minor-age floor removes (`picker-field-stream.ts`).
+ * - `done`: exactly the JSON answer's body. Authoritative.
+ * - `error`: `{ code: "llm_error", message }`; the job is failed and the
+ *   reservation refunded, as on the JSON path.
+ *
+ * A client that disconnects does not stop the analysis: it finishes, bills
+ * and records exactly as the JSON path does, so the job and the reservation
+ * always reach a terminal state. Writes after the disconnect are no-ops.
+ */
+async function streamAnalysis(reply: FastifyReply, analysis: Analysis): Promise<void> {
+  let sse: SSEController
+  try {
+    sse = await createSSEStream(analysis.req, reply)
+  } catch (err) {
+    // Nothing written yet: fail the job and answer as the JSON path does.
+    const message = await failAnalysis(analysis, err)
+    reply.status(502).send({ error: { code: "llm_error", message } })
+    return
+  }
+  try {
+    let body: Awaited<ReturnType<typeof completeAnalysis>>
+    try {
+      const fields = createPickerFieldStream({
+        targetPickers: analysis.targetPickers,
+        onField: (event) => sse.sendEvent({ type: "field", data: event }),
+      })
+      body = await completeAnalysis(analysis, await runAnalyzer(analysis, (partialJson) => fields.push(partialJson)))
+    } catch (err) {
+      const message = await failAnalysis(analysis, err)
+      sse.sendEvent({ type: "error", data: { code: "llm_error", message } })
+      return
+    }
+    sse.sendEvent({ type: "done", data: body })
+  } finally {
+    // Always end the stream (and its keepalive), even if recording a failure throws.
+    sse.close()
+  }
+}
+
 export async function describeToPickerRoutes(app: FastifyInstance) {
   app.post(
     "/v1/describe-to-picker",
@@ -181,7 +319,7 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
       }
-      const { imageUrl, instructions } = parsed.data
+      const { imageUrl } = parsed.data
       const targetPickers = resolveTargetPickers(parsed.data)
       const userId = req.userId
       if (!userId) {
@@ -223,63 +361,13 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
 
       await markProviderCallStart(job.id, "anthropic-sync")
 
+      const analysis: Analysis = { req, jobId: job.id, userId, imageUrl, targetPickers, model, body: parsed.data }
+      if (wantsEventStream(req)) return streamAnalysis(reply, analysis)
+
       try {
-        const { schema, toolName, legend, otherPickersLegend } = buildMultiPickerAnalyzerSpec(targetPickers)
-        const imageBlock = await prefetchAsBase64(imageUrl)
-        const content: LlmContentBlock[] = [imageBlock, { type: "text", text: "Analyze the subject and emit the picker JSON." }]
-
-        const { output, inputTokens, outputTokens } = await llmCompleteStructured(
-          {
-            modelId: model.id,
-            system: buildSystemPrompt(legend, instructions, otherPickersLegend),
-            messages: [{ role: "user", content }],
-            reasoningEffort: parsed.data.reasoningEffort,
-            ...resolveLlmParams(parsed.data),
-          },
-          schema,
-          { schemaName: toolName },
-        )
-
-        const { gaps, ...pickerJson } = output as Record<string, unknown> & { gaps?: PickerGaps }
-        // W1-a: a minor person value floors the styling/pose/mood values from
-        // the same analysis (the per-picker cleanup only sees its own patch).
-        const flooredPickerJson = applyMinorAgeFloorToPickerValues(pickerJson as Record<string, unknown>)
-
-        await supabase
-          .from("jobs")
-          .update({
-            status: "completed",
-            output_data: { json: flooredPickerJson, targetPickers, usage: { inputTokens, outputTokens } },
-          })
-          .eq("id", job.id)
-          .eq("user_id", userId)
-        await commitReservedCreditsForJob(job.id)
-
-        // Persist catalog-gap feedback (best-effort — never breaks the analysis).
-        // Parallel so a 0-8 gap batch doesn't add serial RPC latency to the response.
-        // Two sinks: the aggregate counters (picker_catalog_gaps) and one
-        // per-incident app_report carrying the image link + app origin.
-        const missingReport = buildMissingPickerReport(gaps, {
-          imageUrl,
-          llmModel: model.id,
-          targetPickers,
-          origin: parsed.data.origin,
-          userId,
-          jobId: job.id,
-        })
-        await Promise.all([
-          ...buildGapRecords(gaps, flooredPickerJson, userId).map(async (rec) => {
-            const { error: gapErr } = await supabase.rpc("record_picker_catalog_gap", rec)
-            if (gapErr) req.log.warn({ err: gapErr.message }, "picker gap upsert failed")
-          }),
-          ...(missingReport ? [insertAppReport(missingReport)] : []),
-        ])
-
-        return reply.send({ jobId: job.id, pickerJson: flooredPickerJson, gaps })
+        return reply.send(await completeAnalysis(analysis, await runAnalyzer(analysis)))
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Picker analysis failed"
-        await supabase.from("jobs").update({ status: "failed", output_data: { error: message } }).eq("id", job.id).eq("user_id", userId)
-        await refundReservedCreditsForJob(job.id)
+        const message = await failAnalysis(analysis, err)
         return reply.status(502).send({ error: { code: "llm_error", message } })
       }
     },

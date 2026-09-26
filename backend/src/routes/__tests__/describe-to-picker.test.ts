@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import Fastify, { type FastifyInstance } from "fastify"
+import Fastify, { type FastifyInstance, type FastifyReply } from "fastify"
+import { buildPickerAnalyzerSpec, getAdultOnlyIds } from "@nodaro/prompts"
 
 const mocks = vi.hoisted(() => ({
   maybeProxyLlmRouteToCloud: vi.fn(),
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   refundReservedCreditsForJob: vi.fn(),
   markProviderCallStart: vi.fn(),
   llmCompleteStructured: vi.fn(),
+  llmStreamStructured: vi.fn(),
   prefetchAsBase64: vi.fn(),
 }))
 
@@ -28,7 +30,10 @@ vi.mock("@/lib/credits-job-lifecycle.js", () => ({
   refundReservedCreditsForJob: mocks.refundReservedCreditsForJob,
 }))
 vi.mock("@/lib/reconcile/persistence.js", () => ({ markProviderCallStart: mocks.markProviderCallStart }))
-vi.mock("@/lib/llm-client.js", () => ({ llmCompleteStructured: mocks.llmCompleteStructured }))
+vi.mock("@/lib/llm-client.js", () => ({
+  llmCompleteStructured: mocks.llmCompleteStructured,
+  llmStreamStructured: mocks.llmStreamStructured,
+}))
 vi.mock("@/lib/anthropic-image.js", () => ({ prefetchAsBase64: mocks.prefetchAsBase64 }))
 vi.mock("@/lib/supabase.js", () => {
   // .update({...}).eq("id", …).eq("user_id", …) — the exact chain the route uses.
@@ -224,5 +229,187 @@ describe("POST /v1/describe-to-picker — W1-a minor-age floor", () => {
     const res = await post(VALID)
     expect(res.statusCode).toBe(200)
     expect(res.json().pickerJson.styling).toEqual({ top: "top-bra-top" })
+  })
+})
+
+describe("POST /v1/describe-to-picker — streamed answer (Accept: text/event-stream)", () => {
+  const USER_ID = "00000000-0000-4000-8000-000000000001"
+  const URL = "/v1/describe-to-picker"
+  const VALID = { imageUrl: "https://cdn.example/img.png", targetPickers: ["person", "styling"], userId: USER_ID }
+  const SSE = { accept: "text/event-stream, application/json" }
+  // Real catalog ids: an ordinary type and hair colour, and an adult-only top.
+  const PERSON = buildPickerAnalyzerSpec("person")
+  const ADULT_ONLY = getAdultOnlyIds()
+  const firstOrdinary = (dimension: string) =>
+    PERSON.dimensions.find((d) => d.dimension === dimension)?.entryIds.find((id) => !ADULT_ONLY.has(id)) as string
+  const TYPE = firstOrdinary("type")
+  const HAIR = firstOrdinary("hair-color")
+  const ANSWER = {
+    person: { type: TYPE, age: "age-30s", "hair-color": [HAIR] },
+    styling: { top: "top-bra-top" },
+    gaps: { missingItems: [], missingCategories: [] },
+  }
+
+  type StreamOpts = { schemaName?: string; onToolJson?: (partialJson: string) => void }
+  let app: FastifyInstance
+
+  /** The analyzer answering `output`, after streaming its JSON text in `pieces`. */
+  function streamingAnalyzer(output: Record<string, unknown>, pieces = 5) {
+    return async (_req: unknown, _schema: unknown, opts: StreamOpts) => {
+      const text = JSON.stringify(output)
+      const size = Math.ceil(text.length / pieces)
+      for (let i = 0; i < text.length; i += size) opts.onToolJson?.(text.slice(i, i + size))
+      return { output, inputTokens: 100, outputTokens: 50 }
+    }
+  }
+
+  function events(payload: string): Array<{ type: string; data: Record<string, unknown> }> {
+    return payload
+      .split("\n\n")
+      .map((block) => block.split("\n").find((line) => line.startsWith("data: ")))
+      .filter((line): line is string => line !== undefined)
+      .map((line) => JSON.parse(line.slice("data: ".length)))
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mocks.maybeProxyLlmRouteToCloud.mockResolvedValue(false)
+    mocks.insertJob.mockResolvedValue({ data: { id: "job-1" }, error: null })
+    mocks.reserveCreditsForJob.mockResolvedValue({ usageLogId: "usage-1" })
+    mocks.commitReservedCreditsForJob.mockResolvedValue(undefined)
+    mocks.refundReservedCreditsForJob.mockResolvedValue(0)
+    mocks.markProviderCallStart.mockResolvedValue(undefined)
+    mocks.prefetchAsBase64.mockResolvedValue({ type: "image", url: "https://cdn.example/img.png" })
+
+    app = Fastify({ logger: false })
+    app.addHook("preHandler", async (req) => {
+      const body = req.body as Record<string, unknown> | undefined
+      if (typeof body?.userId === "string") req.userId = body.userId
+    })
+    await app.register(async (instance) => { await describeToPickerRoutes(instance) })
+    await app.ready()
+  })
+
+  afterEach(async () => { await app.close() })
+
+  it("sends a field per detail as the model writes it, then done carrying exactly the JSON answer", async () => {
+    mocks.llmStreamStructured.mockImplementation(streamingAnalyzer(ANSWER))
+    const streamed = await app.inject({ method: "POST", url: URL, payload: VALID, headers: SSE })
+
+    expect(streamed.statusCode).toBe(200)
+    expect(streamed.headers["content-type"]).toBe("text/event-stream")
+    const evts = events(streamed.payload)
+    // The adult-only top never streams, adult or not: it arrives with `done`.
+    expect(evts.filter((e) => e.type === "field").map((e) => e.data)).toEqual([
+      { field: "person.type", value: TYPE },
+      { field: "person.age", value: "age-30s" },
+      { field: "person.hair-color", value: [HAIR] },
+    ])
+    expect(evts.filter((e) => e.type === "done")).toHaveLength(1)
+    expect(evts.at(-1)).toMatchObject({ type: "done", data: { pickerJson: { styling: { top: "top-bra-top" } } } })
+    expect(evts.at(-1)?.type).toBe("done")
+
+    // The same analysis request as the JSON answer, and `done` is its body byte for byte.
+    mocks.llmCompleteStructured.mockResolvedValue({ output: ANSWER, inputTokens: 100, outputTokens: 50 })
+    const plain = await app.inject({ method: "POST", url: URL, payload: VALID })
+    expect(JSON.stringify(evts.at(-1)?.data)).toBe(plain.payload)
+    const [streamReq, , streamOpts] = mocks.llmStreamStructured.mock.calls[0] as [unknown, unknown, StreamOpts]
+    const [plainReq, , plainOpts] = mocks.llmCompleteStructured.mock.calls[0] as [unknown, unknown, StreamOpts]
+    expect(streamReq).toEqual(plainReq)
+    expect(streamOpts.schemaName).toBe(plainOpts.schemaName)
+  })
+
+  it("bills exactly one analysis: commits on done and never refunds", async () => {
+    mocks.llmStreamStructured.mockImplementation(streamingAnalyzer(ANSWER))
+    await app.inject({ method: "POST", url: URL, payload: VALID, headers: SSE })
+
+    expect(mocks.reserveCreditsForJob).toHaveBeenCalledTimes(1)
+    expect(mocks.commitReservedCreditsForJob).toHaveBeenCalledTimes(1)
+    expect(mocks.commitReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(mocks.refundReservedCreditsForJob).not.toHaveBeenCalled()
+    expect(mocks.jobUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: "completed" }))
+    expect(mocks.llmCompleteStructured).not.toHaveBeenCalled()
+  })
+
+  it("without the event-stream Accept, answers JSON exactly as before and never streams", async () => {
+    mocks.llmCompleteStructured.mockResolvedValue({ output: ANSWER, inputTokens: 100, outputTokens: 50 })
+    const res = await app.inject({ method: "POST", url: URL, payload: VALID, headers: { accept: "application/json" } })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.headers["content-type"]).toContain("application/json")
+    expect(res.json()).toEqual({ jobId: "job-1", pickerJson: { person: ANSWER.person, styling: ANSWER.styling }, gaps: ANSWER.gaps })
+    expect(mocks.llmStreamStructured).not.toHaveBeenCalled()
+  })
+
+  it("keeps validation, auth and credit failures plain HTTP errors, before any stream opens", async () => {
+    const noImage = await app.inject({ method: "POST", url: URL, payload: { targetPickers: ["person"], userId: USER_ID }, headers: SSE })
+    expect(noImage.statusCode).toBe(400)
+    expect(noImage.json().error.code).toBe("validation_error")
+
+    const anonymous = await app.inject({ method: "POST", url: URL, payload: { imageUrl: VALID.imageUrl, targetPickers: ["person"] }, headers: SSE })
+    expect(anonymous.statusCode).toBe(401)
+    expect(anonymous.json().error.code).toBe("unauthorized")
+
+    mocks.reserveCreditsForJob.mockImplementationOnce(async (_req: unknown, reply: FastifyReply) => {
+      reply.status(402).send({ error: { code: "insufficient_credits", message: "Not enough credits" } })
+      return null
+    })
+    const broke = await app.inject({ method: "POST", url: URL, payload: VALID, headers: SSE })
+    expect(broke.statusCode).toBe(402)
+    expect(broke.headers["content-type"]).toContain("application/json")
+    expect(broke.json().error.code).toBe("insufficient_credits")
+    expect(mocks.llmStreamStructured).not.toHaveBeenCalled()
+  })
+
+  it("a failure after the stream opened sends error, refunds, and fails the job", async () => {
+    mocks.llmStreamStructured.mockImplementation(async (_req: unknown, _schema: unknown, opts: StreamOpts) => {
+      opts.onToolJson?.('{"person":{"age":"age-30s"')
+      throw new Error("The model stopped responding")
+    })
+    const res = await app.inject({ method: "POST", url: URL, payload: VALID, headers: SSE })
+
+    expect(res.statusCode).toBe(200)
+    const evts = events(res.payload)
+    expect(evts.map((e) => e.type)).toEqual(["field", "error"])
+    expect(evts.at(-1)?.data).toEqual({ code: "llm_error", message: "The model stopped responding" })
+    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
+    expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", output_data: { error: "The model stopped responding" } })
+  })
+
+  it("a minor: no field carries a value the floor removes, and done carries the floored answer", async () => {
+    const minor = { person: { age: "age-pre-teen", "hair-color": [HAIR] }, styling: { top: "top-bra-top" } }
+    mocks.llmStreamStructured.mockImplementation(streamingAnalyzer(minor, 9))
+    const evts = events((await app.inject({ method: "POST", url: URL, payload: VALID, headers: SSE })).payload)
+
+    expect(evts.filter((e) => e.type === "field").map((e) => e.data)).toEqual([
+      { field: "person.age", value: "age-pre-teen" },
+      { field: "person.hair-color", value: [HAIR] },
+    ])
+    expect(evts.at(-1)).toMatchObject({ type: "done", data: { pickerJson: { person: minor.person, styling: {} } } })
+  })
+
+  it("delivers each event while the analysis is still running, to an in-process reader too", async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    mocks.llmStreamStructured.mockImplementation(async (_req: unknown, _schema: unknown, opts: StreamOpts) => {
+      opts.onToolJson?.('{"person":{"age":"age-30s"')
+      await gate
+      opts.onToolJson?.("}}")
+      return { output: { person: { age: "age-30s" } }, inputTokens: 1, outputTokens: 1 }
+    })
+
+    // How an in-process caller reads it: an inject whose body is a live stream.
+    const res = await app.inject({ method: "POST", url: URL, payload: VALID, headers: SSE, payloadAsStream: true })
+    let text = ""
+    const stream = res.stream()
+    stream.on("data", (chunk: Buffer) => { text += chunk.toString() })
+    const ended = new Promise((resolve) => stream.on("end", resolve))
+
+    await vi.waitFor(() => expect(text).toContain('"field":"person.age"'))
+    expect(text).not.toContain('"type":"done"')
+    release()
+    await ended
+    expect(text).toContain('"type":"done"')
   })
 })

@@ -40,6 +40,24 @@ If no LLM API key (KIE or Anthropic) is configured, the node returns `503 provid
 
 **Flat 10 credits per run**, regardless of how many pickers you wire or which vision model you pick — it is always one vision call. The tiered identifiers `describe-to-picker`, `describe-to-picker:economy`, and `describe-to-picker:premium` all resolve to the same flat price. Credits are reserved when the job starts, committed on success, and fully refunded if the analysis fails.
 
+## Streaming the answer (API)
+
+`POST /v1/describe-to-picker` can deliver its answer as server-sent events, so a client can show each detected trait the moment the model has written it. Send `Accept: text/event-stream` (for example `Accept: text/event-stream, application/json`). Without it, the route answers JSON exactly as before.
+
+Every failure decided before the stream opens (`400`, `401`, `402`, `500`, `502`, `503`) stays a plain HTTP response with the usual JSON error body. The stream itself is `200` with `Content-Type: text/event-stream`: one JSON object per `data:` line and a blank line between events. Comment lines (`: keepalive`) may appear; ignore them.
+
+| Event | `data` | Meaning |
+|-------|--------|---------|
+| `field` | `{ "field": "<picker>.<dimension>", "value": "<id>" }` or `"value": ["<id>", …]` | One detected trait (e.g. `person.hair-color`), sent once the model has finished writing it. At most one per trait. **Provisional**: it is the model's raw pick, which can still fail validation (an id outside the catalog, more picks than the dimension allows) and be corrected. `done` replaces them all. |
+| `done` | `{ jobId, pickerJson, gaps? }` | Exactly the JSON answer. Authoritative. |
+| `error` | `{ "code": "llm_error", "message": "…" }` | The analysis failed after the stream opened. The credits are refunded. |
+
+The stream ends after `done` or `error`; a stream that ends with neither is a failed read.
+
+- **Safety.** A streamed value never contains an id the minor-age safety floor could remove, for any subject. Such traits arrive only in `done`.
+- **Models.** Traits stream from the Claude models when the deployment has a direct Anthropic key. With any other model, the stream carries only `done`. A self-hosted install without its own LLM keys answers through its cloud connection as plain JSON, even when a stream is asked for.
+- **Billing is unchanged.** One analysis per request: committed on `done`, refunded on `error`. A client that disconnects does not stop or re-bill the analysis; the job still completes.
+
 ## Consumer flow
 
 The picker JSON only takes effect once you connect this node's `picker-json` output to a picker node's `picker-json` input. Each consuming node ([Person](../parameters/person.md), Styling, Framing, Lens, Camera/Film Stock) reads **its own section** of the multi-section object and decides how (and when) to merge the detected values into its current selection.

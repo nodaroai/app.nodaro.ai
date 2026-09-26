@@ -24,6 +24,10 @@ export type StreamEvent =
   // a client that knows only runs must not render an edit as one.
   | { type: "action_proposed"; data: Record<string, unknown> }
   | { type: "usage"; data: Record<string, unknown> }
+  // One detail of a structured answer, sent the moment the model has finished
+  // writing it (describe-to-picker's streamed answer). Provisional: the
+  // stream's `done` carries the authoritative result.
+  | { type: "field"; data: { field: string; value: string | string[] } }
 
 // ---------------------------------------------------------------------------
 // SSE Controller
@@ -114,8 +118,15 @@ export async function createSSEStream(
   }, KEEPALIVE_INTERVAL_MS)
 
   // -- Client disconnect -----------------------------------------------------
+  // The RESPONSE's close, never the request's. On current Node the request
+  // stream closes as soon as its body has been read, not when the client
+  // leaves: by a handler behind async hooks it has already closed (so a
+  // listener there never hears a disconnect), and by one without them it
+  // closes just after this attaches (which marked a healthy stream closed and
+  // silenced every write). The response closes when the connection goes away
+  // or the stream ends.
 
-  req.raw.on("close", cleanup)
+  reply.raw.once("close", cleanup)
 
   // --------------------------------------------------------------------------
 

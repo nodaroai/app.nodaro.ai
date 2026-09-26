@@ -32,6 +32,10 @@ export type StreamEvent =
   // a client that knows only runs must not render an edit as one.
   | { type: "action_proposed"; data: Record<string, unknown> }
   | { type: "usage"; data: Record<string, unknown> }
+  // One detail of a structured answer, sent the moment the model has finished
+  // writing it (describe-to-picker's streamed answer). Provisional: the
+  // stream's `done` carries the authoritative result.
+  | { type: "field"; data: { field: string; value: string | string[] } }
 
 /**
  * Thrown when the SSE endpoint responds with a non-2xx status. Carries the HTTP
