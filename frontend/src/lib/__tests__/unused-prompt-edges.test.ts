@@ -36,13 +36,46 @@ function buildSource(): WorkflowNode {
 }
 
 describe("computeUnusedPromptEdges", () => {
-  it("1. non-empty typed prompt with no ref → flags the dead wire", () => {
+  it("1. generate-image APPENDS the wire to a typed prompt → not flagged", () => {
     const nodes = [
       buildSource(),
       node("c1", "generate-image", { prompt: "a portrait" }),
     ]
     const edges = [edge("e1", "n1", "c1", "prompt")]
+    expect(computeUnusedPromptEdges(nodes, edges).has("e1")).toBe(false)
+  })
+
+  it("1b. generate-image with Inject Prompt off → the wire is dead", () => {
+    const nodes = [
+      buildSource(),
+      node("c1", "generate-image", { prompt: "a portrait", injectPrompt: false }),
+    ]
+    const edges = [edge("e1", "n1", "c1", "prompt")]
     expect(computeUnusedPromptEdges(nodes, edges).has("e1")).toBe(true)
+  })
+
+  it("1c. two wires into generate-video's prompt → the earlier one is replaced (dead), the last one is used", () => {
+    const nodes = [
+      node("n1", "text-prompt", { label: "First", text: "a" }),
+      node("n2", "text-prompt", { label: "Second", text: "b" }),
+      node("c1", "generate-video", { prompt: "a street" }),
+    ]
+    const edges = [edge("e1", "n1", "c1", "prompt"), edge("e2", "n2", "c1", "prompt")]
+    const unused = computeUnusedPromptEdges(nodes, edges)
+    expect(unused.has("e1")).toBe(true)
+    expect(unused.has("e2")).toBe(false)
+  })
+
+  it("1d. a wire the prompt places via {Label} is used, and never counts as the replacing one", () => {
+    const nodes = [
+      node("n1", "text-prompt", { label: "First", text: "a" }),
+      node("n2", "text-prompt", { label: "Second", text: "b" }),
+      node("c1", "generate-image", { prompt: "a {Second} street" }),
+    ]
+    const edges = [edge("e1", "n1", "c1", "prompt"), edge("e2", "n2", "c1", "prompt")]
+    const unused = computeUnusedPromptEdges(nodes, edges)
+    expect(unused.has("e2")).toBe(false)
+    expect(unused.has("e1")).toBe(false)
   })
 
   it("2. prompt references {Src} → not flagged", () => {

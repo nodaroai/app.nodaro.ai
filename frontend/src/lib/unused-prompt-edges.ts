@@ -1,6 +1,6 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
-import { NODE_MAPPABLE_FIELDS, canonicalVarName } from "@nodaro/shared"
+import { NODE_MAPPABLE_FIELDS, PARAMETER_NODE_TYPES, canonicalVarName, extractReferencedLabels } from "@nodaro/shared"
 import { getUpstreamNodes } from "@/lib/node-refs"
 import { referencedRefs, hasEmptyInjection } from "@/lib/prompt-ref-scan"
 // Canonical identity-source set (character/face/object/location) — reused so a
@@ -8,11 +8,20 @@ import { referencedRefs, hasEmptyInjection } from "@/lib/prompt-ref-scan"
 // reference/description regardless of any {ref}, so a wire from one is never "unused".
 import { IDENTITY_TYPES } from "@/lib/generate-image-handles"
 
+/** Consumers that APPEND the wired prompt to the typed one (`appendWired` in
+ *  computeNodePrompt) instead of using it as a fallback — so a typed prompt
+ *  never makes their wire dead. */
+const APPEND_WIRED_CONSUMERS: ReadonlySet<string> = new Set(["generate-image", "generate-video"])
+
 /** Edge IDs wired into a `prompt` handle but NOT used by the consumer's prompt.
  *  Conservative — only flags typed-primary consumers (NODE_PROMPT_CANDIDATE_FIELDS)
  *  with a non-empty typed prompt, no `{}` injection, no `{Label}` ref to the source,
  *  no fieldMapping to the source, and a non-identity source. Mirrors execution-time
- *  precedence so it can't drift. Never flags a live edge. */
+ *  precedence so it can't drift. Never flags a live edge.
+ *
+ *  Generate Image / Generate Video append the wire instead: there a wire is dead
+ *  only when Inject Prompt is off, or when a later wire replaces it (the
+ *  resolver keeps the LAST unreferenced text source). */
 export function computeUnusedPromptEdges(
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
@@ -45,6 +54,11 @@ export function computeUnusedPromptEdges(
     if (IDENTITY_TYPES.has(source.type ?? "")) continue
 
     const cdata = consumer.data as Record<string, unknown>
+
+    if (APPEND_WIRED_CONSUMERS.has(ctype)) {
+      if (isAppendedWireUnused(edge, consumer, cdata, byId, edges, upstreamFor)) unused.add(edge.id)
+      continue
+    }
 
     const fm = cdata.fieldMappings as Record<string, unknown> | undefined
     if (
@@ -79,4 +93,35 @@ export function computeUnusedPromptEdges(
     unused.add(edge.id)
   }
   return unused
+}
+
+/** An appended wire (Generate Image / Generate Video) is dead only when Inject
+ *  Prompt is off, or when a LATER wire replaces it: the input resolver keeps the
+ *  last text source it reaches on `prompt`, skipping identity sources (they
+ *  feed references), parameter pickers (their hint is added separately) and
+ *  sources the prompt places via `{Label}`. */
+function isAppendedWireUnused(
+  edge: WorkflowEdge,
+  consumer: WorkflowNode,
+  cdata: Record<string, unknown>,
+  byId: ReadonlyMap<string, WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  upstreamFor: (consumerId: string) => ReturnType<typeof getUpstreamNodes>,
+): boolean {
+  const labelOf = (sourceId: string) => upstreamFor(consumer.id).find((u) => u.id === sourceId)?.label
+  // The same set the input resolver drops from `inputs.prompt` (placed via {Label}).
+  const referenced = extractReferencedLabels(cdata.prompt as string | undefined, cdata.negativePrompt as string | undefined)
+  const isCandidate = (e: WorkflowEdge) => {
+    const src = byId.get(e.source)
+    if (!src || IDENTITY_TYPES.has(src.type ?? "")) return false
+    // A picker adds its hint separately; `text-prompt` is also a parameter type,
+    // but the resolver routes it into the prompt (its own branch comes first).
+    if (src.type !== "text-prompt" && PARAMETER_NODE_TYPES.has(src.type ?? "")) return false
+    const label = labelOf(src.id)
+    return !(label && referenced.has(canonicalVarName(label)))
+  }
+  if (!isCandidate(edge)) return false
+  if (cdata.injectPrompt === false) return true
+  const lastCandidate = [...edges].reverse().find((e) => e.target === consumer.id && e.targetHandle === "prompt" && isCandidate(e))
+  return lastCandidate !== undefined && lastCandidate.id !== edge.id
 }
