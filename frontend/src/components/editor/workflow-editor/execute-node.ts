@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
-import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings } from "@nodaro/shared";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
@@ -118,7 +118,7 @@ import { tx } from "@/lib/i18n";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
   readPromptAffixes, unwrapEditPlanOutput, clampEditPlanClipCount, asEditPlanMode, asEditPlanTier, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, uiResolutionFill, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN, DEFAULT_TRANSCRIBE_NODE_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, normalizeCaptionNumericLevers } from "@nodaro/shared"
-import { applyPromptAffixes, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
+import { applyPromptAffixes, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
@@ -1250,26 +1250,21 @@ function executeNodeCore(
   }
 
   if (node.type === "generate-script") {
-    const prompt = applyPromptAffixes(overridePrompt ?? inputs.prompt, readPromptAffixes(node.data as Record<string, unknown>), refMap) ?? "";
-    if (!prompt) {
-      toast.error(
-        nodeRunError((node.data as GenerateScriptData).label, "nodeRun.noPromptFound"),
-      );
+    // The topic and the settings go through the server's own readers, so a
+    // wired Text node and a mapped Tone or Scene Count read the same on a
+    // single-node run as on a workflow run.
+    const scriptData = node.data as GenerateScriptData;
+    const prompt = computeScriptTopic(scriptData, { override: overridePrompt, wired: inputs.prompt, refMap });
+    if (!prompt.trim()) {
+      toast.error(nodeRunError(scriptData.label, "nodeRun.noPromptFound"));
       return Promise.reject(new Error("No prompt"));
     }
-    const scriptData = node.data as GenerateScriptData;
     setUserPromptTemplate(undefined);
-    return runScriptGeneration(
-      node.id,
-      prompt,
-      ctx,
-      scriptData.sceneCount,
-      scriptData.tone || undefined,
-      scriptData.targetLength || undefined,
-      scriptData.provider || undefined,
-      scriptData.llmModel || undefined,
-      scriptData.reasoningEffort || undefined,
-    );
+    return runScriptGeneration(node.id, prompt, ctx, readScriptSettings(scriptData, refMap), {
+      provider: scriptData.provider || undefined,
+      llmModel: scriptData.llmModel || undefined,
+      reasoningEffort: scriptData.reasoningEffort || undefined,
+    });
   }
 
   if (node.type === "generate-image") {

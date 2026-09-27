@@ -48,7 +48,9 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   "edit-3d-scene":       ["editPrompt"],
   "pro-3d-render":       ["scenePrompt"],
   "motion-graphics":     ["motionPrompt"],
-  "generate-script":     ["styleGuide"],
+  // Every field the panel offers a source for. Numbers arrive as text from a
+  // Scene Count / Duration node; readScriptSettings coerces them on both engines.
+  "generate-script":     ["styleGuide", "tone", "sceneCount", "targetLength"],
   "speech-to-video":     ["prompt", "negativePrompt"],
   "extend-video":        ["prompt"],
   "motion-transfer":     ["prompt"],

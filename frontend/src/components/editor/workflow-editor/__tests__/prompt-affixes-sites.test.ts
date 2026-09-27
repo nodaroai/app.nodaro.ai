@@ -11,13 +11,18 @@ import { join } from "node:path"
 
 const SRC = readFileSync(join(__dirname, "..", "execute-node.ts"), "utf8")
 
-/** Category B on the frontend (Category A goes through promptOf / assembleVideoPrompt / computeLlmChatFields). */
+/** Category B on the frontend (Category A goes through promptOf / assembleVideoPrompt / computeLlmChatFields / computeScriptTopic). */
 const CATEGORY_B = [
   "modify-image", "generate-mask", "voice-remix", "voice-design", "forced-alignment", "video-analysis",
   "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-style-boost", "suno-upload-extend",
   "image-to-text", "lip-sync", "motion-transfer", "video-sfx", "3d-title", "motion-graphics", "image-critic",
-  "generate-script",
 ]
+
+/** Bespoke blocks whose shared composer applies the affixes itself — the one
+ *  both engines call, so the block names it instead of `applyPromptAffixes(`. */
+const SHARED_COMPOSER: Readonly<Record<string, string>> = {
+  "generate-script": "computeScriptTopic(",
+}
 
 function blockFor(type: string): string {
   const start = SRC.indexOf(`if (node.type === "${type}")`)
@@ -29,5 +34,8 @@ function blockFor(type: string): string {
 describe("execute-node Category-B sites wrap the prompt with applyPromptAffixes", () => {
   for (const type of CATEGORY_B) {
     it(type, () => expect(blockFor(type)).toContain("applyPromptAffixes("))
+  }
+  for (const [type, composer] of Object.entries(SHARED_COMPOSER)) {
+    it(`${type} (through ${composer.slice(0, -1)})`, () => expect(blockFor(type)).toContain(composer))
   }
 })

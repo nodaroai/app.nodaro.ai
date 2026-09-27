@@ -184,3 +184,19 @@ export function computeLlmChatFields(
     systemPrompt: resolvePrompt({ typed: [data.systemPrompt as string | undefined], wired: wiredSystemPrompt, refMap }),
   }
 }
+
+/** generate-script's topic. Both engines call this, so a wired Text node reads
+ *  the same on a single-node run and a server run.
+ *
+ *  Precedence is override (a list fan-out item) > wired > `data.prompt`. Wired
+ *  comes BEFORE the typed field, the reverse of `computeNodePrompt`, because
+ *  `data.prompt` has no editor: the panel's text field is the style guide. A
+ *  value there was written by the old connect-time `{Label}` auto-fill or by an
+ *  agent, and it is kept only as the fallback that saved workflows rely on. */
+export function computeScriptTopic(
+  data: Record<string, unknown>,
+  { override, wired, refMap }: Omit<ComputeNodePromptArgs, "appendWired">,
+): string {
+  const core = [override, wired, data.prompt as string | undefined].find(present)
+  return applyPromptAffixes(core === undefined ? "" : rr(core, refMap), readPromptAffixes(data), refMap)
+}

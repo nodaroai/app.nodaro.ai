@@ -161,6 +161,22 @@ describe("generateScript — user prompt construction", () => {
     expect(userMsg).not.toContain("Tone:")
   })
 
+  it("adds the style guide after the brief when one is given", async () => {
+    await generateScript("a journey", 3, undefined, undefined, undefined, undefined, undefined, undefined, { styleGuide: "Noir, short lines" })
+
+    const call = mocks.llmComplete.mock.calls[0][0]
+    const userMsg = (call.messages[0] as { content: string }).content
+    expect(userMsg).toMatch(/Style guide \(follow it for the writing, the visuals and the pacing\):\nNoir, short lines$/)
+  })
+
+  it("omits the style guide when there is none", async () => {
+    await generateScript("a journey", 3, undefined, undefined, undefined, undefined, undefined, undefined, { styleGuide: undefined })
+
+    const call = mocks.llmComplete.mock.calls[0][0]
+    const userMsg = (call.messages[0] as { content: string }).content
+    expect(userMsg).not.toContain("Style guide")
+  })
+
   it("uses the system prompt with cinematic-script instructions", async () => {
     await generateScript("p")
 

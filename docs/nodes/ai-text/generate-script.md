@@ -12,16 +12,18 @@ The Generate Script node uses Gemini Flash to produce a structured, multi-scene 
 | Provider | `ScriptProvider` | `"gemini"` | AI model provider for script generation |
 | Model | `string` | `"gemini-2.5-flash"` | Specific model version |
 | Advanced mode | `boolean` | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit tier up; the node's cost badge updates immediately. Disabled with an inline reason on non-Gemini models |
-| Scene Count | `number` | `5` | Number of scenes to generate |
-| Style Guide | `string` | `""` | Optional style directions that influence the visual and narrative style of the script |
+| Scene Count | `number` | `5` | Number of scenes to generate, 1 to 20 |
+| Style Guide | `string` | `""` | Optional style directions for the writing, the visuals and the pacing. Sent to the model with the topic. Supports `{Node Label}` references |
 | Structure | `"freeform" \| "8-step" \| "custom"` | `"freeform"` | Script structure template. Freeform allows the AI to decide pacing; 8-step follows a classic narrative arc |
-| Tone | `string` | `""` | Optional tone descriptor (e.g., "cinematic", "playful", "dark", "documentary") |
-| Target Length | `number` | `60` | Target total duration in seconds for the entire script |
+| Tone | `string` | `""` | Optional tone descriptor (e.g., "cinematic", "playful", "dark", "documentary"), up to 200 characters. Can come from a connected Tone or Text node (pick it in the field's source menu) |
+| Target Length | `number` | `60` | Target total duration in seconds for the entire script, 5 to 600 |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the script prompt (not the Style Guide) at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 
-- **Input**: `in` -- text prompt describing the desired script topic, story, or concept
+- **Input**: `prompt` -- the topic, story or concept, from a connected Text node (or any text output). A run with no topic stops before it starts and names the missing input; no credits are charged.
+
+A value that comes from a connected source is fitted to its field: a longer tone is cut to 200 characters, a number given as text becomes a whole number within the field's range, and a value that is not a number leaves the field at its default.
 - **Output**: `scenes` -- structured `GeneratedScript` object containing title, total duration, and array of `ScriptScene` objects
 
 ### ScriptScene Fields

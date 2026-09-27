@@ -485,23 +485,22 @@ describe("generate-script", () => {
       "n1",
       "test prompt",
       expect.anything(),
-      5,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
+      { sceneCount: 5 },
+      {},
     )
   })
 
-  it("passes sceneCount, tone, targetLength, provider, llmModel, reasoningEffort from data", async () => {
+  it("passes the typed settings and the model, normalized to what the route accepts", async () => {
     mockResolveNodeInputs.mockReturnValue({ prompt: "p" })
     mockRunScriptGeneration.mockResolvedValue(undefined)
     await executeNode(
       makeNode("generate-script", {
         sceneCount: 3,
         tone: "dramatic",
+        // Not a number of seconds: dropped so the generator's default applies,
+        // instead of the route refusing the whole request.
         targetLength: "short",
+        styleGuide: "  Noir, short lines, rain in every scene  ",
         provider: "claude",
         llmModel: "claude-sonnet-4.6",
         reasoningEffort: "medium",
@@ -512,13 +511,46 @@ describe("generate-script", () => {
       "n1",
       "p",
       expect.anything(),
-      3,
-      "dramatic",
-      "short",
-      "claude",
-      "claude-sonnet-4.6",
-      "medium",
+      { sceneCount: 3, tone: "dramatic", styleGuide: "Noir, short lines, rain in every scene" },
+      { provider: "claude", llmModel: "claude-sonnet-4.6", reasoningEffort: "medium" },
     )
+  })
+
+  it("applies a mapped Tone and a mapped Scene Count (both used to be ignored)", async () => {
+    const tone = { id: "tone1", type: "tone", data: { label: "Tone", tone: "wry and warm" } }
+    const count = { id: "count1", type: "scene-count", data: { label: "Scenes", count: 7 } }
+    const script = makeNode("generate-script", {
+      tone: "typed tone",
+      sceneCount: 3,
+      fieldMappings: { tone: { sourceNodeId: "tone1" }, sceneCount: { sourceNodeId: "count1" } },
+    })
+    mockNodes = [script, tone, count]
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a lighthouse keeper" })
+    mockRunScriptGeneration.mockResolvedValue(undefined)
+    await executeNode(script, makeCtx())
+    expect(mockRunScriptGeneration).toHaveBeenCalledWith(
+      "n1",
+      "a lighthouse keeper",
+      expect.anything(),
+      // The Scene Count node reports "7" as text; it arrives as the number 7.
+      expect.objectContaining({ tone: "wry and warm", sceneCount: 7 }),
+      {},
+    )
+  })
+
+  it("falls back to the saved {Label} topic when the resolver hid the wired Text node", async () => {
+    // Older workflows carry a hidden `prompt: "{Story}"` from the connect-time
+    // auto-fill. It makes the resolver drop the wired Text (its label is
+    // "referenced"), and the single-node run used to fail with "No prompt".
+    const story = { id: "t1", type: "text-prompt", data: { label: "Story", text: "a knight's last quest" } }
+    const script = makeNode("generate-script", { prompt: "{Story}" })
+    mockNodes = [script, story]
+    mockEdges = [{ id: "e1", source: "t1", target: "n1", targetHandle: "prompt" }]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockExtractNodeOutput.mockImplementation((node: any) => (node.id === "t1" ? "a knight's last quest" : undefined))
+    mockRunScriptGeneration.mockResolvedValue(undefined)
+    await executeNode(script, makeCtx())
+    expect(mockRunScriptGeneration).toHaveBeenCalledWith("n1", "a knight's last quest", expect.anything(), {}, {})
   })
 })
 

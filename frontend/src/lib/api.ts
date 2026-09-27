@@ -3226,6 +3226,7 @@ export async function generateScriptApi(params: {
   sceneCount?: number
   tone?: string
   targetDuration?: number
+  styleGuide?: string
   provider?: string
   llmModel?: string
   reasoningEffort?: string

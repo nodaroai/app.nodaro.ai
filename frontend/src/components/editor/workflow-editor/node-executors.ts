@@ -1,4 +1,4 @@
-import type { FrameFit, FrameDelivery } from "@nodaro/shared";
+import type { FrameFit, FrameDelivery, ScriptSettings } from "@nodaro/shared";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import {
@@ -505,12 +505,9 @@ export function runScriptGeneration(
   nodeId: string,
   prompt: string,
   ctx: ExecutionContext,
-  sceneCount?: number,
-  tone?: string,
-  targetDuration?: number,
-  provider?: string,
-  llmModel?: string,
-  reasoningEffort?: string,
+  /** Already normalized by `readScriptSettings`, the server's reader too. */
+  settings: ScriptSettings = {},
+  model: { provider?: string; llmModel?: string; reasoningEffort?: string } = {},
 ): Promise<string> {
   const { updateNodeData, nodes } = useWorkflowStore.getState();
   updateNodeData(nodeId, { ...RUN_START_RESET });
@@ -523,8 +520,7 @@ export function runScriptGeneration(
   );
 
   return new Promise<string>((resolve, reject) => {
-    generateScriptApi({ prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort,
-      ...advanced, userId: ctx.userId })
+    generateScriptApi({ prompt, ...settings, ...model, ...advanced, userId: ctx.userId })
       .then(({ jobId }) => {
         if (ctx.signal?.aborted) {
           // Run discarded/aborted while the create-job request was in flight.

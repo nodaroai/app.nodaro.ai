@@ -156,6 +156,8 @@ export async function generateScript(
    *  this signature is already 7 deep and every existing call site passes
    *  positionally. */
   advanced?: LlmAdvancedInput,
+  /** The node's style guide: how the script should read and look. */
+  brief?: { styleGuide?: string },
 ): Promise<GeneratedScript> {
   const resolvedModelId = resolveScriptModelId(provider, llmModel)
 
@@ -164,6 +166,9 @@ export async function generateScript(
   let userPrompt = `Create a ${sceneCount}-scene cinematic script for the following concept:\n\n${prompt}\n\nTarget duration: ${duration} seconds.`
   if (tone) {
     userPrompt += `\nTone: ${tone}`
+  }
+  if (brief?.styleGuide) {
+    userPrompt += `\n\nStyle guide (follow it for the writing, the visuals and the pacing):\n${brief.styleGuide}`
   }
 
   const modelDef = getLlmModel(resolvedModelId)

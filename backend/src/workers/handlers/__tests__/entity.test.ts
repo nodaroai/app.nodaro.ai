@@ -476,7 +476,7 @@ describe("generate-script handler", () => {
     const job = makeJob("generate-script", { prompt: "a story about adventure" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateScript).toHaveBeenCalledWith("a story about adventure", undefined, undefined, undefined, undefined, undefined, undefined, undefined)
+    expect(mocks.mockGenerateScript).toHaveBeenCalledWith("a story about adventure", undefined, undefined, undefined, undefined, undefined, undefined, undefined, { styleGuide: undefined })
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { script: { title: "My Script", scenes: [{ description: "Scene 1" }] } },
     }))
@@ -500,6 +500,24 @@ describe("generate-script handler", () => {
       "claude-opus-4.7",
       "max",
       undefined,
+      { styleGuide: undefined },
+    )
+  })
+
+  it("passes the node's style guide to generateScript", async () => {
+    const job = makeJob("generate-script", { prompt: "a story", styleGuide: "noir, short lines" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockGenerateScript).toHaveBeenCalledWith(
+      "a story",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { styleGuide: "noir, short lines" },
     )
   })
 })

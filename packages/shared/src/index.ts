@@ -643,6 +643,14 @@ export {
 
 export { NODE_MAPPABLE_FIELDS, SUNO_FIELD_HANDLE_FIELDS, fieldKeyFromHandle } from "./node-mappable-fields.js"
 export {
+  readScriptSettings,
+  SCRIPT_SCENE_COUNT_RANGE,
+  SCRIPT_TARGET_DURATION_RANGE,
+  SCRIPT_TONE_MAX_LENGTH,
+  SCRIPT_STYLE_GUIDE_MAX_LENGTH,
+  type ScriptSettings,
+} from "./script-settings.js"
+export {
   SCHEDULE_TRIGGER_NODE_TYPE,
   WEBHOOK_TRIGGER_NODE_TYPE,
   TELEGRAM_TRIGGER_NODE_TYPE,
