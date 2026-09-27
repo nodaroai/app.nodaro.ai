@@ -1932,6 +1932,38 @@
       "expected": "a Crusader knight — chainmail hauberk under a white surcoat with a red cross emblem, conical helm, longsword and kite shield, devout warrior bearing, in their early 20s, around 21 years old, of Norwegian descent, a Shibuya streetwear aesthetic — Tokyo street-fashion vibe, layered post-modern mood, full-figured, full bust, pear-shaped silhouette, a heart-shaped face with a wide forehead and pointed chin, a pointed chin with a narrow jawline, high, defined cheekbones, a lean face with low facial fat and subtle hollowing beneath the cheekbones, double-eyelid eyes with a clearly defined upper crease, droopy eyes with the upper lids sitting low for a soft, sleepy gaze, upturned eyes with the outer corners lifted, positive canthal tilt, close-set eyes set close together, eyes set close beneath the brow with little brow-to-eye distance, hunter eyes, a small button nose with a rounded tip, a slightly upturned nose tip, full plump lips, a wide mouth, with lips pursed, pressed and pushed forward, long straight hair, gray hair, bold defined dark full eyebrows, tan skin, with visible swimwear tan lines on the skin, rare violet eyes with a deep purple iris, gazing off-camera with a contemplative expression, a goatee, with a small face tattoo near the eye or cheekbone"
     },
     {
+      "key": "person/mixed-heritage",
+      "note": "Two ethnicity picks → one mixed-heritage phrase from the entries' prompt text",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "ethnicity": [
+            "slavic",
+            "mediterranean"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "of mixed Slavic Eastern European and Mediterranean heritage"
+    },
+    {
+      "key": "person/mixed-heritage-abbrev",
+      "note": "Two ethnicity picks whose short labels are abbreviations (Pacific Isl. / East (any))",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "ethnicity": [
+            "pacific-islander",
+            "east-asian"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "of mixed Pacific Islander and East Asian heritage"
+    },
+    {
       "key": "person/one-dimension",
       "note": "multi-dim: only \"type\" set",
       "node": {

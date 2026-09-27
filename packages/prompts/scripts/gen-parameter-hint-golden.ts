@@ -451,6 +451,19 @@ add(
   { id: "n1", type: "person", data: { distinctiveFeature: ["feature-midriff-visible", "feature-navel-visible"] } },
 )
 
+// Two ethnicity picks: the heritage phrase is built from each entry's prompt
+// text, never from its picker short label ("Mediter.", "Pacific Isl.").
+add(
+  "person/mixed-heritage",
+  "Two ethnicity picks → one mixed-heritage phrase from the entries' prompt text",
+  { id: "n1", type: "person", data: { ethnicity: ["slavic", "mediterranean"] } },
+)
+add(
+  "person/mixed-heritage-abbrev",
+  "Two ethnicity picks whose short labels are abbreviations (Pacific Isl. / East (any))",
+  { id: "n1", type: "person", data: { ethnicity: ["pacific-islander", "east-asian"] } },
+)
+
 for (const id of ["state-fitted", "state-wet"] as const) {
   add(`styling/w1b:${id}`, `W1-b reworded hint — ${id}`, {
     id: "n1",
