@@ -47,7 +47,7 @@ generated_from: 65b4cddf2
 
 ## When to use
 
-(Add prose here. Auto-gen will preserve it across regenerations.)
+Replaces the face in a video with the face from one image. Wire the face into `face` (an image producer's output, or a Character / Face node, whose portrait is used) and the clip into `video`. The result keeps the source clip's own sound.
 
 <!-- AUTO-GEN:START mcp-call -->
 **MCP tool:** `face_swap`
@@ -61,7 +61,8 @@ generated_from: 65b4cddf2
 
 ## Common gotchas
 
-(Add prose here.)
+- A run missing the face or the video is refused before anything is billed (`image_required` / `video_required`).
+- Use a clear, front-facing face photo; the source clip needs a clearly visible face.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

@@ -2165,7 +2165,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
   server.registerTool(
     "suno_generate",
     {
-      title: "Suno Generate",
+      title: "Suno Create Music",
       description:
         "Generate an original song with Suno AI. Returns a job_id. The job " +
         "output contains sunoTaskId + sunoTrackId needed by follow-up tools " +

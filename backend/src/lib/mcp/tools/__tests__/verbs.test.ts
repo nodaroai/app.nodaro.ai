@@ -1171,6 +1171,37 @@ describe("voice_design verb", () => {
   })
 })
 
+describe("generate_script verb", () => {
+  it("forwards style_guide as styleGuide, beside the other settings", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-script", { jobId: "j-gs" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_script", {
+      prompt: "a lighthouse keeper's last night",
+      scene_count: 4,
+      tone: "wistful",
+      target_duration: 45,
+      style_guide: "noir, short lines, rain in every scene",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body).toMatchObject({
+      prompt: "a lighthouse keeper's last night",
+      sceneCount: 4,
+      tone: "wistful",
+      targetDuration: 45,
+      styleGuide: "noir, short lines, rain in every scene",
+    })
+  })
+
+  it("sends no styleGuide when none is given", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-script", { jobId: "j-gs2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "generate_script", { prompt: "a short story" })
+    expect(received.body).not.toHaveProperty("styleGuide")
+  })
+})
+
 // suno_separate_stems / suno_extend error-path coverage requires a
 // supabase mock that matches resolveSunoIds' specific column selection
 // (output_data, user_id, is_public, status). The shared file-level mock

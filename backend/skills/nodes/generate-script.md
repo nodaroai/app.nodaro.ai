@@ -1,7 +1,7 @@
 ---
 node_type: generate-script
-generated_at: 2026-09-27T10:38:39.153Z
-generated_from: bf4f83575
+generated_at: 2026-09-27T11:11:38.336Z
+generated_from: bcca061ee
 ---
 
 # Generate Script
@@ -73,6 +73,7 @@ Four settings inputs set one panel field each at run time, over the typed value:
 - `scene_count`
 - `tone`
 - `target_duration`
+- `style_guide`
 - `model`
 <!-- AUTO-GEN:END mcp-call -->
 

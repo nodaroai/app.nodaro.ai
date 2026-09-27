@@ -399,6 +399,15 @@ const UGC_BUILDER_TOOL_BYTES = 3_753
 // get_recipe's description gains one sentence saying the listing includes the
 // UGC website video on Nodaro Cloud. measured by this suite: +136 B.
 const GET_RECIPE_UGC_SENTENCE_BYTES = 136
+// RAISED 2026-09-27 by ONE argument and a title, and nothing else: `style_guide`
+// on `generate_script` (the route takes `styleGuide`, and the Generate Script
+// panel's main text field is the style guide, which the model now receives), and
+// `suno_generate`'s title following the node's name, "Suno Create Music". The
+// `scene_count` description also traded "default determined by model" for the
+// real default. No tool was added, so the fixture does NOT move. measured by
+// this suite: 373_062 total − 372_935 base = 127 B, which keeps the 37 B of
+// headroom the list had before.
+const GENERATE_SCRIPT_STYLE_GUIDE_BYTES = 127
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -433,7 +442,8 @@ export const TOOL_WIRE_BUDGET = {
     VIDEO_OVERLAY_TOOL_BYTES +
     AUDIO_SYNC_TOOL_BYTES +
     UGC_BUILDER_TOOL_BYTES +
-    GET_RECIPE_UGC_SENTENCE_BYTES,
+    GET_RECIPE_UGC_SENTENCE_BYTES +
+    GENERATE_SCRIPT_STYLE_GUIDE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }
