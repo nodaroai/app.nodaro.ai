@@ -201,6 +201,7 @@ app.post("/v1/my-route", {
 
 **Core shim (stays in `middleware/`):**
 - `middleware/credit-guard.ts` — thin dispatcher; `creditGuard()` returns no-op preHandler when `!hasCredits()`, otherwise delegates to `ee/lib/credit-guard-impl.ts` via dynamic `import()`. The 62 routes calling `creditGuard()` see no behavioral change.
+- `lib/pricing/charged-prices.ts` — `loadChargedPrices()`, the prices a run is CHARGED (`model_pricing` over `STATIC_CREDIT_COSTS`, marked up once), loaded the same dynamic way. Every surface that LISTS a price (`/v1/models`, MCP `list_models`, `/v1/nodes`, the workflow and Component estimates, `/v1/credits/model-costs`) reads it or its ee twin `getChargedPriceTable()` — never `STATIC_CREDIT_COSTS` or the catalog's `pricing`, which are base prices below what a run is charged.
 
 ---
 

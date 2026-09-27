@@ -101,6 +101,7 @@ All gated behind `hasCredits()`:
 - `InsufficientCreditsModal` — balance vs required, with Upgrade/Buy CTAs
 - `RunNodeButton` — hover button under each node "Run (N CR)"
 - `useModelCredits(modelId)` hook — fetches from `/v1/credits/model-cost` with cache
+- `useModelCreditRange(modelId)` (`hooks/use-model-credit-range.ts`) — the "min-max CR" a model picker quotes for a variable-priced model, at the CHARGED price of each variant (batched `/v1/credits/model-costs`). Never derive a price or range from `MODEL_CATALOG` `pricing` — those are base prices, below what a run is charged.
 
 ---
 

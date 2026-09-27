@@ -8,8 +8,9 @@ import { z } from "zod"
 import { CreditsService } from "../services/credits.js"
 import { supabase } from "../../lib/supabase.js"
 import { formatZodError } from "../../lib/zod-error.js"
+import { sendInternalError } from "../../lib/http-errors.js"
 import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
-import { PriceNotConfiguredError, type UserBalance } from "../billing/credits.js"
+import { chargedCredits, getChargedPriceTable, type UserBalance } from "../billing/credits.js"
 import { callerKeyHash } from "../../routes/oauth-register.js"
 import { config } from "../../lib/config.js"
 import { firstHeaderValue } from "../../lib/request-helpers.js"
@@ -412,14 +413,16 @@ export async function creditsRoutes(app: FastifyInstance) {
 
   /**
    * POST /v1/credits/model-costs
-   * Batch lookup for editor cost previews. Returns the subset of models with
-   * a known price + a list of identifiers that have no pricing row.
+   * Batch lookup for editor cost previews: the price each identifier is
+   * charged, plus the identifiers that have no price at all.
    *
-   * Per-model fault isolation (Promise.allSettled): one unpriced identifier
-   * cannot 503 the whole batch and take down the editor's cost panel. The
-   * hard-fail policy still triggers at credit-guard reservation time when the
-   * user actually runs the node — that's the intended user-facing gate, not
-   * the editor preview lookup.
+   * Priced from ONE read of the price table (`getChargedPriceTable`, the batch
+   * twin of the Run button's lookup), not one database query per identifier:
+   * the model pickers ask for every variant of every variable-priced model at
+   * once. An unpriced identifier lands in `missing` and never fails the batch —
+   * the hard-fail policy still triggers when the user actually runs the node.
+   * `errors` stays on the wire for older clients; a failed table read prices
+   * from STATIC_CREDIT_COSTS rather than failing identifiers.
    */
   app.post("/v1/credits/model-costs", async (req, reply) => {
     const parsed = modelCostsBody.safeParse(req.body ?? {})
@@ -430,39 +433,24 @@ export async function creditsRoutes(app: FastifyInstance) {
     }
     const { models } = parsed.data
 
-    const results = await Promise.allSettled(
-      models.map(async (model) => {
-        const cost = await CreditsService.getModelCreditCost(model)
-        return { model, cost }
-      }),
-    )
-
-    const costs: Record<string, number> = {}
-    const missing: string[] = []
-    const otherErrors: string[] = []
-
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i]!
-      if (r.status === "fulfilled") {
-        costs[r.value.model] = r.value.cost
-        continue
+    try {
+      const prices = await getChargedPriceTable()
+      const costs: Record<string, number> = {}
+      const missing: string[] = []
+      for (const model of models) {
+        const cost = chargedCredits(prices, model)
+        if (cost === undefined) missing.push(model)
+        else costs[model] = cost
       }
-      const id = models[i]!
-      if (r.reason instanceof PriceNotConfiguredError) {
-        missing.push(id)
-        continue
+      if (missing.length > 0) {
+        console.warn(
+          `[credits] model-costs: ${missing.length} unpriced identifier(s): ${missing.join(", ")}`,
+        )
       }
-      otherErrors.push(id)
-      console.error(`[credits] model-costs lookup failed for "${id}":`, r.reason)
+      return { data: costs, missing, errors: [] as string[] }
+    } catch (err) {
+      return sendInternalError(reply, req, err, "Failed to get model costs")
     }
-
-    if (missing.length > 0) {
-      console.warn(
-        `[credits] model-costs: ${missing.length} unpriced identifier(s): ${missing.join(", ")}`,
-      )
-    }
-
-    return { data: costs, missing, errors: otherErrors }
   })
 
   /**

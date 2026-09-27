@@ -11,6 +11,7 @@ export const queryKeys = {
     all: ["credits"] as const,
     balance: (userId: string) => ["credits", "balance", userId] as const,
     modelCost: (model: string) => ["credits", "model-cost", model] as const,
+    modelRanges: () => ["credits", "model-ranges"] as const,
   },
 
   // Billing

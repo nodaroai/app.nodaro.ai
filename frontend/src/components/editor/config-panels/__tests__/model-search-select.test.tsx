@@ -6,6 +6,7 @@ import { translate } from "@/lib/i18n"
 
 // Hook is gated behind hasCredits(); stub it so the closed-state render is pure.
 vi.mock("@/ee/hooks/use-model-credits", () => ({ useModelCredits: () => 0 }))
+vi.mock("@/hooks/use-model-credit-range", () => ({ useModelCreditRange: () => undefined }))
 
 const OPTIONS = [
   { value: "flux", label: "Flux", desc: "Photorealistic" },
