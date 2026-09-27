@@ -113,13 +113,14 @@ export const VIDEO_ANALYSIS_WINDOW = { LEN: WINDOW_LEN, STRIDE: WINDOW_STRIDE, O
 // the legacy `gemini-3-flash` family moves too.
 // Output of the plugin's `scripts/gen-va-buckets.mjs`, pasted verbatim.
 export const VIDEO_ANALYSIS_BUCKET_CREDITS: Record<string, number> = {
-  // Legacy fast-tier model (pre-2026-07) — kept for stored raw-id configs.
+  // Current fast tier (VIDEO_ANALYSIS_TIERS.fast; it was also the fast model
+  // before 2026-07).
   "video-analysis:gemini-3-flash:60s": 181,
   "video-analysis:gemini-3-flash:180s": 186,
   "video-analysis:gemini-3-flash:360s": 516,
   "video-analysis:gemini-3-flash:600s": 849,
-  // Current fast tier — regenerated from the private formula for its backing
-  // model; higher than the legacy fast schedule but still ≤ pro per bucket.
+  // Legacy fast-tier model (backed the fast tier 2026-07 → 2026-07-29) — kept
+  // for stored raw-id configs; still ≤ pro per bucket.
   "video-analysis:gemini-3.6-flash:60s": 205,
   "video-analysis:gemini-3.6-flash:180s": 219,
   "video-analysis:gemini-3.6-flash:360s": 603,

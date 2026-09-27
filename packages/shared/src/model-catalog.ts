@@ -2282,9 +2282,9 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     kind: "video",
     modes: ["video-analysis"] as const,
     family: "Nodaro",
-    label: "Video Analysis (Fast — legacy)",
+    label: "Video Analysis (Fast)",
     series: "Video Analysis",
-    description: "Legacy fast-tier analysis model (pre-2026-07). Kept so stored raw-model configs keep running and keep pricing under their own identifier; new fast-tier runs use the current fast model.",
+    description: "Analyze a video into a structured shot list (scenes, camera, audio) — fast, economy tier. Billed per duration bucket.",
     useCases: ["video-analysis", "shot-list", "fast"],
     pricing: [
       { identifier: "video-analysis:gemini-3-flash", credits: 849, note: "10-min ceiling (no duration given)" },
@@ -2299,9 +2299,9 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     kind: "video",
     modes: ["video-analysis"] as const,
     family: "Nodaro",
-    label: "Video Analysis (Fast)",
+    label: "Video Analysis (Fast — legacy)",
     series: "Video Analysis",
-    description: "Analyze a video into a structured shot list (scenes, camera, audio) — fast, economy tier. Billed per duration bucket.",
+    description: "Legacy fast-tier analysis model (backed the fast tier from 2026-07 until 2026-07-29). Kept so stored raw-model configs keep running and keep pricing under their own identifier; new fast-tier runs use the current fast model.",
     useCases: ["video-analysis", "shot-list", "fast"],
     pricing: [
       { identifier: "video-analysis:gemini-3.6-flash", credits: 995, note: "10-min ceiling (no duration given)" },
