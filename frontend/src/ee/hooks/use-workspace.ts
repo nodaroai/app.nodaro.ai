@@ -72,5 +72,5 @@ export const FALLBACK_VOCABULARY: Record<string, string> = Object.freeze({
 export function useVocabulary(orgId?: string | null): Record<string, string> {
   const { organizations, activeOrganization } = useWorkspace()
   const org = orgId ? (organizations.find((o) => o.id === orgId) ?? null) : activeOrganization
-  return useOrgVocabulary(org?.vocabulary ?? FALLBACK_VOCABULARY)
+  return useOrgVocabulary(org?.vocabulary ?? FALLBACK_VOCABULARY, org?.settings?.vocabulary_overrides)
 }

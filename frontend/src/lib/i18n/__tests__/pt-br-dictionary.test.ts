@@ -37,7 +37,10 @@ const SAME_AS_EN: ReadonlySet<string> = new Set<string>([
 const CONTRACTED_OK: ReadonlySet<string> = new Set<string>([
   "integ.clearsMissingKeys",        // "{n} das {total} chaves": chaves fixes it
   "setup.oneClickClears",           // same
-  "org.workspaceNamePlaceholder",   // the workspace word is feminine by convention
+  // The workspace word's gender is known at run time: genderedWorkspaceKey
+  // (ee/lib/org-vocabulary.ts) picks the base (feminine) or its …Masc form.
+  "org.workspaceNamePlaceholder",
+  "org.workspaceNamePlaceholderMasc",
 ])
 
 const dict = ptBR as Record<string, string>

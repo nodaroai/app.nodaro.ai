@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { queryKeys } from "@/lib/query-keys"
 import { useVocabulary } from "@/ee/hooks/use-workspace"
+import { genderedWorkspaceKey, workspaceGender } from "@/ee/lib/org-vocabulary"
 import { JoinCodeCard } from "@/ee/components/org/join-code-card"
 import { useT, type TFunction } from "@/lib/i18n"
 import { OrgApiError, getWorkspace, updateWorkspace } from "@/ee/lib/orgs-api"
@@ -27,6 +28,7 @@ export default function WorkspaceSettingsPage() {
   const { id = "" } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const vocabulary = useVocabulary()
+  const gender = workspaceGender(vocabulary, t)
   const workspaceWord = vocabulary.workspace ?? t("org.workspaceWord")
 
   const workspace = useQuery({
@@ -66,7 +68,7 @@ export default function WorkspaceSettingsPage() {
           <p className="text-sm text-muted-foreground">
             {code === "member_suspended"
               ? t("org.suspendedCannotOpenShort")
-              : t("org.workspaceMissingOrNotMember", { workspace: workspaceWord.toLowerCase() })}
+              : t(genderedWorkspaceKey("org.workspaceMissingOrNotMember", gender), { workspace: workspaceWord.toLowerCase() })}
           </p>
           <Button asChild variant="outline">
             <Link to="/">{t("org.backToYourWork")}</Link>
@@ -91,13 +93,13 @@ export default function WorkspaceSettingsPage() {
 
       {!isAdmin && (
         <p className="rounded-md border p-3 text-sm text-muted-foreground">
-          {t("org.onlyAdminCanChange", { workspace: workspaceWord.toLowerCase() })}
+          {t(genderedWorkspaceKey("org.onlyAdminCanChange", gender), { workspace: workspaceWord.toLowerCase() })}
         </p>
       )}
 
       {data.archived && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-muted-foreground">
-          {t("org.archivedNothingChanges", { workspace: workspaceWord.toLowerCase() })}
+          {t(genderedWorkspaceKey("org.archivedNothingChanges", gender), { workspace: workspaceWord.toLowerCase() })}
         </p>
       )}
 
@@ -142,7 +144,7 @@ export default function WorkspaceSettingsPage() {
         </div>
       </Card>
 
-      {isAdmin && <JoinCodeCard workspaceId={id} workspaceWord={workspaceWord} disabled={data.archived} />}
+      {isAdmin && <JoinCodeCard workspaceId={id} workspaceWord={workspaceWord} gender={gender} disabled={data.archived} />}
     </div>
   )
 }

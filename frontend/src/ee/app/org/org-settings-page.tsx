@@ -12,7 +12,7 @@ import { queryKeys } from "@/lib/query-keys"
 import { hydrateWorkspaces } from "@/lib/workspace-context"
 import { useWorkspace } from "@/ee/hooks/use-workspace"
 import { useOrgVocabulary } from "@/ee/hooks/use-org-vocabulary"
-import { pluralWorkspaceWord } from "@/ee/lib/org-vocabulary"
+import { genderedWorkspaceKey, pluralWorkspaceWord, workspaceGender } from "@/ee/lib/org-vocabulary"
 import { useT, type MessageKey, type TFunction } from "@/lib/i18n"
 import { OrgApiError, getOrganization, updateOrganization } from "@/ee/lib/orgs-api"
 import { ORG_STATUS_KEYS } from "./org-overview-page"
@@ -105,7 +105,8 @@ export default function OrgSettingsPage() {
 
   const membership = organizations.find((o) => o.slug === slug) ?? null
   const orgId = membership?.id ?? ""
-  const vocabulary = useOrgVocabulary(membership?.vocabulary)
+  const vocabulary = useOrgVocabulary(membership?.vocabulary, membership?.settings?.vocabulary_overrides)
+  const gender = workspaceGender(vocabulary, t)
   const vocabularyWord = vocabulary.workspace
   const workspaceWord = vocabularyWord ?? t("org.workspaceWord")
   // The organization's own word, pluralized; without one, the plural comes from the dictionary.
@@ -282,7 +283,7 @@ export default function OrgSettingsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="private">{t("org.visibilityPrivate")}</SelectItem>
-              <SelectItem value="workspace">{t("org.visibilityWorkspace", { workspace: workspaceWord.toLowerCase() })}</SelectItem>
+              <SelectItem value="workspace">{t(genderedWorkspaceKey("org.visibilityWorkspace", gender), { workspace: workspaceWord.toLowerCase() })}</SelectItem>
             </SelectContent>
           </Select>
         </div>

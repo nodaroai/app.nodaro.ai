@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { queryKeys } from "@/lib/query-keys"
 import { useVocabulary } from "@/ee/hooks/use-workspace"
+import { genderedWorkspaceKey, workspaceGender } from "@/ee/lib/org-vocabulary"
 import { useT, type TFunction } from "@/lib/i18n"
 import {
   OrgApiError,
@@ -34,6 +35,7 @@ export default function WorkspacePeoplePage() {
   const { id = "" } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const vocabulary = useVocabulary()
+  const gender = workspaceGender(vocabulary, t)
   const workspaceWord = vocabulary.workspace ?? t("org.workspaceWord")
 
   const workspace = useQuery({
@@ -72,7 +74,7 @@ export default function WorkspacePeoplePage() {
           <p className="text-sm text-muted-foreground">
             {code === "member_suspended"
               ? t("org.suspendedCannotOpenShort")
-              : t("org.workspaceMissingOrNotMember", { workspace: workspaceWord.toLowerCase() })}
+              : t(genderedWorkspaceKey("org.workspaceMissingOrNotMember", gender), { workspace: workspaceWord.toLowerCase() })}
           </p>
           <Button asChild variant="outline">
             <Link to="/">{t("org.backToYourWork")}</Link>
@@ -97,7 +99,7 @@ export default function WorkspacePeoplePage() {
 
       {workspace.data.archived && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-muted-foreground">
-          {t("org.archivedMembersLocked", { workspace: workspaceWord.toLowerCase() })}
+          {t(genderedWorkspaceKey("org.archivedMembersLocked", gender), { workspace: workspaceWord.toLowerCase() })}
         </p>
       )}
 
@@ -112,7 +114,7 @@ export default function WorkspacePeoplePage() {
 
       {members.data && members.data.data.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          {t("org.nobodyAddedYet", { workspace: workspaceWord.toLowerCase() })}
+          {t(genderedWorkspaceKey("org.nobodyAddedYet", gender), { workspace: workspaceWord.toLowerCase() })}
         </p>
       )}
 
@@ -133,7 +135,7 @@ export default function WorkspacePeoplePage() {
 
       {isAdmin && (
         <p className="text-xs text-muted-foreground">
-          {t("org.removeFromWorkspaceOnly", { workspace: workspaceWord.toLowerCase() })}
+          {t(genderedWorkspaceKey("org.removeFromWorkspaceOnly", gender), { workspace: workspaceWord.toLowerCase() })}
         </p>
       )}
     </div>

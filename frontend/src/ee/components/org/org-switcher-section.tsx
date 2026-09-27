@@ -60,7 +60,7 @@ export function OrgSwitcherSection() {
 
       {organizations.map((org) => {
         const own = workspaces.filter((w) => w.orgId === org.id)
-        const vocabulary = localizeVocabulary(org.vocabulary, locale)
+        const vocabulary = localizeVocabulary(org.vocabulary, locale, org.settings?.vocabulary_overrides)
         return (
           <div key={org.id}>
             <DropdownMenuLabel className="pt-2 text-xs font-normal text-muted-foreground">

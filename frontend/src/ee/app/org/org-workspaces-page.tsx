@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { queryKeys } from "@/lib/query-keys"
 import { useWorkspace } from "@/ee/hooks/use-workspace"
 import { useOrgVocabulary } from "@/ee/hooks/use-org-vocabulary"
-import { pluralWorkspaceWord, workspaceSentence } from "@/ee/lib/org-vocabulary"
+import { genderedWorkspaceKey, pluralWorkspaceWord, workspaceGender, workspaceSentence } from "@/ee/lib/org-vocabulary"
 import { useT, type TFunction } from "@/lib/i18n"
 import { OrgApiError, createWorkspace, listOrgWorkspaces, setWorkspaceArchived } from "@/ee/lib/orgs-api"
 import { ORG_STATUS_KEYS } from "./org-overview-page"
@@ -30,9 +30,10 @@ export default function OrgWorkspacesPage() {
 
   const membership = organizations.find((o) => o.slug === slug) ?? null
   const orgId = membership?.id ?? ""
-  const vocabulary = useOrgVocabulary(membership?.vocabulary)
+  const vocabulary = useOrgVocabulary(membership?.vocabulary, membership?.settings?.vocabulary_overrides)
   const vocabularyWord = vocabulary.workspace
   const workspaceWord = vocabularyWord ?? t("org.workspaceWordTitle")
+  const gender = workspaceGender(vocabulary, t)
   // The organization's own word, pluralized; without one, the plural comes from the dictionary.
   const workspacesWord = pluralWorkspaceWord(vocabulary, t)
   const canManage = membership?.role === "owner" || membership?.role === "admin"
@@ -71,7 +72,7 @@ export default function OrgWorkspacesPage() {
           <h1 className="text-xl font-semibold">{membership ? t("org.notAvailableToYou") : t("org.orgNotFound")}</h1>
           <p className="text-sm text-muted-foreground">
             {membership
-              ? t("org.manageThingsOwnerAdminOnly", { things: workspacesWord.toLowerCase() })
+              ? t(genderedWorkspaceKey("org.manageThingsOwnerAdminOnly", gender), { things: workspacesWord.toLowerCase() })
               : t("org.orgMissingOrNotMember")}
           </p>
           <Button asChild variant="outline">
@@ -118,12 +119,12 @@ export default function OrgWorkspacesPage() {
       <Card className="p-6">
         <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
           <div className="min-w-56 flex-1 space-y-2">
-            <Label htmlFor="new-workspace">{t("org.newWorkspace", { workspace: workspaceWord.toLowerCase() })}</Label>
+            <Label htmlFor="new-workspace">{t(genderedWorkspaceKey("org.newWorkspace", gender), { workspace: workspaceWord.toLowerCase() })}</Label>
             <Input
               id="new-workspace"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={workspaceSentence(t, "org.workspaceNamePlaceholder", workspaceWord)}
+              placeholder={workspaceSentence(t, "org.workspaceNamePlaceholder", workspaceWord, gender)}
               maxLength={120}
               disabled={!isActive || create.isPending}
             />
@@ -187,7 +188,7 @@ export default function OrgWorkspacesPage() {
             ))}
           </ul>
           <p className="text-xs text-muted-foreground">
-            {t("org.archivedWsReadable", { workspace: workspaceWord.toLowerCase() })}
+            {t(genderedWorkspaceKey("org.archivedWsReadable", gender), { workspace: workspaceWord.toLowerCase() })}
           </p>
         </section>
       )}

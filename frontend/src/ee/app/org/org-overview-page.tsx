@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { queryKeys } from "@/lib/query-keys"
 import { useWorkspace } from "@/ee/hooks/use-workspace"
 import { useOrgVocabulary } from "@/ee/hooks/use-org-vocabulary"
-import { pluralWorkspaceWord } from "@/ee/lib/org-vocabulary"
+import { genderedWorkspaceKey, pluralWorkspaceWord, workspaceGender } from "@/ee/lib/org-vocabulary"
 import { useT, type MessageKey, type TFunction } from "@/lib/i18n"
 import { OrgApiError, getOrganization, listOrgWorkspaces } from "@/ee/lib/orgs-api"
 
@@ -43,7 +43,8 @@ export default function OrgOverviewPage() {
   const { organizations, status: membershipStatus } = useWorkspace()
 
   const membership = organizations.find((o) => o.slug === slug) ?? null
-  const vocabulary = useOrgVocabulary(membership?.vocabulary)
+  const vocabulary = useOrgVocabulary(membership?.vocabulary, membership?.settings?.vocabulary_overrides)
+  const gender = workspaceGender(vocabulary, t)
   // The organization's own word, pluralized; without one, the plural comes from the dictionary.
   const workspacesWord = pluralWorkspaceWord(vocabulary, t)
 
@@ -150,8 +151,8 @@ export default function OrgOverviewPage() {
         {workspaces.error && (
           <p className="text-sm text-muted-foreground">
             {workspaces.error instanceof OrgApiError && workspaces.error.code === "insufficient_role"
-              ? t("org.seeYoursInSwitcher", { things: workspacesWord.toLowerCase() })
-              : t("org.loadThingsFailed", { things: workspacesWord.toLowerCase() })}
+              ? t(genderedWorkspaceKey("org.seeYoursInSwitcher", gender), { things: workspacesWord.toLowerCase() })
+              : t(genderedWorkspaceKey("org.loadThingsFailed", gender), { things: workspacesWord.toLowerCase() })}
           </p>
         )}
 

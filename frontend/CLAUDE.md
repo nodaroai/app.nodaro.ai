@@ -349,7 +349,15 @@ Calls `POST /v1/ai-writer/generate-stream` via SSE (bypasses proxy). Returns `{ 
 - **Code reads left to right:** `globals.css` pins `pre`, `code`, `kbd` and `samp` LTR (`:where(…):not([dir])`, guarded by `rtl-direction-guards`).
   - A `<pre>` that shows prose (a node's text output, a final prompt) sets `dir="auto"`.
   - A text input for code, a URL or a key sets `dir="ltr"`.
-- **Organization words:** an organization's vocabulary arrives from the server in English. Render it through `useOrgVocabulary` / `localizeVocabulary` (`ee/lib/org-vocabulary.ts`). It translates the kinds' default words (`orgVocab.*`) and keeps any word an organization set itself exactly as typed. The workspace word lands in Hebrew sentences written for a feminine noun.
+- **Organization words:** an organization's vocabulary arrives from the server in English. Render it through `useOrgVocabulary` / `localizeVocabulary` (`ee/lib/org-vocabulary.ts`). It translates the kinds' default words (`orgVocab.*`) and keeps any word an organization set itself exactly as typed. Pass the organization's raw `settings.vocabulary_overrides` too.
+  - **Gender of the workspace word.** A sentence with the workspace word agrees with its gender in Hebrew and Portuguese. The localized vocabulary carries `workspace_gender`, resolved in this order: a translated default declares it in the dictionary (`orgVocab.*.workspaceGender`); an organization's own word takes its `workspace_gender` override; the generic fallback word uses `org.workspaceWordGender`.
+  - **Rendering a gendered sentence.** A sentence whose wording depends on the gender has a `…Masc` variant listed in `WORKSPACE_SENTENCE_MASCULINE`. Render it with `genderedWorkspaceKey(key, workspaceGender(vocabulary, t))` or `workspaceSentence(…)`. The base is written for a feminine word, because every default is feminine in both languages.
+  - **The word's placeholder.** The word enters a sentence only as `{workspace}` (`{things}` / `{plural}` for the plural), never under another name.
+  - **Guard.** `org-workspace-gender.test.ts` fails when:
+    - a new sentence with the word has no variant and is not declared neutral
+    - an organization sentence has a placeholder name nobody has classified
+    - a call site bypasses the gender
+    - a page localizes the vocabulary without the organization's overrides
 - **Copilot:** its copy is `copilot.*` keys indexed by `ee/lib/copilot/strings.ts` (`COPILOT_KEYS`); each turn sends the interface `locale`, and the backend appends a reply-language line to the per-turn context (`backend/src/ee/copilot/reply-language.ts`; English adds nothing).
 
 ---
