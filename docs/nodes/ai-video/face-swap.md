@@ -21,7 +21,7 @@ The Face Swap node takes a video and a reference face image and replaces the fac
 A run without both inputs stops before it starts and names the missing one; no credits are charged.
 
 **Outputs:**
-- Face-swapped video
+- Face-swapped video, with the source video's own sound (dialogue, music, ambience). A source without sound gives a silent result.
 
 ## Credit Cost
 

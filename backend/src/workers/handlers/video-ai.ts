@@ -100,6 +100,7 @@ import { handleAiAvatar } from "./heygen-avatar.js"
 import { handleCinematicAvatar } from "./heygen-cinematic.js"
 import { handleBeebleSwitchX } from "./beeble-switchx.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
+import { uploadSwapWithSourceAudio } from "./face-swap-audio.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import {
   providerKindForVideoModel,
@@ -1517,7 +1518,8 @@ const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
   })
   await setJobProgress(job, ctx.jobId, 50)
 
-  const r2Url = await uploadVideoMaybeWatermark(outputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  // The swap comes back without sound: put the source clip's audio back on it.
+  const r2Url = await uploadSwapWithSourceAudio(outputUrl, videoUrl, ctx)
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
