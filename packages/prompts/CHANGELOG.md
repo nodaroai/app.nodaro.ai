@@ -1,5 +1,14 @@
 # @nodaro/prompts
 
+## 1.27.1
+
+### Patch Changes
+
+- 18e57da: Sharper character picker photos. Every Person and Styling picture that was narrower than 250px is now twice its size (upscaled). A caption baked into the picture is cropped away, and the original transparency (rounded corners, soft edges) is kept. They stay sharp on picker cards and when enlarged.
+- Updated dependencies [ed74c76]
+- Updated dependencies [b06881d]
+  - @nodaro/shared@3.14.1
+
 ## 1.27.0
 
 ### Minor Changes
