@@ -269,6 +269,7 @@ export {
   seedanceVideoEditCreditId,
   pricedVideoSelection,
   buildMotionCreditModelIdentifier,
+  speedRampCreditId,
   sunoCreditType,
   SUNO_VERSION_CREDIT_KEYS,
   SUNO_VERSION_PRICED_OPERATIONS,

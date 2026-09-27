@@ -25,7 +25,8 @@ import type { ExtractFrameData } from "@/types/nodes"
 function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as ExtractFrameData
-  const credits = useModelCredits("ffmpeg", 1)
+  // The id its route reserves (its own row), not the generic "ffmpeg" one.
+  const credits = useModelCredits("extract-frame", 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)

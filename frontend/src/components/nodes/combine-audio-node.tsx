@@ -21,7 +21,8 @@ import type { CombineAudioData } from "@/types/nodes"
 function CombineAudioNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as CombineAudioData
-  const credits = useModelCredits("ffmpeg", 1)
+  // The id its route reserves (its own row), not the generic "ffmpeg" one.
+  const credits = useModelCredits("combine-audio", 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   // Narrow subscription: a primitive incoming-edge count instead of the whole

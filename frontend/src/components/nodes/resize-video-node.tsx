@@ -24,7 +24,9 @@ import type { ResizeVideoData } from "@/types/nodes"
 function ResizeVideoNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as ResizeVideoData
-  const credits = useModelCredits("ffmpeg", 1)
+  // The id the route reserves (its own row), not the generic "ffmpeg" one,
+  // which quoted half the charge.
+  const credits = useModelCredits("resize-video", 20)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)

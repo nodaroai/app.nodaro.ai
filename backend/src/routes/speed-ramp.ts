@@ -9,6 +9,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { speedRampCreditId } from "@nodaro/shared"
 
 const rampSegmentSchema = z.object({
   start: z.number().min(0),
@@ -38,8 +39,7 @@ const speedRampBody = z.object({
 /** Build the composite credit-model identifier — `speed-ramp:smooth` when
  *  motion-compensated interpolation is enabled, `speed-ramp` otherwise. */
 function buildSpeedRampCreditId(body: unknown): string {
-  const b = (body ?? {}) as Record<string, unknown>
-  return b.quality === "smooth" ? "speed-ramp:smooth" : "speed-ramp"
+  return speedRampCreditId(((body ?? {}) as Record<string, unknown>).quality)
 }
 
 export async function speedRampRoutes(app: FastifyInstance) {

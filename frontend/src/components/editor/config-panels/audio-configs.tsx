@@ -86,6 +86,8 @@ import { WaveformAudioPlayer } from "@/components/audio-player"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
 import { buildConnectedRefsFromSources } from "./connected-refs-builder"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { hasCredits } from "@/lib/edition"
 import { useLocalizeModelDescription, useLocalizeNodeLabel, useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowEdge } from "@/types/nodes"
@@ -402,6 +404,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
 // and links back to the modal via the node card.
 export function SunoVoiceConfig({ data }: ConfigProps<SunoVoiceData>) {
   const t = useT()
+  const voiceCreateCredits = useModelCredits("suno-voice-create", 200)
   const ready = Boolean(data.voiceId) && data.status === "success"
   return (
     <div className="flex flex-col gap-3">
@@ -426,6 +429,8 @@ export function SunoVoiceConfig({ data }: ConfigProps<SunoVoiceData>) {
         {!ready && (
           <div className="text-[11px] text-muted-foreground mt-2">
             {t("audiocfg.svClickPre")}<span className="font-medium">{t("audiocfg.configureVoiceBtn")}</span>{t("audiocfg.svClickPost")}
+            {/* The live price (the charge is the "suno-voice-create" row), only where there is billing. */}
+            {hasCredits() && <>{t("common.fragmentGap")}{t("audiocfg.svCost", { n: voiceCreateCredits })}</>}
           </div>
         )}
       </div>

@@ -22,7 +22,9 @@ import {
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { COMPOSITION_RATIOS, COLLAGE_ASPECT_RATIOS } from "./model-options"
 import { CombineTransitionPicker } from "@/lib/picker-ui"
-import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, CAPTION_LOOK_IDS, DEFAULT_CAPTION_LOOK, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_LEVER_BOUNDS, SUPPORTED_FONT_NAMES, type CaptionLookId, type CaptionLookLevers, type SupportedFontName } from "@nodaro/shared"
+import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, CAPTION_LOOK_IDS, DEFAULT_CAPTION_LOOK, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_LEVER_BOUNDS, SUPPORTED_FONT_NAMES, type CaptionLookId, type CaptionLookLevers, type SupportedFontName, speedRampCreditId } from "@nodaro/shared"
+import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { hasCredits } from "@/lib/edition"
 import { resolveCaptionPanelLevers } from "../caption-panel-levers"
 import { isCloud } from "@/lib/edition"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -1591,6 +1593,9 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
   const audioMode: "pitch-preserve" | "pitch-shift" | "drop" =
     data.audioMode ?? (data.adjustAudio === false ? "drop" : "pitch-preserve")
   const quality = data.quality ?? "fast"
+  // Live prices for both tiers (the ids the route and the orchestrator reserve).
+  const fastCredits = useModelCredits(speedRampCreditId("fast"), 20)
+  const smoothCredits = useModelCredits(speedRampCreditId("smooth"), 50)
   const reverse = data.reverse ?? false
   const ramps = data.ramps ?? []
   const usingRamps = ramps.length > 0
@@ -1664,8 +1669,9 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
         <Select value={quality} onValueChange={(v) => onUpdate({ quality: v as "fast" | "smooth" })}>
           <SelectTrigger aria-label={t("proccfg.frameQuality")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="fast">{t("proccfg.fastFrameDuplicate2Cr")}</SelectItem>
-            <SelectItem value="smooth">{t("proccfg.smoothMotionInterpolation5Cr")}</SelectItem>
+            {/* A price only where there is billing (a community build has none). */}
+            <SelectItem value="fast">{hasCredits() ? t("proccfg.fastFrameDuplicateCr", { n: fastCredits }) : t("proccfg.fastFrameDuplicate")}</SelectItem>
+            <SelectItem value="smooth">{hasCredits() ? t("proccfg.smoothMotionInterpolationCr", { n: smoothCredits }) : t("proccfg.smoothMotionInterpolation")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground mt-1">

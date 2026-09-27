@@ -15,7 +15,7 @@ The 3-step modal opens when you click **Configure Voice** on the node card.
 2. **Read & record** — the modal displays a short phrase like *"Harmonies fill the air with joyful melodies tonight"*. Record yourself singing or speaking it, then upload the recording. Use the **Regenerate phrase** button if you want a different one.
 3. **Voice details** — fill in voice name, optional style ("Pop, female vocal"), description, and singer skill level. Click **Create voice** to call `/api/v1/voice/generate` and poll `/api/v1/voice/record-info` for the final `voiceId`.
 
-The 20-credit charge is reserved when you click **Create voice** in Step 3, committed on success, and refunded on failure or timeout.
+The voice-creation charge is reserved when you click **Create voice** in Step 3, committed on success, and refunded on failure or timeout.
 
 ## Configuration
 
@@ -41,9 +41,9 @@ The 20-credit charge is reserved when you click **Create voice** in Step 3, comm
 | Step | Cost |
 |------|------|
 | `/voice/validate`, `/voice/validate-info`, `/voice/regenerate` | **0** credits |
-| **`/voice/generate`** (Step 3 "Create voice") | **20** credits |
+| **`/voice/generate`** (Step 3 "Create voice") | One-time charge. The current price is shown on the node, in the setup window and on the **Create voice** button. |
 
-The 20-credit charge covers KIE's validate + generate calls combined. KIE.ai does not publish per-call pricing for this flow, so the value is a conservative one-time default and may be tuned later via the `model_pricing` table.
+It is the only charge in the flow: validating and re-recording the phrase are free.
 
 Credits are reserved on `POST /v1/suno/voice/generate` and committed by the polling endpoint (`GET /v1/suno/voice/record-info`) when KIE reports `status="success"`. On `status="fail"`, credits are refunded to the original pools.
 

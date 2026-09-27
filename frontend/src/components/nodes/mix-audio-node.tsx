@@ -21,7 +21,9 @@ import type { MixAudioData } from "@/types/nodes"
 function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as MixAudioData
-  const credits = useModelCredits("ffmpeg", 1)
+  // The id the route reserves (its own row), not the generic "ffmpeg" one,
+  // which quoted half the charge.
+  const credits = useModelCredits("mix-audio", 20)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
