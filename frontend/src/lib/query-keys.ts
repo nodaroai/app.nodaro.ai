@@ -161,6 +161,8 @@ export const queryKeys = {
     // its branch returns before any scoping runs. Keying it would split a
     // cache that cannot differ and refetch on every switch for nothing.
     listStudioAll: () => ["workflows", "list", "studio", "all"] as const,
+    /** A workflow's trigger rows (`GET /v1/workflows/:id/triggers`). */
+    triggers: (workflowId: string) => ["workflows", "triggers", workflowId] as const,
   },
 
   // Client-app registry (which SDK apps exist, whose workflows are user-facing).

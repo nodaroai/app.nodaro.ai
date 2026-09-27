@@ -353,7 +353,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "video-analysis": return <VideoAnalysisConfig {...configProps} />
     case "video-audit": return <VideoAuditConfig {...configProps} />
     case "reference-audio": return <ReferenceAudioConfig {...configProps} />
-    case "webhook-trigger": return <WebhookTriggerConfig {...configProps} />
+    case "webhook-trigger": return <WebhookTriggerConfig {...configProps} nodeId={selectedNodeId} />
     case "schedule-trigger": return <ScheduleTriggerConfig {...configProps} />
     case "tone": return <ToneConfig {...configProps} />
     case "style-guide": return <StyleGuideConfig {...configProps} />

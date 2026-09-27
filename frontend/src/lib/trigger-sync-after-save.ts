@@ -1,5 +1,7 @@
 import { PROJECTED_TRIGGER_NODE_TYPES } from "@nodaro/shared"
 import { syncWorkflowTriggers } from "@/lib/api"
+import { queryClient } from "@/lib/query-client"
+import { queryKeys } from "@/lib/query-keys"
 
 /**
  * After a save, the editor asks the server to project trigger nodes onto real
@@ -133,6 +135,9 @@ export async function syncTriggersAfterSave(
       throw new Error("sync refused")
     }
     tracker.lastSynced = after
+    // The rows changed: a Webhook Trigger's URL (read from its row) appears
+    // in the editor as soon as the save that created it lands.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.workflows.triggers(workflowId) })
     // Confirmed: what this sync vouched for. Anything a save added WHILE it
     // was in flight is still pending, for the chained run.
     tracker.pendingVouch = new Set([...tracker.pendingVouch].filter((id) => !tracker.inFlightVouch.has(id)))

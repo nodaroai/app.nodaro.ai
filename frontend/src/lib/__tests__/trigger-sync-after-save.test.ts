@@ -17,6 +17,8 @@ import {
   syncTriggersAfterSave,
   triggerFingerprint,
 } from "../trigger-sync-after-save"
+import { queryClient } from "@/lib/query-client"
+import { queryKeys } from "@/lib/query-keys"
 
 const WF = "00000000-0000-4000-8000-000000000020"
 const TEXT = { id: "t1", type: "text-prompt" }
@@ -187,5 +189,28 @@ describe("the server's reason", () => {
     const onFailure = vi.fn()
     await syncTriggersAfterSave(createTriggerSyncTracker(), WF, [], [TELEGRAM], onFailure)
     expect(onFailure).toHaveBeenCalledWith(undefined)
+  })
+})
+
+describe("the Webhook Trigger URL follows the sync", () => {
+  it("a successful sync marks the workflow's trigger rows stale, so the editor reads the new URL", async () => {
+    const key = queryKeys.workflows.triggers(WF)
+    queryClient.setQueryData(key, [])
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false)
+
+    const outcome = await syncTriggersAfterSave(createTriggerSyncTracker(), WF, [TEXT], [TEXT, WEBHOOK])
+
+    expect(outcome).toBe("synced")
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true)
+  })
+
+  it("a refused sync leaves them as they were", async () => {
+    const key = queryKeys.workflows.triggers(WF)
+    queryClient.setQueryData(key, [])
+    apiMock.syncWorkflowTriggers.mockResolvedValue({ data: { synced: false, created: 0, updated: 0, removed: 0 } })
+
+    await syncTriggersAfterSave(createTriggerSyncTracker(), WF, [TEXT], [TEXT, WEBHOOK])
+
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false)
   })
 })
