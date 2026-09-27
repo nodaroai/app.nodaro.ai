@@ -55,6 +55,20 @@ export interface KieModelConfig {
   requiresDuration?: boolean               // Model schema lists `duration` as REQUIRED — bespoke runners must emit it even in modes where it is ignored (gemini-omni-flash)
 }
 
+/**
+ * Grok Imagine Image 2.0's TASK-CHAINED edit: `{ prompt, task_id, mask_indexs? }`,
+ * where `task_id` is a prior grok-2 t2i or segment-map task. Both entries that
+ * call it (`grok-2-edit`, and `grok-2-i2i`'s second step) read this one id.
+ *
+ * KIE renamed it (seen 2026-09-27). It used to be `.../image-edit`; that id is
+ * now a DIRECT image-to-image endpoint (`prompt` + `aspect_ratio` +
+ * `image_urls`), and it refuses a task-chained body at createTask with
+ * `{"code":500,"msg":"This field is required"}`. Every grok-2 run with a
+ * reference image failed that way. Doc: docs.kie.ai/market/grok-imagine-image-2-0/image-edit.md
+ * (the page kept its old name and now documents `segment-edit`).
+ */
+const GROK_2_SEGMENT_EDIT_MODEL = "grok-imagine-image-2-0/segment-edit"
+
 // =============================================================================
 // IMAGE GENERATION MODELS
 // =============================================================================
@@ -182,6 +196,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
   // Grok Imagine Image 2.0 family — t2i plus task-chained edit + FREE segment
   // map. See docs.kie.ai/market/grok-imagine-image-2-0/{text-to-image,image-edit,segment-map}.md
+  // (the edit is GROK_2_SEGMENT_EDIT_MODEL above — read its rename note).
   // The edit + segment endpoints take a PRIOR grok-2 generation's task_id
   // (NOT an image URL) — same plumbing as grok-upscale: the worker passes the
   // taskId through editImage's imageUrl arg and `imageParam: "task_id"` places
@@ -194,7 +209,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     extraParams: { aspect_ratio: "16:9" },
   },
   "grok-2-edit": {
-    model: "grok-imagine-image-2-0/image-edit",
+    model: GROK_2_SEGMENT_EDIT_MODEL,
     credits: 4,
     cost: 0.02,
     inputType: "image-to-image",
@@ -213,16 +228,16 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
   // grok-2's de-facto i2i: the grok-imagine-2 family has NO image input on
   // its t2i endpoint (schema-verified 2026-08-19), but segment-map ALSO
-  // accepts an arbitrary `image_url` and mints a task id that image-edit
-  // consumes — a two-step reference chain (segment is FREE, so the total is
-  // the edit's 4 KIE credits). Reached via the T2I_TO_I2I_VARIANT auto-route
+  // accepts an arbitrary `image_url` and mints a task id that the segment
+  // edit consumes — a two-step reference chain (segment is FREE, so the total
+  // is the edit's 4 KIE credits). Reached via the T2I_TO_I2I_VARIANT auto-route
   // when refs are attached to grok-2; the chain lives in
   // image.ts::grok2ReferenceChain. Single reference only.
   // NB: deliberately NO imageParam — the caller-facing input is an image
   // URL (the chain mints its own task id internally), so it must NOT join
   // TASK_CHAINED_EDIT_PROVIDERS' imageParam:"task_id" invariant.
   "grok-2-i2i": {
-    model: "grok-imagine-image-2-0/image-edit",
+    model: GROK_2_SEGMENT_EDIT_MODEL,
     credits: 4,
     cost: 0.02,
     inputType: "image-to-image",

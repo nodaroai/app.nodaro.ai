@@ -68,6 +68,7 @@ vi.stubGlobal(
 )
 
 import { KieImageProvider } from "../kie/image.js"
+import { KIE_IMAGE_MODELS } from "../kie/models.js"
 
 const provider = new KieImageProvider()
 
@@ -241,7 +242,7 @@ describe("KIE image generation — request body snapshots", () => {
     expect(result.kieTaskId).toBe("task_grok_imagine_image_2_0_123")
   })
 
-  it("grok-2 with a reference runs the segment-map(image_url) → image-edit(task_id) chain (grok-2-i2i)", async () => {
+  it("grok-2 with a reference runs the segment-map(image_url) → segment-edit(task_id) chain (grok-2-i2i)", async () => {
     // The t2i endpoint takes NO image input (schema-verified 2026-08-19) —
     // refs must flow through the FREE segment step that mints a task id and
     // the edit step that consumes it. Verified live against KIE.
@@ -269,7 +270,7 @@ describe("KIE image generation — request body snapshots", () => {
           "prompt": "make it a snowy winter scene",
           "task_id": "task_grok_segment_arb_1",
         },
-        "editModel": "grok-imagine-image-2-0/image-edit",
+        "editModel": "grok-imagine-image-2-0/segment-edit",
         "segBody": {
           "image_url": "https://cdn.test/reference.png",
         },
@@ -316,9 +317,17 @@ describe("KIE image editing — grok-2 task-chained request bodies", () => {
           "prompt": "make the sky stormy",
           "task_id": "task_grok_prior_123",
         },
-        "model": "grok-imagine-image-2-0/image-edit",
+        "model": "grok-imagine-image-2-0/segment-edit",
       }
     `)
+  })
+
+  it("grok-2-edit and grok-2-i2i call the same task-chained edit endpoint", () => {
+    // Both send `{ prompt, task_id }`. When KIE renamed that endpoint
+    // (image-edit → segment-edit, 2026-09-27), the old id became a direct i2i
+    // endpoint that refuses this body — so the two entries must move together.
+    expect(KIE_IMAGE_MODELS["grok-2-i2i"].model).toBe(KIE_IMAGE_MODELS["grok-2-edit"].model)
+    expect(KIE_IMAGE_MODELS["grok-2-edit"].model).toBe("grok-imagine-image-2-0/segment-edit")
   })
 
   it("grok-2-segment sends task_id only and maps resultObject.segments onto url/extraUrls/segments", async () => {
