@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest"
 import {
   costTier,
+  costTierCuts,
   renderModelTable,
   renderRecommendations,
 } from "../../../scripts/lib/gen-skills/render-model-guide.js"
-import type { ModelCatalogEntry, ModelRecommendation } from "@nodaro/shared"
+import { MODEL_CATALOG, type ModelCatalogEntry, type ModelRecommendation } from "@nodaro/shared"
 
 const CATALOG: Record<string, ModelCatalogEntry> = {
   "z-image": {
@@ -77,24 +78,37 @@ const RECS: readonly ModelRecommendation[] = [
 ]
 
 describe("costTier", () => {
-  it("buckets image credits: Everyday <=2, Standard 3-4, Premium >=5", () => {
-    expect(costTier("image", 1)).toBe("Everyday")
-    expect(costTier("image", 2)).toBe("Everyday")
-    expect(costTier("image", 4)).toBe("Standard")
-    expect(costTier("image", 5)).toBe("Premium")
+  const tiersOf = (credits: number[]) => {
+    const cuts = costTierCuts(credits)
+    return credits.map((c) => costTier(c, cuts))
+  }
+
+  it("splits one kind's models into thirds by default price", () => {
+    expect(tiersOf([10, 20, 30, 40, 50, 60])).toEqual([
+      "Everyday", "Everyday", "Standard", "Standard", "Premium", "Premium",
+    ])
   })
 
-  it("buckets video credits on a higher scale: Everyday <=15, Premium >=50", () => {
-    expect(costTier("video", 15)).toBe("Everyday")
-    expect(costTier("video", 28)).toBe("Standard")
-    expect(costTier("video", 50)).toBe("Premium")
-    expect(costTier("video", 63)).toBe("Premium")
+  it("is scale-free: the same models at ten times the price keep their tiers", () => {
+    // Fixed credit thresholds survived the 2026-07-30 ×10 re-denomination and
+    // labelled 120 of 128 models Premium. A relative split cannot drift so.
+    const before = [2, 3, 10, 13, 15, 20, 25, 45, 120]
+    expect(tiersOf(before.map((c) => c * 10))).toEqual(tiersOf(before))
   })
 
-  it("buckets audio credits: Everyday <=3, Premium >=8", () => {
-    expect(costTier("audio", 3)).toBe("Everyday")
-    expect(costTier("audio", 5)).toBe("Standard")
-    expect(costTier("audio", 8)).toBe("Premium")
+  it("gives equal prices the same tier", () => {
+    const tiers = tiersOf([30, 30, 30, 30, 30, 40, 50])
+    expect(new Set(tiers.slice(0, 5)).size).toBe(1)
+  })
+
+  it("never labels most of a real kind Premium", () => {
+    for (const kind of ["image", "video", "audio"] as const) {
+      const credits = Object.values(MODEL_CATALOG)
+        .filter((e) => e.kind === kind && !e.mcpHidden)
+        .map((e) => e.pricing[0]?.credits ?? 0)
+      const premium = tiersOf(credits).filter((t) => t === "Premium").length
+      expect(premium / credits.length, kind).toBeLessThan(0.5)
+    }
   })
 })
 
