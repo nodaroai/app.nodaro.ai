@@ -8,6 +8,7 @@ import { getActiveWorkspaceId, setActiveWorkspace } from "@/lib/workspace-contex
 import { useVocabulary } from "@/ee/hooks/use-workspace"
 import { useT, type TFunction } from "@/lib/i18n"
 import { OrgApiError, getWorkspace } from "@/ee/lib/orgs-api"
+import { workspaceSentence } from "@/ee/lib/org-vocabulary"
 
 /**
  * `/w/:id` — the workspace someone just joined or switched into.
@@ -108,7 +109,7 @@ export default function WorkspaceHomePage() {
 
 function title(code: string, workspaceWord: string, t: TFunction): string {
   if (code === "member_suspended") return t("org.membershipSuspendedTitle")
-  return t("org.workspaceNotFound", { workspace: workspaceWord })
+  return workspaceSentence(t, "org.workspaceNotFound", workspaceWord)
 }
 
 function explain(code: string, workspaceWord: string, t: TFunction): string {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { localizeVocabulary, pluralWorkspaceWord } from "../org-vocabulary"
+import { localizeVocabulary, pluralWorkspaceWord, workspaceSentence } from "../org-vocabulary"
 import { FALLBACK_VOCABULARY } from "@/ee/hooks/use-workspace"
 import { translate, type TFunction } from "@/lib/i18n"
 import { en } from "@/lib/i18n/en"
@@ -85,5 +85,25 @@ describe("orgVocab dictionary", () => {
       workspace_admin: FALLBACK_VOCABULARY.workspace_admin,
       workspace_member: FALLBACK_VOCABULARY.workspace_member,
     })
+  })
+})
+
+describe("workspaceSentence", () => {
+  // A stand-in dictionary: English opens the sentence with the word, Portuguese
+  // puts it mid-sentence. Both must read in sentence case.
+  const english: TFunction = (_key, vars) => `${vars?.workspace} not found`
+  const portuguese: TFunction = (_key, vars) => `Nome da ${vars?.workspace}`
+
+  it("capitalizes the word when it opens the sentence", () => {
+    expect(workspaceSentence(english, "org.workspaceNotFound", "Class")).toBe("Class not found")
+  })
+
+  it("keeps the word lowercase inside the sentence", () => {
+    expect(workspaceSentence(portuguese, "org.workspaceNamePlaceholder", "Turma")).toBe("Nome da turma")
+  })
+
+  it("leaves a script without case as it is", () => {
+    const hebrew: TFunction = (_key, vars) => `${vars?.workspace} לא נמצאה`
+    expect(workspaceSentence(hebrew, "org.workspaceNotFound", "כיתה")).toBe("כיתה לא נמצאה")
   })
 })

@@ -256,7 +256,10 @@ export function ObjectAssetTab({
         ))}
         {items.length === 0 && trackedForBucket.length === 0 && (
           <div className="col-span-full text-center text-[11px] text-slate-500 py-8 border border-dashed border-[#1e293b] rounded">
-            {t("studio.noVariantsYet", { bucket: t(BUCKET_LABEL[tabKind]) })}
+            {/* "No variations variants yet" doubles the word, so the Variations tab has its own line. */}
+            {tabKind === "variations"
+              ? t("studio.noVariationsYet")
+              : t("studio.noVariantsYet", { bucket: t(BUCKET_LABEL[tabKind]) })}
           </div>
         )}
       </div>

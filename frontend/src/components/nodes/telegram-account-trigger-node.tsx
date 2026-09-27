@@ -49,11 +49,11 @@ function TelegramAccountTriggerNodeComponent({ id, data, selected }: NodeProps) 
             {!nodeData.accountId
               ? t("tgtrig.cardConfigure")
               : listening
-                ? t("tgtrig.cardListening", { n: chatCount })
+                ? t(chatCount === 1 ? "tgtrig.cardListeningOne" : "tgtrig.cardListening", { n: chatCount })
                 : t("tgtrig.cardOff")}
           </p>
           <p className={`text-[10px] mt-1 ${listening ? "text-green-500" : "text-muted-foreground"}`}>
-            {listening ? t("sched.active") : t("apps.inactive")}
+            {listening ? t("sched.active") : t("sched.inactive")}
           </p>
         </div>
       </BaseNode>

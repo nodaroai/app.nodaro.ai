@@ -98,7 +98,7 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="video-composer" handleId="in"          type="target" position={Position.Left}  label="Assets"      color={HANDLE_COLORS.identity} icon={<Sparkles />} side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="video-composer" handleId="in"          type="target" position={Position.Left}  label="Media"       color={HANDLE_COLORS.identity} icon={<Sparkles />} side="left"  top="calc(100% - 24px)" />
     <HandleWithPopover nodeId={id} nodeType="video-composer" handleId="composition" type="source" position={Position.Right} label="Composition" color={HANDLE_COLORS.control} icon={<Film />}     side="right" top="24px" />
     </div>
   )

@@ -2643,8 +2643,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">
-        {t("audiocfg.descRecast1")}
-        {t("audiocfg.descRecast2")}
+        {t("audiocfg.descRecast")}
       </p>
       <div>
         <Label>{t("audiocfg.addVoice")}</Label>
@@ -2695,7 +2694,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
                   onClick={() => keepAt(i)}
                   className="text-[10px] px-1 text-muted-foreground hover:text-foreground"
                 >
-                  {t("audiocfg.mergeKeepBadge")}
+                  {t("audiocfg.keepOriginalButton")}
                 </button>
               )}
               <button aria-label={t("audiocfg.moveUp")} onClick={() => move(i, -1)} className="text-xs px-1">↑</button>

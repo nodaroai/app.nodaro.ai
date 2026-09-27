@@ -162,7 +162,7 @@ export function LibraryDrawer({
               <Card
                 key={m.id}
                 name={m.name}
-                tag={t("marketplace.tabMineShort")}
+                tag={t("pipe.libraryMineTag")}
                 description={m.description || t("pipe.cinemaSavedAsset")}
                 thumb={m.url}
                 onUse={() => onUseInShot?.(m.name, m.description)}

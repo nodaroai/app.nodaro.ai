@@ -26,16 +26,26 @@ function isSupportedLocale(value: string | null | undefined): value is LocaleId 
 }
 
 /**
- * Resolve a BCP-47 tag to a locale we ship: an exact match, else the
- * language-only prefix ("en-US" → "en"). null if neither is supported. Shared
- * so the DEFAULT_LOCALE operator knob is exactly as forgiving as the automatic
- * browser detection it overrides.
+ * Resolve a BCP-47 tag to a locale we ship, in this order:
+ *   1. an exact match, ignoring letter case ("pt-br" → "pt-BR")
+ *   2. the language-only prefix ("en-US" → "en")
+ *   3. for a bare language tag, the one regional form we ship of it ("pt" →
+ *      "pt-BR"). Browsers list the bare tag after the regional one, so
+ *      "pt-PT, pt" reaches Portuguese too. A different region is never
+ *      remapped: zh-TW is not zh-CN.
+ * null if none applies. Shared so the DEFAULT_LOCALE operator knob is exactly
+ * as forgiving as the automatic browser detection it overrides.
  */
 function matchSupportedLocale(tag: string | null | undefined): LocaleId | null {
   if (!tag) return null
-  if (isSupportedLocale(tag)) return tag
-  const prefix = tag.split("-")[0]
-  return isSupportedLocale(prefix) ? prefix : null
+  const lower = tag.toLowerCase()
+  const exact = LANGUAGES.find((l) => l.id.toLowerCase() === lower)
+  if (exact) return exact.id
+  const prefix = lower.split("-")[0]
+  if (isSupportedLocale(prefix)) return prefix
+  if (lower !== prefix) return null
+  const regional = LANGUAGES.filter((l) => l.id.toLowerCase().split("-")[0] === prefix)
+  return regional.length === 1 ? regional[0].id : null
 }
 
 /**

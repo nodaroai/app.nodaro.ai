@@ -78,7 +78,7 @@ export function formatRelative(iso: string): string {
   const d = Math.floor(hr / 24)
   if (d < 30) return tx("time.dayAgo", { n: d })
   const mo = Math.floor(d / 30)
-  return tx("time.moAgo", { n: mo })
+  return tx(mo === 1 ? "time.moAgoOne" : "time.moAgo", { n: mo })
 }
 
 export type { MessageKey, ChromeDict }

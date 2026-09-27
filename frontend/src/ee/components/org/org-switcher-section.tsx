@@ -49,7 +49,7 @@ export function OrgSwitcherSection() {
       <DropdownMenuSeparator />
       {!belongsToNone && (
         <>
-          <DropdownMenuLabel>{t("org.workspacesLabel")}</DropdownMenuLabel>
+          <DropdownMenuLabel>{t("org.switcherWorkspacesHeader")}</DropdownMenuLabel>
           <DropdownMenuItem className="px-3" onSelect={() => setActiveWorkspace(null)}>
             <User className="size-4" />
             <span className="flex-1">{t("org.personal")}</span>

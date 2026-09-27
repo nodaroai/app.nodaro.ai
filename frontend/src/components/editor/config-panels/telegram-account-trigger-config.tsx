@@ -90,7 +90,7 @@ export function TelegramAccountTriggerConfig({ data, onUpdate }: ConfigProps<Tel
         }`}
       >
         <div className={`h-2 w-2 rounded-full ${listening ? "bg-green-500" : "bg-gray-400"}`} />
-        {listening ? t("cfgext.trigActiveListening") : t("apps.inactive")}
+        {listening ? t("cfgext.trigActiveListening") : t("sched.inactive")}
       </div>
 
       <div>

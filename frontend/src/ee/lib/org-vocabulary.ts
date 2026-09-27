@@ -55,6 +55,17 @@ export function localizeVocabulary(
 }
 
 /**
+ * A sentence built around the workspace word. The word may open the sentence
+ * (English "Class not found") or sit inside it (Portuguese "Nome da turma"),
+ * so it goes in lowercase, the way every other sentence takes it, and the
+ * finished sentence gets its capital. Scripts without case read the same.
+ */
+export function workspaceSentence(t: TFunction, key: MessageKey, workspaceWord: string): string {
+  const sentence = t(key, { workspace: workspaceWord.toLowerCase() })
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1)
+}
+
+/**
  * The plural of the workspace word: "Classes", "כיתות". A translated default
  * brings its own plural. The organization's own word takes the English rules
  * only when it is written in Latin letters; a word typed in another script is

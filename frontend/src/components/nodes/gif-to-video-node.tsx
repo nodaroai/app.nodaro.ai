@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, type MessageKey } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo, useRef } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle, X, RotateCcw, Upload, Image as ImageIcon } from "lucide-react"
@@ -20,6 +20,9 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { GifToVideoData } from "@/types/nodes"
+
+/** The background choices, by their config-panel label (the summary shows the label, never the stored value). */
+const BACKGROUND_LABEL: Record<GifToVideoData["alphaBackground"], MessageKey> = { white: "proccfg.white", black: "proccfg.black" }
 
 const ACCEPTS_IMAGE = (t: string) => isValidGifToVideoConnection("image", t)
 
@@ -91,7 +94,7 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const isQueued = status === "running" && (!progressPct || progressPct <= 3)
   const isEncoding = status === "running" && !isQueued
   const loopLabel = nodeData.loopToMinimum ? t("node.gifLoopTo", { n: nodeData.targetDuration ?? 3 }) : t("node.gifAsIs")
-  const summaryLabel = `${loopLabel} · ${nodeData.interpolate ? t("node.gifSmooth") : t("node.gifStepped")} · ${t("node.gifBackground", { color: nodeData.alphaBackground ?? "white" })}`
+  const summaryLabel = `${loopLabel} · ${nodeData.interpolate ? t("node.gifSmooth") : t("node.gifStepped")} · ${t("node.gifBackground", { color: t(BACKGROUND_LABEL[nodeData.alphaBackground ?? "white"]).toLowerCase() })}`
 
   return (
     <div className="relative group/node" style={{ width: "100%", height: "100%", overflow: "visible" }}>

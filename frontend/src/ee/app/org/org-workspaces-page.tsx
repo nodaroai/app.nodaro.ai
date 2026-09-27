@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { queryKeys } from "@/lib/query-keys"
 import { useWorkspace } from "@/ee/hooks/use-workspace"
 import { useOrgVocabulary } from "@/ee/hooks/use-org-vocabulary"
-import { pluralWorkspaceWord } from "@/ee/lib/org-vocabulary"
+import { pluralWorkspaceWord, workspaceSentence } from "@/ee/lib/org-vocabulary"
 import { useT, type TFunction } from "@/lib/i18n"
 import { OrgApiError, createWorkspace, listOrgWorkspaces, setWorkspaceArchived } from "@/ee/lib/orgs-api"
 import { ORG_STATUS_KEYS } from "./org-overview-page"
@@ -123,7 +123,7 @@ export default function OrgWorkspacesPage() {
               id="new-workspace"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={t("org.workspaceNamePlaceholder", { workspace: workspaceWord })}
+              placeholder={workspaceSentence(t, "org.workspaceNamePlaceholder", workspaceWord)}
               maxLength={120}
               disabled={!isActive || create.isPending}
             />

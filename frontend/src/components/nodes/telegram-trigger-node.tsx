@@ -43,7 +43,7 @@ function TelegramTriggerNodeComponent({ id, data, selected }: NodeProps) {
           </p>
           {nodeData.isActive !== undefined && (
             <p className={`text-[10px] mt-1 ${nodeData.isActive ? "text-green-500" : "text-muted-foreground"}`}>
-              {nodeData.isActive ? t("sched.active") : t("apps.inactive")}
+              {nodeData.isActive ? t("sched.active") : t("sched.inactive")}
             </p>
           )}
         </div>

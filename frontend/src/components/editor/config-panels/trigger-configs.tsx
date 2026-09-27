@@ -216,7 +216,7 @@ export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTr
             : "bg-gray-50 dark:bg-[#2D2D2D] border-gray-200 dark:border-[#2D2D2D] text-gray-500 dark:text-[#64748B]"
       }`}>
         <div className={`h-2 w-2 rounded-full ${listening ? "bg-green-500" : isActive ? "bg-amber-500" : "bg-gray-400"}`} />
-        {listening ? t("cfgext.trigActiveListening") : isActive ? t("cfgext.trigPickBotFirst") : t("apps.inactive")}
+        {listening ? t("cfgext.trigActiveListening") : isActive ? t("cfgext.trigPickBotFirst") : t("sched.inactive")}
       </div>
 
       {/* Connection selector */}
