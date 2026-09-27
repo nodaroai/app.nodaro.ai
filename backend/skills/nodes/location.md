@@ -1,7 +1,7 @@
 ---
 node_type: location
-generated_at: 2026-09-21T19:12:10.204Z
-generated_from: 09788c987
+generated_at: 2026-09-27T12:51:24.922Z
+generated_from: c607aa02c
 ---
 
 # Location
@@ -9,7 +9,7 @@ generated_from: 09788c987
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `location`
 **Category:** location
-**Credit cost:** `20` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `in`, `cinematography`
 **Outputs (source handles):** `locationRef`, `image`
 

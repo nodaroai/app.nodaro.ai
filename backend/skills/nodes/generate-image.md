@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-09-22T09:36:30.710Z
-generated_from: 65b4cddf2
+generated_at: 2026-09-27T12:51:23.137Z
+generated_from: c607aa02c
 ---
 
 # generate-image
@@ -9,7 +9,7 @@ generated_from: 65b4cddf2
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `generate-image`
 **Category:** ai
-**Credit cost:** `2-620` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `2-620` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `prompt`, `negative`, `references`, `assets`, `elements`, `look`
 **Outputs (source handles):** `image`
 

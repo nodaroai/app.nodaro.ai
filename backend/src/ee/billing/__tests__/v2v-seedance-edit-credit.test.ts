@@ -16,7 +16,7 @@ import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
  */
 describe("video-to-video — Seedance edit lane credit identifier", () => {
   const estimate = (data: Record<string, unknown>) =>
-    CreditsService.estimateWorkflowCredits([{ type: "video-to-video", data }])
+    CreditsService.estimateWorkflowBaseCredits([{ type: "video-to-video", data }])
 
   it("every (provider × resolution) the node can be configured to is priced", () => {
     for (const provider of SEEDANCE_VIDEO_EDIT_PROVIDERS) {

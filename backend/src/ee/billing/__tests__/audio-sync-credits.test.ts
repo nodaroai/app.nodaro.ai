@@ -8,13 +8,15 @@
  * wired sources) and the pre-run estimate (estimateWorkflowCredits, from the
  * edges). The last two are driven here through their REAL paths over the same
  * graphs: the real `resolveNodeInputs` into the real `buildPayload`, whose
- * `modelIdentifier` IS what the run reserves, against the public estimator.
+ * `modelIdentifier` IS what the run reserves, against the public estimator's
+ * per-node pricing at base prices (`estimateWorkflowBaseCredits` — the markup
+ * is applied to both sides alike).
  *
  * THE INVARIANT: the estimate is never BELOW the reservation. Without edges the
  * estimator cannot count the sources, so it quotes the 6-source ceiling.
  */
 import { describe, it, expect } from "vitest"
-import { CREDIT_COSTS, STATIC_CREDIT_COSTS, estimateWorkflowCredits } from "../credits.js"
+import { CREDIT_COSTS, CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 import { buildPayload } from "../../../services/workflow-engine/payload-builder.js"
 import { resolveNodeInputs } from "../../../services/workflow-engine/input-resolver.js"
 import type { SimpleNode, SimpleEdge } from "../../../services/workflow-engine/types.js"
@@ -50,7 +52,10 @@ function graphOf(recordings: ReadonlyArray<readonly [string, "audio" | "video"]>
 /** The node's own quote: the whole-graph total minus the graph without it. */
 function estimated(graph: { nodes: SimpleNode[]; edges: SimpleEdge[] }, withEdges = true): number {
   const edges = withEdges ? graph.edges : undefined
-  return estimateWorkflowCredits(graph.nodes, edges) - estimateWorkflowCredits(graph.nodes.filter((n) => n.id !== SYNC), edges)
+  return (
+    CreditsService.estimateWorkflowBaseCredits(graph.nodes, edges) -
+    CreditsService.estimateWorkflowBaseCredits(graph.nodes.filter((n) => n.id !== SYNC), edges)
+  )
 }
 
 function built(graph: { nodes: SimpleNode[]; edges: SimpleEdge[] }) {

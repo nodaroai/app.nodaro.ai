@@ -3,6 +3,7 @@ import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { hasCredits } from "./config.js"
+import type { ChargedPrices } from "./pricing/charged-prices.js"
 
 // ===========================================================================
 // Credit bands — DERIVED from the price table, never hand-typed
@@ -1620,4 +1621,43 @@ export function getEnrichedRegistry(): NodeDescriptor[] {
 
 export function findNode(type: string): NodeDescriptor | undefined {
   return getEnrichedRegistry().find((n) => n.type === type)
+}
+
+/**
+ * A descriptor with its `creditCost` at the credits a run is charged — what
+ * `GET /v1/nodes` serves. The registry keeps the base figures derived above
+ * (gen:skills and the band guard read those, and must not depend on runtime
+ * pricing); this re-reads each one from `prices` at request time.
+ *
+ * A band keeps its derivation — the cheapest and the priciest identifier the
+ * node can reserve on — but takes each end from the charged prices, identifier
+ * by identifier, since a per-service price can reorder a band's members. A
+ * number stands for the node type's own row. Anything else ("per-minute", a
+ * node nothing prices) is served as declared.
+ */
+export function chargedDescriptor(desc: NodeDescriptor, prices: ChargedPrices): NodeDescriptor {
+  const creditCost = chargedCreditCost(desc, prices)
+  return creditCost === desc.creditCost ? desc : { ...desc, creditCost }
+}
+
+function chargedCreditCost(desc: NodeDescriptor, prices: ChargedPrices): number | string | undefined {
+  if (desc.creditCost === undefined) return undefined
+  const source = CREDIT_BAND_SOURCES[desc.type]
+  if (source) {
+    const [minUnits, maxUnits] = source.span ?? [1, 1]
+    const lows: number[] = []
+    const highs: number[] = []
+    for (const id of source.ids) {
+      const low = prices.credits(id, minUnits)
+      const high = prices.credits(id, maxUnits)
+      if (low !== undefined) lows.push(low)
+      if (high !== undefined) highs.push(high)
+    }
+    if (lows.length === 0 || highs.length === 0) return desc.creditCost
+    const min = Math.min(...lows)
+    const max = Math.max(...highs)
+    return min === max ? min : `${min}-${max}`
+  }
+  if (typeof desc.creditCost === "number") return prices.credits(desc.type) ?? desc.creditCost
+  return desc.creditCost
 }

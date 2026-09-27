@@ -558,7 +558,8 @@ const referenceImageNodes = nodes.filter(n =>
 
 // Get a single descriptor by type slug:
 const { data: nanoBanana } = await client.nodes.get("generate-image")
-console.log(`Cost: ${nanoBanana.creditCost}`) // Cloud only — community and
+console.log(`Cost: ${nanoBanana.creditCost}`) // the credits a run is charged:
+// a "min-max" range for a node priced per model. Cloud only — community and
 // business installs have no credit system and omit creditCost entirely
 ```
 

@@ -1,7 +1,7 @@
 ---
 node_type: style-guide
-generated_at: 2026-09-27T10:38:38.439Z
-generated_from: bf4f83575
+generated_at: 2026-09-27T12:51:22.433Z
+generated_from: c607aa02c
 ---
 
 # Style Guide
@@ -9,7 +9,7 @@ generated_from: bf4f83575
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `style-guide`
 **Category:** parameter
-**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `style`
 

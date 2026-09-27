@@ -1546,7 +1546,7 @@ Fetches one descriptor by its type slug (e.g. `"generate-image"`,
 
 ```ts
 const { data } = await client.nodes.get("generate-image")
-console.log(data.providers, data.creditCost) // creditCost: Cloud only
+console.log(data.providers, data.creditCost) // creditCost: the charged price, Cloud only
 ```
 
 #### `run(type, params?)`
@@ -1927,8 +1927,9 @@ list(opts?: { kind?: "image" | "video" | "audio"; mode?: string; family?: string
 
 `GET /v1/models` → the model catalog grouped by kind and vendor family:
 capability sheets (`modes`, `features`, `aspectRatios`, `resolutions`,
-`durations`), per-variant credit `pricing` (Cloud only — editions without a
-credit system omit the field), compact `promptTips`, and the
+`durations`), per-variant credit `pricing` — the credits a run is charged
+(Cloud only — editions without a credit system omit the field), compact
+`promptTips`, and the
 `doctrineCovered` truth flag — `true` only when a sourced per-family prompt
 doctrine exists for the model, so "vendor doctrine" badges can never
 overclaim. The same projection the MCP `list_models` tool serves, so the two

@@ -1193,7 +1193,7 @@ node type the server has registered without hard-coding a list.
 | `GET` | `/v1/nodes/:type` | Return a single descriptor by node type string. 404 `not_found` when the type doesn't exist. |
 
 `NodeDescriptor` fields (subset): `type`, `label`, `category`,
-`outputType`, `creditCost` (static credit cost when known — Cloud only; community and business installs have no credit system and omit the field), `inputSchema`
+`outputType`, `creditCost` (the credits a run is charged, the same figure as the node's Run button: one number for a flat price, a `"min-max"` range for a node priced per model or setting — Cloud only; community and business installs have no credit system and omit the field), `inputSchema`
 (JSON Schema for the node's config fields), `providers` (supported
 provider slugs), `capabilities` (feature flags the node exposes). Nodes
 with per-model constraints carry additional discovery fields —
@@ -1210,8 +1210,8 @@ forward-compatible.
 Every AI prompt node also lists `promptPrefix` and `promptSuffix` (`text`) in
 `inputSchema` — see [Prompt pre & post text](./prompt-pre-post-text.md).
 
-Neither endpoint requires authentication; they expose only static
-registry metadata. No scopes required.
+Neither endpoint requires authentication; they expose only registry
+metadata and prices. No scopes required.
 
 ### Model catalog
 
@@ -1221,8 +1221,9 @@ minutes (`Cache-Control: public, max-age=300`). Returns
 `{ sections, recommendations, totalModels }`: models grouped by kind
 (`image` / `video` / `audio`) and vendor family, each with capability
 sheets (`modes`, `features`, `aspectRatios`, `resolutions`, `durations`),
-per-variant credit `pricing` (Cloud only — like `creditCost` on
-`/v1/nodes`, editions without a credit system omit it), compact
+per-variant credit `pricing` — the credits a run is charged, the price
+`GET /v1/credits/model-cost` returns for that variant (Cloud only — like
+`creditCost` on `/v1/nodes`, editions without a credit system omit it), compact
 `promptTips`, and the
 `doctrineCovered` truth flag (`true` only when a sourced per-family prompt
 doctrine exists — gate "vendor doctrine" badges on it; never overclaim).

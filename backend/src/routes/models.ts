@@ -3,6 +3,7 @@ import { z } from "zod"
 import { listModels, groupByKindAndFamily, MODEL_RECOMMENDATIONS, MODEL_CATALOG, type ModelKind, type ModelMode } from "@nodaro/shared"
 import { projectModel } from "../lib/mcp/tools/models.js"
 import { isModelDenied } from "../lib/surface-deny.js"
+import { loadChargedPrices } from "../lib/pricing/charged-prices.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 /**
@@ -49,9 +50,10 @@ export async function modelsRoutes(app: FastifyInstance) {
 
     // Each model under ITS OWN kind, then by family — the shared envelope the
     // MCP tool renders too (a mixed vendor appears once per kind, #1332).
+    const prices = await loadChargedPrices()
     const sections = groupByKindAndFamily(filtered).map(({ kind: k, families }) => ({
       kind: k,
-      families: families.map(({ family: fam, models }) => ({ family: fam, models: models.map(projectModel) })),
+      families: families.map(({ family: fam, models }) => ({ family: fam, models: models.map((m) => projectModel(m, prices)) })),
     }))
 
     const allRecs = [...MODEL_RECOMMENDATIONS]
@@ -59,7 +61,8 @@ export async function modelsRoutes(app: FastifyInstance) {
       ? allRecs.filter((r) => r.modelIds.some((id) => MODEL_CATALOG[id]?.kind === kind))
       : allRecs
 
-    // Public + read-only + catalog-static: cache generously.
+    // Public + read-only: cache generously. The prices are the admin's and
+    // change rarely; the Run button reads them live when it matters.
     reply.header("Cache-Control", "public, max-age=300")
     return reply.send({ sections, recommendations, totalModels: filtered.length })
   })

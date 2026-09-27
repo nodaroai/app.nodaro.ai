@@ -6,7 +6,8 @@ import { scene3DProAvailable } from "../services/scene3d/scene3d-engine.js"
 import { isNodaroConnected } from "../lib/nodaro-connect.js"
 import { z } from "zod"
 import { PRO3D_RENDER_NODE_TYPE } from "@nodaro/shared"
-import { getEnrichedRegistry, findNode } from "../lib/node-registry.js"
+import { getEnrichedRegistry, findNode, chargedDescriptor } from "../lib/node-registry.js"
+import { loadChargedPrices } from "../lib/pricing/charged-prices.js"
 
 
 import { openApiRegistry } from "../lib/openapi-registry.js"
@@ -69,9 +70,11 @@ export async function nodesRoutes(app: FastifyInstance) {
       if (NODARO_EXCLUSIVE_NODE_TYPES.has(n.type)) return connected
       return true
     })
+    // The prices a run is charged, not the registry's base figures.
+    const prices = await loadChargedPrices()
     return reply
       .header("Cache-Control", "public, max-age=300")
-      .send({ data })
+      .send({ data: data.map((n) => chargedDescriptor(n, prices)) })
   })
 
   app.get("/v1/nodes/:type", async (req, reply) => {
@@ -112,6 +115,6 @@ export async function nodesRoutes(app: FastifyInstance) {
     }
     return reply
       .header("Cache-Control", "public, max-age=300")
-      .send({ data: node })
+      .send({ data: chargedDescriptor(node, await loadChargedPrices()) })
   })
 }

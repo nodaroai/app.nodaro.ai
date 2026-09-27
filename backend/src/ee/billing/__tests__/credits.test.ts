@@ -102,24 +102,24 @@ describe("CreditsService", () => {
   })
 
   // ════════════════════════════════════════════════════════════════════════
-  // estimateWorkflowCredits (pure static — no DB)
+  // estimateWorkflowBaseCredits (pure static — no DB)
   // ════════════════════════════════════════════════════════════════════════
 
-  describe("estimateWorkflowCredits", () => {
+  describe("estimateWorkflowBaseCredits", () => {
     it("returns 0 for an empty array", () => {
-      expect(CreditsService.estimateWorkflowCredits([])).toBe(0)
+      expect(CreditsService.estimateWorkflowBaseCredits([])).toBe(0)
     })
 
     it("returns correct cost for a known node type (generate-image)", () => {
-      expect(CreditsService.estimateWorkflowCredits([{ type: "generate-image" }])).toBe(20)
+      expect(CreditsService.estimateWorkflowBaseCredits([{ type: "generate-image" }])).toBe(20)
     })
 
     it("returns correct cost for veo3", () => {
-      expect(CreditsService.estimateWorkflowCredits([{ type: "veo3" }])).toBe(1000) // base ($1.25); markup applied at runtime
+      expect(CreditsService.estimateWorkflowBaseCredits([{ type: "veo3" }])).toBe(1000) // base ($1.25); markup applied at runtime
     })
 
     it("returns 0 for an unknown node type", () => {
-      expect(CreditsService.estimateWorkflowCredits([{ type: "totally-unknown" }])).toBe(0)
+      expect(CreditsService.estimateWorkflowBaseCredits([{ type: "totally-unknown" }])).toBe(0)
     })
 
     it("sums costs for mixed node types", () => {
@@ -129,7 +129,7 @@ describe("CreditsService", () => {
         { type: "text-to-speech" },   // 3 (base)
         { type: "ffmpeg" },           // 1
       ]
-      expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(1060)
+      expect(CreditsService.estimateWorkflowBaseCredits(nodes)).toBe(1060)
     })
 
     it("returns correct cost for FFmpeg nodes", () => {
@@ -139,7 +139,7 @@ describe("CreditsService", () => {
         { type: "speed-ramp" },      // 2
         { type: "combine-videos" },  // 3
       ]
-      expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(70)
+      expect(CreditsService.estimateWorkflowBaseCredits(nodes)).toBe(70)
     })
   })
 
@@ -712,66 +712,66 @@ describe("CreditsService", () => {
   })
 
   // ════════════════════════════════════════════════════════════════════════
-  // estimateWorkflowCredits — composite model identifiers from node data
+  // estimateWorkflowBaseCredits — composite model identifiers from node data
   // ════════════════════════════════════════════════════════════════════════
 
-  describe("estimateWorkflowCredits with composite identifiers", () => {
+  describe("estimateWorkflowBaseCredits with composite identifiers", () => {
     it("resolves gpt-image:high", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "generate-image", data: { provider: "gpt-image", quality: "high" } },
       ])).toBe(60)
     })
 
     it("resolves gpt-image with medium quality (base)", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "generate-image", data: { provider: "gpt-image", quality: "medium" } },
       ])).toBe(10)
     })
 
     it("resolves flux:2K", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "generate-image", data: { provider: "flux", resolution: "2K" } },
       ])).toBe(20)
     })
 
     it("resolves flux with 1K (base)", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "generate-image", data: { provider: "flux", resolution: "1K" } },
       ])).toBe(13)
     })
 
     it("resolves nano-banana-2:2K", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "generate-image", data: { provider: "nano-banana-2", resolution: "2K" } },
       ])).toBe(50)
     })
 
     it("resolves nano-banana-2:4K", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "generate-image", data: { provider: "nano-banana-2", resolution: "4K" } },
       ])).toBe(50)
     })
 
     it("resolves nano-banana-pro:4K", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "generate-image", data: { provider: "nano-banana-pro", resolution: "4K" } },
       ])).toBe(60)
     })
 
     it("resolves ideogram-edit:TURBO", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "image-to-image", data: { provider: "ideogram-edit", renderingSpeed: "TURBO" } },
       ])).toBe(30)
     })
 
     it("resolves ideogram-edit:QUALITY", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "image-to-image", data: { provider: "ideogram-edit", renderingSpeed: "QUALITY" } },
       ])).toBe(60)
     })
 
     it("resolves topaz-image-upscale:4K", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "edit-image", data: { provider: "topaz-image-upscale", targetResolution: "4K" } },
       ])).toBe(50)
     })
@@ -780,76 +780,76 @@ describe("CreditsService", () => {
     // renders — and therefore bills — at the 4x tier. The `:8K` price key stays
     // in STATIC_CREDIT_COSTS for historical usage_logs; nothing reserves it.
     it("resolves a legacy topaz-image-upscale 8K target at the 4x tier", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "edit-image", data: { provider: "topaz-image-upscale", targetResolution: "8K" } },
       ])).toBe(50)
     })
 
     it("resolves topaz-image-upscale by the explicit factor, overriding a stored target", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "edit-image", data: { provider: "topaz-image-upscale", upscaleFactor: "4" } },
       ])).toBe(50)
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "edit-image", data: { provider: "topaz-image-upscale", upscaleFactor: "2", targetResolution: "8K" } },
       ])).toBe(25)
     })
 
     it("resolves topaz-image-upscale at default 2K (base)", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "edit-image", data: { provider: "topaz-image-upscale", targetResolution: "2K" } },
       ])).toBe(25)
     })
 
     it("resolves seedream:high", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "generate-image", data: { provider: "seedream", quality: "high" } },
       ])).toBe(40)
     })
 
     it("resolves ai-writer directly", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "ai-writer", data: { provider: "claude" } },
       ])).toBe(4) // base (Sonnet ~$0.041/call)
     })
 
     it("resolves suno-separate split_stem", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-separate", data: { type: "split_stem" } },
       ])).toBe(130) // base
     })
 
     it("resolves suno-separate default type", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-separate", data: { type: "separate" } },
       ])).toBe(40) // matches model_pricing (mig 059); STATIC was a stale 5
     })
 
     it("resolves suno-generate V5", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-generate", data: { model: "V5" } },
       ])).toBe(30) // base
     })
 
     it("resolves suno-generate V4", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-generate", data: { model: "V4" } },
       ])).toBe(30) // base
     })
 
     it("resolves suno-cover V5", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-cover", data: { model: "V5" } },
       ])).toBe(30) // base
     })
 
     it("resolves suno-generate V5_5 to the version key", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-generate", data: { model: "V5_5" } },
       ])).toBe(30) // suno-v5_5
     })
 
     it.each(["V6", "V6_WILD", "V6_MINI"])("resolves suno-generate %s to its own version key (30)", (model) => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-generate", data: { model } },
       ])).toBe(30)
     })
@@ -862,121 +862,121 @@ describe("CreditsService", () => {
     it("resolves a flat-priced Suno operation by its own key, not the version key", () => {
       // suno-style-boost is 10 and suno-replace-section 20; suno-v5 is 30.
       // Before the contract fix both resolved to suno-v5 and over-quoted.
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-style-boost", data: { model: "V5" } },
       ])).toBe(10)
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-replace-section", data: { model: "V5" } },
       ])).toBe(20)
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-mashup", data: { model: "V5_5" } },
       ])).toBe(30)
     })
 
     it("resolves suno-lyrics (exempted from V5 check)", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-lyrics", data: { model: "V5" } },
       ])).toBe(10) // base
     })
 
     it("resolves suno-music-video (exempted from V5 check)", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-music-video", data: { model: "V5" } },
       ])).toBe(10) // matches model_pricing (mig 059); STATIC was a stale 5
     })
 
     it("resolves extend-video veo-extend:quality", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "extend-video", data: { provider: "veo-extend", model: "quality" } },
       ])).toBe(790)
     })
 
     it("resolves extend-video veo-extend fast (base)", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "extend-video", data: { provider: "veo-extend", model: "fast" } },
       ])).toBe(190)
     })
 
     it("resolves extend-video seedance-2-extend default (8s 720p = ref-mode 50 + 3 stitch)", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "extend-video", data: { provider: "seedance-2-extend" } },
       ])).toBe(530)
     })
 
     it("resolves extend-video seedance-2-extend:12s:1080p", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "extend-video", data: { provider: "seedance-2-extend", duration: 12, resolution: "1080p" } },
       ])).toBe(1160)
     })
 
     it("snaps off-tier seedance-2-extend durations into the next tier (6s → 8s 480p)", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "extend-video", data: { provider: "seedance-2-extend", duration: 6, resolution: "480p" } },
       ])).toBe(260)
     })
 
     it("resolves I2V kling-3.0:5s — no sound field estimates the :audio tier (model default is audio ON)", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "image-to-video", data: { provider: "kling-3.0", duration: 5 } },
       ])).toBe(338) // base — capability defaultOn mirrors the provider's sound default
     })
 
     it("resolves I2V kling-3.0:5s with sound explicitly off", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "image-to-video", data: { provider: "kling-3.0", duration: 5, sound: false } },
       ])).toBe(270) // base
     })
 
     it("resolves I2V kling-3.0:5s:audio", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "image-to-video", data: { provider: "kling-3.0", duration: 5, sound: true } },
       ])).toBe(338) // base
     })
 
     it("resolves T2V grok (override to grok-i2v)", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "text-to-video", data: { provider: "grok" } },
       ])).toBe(50)
     })
 
     it("resolves T2V wan (override to wan-t2v)", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "text-to-video", data: { provider: "wan" } },
       ])).toBe(270) // base (wan-t2v)
     })
 
     it("resolves motion-transfer kling-3.0 1080p 5s", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "motion-transfer", data: { provider: "kling-3.0", resolution: "1080p", videoDuration: 5 } },
       ])).toBe(250) // base (kling-3.0-motion:1080p:5s)
     })
 
     it("resolves motion-transfer wan-animate-move 720p", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "motion-transfer", data: { provider: "wan-animate-move", resolution: "720p" } },
       ])).toBe(410)
     })
 
     it("resolves motion-transfer wan-animate-move default 480p", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "motion-transfer", data: { provider: "wan-animate-move", resolution: "480p" } },
       ])).toBe(255)
     })
 
     it("resolves I2V seedance:12s", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "image-to-video", data: { provider: "seedance", duration: 12 } },
       ])).toBe(150)
     })
 
     it("falls back for unknown provider", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "generate-image", data: { provider: "future-provider" } },
       ])).toBe(20)
     })
 
     it("handles nodes with empty data object", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "generate-image", data: {} },
       ])).toBe(20)
     })
@@ -988,33 +988,33 @@ describe("CreditsService", () => {
         { type: "image-to-video", data: { provider: "kling-3.0", duration: 10, sound: true } }, // 100 (base)
         { type: "suno-separate", data: { type: "split_stem" } },                        // 13 (base)
       ]
-      expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(1220)
+      expect(CreditsService.estimateWorkflowBaseCredits(nodes)).toBe(1220)
     })
   })
 
   // ════════════════════════════════════════════════════════════════════════
-  // estimateWorkflowCredits — llm-chat reasoning-effort tier bump
+  // estimateWorkflowBaseCredits — llm-chat reasoning-effort tier bump
   // (getNodeModelIdentifier must forward data.reasoningEffort into
   // buildLlmCreditIdentifier's 3rd arg — otherwise the pre-run estimate
   // understates a clamped xhigh/max reservation vs. what creditGuard/
   // resolveLlmCreditId actually reserves at runtime.)
   // ════════════════════════════════════════════════════════════════════════
 
-  describe("estimateWorkflowCredits — llm-chat reasoning-effort tier bump", () => {
+  describe("estimateWorkflowBaseCredits — llm-chat reasoning-effort tier bump", () => {
     it("resolves llm-chat gpt-5.6-terra at the standard price with no reasoning effort", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "llm-chat", data: { llmModel: "gpt-5.6-terra" } },
       ])).toBe(2)
     })
 
     it("does not bump the tier for high effort (Claude-family server default, never bumps)", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "llm-chat", data: { llmModel: "gpt-5.6-terra", reasoningEffort: "high" } },
       ])).toBe(2)
     })
 
     it("bumps llm-chat gpt-5.6-terra to the premium price at max reasoning effort (estimator/billing parity)", () => {
-      expect(CreditsService.estimateWorkflowCredits([
+      expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "llm-chat", data: { llmModel: "gpt-5.6-terra", reasoningEffort: "max" } },
       ])).toBe(6)
     })
@@ -1023,7 +1023,7 @@ describe("CreditsService", () => {
   // ════════════════════════════════════════════════════════════════════════
   // STATIC_CREDIT_COSTS — Seedance 2 1080p coverage (no DB dependency)
   // ════════════════════════════════════════════════════════════════════════
-  // `estimateWorkflowCredits` doesn't thread `resolution`/`hasVideoRef`
+  // `estimateWorkflowBaseCredits` doesn't thread `resolution`/`hasVideoRef`
   // into buildVideoCreditModelIdentifier (uses defaults), so the 1080p
   // composites are exercised in production via the route handler path
   // (`generate-video.ts` / `text-to-video.ts` / `lip-sync.ts`) which
@@ -1080,7 +1080,7 @@ describe("CreditsService", () => {
   })
 
   // ════════════════════════════════════════════════════════════════════════
-  // estimateWorkflowCredits — add-captions follows the RENDERER
+  // estimateWorkflowBaseCredits — add-captions follows the RENDERER
   //
   // The price of a caption node is not a property of the node type: a plain
   // static subtitle is an FFmpeg drawtext burn, anything styled / timed /
@@ -1090,7 +1090,7 @@ describe("CreditsService", () => {
   // "FFmpeg" while the reservation bills a render.
   // ════════════════════════════════════════════════════════════════════════
 
-  describe("estimateWorkflowCredits for add-captions", () => {
+  describe("estimateWorkflowBaseCredits for add-captions", () => {
     /**
      * The node's own data, in a graph whose wiring is KNOWN and empty: an id so
      * the estimator can match edges to this node, and an explicit `[]` so
@@ -1098,7 +1098,7 @@ describe("CreditsService", () => {
      * edges gets the pricier lane instead (pinned separately below).
      */
     const estimate = (data: Record<string, unknown>, edges: EstimateEdge[] = []) =>
-      CreditsService.estimateWorkflowCredits([{ id: "ac1", type: "add-captions", data }], edges)
+      CreditsService.estimateWorkflowBaseCredits([{ id: "ac1", type: "add-captions", data }], edges)
 
     it("quotes the FFmpeg price for a plain-text subtitle", () => {
       expect(estimate({ style: "subtitle", text: "hello world" })).toBe(30)
@@ -1162,7 +1162,7 @@ describe("CreditsService", () => {
       // `captions` alongside the text, so the render is Remotion even though
       // the edge names no `transcript` handle.
       expect(
-        CreditsService.estimateWorkflowCredits(
+        CreditsService.estimateWorkflowBaseCredits(
           [
             { id: "tr1", type: "transcribe", data: { provider: "elevenlabs-stt" } },
             { id: "ac1", type: "add-captions", data: { style: "subtitle", text: "hello world" } },
@@ -1182,13 +1182,13 @@ describe("CreditsService", () => {
       // A nodes-only caller (the older estimate-workflow body) cannot be told
       // whether a transcript is wired in. Unknown ⇒ quote the render.
       expect(
-        CreditsService.estimateWorkflowCredits([{ id: "ac1", type: "add-captions", data: { style: "subtitle", text: "hello world" } }]),
+        CreditsService.estimateWorkflowBaseCredits([{ id: "ac1", type: "add-captions", data: { style: "subtitle", text: "hello world" } }]),
       ).toBe(50)
     })
 
     it("quotes the pricier lane for a node with no id — its edges cannot be matched", () => {
       expect(
-        CreditsService.estimateWorkflowCredits([{ type: "add-captions", data: { style: "subtitle", text: "hello world" } }], []),
+        CreditsService.estimateWorkflowBaseCredits([{ type: "add-captions", data: { style: "subtitle", text: "hello world" } }], []),
       ).toBe(50)
     })
   })

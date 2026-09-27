@@ -17,9 +17,9 @@ describe("meta-ads-scrape credit table sync", () => {
 
   it("the pre-run workflow estimate quotes the same tier the reservation will take", () => {
     const pages = { mode: "pages", pageUrls: "https://www.facebook.com/a\nhttps://www.facebook.com/b\nhttps://www.facebook.com/c", count: 30 }
-    expect(CreditsService.estimateWorkflowCredits([{ type: "meta-ads-scrape", data: pages }])).toBe(100) // 30 × 3 → 100
-    expect(CreditsService.estimateWorkflowCredits([{ type: "meta-ads-scrape", data: { mode: "search", query: "x" } }])).toBe(20)
-    expect(CreditsService.estimateWorkflowCredits([{ type: "meta-ads-scrape", data: {} }])).toBe(20)
+    expect(CreditsService.estimateWorkflowBaseCredits([{ type: "meta-ads-scrape", data: pages }])).toBe(100) // 30 × 3 → 100
+    expect(CreditsService.estimateWorkflowBaseCredits([{ type: "meta-ads-scrape", data: { mode: "search", query: "x" } }])).toBe(20)
+    expect(CreditsService.estimateWorkflowBaseCredits([{ type: "meta-ads-scrape", data: {} }])).toBe(20)
   })
 
   it("every tier the builder can produce is priced on the backend at 1 credit per requested ad", () => {

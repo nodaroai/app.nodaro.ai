@@ -470,7 +470,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const providersUsed = extractProviders(nodes)
     const nodeCount = nodes.length
     const complexity = calculateComplexity(nodes, edges)
-    const estimatedCredits = estimateWorkflowCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[])
+    const estimatedCredits = await estimateWorkflowCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[])
     const snapshotNodes = nodes
 
     // Resolve the source URL for the template preview with priority:

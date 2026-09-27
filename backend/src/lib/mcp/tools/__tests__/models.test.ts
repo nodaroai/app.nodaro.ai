@@ -37,6 +37,16 @@ vi.mock("../../../../ee/billing/credits.js", () => ({
   },
 }))
 
+// The prices a run is charged — the admin's, which can sit above the
+// catalog's base figures. `loadChargedPrices` is the shim over the billing
+// module; the pricing test below pins that list_models serves these.
+const { chargedByIdentifier } = vi.hoisted(() => ({
+  chargedByIdentifier: new Map<string, number>([["nano-banana-2", 22], ["nano-banana-2:2K", 55]]),
+}))
+vi.mock("../../../pricing/charged-prices.js", () => ({
+  loadChargedPrices: async () => ({ credits: (identifier: string) => chargedByIdentifier.get(identifier) }),
+}))
+
 // Mutable edition flag: default matches setup.ts's EDITION=cloud; the
 // pricing-stripping test flips it to model a community/business install.
 let mockHasCredits = true
@@ -112,6 +122,26 @@ describe("list_models tool (always available)", () => {
     })
     const result = await callTool(server, "list_models", { kind: "image" })
     expect(result.content[0]?.text ?? "").toContain("\"pricing\"")
+  })
+
+  it("lists each variant at the credits a run is charged, not the catalog's base price", async () => {
+    const server = buildServer()
+    registerModels({
+      server,
+      session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }),
+      fastify: Fastify(),
+    })
+    const result = await callTool(server, "list_models", { kind: "image" })
+    const body = JSON.parse(result.content[0]?.text ?? "{}") as {
+      sections: Array<{ families: Array<{ models: Array<{ id: string; pricing: Array<{ identifier: string; credits: number }> }> }> }>
+    }
+    const model = body.sections.flatMap((s) => s.families.flatMap((f) => f.models)).find((m) => m.id === "nano-banana-2")
+    const credits = Object.fromEntries((model?.pricing ?? []).map((p) => [p.identifier, p.credits]))
+    // The catalog says 20 / 50 / 50; the charged prices say 22 and 55.
+    expect(credits["nano-banana-2"]).toBe(22)
+    expect(credits["nano-banana-2:2K"]).toBe(55)
+    // A variant with no charged price keeps its catalog figure.
+    expect(credits["nano-banana-2:4K"]).toBe(50)
   })
 
   it("omits pricing entirely on editions without credits (same principle as /v1/nodes creditCost)", async () => {

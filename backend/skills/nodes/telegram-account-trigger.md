@@ -1,7 +1,7 @@
 ---
 node_type: telegram-account-trigger
-generated_at: 2026-09-25T12:25:37.622Z
-generated_from: ce1a2e649
+generated_at: 2026-09-27T12:51:25.671Z
+generated_from: c607aa02c
 ---
 
 # Telegram Account Trigger
@@ -9,7 +9,7 @@ generated_from: ce1a2e649
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `telegram-account-trigger`
 **Category:** input
-**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** (none)
 **Outputs (source handles):** `text`, `chatId`, `messageId`, `senderId`
 

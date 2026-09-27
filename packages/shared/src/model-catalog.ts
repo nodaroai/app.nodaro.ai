@@ -74,7 +74,9 @@ export type ModelMode =
 export interface PriceVariant {
   /** Composite identifier as it appears in `STATIC_CREDIT_COSTS`. */
   identifier: string
-  /** Credits charged at reservation. */
+  /** The catalog's list price in credits. `GET /v1/models` and the MCP
+   *  `list_models` tool serve the price a run is charged on the instance,
+   *  which may differ. */
   credits: number
   /** Short human-readable note describing this variant ("1K default", "4K", "with audio"). */
   note?: string

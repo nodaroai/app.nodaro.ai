@@ -1895,6 +1895,7 @@ const modelPricingCache = new TtlCache<ModelPricing>(60_000)
  */
 export function invalidateModelPricingCache(): void {
   modelPricingCache.invalidate()
+  pricingRowsCache.invalidate()
 }
 
 /**
@@ -1955,6 +1956,91 @@ export async function getModelCreditCostFromDB(modelIdentifier: string): Promise
   const settings = await getAppSettings()
   const creditCost = applyServiceMarkup(base.creditCost, settings, modelIdentifier)
   return creditCost === base.creditCost ? base : { ...base, creditCost }
+}
+
+// ── Charged price table (60s TTL) ──
+
+/**
+ * Every price at once, for the surfaces that list many: `GET /v1/models`, MCP
+ * `list_models`, `GET /v1/nodes` and the workflow estimates.
+ *
+ * The batch twin of `getModelCreditCostFromDB`, and it has to stay that: a
+ * listed price that differs from the Run button is the bug this exists to fix
+ * (listed 150, charged 165). Same rule, so a price reads the same on every
+ * surface: a `model_pricing` row wins, `STATIC_CREDIT_COSTS` is the fallback,
+ * and `applyServiceMarkup` marks the base up ONCE for its identifier.
+ */
+export interface ChargedPriceTable {
+  /** The base credits for `identifier`: its `model_pricing` row, else its
+   *  `STATIC_CREDIT_COSTS` entry, else undefined (priced nowhere). */
+  base(identifier: string): number | undefined
+  /** `baseCredits` marked up once for `identifier`, exactly as a reservation
+   *  is: `creditGuard` marks a computed total (Image Overlay's per-platform
+   *  price, a per-second rate × seconds) up once at the route's identifier. */
+  charge(identifier: string, baseCredits: number): number
+}
+
+/**
+ * The price a user pays for `units` of `identifier` (1 by default), or
+ * undefined when it is priced nowhere. Units multiply the base BEFORE the
+ * markup, as a route that computes its price reserves it (a per-second rate ×
+ * seconds, marked up once).
+ */
+export function chargedCredits(prices: ChargedPriceTable, identifier: string, units = 1): number | undefined {
+  const base = prices.base(identifier)
+  return base === undefined ? undefined : prices.charge(identifier, base * units)
+}
+
+/**
+ * `model_pricing` read whole. A page is the next rows after the last one read,
+ * never a fixed offset: PostgREST caps a response at the project's `max_rows`
+ * (1000 by default, lower if configured) WITHOUT an error, so fixed-size pages
+ * would silently skip everything past the cap on each page.
+ */
+async function readModelPricingRows(): Promise<ReadonlyMap<string, number> | null> {
+  const rows = new Map<string, number>()
+  for (let from = 0; ; ) {
+    const { data, error } = await supabase
+      .from("model_pricing")
+      .select("model_identifier, credit_cost")
+      .order("model_identifier", { ascending: true })
+      .range(from, from + 999)
+    if (error) {
+      console.error("[credits] Failed to read model_pricing for the price table:", error.message)
+      return null
+    }
+    const page = (data ?? []) as Array<{ model_identifier: string; credit_cost: unknown }>
+    for (const row of page) {
+      if (typeof row.credit_cost === "number") rows.set(row.model_identifier, row.credit_cost)
+    }
+    if (page.length === 0) return rows
+    from += page.length
+  }
+}
+
+const pricingRowsCache = new TtlCache<ReadonlyMap<string, number>>(60_000)
+let pricingRowsInflight: Promise<ReadonlyMap<string, number> | null> | null = null
+
+async function modelPricingRows(): Promise<ReadonlyMap<string, number>> {
+  const cached = pricingRowsCache.get("all")
+  if (cached) return cached
+  pricingRowsInflight ??= readModelPricingRows().finally(() => {
+    pricingRowsInflight = null
+  })
+  const rows = await pricingRowsInflight
+  // A failed read prices from STATIC_CREDIT_COSTS alone, as a failed single
+  // lookup does, but is not cached: the next request reads the table again.
+  if (!rows) return new Map()
+  pricingRowsCache.set("all", rows)
+  return rows
+}
+
+export async function getChargedPriceTable(): Promise<ChargedPriceTable> {
+  const [rows, settings] = await Promise.all([modelPricingRows(), getAppSettings()])
+  return {
+    base: (identifier) => rows.get(identifier) ?? STATIC_CREDIT_COSTS[identifier],
+    charge: (identifier, baseCredits) => applyServiceMarkup(baseCredits, settings, identifier),
+  }
 }
 
 // ── Tier config cache (60s TTL) ──
@@ -3260,26 +3346,61 @@ export class CreditsService {
   }
 
   /**
-   * Estimate credits for a workflow, reading node data for variable-cost nodes.
-   * Mirrors the frontend getModelIdentifier() logic for composite model identifiers.
+   * What a run of this workflow will be charged, reading node data for
+   * variable-cost nodes. Mirrors the frontend getModelIdentifier() logic for
+   * composite model identifiers, and prices every node the way its
+   * reservation will: `model_pricing` over `STATIC_CREDIT_COSTS`, marked up
+   * once per node (`getChargedPriceTable`).
    */
-  static estimateWorkflowCredits(
+  static async estimateWorkflowCredits(
     nodes: ReadonlyArray<EstimateNode>,
     /** The workflow's edges, when the caller has them. Some prices are a GRAPH
      *  fact (does an edge feed add-captions a timed caption source?). Without
      *  edges the estimator assumes the pricier answer — never under-quote. */
     edges?: ReadonlyArray<EstimateEdge>,
-  ): number {
-    return nodes.reduce((sum, node) => {
-      // Image Overlay is base + 2 per extra platform render — the shared formula.
-      if (node.type === "image-overlay") return sum + imageOverlayCredits((node.data?.variants as unknown[] | undefined))
-      const modelId = getNodeModelIdentifier(node, {
-        timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
-        audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
-      })
-      return sum + (STATIC_CREDIT_COSTS[modelId] ?? STATIC_CREDIT_COSTS[node.type] ?? 0)
-    }, 0)
+  ): Promise<number> {
+    // Without a credit system nothing is charged, so there is no price table
+    // to read: the figure stays the static one these editions always showed.
+    const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
+    return sumWorkflowEstimate(nodes, edges, prices)
   }
+
+  /**
+   * The same estimate at `STATIC_CREDIT_COSTS`' base prices, with no database
+   * read and no markup. Nothing a user sees should quote it — it pins which
+   * identifier each node is estimated at.
+   */
+  static estimateWorkflowBaseCredits(
+    nodes: ReadonlyArray<EstimateNode>,
+    edges?: ReadonlyArray<EstimateEdge>,
+  ): number {
+    return sumWorkflowEstimate(nodes, edges, STATIC_BASE_PRICES)
+  }
+}
+
+/** `STATIC_CREDIT_COSTS` as a price table: the base prices, unmarked. */
+const STATIC_BASE_PRICES: ChargedPriceTable = {
+  base: (identifier) => STATIC_CREDIT_COSTS[identifier],
+  charge: (_identifier, baseCredits) => baseCredits,
+}
+
+function sumWorkflowEstimate(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  prices: ChargedPriceTable,
+): number {
+  return nodes.reduce((sum, node) => {
+    // Image Overlay is base + 2 per extra platform render — the shared formula,
+    // marked up once as a whole, the way its route's creditGuard reserves it.
+    if (node.type === "image-overlay") {
+      return sum + prices.charge("image-overlay", imageOverlayCredits((node.data?.variants as unknown[] | undefined)))
+    }
+    const modelId = getNodeModelIdentifier(node, {
+      timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
+      audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
+    })
+    return sum + (chargedCredits(prices, modelId) ?? chargedCredits(prices, node.type) ?? 0)
+  }, 0)
 }
 
 /**
@@ -3553,10 +3674,10 @@ function getNodeModelIdentifier(
   )
 }
 
-// Export legacy function for backward compatibility
+/** What a run of this workflow will be charged — see `CreditsService.estimateWorkflowCredits`. */
 export function estimateWorkflowCredits(
   nodes: ReadonlyArray<EstimateNode>,
   edges?: ReadonlyArray<EstimateEdge>,
-): number {
+): Promise<number> {
   return CreditsService.estimateWorkflowCredits(nodes, edges)
 }

@@ -623,7 +623,7 @@ export async function creditsRoutes(app: FastifyInstance) {
     const { nodes, edges } = parsed.data
 
     try {
-      const totalCredits = CreditsService.estimateWorkflowCredits(nodes, edges)
+      const totalCredits = await CreditsService.estimateWorkflowCredits(nodes, edges)
       // P14/W8: the payer-aware half. The billing hook already resolved this
       // request's payer (rung 1 via the body's workflowId — which required
       // the run predicate — or rung 2 via the validated workspace header),

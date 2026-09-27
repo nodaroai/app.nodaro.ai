@@ -47,8 +47,9 @@ export interface NodeDescriptor {
   category: NodeCategory
   description: string
   outputType: OutputType
-  /** Credit cost. Number when fixed, string range like "1-8" when
-   *  model-dependent. Undefined when the node is free — or on editions
+  /** The credits a run is charged, the figure on the node's Run button.
+   *  Number when fixed, string range like "10-80" when model-dependent.
+   *  Undefined when the node is free — or on editions
    *  without a credit system (community/business omit the field entirely;
    *  it is meaningful on Cloud only). */
   creditCost?: number | string

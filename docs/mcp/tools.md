@@ -1410,7 +1410,8 @@ component's input schema keys. Returns an `execution_id`.
 Browse AI models available on this Nodaro instance. Returns grouped JSON
 with per-model capability sheets (aspect ratios, resolutions, qualities,
 durations, features, and — on editions with a credit system — per-variant
-credit pricing; community/business installs omit `pricing`) and a
+credit pricing, the credits a run is charged; community/business installs
+omit `pricing`) and a
 `recommendations` array. Models with model-family prompting guidance (e.g. Seedance 2.0)
 also carry a `promptTips` array — short prompting rules worth applying
 before calling `generate_video` / `animate_image` — and every model
