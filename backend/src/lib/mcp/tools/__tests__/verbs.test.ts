@@ -1202,6 +1202,35 @@ describe("generate_script verb", () => {
   })
 })
 
+describe("suno_upload_extend verb", () => {
+  // The provider's `defaultParamFlag: true` is its CUSTOM mode (the caller's
+  // style / title / continueAt), so it is the inverse of `use_default_params`.
+  it("uses the caller's style and title by default (defaultParamFlag: true)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/suno/upload-extend", { jobId: "j-ue" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "suno_upload_extend", {
+      audio_url: "https://cdn.example/song.mp3",
+      continue_at: 30,
+      style: "lo-fi",
+      title: "Night drive",
+    })
+    expect(received.body).toMatchObject({ defaultParamFlag: true, style: "lo-fi", title: "Night drive" })
+  })
+
+  it("lets Suno pick when use_default_params is true (defaultParamFlag: false)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/suno/upload-extend", { jobId: "j-ue2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "suno_upload_extend", {
+      audio_url: "https://cdn.example/song.mp3",
+      continue_at: 30,
+      use_default_params: true,
+    })
+    expect(received.body).toMatchObject({ defaultParamFlag: false })
+  })
+})
+
 // suno_separate_stems / suno_extend error-path coverage requires a
 // supabase mock that matches resolveSunoIds' specific column selection
 // (output_data, user_id, is_public, status). The shared file-level mock

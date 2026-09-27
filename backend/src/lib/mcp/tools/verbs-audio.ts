@@ -2452,7 +2452,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         title: z.string().max(SUNO_TITLE_MAX).optional(),
         negative_style: z.string().max(500).optional(),
         vocal_gender: z.enum(["male", "female"]).optional(),
-        use_default_params: z.boolean().optional().describe("Use Suno defaults instead of the supplied style/title. Default false."),
+        use_default_params: z.boolean().optional().describe("true: Suno picks style/title. Default false: yours are used."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -2466,7 +2466,11 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         uploadUrl: args.audio_url,
         continueAt: args.continue_at,
         model: args.model ?? DEFAULT_SUNO_MODEL,
-        defaultParamFlag: args.use_default_params ?? false,
+        // The provider's `defaultParamFlag: true` is its CUSTOM mode (your
+        // style / title / continueAt) despite the name, so it is the inverse of
+        // `use_default_params`. Mapping it straight through dropped the style
+        // and title a caller passed by default.
+        defaultParamFlag: !(args.use_default_params ?? false),
         ...(args.style ? { style: args.style } : {}),
         ...(args.title ? { title: args.title } : {}),
         ...(args.negative_style ? { negativeStyle: args.negative_style } : {}),

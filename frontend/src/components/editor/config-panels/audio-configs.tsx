@@ -802,7 +802,9 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
       </MappableField>
       <div className="flex items-center gap-2">
         <input type="checkbox" id="suno-extend-customParams" checked={data.defaultParamFlag ?? true} onChange={(e) => onUpdate({ defaultParamFlag: e.target.checked })} className="accent-[#ff0073]" />
-        <label htmlFor="suno-extend-customParams" className="text-xs font-medium text-muted-foreground">{t("audiocfg.useDefaultParamsUncheck")}</label>
+        {/* Checked sends defaultParamFlag: true, which the provider reads as CUSTOM
+            mode (your style, title and continue-from), despite the flag's name. */}
+        <label htmlFor="suno-extend-customParams" className="text-xs font-medium text-muted-foreground">{t("audiocfg.extendUseMySettings")}</label>
       </div>
     </div>
   )
@@ -1451,7 +1453,8 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
       </MappableField>
       <div className="flex items-center gap-2">
         <Checkbox id="upload-extend-default" checked={data.defaultParamFlag} onCheckedChange={(v) => onUpdate({ defaultParamFlag: !!v })} />
-        <Label htmlFor="upload-extend-default" className="text-xs">{t("audiocfg.useDefaultParams")}</Label>
+        {/* Checked = defaultParamFlag: true = the provider's custom mode (see Suno Extend). */}
+        <Label htmlFor="upload-extend-default" className="text-xs">{t("audiocfg.uploadExtendUseMySettings")}</Label>
       </div>
       <MappableField field="title" label={t("audiocfg.titleOptional")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input value={data.title ?? ""} maxLength={SUNO_TITLE_MAX} onChange={(e) => onUpdate({ title: e.target.value })} placeholder={t("audiocfg.phSongTitle")} />
