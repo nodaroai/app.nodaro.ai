@@ -75,7 +75,7 @@ The `json` handle emits an array of posts, each shaped as:
 
 ## Pricing
 
-**1 credit per requested post**, rounded up to the next tier of the requested total (`Posts per source × number of sources`).
+**1 credit per requested post**, rounded up to the next tier of the requested total (`Posts per source × number of sources`). These are list prices: the node's Run button, and `GET /v1/models` / the MCP `list_models` tool, show the price your instance charges.
 
 | Requested total | Credits |
 |-----------------|---------|

@@ -295,9 +295,9 @@ function InstagramScrapeNodeComponent({ id, data, selected }: NodeProps) {
               <FeaturedPost post={featuredPost} />
               {visible.length > 1 && (
                 <div className="flex items-center gap-2">
-                  <button type="button" onClick={(e) => { stop(e); stepFeatured(-1) }} onMouseDown={stop} aria-label={t("cfgext.metaAdsPrevAd")} className="rounded-full border border-[var(--meta-ads-border)] p-1 text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]"><ChevronLeft className="h-4 w-4" /></button>
+                  <button type="button" onClick={(e) => { stop(e); stepFeatured(-1) }} onMouseDown={stop} aria-label={t("cfgext.igPrevPost")} className="rounded-full border border-[var(--meta-ads-border)] p-1 text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]"><ChevronLeft className="h-4 w-4" /></button>
                   <span className="text-[11.5px] font-semibold tabular-nums text-[var(--meta-ads-muted)]">{featuredPos + 1} / {visible.length}</span>
-                  <button type="button" onClick={(e) => { stop(e); stepFeatured(1) }} onMouseDown={stop} aria-label={t("cfgext.metaAdsNextAd")} className="rounded-full border border-[var(--meta-ads-border)] p-1 text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]"><ChevronRight className="h-4 w-4" /></button>
+                  <button type="button" onClick={(e) => { stop(e); stepFeatured(1) }} onMouseDown={stop} aria-label={t("cfgext.igNextPost")} className="rounded-full border border-[var(--meta-ads-border)] p-1 text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]"><ChevronRight className="h-4 w-4" /></button>
                   <button type="button" onClick={(e) => { stop(e); selectNode?.(id) }} onMouseDown={stop} className="ms-auto text-[11.5px] font-bold text-[#FF0073] hover:underline">{t("node.viewAllN", { n: items.length })}</button>
                 </div>
               )}
@@ -315,11 +315,11 @@ function InstagramScrapeNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       {/* The real handle pips (colours / icons / labels). Kept in lockstep with HANDLES above and HANDLE_OUTPUT_TYPES. */}
-      <HandleWithPopover nodeId={id} nodeType="instagram-scrape" handleId="in" type="target" position={Position.Left} label={t("cfgext.metaAdsInHandle")} color={DATA_HANDLE_COLORS.text} icon={<Search />} side="left" top="calc(100% - 24px)" accepts={ACCEPTS_IN} />
+      <HandleWithPopover nodeId={id} nodeType="instagram-scrape" handleId="in" type="target" position={Position.Left} label={t("cfgext.igInHandle")} color={DATA_HANDLE_COLORS.text} icon={<Search />} side="left" top="calc(100% - 24px)" accepts={ACCEPTS_IN} />
       <HandleWithPopover nodeId={id} nodeType="instagram-scrape" handleId="json" type="source" position={Position.Right} label="JSON" color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="24px" />
-      <HandleWithPopover nodeId={id} nodeType="instagram-scrape" handleId="text" type="source" position={Position.Right} label={t("cfgext.metaAdsOutText")} color={DATA_HANDLE_COLORS.text} icon={<Type />} side="right" top="52px" />
-      <HandleWithPopover nodeId={id} nodeType="instagram-scrape" handleId="image" type="source" position={Position.Right} label={t("cfgext.metaAdsOutImage")} color={HANDLE_COLORS.image} icon={<ImageIcon />} side="right" top="80px" />
-      <HandleWithPopover nodeId={id} nodeType="instagram-scrape" handleId="video" type="source" position={Position.Right} label={t("cfgext.metaAdsOutVideo")} color={HANDLE_COLORS.video} icon={<Film />} side="right" top="108px" />
+      <HandleWithPopover nodeId={id} nodeType="instagram-scrape" handleId="text" type="source" position={Position.Right} label={t("cfgext.igOutText")} color={DATA_HANDLE_COLORS.text} icon={<Type />} side="right" top="52px" />
+      <HandleWithPopover nodeId={id} nodeType="instagram-scrape" handleId="image" type="source" position={Position.Right} label={t("cfgext.igOutImage")} color={HANDLE_COLORS.image} icon={<ImageIcon />} side="right" top="80px" />
+      <HandleWithPopover nodeId={id} nodeType="instagram-scrape" handleId="video" type="source" position={Position.Right} label={t("cfgext.igOutVideo")} color={HANDLE_COLORS.video} icon={<Film />} side="right" top="108px" />
     </div>
   )
 }
