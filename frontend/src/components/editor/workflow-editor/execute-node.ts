@@ -447,7 +447,9 @@ export function buildMetaAdsScrapeParams(
     countryCode: data.countryCode,
     platforms: Array.isArray(data.platforms) ? data.platforms : undefined,
     formats: Array.isArray(data.formats) ? data.formats : undefined,
-    featuredIndex: typeof data.featuredIndex === "number" ? data.featuredIndex : undefined,
+    // No featuredIndex: a run features its FIRST result, and the node resets
+    // its featured item to 0 on completion. Sending the saved index made the
+    // route feature (and copy the video of) another item than the node shows.
     // The creative video is the expensive bytes — copied into the library
     // only when something downstream will actually consume it.
     ingestVideo: opts.videoWired === true,
@@ -5247,7 +5249,9 @@ function executeNodeCore(
       count: d.count,
       period: d.period,
       formats: Array.isArray(d.formats) ? d.formats : undefined,
-      featuredIndex: typeof d.featuredIndex === "number" ? d.featuredIndex : undefined,
+      // No featuredIndex: a run features its FIRST result, and the node resets
+      // its featured item to 0 on completion. Sending the saved index made the
+      // route feature (and copy the video of) another item than the node shows.
       ingestVideo: videoWired,
       ingestAllVideos: d.ingestAllVideos === true ? true : undefined,
       analyze: d.analyze === true ? true : undefined,

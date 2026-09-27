@@ -1106,7 +1106,10 @@ export function buildSyncHttpBody(
         countryCode: data.countryCode,
         platforms: Array.isArray(data.platforms) ? data.platforms : undefined,
         formats: Array.isArray(data.formats) ? data.formats : undefined,
-        featuredIndex: typeof data.featuredIndex === "number" ? data.featuredIndex : undefined,
+        // No featuredIndex: a run features its FIRST result. The saved index
+        // points into the previous run's results, and the editor resets it to
+        // 0 on every completion — sending it featured (and copied the video
+        // of) a different item than the node then shows.
         // Copy every ad's video (the expensive bytes) — opt-in node setting,
         // independent of the featured-video-when-wired rule below.
         ingestAllVideos: data.ingestAllVideos === true ? true : undefined,
@@ -1131,7 +1134,10 @@ export function buildSyncHttpBody(
         count: data.count,
         period: data.period,
         formats: Array.isArray(data.formats) ? data.formats : undefined,
-        featuredIndex: typeof data.featuredIndex === "number" ? data.featuredIndex : undefined,
+        // No featuredIndex: a run features its FIRST result. The saved index
+        // points into the previous run's results, and the editor resets it to
+        // 0 on every completion — sending it featured (and copied the video
+        // of) a different item than the node then shows.
         ingestAllVideos: data.ingestAllVideos === true ? true : undefined,
         analyze: data.analyze === true ? true : undefined,
         analysisModel: typeof data.analysisModel === "string" && data.analysisModel ? data.analysisModel : undefined,

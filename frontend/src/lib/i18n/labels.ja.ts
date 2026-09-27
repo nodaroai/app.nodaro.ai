@@ -251,6 +251,7 @@ const HANDLE_LABELS_JA: Record<string, string> = {
   "Text": "テキスト",
   "URL / Query": "URL／クエリ",
   "Keyword / Page URLs": "キーワード／ページ URL",
+  "Profiles / Hashtags": "プロフィール／ハッシュタグ",
   "Variables": "変数",
   "Video": "動画",
   "Video + Audio": "動画＋オーディオ",

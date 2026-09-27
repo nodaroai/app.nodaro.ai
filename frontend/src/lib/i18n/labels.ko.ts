@@ -251,6 +251,7 @@ const HANDLE_LABELS_KO: Record<string, string> = {
   "Text": "텍스트",
   "URL / Query": "URL / 검색어",
   "Keyword / Page URLs": "키워드 / 페이지 URL",
+  "Profiles / Hashtags": "프로필 / 해시태그",
   "Variables": "변수",
   "Video": "동영상",
   "Video + Audio": "동영상 + 오디오",

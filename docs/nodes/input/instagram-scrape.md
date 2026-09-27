@@ -46,10 +46,12 @@ Instagram's image and video links are signed and expire, so after every run the 
 
 | Handle | Carries |
 |--------|---------|
-| `json` | the whole array of posts (below) — fan out with a List node |
+| `json` | the whole array of posts (below) — wire it to a List node to fan out, to Extract Field to pull one field, or to a prompt input |
 | `text` | the featured post's caption |
 | `image` | the featured post's first image (or its video cover) |
 | `video` | the featured post's first video |
+
+The featured post is the one shown on the card (‹ ›, or a Results row click). A run, from the editor or the API, features the first returned post; "Run from here" reuses the post featured on the saved node without scraping again.
 
 The `json` handle emits an array of posts, each shaped as:
 

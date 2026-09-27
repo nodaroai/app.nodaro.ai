@@ -8,6 +8,7 @@
  * `cinematography`, `subjects`) are migrated on load by source type.
  */
 import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
 
 export const GENERATE_IMAGE_INPUT_HANDLES = ["prompt", "negative", "references", "assets", "elements", "look"] as const
 
@@ -132,7 +133,7 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
  *  where the resolvers route by handle into media-URL arrays or verbatim
  *  text fields that a JSON blob would break. Kept apart from
  *  TEXT_PRODUCER_TYPES on purpose: that set widens every text handle at once. */
-export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set(["web-scrape", "meta-ads-scrape"])
+export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>(SCRAPE_NODE_TYPES)
 
 /** Source node types whose output image feeds References (mirrors backend
  *  `imageSourceTypes` in payload-builder.ts:1328). */

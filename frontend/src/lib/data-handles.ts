@@ -18,6 +18,7 @@ import {
   IMAGE_PRODUCER_TYPES,
 } from "./generate-image-handles"
 import { HANDLE_COLORS } from "./handle-colors"
+import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
 
 /** Producers of text/string output. Reuses generate-image-handles
  *  TEXT_PRODUCER_TYPES plus extract-field (its `text` mode emits a scalar)
@@ -32,7 +33,7 @@ export const DATA_TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
  *  output structured items via `__listResults`. */
 export const LIST_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "list",
-  "web-scrape", "meta-ads-scrape", "extract-field", "filter-list",
+  ...SCRAPE_NODE_TYPES, "extract-field", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
   "selector",
   "ai-writer", "llm-chat", "generate-script",
@@ -68,7 +69,7 @@ export const ACCEPTS_JSON = (sourceType: string): boolean =>
 /** Producers of JSON/dict-shaped data — web-scrape returns json arrays,
  *  extract-field has a `json` outputType, etc. */
 export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
-  "web-scrape", "meta-ads-scrape", "extract-field", "silence-detect",
+  ...SCRAPE_NODE_TYPES, "extract-field", "silence-detect",
   // audio-sync's `json` handle carries { version, reference, offsets, notes }.
   "audio-sync",
   "list", "filter-list",

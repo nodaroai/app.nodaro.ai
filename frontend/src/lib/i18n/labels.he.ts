@@ -259,6 +259,7 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "Text": "טקסט",
   "URL / Query": "כתובת / שאילתה",
   "Keyword / Page URLs": "מילת חיפוש / כתובות עמודים",
+  "Profiles / Hashtags": "פרופילים / האשטאגים",
   "Variables": "משתנים",
   "Video": "וידאו",
   "Video + Audio": "וידאו ואודיו",

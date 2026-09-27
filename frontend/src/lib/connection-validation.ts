@@ -96,6 +96,7 @@ import {
   groupHandleId,
 } from "@nodaro/shared"
 import { isVisualPickerType } from "./parameter-picker-types"
+import { isScrapeNodeType } from "./scrape-node-types"
 import { ACCEPTS_CHARACTER_REF, ACCEPTS_ENTITY_REF, ACCEPTS_LOTTIE_ASSET, ACCEPTS_PARAMETER_PICKER, ACCEPTS_PICKER_JSON } from "./target-handle-registry"
 
 const MEDIA_ONLY_HANDLES: ReadonlySet<string> = new Set([
@@ -523,7 +524,7 @@ export function isValidWorkflowConnection(
     }
     return isValidLoopCoarse(imageSourceType, isVisualPickerType)
   }
-  if ((targetType === "web-scrape" || targetType === "meta-ads-scrape") && connection.targetHandle) {
+  if (isScrapeNodeType(targetType) && connection.targetHandle) {
     return isValidWebScrapeConnection(
       connection.targetHandle,
       imageSourceType,

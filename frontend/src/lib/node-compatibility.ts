@@ -8,6 +8,7 @@ import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
 import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, VIDEO_ONLY_PARAMETER_NODE_TYPES, resolveEffectiveSourceType } from "@nodaro/shared"
 import { AUDIO_PICKER_TYPES, VOICE_PERSONA_TYPES, GENERATE_SCRIPT_FIELD_HANDLES } from "./audio-text-handles"
 import { ANALYSIS_PRODUCER_TYPES } from "./data-handles"
+import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
 
 // `voice` target accepts voice-persona producers (suno-voice, voice-design's
 // voiceId output) AND voice-character (a parameter picker — surfaced as
@@ -21,7 +22,7 @@ const VOICE_TARGET_TYPES: ReadonlySet<string> = new Set<string>([...VOICE_PERSON
  *  paths in sync prevents the add-node popup from suggesting targets the
  *  drop-time validator then rejects. */
 const TYPED_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set([
-  "list", "web-scrape", "meta-ads-scrape", "extract-field", "filter-list",
+  "list", ...SCRAPE_NODE_TYPES, "extract-field", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
   // silence-detect emits { version, ranges, durationMs } JSON on its `json`
   // source handle; its source-direction popover consults TARGET_HANDLE_ACCEPTS
@@ -324,7 +325,15 @@ export function getCompatibleNodes(
   // HANDLE_COMPATIBILITY which has loose entries like
   // `json: ["json","in","text","prompt"]` and would suggest media nodes
   // that the new data-handles.ts predicates then reject at drop time.
-  if (direction === "source" && consumerNodeType && TYPED_SOURCE_NODE_TYPES.has(consumerNodeType)) {
+  //
+  // Judged by what THIS handle emits: a scraper's `text` / `image` / `video`
+  // pips emit a plain text / image / video (resolveEffectiveSourceType), so
+  // only its `json` pip takes this branch — the others fall through to the
+  // media candidates, as the drop validator treats them.
+  const typedSourceType = direction === "source" && consumerNodeType
+    ? resolveEffectiveSourceType(consumerNodeType, handleId)
+    : undefined
+  if (direction === "source" && consumerNodeType && typedSourceType && TYPED_SOURCE_NODE_TYPES.has(typedSourceType)) {
     const direct: NodeOption[] = []
     const directTypes = new Set<SceneNodeType>()
     for (const option of nodeOptions) {
@@ -333,7 +342,7 @@ export function getCompatibleNodes(
       if (option.type === consumerNodeType) continue
       const entries = TARGET_HANDLE_ACCEPTS[option.type]
       if (!entries) continue
-      if (entries.some((e) => e.accepts(consumerNodeType))) {
+      if (entries.some((e) => e.accepts(typedSourceType))) {
         direct.push(option)
         directTypes.add(option.type)
       }
