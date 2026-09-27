@@ -13,7 +13,15 @@ import { IDENTITY_TYPES } from "@/lib/generate-image-handles"
  *  never makes their wire dead. */
 const APPEND_WIRED_CONSUMERS: ReadonlySet<string> = new Set(["generate-image", "generate-video"])
 
-/** Edge IDs wired into a `prompt` handle but NOT used by the consumer's prompt.
+/** Why a prompt wire does nothing — the reason its grey edge names on hover.
+ *  - `not-referenced`: the consumer's typed prompt takes precedence and never
+ *    places the source (no `{Label}`, no `{}` injection, no field mapping).
+ *  - `inject-off`: Generate Image / Video with Inject Prompt turned off.
+ *  - `replaced`: Generate Image / Video keep only the LAST text wire; a text
+ *    source connected after this one takes its place. */
+export type UnusedPromptReason = "not-referenced" | "inject-off" | "replaced"
+
+/** Edges wired into a `prompt` handle but NOT used by the consumer's prompt, each with why.
  *  Conservative — only flags typed-primary consumers (NODE_PROMPT_CANDIDATE_FIELDS)
  *  with a non-empty typed prompt, no `{}` injection, no `{Label}` ref to the source,
  *  no fieldMapping to the source, and a non-identity source. Mirrors execution-time
@@ -25,8 +33,8 @@ const APPEND_WIRED_CONSUMERS: ReadonlySet<string> = new Set(["generate-image", "
 export function computeUnusedPromptEdges(
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
-): Set<string> {
-  const unused = new Set<string>()
+): Map<string, UnusedPromptReason> {
+  const unused = new Map<string, UnusedPromptReason>()
   const byId = new Map(nodes.map((n) => [n.id, n]))
   // Memoize the per-consumer upstream BFS: several dead prompt edges into the
   // same consumer would otherwise each re-run the full O(V+E) getUpstreamNodes.
@@ -56,7 +64,8 @@ export function computeUnusedPromptEdges(
     const cdata = consumer.data as Record<string, unknown>
 
     if (APPEND_WIRED_CONSUMERS.has(ctype)) {
-      if (isAppendedWireUnused(edge, consumer, cdata, byId, edges, upstreamFor)) unused.add(edge.id)
+      const reason = appendedWireUnusedReason(edge, consumer, cdata, byId, edges, upstreamFor)
+      if (reason) unused.set(edge.id, reason)
       continue
     }
 
@@ -90,7 +99,7 @@ export function computeUnusedPromptEdges(
     const sourceLabel = upstreamFor(consumer.id).find((u) => u.id === source.id)?.label
     if (sourceLabel && referencedRefs(cdata, scanFields).has(canonicalVarName(sourceLabel))) continue
 
-    unused.add(edge.id)
+    unused.set(edge.id, "not-referenced")
   }
   return unused
 }
@@ -100,14 +109,14 @@ export function computeUnusedPromptEdges(
  *  last text source it reaches on `prompt`, skipping identity sources (they
  *  feed references), parameter pickers (their hint is added separately) and
  *  sources the prompt places via `{Label}`. */
-function isAppendedWireUnused(
+function appendedWireUnusedReason(
   edge: WorkflowEdge,
   consumer: WorkflowNode,
   cdata: Record<string, unknown>,
   byId: ReadonlyMap<string, WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
   upstreamFor: (consumerId: string) => ReturnType<typeof getUpstreamNodes>,
-): boolean {
+): UnusedPromptReason | null {
   const labelOf = (sourceId: string) => upstreamFor(consumer.id).find((u) => u.id === sourceId)?.label
   // The same set the input resolver drops from `inputs.prompt` (placed via {Label}).
   const referenced = extractReferencedLabels(cdata.prompt as string | undefined, cdata.negativePrompt as string | undefined)
@@ -120,8 +129,8 @@ function isAppendedWireUnused(
     const label = labelOf(src.id)
     return !(label && referenced.has(canonicalVarName(label)))
   }
-  if (!isCandidate(edge)) return false
-  if (cdata.injectPrompt === false) return true
+  if (!isCandidate(edge)) return null
+  if (cdata.injectPrompt === false) return "inject-off"
   const lastCandidate = [...edges].reverse().find((e) => e.target === consumer.id && e.targetHandle === "prompt" && isCandidate(e))
-  return lastCandidate !== undefined && lastCandidate.id !== edge.id
+  return lastCandidate !== undefined && lastCandidate.id !== edge.id ? "replaced" : null
 }

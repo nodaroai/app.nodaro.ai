@@ -51,7 +51,7 @@ describe("computeUnusedPromptEdges", () => {
       node("c1", "generate-image", { prompt: "a portrait", injectPrompt: false }),
     ]
     const edges = [edge("e1", "n1", "c1", "prompt")]
-    expect(computeUnusedPromptEdges(nodes, edges).has("e1")).toBe(true)
+    expect(computeUnusedPromptEdges(nodes, edges).get("e1")).toBe("inject-off")
   })
 
   it("1c. two wires into generate-video's prompt → the earlier one is replaced (dead), the last one is used", () => {
@@ -62,7 +62,7 @@ describe("computeUnusedPromptEdges", () => {
     ]
     const edges = [edge("e1", "n1", "c1", "prompt"), edge("e2", "n2", "c1", "prompt")]
     const unused = computeUnusedPromptEdges(nodes, edges)
-    expect(unused.has("e1")).toBe(true)
+    expect(unused.get("e1")).toBe("replaced")
     expect(unused.has("e2")).toBe(false)
   })
 
@@ -189,6 +189,6 @@ describe("computeUnusedPromptEdges", () => {
       node("c1", "image-to-video", { prompt: "", motionPrompt: "a dancing scene" }),
     ]
     const edges = [edge("e1", "n1", "c1", "prompt")]
-    expect(computeUnusedPromptEdges(nodes, edges).has("e1")).toBe(true)
+    expect(computeUnusedPromptEdges(nodes, edges).get("e1")).toBe("not-referenced")
   })
 })
