@@ -118,7 +118,7 @@ import { tx } from "@/lib/i18n";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
   readPromptAffixes, unwrapEditPlanOutput, clampEditPlanClipCount, asEditPlanMode, asEditPlanTier, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, uiResolutionFill, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN, DEFAULT_TRANSCRIBE_NODE_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, normalizeCaptionNumericLevers } from "@nodaro/shared"
-import { applyPromptAffixes, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
+import { applyPromptAffixes, appendPromptHints, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
@@ -1576,8 +1576,7 @@ function executeNodeCore(
       // identity bullet (above), so exclude them here to avoid a tail dup.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -1807,8 +1806,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -1896,8 +1894,7 @@ function executeNodeCore(
       // Bullet consumer (stamps character elements onto the ref) → exclude here.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
+        rawPrompt = appendPromptHints(rawPrompt, cinematographyHints);
       }
     }
     {
@@ -2049,8 +2046,7 @@ function executeNodeCore(
       // Bullet consumer (stamps character elements onto the ref) → exclude here.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
+        rawPrompt = appendPromptHints(rawPrompt, cinematographyHints);
       }
     }
     {
@@ -2317,8 +2313,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -2706,8 +2701,7 @@ function executeNodeCore(
     // Bullet consumer (stamps character elements onto the video ref) → exclude here.
     const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
     for (const h of cinematographyHints) motionHints.push(h);
-    if (motionHints.length > 0 && prompt) prompt = `${prompt}. ${motionHints.join(", ")}`;
-    else if (motionHints.length > 0) prompt = motionHints.join(", ");
+    if (motionHints.length > 0) prompt = appendPromptHints(prompt, motionHints);
     {
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
       if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
@@ -2939,8 +2933,7 @@ function executeNodeCore(
       // Bullet consumer (stamps character elements onto the video ref) → exclude here.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -3096,8 +3089,7 @@ function executeNodeCore(
       // Bullet consumer (stamps character elements onto the video ref) → exclude here.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -5562,8 +5554,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -5712,8 +5703,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -5898,8 +5888,7 @@ function executeNodeCore(
       {
         const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
         if (cinematographyHints.length > 0) {
-          const joined = cinematographyHints.join(", ");
-          seedancePrompt = seedancePrompt ? `${seedancePrompt}. ${joined}` : joined;
+          seedancePrompt = appendPromptHints(seedancePrompt, cinematographyHints);
         }
       }
       {
@@ -5944,8 +5933,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -5991,8 +5979,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -8806,9 +8793,7 @@ function executeNodeCore(
     const augmentedData = cinematographyHints.length > 0
       ? {
           ...locData,
-          description: locData.description
-            ? `${locData.description}. ${cinematographyHints.join(", ")}`
-            : cinematographyHints.join(", "),
+          description: appendPromptHints(locData.description, cinematographyHints),
         }
       : locData;
     return runLocationGeneration(node.id, augmentedData, ctx);

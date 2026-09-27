@@ -4,6 +4,7 @@
  * provider-aware prompt truncation (default 5000 chars), and reference image filtering by model support.
  */
 
+import { joinSentences } from "./hint-join.js"
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
 import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared"
 import { getStylePromptHint, isDeniedStyleId } from "./style.js"
@@ -60,7 +61,7 @@ function composeIdentityDescPart(
   if (c) parts.push(c)
   const e = elementInjection?.trim()
   if (e) parts.push(e)
-  return parts.length > 0 ? `${subject} — ${parts.join(". ")}` : subject
+  return parts.length > 0 ? `${subject} — ${joinSentences(parts)}` : subject
 }
 
 /**

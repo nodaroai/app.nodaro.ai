@@ -16,7 +16,7 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 // Shared logic from packages/shared — single source of truth
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
 import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, sunoCreditType, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, readScriptSettings, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, seedanceVideoEditCreditId, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, newScene3DRevisionId, resolveScene3DAuthoringEngine, scene3DPlanSchema, PRO3D_RENDER_CREDIT_ID, PRO3D_RENDER_DEFAULT_ENGINE, buildPro3DRenderSource, pro3DRenderTimingOverrides, renderVideoCreditId, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES, normalizeTranscript, captionRoutesToRemotion, normalizeCaptionNumericLevers, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, transcriptDurationSec, DEFAULT_TRANSCRIBE_NODE_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, type Scene3DPlan } from "@nodaro/shared"
-import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, computeScriptTopic, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, buildSeedanceVideoEditPrompt, applyPromptAffixes, composeVideoPromptText, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
+import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, appendPromptHints, joinSentences, computeScriptTopic, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, buildSeedanceVideoEditPrompt, applyPromptAffixes, composeVideoPromptText, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
 import { labelRefHintContext } from "./label-ref-hint-context.js"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
@@ -2232,8 +2232,7 @@ function composeVideoPrompt(args: {
   const cinematographyHints = collectCinematographyHints(args.nodeId, args.buildCtx, { excludeCharacterElements: true })
   for (const h of cinematographyHints) hints.push(h)
   if (hints.length > 0) {
-    const joined = hints.join(", ")
-    p = p ? `${p}. ${joined}` : joined
+    p = appendPromptHints(p, hints)
   }
   const identityClause = collectIdentityLockClause(args.nodeId, args.buildCtx)
   if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
@@ -2515,8 +2514,7 @@ export function buildPayload(
         // Bullet consumer (stamps character elements onto the ref) → exclude here.
         const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
         if (cinematographyHints.length > 0) {
-          const joined = cinematographyHints.join(", ")
-          rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
+          rawPrompt = appendPromptHints(rawPrompt, cinematographyHints)
         }
       }
       {
@@ -2847,8 +2845,7 @@ export function buildPayload(
       {
         const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
         if (cinematographyHints.length > 0) {
-          const joined = cinematographyHints.join(", ")
-          editPrompt = editPrompt ? `${editPrompt}. ${joined}` : joined
+          editPrompt = appendPromptHints(editPrompt, cinematographyHints)
         }
       }
       {
@@ -2958,8 +2955,7 @@ export function buildPayload(
         // Bullet consumer (stamps character elements onto the ref) → exclude here.
         const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
         if (cinematographyHints.length > 0) {
-          const joined = cinematographyHints.join(", ")
-          rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
+          rawPrompt = appendPromptHints(rawPrompt, cinematographyHints)
         }
       }
       {
@@ -3121,8 +3117,7 @@ export function buildPayload(
           // Bullet consumer (stamps character elements onto the ref) → exclude here.
           const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
           if (cinematographyHints.length > 0) {
-            const joined = cinematographyHints.join(", ")
-            editPrompt = editPrompt ? `${editPrompt}. ${joined}` : joined
+            editPrompt = appendPromptHints(editPrompt, cinematographyHints)
           }
         }
         {
@@ -3196,8 +3191,7 @@ export function buildPayload(
           // Bullet consumer (stamps character elements onto the ref) → exclude here.
           const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
           if (cinematographyHints.length > 0) {
-            const joined = cinematographyHints.join(", ")
-            rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
+            rawPrompt = appendPromptHints(rawPrompt, cinematographyHints)
           }
         }
         {
@@ -4275,8 +4269,7 @@ export function buildPayload(
           // Bullet consumer (stamps character elements onto the video ref) → exclude here.
           const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeCharacterElements: true })
           if (cinematographyHints.length > 0) {
-            const joined = cinematographyHints.join(", ")
-            p = p ? `${p}. ${joined}` : joined
+            p = appendPromptHints(p, cinematographyHints)
           }
         }
         const identityClause = collectIdentityLockClause(node.id, buildCtx)
@@ -4529,8 +4522,7 @@ export function buildPayload(
             {
               const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
               if (cinematographyHints.length > 0) {
-                const joined = cinematographyHints.join(", ")
-                p = p ? `${p}. ${joined}` : joined
+                p = appendPromptHints(p, cinematographyHints)
               }
             }
             const identityClause = collectIdentityLockClause(node.id, buildCtx)
@@ -4756,8 +4748,7 @@ export function buildPayload(
         {
           const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
           if (cinematographyHints.length > 0) {
-            const joined = cinematographyHints.join(", ")
-            p = p ? `${p}. ${joined}` : joined
+            p = appendPromptHints(p, cinematographyHints)
           }
         }
         const identityClause = collectIdentityLockClause(node.id, buildCtx)
@@ -6607,11 +6598,7 @@ export function buildPayload(
       const provider = (data.provider as string) ?? "nano-banana"
       const name = (data.name as string | undefined) ?? ""
       const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
-      const cineSuffix = cinematographyHints.length > 0 ? cinematographyHints.join(", ") : ""
-      const baseDescription = (data.description as string | undefined) ?? ""
-      const augmentedDescription = cineSuffix
-        ? (baseDescription ? `${baseDescription}. ${cineSuffix}` : cineSuffix)
-        : (baseDescription || undefined)
+      const augmentedDescription = appendPromptHints(data.description as string | undefined, cinematographyHints) || undefined
       const entityPrompt = name
         ? buildLocationPrompt({
             name,
@@ -6653,9 +6640,7 @@ export function buildPayload(
       try {
         const sceneStylePrompt = buildScenePrompt(data as unknown as SceneData, charDefs as CharacterDef[])
         const upstreamPrompt = resolvedInputs.prompt ?? ""
-        scenePrompt = upstreamPrompt
-          ? `${upstreamPrompt}. ${sceneStylePrompt}`
-          : sceneStylePrompt
+        scenePrompt = joinSentences([upstreamPrompt, sceneStylePrompt])
 
         // Append character description templates (matches frontend charDescs logic).
         // buildScenePrompt adds compositional info (name + mood + action);
