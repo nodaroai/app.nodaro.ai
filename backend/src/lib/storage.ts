@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto"
 import { createReadStream, createWriteStream } from "node:fs"
 import { pipeline } from "node:stream/promises"
 import { stat } from "node:fs/promises"
+import { extname } from "node:path"
 import { Readable, Transform } from "node:stream"
 import { config } from "./config.js"
 import { safeFetch } from "./safe-fetch.js"
@@ -166,17 +167,48 @@ const VIDEO_EXT_MIME = { mp4: "video/mp4", mov: "video/quicktime" } as const
 export type VideoContainerExt = keyof typeof VIDEO_EXT_MIME
 
 /**
+ * Audio containers a LOCAL file is stored as. The name and the content type
+ * follow the file a producer wrote, which it names by its format
+ * (`audio.mp3`, `output.${audioFormat}`). The blanket `.wav` / `audio/wav`
+ * stamp served Extract Audio's MP3 (and Trim Audio's MP3 or AAC choice) as a
+ * ".wav" file (docs rebuild, item 8). A file with no recognised extension
+ * keeps the old `.wav` stamp.
+ */
+const AUDIO_EXT_MIME = {
+  wav: "audio/wav",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  ogg: "audio/ogg",
+  opus: "audio/ogg",
+  flac: "audio/flac",
+} as const
+type AudioContainerExt = keyof typeof AUDIO_EXT_MIME
+
+function isAudioContainerExt(ext: string | undefined): ext is AudioContainerExt {
+  return ext !== undefined && Object.hasOwn(AUDIO_EXT_MIME, ext)
+}
+
+/** The audio container a local file's name declares, if it is one we store. */
+function audioExtOf(filePath: string): AudioContainerExt | undefined {
+  const ext = extname(filePath).slice(1).toLowerCase()
+  return isAudioContainerExt(ext) ? ext : undefined
+}
+
+/**
  * Resolve `{ key, contentType }` for one produced-media upload. Without
- * `ext` — or for a non-video type, which has its own single container — this
- * is exactly `r2Key(jobId, type)` + `MEDIA_MIME[type]`.
+ * `ext` this is exactly `r2Key(jobId, type)` + `MEDIA_MIME[type]`.
  */
 function mediaTarget(
   jobId: string,
   type: MediaType,
-  ext?: VideoContainerExt,
+  ext?: VideoContainerExt | AudioContainerExt,
 ): { key: string; contentType: string } {
-  if (type === "video" && ext && ext !== "mp4") {
-    return { key: mediaObjectKey(jobId, type, ext), contentType: VIDEO_EXT_MIME[ext] }
+  if (type === "video" && ext && ext !== "mp4" && Object.hasOwn(VIDEO_EXT_MIME, ext)) {
+    return { key: mediaObjectKey(jobId, type, ext), contentType: VIDEO_EXT_MIME[ext as VideoContainerExt] }
+  }
+  if (type === "audio" && isAudioContainerExt(ext) && ext !== "wav") {
+    return { key: mediaObjectKey(jobId, type, ext), contentType: AUDIO_EXT_MIME[ext] }
   }
   return { key: r2Key(jobId, type), contentType: MEDIA_MIME[type] }
 }
@@ -509,7 +541,7 @@ export async function uploadFileToR2(
   opts: { ext?: VideoContainerExt; signal?: AbortSignal } = {},
 ): Promise<string> {
   const fileStat = await stat(filePath)
-  const { key, contentType } = mediaTarget(jobId, type, opts.ext)
+  const { key, contentType } = mediaTarget(jobId, type, opts.ext ?? (type === "audio" ? audioExtOf(filePath) : undefined))
 
   if (opts.signal) {
     opts.signal.throwIfAborted()
