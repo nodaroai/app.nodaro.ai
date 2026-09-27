@@ -492,8 +492,22 @@ export function isValidSunoUploadExtendConnection(
 
 // ─── Batch 3: AI > Script & Text ──────────────────────────────────────
 
-/** generate-script: prompt (text + picker). 7 source handles emit
- *  structured content; this validator only governs the input. */
+/** generate-script's settings inputs: one `field-<key>` pip per setting the
+ *  panel shows. A wire into one sets that field at run time on both engines
+ *  (`resolveFieldMappings`' edge lane, above the source menu and the typed
+ *  value). Text settings take their Generation Settings node or any text; the
+ *  number settings take only their own node, whose value readScriptSettings
+ *  coerces into the route's range. */
+export const GENERATE_SCRIPT_FIELD_HANDLES = {
+  tone: "field-tone",
+  styleGuide: "field-styleGuide",
+  sceneCount: "field-sceneCount",
+  targetLength: "field-targetLength",
+} as const
+
+/** generate-script: prompt (text + picker) plus the four settings inputs.
+ *  7 source handles emit structured content; this validator only governs the
+ *  inputs. */
 export function isValidGenerateScriptConnection(
   targetHandleId: string,
   sourceType: string,
@@ -502,6 +516,14 @@ export function isValidGenerateScriptConnection(
   switch (targetHandleId) {
     case "prompt":
       return ACCEPTS_PROMPT(sourceType, isVisualPicker)
+    case GENERATE_SCRIPT_FIELD_HANDLES.tone:
+      return sourceType === "tone" || ACCEPTS_TEXT_OR_DYN(sourceType)
+    case GENERATE_SCRIPT_FIELD_HANDLES.styleGuide:
+      return sourceType === "style-guide" || ACCEPTS_TEXT_OR_DYN(sourceType)
+    case GENERATE_SCRIPT_FIELD_HANDLES.sceneCount:
+      return sourceType === "scene-count"
+    case GENERATE_SCRIPT_FIELD_HANDLES.targetLength:
+      return sourceType === "duration"
     default:
       return false
   }
@@ -654,7 +676,13 @@ export const AUDIO_TEXT_HANDLE_LABELS: Record<string, Record<string, string>> = 
   "suno-convert-wav":       { audio: "Audio" },
   "suno-upload-extend":     { audio: "Audio", prompt: "Prompt" },
   // Batch 3: AI > Script & Text
-  "generate-script":    { prompt: "Prompt" },
+  "generate-script":    {
+    prompt: "Prompt",
+    "field-tone": "Tone",
+    "field-styleGuide": "Style Guide",
+    "field-sceneCount": "Scene Count",
+    "field-targetLength": "Duration",
+  },
   "llm-chat":           { prompt: "Prompt", references: "References", "system-prompt": "Instructions" },
   "transcribe":         { audio: "Audio" },
   // Batch 4: Processing > Audio + Text

@@ -17,7 +17,7 @@ The Aspect Ratio parameter node provides a standardized aspect ratio value that 
 - `in` -- optional upstream input (rarely used; Aspect Ratio is typically a root parameter node)
 
 **Outputs:**
-- `aspect_ratio` -- aspect ratio string (e.g., `"16:9"`), consumed by downstream generation nodes
+- `ratio` -- aspect ratio string (e.g., `"16:9"`). No node accepts this connection today: Generate Image and Generate Video take their aspect ratio from their own settings.
 ## Supported Providers
 
 Not applicable. This is a data-passing parameter node with no AI provider.

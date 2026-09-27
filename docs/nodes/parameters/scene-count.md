@@ -17,7 +17,7 @@ The Scene Count parameter node provides a numeric value that controls how many s
 - `in` -- optional upstream input (rarely used; Scene Count is typically a root parameter node)
 
 **Outputs:**
-- `scene_count` -- numeric scene count value, consumed by Generate Script nodes
+- `count` -- numeric scene count value. Connect it to Generate Script's **Scene Count** input; the script then uses it instead of the number typed in its panel (clamped to 1–20).
 ## Supported Providers
 
 Not applicable. This is a data-passing parameter node with no AI provider.

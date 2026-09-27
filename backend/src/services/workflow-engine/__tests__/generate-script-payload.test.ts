@@ -107,4 +107,21 @@ describe("generate-script payload — mapped sources reach the worker", () => {
     expect(payload.tone).toBe("wry and warm")
     expect(payload.sceneCount).toBe(6)
   })
+
+  it("applies the settings nodes wired into the node's settings inputs, over the typed values", () => {
+    const count: SimpleNode = { id: "count1", type: "scene-count", data: { label: "Scenes", count: 9 } }
+    const duration: SimpleNode = { id: "dur1", type: "duration", data: { label: "Length", seconds: 45 } }
+    const guide: SimpleNode = { id: "guide1", type: "style-guide", data: { label: "Guide", text: "noir, short lines" } }
+    const data = { label: "Script", prompt: "a lighthouse keeper", sceneCount: 3, targetLength: 60, styleGuide: "typed" }
+    const edges: SimpleEdge[] = [
+      { id: "e1", source: "count1", target: "s1", sourceHandle: "count", targetHandle: "field-sceneCount" },
+      { id: "e2", source: "dur1", target: "s1", sourceHandle: "duration", targetHandle: "field-targetLength" },
+      { id: "e3", source: "guide1", target: "s1", sourceHandle: "style", targetHandle: "field-styleGuide" },
+    ]
+    const resolved = resolveFieldMappings(data, {}, [count, duration, guide], undefined, NODE_MAPPABLE_FIELDS["generate-script"], "s1", edges)
+    const { payload } = buildPayload({ id: "s1", type: "generate-script", data: resolved }, JOB_ID, {})
+    expect(payload.sceneCount).toBe(9)
+    expect(payload.targetDuration).toBe(45)
+    expect(payload.styleGuide).toBe("noir, short lines")
+  })
 })

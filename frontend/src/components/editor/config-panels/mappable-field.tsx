@@ -33,6 +33,7 @@ export const MappableField = memo(function MappableField({
   onMapField,
   providerCategory,
   labelAction,
+  wiredHandleId,
   children,
 }: {
   readonly field: string
@@ -42,6 +43,10 @@ export const MappableField = memo(function MappableField({
   readonly onMapField: (field: string, sourceNodeId: string | null) => void
   readonly providerCategory?: string
   readonly labelAction?: React.ReactNode
+  /** The node's own input pip for this field (e.g. `field-tone`). A wire into
+   *  it sets the field at run time and wins over the source menu, so while it
+   *  is wired the field shows that source, read-only, and the menu is hidden. */
+  readonly wiredHandleId?: string
   readonly children: React.ReactNode
 }) {
   const t = useT()
@@ -50,8 +55,9 @@ export const MappableField = memo(function MappableField({
   const labelId = `${baseId}-label`
   const triggerId = `${baseId}-trigger`
   const compatible = getCompatibleSources(field, sources, providerCategory)
+  const wired = wiredHandleId ? sources.find((s) => s.targetHandle === wiredHandleId) : undefined
   const mapping = fieldMappings[field]
-  const mappedSource = mapping ? compatible.find((s) => s.id === mapping.sourceNodeId) : undefined
+  const mappedSource = wired ?? (mapping ? compatible.find((s) => s.id === mapping.sourceNodeId) : undefined)
   const isMapped = !!mappedSource
 
   return (
@@ -62,7 +68,13 @@ export const MappableField = memo(function MappableField({
         </div>
         <div className="flex items-center gap-1">
           {labelAction}
-          {compatible.length > 0 && (
+          {wired && (
+            <span className="inline-flex h-5 max-w-[160px] items-center gap-1 rounded-md bg-[#ff0073]/10 px-1.5 text-[10px] font-medium text-[#ff0073] dark:bg-[#ff0073]/15 dark:text-[#ff6aa5]">
+              <Link2 className="size-2.5 shrink-0" />
+              <span className="truncate">{localizeNode(wired.label)}</span>
+            </span>
+          )}
+          {!wired && compatible.length > 0 && (
             <Select
               value={mapping?.sourceNodeId ?? "__manual__"}
               onValueChange={(v) => onMapField(field, v === "__manual__" ? null : v)}

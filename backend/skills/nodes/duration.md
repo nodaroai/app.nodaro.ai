@@ -28,14 +28,15 @@ generated_from: 09788c987
 
 ## When to use
 
-(Add prose here. Auto-gen will preserve it across regenerations.)
+Sets a Generate Script node's target length in seconds. Wire its `duration` output into Generate Script's `field-targetLength` input; the value replaces the script's own `targetLength` at run time.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas
 
-(Add prose here.)
+- It reports its number as text; the script coerces it to whole seconds and clamps it to 5–600.
+- Video and audio generation nodes don't take this connection.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

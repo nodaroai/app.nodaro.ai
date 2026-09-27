@@ -17,7 +17,7 @@ The Duration parameter node provides a numeric value (in seconds) that controls 
 - `in` -- optional upstream input (rarely used; Duration is typically a root parameter node)
 
 **Outputs:**
-- `duration` -- numeric duration value in seconds, consumed by downstream generation nodes
+- `duration` -- numeric duration value in seconds. Connect it to Generate Script's **Duration** input to set the script's target length (clamped to 5–600 seconds). Video and audio generation nodes don't take this connection.
 ## Supported Providers
 
 Not applicable. This is a data-passing parameter node with no AI provider.

@@ -6964,7 +6964,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "parameter",
     creditCost: 0,
     inputs: ["in"],
-    outputs: ["style_guide"],
+    outputs: ["style"],
     defaultData: { label: "Style Guide", text: "" },
   },
   {
@@ -6982,7 +6982,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "parameter",
     creditCost: 0,
     inputs: ["in"],
-    outputs: ["scene_count"],
+    outputs: ["count"],
     defaultData: { label: "Scene Count", count: 5 },
   },
   {
@@ -7000,7 +7000,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "parameter",
     creditCost: 0,
     inputs: ["in"],
-    outputs: ["aspect_ratio"],
+    outputs: ["ratio"],
     defaultData: { label: "Aspect Ratio", ratio: "16:9" },
   },
   {
@@ -7386,7 +7386,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Generate Script",
     category: "ai",
     creditCost: 2,
-    inputs: ["prompt"],
+    inputs: ["prompt", "field-tone", "field-styleGuide", "field-sceneCount", "field-targetLength"],
     outputs: ["scenes", "images", "dialogue", "music", "sfx", "characters", "locations"],
     defaultData: { label: "Generate Script", provider: "gemini", model: "gemini-2.5-flash", sceneCount: 5, styleGuide: "", structure: "freeform", tone: "", targetLength: 60, fieldMappings: {} },
   },

@@ -1,7 +1,7 @@
 ---
 node_type: aspect-ratio
-generated_at: 2026-09-21T19:12:08.786Z
-generated_from: 09788c987
+generated_at: 2026-09-27T10:38:38.499Z
+generated_from: bf4f83575
 ---
 
 # Aspect Ratio
@@ -11,7 +11,7 @@ generated_from: 09788c987
 **Category:** parameter
 **Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** `in`
-**Outputs (source handles):** `aspect_ratio`
+**Outputs (source handles):** `ratio`
 
 **Required data fields:**
 - `label: string`

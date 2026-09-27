@@ -87,6 +87,7 @@ import {
   isValidSunoConvertWavConnection,
   isValidSunoUploadExtendConnection,
   isValidGenerateScriptConnection,
+  GENERATE_SCRIPT_FIELD_HANDLES,
   isValidLlmChatConnection,
   isValidTranscribeConnection,
   isValidSplitMediaConnection,
@@ -531,6 +532,11 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   // ─── AI > Script & Text (Batch 3 of audio/text typed-handles migration) ──
   "generate-script": [
     { handleId: "prompt", label: AUDIO_TEXT_HANDLE_LABELS["generate-script"].prompt, accepts: (s) => isValidGenerateScriptConnection("prompt", s, isVisualPickerType) },
+    ...Object.values(GENERATE_SCRIPT_FIELD_HANDLES).map((handleId) => ({
+      handleId,
+      label: AUDIO_TEXT_HANDLE_LABELS["generate-script"][handleId],
+      accepts: (s: string) => isValidGenerateScriptConnection(handleId, s, isVisualPickerType),
+    })),
   ],
   "llm-chat": [
     { handleId: "prompt",        label: AUDIO_TEXT_HANDLE_LABELS["llm-chat"].prompt,            accepts: (s) => isValidLlmChatConnection("prompt",        s, isVisualPickerType) },

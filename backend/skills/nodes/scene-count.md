@@ -1,7 +1,7 @@
 ---
 node_type: scene-count
-generated_at: 2026-09-21T19:12:08.769Z
-generated_from: 09788c987
+generated_at: 2026-09-27T10:38:38.473Z
+generated_from: bf4f83575
 ---
 
 # Scene Count
@@ -11,7 +11,7 @@ generated_from: 09788c987
 **Category:** parameter
 **Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** `in`
-**Outputs (source handles):** `scene_count`
+**Outputs (source handles):** `count`
 
 **Required data fields:**
 - `label: string`
@@ -28,14 +28,15 @@ generated_from: 09788c987
 
 ## When to use
 
-(Add prose here. Auto-gen will preserve it across regenerations.)
+Sets how many scenes a Generate Script node writes. Wire its `count` output into Generate Script's `field-sceneCount` input; the value replaces the script's own `sceneCount` at run time.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas
 
-(Add prose here.)
+- It reports its number as text; the script coerces it to a whole number and clamps it to 1–20.
+- No other node takes this connection.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

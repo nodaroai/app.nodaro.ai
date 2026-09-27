@@ -538,6 +538,28 @@ describe("generate-script", () => {
     )
   })
 
+  it("applies the Scene Count and Duration nodes wired into the settings inputs", async () => {
+    const count = { id: "count1", type: "scene-count", data: { label: "Scenes", count: 9 } }
+    const duration = { id: "dur1", type: "duration", data: { label: "Length", seconds: 45 } }
+    const script = makeNode("generate-script", { sceneCount: 3, targetLength: 60 })
+    mockNodes = [script, count, duration]
+    mockEdges = [
+      { id: "e1", source: "count1", target: "n1", targetHandle: "field-sceneCount" },
+      { id: "e2", source: "dur1", target: "n1", targetHandle: "field-targetLength" },
+    ]
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a lighthouse keeper" })
+    mockRunScriptGeneration.mockResolvedValue(undefined)
+    await executeNode(script, makeCtx())
+    expect(mockRunScriptGeneration).toHaveBeenCalledWith(
+      "n1",
+      "a lighthouse keeper",
+      expect.anything(),
+      // The wire wins over the typed 3 and 60; both nodes report their number as text.
+      expect.objectContaining({ sceneCount: 9, targetDuration: 45 }),
+      {},
+    )
+  })
+
   it("falls back to the saved {Label} topic when the resolver hid the wired Text node", async () => {
     // Older workflows carry a hidden `prompt: "{Story}"` from the connect-time
     // auto-fill. It makes the resolver drop the wired Text (its label is

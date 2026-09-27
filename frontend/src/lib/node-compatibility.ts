@@ -6,7 +6,7 @@ import { IDENTITY_TYPES, IMAGE_PRODUCER_TYPES, TEXT_PRODUCER_TYPES } from "./gen
 import { ACCEPTS_PARAMETER_PICKER, TARGET_HANDLE_ACCEPTS } from "./target-handle-registry"
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
 import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, VIDEO_ONLY_PARAMETER_NODE_TYPES, resolveEffectiveSourceType } from "@nodaro/shared"
-import { AUDIO_PICKER_TYPES, VOICE_PERSONA_TYPES } from "./audio-text-handles"
+import { AUDIO_PICKER_TYPES, VOICE_PERSONA_TYPES, GENERATE_SCRIPT_FIELD_HANDLES } from "./audio-text-handles"
 import { ANALYSIS_PRODUCER_TYPES } from "./data-handles"
 
 // `voice` target accepts voice-persona producers (suno-voice, voice-design's
@@ -236,6 +236,8 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   "analysis",
   // suno-generate secondary text fields (field-<key> mappable handles).
   "field-style", "field-lyrics", "field-title", "field-negativeStyle",
+  // generate-script settings inputs (Tone / Style Guide / Scene Count / Duration).
+  ...Object.values(GENERATE_SCRIPT_FIELD_HANDLES),
   //   - scene: Edit 3D Scene's upstream-plan input (accepts only the two
   //     3D-scene authoring nodes, never a Parameter picker).
   "scene",
@@ -273,6 +275,9 @@ const CONSUMER_TYPE_DEPENDENT_HANDLES: ReadonlySet<string> = new Set(["startStat
  *  after-effects, transcribe, etc.) — false-positive UX. */
 export const PARAMETER_ACCEPTING_HANDLE_IDS: ReadonlySet<string> = new Set([
   "startState", "endState", "target",
+  // Generate Script's settings inputs take the Tone / Style Guide / Scene
+  // Count / Duration nodes (Parameter category).
+  ...Object.values(GENERATE_SCRIPT_FIELD_HANDLES),
   // Image-producer legacy `cinematography` handle accepts visual pickers
   // (camera, look, elements). The existing getCompatibleNodes branch
   // (handleId === "cinematography" || "style") routes to picker candidates;
@@ -498,6 +503,22 @@ export function getCompatibleNodes(
     const directTypes = new Set<SceneNodeType>()
     for (const option of nodeOptions) {
       if (!TEXT_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // Generate Script's settings inputs: exactly what its validator takes (the
+  // matching Generation Settings node, plus any text for Tone / Style Guide),
+  // read from TARGET_HANDLE_ACCEPTS so the popup and the drop can't differ.
+  // Before the generic `field-` branch below, which offers text producers only.
+  if (consumerNodeType === "generate-script" && direction === "target" && handleId.startsWith("field-")) {
+    const entry = TARGET_HANDLE_ACCEPTS["generate-script"]?.find((e) => e.handleId === handleId)
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!entry?.accepts(option.type)) continue
       direct.push(option)
       directTypes.add(option.type)
     }

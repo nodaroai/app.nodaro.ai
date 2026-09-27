@@ -28,14 +28,14 @@ generated_from: 09788c987
 
 ## When to use
 
-(Add prose here. Auto-gen will preserve it across regenerations.)
+Holds a free-text tone. On Generate Script, wire its `tone` output into the `field-tone` input; the tone replaces the script's typed `tone` at run time (cut to 200 characters).
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas
 
-(Add prose here.)
+- A Tone node is never a topic: wired into Generate Script's `prompt` it contributes nothing.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

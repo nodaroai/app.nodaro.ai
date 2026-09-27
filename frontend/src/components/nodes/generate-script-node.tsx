@@ -4,13 +4,13 @@ import { useT } from "@/lib/i18n"
 import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { BookOpen, Loader2, AlertCircle, X, FileText, Sparkles, ImageIcon, Film, Maximize2, Type, MessageSquare, Music, Volume2, User, MapPin, Copy, Braces } from "lucide-react"
+import { BookOpen, Loader2, AlertCircle, X, FileText, Sparkles, ImageIcon, Film, Maximize2, Type, MessageSquare, Music, Volume2, User, MapPin, Copy, Braces, Palette, Brush, Hash, Clock } from "lucide-react"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
-import { isValidGenerateScriptConnection } from "@/lib/audio-text-handles"
+import { isValidGenerateScriptConnection, GENERATE_SCRIPT_FIELD_HANDLES } from "@/lib/audio-text-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import type { ExpandOptions } from "@/components/editor/expand-storyboard-dialog"
 const ScriptPreviewModal = lazy(() => import("@/components/editor/script-preview-modal").then(m => ({ default: m.ScriptPreviewModal })))
@@ -26,6 +26,11 @@ import type { GenerateScriptData, GeneratedScriptResult } from "@/types/nodes"
 
 const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT = (t: string) => isValidGenerateScriptConnection("prompt", t, isVisualPicker)
+const acceptsOn = (handleId: string) => (t: string) => isValidGenerateScriptConnection(handleId, t, isVisualPicker)
+const ACCEPTS_TONE = acceptsOn(GENERATE_SCRIPT_FIELD_HANDLES.tone)
+const ACCEPTS_STYLE_GUIDE = acceptsOn(GENERATE_SCRIPT_FIELD_HANDLES.styleGuide)
+const ACCEPTS_SCENE_COUNT = acceptsOn(GENERATE_SCRIPT_FIELD_HANDLES.sceneCount)
+const ACCEPTS_DURATION = acceptsOn(GENERATE_SCRIPT_FIELD_HANDLES.targetLength)
 
 function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
@@ -261,6 +266,12 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="prompt"     type="target" position={Position.Left}  label="Prompt"     color={TEXT_HANDLE_COLOR} icon={<Type />}          side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    {/* Settings inputs: a wire sets that panel field at run time (Tone, Style
+        Guide, Scene Count and Duration nodes, or any text for the two text ones). */}
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId={GENERATE_SCRIPT_FIELD_HANDLES.tone}         type="target" position={Position.Left} label="Tone"        color={TEXT_HANDLE_COLOR}  icon={<Palette />} side="left" top="calc(100% - 56px)"  accepts={ACCEPTS_TONE} />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId={GENERATE_SCRIPT_FIELD_HANDLES.styleGuide}   type="target" position={Position.Left} label="Style Guide" color={TEXT_HANDLE_COLOR}  icon={<Brush />}   side="left" top="calc(100% - 88px)"  accepts={ACCEPTS_STYLE_GUIDE} />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId={GENERATE_SCRIPT_FIELD_HANDLES.sceneCount}   type="target" position={Position.Left} label="Scene Count" color={HANDLE_COLORS.look} icon={<Hash />}    side="left" top="calc(100% - 120px)" accepts={ACCEPTS_SCENE_COUNT} />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId={GENERATE_SCRIPT_FIELD_HANDLES.targetLength} type="target" position={Position.Left} label="Duration"    color={HANDLE_COLORS.look} icon={<Clock />}   side="left" top="calc(100% - 152px)" accepts={ACCEPTS_DURATION} />
     <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="scenes"     type="source" position={Position.Right} label="Scenes"     color={HANDLE_COLORS.video} icon={<Braces />}        side="right" top="24px" />
     <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="images"     type="source" position={Position.Right} label="Images"     color={HANDLE_COLORS.image} icon={<ImageIcon />}     side="right" top="56px" />
     <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="dialogue"   type="source" position={Position.Right} label="Dialogue"   color={TEXT_HANDLE_COLOR} icon={<MessageSquare />} side="right" top="88px" />

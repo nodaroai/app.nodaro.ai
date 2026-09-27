@@ -319,6 +319,9 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "Voice character": "אופי הקול",
   "Voice delivery": "הגשת הקול",
   "Tone": "טון",
+  "Style Guide": "מדריך סגנון",
+  "Scene Count": "מספר סצנות",
+  "Duration": "משך",
   "Text prompt": "פרומפט טקסט",
   // Output / input pips rendered straight from node components (not the
   // target-handle registry) — guarded by handle-labels-coverage.test.ts.
