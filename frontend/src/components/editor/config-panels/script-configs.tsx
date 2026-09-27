@@ -118,20 +118,6 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           onChange={(e) => onUpdate({ sceneCount: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
         />
       </MappableField>
-      <div>
-        <Label>{t("scriptcfg.structure")}</Label>
-        <Select
-          value={data.structure}
-          onValueChange={(v) => onUpdate({ structure: v as GenerateScriptData["structure"] })}
-        >
-          <SelectTrigger aria-label={t("scriptcfg.structure")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="freeform">{t("scriptcfg.structureFreeform")}</SelectItem>
-            <SelectItem value="8-step">{t("scriptcfg.structure8Step")}</SelectItem>
-            <SelectItem value="custom">{t("cfgshared.custom")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
       <MappableField field="styleGuide" label={t("scriptcfg.styleGuide")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} wiredHandleId={GENERATE_SCRIPT_FIELD_HANDLES.styleGuide} labelAction={
         <span className="inline-flex items-center gap-0.5">
           <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />

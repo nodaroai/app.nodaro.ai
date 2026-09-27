@@ -2524,9 +2524,6 @@ export const en = {
   "txtcfg.numberOfRuns": "Number of runs",
   // scriptcfg: config-panel copy localized 2026-09-02 (keys in source order)
   "scriptcfg.numberOfScenes": "Number of Scenes",
-  "scriptcfg.structure": "Structure",
-  "scriptcfg.structureFreeform": "Freeform",
-  "scriptcfg.structure8Step": "8-Step Story",
   "scriptcfg.styleGuide": "Style Guide",
   "scriptcfg.phStyleGuide": "e.g. children's book illustration, watercolor...",
   "scriptcfg.tone": "Tone",

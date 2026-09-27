@@ -1587,6 +1587,8 @@ export type GenerateScriptData = PromptAffixFields & {
   maxTokens?: number
   sceneCount: number
   styleGuide: string
+  /** Legacy: saved workflows carry it, but it was never wired to the generator,
+   *  so the panel no longer shows it. */
   structure: "freeform" | "8-step" | "custom"
   tone: string
   targetLength: number
