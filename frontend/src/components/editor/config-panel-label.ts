@@ -95,7 +95,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "voice-design": "Voice Design",
   "forced-alignment": "Forced Alignment",
   "suno-voice": "Suno Voice",
-  "suno-generate": "Suno Generate",
+  "suno-generate": "Suno Create Music",
   "suno-cover": "Suno Cover",
   "suno-extend": "Suno Extend",
   "suno-lyrics": "Suno Lyrics",

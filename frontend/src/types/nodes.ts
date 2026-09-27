@@ -7940,12 +7940,12 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // NODE_DEFINITIONS textually and cannot resolve identifiers. Guarded by suno-model-picker.test.tsx.
   {
     type: "suno-generate",
-    label: "Suno Generate",
+    label: "Suno Create Music",
     category: "ai",
     creditCost: 3,
     inputs: ["prompt", "audio-style", "voice", "field-style", "field-lyrics", "field-title", "field-negativeStyle"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Generate", prompt: "", model: "V6", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoGenerateData,
+    defaultData: { label: "Suno Create Music", prompt: "", model: "V6", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoGenerateData,
   },
   {
     type: "suno-cover",

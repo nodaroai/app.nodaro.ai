@@ -260,8 +260,8 @@ Music and voice-design pickers. Wire into Suno, Generate Music, Text-to-Audio, o
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Music Genre](./parameters/music-genre.md) | Pick genre + subgenre + era for music generation | Feed Suno Generate, Generate Music (MiniMax), Text to Audio |
-| [Music Mood](./parameters/music-mood.md) | Pick energy + emotion + vibe for music generation | Feed Suno Generate, Generate Music (MiniMax), Text to Audio |
+| [Music Genre](./parameters/music-genre.md) | Pick genre + subgenre + era for music generation | Feed Suno Create Music, Generate Music (MiniMax), Text to Audio |
+| [Music Mood](./parameters/music-mood.md) | Pick energy + emotion + vibe for music generation | Feed Suno Create Music, Generate Music (MiniMax), Text to Audio |
 | [Instrumentation](./parameters/instrumentation.md) | Pick instruments + production style + vocal presence | Feed music generators; flips MiniMax `instrumental` flag |
 | [Voice Character](./parameters/voice-character.md) | Pick age + gender + accent + timbre for ElevenLabs Voice Design | Compose voice descriptions for Voice Design |
 | [Voice Delivery](./parameters/voice-delivery.md) | Pick pace + emotion + archetype for ElevenLabs Voice Design | Compose voice descriptions for Voice Design |
@@ -355,8 +355,8 @@ Dedicated suite for music creation, editing, and manipulation powered by Suno AI
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Suno Voice](./suno-music/suno-voice.md) | Create a custom voice persona from a recording | Train a `voiceId` to sing on Suno Generate / Cover / Extend |
-| [Suno Generate](./suno-music/suno-generate.md) | Generate full song from prompt and lyrics | Create complete songs with style, lyrics, and vocal control |
+| [Suno Voice](./suno-music/suno-voice.md) | Create a custom voice persona from a recording | Train a `voiceId` to sing on Suno Create Music / Cover / Extend |
+| [Suno Create Music](./suno-music/suno-generate.md) | Generate full song from prompt and lyrics | Create complete songs with style, lyrics, and vocal control |
 | [Suno Cover](./suno-music/suno-cover.md) | Create cover version of existing song | Re-record existing audio in a new style or voice |
 | [Suno Extend](./suno-music/suno-extend.md) | Continue/extend existing Suno track | Add more content to a Suno-generated track |
 | [Suno Lyrics](./suno-music/suno-lyrics.md) | Generate song lyrics from prompt | AI-write lyrics with structure (verse, chorus, bridge) |

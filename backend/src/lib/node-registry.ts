@@ -907,7 +907,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "voice-remix", label: "Voice Remix", category: "ai-audio", description: "Generate a voice from a natural language description and hear it speak preview text.", outputType: "audio" },
   { type: "voice-design", label: "Voice Design", category: "ai-audio", description: "Create a custom voice with full parameter controls and receive both an audio preview and a reusable voice ID.", outputType: "audio" },
   // Suno audio-track nodes (output audio) — suno-music-video is ai-video (above), suno-lyrics / suno-style-boost are ai-text (below).
-  { type: "suno-generate", label: "Suno Generate", category: "ai-audio", description: "Full song generation using Suno AI with extensive creative controls.", outputType: "audio" },
+  { type: "suno-generate", label: "Suno Create Music", category: "ai-audio", description: "Full song generation using Suno AI with extensive creative controls.", outputType: "audio" },
   { type: "suno-cover", label: "Suno Cover", category: "ai-audio", description: "Create a cover version of an existing audio track using Suno AI.", outputType: "audio" },
   { type: "suno-extend", label: "Suno Extend", category: "ai-audio", description: "Extend an existing Suno-generated track by continuing from a specified timestamp.", outputType: "audio" },
   { type: "suno-separate", label: "Suno Separate Stems", category: "ai-audio", description: "Separate vocals from instrumentals, or split a track into individual stems.", outputType: "audio" },

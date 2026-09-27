@@ -4237,7 +4237,7 @@ function executeNodeCore(
       node.id,
       () => sunoGenerateApi({ ...result, userId: ctx.userId }),
       "generatedAudioUrl",
-      "Suno Generate",
+      "Suno Create Music",
       ctx,
       extractSunoOutputFields,
     );

@@ -118,7 +118,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `suno-convert-wav` | Suno Convert WAV | ai | Convert a Suno-generated MP3 audio track to lossless WAV format | `audio`:audio | `audio`:audio | NO |
 | `suno-cover` | Suno Cover | ai | Create a cover version of an existing audio track using Suno AI | `audio`:audio, `prompt`:text, `voice`:identity | `audio`:audio | NO |
 | `suno-extend` | Suno Extend | ai | Extend an existing Suno-generated track by continuing from a specified timestamp | `audio`:audio, `prompt`:text, `voice`:identity | `audio`:audio | NO |
-| `suno-generate` | Suno Generate | ai | Full song generation using Suno AI with extensive creative controls | `prompt`:text, `audio-style`:audio, `voice`:audio, `field-style`:text, `field-lyrics`:text, `field-title`:text, `field-negativeStyle`:text | `audio`:audio | NO |
+| `suno-generate` | Suno Create Music | ai | Full song generation using Suno AI with extensive creative controls | `prompt`:text, `audio-style`:audio, `voice`:audio, `field-style`:text, `field-lyrics`:text, `field-title`:text, `field-negativeStyle`:text | `audio`:audio | NO |
 | `suno-lyrics` | Suno Lyrics | ai | Generate song lyrics from a text prompt using Suno AI | `prompt`:text | `text`:text | NO |
 | `suno-mashup` | Suno Mashup | ai | Blend two audio tracks into a single mashup using Suno AI | `audio1`:audio, `audio2`:audio | `audio`:audio | NO |
 | `suno-music-video` | Music Video | ai | Generate a music video for a Suno-generated track | `audio`:audio | `video`:video | NO |

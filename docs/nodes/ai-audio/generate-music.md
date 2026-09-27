@@ -3,9 +3,9 @@
 
 ## Overview
 
-The Generate Music node produces original music with MiniMax, steered by a **reference song, voice or instrumental** plus your text description. This is the basic music generation node -- for Suno-based generation (covers, extensions, lyrics, stem separation, and more), use the dedicated **Suno Generate** node and the other Suno-specific nodes.
+The Generate Music node produces original music with MiniMax, steered by a **reference song, voice or instrumental** plus your text description. This is the basic music generation node -- for Suno-based generation (covers, extensions, lyrics, stem separation, and more), use the dedicated **Suno Create Music** node and the other Suno-specific nodes.
 
-> **A reference is required.** MiniMax Music is reference-conditioned: it refuses any run that carries no reference song, voice or instrumental. Supply one by uploading a file, pasting a YouTube link, or wiring an audio node into the node's reference input. A run without one is refused **before** any credits are reserved (in the editor, in workflow runs, and over the API) -- you will see "MiniMax Music needs a reference song, voice or instrumental", not a provider error. For prompt-only music with no reference track, use the **Suno Generate** node.
+> **A reference is required.** MiniMax Music is reference-conditioned: it refuses any run that carries no reference song, voice or instrumental. Supply one by uploading a file, pasting a YouTube link, or wiring an audio node into the node's reference input. A run without one is refused **before** any credits are reserved (in the editor, in workflow runs, and over the API) -- you will see "MiniMax Music needs a reference song, voice or instrumental", not a provider error. For prompt-only music with no reference track, use the **Suno Create Music** node.
 
 ## Configuration
 
@@ -29,7 +29,7 @@ The Generate Music node produces original music with MiniMax, steered by a **ref
 |----------|-------|-------|
 | `minimax` | MiniMax Music | The only provider for this node |
 
-> **Note:** Suno models (`suno-v6` / `suno-v6_wild` / `suno-v6_mini` / `suno-v5_5` / `suno-v5` / `suno`) are **not** available through this node. They run through the dedicated **Suno Generate** node (and related Suno-specific nodes) which use a separate client path. See [Suno Generate](../suno-music/suno-generate.md) for Suno-based music generation.
+> **Note:** Suno models (`suno-v6` / `suno-v6_wild` / `suno-v6_mini` / `suno-v5_5` / `suno-v5` / `suno`) are **not** available through this node. They run through the dedicated **Suno Create Music** node (and related Suno-specific nodes) which use a separate client path. See [Suno Create Music](../suno-music/suno-generate.md) for Suno-based music generation.
 
 ## Inputs & Outputs
 
@@ -52,7 +52,7 @@ The Generate Music node produces original music with MiniMax, steered by a **ref
 
 ## Tips
 
-- For Suno-based generation and advanced features (covers, extensions, style boost, stem separation, mashups), use the dedicated Suno nodes: Suno Generate, Suno Cover, Suno Extend, Suno Lyrics, Suno Separate, Suno Music Video, and Suno Upload Extend.
+- For Suno-based generation and advanced features (covers, extensions, style boost, stem separation, mashups), use the dedicated Suno nodes: Suno Create Music, Suno Cover, Suno Extend, Suno Lyrics, Suno Separate, Suno Music Video, and Suno Upload Extend.
 - The prompt maximum is 3000 characters, providing room for very detailed descriptions including specific instruments, arrangement notes, and dynamic changes.
 - The output is never a copy of the reference: it influences mood and instrumentation rather than melody.
 - Generated music tracks can be connected to Merge Video & Audio for adding background music to video, or to Mix Audio for layering with other audio sources.

@@ -9,7 +9,7 @@ Suno Extend takes a previously generated Suno track (identified by its Audio ID)
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Audio ID | string | `""` | Suno audio ID (required). Inherited from the connected Suno node's **selected** track — the panel shows "Inherited from *Suno Generate*: `<id>`" under the field, so nothing needs pasting; switch tracks on the source node and Extend follows. A manual value applies only without a connection. |
+| Audio ID | string | `""` | Suno audio ID (required). Inherited from the connected Suno node's **selected** track — the panel shows "Inherited from *Suno Create Music*: `<id>`" under the field, so nothing needs pasting; switch tracks on the source node and Extend follows. A manual value applies only without a connection. |
 | Continue From | number (seconds) | `0` | Timestamp in seconds where the extension begins. Must be greater than 0; leave it at 0 (or empty) and the node extends the track using Suno's own parameters instead of the custom ones. |
 | Extension Prompt | string | `""` | Prompt describing the desired continuation. Max length is per-version (5000 for V6 / V4.5+ / V5, 3000 for V4); longer input is truncated rather than rejected. |
 | Model | enum | `"V6"` | Suno model version: `V6` (greater musical expression, more natural vocals, richer details), `V6_WILD` (bolder, more distinctive, less predictable), `V6_MINI` (lightweight and fast), `V5_5`, `V5`, `V4_5PLUS`, `V4_5ALL`, `V4_5`, `V4`. |
@@ -25,7 +25,7 @@ Suno Extend takes a previously generated Suno track (identified by its Audio ID)
 
 ## Inputs & Outputs
 
-- **Inputs:** `in` -- Suno audio ID from an upstream Suno node (e.g., Suno Generate)
+- **Inputs:** `in` -- Suno audio ID from an upstream Suno node (e.g., Suno Create Music)
 - **Outputs:** `audio` -- extended audio URL
 ## Best Practices
 
@@ -39,7 +39,7 @@ Suno Extend takes a previously generated Suno track (identified by its Audio ID)
 
 - Lengthening a generated song that ended too soon.
 - Adding a bridge, outro, or additional verse to an existing track.
-- Building a multi-part composition by chaining Suno Generate into multiple Suno Extend nodes.
+- Building a multi-part composition by chaining Suno Create Music into multiple Suno Extend nodes.
 - Iteratively refining a song by extending from specific moments.
 - Creating long-form ambient or background music by repeated extension.
 

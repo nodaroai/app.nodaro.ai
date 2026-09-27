@@ -1,9 +1,9 @@
-# Suno Generate
+# Suno Create Music
 > Full song generation using Suno AI with extensive creative controls.
 
 ## Overview
 
-Suno Generate creates complete songs from text prompts. It supports multiple Suno model versions, custom lyrics with metatag formatting, genre/style tags, and fine-grained controls for vocal gender, style weight, weirdness, and audio weight. The prompt field supports Suno metatag autocomplete for structured lyrics.
+Suno Create Music creates complete songs from text prompts. It supports multiple Suno model versions, custom lyrics with metatag formatting, genre/style tags, and fine-grained controls for vocal gender, style weight, weirdness, and audio weight. The prompt field supports Suno metatag autocomplete for structured lyrics.
 
 ## Configuration
 

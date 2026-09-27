@@ -129,7 +129,7 @@ function WIZARD_TARGET_OPTIONS(): ReadonlyArray<{
       group: tx("cfgext.phdGroupMusic"),
       items: [
         { value: "generate-music", label: "Generate Music" },
-        { value: "suno-generate", label: "Suno Generate" },
+        { value: "suno-generate", label: "Suno Create Music" },
       ],
     },
     {

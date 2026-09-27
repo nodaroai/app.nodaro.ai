@@ -3,7 +3,7 @@
 
 ## Overview
 
-Suno Voice is a **setup-time** node — it does not execute as part of a workflow run. Instead, you configure it once via a 3-step modal that walks you through KIE.ai's `/voice/validate` → `/voice/generate` flow. Once setup completes, the node stores a `voiceId` and emits it at workflow runtime as the `personaId` input to Suno Generate / Suno Cover / Suno Extend, so any music those nodes produce sings in your custom voice.
+Suno Voice is a **setup-time** node — it does not execute as part of a workflow run. Instead, you configure it once via a 3-step modal that walks you through KIE.ai's `/voice/validate` → `/voice/generate` flow. Once setup completes, the node stores a `voiceId` and emits it at workflow runtime as the `personaId` input to Suno Create Music / Suno Cover / Suno Extend, so any music those nodes produce sings in your custom voice.
 
 The validation phrase is generated server-side per submission, so the verification recording cannot be prepared ahead of time — you must record yourself reading the exact phrase the server returns in Step 2.
 
@@ -34,7 +34,7 @@ The 20-credit charge is reserved when you click **Create voice** in Step 3, comm
 ## Inputs & outputs
 
 - **Inputs:** none. All configuration happens in the modal.
-- **Outputs:** `voicePersona` — a structured payload `{ voiceId, voiceName, style, personaId, personaModel: "voice_persona" }`. Wire this output into a Suno Generate / Suno Cover / Suno Extend node's `in` handle; the workflow editor's input resolver maps `voiceId` → `personaId` automatically.
+- **Outputs:** `voicePersona` — a structured payload `{ voiceId, voiceName, style, personaId, personaModel: "voice_persona" }`. Wire this output into a Suno Create Music / Suno Cover / Suno Extend node's `in` handle; the workflow editor's input resolver maps `voiceId` → `personaId` automatically.
 
 ## Credits
 
@@ -57,7 +57,7 @@ Credits are reserved on `POST /v1/suno/voice/generate` and committed by the poll
 
 ## Common use cases
 
-- Create a custom singing voice from a personal vocal sample and use it as the singer on Suno Generate.
+- Create a custom singing voice from a personal vocal sample and use it as the singer on Suno Create Music.
 - Build a small library of voice personas for a podcast, ad campaign, or game soundtrack.
 - A/B test the same lyrics across multiple custom voices.
 
@@ -70,6 +70,6 @@ Credits are reserved on `POST /v1/suno/voice/generate` and committed by the poll
 
 ## Related nodes
 
-- [Suno Generate](./suno-generate.md) — accepts `personaId` to apply the persona to a freshly generated song.
+- [Suno Create Music](./suno-generate.md) — accepts `personaId` to apply the persona to a freshly generated song.
 - [Suno Cover](./suno-cover.md) — applies the persona to a cover of an existing track.
 - [Suno Extend](./suno-extend.md) — extends a previously generated track using the persona.

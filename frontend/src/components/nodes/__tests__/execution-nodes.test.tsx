@@ -212,7 +212,7 @@ const NODES: NodeTestConfig[] = [
   { name: "GenerateMusicNode", Component: GenerateMusicNode, expectedCategory: "ai", defaultData: { label: "Generate Music", provider: "suno" } },
   { name: "TextToAudioNode", Component: TextToAudioNode, expectedCategory: "ai", defaultData: { label: "Text to Audio", provider: "tangoflux" } },
   { name: "GenerateScriptNode", Component: GenerateScriptNode, expectedCategory: "script", defaultData: { label: "Generate Script" } },
-  { name: "SunoGenerateNode", Component: SunoGenerateNode, expectedCategory: "ai", defaultData: { label: "Suno Generate" } },
+  { name: "SunoGenerateNode", Component: SunoGenerateNode, expectedCategory: "ai", defaultData: { label: "Suno Create Music" } },
   { name: "SunoCoverNode", Component: SunoCoverNode, expectedCategory: "ai", defaultData: { label: "Suno Cover" } },
   { name: "SunoExtendNode", Component: SunoExtendNode, expectedCategory: "ai", defaultData: { label: "Suno Extend" } },
   { name: "SunoLyricsNode", Component: SunoLyricsNode, expectedCategory: "ai", defaultData: { label: "Suno Lyrics" } },

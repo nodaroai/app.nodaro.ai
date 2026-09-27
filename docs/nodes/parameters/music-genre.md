@@ -1,6 +1,6 @@
 # Music Genre
 
-A parameter-picker that emits a music-genre prompt-hint to feed Suno Generate, Generate Music (MiniMax), and Text to Audio.
+A parameter-picker that emits a music-genre prompt-hint to feed Suno Create Music, Generate Music (MiniMax), and Text to Audio.
 
 The picker shows a horizontal tab row across genre categories (Hip Hop / R&B, Electronic, Pop, Rock / Metal, Acoustic / Roots, Global, Cinematic / Score) — taxonomy aligned with [Splice](https://splice.com/sounds/genres).
 
@@ -31,7 +31,7 @@ When only one sub-field is set, the bare hint is emitted (e.g. `synthwave`). Whe
 ## Connecting
 
 Wire to:
-- **Suno Generate** `audio-style` handle — composed text appended to `style` (in customMode) or `prompt` (otherwise).
+- **Suno Create Music** `audio-style` handle — composed text appended to `style` (in customMode) or `prompt` (otherwise).
 - **Generate Music** `audio-style` handle — when provider=minimax, populates the typed `genre` field; otherwise appended to `prompt`.
 - **Text to Audio** `audio-style` handle — appended to `prompt`.
 - **Text Prompt / Combine Text** `in` handle — direct text wiring.

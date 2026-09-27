@@ -1,10 +1,10 @@
 ---
 node_type: suno-generate
-generated_at: 2026-09-21T19:12:09.383Z
-generated_from: 09788c987
+generated_at: 2026-09-27T10:07:59.018Z
+generated_from: fc0ee97cf
 ---
 
-# Suno Generate
+# Suno Create Music
 
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `suno-generate`
@@ -46,7 +46,7 @@ generated_from: 09788c987
 **Default data:**
 ```json
 {
-  "label": "Suno Generate",
+  "label": "Suno Create Music",
   "prompt": "",
   "model": "V6",
   "lyrics": "",
@@ -97,7 +97,7 @@ generated_from: 09788c987
     "y": 0
   },
   "data": {
-    "label": "Suno Generate",
+    "label": "Suno Create Music",
     "prompt": "",
     "model": "V6",
     "lyrics": "",
