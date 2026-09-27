@@ -8,14 +8,20 @@ vi.mock("@xyflow/react", () => ({ useStore: (sel: (s: unknown) => unknown) => se
 vi.mock("@/components/editor/config-panels/node-preset-dropdown", () => ({
   PresetDropdown: ({ zoom }: { zoom?: number }) => <div data-testid="preset" data-zoom={zoom} />,
 }))
-vi.mock("lucide-react", () => ({ MoreHorizontal: (p: Record<string, unknown>) => <span data-testid="more" {...p} /> }))
+vi.mock("lucide-react", () => ({
+  MoreHorizontal: (p: Record<string, unknown>) => <span data-testid="more" {...p} />,
+  CircleHelp: (p: Record<string, unknown>) => <span data-testid="help" {...p} />,
+}))
 
 import { NodeTopToolbar } from "../node-top-toolbar"
 
-const renderToolbar = (showActions = true) =>
+const renderToolbar = (showActions = true, { showPreset = true, showDocs = true } = {}) =>
   render(
     <NodeTopToolbar
       nodeId="n1"
+      nodeType="generate-image"
+      showPreset={showPreset}
+      showDocs={showDocs}
       showActions={showActions}
       onMoreMenu={() => {}}
       onEnter={() => {}}
@@ -44,8 +50,30 @@ describe("NodeTopToolbar", () => {
 
   it("shows only the preset pill (no ⋯ menu) when showActions is false", () => {
     h.canvasZoom = 1
-    renderToolbar(false)
+    renderToolbar(false, { showDocs: false })
     expect(screen.getByTestId("preset")).toBeInTheDocument()
+    expect(screen.queryByTestId("more")).toBeNull()
+    expect(screen.queryByTestId("help")).toBeNull()
+  })
+
+  it("puts the ? docs link between the preset pill and the ⋯ menu, to the node's page in a new tab", () => {
+    h.canvasZoom = 2
+    const { container } = renderToolbar()
+    const link = screen.getByTestId("help").closest("a")!
+    expect(link.getAttribute("href")).toBe("https://nodaro.ai/docs/node/generate-image?lang=en&ref=app")
+    expect(link.getAttribute("target")).toBe("_blank")
+    expect(link.getAttribute("rel")).toBe("noopener")
+    // Same glyph size as the ⋯ beside it.
+    expect(screen.getByTestId("help").getAttribute("size")).toBe("26")
+    const order = [...container.querySelectorAll("[data-testid]")].map((e) => e.getAttribute("data-testid"))
+    expect(order).toEqual(["preset", "help", "more"])
+  })
+
+  it("shows the ? alone while the node is only selected (no preset applied, not hovered)", () => {
+    h.canvasZoom = 1
+    renderToolbar(false, { showPreset: false, showDocs: true })
+    expect(screen.getByTestId("help")).toBeInTheDocument()
+    expect(screen.queryByTestId("preset")).toBeNull()
     expect(screen.queryByTestId("more")).toBeNull()
   })
 })

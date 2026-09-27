@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { FieldMappings } from "@/types/nodes"
+import { CompareModelsLink } from "@/components/editor/node-docs/compare-models-link"
 import { getCompatibleSources } from "./helpers"
 import type { SourceNodeInfo } from "./types"
 
@@ -67,6 +68,9 @@ export const MappableField = memo(function MappableField({
           <Label id={labelId} htmlFor={triggerId} className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{label}</Label>
         </div>
         <div className="flex items-center gap-1">
+          {/* The node's model picker: "Compare models ↗" to its docs page's
+              #models (self-hides without that section or outside the panel). */}
+          {field === "provider" && <CompareModelsLink />}
           {labelAction}
           {wired && (
             <span className="inline-flex h-5 max-w-[160px] items-center gap-1 rounded-md bg-[#ff0073]/10 px-1.5 text-[10px] font-medium text-[#ff0073] dark:bg-[#ff0073]/15 dark:text-[#ff6aa5]">

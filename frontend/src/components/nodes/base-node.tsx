@@ -654,16 +654,20 @@ function BaseNodeComponent({
           transform: zoom !== 1 ? `scale(${zoom})` : undefined,
         }}
       >
-      {/* Visible on hover, while the preset menu is open, OR whenever a preset is applied (so the
-          preset pill stays on the node). offset scales with the node zoom so the gap above the
-          card tracks the floating title (EditableNodeLabel, `-top-6`) instead of a constant 4px. */}
-      <NodeToolbar align="end" isVisible={isHovered || presetMenuOpen || hasActivePreset} position={Position.Top} offset={Math.round(8 * zoom)}>
-        {/* Toolbar content (preset dropdown + 3-dots) scales by canvasZoom × nodeZoom so it tracks
-            the node title — see NodeTopToolbar. Only mounts while the toolbar is visible. The ⋯ menu
-            and per-node actions show only on hover / while the menu is open; the preset pill always
-            shows when a preset is active. */}
+      {/* Visible on hover, while the preset menu is open, whenever a preset is applied (so the
+          preset pill stays on the node), OR while the node is selected (so its "?" docs link is
+          there). offset scales with the node zoom so the gap above the card tracks the floating
+          title (EditableNodeLabel, `-top-6`) instead of a constant 4px. */}
+      <NodeToolbar align="end" isVisible={isHovered || presetMenuOpen || hasActivePreset || !!selected} position={Position.Top} offset={Math.round(8 * zoom)}>
+        {/* Toolbar content (preset dropdown + "?" + 3-dots) scales by canvasZoom × nodeZoom so it
+            tracks the node title — see NodeTopToolbar. Only mounts while the toolbar is visible. The
+            ⋯ menu and per-node actions show only on hover / while the menu is open; the preset pill
+            always shows when a preset is active; the "?" also shows while the node is selected. */}
         <NodeTopToolbar
           nodeId={id}
+          nodeType={nodeType}
+          showPreset={isHovered || presetMenuOpen || hasActivePreset}
+          showDocs={isHovered || presetMenuOpen || !!selected}
           showActions={isHovered || presetMenuOpen}
           onMoreMenu={handleMoreMenu}
           toolbarActions={toolbarActions}

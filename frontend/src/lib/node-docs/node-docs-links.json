@@ -1,0 +1,3485 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-27",
+  "howToLink": {
+    "link": "https://nodaro.ai/docs/node/{type}",
+    "withLanguage": "https://nodaro.ai/docs/node/{type}?lang={lang}",
+    "withSection": "https://nodaro.ai/docs/node/{type}#{section}",
+    "withTracking": "https://nodaro.ai/docs/node/{type}?ref=app",
+    "note": "Build every link from the node type with the pattern above. It redirects to the page wherever the page lives, so never hard-code a page URL. Unknown types land on the Node Reference."
+  },
+  "languages": {
+    "published": [
+      "en"
+    ],
+    "note": "Pass the UI language as ?lang=. A language the docs have not published yet falls back to English, so it is safe to always send it."
+  },
+  "sections": {
+    "when-to-use": "When to use it",
+    "quick-start": "Quick start",
+    "inputs": "Inputs",
+    "outputs": "Outputs",
+    "settings": "Settings",
+    "models": "Models",
+    "credits": "Credits",
+    "tips": "Tips",
+    "troubleshooting": "Troubleshooting",
+    "api": "From the API",
+    "limits": "Limits",
+    "faq": "Frequently asked questions"
+  },
+  "fallback": "https://nodaro.ai/docs/nodes",
+  "aliases": {
+    "image-to-video": "generate-video",
+    "text-to-video": "generate-video"
+  },
+  "nodes": [
+    {
+      "type": "upload-image",
+      "label": "Upload Image",
+      "pickerTab": "Image",
+      "family": "Add Your Own",
+      "link": "https://nodaro.ai/docs/node/upload-image",
+      "page": "https://nodaro.ai/docs/nodes/image/upload-image",
+      "summary": "Bring your own picture into a workflow. Upload a file or paste a link, crop it on the way in, and send it to every node that takes an image.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "outputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "generate-image",
+      "label": "Generate Image",
+      "pickerTab": "Image",
+      "family": "Create",
+      "link": "https://nodaro.ai/docs/node/generate-image",
+      "page": "https://nodaro.ai/docs/nodes/image/generate-image",
+      "summary": "Create an image from a text prompt with one of Nodaro's image models, keep characters consistent with references, and edit results in place with a mask.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "modify-image",
+      "label": "Modify Image",
+      "pickerTab": "Image",
+      "family": "Edit & Retouch",
+      "link": "https://nodaro.ai/docs/node/modify-image",
+      "page": "https://nodaro.ai/docs/nodes/image/modify-image",
+      "summary": "Change an existing image with a text instruction. Restyle it, fix one detail or repaint a masked area with more than 20 image-editing models.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "upscale-image",
+      "label": "Upscale Image",
+      "pickerTab": "Image",
+      "family": "Edit & Retouch",
+      "link": "https://nodaro.ai/docs/node/upscale-image",
+      "page": "https://nodaro.ai/docs/nodes/image/upscale-image",
+      "summary": "Enlarge and sharpen an image without a prompt. Use Recraft Upscale for quick, low-cost results or Topaz Upscale at 1x, 2x or 4x for final files.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "remove-background",
+      "label": "Remove Background",
+      "pickerTab": "Image",
+      "family": "Edit & Retouch",
+      "link": "https://nodaro.ai/docs/node/remove-background",
+      "page": "https://nodaro.ai/docs/nodes/image/remove-background",
+      "summary": "Remove the background from an image in one step. The node returns a transparent PNG of the subject, ready to place on a new scene or a brand graphic.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "generate-mask",
+      "label": "Generate Mask",
+      "pickerTab": "Image",
+      "family": "Edit & Retouch",
+      "link": "https://nodaro.ai/docs/node/generate-mask",
+      "page": "https://nodaro.ai/docs/nodes/image/generate-mask",
+      "summary": "Describe a subject in plain words, such as \"the red car\", and get a black-and-white mask of it to repaint only that area in an editing node.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "troubleshooting",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "paint-mask",
+      "label": "Paint Mask",
+      "pickerTab": "Image",
+      "family": "Edit & Retouch",
+      "link": "https://nodaro.ai/docs/node/paint-mask",
+      "page": "https://nodaro.ai/docs/nodes/image/paint-mask",
+      "summary": "Paint a mask by hand over any image, or refine a generated one, and send it to every node that takes a mask. White is edited, black is kept. Free.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "faq"
+      ]
+    },
+    {
+      "type": "image-collage",
+      "label": "Image Collage",
+      "pickerTab": "Image",
+      "family": "Edit & Retouch",
+      "link": "https://nodaro.ai/docs/node/image-collage",
+      "page": "https://nodaro.ai/docs/nodes/image/image-collage",
+      "summary": "Arrange up to 30 images into one 2K or 4K picture with a smart or grid layout. Add numbers and labels to turn a batch of shots into a storyboard.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "image-overlay",
+      "label": "Image Overlay",
+      "pickerTab": "Image",
+      "family": "Edit & Retouch",
+      "link": "https://nodaro.ai/docs/node/image-overlay",
+      "page": "https://nodaro.ai/docs/nodes/image/image-overlay",
+      "summary": "Place up to 12 layers, such as logos, text, QR codes and shapes, on an image, pixel-exactly, with a live preview. Export for many platforms in one run.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "extract-frame",
+      "label": "Extract Frame",
+      "pickerTab": "Image",
+      "family": "Edit & Retouch",
+      "link": "https://nodaro.ai/docs/node/extract-frame",
+      "page": "https://nodaro.ai/docs/nodes/image/extract-frame",
+      "summary": "Pull one frame out of a video as a lossless PNG, such as the first, the last, a timestamp or an exact frame number, to chain clips or make thumbnails.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "troubleshooting",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "reference-sheet",
+      "label": "Reference Sheet",
+      "pickerTab": "Image",
+      "family": "References",
+      "link": "https://nodaro.ai/docs/node/reference-sheet",
+      "page": "https://nodaro.ai/docs/nodes/image/reference-sheet",
+      "summary": "Compose a turnaround, variation board, detail sheet or full model sheet from a Character, Object or Location, and reuse its clean panels as references.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "troubleshooting",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "reference-board",
+      "label": "Reference Board",
+      "pickerTab": "Image",
+      "family": "References",
+      "link": "https://nodaro.ai/docs/node/reference-board",
+      "page": "https://nodaro.ai/docs/nodes/image/reference-board",
+      "summary": "Generate a dense reference board with a hero image, panels and a color palette in one AI pass, then refine it with an edit, a mask or a re-roll.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "image-to-text",
+      "label": "Describe Image",
+      "pickerTab": "Image",
+      "family": "Understand",
+      "link": "https://nodaro.ai/docs/node/image-to-text",
+      "page": "https://nodaro.ai/docs/nodes/image/describe-image",
+      "summary": "Describe any image in words with a vision model, briefly, in detail or in labeled sections, and send the text to prompts, captions or alt text.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "describe-to-picker",
+      "label": "Describe to Picker",
+      "pickerTab": "Image",
+      "family": "Understand",
+      "link": "https://nodaro.ai/docs/node/describe-to-picker",
+      "page": "https://nodaro.ai/docs/nodes/image/describe-to-picker",
+      "summary": "Analyze a photo with a vision model and fill the Person, Styling, Framing, Lens and Camera / Film Stock pickers you connect with valid catalog choices.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "troubleshooting",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "image-critic",
+      "label": "Image Critic",
+      "pickerTab": "Image",
+      "family": "Understand",
+      "link": "https://nodaro.ai/docs/node/image-critic",
+      "page": "https://nodaro.ai/docs/nodes/image/image-critic",
+      "summary": "Score an image for realism, anatomy, prompt adherence, style or character consistency, and route it by the result to build automatic quality checks.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "upload-video",
+      "label": "Upload Video",
+      "pickerTab": "Video",
+      "family": "Add Your Own",
+      "link": "https://nodaro.ai/docs/node/upload-video",
+      "page": "https://nodaro.ai/docs/nodes/video/upload-video",
+      "summary": "Bring your own video into a workflow. Upload an MP4, MOV or WebM file or paste a URL, crop, trim or convert it, and send it to any video node.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "generate-video",
+      "label": "Generate Video",
+      "pickerTab": "Video",
+      "family": "Create",
+      "link": "https://nodaro.ai/docs/node/generate-video",
+      "page": "https://nodaro.ai/docs/nodes/video/generate-video",
+      "summary": "Make a video clip from a prompt, a start frame or references with Seedance, VEO, Kling, Wan and more, with sound, end frames and per-model credit rules.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "generate-video-pro",
+      "label": "Generate Video Pro",
+      "pickerTab": "Video",
+      "family": "Create",
+      "link": "https://nodaro.ai/docs/node/generate-video-pro",
+      "page": "https://nodaro.ai/docs/nodes/video/generate-video-pro",
+      "summary": "Make one long AI video from a prompt or a script. Generate Video Pro splits it into model-sized segments, renders them in order and stitches one clip.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-music-video",
+      "label": "Music Video",
+      "pickerTab": "Video",
+      "family": "Create",
+      "link": "https://nodaro.ai/docs/node/suno-music-video",
+      "page": "https://nodaro.ai/docs/nodes/video/music-video",
+      "summary": "Generate a music video for a song made with Suno. Connect a Suno music node, run Music Video, and get visuals made for that track, for 10 credits.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "still-to-video",
+      "label": "Still to Video",
+      "pickerTab": "Video",
+      "family": "Create",
+      "link": "https://nodaro.ai/docs/node/still-to-video",
+      "page": "https://nodaro.ai/docs/nodes/video/still-to-video",
+      "summary": "Turn one image and one audio track into an MP4, with an optional zoom, pan or Ken Burns motion. No AI model runs, so it costs 0 credits.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "slideshow",
+      "label": "Slideshow",
+      "pickerTab": "Video",
+      "family": "Create",
+      "link": "https://nodaro.ai/docs/node/slideshow",
+      "page": "https://nodaro.ai/docs/nodes/video/slideshow",
+      "summary": "Turn 2 to 100 images and an optional audio track into an MP4 slideshow with motion and transitions. No AI model runs, so it costs 0 credits.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "generative-pipeline",
+      "label": "Story → Video",
+      "pickerTab": "Video",
+      "family": "Story & Script",
+      "link": "https://nodaro.ai/docs/node/generative-pipeline",
+      "page": "https://nodaro.ai/docs/nodes/video/story-to-video",
+      "summary": "Turn a story prompt into a finished AI film. Story → Video writes the script, casts, plans shots, animates and edits, and stops for your approval.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "scene",
+      "label": "Scene",
+      "pickerTab": "Video",
+      "family": "Story & Script",
+      "link": "https://nodaro.ai/docs/node/scene",
+      "page": "https://nodaro.ai/docs/nodes/video/scene",
+      "summary": "The Scene node holds one scene of a Story → Video film, with its shots, camera, keyframes and clip. Review it, refine the shots and approve it.",
+      "sections": [
+        "when-to-use",
+        "outputs",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "generate-script",
+      "label": "Generate Script",
+      "pickerTab": "Video",
+      "family": "Story & Script",
+      "link": "https://nodaro.ai/docs/node/generate-script",
+      "page": "https://nodaro.ai/docs/nodes/video/generate-script",
+      "summary": "Write a multi-scene video script with AI. Each scene gets a description, action, mood, length, camera, dialogue and a ready-to-use image prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "ai-avatar",
+      "label": "AI Avatar",
+      "pickerTab": "Video",
+      "family": "Animate & Perform",
+      "link": "https://nodaro.ai/docs/node/ai-avatar",
+      "page": "https://nodaro.ai/docs/nodes/video/ai-avatar",
+      "summary": "Make a talking avatar video with HeyGen. Pick an avatar or animate your own image, then give it a script and a voice, or a recorded voiceover.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "cinematic-avatar",
+      "label": "Cinematic Avatar",
+      "pickerTab": "Video",
+      "family": "Animate & Perform",
+      "link": "https://nodaro.ai/docs/node/cinematic-avatar",
+      "page": "https://nodaro.ai/docs/nodes/video/cinematic-avatar",
+      "summary": "Make a short cinematic clip with 1 to 3 HeyGen avatar looks from a text prompt. No script or voice; the prompt directs the scene, action and camera.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "lip-sync",
+      "label": "Lip Sync",
+      "pickerTab": "Video",
+      "family": "Animate & Perform",
+      "link": "https://nodaro.ai/docs/node/lip-sync",
+      "page": "https://nodaro.ai/docs/nodes/video/lip-sync",
+      "summary": "Make a portrait speak an audio track, or dub an existing video by re-syncing its lips to new speech, with Kling Avatar, OmniHuman, Seedance and more.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "speech-to-video",
+      "label": "Speech to Video",
+      "pickerTab": "Video",
+      "family": "Animate & Perform",
+      "link": "https://nodaro.ai/docs/node/speech-to-video",
+      "page": "https://nodaro.ai/docs/nodes/video/speech-to-video",
+      "summary": "Generate a video driven by a speech track with Wan 2.2. Connect speech audio, a portrait and a prompt, and get a talking video from 30 credits.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "motion-transfer",
+      "label": "Motion Transfer",
+      "pickerTab": "Video",
+      "family": "Animate & Perform",
+      "link": "https://nodaro.ai/docs/node/motion-transfer",
+      "page": "https://nodaro.ai/docs/nodes/video/motion-transfer",
+      "summary": "Make a still character perform the moves of a reference video, such as a dance or a gesture, with Kling 2.6, Kling 3.0 or Wan Animate.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "face-swap",
+      "label": "Face Swap",
+      "pickerTab": "Video",
+      "family": "Animate & Perform",
+      "link": "https://nodaro.ai/docs/node/face-swap",
+      "page": "https://nodaro.ai/docs/nodes/video/face-swap",
+      "summary": "Replace the face in a video with the face from a reference image, for character replacement, privacy or creative remixes, for 130 credits per run.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "extend-video",
+      "label": "Extend Video",
+      "pickerTab": "Video",
+      "family": "Continue & Restyle",
+      "link": "https://nodaro.ai/docs/node/extend-video",
+      "page": "https://nodaro.ai/docs/nodes/video/extend-video",
+      "summary": "Continue a video with new footage that follows your prompt, using Seedance 2 Extend, LTX 2.3 Pro, VEO Extend or Runway Extend, and chain runs for long shots.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "edit-video-pro",
+      "label": "Edit Video Pro",
+      "pickerTab": "Video",
+      "family": "Continue & Restyle",
+      "link": "https://nodaro.ai/docs/node/edit-video-pro",
+      "page": "https://nodaro.ai/docs/nodes/video/edit-video-pro",
+      "summary": "Replace a chosen span of an existing video, from 4 seconds up to 2 minutes, with new Seedance footage stitched back so the rest of the clip stays the same.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "video-retake",
+      "label": "Retake Video",
+      "pickerTab": "Video",
+      "family": "Continue & Restyle",
+      "link": "https://nodaro.ai/docs/node/video-retake",
+      "page": "https://nodaro.ai/docs/nodes/video/retake-video",
+      "summary": "Regenerate a time window of an existing video with LTX 2.3 Pro. Replace only the sound, only the picture or both, and keep everything outside the window.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "limits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "video-to-video",
+      "label": "Video to Video",
+      "pickerTab": "Video",
+      "family": "Continue & Restyle",
+      "link": "https://nodaro.ai/docs/node/video-to-video",
+      "page": "https://nodaro.ai/docs/nodes/video/video-to-video",
+      "summary": "Transform a whole video from a prompt. Restyle footage as anime or claymation, turn day into night, or edit a clip by instruction with Seedance 2.5 Edit.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "switchx",
+      "label": "Relight & Switch",
+      "pickerTab": "Video",
+      "family": "Continue & Restyle",
+      "link": "https://nodaro.ai/docs/node/switchx",
+      "page": "https://nodaro.ai/docs/nodes/video/relight-and-switch",
+      "summary": "Relight a subject, swap or restyle a background, or composite new elements into a video, driven by the clip's own pixels, a mask and a reference image.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "limits",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "trim-video",
+      "label": "Trim Video",
+      "pickerTab": "Video",
+      "family": "Cut & Assemble",
+      "link": "https://nodaro.ai/docs/node/trim-video",
+      "page": "https://nodaro.ai/docs/nodes/video/trim-video",
+      "summary": "Cut a video by start and end time, trim seconds or frames from its edges, keep its first or last seconds, or cut at the cleanest loop point with Smart loop cut.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "combine-videos",
+      "label": "Combine Videos",
+      "pickerTab": "Video",
+      "family": "Cut & Assemble",
+      "link": "https://nodaro.ai/docs/node/combine-videos",
+      "page": "https://nodaro.ai/docs/nodes/video/combine-videos",
+      "summary": "Join several video clips into one in the order you set, with more than 50 transitions, audio crossfades, seam trims and jump-free joins for continuous shots.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "apply-edl",
+      "label": "Apply EDL",
+      "pickerTab": "Video",
+      "family": "Cut & Assemble",
+      "link": "https://nodaro.ai/docs/node/apply-edl",
+      "page": "https://nodaro.ai/docs/nodes/video/apply-edl",
+      "summary": "Render an edit decision list into one finished video or audio file, with cuts and crossfades, and remap a transcript so captions follow the finished cut.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "assemble-narrated-video",
+      "label": "Assemble Narrated Video",
+      "pickerTab": "Video",
+      "family": "Cut & Assemble",
+      "link": "https://nodaro.ai/docs/node/assemble-narrated-video",
+      "page": "https://nodaro.ai/docs/nodes/video/assemble-narrated-video",
+      "summary": "Fit each voice take to its video clip and join the blocks into one narrated MP4. Short voices are centered, long voices slow the clip, and no voice is ever cut.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "speed-ramp",
+      "label": "Adjust Speed",
+      "pickerTab": "Video",
+      "family": "Cut & Assemble",
+      "link": "https://nodaro.ai/docs/node/speed-ramp",
+      "page": "https://nodaro.ai/docs/nodes/video/adjust-speed",
+      "summary": "Change a video's playback speed from 0.05x to 100x, play it in reverse, keep or shift the pitch, add smooth slow motion, or ramp the speed with segments.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "loop-video",
+      "label": "Loop Video",
+      "pickerTab": "Video",
+      "family": "Cut & Assemble",
+      "link": "https://nodaro.ai/docs/node/loop-video",
+      "page": "https://nodaro.ai/docs/nodes/video/loop-video",
+      "summary": "Repeat a short video a set number of times or until it reaches a target length, and cut it at its cleanest loop point first so that no repeat shows a jump.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "fade-video",
+      "label": "Fade In/Out",
+      "pickerTab": "Video",
+      "family": "Cut & Assemble",
+      "link": "https://nodaro.ai/docs/node/fade-video",
+      "page": "https://nodaro.ai/docs/nodes/video/fade-in-out",
+      "summary": "Fade a video in at its start and out at its end, from and to black or white, with separate durations from 0.1 to 3 seconds. The sound fades along with it.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "composite",
+      "label": "Composite",
+      "pickerTab": "Video",
+      "family": "Cut & Assemble",
+      "link": "https://nodaro.ai/docs/node/composite",
+      "page": "https://nodaro.ai/docs/nodes/video/composite",
+      "summary": "Layer up to four videos into one composition with per-layer position, blend mode, opacity and timing. It costs no credits; Render Video turns it into an MP4.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "video-composer",
+      "label": "Compose Video",
+      "pickerTab": "Video",
+      "family": "Cut & Assemble",
+      "link": "https://nodaro.ai/docs/node/video-composer",
+      "page": "https://nodaro.ai/docs/nodes/video/compose-video",
+      "summary": "Describe the video you want, and an AI model arranges your connected images, clips and audio into a timed, multi-track composition that Render Video renders.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "split-media",
+      "label": "Split into Chunks",
+      "pickerTab": "Video",
+      "family": "Cut & Assemble",
+      "link": "https://nodaro.ai/docs/node/split-media",
+      "page": "https://nodaro.ai/docs/nodes/video/split-into-chunks",
+      "summary": "Cut a long video or audio file into equal-length chunks, as audio files and video clips, so you can transcribe, dub or transform each piece separately.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "manual-edit",
+      "label": "Manual Edit",
+      "pickerTab": "Video",
+      "family": "Cut & Assemble",
+      "link": "https://nodaro.ai/docs/node/manual-edit",
+      "page": "https://nodaro.ai/docs/nodes/video/manual-edit",
+      "summary": "Open clips, images and audio in the NodarCut video editor, cut and arrange them by hand, and pass the edited video on, or pause a workflow until you finish.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "edit-plan",
+      "label": "Edit Plan",
+      "pickerTab": "Video",
+      "family": "Cut & Assemble",
+      "link": "https://nodaro.ai/docs/node/edit-plan",
+      "page": "https://nodaro.ai/docs/nodes/video/edit-plan",
+      "summary": "Plan an edit from a recording's transcript. Tighten it, find short shareable clips or mark chapters, as an edit decision list that Apply EDL renders.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "video-sfx",
+      "label": "Video SFX",
+      "pickerTab": "Video",
+      "family": "Sound for Video",
+      "link": "https://nodaro.ai/docs/node/video-sfx",
+      "page": "https://nodaro.ai/docs/nodes/video/video-sfx",
+      "summary": "Generate sound effects, foley and ambience that follow the action in a video, from an optional prompt. The new sound replaces the video's own audio track.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "limits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "merge-video-audio",
+      "label": "Merge Video & Audio",
+      "pickerTab": "Video",
+      "family": "Sound for Video",
+      "link": "https://nodaro.ai/docs/node/merge-video-audio",
+      "page": "https://nodaro.ai/docs/nodes/video/merge-video-audio",
+      "summary": "Add voiceover, music or sound effects to a video. Set each track's volume and start time, and keep, lower or mute the video's own sound.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "troubleshooting",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "extract-audio",
+      "label": "Extract Audio",
+      "pickerTab": "Video",
+      "family": "Sound for Video",
+      "link": "https://nodaro.ai/docs/node/extract-audio",
+      "page": "https://nodaro.ai/docs/nodes/video/extract-audio",
+      "summary": "Pull the audio track out of a video as a standalone MP3 file, to split it into stems, clean the voice or reuse the soundtrack under another clip. No settings.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "troubleshooting",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "remove-audio",
+      "label": "Remove Audio",
+      "pickerTab": "Video",
+      "family": "Sound for Video",
+      "link": "https://nodaro.ai/docs/node/remove-audio",
+      "page": "https://nodaro.ai/docs/nodes/video/remove-audio",
+      "summary": "Strip the audio track from a video and keep a silent clip. The picture is copied without re-encoding, so nothing is lost and the node finishes almost at once.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "3d-title",
+      "label": "3D Title",
+      "pickerTab": "Video",
+      "family": "Titles, Graphics & Captions",
+      "link": "https://nodaro.ai/docs/node/3d-title",
+      "page": "https://nodaro.ai/docs/nodes/video/3d-title",
+      "summary": "Describe a title and an AI model plans an animated 3D text scene with camera moves, lighting and particles, up to 60 seconds, for intros, outros and trailers.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "motion-graphics",
+      "label": "Motion Graphics",
+      "pickerTab": "Video",
+      "family": "Titles, Graphics & Captions",
+      "link": "https://nodaro.ai/docs/node/motion-graphics",
+      "page": "https://nodaro.ai/docs/nodes/video/motion-graphics",
+      "summary": "Describe a lower third, title card or kinetic typography and an AI model animates it in 2D, as editable Lottie with free color and text edits, up to 60 seconds.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "after-effects",
+      "label": "After Effects",
+      "pickerTab": "Video",
+      "family": "Titles, Graphics & Captions",
+      "link": "https://nodaro.ai/docs/node/after-effects",
+      "page": "https://nodaro.ai/docs/nodes/video/after-effects",
+      "summary": "Describe a look and an AI model plans video effects, such as a color grade, film grain, vignette, letterbox or motion blur, and previews them before you render.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "lottie-overlay",
+      "label": "Lottie Overlay",
+      "pickerTab": "Video",
+      "family": "Titles, Graphics & Captions",
+      "link": "https://nodaro.ai/docs/node/lottie-overlay",
+      "page": "https://nodaro.ai/docs/nodes/video/lottie-overlay",
+      "summary": "Describe the overlays and an AI model places and times Lottie animations, such as confetti, hearts or arrows, or your own Motion Graphics, over a video.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "add-captions",
+      "label": "Add Captions",
+      "pickerTab": "Video",
+      "family": "Titles, Graphics & Captions",
+      "link": "https://nodaro.ai/docs/node/add-captions",
+      "page": "https://nodaro.ai/docs/nodes/video/add-captions",
+      "summary": "Transcribe a video and burn in captions, as a clean subtitle or one of five animated word-by-word styles, with fonts, outlines, position and words per line.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "faq"
+      ]
+    },
+    {
+      "type": "render-video",
+      "label": "Render Video",
+      "pickerTab": "Video",
+      "family": "Titles, Graphics & Captions",
+      "link": "https://nodaro.ai/docs/node/render-video",
+      "page": "https://nodaro.ai/docs/nodes/video/render-video",
+      "summary": "Render the plan of Motion Graphics, 3D Title, After Effects, Lottie Overlay, Compose Video or a 3D scene into an MP4, or arrange connected media without a plan.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "video-overlay",
+      "label": "Video Overlay",
+      "pickerTab": "Video",
+      "family": "Titles, Graphics & Captions",
+      "link": "https://nodaro.ai/docs/node/video-overlay",
+      "page": "https://nodaro.ai/docs/nodes/video/video-overlay",
+      "summary": "Show up to 20 images over a video, each in its own time window, as a card, corner badge, full frame or custom box, with a live preview and the audio kept.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "limits",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "generate-3d-scene",
+      "label": "Generate 3D Scene",
+      "pickerTab": "Video",
+      "family": "Titles, Graphics & Captions",
+      "link": "https://nodaro.ai/docs/node/generate-3d-scene",
+      "page": "https://nodaro.ai/docs/nodes/video/generate-3d-scene",
+      "summary": "Describe a shot and get an editable, animated 3D clay scene for previz, with objects, camera moves and timing, to render as a layout reference for video models.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "edit-3d-scene",
+      "label": "Edit 3D Scene",
+      "pickerTab": "Video",
+      "family": "Titles, Graphics & Captions",
+      "link": "https://nodaro.ai/docs/node/edit-3d-scene",
+      "page": "https://nodaro.ai/docs/nodes/video/edit-3d-scene",
+      "summary": "Change a 3D clay scene with a plain instruction or free direct edits, lock the objects that must stay the same, and keep every revision to compare or restore.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "pro-3d-render",
+      "label": "3D Render Pro",
+      "pickerTab": "Video",
+      "family": "Titles, Graphics & Captions",
+      "link": "https://nodaro.ai/docs/node/pro-3d-render",
+      "page": "https://nodaro.ai/docs/nodes/video/pro-3d-render",
+      "summary": "Author an animated 3D scene from a brief and render it in one run on a hosted engine, returning the MP4, the editable scene and one still image per shot.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "resize-video",
+      "label": "Resize Video",
+      "pickerTab": "Video",
+      "family": "Format & Export",
+      "link": "https://nodaro.ai/docs/node/resize-video",
+      "page": "https://nodaro.ai/docs/nodes/video/resize-video",
+      "summary": "Change a video's aspect ratio to 16:9, 9:16, 1:1 or 4:5 by cropping, padding or stretching, for example to turn a landscape clip into a vertical Reel.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "social-media-format",
+      "label": "Social Media Format",
+      "pickerTab": "Video",
+      "family": "Format & Export",
+      "link": "https://nodaro.ai/docs/node/social-media-format",
+      "page": "https://nodaro.ai/docs/nodes/video/social-media-format",
+      "summary": "Fit a video or image to the frame size of Instagram, TikTok, YouTube Shorts, X, Facebook or LinkedIn, and keep the post caption within the platform's limit.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "video-upscale",
+      "label": "Upscale Video",
+      "pickerTab": "Video",
+      "family": "Format & Export",
+      "link": "https://nodaro.ai/docs/node/video-upscale",
+      "page": "https://nodaro.ai/docs/nodes/video/upscale-video",
+      "summary": "Increase a video's resolution with AI, using Topaz at 1x, 2x or 4x for any clip, or VEO 1080p and VEO 4K for a video made by a VEO model in the same workflow.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "faq"
+      ]
+    },
+    {
+      "type": "transcode-video",
+      "label": "Transcode Video",
+      "pickerTab": "Video",
+      "family": "Format & Export",
+      "link": "https://nodaro.ai/docs/node/transcode-video",
+      "page": "https://nodaro.ai/docs/nodes/video/transcode-video",
+      "summary": "Re-encode a video with H.264 or H.265, a quality (CRF) value, a lower resolution and an audio bitrate, to shrink files or make them play on any device.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "gif-to-video",
+      "label": "Gif to Video",
+      "pickerTab": "Video",
+      "family": "Format & Export",
+      "link": "https://nodaro.ai/docs/node/gif-to-video",
+      "page": "https://nodaro.ai/docs/nodes/video/gif-to-video",
+      "summary": "Convert an animated GIF into an MP4 for free, loop short GIFs to a usable length, and use the clip as a motion reference for video models that refuse GIF files.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "faq"
+      ]
+    },
+    {
+      "type": "video-analysis",
+      "label": "Video Analysis",
+      "pickerTab": "Video",
+      "family": "Analyze",
+      "link": "https://nodaro.ai/docs/node/video-analysis",
+      "page": "https://nodaro.ai/docs/nodes/video/video-analysis",
+      "summary": "Break a video or YouTube link of up to 10 minutes into scenes of 8 seconds or less, with prompt-ready visuals, camera, audio and castable people and places.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "video-audit",
+      "label": "AI Audit",
+      "pickerTab": "Video",
+      "family": "Analyze",
+      "link": "https://nodaro.ai/docs/node/video-audit",
+      "page": "https://nodaro.ai/docs/nodes/video/ai-audit",
+      "summary": "Re-watch a video against its Video Analysis, apply only the fixes the footage confirms, and get a report of every fix, declined change and watch item.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "limits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "upload-audio",
+      "label": "Upload Audio",
+      "pickerTab": "Audio",
+      "family": "Add Your Own",
+      "link": "https://nodaro.ai/docs/node/upload-audio",
+      "page": "https://nodaro.ai/docs/nodes/audio/upload-audio",
+      "summary": "Add your own audio to a workflow. Upload an MP3, WAV, M4A, AAC, FLAC or OGG file or paste a link, trim it before upload, and wire it to any audio node.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "outputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "reference-audio",
+      "label": "Reference Audio",
+      "pickerTab": "Audio",
+      "family": "Add Your Own",
+      "link": "https://nodaro.ai/docs/node/reference-audio",
+      "page": "https://nodaro.ai/docs/nodes/audio/reference-audio",
+      "summary": "Bring audio into a workflow from a YouTube video, an uploaded file or a direct link. Reference Audio extracts the sound track and lets you preview it first.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "outputs",
+        "settings",
+        "tips",
+        "troubleshooting",
+        "faq"
+      ]
+    },
+    {
+      "type": "text-to-speech",
+      "label": "Text to Speech",
+      "pickerTab": "Audio",
+      "family": "Speech & Voiceover",
+      "link": "https://nodaro.ai/docs/node/text-to-speech",
+      "page": "https://nodaro.ai/docs/nodes/audio/text-to-speech",
+      "summary": "Turn text into natural speech with ElevenLabs v3, Turbo v2.5 or Multilingual v2. Choose a voice, add emotion with audio tags, and speak up to 46 languages.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "text-to-dialogue",
+      "label": "Text to Dialogue",
+      "pickerTab": "Audio",
+      "family": "Speech & Voiceover",
+      "link": "https://nodaro.ai/docs/node/text-to-dialogue",
+      "page": "https://nodaro.ai/docs/nodes/audio/text-to-dialogue",
+      "summary": "Voice a whole conversation in one audio file. Give each line its own voice, add audio tags for emotion, or fill the lines from a script. ElevenLabs Dialogue v3.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "limits",
+        "models",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "voice-changer",
+      "label": "Voice Changer",
+      "pickerTab": "Audio",
+      "family": "Voices",
+      "link": "https://nodaro.ai/docs/node/voice-changer",
+      "page": "https://nodaro.ai/docs/nodes/audio/voice-changer",
+      "summary": "Replace the voice in a recording or a talking video with another voice, and keep the original emotion, pacing and timing. Speech-to-speech with ElevenLabs.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "voice-changer-pro",
+      "label": "Voice Changer Pro",
+      "pickerTab": "Audio",
+      "family": "Voices",
+      "link": "https://nodaro.ai/docs/node/voice-changer-pro",
+      "page": "https://nodaro.ai/docs/nodes/audio/voice-changer-pro",
+      "summary": "Detect each speaker in a recording or talking video and give each one a new voice, with the original emotion and timing kept. Priced per minute of speech.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "voice-design",
+      "label": "Voice Design",
+      "pickerTab": "Audio",
+      "family": "Voices",
+      "link": "https://nodaro.ai/docs/node/voice-design",
+      "page": "https://nodaro.ai/docs/nodes/audio/voice-design",
+      "summary": "Create a new voice from a written description, with control over model, loudness, guidance and seed. Get an audio preview and a voice ID you can keep and reuse.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "voice-remix",
+      "label": "Voice Remix",
+      "pickerTab": "Audio",
+      "family": "Voices",
+      "link": "https://nodaro.ai/docs/node/voice-remix",
+      "page": "https://nodaro.ai/docs/nodes/audio/voice-remix",
+      "summary": "Describe a voice in plain words and hear it speak your preview text. The quick way to explore voice ideas, with no reference recording and no settings to tune.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "dubbing",
+      "label": "Dubbing",
+      "pickerTab": "Audio",
+      "family": "Voices",
+      "link": "https://nodaro.ai/docs/node/dubbing",
+      "page": "https://nodaro.ai/docs/nodes/audio/dubbing",
+      "summary": "Translate spoken audio or a whole video into another language and keep each speaker's own voice. Dub a file or a YouTube link, from 40 credits per minute.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "limits",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-generate",
+      "label": "Suno Create Music",
+      "pickerTab": "Audio",
+      "family": "Music",
+      "link": "https://nodaro.ai/docs/node/suno-generate",
+      "page": "https://nodaro.ai/docs/nodes/audio/suno-create-music",
+      "summary": "Make full songs with Suno V6 and earlier Suno versions. Write lyrics with metatags, set the style and the vocals, or create an instrumental track.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "generate-music",
+      "label": "Generate Music",
+      "pickerTab": "Audio",
+      "family": "Music",
+      "link": "https://nodaro.ai/docs/node/generate-music",
+      "page": "https://nodaro.ai/docs/nodes/audio/generate-music",
+      "summary": "Create original music with MiniMax Music from a reference song, voice or instrumental plus a text prompt, with optional lyrics, genre and mood.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-lyrics",
+      "label": "Suno Lyrics",
+      "pickerTab": "Audio",
+      "family": "Music",
+      "link": "https://nodaro.ai/docs/node/suno-lyrics",
+      "page": "https://nodaro.ai/docs/nodes/audio/suno-lyrics",
+      "summary": "Write complete song lyrics from a short description with Suno. The lyrics come with section tags and a suggested title, ready for Suno Create Music.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-cover",
+      "label": "Suno Cover",
+      "pickerTab": "Audio",
+      "family": "Music",
+      "link": "https://nodaro.ai/docs/node/suno-cover",
+      "page": "https://nodaro.ai/docs/nodes/audio/suno-cover",
+      "summary": "Make a cover version of a song with Suno. Change the genre, the lyrics or the vocal gender, sing it in your own voice, or turn it into an instrumental.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-extend",
+      "label": "Suno Extend",
+      "pickerTab": "Audio",
+      "family": "Music",
+      "link": "https://nodaro.ai/docs/node/suno-extend",
+      "page": "https://nodaro.ai/docs/nodes/audio/suno-extend",
+      "summary": "Continue a Suno song from the second you choose, with a new prompt and style. Add a bridge, an outro or a verse, or chain extensions into a long track.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "troubleshooting",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-mashup",
+      "label": "Suno Mashup",
+      "pickerTab": "Audio",
+      "family": "Music",
+      "link": "https://nodaro.ai/docs/node/suno-mashup",
+      "page": "https://nodaro.ai/docs/nodes/audio/suno-mashup",
+      "summary": "Blend two audio tracks into one mashup with Suno. Turn on custom mode to set the title, the style tags, the styles to avoid and the vocal gender.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-replace-section",
+      "label": "Suno Replace Section",
+      "pickerTab": "Audio",
+      "family": "Music",
+      "link": "https://nodaro.ai/docs/node/suno-replace-section",
+      "page": "https://nodaro.ai/docs/nodes/audio/suno-replace-section",
+      "summary": "Regenerate a 6 to 60 second section of a Suno song with new lyrics and style tags, such as a weak verse or chorus, and keep the rest of the track intact.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-add-vocals",
+      "label": "Suno Add Vocals",
+      "pickerTab": "Audio",
+      "family": "Music",
+      "link": "https://nodaro.ai/docs/node/suno-add-vocals",
+      "page": "https://nodaro.ai/docs/nodes/audio/suno-add-vocals",
+      "summary": "Add AI-generated vocals to an instrumental track made by a Suno node. Suno writes the lyrics and the melody to fit the music, on Suno V6 by default.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-add-instrumental",
+      "label": "Suno Add Instrumental",
+      "pickerTab": "Audio",
+      "family": "Music",
+      "link": "https://nodaro.ai/docs/node/suno-add-instrumental",
+      "page": "https://nodaro.ai/docs/nodes/audio/suno-add-instrumental",
+      "summary": "Add an AI-generated instrumental arrangement to a vocal track made by a Suno node. Suno matches the genre, tempo and key of the vocals automatically.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-upload-extend",
+      "label": "Suno Upload Extend",
+      "pickerTab": "Audio",
+      "family": "Music",
+      "link": "https://nodaro.ai/docs/node/suno-upload-extend",
+      "page": "https://nodaro.ai/docs/nodes/audio/suno-upload-extend",
+      "summary": "Continue any audio with Suno, not only Suno songs. Extend an upload, a voiceover or another AI track from the second you choose, in the style you set.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-style-boost",
+      "label": "Suno Style Boost",
+      "pickerTab": "Audio",
+      "family": "Music",
+      "link": "https://nodaro.ai/docs/node/suno-style-boost",
+      "page": "https://nodaro.ai/docs/nodes/audio/suno-style-boost",
+      "summary": "Turn a short music style, such as lo-fi chill, into richer Suno style tags, and send the result to the Style field of Suno Create Music for your song.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-convert-wav",
+      "label": "Suno Convert WAV",
+      "pickerTab": "Audio",
+      "family": "Music",
+      "link": "https://nodaro.ai/docs/node/suno-convert-wav",
+      "page": "https://nodaro.ai/docs/nodes/audio/suno-convert-wav",
+      "summary": "Convert a song made by a Suno node from compressed MP3 to lossless WAV, for mixing, mastering, archiving or tools that do not accept MP3 files.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "text-to-audio",
+      "label": "Text to Audio",
+      "pickerTab": "Audio",
+      "family": "Sound Effects",
+      "link": "https://nodaro.ai/docs/node/text-to-audio",
+      "page": "https://nodaro.ai/docs/nodes/audio/text-to-audio",
+      "summary": "Generate a sound effect or an ambience from a text description with ElevenLabs Sound Effects, up to 22 seconds long, with gapless loops for backgrounds.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "audio-isolation",
+      "label": "Voice Extractor",
+      "pickerTab": "Audio",
+      "family": "Clean & Separate",
+      "link": "https://nodaro.ai/docs/node/audio-isolation",
+      "page": "https://nodaro.ai/docs/nodes/audio/voice-extractor",
+      "summary": "Remove background noise, music and other sounds from a recording and keep only the voice. Clean audio before transcription, lip sync, dubbing or a voice change.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "audio-separation",
+      "label": "Audio Separation",
+      "pickerTab": "Audio",
+      "family": "Clean & Separate",
+      "link": "https://nodaro.ai/docs/node/audio-separation",
+      "page": "https://nodaro.ai/docs/nodes/audio/audio-separation",
+      "summary": "Split any audio into vocals and instrumental, or into stems such as drums, bass, guitar and piano, with the Demucs model. Works on songs from any source.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-separate",
+      "label": "Suno Separate",
+      "pickerTab": "Audio",
+      "family": "Clean & Separate",
+      "link": "https://nodaro.ai/docs/node/suno-separate",
+      "page": "https://nodaro.ai/docs/nodes/audio/suno-separate",
+      "summary": "Split a song made with Suno into a vocal and an instrumental track, or into up to 12 stems such as drums, bass, guitar and piano, straight from a Suno node.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "silence-detect",
+      "label": "Silence Detect",
+      "pickerTab": "Audio",
+      "family": "Analyze",
+      "link": "https://nodaro.ai/docs/node/silence-detect",
+      "page": "https://nodaro.ai/docs/nodes/audio/silence-detect",
+      "summary": "Find the silent spans in a recording or a video and get them as time ranges, ready to cut dead air in an edit. A flat 10 credits per run, with no AI model.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "audio-sync",
+      "label": "Audio Sync",
+      "pickerTab": "Audio",
+      "family": "Analyze",
+      "link": "https://nodaro.ai/docs/node/audio-sync",
+      "page": "https://nodaro.ai/docs/nodes/audio/audio-sync",
+      "summary": "Measure how far apart 2 to 6 recordings of one conversation are, from their sound, so a multicam edit lines up without typing offsets. Also reports clock drift.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "limits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "trim-audio",
+      "label": "Trim Audio",
+      "pickerTab": "Audio",
+      "family": "Edit Audio",
+      "link": "https://nodaro.ai/docs/node/trim-audio",
+      "page": "https://nodaro.ai/docs/nodes/audio/trim-audio",
+      "summary": "Cut a section out of an audio file by start and end time, and save it as MP3, WAV or AAC. Keep only the part of a recording or song that the next node needs.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "combine-audio",
+      "label": "Combine Audio",
+      "pickerTab": "Audio",
+      "family": "Edit Audio",
+      "link": "https://nodaro.ai/docs/node/combine-audio",
+      "page": "https://nodaro.ai/docs/nodes/audio/combine-audio",
+      "summary": "Join audio clips end to end into one file, in the order you choose, and trim each clip first. For narration, podcasts and dialogue made in several parts.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "mix-audio",
+      "label": "Mix Audio",
+      "pickerTab": "Audio",
+      "family": "Edit Audio",
+      "link": "https://nodaro.ai/docs/node/mix-audio",
+      "page": "https://nodaro.ai/docs/nodes/audio/mix-audio",
+      "summary": "Layer several audio tracks into one file, with a volume from 0 to 200% for each. Put a voiceover over music, or effects over an ambience, before adding video.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "adjust-volume",
+      "label": "Adjust Volume",
+      "pickerTab": "Audio",
+      "family": "Edit Audio",
+      "link": "https://nodaro.ai/docs/node/adjust-volume",
+      "page": "https://nodaro.ai/docs/nodes/audio/adjust-volume",
+      "summary": "Change the volume of an audio track or of a video's sound, level it with Normalize, and add a fade-in and a fade-out of up to 10 seconds each.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "audio-fx",
+      "label": "Audio FX",
+      "pickerTab": "Audio",
+      "family": "Edit Audio",
+      "link": "https://nodaro.ai/docs/node/audio-fx",
+      "page": "https://nodaro.ai/docs/nodes/audio/audio-fx",
+      "summary": "Put a voice in a room, a car or a church with a reverb, or add a telephone, megaphone or echo effect. A flat 20 credits per run, plus custom delay and EQ.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "transcribe",
+      "label": "Transcribe",
+      "pickerTab": "Audio",
+      "family": "Transcribe",
+      "link": "https://nodaro.ai/docs/node/transcribe",
+      "page": "https://nodaro.ai/docs/nodes/audio/transcribe",
+      "summary": "Turn the speech in audio or video into text with ElevenLabs STT or Whisper. Get word timings for captions, speaker labels, and tags for music and laughter.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "forced-alignment",
+      "label": "Forced Alignment",
+      "pickerTab": "Audio",
+      "family": "Transcribe",
+      "link": "https://nodaro.ai/docs/node/forced-alignment",
+      "page": "https://nodaro.ai/docs/nodes/audio/forced-alignment",
+      "summary": "Time every word of a known transcript against its audio and get each word's start and end as data, for karaoke highlights, timed graphics and captions.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "provider",
+      "label": "Provider",
+      "pickerTab": "Models",
+      "family": "Generation Settings",
+      "link": "https://nodaro.ai/docs/node/provider",
+      "page": "https://nodaro.ai/docs/nodes/settings/provider",
+      "summary": "The Provider node holds one model choice for image, video, voice or script generation. It cannot be wired into generation nodes, so set the model on each node.",
+      "sections": [
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "aspect-ratio",
+      "label": "Aspect Ratio",
+      "pickerTab": "Models",
+      "family": "Generation Settings",
+      "link": "https://nodaro.ai/docs/node/aspect-ratio",
+      "page": "https://nodaro.ai/docs/nodes/settings/aspect-ratio",
+      "summary": "The Aspect Ratio node holds one frame shape, such as 16:9 or 9:16. It cannot be wired into image or video nodes, so set the ratio on each node.",
+      "sections": [
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "duration",
+      "label": "Duration",
+      "pickerTab": "Models",
+      "family": "Generation Settings",
+      "link": "https://nodaro.ai/docs/node/duration",
+      "page": "https://nodaro.ai/docs/nodes/settings/duration",
+      "summary": "The Duration node holds a target length in seconds. It cannot be wired into video or script nodes, so set the length on each node.",
+      "sections": [
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "motion",
+      "label": "Motion",
+      "pickerTab": "Models",
+      "family": "Generation Settings",
+      "link": "https://nodaro.ai/docs/node/motion",
+      "page": "https://nodaro.ai/docs/nodes/settings/motion",
+      "summary": "The Motion node holds a motion level, Subtle, Moderate or Dynamic. It cannot be wired into Generate Video, which has its own Motion hint setting.",
+      "sections": [
+        "settings",
+        "faq"
+      ]
+    },
+    {
+      "type": "scene-count",
+      "label": "Scene Count",
+      "pickerTab": "Models",
+      "family": "Generation Settings",
+      "link": "https://nodaro.ai/docs/node/scene-count",
+      "page": "https://nodaro.ai/docs/nodes/settings/scene-count",
+      "summary": "The Scene Count node holds a number of scenes, 5 by default. It cannot be wired into Generate Script, which has its own Number of Scenes setting.",
+      "sections": [
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "tone",
+      "label": "Tone",
+      "pickerTab": "Models",
+      "family": "Generation Settings",
+      "link": "https://nodaro.ai/docs/node/tone",
+      "page": "https://nodaro.ai/docs/nodes/settings/tone",
+      "summary": "Write a tone once, such as cinematic, cheerful or dark and moody, and connect it to the Look input of image and video nodes, which add it to their prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "style-guide",
+      "label": "Style Guide",
+      "pickerTab": "Models",
+      "family": "Generation Settings",
+      "link": "https://nodaro.ai/docs/node/style-guide",
+      "page": "https://nodaro.ai/docs/nodes/settings/style-guide",
+      "summary": "The Style Guide node holds written visual direction. It cannot be wired into generation nodes, so put your style in Generate Script, Generate Image or a picker.",
+      "sections": [
+        "settings",
+        "faq"
+      ]
+    },
+    {
+      "type": "character",
+      "label": "Character Asset",
+      "pickerTab": "Assets",
+      "family": "Characters",
+      "link": "https://nodaro.ai/docs/node/character",
+      "page": "https://nodaro.ai/docs/nodes/assets/character",
+      "summary": "Build a reusable character in the Character Studio, with a portrait, expressions, poses, motion clips and a voice, and keep one face in every image and video.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "face",
+      "label": "Create Face",
+      "pickerTab": "Assets",
+      "family": "Characters",
+      "link": "https://nodaro.ai/docs/node/face",
+      "page": "https://nodaro.ai/docs/nodes/assets/create-face",
+      "summary": "Make a reusable face identity from one clear photo, and use it to keep the same face in generated images and to swap it into video with Face Swap.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "creature",
+      "label": "Animal/Creature Asset",
+      "pickerTab": "Assets",
+      "family": "Creatures",
+      "link": "https://nodaro.ai/docs/node/creature",
+      "page": "https://nodaro.ai/docs/nodes/assets/creature",
+      "summary": "Build a reusable animal or mythical creature in the Creature Studio, with poses, variations, motion clips and a voice, and keep it the same in every shot.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "location",
+      "label": "Location Asset",
+      "pickerTab": "Assets",
+      "family": "Places",
+      "link": "https://nodaro.ai/docs/node/location",
+      "page": "https://nodaro.ai/docs/nodes/assets/location",
+      "summary": "Build a reusable location in the Location Studio, with time of day, weather, season, angle and lighting variants, and keep the same place in every shot.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "object",
+      "label": "Object/Props Asset",
+      "pickerTab": "Assets",
+      "family": "Objects",
+      "link": "https://nodaro.ai/docs/node/object",
+      "page": "https://nodaro.ai/docs/nodes/assets/object",
+      "summary": "Build a reusable prop or product in the Object Studio, with angle, material and variation images and short motion clips, and keep the same item in every shot.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "schedule-trigger",
+      "label": "Schedule Trigger",
+      "pickerTab": "Automate",
+      "family": "Triggers",
+      "link": "https://nodaro.ai/docs/node/schedule-trigger",
+      "page": "https://nodaro.ai/docs/nodes/automate/schedule-trigger",
+      "summary": "Run a workflow automatically every few minutes, hours, days, weeks or months, or on a cron expression, in your timezone. Turn it on with one switch.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "webhook-trigger",
+      "label": "Webhook Trigger",
+      "pickerTab": "Automate",
+      "family": "Triggers",
+      "link": "https://nodaro.ai/docs/node/webhook-trigger",
+      "page": "https://nodaro.ai/docs/nodes/automate/webhook-trigger",
+      "summary": "Start a workflow from another app, a form or your own code with an HTTP POST, and pass values such as a prompt or an image URL into the run.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "limits",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "telegram-trigger",
+      "label": "Telegram Trigger",
+      "pickerTab": "Automate",
+      "family": "Triggers",
+      "link": "https://nodaro.ai/docs/node/telegram-trigger",
+      "page": "https://nodaro.ai/docs/nodes/automate/telegram-trigger",
+      "summary": "Start a workflow each time your Telegram bot receives a message, and pass the text, photo, video or audio of the message to the nodes after it.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "credits",
+        "troubleshooting",
+        "faq"
+      ]
+    },
+    {
+      "type": "web-scrape",
+      "label": "Web Scrape",
+      "pickerTab": "Automate",
+      "family": "Get Content",
+      "link": "https://nodaro.ai/docs/node/web-scrape",
+      "page": "https://nodaro.ai/docs/nodes/automate/web-scrape",
+      "summary": "Fetch Google Search results, the text of a web page or site, RSS or Atom feed items, or TikTok posts, and pass them on as JSON to AI and list nodes.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "credits",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "youtube-video",
+      "label": "Video URL",
+      "pickerTab": "Automate",
+      "family": "Get Content",
+      "link": "https://nodaro.ai/docs/node/youtube-video",
+      "page": "https://nodaro.ai/docs/nodes/automate/video-url",
+      "summary": "Paste a YouTube, TikTok, Instagram, Facebook or X link and get the video as a file for trimming, captions, analysis and remixing. Choose part of long videos.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "outputs",
+        "tips",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "telegram-channel-feed",
+      "label": "Telegram Channel Feed",
+      "pickerTab": "Automate",
+      "family": "Get Content",
+      "link": "https://nodaro.ai/docs/node/telegram-channel-feed",
+      "page": "https://nodaro.ai/docs/nodes/automate/telegram-channel-feed",
+      "summary": "Read the newest posts of a public Telegram channel without a bot, and pass their text on to rewrite, summarize or repost. Each run returns only new posts.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "credits",
+        "limits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "rss-feed",
+      "label": "RSS Feed",
+      "pickerTab": "Automate",
+      "family": "Get Content",
+      "status": "retired",
+      "link": "https://nodaro.ai/docs/node/rss-feed",
+      "page": "https://nodaro.ai/docs/nodes/automate/rss-feed",
+      "summary": "RSS Feed is a retired Nodaro node that no longer runs. Read RSS and Atom feeds with the RSS Feed source of the Web Scrape node instead.",
+      "sections": [
+        "faq"
+      ]
+    },
+    {
+      "type": "text-prompt",
+      "label": "Text",
+      "pickerTab": "Automate",
+      "family": "Text",
+      "link": "https://nodaro.ai/docs/node/text-prompt",
+      "page": "https://nodaro.ai/docs/nodes/automate/text",
+      "summary": "Write a prompt or any other text once and send it to image, video, audio and AI text nodes. Insert the values of other nodes with variables.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "combine-text",
+      "label": "Combine Text",
+      "pickerTab": "Automate",
+      "family": "Text",
+      "link": "https://nodaro.ai/docs/node/combine-text",
+      "page": "https://nodaro.ai/docs/nodes/automate/combine-text",
+      "summary": "Join the text of several nodes into one text, in the order you choose, with a new line, a comma, a space or your own separator between the parts.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "split-text",
+      "label": "Split Text",
+      "pickerTab": "Automate",
+      "family": "Text",
+      "link": "https://nodaro.ai/docs/node/split-text",
+      "page": "https://nodaro.ai/docs/nodes/automate/split-text",
+      "summary": "Cut one text into a list of items at each new line, comma or custom separator, so the next node runs once for every item, such as one image per line.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "llm-chat",
+      "label": "Prompt",
+      "pickerTab": "Automate",
+      "family": "Text",
+      "link": "https://nodaro.ai/docs/node/llm-chat",
+      "page": "https://nodaro.ai/docs/nodes/automate/prompt",
+      "summary": "Generate, rewrite or summarize text with Gemini, Claude, GPT or Grok. Add instructions, images, video or audio, and split the answer into items.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "models",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "list",
+      "label": "List",
+      "pickerTab": "Automate",
+      "family": "Lists & Batching",
+      "link": "https://nodaro.ai/docs/node/list",
+      "page": "https://nodaro.ai/docs/nodes/automate/list",
+      "summary": "Type or paste a list of prompts, or build a table with several columns, and every connected node runs once per row. The List node itself is free.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "collect",
+      "label": "Collect",
+      "pickerTab": "Automate",
+      "family": "Lists & Batching",
+      "link": "https://nodaro.ai/docs/node/collect",
+      "page": "https://nodaro.ai/docs/nodes/automate/collect",
+      "summary": "Gather the results of several nodes in one place. Collect sorts them into text, image, video and audio outputs that connect to any node, for free.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "selector",
+      "label": "Selector",
+      "pickerTab": "Automate",
+      "family": "Lists & Batching",
+      "link": "https://nodaro.ai/docs/node/selector",
+      "page": "https://nodaro.ai/docs/nodes/automate/selector",
+      "summary": "Pick one item or a subset from a list by position, range, random sample, rule or name. Selector sends the pick and the rest to two outputs, for free.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "filter-list",
+      "label": "Filter List",
+      "pickerTab": "Automate",
+      "family": "Lists & Batching",
+      "link": "https://nodaro.ai/docs/node/filter-list",
+      "page": "https://nodaro.ai/docs/nodes/automate/filter-list",
+      "summary": "Keep only the list items that match your conditions, such as a field that contains a word or a date since the last run. Combine rules with AND or OR.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "sort-list",
+      "label": "Sort List",
+      "pickerTab": "Automate",
+      "family": "Lists & Batching",
+      "link": "https://nodaro.ai/docs/node/sort-list",
+      "page": "https://nodaro.ai/docs/nodes/automate/sort-list",
+      "summary": "Put a list in order by the whole item or by a field such as score or created_at, comparing as text, numbers or dates, ascending or descending.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "deduplicate",
+      "label": "Remove Duplicates",
+      "pickerTab": "Automate",
+      "family": "Lists & Batching",
+      "link": "https://nodaro.ai/docs/node/deduplicate",
+      "page": "https://nodaro.ai/docs/nodes/automate/remove-duplicates",
+      "summary": "Remove repeated items from a list and keep the first copy of each. Compare whole items or one field, such as id or url, in scraped or merged lists.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "merge-lists",
+      "label": "Merge Lists",
+      "pickerTab": "Automate",
+      "family": "Lists & Batching",
+      "link": "https://nodaro.ai/docs/node/merge-lists",
+      "page": "https://nodaro.ai/docs/nodes/automate/merge-lists",
+      "summary": "Combine several lists into one. Concatenate appends them in connection order, and Zip merges the items that share a position. Optionally drop duplicates.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "reduce",
+      "label": "Choose Best",
+      "pickerTab": "Automate",
+      "family": "Lists & Batching",
+      "link": "https://nodaro.ai/docs/node/reduce",
+      "page": "https://nodaro.ai/docs/nodes/automate/choose-best",
+      "summary": "Turn many results into one. An AI judge picks the best image or text against your criteria, or the node joins, counts, votes on or merges the results.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "api",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "router",
+      "label": "Router",
+      "pickerTab": "Automate",
+      "family": "Logic & Data",
+      "link": "https://nodaro.ai/docs/node/router",
+      "page": "https://nodaro.ai/docs/nodes/automate/router",
+      "summary": "Send a workflow down one or more named routes. Choose the route yourself, turn several on at once, or let conditions on the incoming data decide.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "extract-field",
+      "label": "Extract Field",
+      "pickerTab": "Automate",
+      "family": "Logic & Data",
+      "link": "https://nodaro.ai/docs/node/extract-field",
+      "page": "https://nodaro.ai/docs/nodes/automate/extract-field",
+      "summary": "Pull one field or a nested path, such as title or authorMeta.name, out of JSON data, and send it on as text, as a list to run once per item, or as JSON.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "qa-check",
+      "label": "QA Check",
+      "pickerTab": "Automate",
+      "family": "Logic & Data",
+      "link": "https://nodaro.ai/docs/node/qa-check",
+      "page": "https://nodaro.ai/docs/nodes/automate/qa-check",
+      "summary": "Score a text from 0 to 1 with an AI model for content, quality, consistency or safety, and get an approved or rejected decision with a short reason.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "json-process",
+      "label": "JSON Process",
+      "pickerTab": "Automate",
+      "family": "Logic & Data",
+      "status": "legacy",
+      "link": "https://nodaro.ai/docs/node/json-process",
+      "page": "https://nodaro.ai/docs/nodes/automate/json-process",
+      "summary": "JSON Process is a legacy node that filters and reshapes JSON. It is no longer in the node picker, but saved workflows keep running. Use Extract Field instead.",
+      "sections": [
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "sub-workflow",
+      "label": "Sub-Workflow",
+      "pickerTab": "Automate",
+      "family": "Workflows",
+      "link": "https://nodaro.ai/docs/node/sub-workflow",
+      "page": "https://nodaro.ai/docs/nodes/automate/sub-workflow",
+      "summary": "Put a whole workflow inside another as one node with typed inputs and outputs. Create a new one in place or reuse an existing workflow, up to 5 levels deep.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "component",
+      "label": "Component",
+      "pickerTab": "Automate",
+      "family": "Workflows",
+      "link": "https://nodaro.ai/docs/node/component",
+      "page": "https://nodaro.ai/docs/nodes/automate/component",
+      "summary": "Add a published component, a versioned workflow from the community or your own, as one node. Set its inputs and settings, and it runs as a black box.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "sub-workflow-input",
+      "label": "Sub-Workflow Input",
+      "pickerTab": "Automate",
+      "family": "Workflows",
+      "link": "https://nodaro.ai/docs/node/sub-workflow-input",
+      "page": "https://nodaro.ai/docs/nodes/automate/sub-workflow-input",
+      "summary": "Define the inputs of a workflow that other workflows call as a Sub-Workflow. Each port has a name and a type, and pairs with a Sub-Workflow Output by route.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "sub-workflow-output",
+      "label": "Sub-Workflow Output",
+      "pickerTab": "Automate",
+      "family": "Workflows",
+      "link": "https://nodaro.ai/docs/node/sub-workflow-output",
+      "page": "https://nodaro.ai/docs/nodes/automate/sub-workflow-output",
+      "summary": "Define what a callable workflow returns. Pair it with a Sub-Workflow Input, add typed output ports, and choose which result the caller shows as its preview.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "group",
+      "label": "Group",
+      "pickerTab": "Automate",
+      "family": "Canvas",
+      "link": "https://nodaro.ai/docs/node/group",
+      "page": "https://nodaro.ai/docs/nodes/automate/group",
+      "summary": "Drag nodes into a Group frame to organize the canvas. Color it to mark a section, and use its outputs to pass the members' results on by type.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "outputs",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "teleport-send",
+      "label": "Teleport Send",
+      "pickerTab": "Automate",
+      "family": "Canvas",
+      "link": "https://nodaro.ai/docs/node/teleport-send",
+      "page": "https://nodaro.ai/docs/nodes/automate/teleport-send",
+      "summary": "Broadcast a value on a lettered channel, and every Teleport Receive tuned to that channel gets it, with no connection line drawn across the canvas.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "teleport-receive",
+      "label": "Teleport Receive",
+      "pickerTab": "Automate",
+      "family": "Canvas",
+      "link": "https://nodaro.ai/docs/node/teleport-receive",
+      "page": "https://nodaro.ai/docs/nodes/automate/teleport-receive",
+      "summary": "Receive the value that a Teleport Send broadcasts on the same channel, anywhere on the canvas and without a connection line. Switch channels at any time.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "troubleshooting",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "preview",
+      "label": "Preview",
+      "pickerTab": "Automate",
+      "family": "Canvas",
+      "link": "https://nodaro.ai/docs/node/preview",
+      "page": "https://nodaro.ai/docs/nodes/automate/preview",
+      "summary": "Preview shows the results of connected nodes, text, images, video and audio, in one place. Today every node shows its own result, so most workflows skip it.",
+      "sections": [
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "sticky-note",
+      "label": "Sticky Note",
+      "pickerTab": "Automate",
+      "family": "Canvas",
+      "link": "https://nodaro.ai/docs/node/sticky-note",
+      "page": "https://nodaro.ai/docs/nodes/automate/sticky-note",
+      "summary": "Put a note anywhere on the canvas to label a section, explain a step or leave instructions. Sticky notes have no inputs or outputs and never affect a run.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "publish-social",
+      "label": "Publish to Social",
+      "pickerTab": "Publish",
+      "family": "One-Click",
+      "link": "https://nodaro.ai/docs/node/publish-social",
+      "page": "https://nodaro.ai/docs/nodes/publish/publish-to-social",
+      "summary": "Post an image, a video or text to any social account you connected, from one node. Pick the account and the node sets the platform and its post options.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "faq"
+      ]
+    },
+    {
+      "type": "instagram-post",
+      "label": "Instagram Post",
+      "pickerTab": "Publish",
+      "family": "Platforms",
+      "link": "https://nodaro.ai/docs/node/instagram-post",
+      "page": "https://nodaro.ai/docs/nodes/publish/instagram-post",
+      "summary": "Publish an image, a Reel, a Story or a carousel to your Instagram Business or Creator account from a workflow, with a caption of up to 2,200 characters.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "faq"
+      ]
+    },
+    {
+      "type": "tiktok-post",
+      "label": "TikTok Post",
+      "pickerTab": "Publish",
+      "family": "Platforms",
+      "link": "https://nodaro.ai/docs/node/tiktok-post",
+      "page": "https://nodaro.ai/docs/nodes/publish/tiktok-post",
+      "summary": "Publish a video from your workflow to a connected TikTok account with a caption. Use vertical 1080 × 1920 video of up to 10 minutes for the best result.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "youtube-upload",
+      "label": "YouTube Upload",
+      "pickerTab": "Publish",
+      "family": "Platforms",
+      "link": "https://nodaro.ai/docs/node/youtube-upload",
+      "page": "https://nodaro.ai/docs/nodes/publish/youtube-upload",
+      "summary": "Upload a video or a Short to your YouTube channel from a workflow, with a title, a description, tags and a privacy setting that starts as Private.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "facebook-post",
+      "label": "Facebook Post",
+      "pickerTab": "Publish",
+      "family": "Platforms",
+      "link": "https://nodaro.ai/docs/node/facebook-post",
+      "page": "https://nodaro.ai/docs/nodes/publish/facebook-post",
+      "summary": "Publish text, an image, a video or a Story to your connected Facebook account from a workflow, with a caption of up to 63,206 characters.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "x-post",
+      "label": "X Post",
+      "pickerTab": "Publish",
+      "family": "Platforms",
+      "link": "https://nodaro.ai/docs/node/x-post",
+      "page": "https://nodaro.ai/docs/nodes/publish/x-post",
+      "summary": "Post text of up to 280 characters to your connected X account, with an optional image or video attached, as the last step of a Nodaro workflow.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "linkedin-post",
+      "label": "LinkedIn Post",
+      "pickerTab": "Publish",
+      "family": "Platforms",
+      "link": "https://nodaro.ai/docs/node/linkedin-post",
+      "page": "https://nodaro.ai/docs/nodes/publish/linkedin-post",
+      "summary": "Publish a text post, an image or a video of up to 10 minutes to your connected LinkedIn account, with up to 3,000 characters of text, from a workflow.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "telegram-post",
+      "label": "Telegram Post",
+      "pickerTab": "Publish",
+      "family": "Platforms",
+      "link": "https://nodaro.ai/docs/node/telegram-post",
+      "page": "https://nodaro.ai/docs/nodes/publish/telegram-post",
+      "summary": "Send a message, a photo or a video to a Telegram chat, channel or group through your connected bot. The node picks the kind of message from what you connect.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "faq"
+      ]
+    },
+    {
+      "type": "save-to-storage",
+      "label": "Save to Storage",
+      "pickerTab": "Publish",
+      "family": "Export",
+      "link": "https://nodaro.ai/docs/node/save-to-storage",
+      "page": "https://nodaro.ai/docs/nodes/publish/save-to-storage",
+      "summary": "Save an image, a video or an audio result to your Nodaro storage so it stays in your asset library. The node is free, and files count toward your quota.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "webhook-output",
+      "label": "Webhook Output",
+      "pickerTab": "Publish",
+      "family": "Export",
+      "link": "https://nodaro.ai/docs/node/webhook-output",
+      "page": "https://nodaro.ai/docs/nodes/publish/webhook-output",
+      "summary": "Send workflow results to any URL as an HTTP POST with a JSON body, with named values and an optional stored credential whose secret stays on the server.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "settings",
+        "tips",
+        "troubleshooting",
+        "faq"
+      ]
+    },
+    {
+      "type": "person",
+      "label": "Person",
+      "pickerTab": "Creative Controls",
+      "family": "Subject",
+      "link": "https://nodaro.ai/docs/node/person",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/person",
+      "summary": "Describe a person for AI images and video with 575 options in 33 settings, from age and body to face geometry, hair and eyes. The picker writes the prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "animal",
+      "label": "Animal",
+      "pickerTab": "Creative Controls",
+      "family": "Subject",
+      "link": "https://nodaro.ai/docs/node/animal",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/animal",
+      "summary": "Pick one of 126 animals, from pets and wildlife to dinosaurs and dragons, and Nodaro adds the animal and a short description of its look to your prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "vehicle",
+      "label": "Vehicle",
+      "pickerTab": "Creative Controls",
+      "family": "Subject",
+      "link": "https://nodaro.ai/docs/node/vehicle",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/vehicle",
+      "summary": "Pick one of 107 vehicles, from classic cars and trains to aircraft, ships and spaceships, and Nodaro adds the vehicle and a short description to your prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "weapon",
+      "label": "Weapon",
+      "pickerTab": "Creative Controls",
+      "family": "Subject",
+      "link": "https://nodaro.ai/docs/node/weapon",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/weapon",
+      "summary": "Pick one of 85 weapons, from katanas and longbows to muskets, blasters and magic staffs, and Nodaro adds the weapon and a short description to your prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "styling",
+      "label": "Styling",
+      "pickerTab": "Creative Controls",
+      "family": "Wardrobe & Pose",
+      "link": "https://nodaro.ai/docs/node/styling",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/styling",
+      "summary": "Style a person for AI images and video with 274 options in 17 settings, from makeup, hair and jewelry to outfits, shoes and fabric. Nodaro writes the prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "pose",
+      "label": "Pose",
+      "pickerTab": "Creative Controls",
+      "family": "Wardrobe & Pose",
+      "link": "https://nodaro.ai/docs/node/pose",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/pose",
+      "summary": "Pick one of 81 poses, from standing and seated postures to running, leaping and hand gestures, and Nodaro adds tested wording for the pose to your prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "setting",
+      "label": "Setting",
+      "pickerTab": "Creative Controls",
+      "family": "Scene",
+      "link": "https://nodaro.ai/docs/node/setting",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/setting",
+      "summary": "Pick one of 66 settings, from a coffee shop or a rooftop to a desert or an alien planet, and Nodaro adds a tested description of the place to your prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "era",
+      "label": "Era / Period",
+      "pickerTab": "Creative Controls",
+      "family": "Scene",
+      "link": "https://nodaro.ai/docs/node/era",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/era",
+      "summary": "Pick one of 28 eras, from Ancient Egypt and Victorian to 1980s Neon and Cyberpunk Future, and Nodaro adds its fashion, places and film look to your prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "furniture",
+      "label": "Furniture",
+      "pickerTab": "Creative Controls",
+      "family": "Scene",
+      "link": "https://nodaro.ai/docs/node/furniture",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/furniture",
+      "summary": "Pick one of 78 furniture pieces, from sofas and four-poster beds to chandeliers and bathtubs, and Nodaro adds the piece and a short description to your prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "held-prop",
+      "label": "Held Prop",
+      "pickerTab": "Creative Controls",
+      "family": "Scene",
+      "link": "https://nodaro.ai/docs/node/held-prop",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/held-prop",
+      "summary": "Pick up to 2 of 60 props for a subject to hold, such as a smartphone, a coffee cup, a book or a bouquet, and Nodaro adds how the prop is held to your prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "material",
+      "label": "Material",
+      "pickerTab": "Creative Controls",
+      "family": "Scene",
+      "link": "https://nodaro.ai/docs/node/material",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/material",
+      "summary": "Pick up to 2 of 67 materials, from silk and leather to gold, marble and glass, and Nodaro adds how each surface looks and takes light to your prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "backdrop",
+      "label": "Backdrop",
+      "pickerTab": "Creative Controls",
+      "family": "Scene",
+      "link": "https://nodaro.ai/docs/node/backdrop",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/backdrop",
+      "summary": "Pick one of 40 studio backdrops, from white seamless paper and gradients to brick walls, velvet drapes and chroma green, and Nodaro adds it to your prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "loop-subject",
+      "label": "Loop Subject",
+      "pickerTab": "Creative Controls",
+      "family": "Scene",
+      "link": "https://nodaro.ai/docs/node/loop-subject",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/loop-subject",
+      "summary": "Pick one of 31 loop subjects, such as a neon tunnel, a starfield or falling snow, and build a seamless looping video for streams, screens and ambient visuals.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "framing",
+      "label": "Framing",
+      "pickerTab": "Creative Controls",
+      "family": "Camera",
+      "link": "https://nodaro.ai/docs/node/framing",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/framing",
+      "summary": "Set the shot size, angle, coverage, composition and vantage of AI images and video from 66 options, and Nodaro writes the framing into your prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "lens",
+      "label": "Lens",
+      "pickerTab": "Creative Controls",
+      "family": "Camera",
+      "link": "https://nodaro.ai/docs/node/lens",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/lens",
+      "summary": "Pick one of 18 lenses, from a 14mm ultra-wide and an 85mm portrait lens to fisheye, anamorphic and vintage primes, and Nodaro adds its look to your prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "camera-format",
+      "label": "Camera / Film Stock",
+      "pickerTab": "Creative Controls",
+      "family": "Camera",
+      "link": "https://nodaro.ai/docs/node/camera-format",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/camera-format",
+      "summary": "Pick one of 31 cameras and film stocks, from 35mm film and Arri Alexa to VHS, Polaroid and daguerreotype, and Nodaro adds that medium's look to your prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "exposure-settings",
+      "label": "Exposure Settings",
+      "pickerTab": "Creative Controls",
+      "family": "Camera",
+      "link": "https://nodaro.ai/docs/node/exposure-settings",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/exposure-settings",
+      "summary": "Set the aperture, shutter speed and ISO of an AI image or video from 20 options, for a soft background, frozen action, light trails or film grain.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "lighting",
+      "label": "Lighting",
+      "pickerTab": "Creative Controls",
+      "family": "Light & Look",
+      "link": "https://nodaro.ai/docs/node/lighting",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/lighting",
+      "summary": "Set how an AI image or video is lit. Combine the time of day, lighting style, direction, lighting ratio and color temperature from 72 tested options.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "color-look",
+      "label": "Color / Look",
+      "pickerTab": "Creative Controls",
+      "family": "Light & Look",
+      "link": "https://nodaro.ai/docs/node/color-look",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/color-look",
+      "summary": "Pick one of 41 color grades, such as Teal & Orange, Kodak Portra or Bleach Bypass, and Nodaro adds that grade to the prompt of your image and video nodes.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "mood",
+      "label": "Mood",
+      "pickerTab": "Creative Controls",
+      "family": "Light & Look",
+      "link": "https://nodaro.ai/docs/node/mood",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/mood",
+      "summary": "Pick up to two of 51 moods, such as calm, tense or joyful, and Nodaro adds tested wording for the emotion to the prompt of the image or video nodes you connect.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "atmosphere",
+      "label": "Atmosphere",
+      "pickerTab": "Creative Controls",
+      "family": "Light & Look",
+      "link": "https://nodaro.ai/docs/node/atmosphere",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/atmosphere",
+      "summary": "Add weather and particles to an AI image or video. Pick up to 2 of 40 conditions, such as Fog, Light Rain, Snow, Smoke or God Rays, from one picker.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "style",
+      "label": "Style",
+      "pickerTab": "Creative Controls",
+      "family": "Light & Look",
+      "link": "https://nodaro.ai/docs/node/style",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/style",
+      "summary": "Set the visual style of an AI image or video, such as Cinematic, Anime, Oil Painting or Pixel Art. Pick one of 49 styles and Nodaro adds it to the prompt.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "photo-genre",
+      "label": "Photo Genre",
+      "pickerTab": "Creative Controls",
+      "family": "Light & Look",
+      "link": "https://nodaro.ai/docs/node/photo-genre",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/photo-genre",
+      "summary": "Make an AI image read as a specific kind of photo, such as a fashion editorial, a street photo, a mirror selfie or a movie poster. Pick one of 46 genres.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "photographer",
+      "label": "Photographer / Artist Style",
+      "pickerTab": "Creative Controls",
+      "family": "Light & Look",
+      "link": "https://nodaro.ai/docs/node/photographer",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/photographer",
+      "summary": "Ground an AI image or video in the signature of a photographer, cinematographer or illustrator. Pick up to 2 of 63 creators, such as Roger Deakins.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "render-quality",
+      "label": "Render Quality",
+      "pickerTab": "Creative Controls",
+      "family": "Light & Look",
+      "link": "https://nodaro.ai/docs/node/render-quality",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/render-quality",
+      "summary": "Push an AI image toward a CG render look, such as Ray Tracing, Unreal Engine 5 or Octane Render, or add a quality term. Pick one of 24 render presets.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "aesthetic",
+      "label": "Aesthetic / Microtrend",
+      "pickerTab": "Creative Controls",
+      "family": "Light & Look",
+      "link": "https://nodaro.ai/docs/node/aesthetic",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/aesthetic",
+      "summary": "Tune an AI image or video to an online aesthetic, such as Y2K, Cottagecore, Dark Academia or Balletcore. Pick up to 2 of 42 named aesthetics.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "camera-motion",
+      "label": "Camera Motion",
+      "pickerTab": "Creative Controls",
+      "family": "Motion & Time",
+      "link": "https://nodaro.ai/docs/node/camera-motion",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/camera-motion",
+      "summary": "Tell an AI video model how the camera moves. Pick one of 66 camera motions, such as Dolly In, Orbit Left or Crane Up, and Nodaro adds tested wording.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "temporal",
+      "label": "Temporal",
+      "pickerTab": "Creative Controls",
+      "family": "Motion & Time",
+      "link": "https://nodaro.ai/docs/node/temporal",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/temporal",
+      "summary": "Control time in an AI video clip. Combine speed, freeze, direction and shutter, such as Slow Motion, Bullet Time or Reverse, from 18 tested options.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "character-motion",
+      "label": "Character Motion",
+      "pickerTab": "Creative Controls",
+      "family": "Motion & Time",
+      "link": "https://nodaro.ai/docs/node/character-motion",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/character-motion",
+      "summary": "Direct what a character does in an AI video clip. Chain up to 3 of more than 1,000 moves, such as walk in, wave or hug, and name who performs them.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "action-fx",
+      "label": "Action FX",
+      "pickerTab": "Creative Controls",
+      "family": "Effects",
+      "link": "https://nodaro.ai/docs/node/action-fx",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/action-fx",
+      "summary": "Add an event to an AI scene, such as an explosion, a lightning strike, an earthquake or a magic portal. Pick up to 2 of 72 tested action effects.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "character-fx",
+      "label": "Character FX",
+      "pickerTab": "Creative Controls",
+      "family": "Effects",
+      "link": "https://nodaro.ai/docs/node/character-fx",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/character-fx",
+      "summary": "Transform a character or give it a power in an AI video: werewolf, fire breathing, wings, glowing eyes and more. Pick up to 2 of 55 character effects.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "composition-effects",
+      "label": "Composition Effects",
+      "pickerTab": "Creative Controls",
+      "family": "Effects",
+      "link": "https://nodaro.ai/docs/node/composition-effects",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/composition-effects",
+      "summary": "Give an AI image or video a bold frame effect, such as Bursting Through Frame, Pixel Disintegration or Double Exposure. Pick one of 18 composition effects.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "post-process-effects",
+      "label": "Post-Process Effects",
+      "pickerTab": "Creative Controls",
+      "family": "Effects",
+      "link": "https://nodaro.ai/docs/node/post-process-effects",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/post-process-effects",
+      "summary": "Add finishing effects to an AI image or video, such as Fine Film Grain, Soft Vignette, Halation Glow or Light Leak. Pick up to 2 of 18 post-process effects.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "transition",
+      "label": "Transition",
+      "pickerTab": "Creative Controls",
+      "family": "Effects",
+      "link": "https://nodaro.ai/docs/node/transition",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/transition",
+      "summary": "Make an AI video model perform a transition inside one clip, such as a Whip Pan, a Match Cut or a Liquid Morph. Choose from more than 80 transitions.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "music-genre",
+      "label": "Music Genre",
+      "pickerTab": "Creative Controls",
+      "family": "Music & Voice",
+      "link": "https://nodaro.ai/docs/node/music-genre",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/music-genre",
+      "summary": "Set the genre of AI music: up to 3 of 29 genres for a fusion, or one genre with a subgenre, plus an era. Works with Suno, Generate Music and Text to Audio.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "music-mood",
+      "label": "Music Mood",
+      "pickerTab": "Creative Controls",
+      "family": "Music & Voice",
+      "link": "https://nodaro.ai/docs/node/music-mood",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/music-mood",
+      "summary": "Describe how AI music should feel: one energy level, up to 3 emotions and up to 3 vibes, such as Driving, Triumphant and Cinematic. Works with Suno and more.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "instrumentation",
+      "label": "Instrumentation",
+      "pickerTab": "Creative Controls",
+      "family": "Music & Voice",
+      "link": "https://nodaro.ai/docs/node/instrumentation",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/instrumentation",
+      "summary": "Choose the sound of AI music: up to 5 of 112 instruments, a production style, the vocals and a singing style. Works with Suno, Generate Music and Text to Audio.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "voice-character",
+      "label": "Voice Character",
+      "pickerTab": "Creative Controls",
+      "family": "Music & Voice",
+      "link": "https://nodaro.ai/docs/node/voice-character",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/voice-character",
+      "summary": "Describe who a designed voice is: age, gender, up to 3 languages, one of 45 accents and a timbre. Nodaro adds it to the voice description of Voice Design.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "voice-delivery",
+      "label": "Voice Delivery",
+      "pickerTab": "Creative Controls",
+      "family": "Music & Voice",
+      "link": "https://nodaro.ai/docs/node/voice-delivery",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/voice-delivery",
+      "summary": "Describe how a designed voice speaks: its pace, its emotion and a voice-acting style, such as Documentary Narrator. Nodaro adds it to Voice Design.",
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "settings",
+        "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "suno-voice",
+      "label": "Suno Voice",
+      "pickerTab": "Creative Controls",
+      "family": "Music & Voice",
+      "link": "https://nodaro.ai/docs/node/suno-voice",
+      "page": "https://nodaro.ai/docs/nodes/creative-controls/suno-voice",
+      "summary": "Create a custom voice persona from a short recording of your own voice, then use it as the singer on Suno Create Music, Suno Cover and Suno Extend.",
+      "sections": [
+        "when-to-use",
+        "credits",
+        "tips",
+        "faq"
+      ]
+    }
+  ],
+  "typesWithoutAPage": [
+    {
+      "type": "image-to-video",
+      "lands": "https://nodaro.ai/docs/node/generate-video"
+    },
+    {
+      "type": "text-to-video",
+      "lands": "https://nodaro.ai/docs/node/generate-video"
+    }
+  ]
+}

@@ -362,6 +362,30 @@ Calls `POST /v1/ai-writer/generate-stream` via SSE (bypasses proxy). Returns `{ 
 
 ---
 
+## Node docs links
+
+Every node links to its page in the public docs (nodaro.ai/docs).
+
+- **One helper.** `docsUrlForNode(type, { section, lang })` (`lib/node-docs/node-docs.ts`); components use `useNodeDocsUrl()`, which binds the interface language.
+  - It builds `https://nodaro.ai/docs/node/{type}?lang=…&ref=app#section`.
+  - `/docs/node/{type}` is a redirect on the docs site, so a page can move without breaking the app, and an unknown type lands on the Node Reference.
+  - Never link to a page URL. A test fails on any `nodaro.ai/docs/node` string outside `lib/node-docs/`.
+- **Four placements, all in shared components:**
+  - the "?" in the node header toolbar (`NodeTopToolbar`), shown on hover or while the node is selected
+  - "Learn about this node" in the ••• menu (`NodeContextMenu`)
+  - the "Docs" pill in the settings panel header, which opens `#settings`; hovering shows the summary, a chip per section and "Open full docs"
+  - "Compare models" beside the model picker's heading, to `#models`
+- **Which sections a page has** comes from the docs site's snapshot, `lib/node-docs/node-docs-links.json`. A deep link shows only when the page has that section.
+  - The app ships two maps generated from it by `npm -w frontend run gen:node-docs` (pass a new file to replace the snapshot first): `node-docs-map.generated.ts` (type → sections) and `node-docs-summaries.generated.ts`, a separate chunk loaded when a popover opens.
+  - The summaries are English, so they show only to an English interface.
+- **White-label.** Docs links are platform links. Every component that renders one checks `nodeDocsLinksShown()` (`surfacePlatformLinks()`), so a deployment that hides platform links shows none; the node-docs test enforces the check.
+- **Compare models.** `<MappableField field="provider">` shows it by itself. A panel that builds its own model heading renders `<CompareModelsLink />` beside it. It reads the node type from `NodeDocsTypeContext`, which only the editor's settings panel provides.
+- **Guards:**
+  - `lib/node-docs/__tests__/node-docs.test.ts` fails when a picker node has no page. Admin-only previews are skipped; nodes whose page is being written go in `AWAITING_DOCS_PAGE`. It also fails when the generated maps drift from the snapshot.
+  - `components/editor/node-docs/__tests__/compare-models-coverage.test.ts` fails when a node whose page has a Models section shows no "Compare models". Nodes with no model picker go in `NO_MODEL_PICKER`.
+
+---
+
 ## Architecture Rules (non-obvious) — migrated from root CLAUDE.md
 
 | Area | Rule |

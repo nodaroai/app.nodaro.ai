@@ -42,6 +42,8 @@ import { isTileGridPickerType } from "@/lib/picker-handles"
 import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared"
 import { getOutputMinuteUnits, NO_RERUNS } from "@/components/editor/workflow-editor/types"
 import { NodeLookPreviewStyleScope } from "@/components/nodes/look-preview-style"
+import { NodeDocsPill } from "@/components/editor/node-docs/node-docs-pill"
+import { NodeDocsTypeContext } from "@/components/editor/node-docs/node-docs-context"
 import {
   getConnectedSources,
   getModelIdentifier,
@@ -887,6 +889,7 @@ export function ConfigPanel() {
         <div className="flex items-center gap-2">
           {/* Fullscreen: preset dropdown on the side (inline in the header row). */}
           {isExpanded && <div className="w-56">{presetDropdown}</div>}
+          <NodeDocsPill nodeType={nodeType} nodeLabel={localizeNodeLabel(nodeTypeDefaultLabel(nodeType))} />
           {!isMobile && (
             <Button
               variant="ghost"
@@ -1053,6 +1056,9 @@ export function ConfigPanel() {
                 catalog id — which ignored `data.hintMode` — and to render the
                 shared Full / Compact lever. Provided once here so every picker
                 panel, present and future, is covered with no per-panel work. */}
+            {/* The node type, for the docs links inside the node's config
+                (the model picker's "Compare models"). */}
+            <NodeDocsTypeContext.Provider value={nodeType}>
             <ParameterPreviewContext.Provider value={{ node: selectedNode, nodes, edges }}>
               {/* The picker grid pictures its options the way this node is
                   set (real render / illustration), and the switch above the
@@ -1083,6 +1089,7 @@ export function ConfigPanel() {
               )}
               </NodeLookPreviewStyleScope>
             </ParameterPreviewContext.Provider>
+            </NodeDocsTypeContext.Provider>
             {/* Prompt Injection — opt out of auto-injecting Look / Elements.
                Renders only for nodes with a look/cinematography or elements
                handle (gated inside the component). */}

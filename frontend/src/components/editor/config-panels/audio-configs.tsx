@@ -63,6 +63,7 @@ import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AU
 import type { AudioFxPreset } from "@nodaro/shared"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import { MappableField } from "./mappable-field"
+import { CompareModelsLink } from "@/components/editor/node-docs/compare-models-link"
 import { SunoField, isSunoFieldWired } from "./suno-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
@@ -2248,7 +2249,10 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
         />
       </div>
       <div>
-        <Label htmlFor="vc-model">{t("field.model")}</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="vc-model">{t("field.model")}</Label>
+          <CompareModelsLink />
+        </div>
         <Select
           value={data.model || DEFAULT_VOICE_CHANGER_MODEL}
           onValueChange={(v) => onUpdate({ model: v as VoiceChangerData["model"] })}
@@ -2477,7 +2481,10 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
         )}
       </MappableField>
       <div>
-        <Label>{t("field.model")}</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label>{t("field.model")}</Label>
+          <CompareModelsLink />
+        </div>
         <Select value={data.model || "eleven_ttv_v3"} onValueChange={(v) => onUpdate({ model: v })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -2834,7 +2841,10 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
         ))}
       </div>
       <div>
-        <Label>{t("field.model")}</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label>{t("field.model")}</Label>
+          <CompareModelsLink />
+        </div>
         <Select
           value={data.model ?? DEFAULT_VOICE_CHANGER_MODEL}
           onValueChange={(v) => onUpdate({ model: v as VoiceChangerProData["model"] })}
