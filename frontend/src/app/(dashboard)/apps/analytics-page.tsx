@@ -241,7 +241,7 @@ function DailyChart({ data }: { data: DailyAnalytics[] }) {
           <div
             key={day.date}
             className="flex-1 min-w-0 group relative"
-            title={t("apps.analytics.dayRunsTooltip", { date: day.date, count: day.totalRuns })}
+            title={t(day.totalRuns === 1 ? "apps.analytics.dayRunsTooltipOne" : "apps.analytics.dayRunsTooltip", { date: day.date, count: day.totalRuns })}
           >
             <div
               className="w-full bg-[#ff0073]/60 hover:bg-[#ff0073] rounded-sm transition-colors"

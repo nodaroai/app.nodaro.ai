@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from "react"
 import { Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useT } from "@/lib/i18n"
+import { labelOf, useT, type MessageKey } from "@/lib/i18n"
+import type { ThreeDTitleCameraAnimation } from "@remotion-pkg/plan-types"
+
+/** A camera animation by its label, keyed by the plan's own union: a new type without a label fails tsc. */
+const CAMERA_ANIMATION_LABEL: Readonly<Record<ThreeDTitleCameraAnimation["type"], MessageKey>> = {
+  orbit: "preview.cameraOrbit",
+  dolly: "preview.cameraDolly",
+  static: "preview.cameraStatic",
+}
 
 interface TextObject {
   id: string
@@ -194,7 +202,7 @@ export function ThreeDTitlePreview({
       {camera && (
         <div className="text-[10px] text-muted-foreground border border-[var(--border-primary)] rounded-md p-2 flex flex-col gap-0.5">
           <span>{t("preview.cameraFov", { n: camera.fov as number })}</span>
-          {cameraAnim && <span>{t("preview.animationLine", { type: cameraAnim.type as string })}</span>}
+          {cameraAnim && <span>{t("preview.animationLine", { type: labelOf(CAMERA_ANIMATION_LABEL, String(cameraAnim.type), t) })}</span>}
         </div>
       )}
 

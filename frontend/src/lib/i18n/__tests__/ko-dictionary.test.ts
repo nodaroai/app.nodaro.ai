@@ -70,8 +70,6 @@ const LATIN_OK: ReadonlySet<string> = new Set<string>([
   "utilcfg.webhookUrl",
   "vidcfg.fps824",
   "vidcfg.youtubeUrl",
-  // Sample prompt text that must stay the text the model sees.
-  "dash.varSampleResolved",
   // Numbers and counters: the tutorial number words render as digits.
   "copilot.runProgress",
   "tut.countEight",

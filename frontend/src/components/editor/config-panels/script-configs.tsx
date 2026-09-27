@@ -33,6 +33,7 @@ import type {
   DescribeToPickerData,
 } from "@/types/nodes"
 import { IMAGE_CRITIC_MODES, STRUCTURED_VISION_MODELS, type ImageCriticMode } from "@nodaro/shared"
+import { IMAGE_CRITIC_MODE_LABEL } from "@/lib/image-critic-mode-copy"
 import { pickerFanoutTargets } from "@nodaro/prompts"
 import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -369,7 +370,7 @@ export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeRefs, refM
           <SelectTrigger aria-label={tx("field.mode")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {IMAGE_CRITIC_MODES.map((m) => (
-              <SelectItem key={m} value={m}>{m}</SelectItem>
+              <SelectItem key={m} value={m}>{t(IMAGE_CRITIC_MODE_LABEL[m])}</SelectItem>
             ))}
           </SelectContent>
         </Select>

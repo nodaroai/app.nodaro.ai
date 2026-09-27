@@ -8,9 +8,17 @@
  */
 import { SCENE3D_LIMITS } from "@nodaro/shared"
 import type { Scene3DNodeReference } from "@/types/nodes"
+import type { MessageKey } from "@/lib/i18n"
 
 export const SCENE3D_REFERENCE_ROLES = ["appearance", "layout", "motion"] as const
 export type Scene3DReferenceRole = (typeof SCENE3D_REFERENCE_ROLES)[number]
+
+/** Each reference role by its label; a new role without a label fails tsc. */
+export const SCENE3D_REFERENCE_ROLE_LABEL: Readonly<Record<Scene3DReferenceRole, MessageKey>> = {
+  appearance: "scene3dcfg.refRoleAppearance",
+  layout: "scene3dcfg.refRoleLayout",
+  motion: "scene3dcfg.refRoleMotion",
+}
 
 export const DEFAULT_REFERENCE_ROLE: Scene3DReferenceRole = "appearance"
 

@@ -518,10 +518,11 @@ export default function SettingsPage() {
             </SelectTrigger>
             <SelectContent>
               {/* Each label shows the mode applied to itself, so the list is its
-                  own preview — no need to open the editor to see the difference. */}
-              <SelectItem value="raw">{t("dash.varSampleRaw")}</SelectItem>
-              <SelectItem value="annotated">{t("dash.varSampleAnnotated")}</SelectItem>
-              <SelectItem value="resolved">{t("dash.varSampleResolved")}</SelectItem>
+                  own preview — no need to open the editor to see the difference.
+                  The braces are the variable syntax; the name and value are words. */}
+              <SelectItem value="raw">{`{${t("dash.varSampleName")}}`}</SelectItem>
+              <SelectItem value="annotated">{`{${t("dash.varSampleName")}: ${t("dash.varSampleValue")}}`}</SelectItem>
+              <SelectItem value="resolved">{t("dash.varSampleValue")}</SelectItem>
             </SelectContent>
           </Select>
         </div>

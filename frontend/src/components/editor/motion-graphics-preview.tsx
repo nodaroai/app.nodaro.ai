@@ -1,7 +1,19 @@
 import { useEffect, useRef, useState } from "react"
 import { ChevronDown, ChevronUp, Eye, EyeOff, Shapes } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useT, type MessageKey } from "@/lib/i18n"
+import { labelOf, useT, type MessageKey } from "@/lib/i18n"
+import type { MGExitAnimation } from "@remotion-pkg/plan-types"
+
+/** A plan's exit animation by its label, keyed by the plan's own union: a new type without a label fails tsc. */
+const EXIT_TYPE_LABEL: Readonly<Record<MGExitAnimation["type"], MessageKey>> = {
+  fade: "preview.exitFade",
+  "zoom-through": "preview.exitZoomThrough",
+  "slide-down": "preview.exitSlideDown",
+  "slide-up": "preview.exitSlideUp",
+  "slide-left": "preview.exitSlideLeft",
+  "slide-right": "preview.exitSlideRight",
+  none: "preview.exitNone",
+}
 
 interface MGElement {
   id: string
@@ -260,7 +272,7 @@ export function MotionGraphicsPreview({
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("preview.exitAnimation")}</span>
           <div className="text-[10px] mt-0.5">
             {t("preview.exitAtFrame", {
-              type: String((motionPlan.exitAnimation as Record<string, unknown>).type ?? "none"),
+              type: labelOf(EXIT_TYPE_LABEL, String((motionPlan.exitAnimation as Record<string, unknown>).type ?? "none"), t),
               frame: String((motionPlan.exitAnimation as Record<string, unknown>).startFrame ?? 0),
             })}
           </div>

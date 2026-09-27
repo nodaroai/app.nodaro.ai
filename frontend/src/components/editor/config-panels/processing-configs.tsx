@@ -265,7 +265,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         <div className="flex flex-col gap-2 ps-3 border-s-2 border-muted-foreground/20">
           <div>
             <Label htmlFor="smart-cut-prev" className="text-[11px] text-muted-foreground">
-              {t("proccfg.searchWindowEndOfPreviousClip", { n: data.smartCutFramesPrev ?? SMART_CUT_WINDOW_DEFAULT })}
+              {t((data.smartCutFramesPrev ?? SMART_CUT_WINDOW_DEFAULT) === 1 ? "proccfg.searchWindowEndOfPreviousClipOne" : "proccfg.searchWindowEndOfPreviousClip", { n: data.smartCutFramesPrev ?? SMART_CUT_WINDOW_DEFAULT })}
             </Label>
             <Input
               id="smart-cut-prev"
@@ -282,7 +282,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
           </div>
           <div>
             <Label htmlFor="smart-cut-next" className="text-[11px] text-muted-foreground">
-              {t("proccfg.searchWindowStartOfNextClip", { n: data.smartCutFramesNext ?? SMART_CUT_WINDOW_DEFAULT })}
+              {t((data.smartCutFramesNext ?? SMART_CUT_WINDOW_DEFAULT) === 1 ? "proccfg.searchWindowStartOfNextClipOne" : "proccfg.searchWindowStartOfNextClip", { n: data.smartCutFramesNext ?? SMART_CUT_WINDOW_DEFAULT })}
             </Label>
             <Input
               id="smart-cut-next"

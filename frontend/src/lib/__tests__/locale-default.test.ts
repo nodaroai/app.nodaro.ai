@@ -35,6 +35,11 @@ describe("resolveInitialLocale — deployment default locale (A3)", () => {
     expect(resolveInitialLocale()).toBe("pt-BR")
   })
 
+  it("maps another region of a language we ship in one form (pt-PT → pt-BR)", () => {
+    window.__NODARO_RUNTIME__ = { defaultLocale: "pt-PT" }
+    expect(resolveInitialLocale()).toBe("pt-BR")
+  })
+
   it("does not remap a region we do not ship — zh-TW is not zh-CN", () => {
     const detected = resolveInitialLocale()
     window.__NODARO_RUNTIME__ = { defaultLocale: "zh-TW" }
@@ -110,6 +115,18 @@ describe("resolveInitialLocale — browser detection lands only on offered local
   it("a Portuguese browser from another region lands on Brazilian Portuguese through its bare tag", () => {
     withBrowserLanguages(["pt-PT", "pt"], () => {
       expect(resolveInitialLocale()).toBe("pt-BR")
+    })
+  })
+
+  it("a browser that lists only pt-PT lands on Brazilian Portuguese", () => {
+    withBrowserLanguages(["pt-PT"], () => {
+      expect(resolveInitialLocale()).toBe("pt-BR")
+    })
+  })
+
+  it("a Traditional Chinese browser does not land on Simplified Chinese", () => {
+    withBrowserLanguages(["zh-TW"], () => {
+      expect(resolveInitialLocale()).toBe("en")
     })
   })
 

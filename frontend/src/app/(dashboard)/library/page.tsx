@@ -280,7 +280,7 @@ export default function LibraryPage() {
 
     setSelected(new Set())
     setDeleting(false)
-    toast.success(t("lib.deletedFiles", { n: deletedCount }))
+    toast.success(t(deletedCount === 1 ? "lib.deletedFilesOne" : "lib.deletedFiles", { n: deletedCount }))
   }, [user?.id, selected, deleteMutation, t])
 
   const toggleSelect = useCallback((id: string) => {

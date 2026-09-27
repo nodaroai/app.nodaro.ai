@@ -178,7 +178,7 @@ function FeaturedPost({ post }: { readonly post: Record<string, unknown> }) {
         <p className="line-clamp-3 whitespace-pre-wrap text-[12.5px] leading-[1.5] text-[var(--meta-ads-text-2)]">{instagramCaption(post)}</p>
       )}
       <div className="flex items-center justify-between text-[11.5px] font-semibold text-[var(--meta-ads-muted)]">
-        <span>{[instagramTimestampLabel(post), counts.videos > 0 ? t("cfgext.metaAdsVideoCount", { count: counts.videos }) : t("cfgext.metaAdsImageCount", { count: counts.images })].filter(Boolean).join(" · ")}</span>
+        <span>{[instagramTimestampLabel(post), counts.videos > 0 ? (counts.videos === 1 ? t("cfgext.metaAdsVideoOne") : t("cfgext.metaAdsVideoCount", { count: counts.videos })) : (counts.images === 1 ? t("cfgext.metaAdsImageOne") : t("cfgext.metaAdsImageCount", { count: counts.images }))].filter(Boolean).join(" · ")}</span>
         {link && (
           <a href={link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[#FF0073] hover:underline">
             {t("cfgext.igOpenPost")} <ExternalLink className="h-3 w-3" />

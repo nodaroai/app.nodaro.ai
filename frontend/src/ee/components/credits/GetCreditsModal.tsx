@@ -79,7 +79,7 @@ export function GetCreditsModal({
               comes from the dictionary, which leaves it empty in Japanese.
               With nothing to divide by, the balance sentence has its own key. */}
           <p className="text-sm text-muted-foreground">
-            {interpolateNodes(t("credits.appCostSentence"), { amount: <strong>{creditUnits(required)}</strong> })}
+            {interpolateNodes(t("credits.appCostSentence"), { amount: <strong>{creditUnits(required)}</strong>, unit })}
             {t("common.fragmentGap")}
             {runsLeft === null
               ? interpolateNodes(t("credits.balanceOnly"), { balance: balanceFigure, unit })

@@ -74,7 +74,7 @@ export function useImportWorkflowJson(): {
           ? t(report.rehosted === 1 ? "editor.mediaCopiedOne" : "editor.mediaCopiedMany", { n: report.rehosted })
           : ""
         toast.success(
-          (assetCount > 0 ? t("editor.importedWithAssetsCount", { n: assetCount }) : t("editor.importedPlain")) + copied,
+          (assetCount > 0 ? t(assetCount === 1 ? "editor.importedWithAssetsCountOne" : "editor.importedWithAssetsCount", { n: assetCount }) : t("editor.importedPlain")) + copied,
         )
 
         // Media this instance could not fetch stays pointing at the exporter,

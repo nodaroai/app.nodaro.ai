@@ -13,9 +13,13 @@ import type { LocaleId } from "@nodaro/shared"
  * version rendered, character for character.
  */
 
+const { mockUnitLabel } = vi.hoisted(() => ({ mockUnitLabel: vi.fn(() => "CR") }))
+
 vi.mock("@/lib/surface-selectors", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/surface-selectors")>()),
   surfaceBillingSelfServe: () => false,
+  // "CR" is the unconfigured default: the dialog then names the locale's word.
+  surfaceCreditUnitLabel: () => mockUnitLabel(),
 }))
 
 import { GetCreditsModal } from "../GetCreditsModal"
@@ -30,6 +34,7 @@ function costLine(locale: LocaleId, balance: number, required: number): HTMLPara
 
 beforeEach(() => {
   useLocaleStore.setState({ locale: "en" })
+  mockUnitLabel.mockReturnValue("CR")
 })
 
 describe("GetCreditsModal — the cost and balance line", () => {
@@ -43,11 +48,16 @@ describe("GetCreditsModal — the cost and balance line", () => {
     ["ja", 200, 50, "このアプリの実行には 1 回あたり 50 クレジットかかります。残高は 200 クレジットです。あと 4 回実行できます。"],
     ["ja", 50, 50, "このアプリの実行には 1 回あたり 50 クレジットかかります。残高は 50 クレジットです。あと 1 回実行できます。"],
     ["ja", 200, 0, "このアプリの実行には 1 回あたり 0 クレジットかかります。残高は 200 クレジットです。"],
-    ["ko", 200, 50, "이 앱은 실행 1회당 50 크레딧이 소모됩니다. 현재 200 크레딧 보유 중이므로 앞으로 4회 더 실행할 수 있습니다."],
-    ["ko", 50, 50, "이 앱은 실행 1회당 50 크레딧이 소모됩니다. 현재 50 크레딧 보유 중이므로 앞으로 1회 더 실행할 수 있습니다."],
-    ["ko", 200, 0, "이 앱은 실행 1회당 0 크레딧이 소모됩니다. 현재 200 크레딧 보유 중입니다."],
+    ["ko", 200, 50, "이 앱의 실행 1회 비용은 50 크레딧입니다. 현재 200 크레딧 보유 중이므로 앞으로 4회 더 실행할 수 있습니다."],
+    ["ko", 50, 50, "이 앱의 실행 1회 비용은 50 크레딧입니다. 현재 50 크레딧 보유 중이므로 앞으로 1회 더 실행할 수 있습니다."],
+    ["ko", 200, 0, "이 앱의 실행 1회 비용은 0 크레딧입니다. 현재 200 크레딧 보유 중입니다."],
   ] as const)("%s, balance %i, cost %i", (locale, balance, required, expected) => {
     expect(costLine(locale, balance, required).textContent).toBe(expected)
+  })
+
+  it("names the deployment's own unit in the cost sentence as well as the balance", () => {
+    mockUnitLabel.mockReturnValue("tokens")
+    expect(costLine("en", 200, 50).textContent).toBe("This app costs 50 tokens per run. You have 200 tokens — enough for 4 more runs.")
   })
 
   it("keeps every figure bold", () => {

@@ -40,7 +40,6 @@ const LATIN_OK: ReadonlySet<string> = new Set<string>([
   "credits.unitShort",
   "credits.unitShortLower",
   "creds.secretPh",
-  "dash.varSampleResolved",
   "editor.copilotName",
   "editor.copilotTabLabel",
   "editor.copilotTitle",
