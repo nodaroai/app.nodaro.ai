@@ -67,12 +67,16 @@ jobs:
           fi
           frontend=false backend=false
           while IFS= read -r f; do
+            # First match wins. backend/ comes before the markdown rule: the
+            # generated skills (backend/skills/**/*.md) are read by backend
+            # tests, and a PR that regenerated them once skipped the suite and
+            # left a stale snapshot failing on dev (#1693).
             case "$f" in
+              backend/*|supabase/*) backend=true ;;
               docs/*|*.md) ;;                                  # affects neither suite
               .github/workflows/ci.yml|.github/actions/*) frontend=true; backend=true ;;
               .github/*) ;;                                    # other workflows: neither
               frontend/*) frontend=true ;;
-              backend/*|supabase/*) backend=true ;;
               *) frontend=true; backend=true ;;                # packages/, root, unknown: both
             esac
           done <<< "$files"

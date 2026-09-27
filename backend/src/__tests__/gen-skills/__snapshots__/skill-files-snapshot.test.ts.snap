@@ -252,7 +252,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
   "data": {
     "label": "Generate Video",
     "provider": "seedance-2-fast",
-    "duration": 5,
+    "duration": 4,
     "prompt": "",
     "negativePrompt": "",
     "fieldMappings": {}
@@ -351,7 +351,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 {
   "label": "Generate Video",
   "provider": "seedance-2-fast",
-  "duration": 5,
+  "duration": 4,
   "prompt": "",
   "negativePrompt": "",
   "fieldMappings": {}
