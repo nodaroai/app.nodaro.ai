@@ -267,14 +267,17 @@ describe("required media inputs", () => {
     })
   })
 
-  it("face-swap stays single-entry — its face half reads only data.faceImageUrl", () => {
-    // Wiring an image into the orange handle sets resolvedInputs.imageUrl, which
-    // the case never reads. An AND entry on it would refuse that graph while the
-    // payload would still ship `undefined` — the audit-dag wiring gap, ticketed
-    // separately. The video half is guarded; the face half deliberately is not.
+  it("face-swap needs both halves — a face image and a video — and ships the wired face", () => {
+    // The face now has its own lane (the resolver routes the `face` handle into
+    // resolvedInputs.faceImageUrl), so a missing face is refused before any job
+    // is created instead of crashing at the provider.
     const n = node("face-swap")
-    expect(() => buildPayload(n, JOB, { videoUrl: "https://cdn.example/v.mp4" }, undefined, ctx(n)))
-      .not.toThrow()
+    const video = "https://cdn.example/v.mp4"
+    const face = "https://cdn.example/f.png"
+    expect(() => buildPayload(n, JOB, { videoUrl: video }, undefined, ctx(n))).toThrow(/image_required/)
+    expect(() => buildPayload(n, JOB, { faceImageUrl: face }, undefined, ctx(n))).toThrow(/video_required/)
+    const built = buildPayload(n, JOB, { videoUrl: video, faceImageUrl: face }, undefined, ctx(n))
+    expect(built.payload).toMatchObject({ faceImageUrl: face, videoUrl: video })
   })
 
   it("covers every frontend-guarded media node (parity ratchet)", () => {

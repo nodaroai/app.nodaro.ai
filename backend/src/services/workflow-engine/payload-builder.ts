@@ -129,12 +129,12 @@ export interface RequiredMediaInput {
  * merge-video-audio rows).
  *
  * ONE ROW PER NODE, ONE OR MORE REQUIREMENTS. A row is a single requirement or
- * an array of them (AND: every entry must be satisfied). The five two-input
+ * an array of them (AND: every entry must be satisfied). The six two-input
  * nodes (merge-video-audio, still-to-video, speech-to-video, motion-transfer,
- * lip-sync) carry both halves, mirroring the frontend, which refuses both.
- * face-swap deliberately stays single: its face half reads only
- * `data.faceImageUrl` (no resolved-input lane), so guarding it would refuse a
- * wired handle — that is the audit-dag wiring gap, ticketed separately.
+ * lip-sync, face-swap) carry both halves, mirroring the frontend, which refuses
+ * both. face-swap's face half reads the resolver's own `faceImageUrl` lane (the
+ * wired `face` handle), so a graph with no face is refused here instead of
+ * crashing at the provider.
  *
  * KEYS ARE READ FROM THE CASE. Every `anyOf` key below is a source the matching
  * case actually consults, INCLUDING its non-media alternatives (`youtubeUrl`,
@@ -169,6 +169,10 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
     { anyOf: ["imageUrl", "videoUrl"], kind: "image", noun: "a portrait image or a video" },
     { anyOf: ["audioUrl"], kind: "audio", noun: "an audio track" },
   ],
+  "face-swap": [
+    { anyOf: ["faceImageUrl"], kind: "image", noun: "a face image" },
+    { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  ],
 
   // --- Video in ---
   // BOTH halves. The audio half names the two keys the case actually reads
@@ -195,7 +199,6 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   "switchx": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "video-sfx": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "video-retake": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
-  "face-swap": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "combine-videos": { anyOf: ["videoUrls", "videoUrlsWithSourceIds"], kind: "video", noun: "at least one video" },
   "assemble-narrated-video": { anyOf: ["videoUrls"], kind: "video", noun: "at least one video" },
   "split-media": { anyOf: ["videoUrl", "audioUrl"], kind: "video", noun: "a video or audio input" },
@@ -4438,7 +4441,7 @@ export function buildPayload(
         modelIdentifier: "roop-face-swap",
         payload: {
           jobId,
-          faceImageUrl: data.faceImageUrl,
+          faceImageUrl: resolvedInputs.faceImageUrl || data.faceImageUrl,
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
           provider: (data.provider as string) ?? "roop",
           usageLogId,

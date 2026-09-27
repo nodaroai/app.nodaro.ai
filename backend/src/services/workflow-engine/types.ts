@@ -311,6 +311,11 @@ export interface ResolvedInputs {
    *  prompt routing. */
   negativePrompt?: string
   imageUrl?: string
+  /** face-swap: the face photo wired into its `face` handle (an image
+   *  producer's file or an entity's portrait). Its own lane, like the editor's
+   *  `faceImageUrl`, so the face never lands in `imageUrl` or
+   *  `referenceImageUrls` where the face-swap payload does not look. */
+  faceImageUrl?: string
   videoUrl?: string
   /** Upstream video duration (seconds) — used for accurate credit estimation
    *  on trim-video / loop-video. Set when the upstream node exposes a

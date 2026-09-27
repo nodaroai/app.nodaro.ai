@@ -1492,6 +1492,19 @@ function routeOutput(
     return
   }
 
+  // --- face-swap: the `face` handle is the face photo. Routed by handle BEFORE
+  // any source-type branch, which would put an image producer's file in
+  // `imageUrl` and an entity's portrait in `referenceImageUrls`, where the
+  // face-swap payload never looks (every server-run Face Swap then crashed at
+  // the provider with no face). `output` is the source's image either way, as
+  // it is for the lip-sync / motion-transfer entity routes below. The `video`
+  // handle falls through to the normal video routing. Mirrors the frontend
+  // node-input-resolver face-swap branch. ---
+  if (targetType === "face-swap" && edge.targetHandle === "face") {
+    inputs.faceImageUrl = output
+    return
+  }
+
   // --- edit-plan inputs: routed by targetHandle BEFORE any source-type branch
   // (same reason as apply-edl below — the json `transcript`/`silence` edges must
   // not fall into inputs.prompt, and the media `sources` edges must not fall into

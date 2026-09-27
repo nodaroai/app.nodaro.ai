@@ -100,6 +100,7 @@ import { handleAiAvatar } from "./heygen-avatar.js"
 import { handleCinematicAvatar } from "./heygen-cinematic.js"
 import { handleBeebleSwitchX } from "./beeble-switchx.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
+import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import {
   providerKindForVideoModel,
   providerKindForLipSyncModel,
@@ -1495,8 +1496,17 @@ const handleVideoRetake: HandlerFn = async function handleVideoRetake(job, ctx) 
 const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
   const { faceImageUrl, videoUrl } = job.data as {
     jobId: string
-    faceImageUrl: string
-    videoUrl: string
+    faceImageUrl?: string
+    videoUrl?: string
+  }
+  // A missing input fails the same way on every attempt: refuse it now (the
+  // worker fails and refunds on this attempt) with a message the user can act
+  // on, instead of letting the provider crash on `undefined` three times.
+  if (!faceImageUrl?.trim()) {
+    throw new DeterministicJobError("Face Swap needs a face image: connect one to its Face input.")
+  }
+  if (!videoUrl?.trim()) {
+    throw new DeterministicJobError("Face Swap needs a video: connect one to its Video input.")
   }
   console.log(`[worker] face-swap ${ctx.jobId}`)
 
