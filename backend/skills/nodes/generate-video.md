@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-09-21T19:12:09.229Z
-generated_from: 09788c987
+generated_at: 2026-09-27T11:48:21.161Z
+generated_from: 8bc979686
 ---
 
 # Generate Video
@@ -79,7 +79,7 @@ generated_from: 09788c987
 {
   "label": "Generate Video",
   "provider": "seedance-2-fast",
-  "duration": 5,
+  "duration": 4,
   "prompt": "",
   "negativePrompt": "",
   "fieldMappings": {}
@@ -142,7 +142,7 @@ The per-family doctrine below (Kling, MiniMax, VEO, Gemini Omni, Grok, Wan, Happ
   "data": {
     "label": "Generate Video",
     "provider": "seedance-2-fast",
-    "duration": 5,
+    "duration": 4,
     "prompt": "",
     "negativePrompt": "",
     "fieldMappings": {}

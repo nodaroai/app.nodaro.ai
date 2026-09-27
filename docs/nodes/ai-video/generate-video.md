@@ -465,7 +465,7 @@ Common fields:
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | Provider | Select | `kling` | Drives all other field visibility |
-| Duration | Select / Number | Provider-specific | See per-provider durations above |
+| Duration | Select / Number | 4 s on a new node (the API default) | See per-provider durations above |
 | Resolution | Select | Provider-specific | 480p / 720p / 1080p depending on provider |
 | Aspect Ratio | Select | Provider-specific | 16:9 / 9:16 / 1:1 / 4:3 / 3:4 / 21:9 / Auto |
 | Generate Audio | Checkbox | Provider-specific | VEO 3.x default on |

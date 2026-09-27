@@ -7569,7 +7569,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // drift test in enumerate-connection-options.test.ts.
     inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look"],
     outputs: ["video"],
-    defaultData: { label: "Generate Video", provider: "seedance-2-fast", duration: 5, prompt: "", negativePrompt: "", fieldMappings: {} },
+    // duration is the literal DEFAULT_VIDEO_DURATION_SEC (the API's default):
+    // gen-skills parses this file textually and cannot resolve a constant. At 5 s
+    // a new node's first run billed Seedance 2 Fast's 8 s tier. Guarded by
+    // generate-video-default-duration.test.ts.
+    defaultData: { label: "Generate Video", provider: "seedance-2-fast", duration: 4, prompt: "", negativePrompt: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
     exposableFields: [
       {
