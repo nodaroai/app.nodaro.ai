@@ -5647,7 +5647,7 @@ export const he: ChromeDict = {
   "run.backendCancelled": "ההרצה בוטלה",
   "run.backendTimedOut": "תם הזמן הקצוב להרצה",
   "run.backendNoLongerExists": "ההרצה אינה קיימת עוד",
-  "run.lostConnection": "החיבור להרצה אבד",
+  "run.lostConnection": "החיבור לשרת אבד. ממשיכים לחכות לסיום ההרצה…",
   "run.underMinRows": "מתחת למינימום השורות: {names}",
   "run.needsRows": "(דרושות {count}+ שורות)",
   "run.connectNodaroToRun": "חברו את nodaro.ai כדי להריץ את הרכיב הזה",
@@ -6334,6 +6334,8 @@ export const he: ChromeDict = {
   "node.listComplete": "הושלם",
   "node.skipBadge": "דילוג",
   "node.recovering": "משחזר…",
+  "node.connectionLost": "מתחבר מחדש…",
+  "node.connectionLostDesc": "אין כרגע חיבור לשרת. המשימה ממשיכה לרוץ, והתוצאה תופיע כאן.",
 
   // Job policy hook — a held or blocked result on the canvas
   "node.review.awaiting": "ממתין לבדיקה",
@@ -10669,6 +10671,7 @@ export const he: ChromeDict = {
   "nodeRun.characterPortraitGenerated": "פורטרט הדמות נוצר",
   "nodeRun.characterGenerationFailed": "יצירת הדמות נכשלה",
   "nodeRun.failedToCheckJobStatus": "בדיקת סטטוס המשימה נכשלה",
+  "nodeRun.jobUnavailable": "לא ניתן למצוא את המשימה. ייתכן שהיא נמחקה.",
   "nodeRun.faceHeadshotGenerationStarted": "יצירת תקריב הפנים התחילה",
   "nodeRun.faceHeadshotGenerated": "תקריב הפנים נוצר",
   "nodeRun.faceHeadshotGenerationFailed": "יצירת תקריב הפנים נכשלה",

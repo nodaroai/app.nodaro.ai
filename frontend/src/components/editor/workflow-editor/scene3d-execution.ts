@@ -36,11 +36,11 @@ import { guardedToast, getJobStatusLeanForNode, RUN_START_RESET } from "./poll-j
 import { shouldAbandonNode } from "./abandon-guard";
 import {
   WorkflowStaleError,
-  MAX_CONSECUTIVE_POLL_FAILURES,
   checkStorageError,
   updateProgressIfChanged,
   type ExecutionContext,
 } from "./types";
+import { jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { archiveSupersededResult, resolveSceneCompletion } from "@/lib/scene3d/revisions";
 import { planRevisionId } from "@/lib/scene3d/plan-view";
 import type { Scene3DRevisionContext, Scene3DRevisionEntry } from "@/types/nodes";
@@ -321,7 +321,7 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context, extr
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   resolve("");
@@ -329,9 +329,11 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context, extr
                 }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
                   currentJobProgress: undefined,
                   sceneJobBaseRevisionId: undefined,
+                  jobConnectionLost: undefined,
                 });
                 guardedToast.error(tx("nodeRun.failedToCheckStatus", { label: shown }));
                 reject(err);

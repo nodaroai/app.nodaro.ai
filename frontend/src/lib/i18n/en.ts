@@ -5690,7 +5690,7 @@ export const en = {
   "run.backendCancelled": "Backend execution cancelled",
   "run.backendTimedOut": "Backend execution timed out",
   "run.backendNoLongerExists": "Backend execution no longer exists",
-  "run.lostConnection": "Lost connection to backend execution",
+  "run.lostConnection": "Lost connection to the server. Still waiting for the run to finish…",
   "run.underMinRows": "Under minimum rows: {names}",
   "run.needsRows": "(needs {count}+ rows)",
   "run.connectNodaroToRun": "Connect nodaro.ai to run this node",
@@ -6377,6 +6377,8 @@ export const en = {
   "node.listComplete": "Complete",
   "node.skipBadge": "SKIP",
   "node.recovering": "Recovering…",
+  "node.connectionLost": "Reconnecting…",
+  "node.connectionLostDesc": "Can't reach the server right now. The job keeps running, and its result will appear here.",
 
   // ── Job policy hook — a held or blocked result on the canvas ────────────
   "node.review.awaiting": "Awaiting review",
@@ -10752,6 +10754,7 @@ export const en = {
   "nodeRun.characterPortraitGenerated": "Character portrait generated",
   "nodeRun.characterGenerationFailed": "Character generation failed",
   "nodeRun.failedToCheckJobStatus": "Failed to check job status",
+  "nodeRun.jobUnavailable": "This job can't be found. It may have been deleted.",
   "nodeRun.faceHeadshotGenerationStarted": "Face headshot generation started",
   "nodeRun.faceHeadshotGenerated": "Face headshot generated",
   "nodeRun.faceHeadshotGenerationFailed": "Face headshot generation failed",

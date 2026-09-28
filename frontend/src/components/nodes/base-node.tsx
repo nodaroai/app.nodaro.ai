@@ -17,6 +17,7 @@ import { NodeSettingsButton } from "./node-settings-button"
 import { InlineGluedStripContext } from "./inline-glued-strip-context"
 import { NodeTopToolbar } from "./node-top-toolbar"
 import { NodePolicyOverlay } from "./node-policy-overlay"
+import { NodeConnectionBadge } from "./node-connection-badge"
 import { computeFittedNodeBox } from "./video-node-defaults"
 import { InlineNodePrompt } from "./inline-node-prompt/inline-node-prompt"
 import { useInlinePromptActive } from "./inline-node-prompt/use-inline-prompt-active"
@@ -729,6 +730,9 @@ function BaseNodeComponent({
           node cards: `jobRecovering` was added that way and is passed by 1 of
           98 call sites, so its chrome has never reached a user. */}
       <NodePolicyOverlay nodeId={id} />
+      {/* "Reconnecting…" while this node's job cannot be read. Mounted here
+          for the same reason as the overlay above: every card, no prop. */}
+      <NodeConnectionBadge nodeId={id} />
       {(!hideHeader || isSkipped) && (
         <div
           className={cn(

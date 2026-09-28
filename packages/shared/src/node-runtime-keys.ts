@@ -28,6 +28,10 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // below. Without the transient half, a flip into review marks a passive tab
   // dirty and a preset captures "awaiting review".
   "jobAwaitingReview",
+  // The editor cannot reach the server to read this node's job. The job keeps
+  // running and the watch keeps polling. Pure run state, cleared by the next
+  // check that gets through, so it is ALSO in TRANSIENT_RUNTIME_KEYS below.
+  "jobConnectionLost",
   "isStreaming",
   "generatedImageUrl",
   "generatedVideoUrl",
@@ -115,6 +119,7 @@ export const TRANSIENT_RUNTIME_KEYS: ReadonlySet<string> = new Set([
   "currentJobId",
   "currentJobProgress",
   "jobAwaitingReview",
+  "jobConnectionLost",
   "isStreaming",
   "subWorkflowProgress",
   "__listTotal",

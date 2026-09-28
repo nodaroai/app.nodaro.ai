@@ -252,6 +252,7 @@ Calls `POST /v1/ai-writer/generate-stream` via SSE (bypasses proxy). Returns `{ 
 | `executeNode()` | `execute-node.ts` | Main dispatch for all ~40+ node types |
 | `resolveNodeInputs()` | `node-input-resolver.ts` | Wire upstream outputs into node inputs |
 | `pollJobToCompletion()` | `poll-job.ts` | Generic job polling with status updates |
+| `shouldStopPolling()` | `poll-connection.ts` | The ONLY give-up rule for job poll loops. A failed status check never fails the node: past the threshold the node shows "Reconnecting…" (`jobConnectionLost`, rendered once by BaseNode) and keeps polling. Only a job the server says is gone (403/404/410) ends the watch, and the node then carries a message. `poll-connection-guard.test.ts` fails the build on any other comparison against `MAX_CONSECUTIVE_POLL_FAILURES`. |
 
 ### Skip Node
 - Right-click or multi-select to skip/unskip. Visual: opacity-40 + dashed border + orange SKIP badge.

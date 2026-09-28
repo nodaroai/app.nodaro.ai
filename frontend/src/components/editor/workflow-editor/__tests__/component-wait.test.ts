@@ -48,6 +48,8 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: {
     getState: () => ({
       workflowId: "wf-1",
+      // The real store's shape: the connection-lost flag writer reads it.
+      nodes: [],
       updateNodeData: (_id: string, patch: Record<string, unknown>) => Object.assign(h.nodeData, patch),
     }),
   },

@@ -265,12 +265,12 @@ import type {
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
-  MAX_CONSECUTIVE_POLL_FAILURES,
   checkStorageError,
   updateProgressIfChanged,
   videoAuditAnalysisWired,
   type ExecutionContext,
 } from "./types";
+import { jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { iterationIdempotencyKey } from "@/lib/idempotency-key";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES, VIDEO_URL_RE } from "./execution-graph";
@@ -2511,7 +2511,7 @@ function executeNodeCore(
                   }
                 } catch (err) {
                   pollFailures++;
-                  if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                  if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                     ctx.untrackInterval(poll);
                     if (shouldAbandonNode(node.id, jobId)) {
                       resolve("");
@@ -2519,8 +2519,10 @@ function executeNodeCore(
                     }
                     updateNodeData(node.id, {
                       executionStatus: "failed",
+                      errorMessage: jobGoneMessage(),
                       currentJobId: undefined,
                       currentJobProgress: undefined,
+                      jobConnectionLost: undefined,
                     });
                     guardedToast.error(tx("nodeRun.failedToCheckPlanningStatus"));
                     reject(err);
@@ -3921,7 +3923,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -3930,8 +3932,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckAlignmentStatus"));
                   reject(err);
@@ -4047,7 +4051,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -4056,8 +4060,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckVideoAnalysis"));
                   reject(err);
@@ -4183,7 +4189,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -4192,8 +4198,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckAIAudit"));
                   reject(err);
@@ -4415,7 +4423,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -4424,8 +4432,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckLyricsStatus"));
                   reject(err);
@@ -4932,7 +4942,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -4941,8 +4951,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckTranscriptionStatus"));
                   reject(err);
@@ -6234,7 +6246,7 @@ function executeNodeCore(
                     }
                   } catch (err) {
                     pollFailures++;
-                    if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                    if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                       ctx.untrackInterval(interval);
                       // Final verification: completion may have raced the
                       // network blip — re-fetch once before giving up.
@@ -6448,7 +6460,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write result/failure to canvas.
@@ -6487,9 +6499,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
-                    errorMessage: "Failed to check status — network error",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckGenerateMask"));
                   reject(err);
@@ -6895,7 +6908,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     resolve("");
@@ -6903,8 +6916,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckEditPlan"));
                   reject(err);
@@ -7152,7 +7167,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     resolve("");
@@ -7160,8 +7175,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckSilenceDetect"));
                   reject(err);
@@ -7259,7 +7276,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     resolve("");
@@ -7267,8 +7284,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckAudioSync"));
                   reject(err);

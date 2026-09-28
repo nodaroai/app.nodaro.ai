@@ -28,10 +28,10 @@ import type {
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
-  MAX_CONSECUTIVE_POLL_FAILURES,
   checkStorageError,
   type ExecutionContext,
 } from "./types";
+import { jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, RUN_START_RESET } from "./poll-job";
 import { shouldAbandonNode } from "./abandon-guard";
 import { tx } from "@/lib/i18n";
@@ -606,7 +606,7 @@ export function runScriptGeneration(
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
@@ -615,7 +615,9 @@ export function runScriptGeneration(
                 }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
                 guardedToast.error(tx("nodeRun.failedToCheckScriptGeneration"));
                 reject(err);
@@ -732,7 +734,7 @@ export function runLottiePlanGeneration(
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
@@ -741,7 +743,9 @@ export function runLottiePlanGeneration(
                 }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
                 guardedToast.error(tx("nodeRun.failedToCheckLottieGeneration"));
                 reject(err);

@@ -16,11 +16,11 @@ import { spendableCredits, type CreditAllowance } from "@/lib/spendable-credits"
 import { BILLING_SURFACE_QUERY_KEY, type BillingSurface } from "@/lib/billing-surface";
 import type { GeneratedResult, WorkflowNode, WorkflowEdge, JobErrorHint, Scene3DRevisionEntry } from "@/types/nodes";
 import {
-  MAX_CONSECUTIVE_POLL_FAILURES,
   isExecutableNode,
   type ExecutionContext,
   type RunConfirmInfo,
 } from "./types";
+import { connectionJustLost, jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { estimateRunCredits } from "./estimate-run-credits";
 import { wordTimingsPreflight } from "./add-captions-preflight";
 import { nestedWordTimingsPreflight } from "./sub-workflow-preflight";
@@ -901,9 +901,9 @@ export function restorePollingForRunningJobs(
               jobAwaitingReview: undefined,
             });
           }
-        } catch {
+        } catch (err) {
           pollFailures++;
-          if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+          if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
             ctx.untrackInterval(poll);
             if (shouldAbandonNode(nodeId, jobId)) {
               // Run discarded/replaced — don't write result/failure to canvas.
@@ -935,9 +935,11 @@ export function restorePollingForRunningJobs(
             } catch { /* final check also failed */ }
             updateNodeData(nodeId, {
               executionStatus: "failed",
+              errorMessage: jobGoneMessage(),
               currentJobId: undefined,
               currentJobProgress: undefined,
               jobAwaitingReview: undefined,
+              jobConnectionLost: undefined,
             });
           }
         }
@@ -1290,7 +1292,13 @@ export function streamBackendExecution(
         return;
       }
       pollFailures++;
-      if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES && !finished) {
+      // Not being able to reach the server says nothing about the run: keep
+      // polling, and say so once. Only an execution the server refuses to show
+      // (403/410 — 404 is handled above) ends the watch.
+      if (connectionJustLost(pollFailures) && !finished) {
+        toast.warning(tx("run.lostConnection"));
+      }
+      if (shouldStopPolling(err, pollFailures) && !finished) {
         // Final verification before giving up
         try {
           const finalExec = await getWorkflowExecution(executionId);
@@ -1316,7 +1324,7 @@ export function streamBackendExecution(
           }
         } catch { /* final check also failed */ }
         cleanup();
-        toast.error(tx("run.lostConnection"));
+        toast.error(tx("run.backendNoLongerExists"));
         return;
       }
     }

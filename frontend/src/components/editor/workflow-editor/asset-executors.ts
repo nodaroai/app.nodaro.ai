@@ -28,10 +28,10 @@ import type {
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
-  MAX_CONSECUTIVE_POLL_FAILURES,
   checkStorageError,
   type ExecutionContext,
 } from "./types";
+import { jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { pollJobToCompletion, guardedToast, getJobStatusLeanForNode, RUN_START_RESET } from "./poll-job";
 import { shouldAbandonNode } from "./abandon-guard";
 import { resolveCharacterAssets } from "./node-input-resolver";
@@ -193,21 +193,18 @@ export function runCharacterGeneration(
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
                   resolve("");
                   return;
                 }
-                const errMsg =
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to check job status";
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
-                  errorMessage: errMsg,
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
                 guardedToast.error(tx("nodeRun.failedToCheckJobStatus"));
                 reject(err);
@@ -364,21 +361,18 @@ export function runFaceGeneration(
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
                   resolve("");
                   return;
                 }
-                const errMsg =
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to check job status";
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
-                  errorMessage: errMsg,
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
                 guardedToast.error(tx("nodeRun.failedToCheckJobStatus"));
                 reject(err);
@@ -559,21 +553,18 @@ export function runObjectGeneration(
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
                   resolve("");
                   return;
                 }
-                const errMsg =
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to check job status";
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
-                  errorMessage: errMsg,
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
                 guardedToast.error(tx("nodeRun.failedToCheckJobStatus"));
                 reject(err);
@@ -755,21 +746,18 @@ export function runCreatureGeneration(
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
                   resolve("");
                   return;
                 }
-                const errMsg =
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to check job status";
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
-                  errorMessage: errMsg,
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
                 guardedToast.error(tx("nodeRun.failedToCheckJobStatus"));
                 reject(err);
@@ -924,7 +912,7 @@ export function runLocationGeneration(
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
@@ -933,7 +921,9 @@ export function runLocationGeneration(
                 }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
                 guardedToast.error(tx("nodeRun.failedToCheckJobStatus"));
                 reject(err);
