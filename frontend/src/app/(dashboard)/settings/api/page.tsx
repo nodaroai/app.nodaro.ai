@@ -35,10 +35,12 @@ import { surfacePlatformLinks } from "@/lib/surface-selectors"
 import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { formatDate } from "@/lib/i18n/format"
+import { useDocsPageUrl } from "@/lib/node-docs/node-docs"
 
 export default function ApiSettingsPage() {
   const t = useT()
   const isRtl = useAppDir() === "rtl"
+  const docsPageUrl = useDocsPageUrl()
   const { user, loading: authLoading } = useAuth()
   const { data: tokens, isLoading } = useApiTokens()
   const createMutation = useCreateApiTokenMutation()
@@ -251,11 +253,11 @@ export default function ApiSettingsPage() {
               <span> {t("apiTok.openapiDesc")}</span>
             </li>
             {surfacePlatformLinks() && <li>
-              <a className="text-primary hover:underline" href="https://nodaroai.github.io/app.nodaro.ai/api-integration.html" target="_blank" rel="noreferrer">{t("apiTok.guideLink")}</a>
+              <a className="text-primary hover:underline" href={docsPageUrl("developers/api")} target="_blank" rel="noreferrer">{t("apiTok.guideLink")}</a>
               <span> {t("apiTok.guideDesc")}</span>
             </li>}
             {surfacePlatformLinks() && <li>
-              <a className="text-primary hover:underline" href="https://nodaroai.github.io/app.nodaro.ai/mcp/" target="_blank" rel="noreferrer">{t("apiTok.mcpLink")}</a>
+              <a className="text-primary hover:underline" href={docsPageUrl("mcp")} target="_blank" rel="noreferrer">{t("apiTok.mcpLink")}</a>
               <span> {t("apiTok.mcpDesc")}</span>
             </li>}
           </ul>

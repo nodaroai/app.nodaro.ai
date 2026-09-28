@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useT } from "@/lib/i18n"
+import { nodeDocsLinksShown, useDocsPageUrl } from "@/lib/node-docs/node-docs"
 
 // Cloud serves MCP from its own subdomain; a self-host serves it from the
 // instance the user is already looking at. Handing a self-hoster the cloud URL
@@ -17,6 +18,7 @@ const MCP_URL = isCloud()
 
 export default function McpPage() {
   const t = useT()
+  const docsPageUrl = useDocsPageUrl()
   const [copied, setCopied] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -70,12 +72,14 @@ export default function McpPage() {
           {t("mcp.pasteHint")}
         </p>
 
-        <a
-          href="https://nodaroai.github.io/app.nodaro.ai/mcp/"
-          className="mt-8 inline-block underline text-sm"
-        >
-          {t("mcp.readDocs")}
-        </a>
+        {nodeDocsLinksShown() && (
+          <a
+            href={docsPageUrl("mcp")}
+            className="mt-8 inline-block underline text-sm"
+          >
+            {t("mcp.readDocs")}
+          </a>
+        )}
       </main>
     </div>
   )

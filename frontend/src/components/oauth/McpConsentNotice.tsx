@@ -1,6 +1,7 @@
 import type { FC } from "react"
 import type { DeveloperAppKind } from "@nodaro/sdk"
 import { useT } from "@/lib/i18n"
+import { nodeDocsLinksShown, useDocsPageUrl } from "@/lib/node-docs/node-docs"
 
 export type { DeveloperAppKind }
 
@@ -20,19 +21,25 @@ export interface McpConsentNoticeProps {
  */
 export const McpConsentNotice: FC<McpConsentNoticeProps> = ({ kind, clientName }) => {
   const t = useT()
+  const docsPageUrl = useDocsPageUrl()
   if (kind !== "dynamic_mcp") return null
   return (
     <div className="rounded-md border-s-4 border-orange-400 bg-orange-50 dark:bg-orange-950/40 p-3 my-3">
       <p className="text-sm text-orange-900 dark:text-orange-200">
-        <strong>{t("oauth.mcpClaimed", { name: clientName })}</strong> {t("oauth.mcpSelfReported")}{" "}
-        <a
-          href="/docs/mcp/troubleshooting"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline"
-        >
-          {t("common.learnMore")}
-        </a>
+        <strong>{t("oauth.mcpClaimed", { name: clientName })}</strong> {t("oauth.mcpSelfReported")}
+        {nodeDocsLinksShown() && (
+          <>
+            {" "}
+            <a
+              href={docsPageUrl("mcp/troubleshooting")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              {t("common.learnMore")}
+            </a>
+          </>
+        )}
       </p>
     </div>
   )

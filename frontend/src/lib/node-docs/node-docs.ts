@@ -59,6 +59,25 @@ export function docsUrlForNode(type: string, opts: { section?: NodeDocsSection; 
   return `${NODE_DOCS_ORIGIN}/docs/node/${encodeURIComponent(type)}?${query.toString()}${hash}`
 }
 
+/**
+ * The link to any other page of the public docs, by its path under `/docs/`
+ * (`"mcp"`, `"mcp/troubleshooting"`, `"developers/api"`). Same origin, `ref`
+ * and language rules as a node page; the same `nodeDocsLinksShown()` gate.
+ */
+export function docsUrlForPage(path: string, opts: { lang?: string } = {}): string {
+  const query = new URLSearchParams()
+  if (opts.lang) query.set("lang", opts.lang)
+  query.set("ref", "app")
+  const clean = path.replace(/^\/+|\/+$/g, "")
+  return `${NODE_DOCS_ORIGIN}/docs${clean ? `/${clean}` : ""}?${query.toString()}`
+}
+
+/** `docsUrlForPage` with the interface language bound. */
+export function useDocsPageUrl(): (path: string) => string {
+  const lang = useUserLocale()
+  return useCallback((path: string) => docsUrlForPage(path, { lang }), [lang])
+}
+
 /** The sections the node's page has, in page order. Empty for a type with no page. */
 export function nodeDocsSections(type: string): readonly NodeDocsSection[] {
   return NODE_DOCS_SECTIONS[NODE_DOCS_ALIASES[type] ?? type] ?? []

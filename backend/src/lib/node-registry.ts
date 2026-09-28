@@ -30,6 +30,9 @@ import type { ChargedPrices } from "./pricing/charged-prices.js"
 // exported so `__tests__/node-registry-credit-bands.test.ts` can prove every
 // declared band is the derivation and every named id is really priced.
 
+/** Text to Speech's advertised models: the route's ids that are catalog models. */
+const TTS_CATALOG_PROVIDERS: string[] = TTS_PROVIDERS.filter((id) => MODEL_CATALOG[id] !== undefined)
+
 /** Snapshot of the price table's keys, for the prefix scans below. */
 const STATIC_CREDIT_IDS = Object.keys(STATIC_CREDIT_COSTS)
 
@@ -796,12 +799,16 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     description: "Synthesize speech from text using ElevenLabs.",
     outputType: "audio",
     creditCost: creditBandFor("text-to-speech"),
-    providers: ["eleven_v3", "eleven_turbo_v2_5", "eleven_multilingual_v2"],
+    // The ids the route takes (`provider` on /v1/text-to-speech) and the model
+    // catalog lists — never ElevenLabs' own wire names (eleven_v3 …), which the
+    // route rejects. The legacy `elevenlabs` alias stays accepted but is not
+    // advertised: it is not a catalog model.
+    providers: TTS_CATALOG_PROVIDERS,
     inputSchema: {
       fields: [
         { key: "text", type: "text", required: true },
         { key: "voiceId", type: "text" },
-        { key: "model", type: "select", options: ["eleven_v3", "eleven_turbo_v2_5", "eleven_multilingual_v2"] },
+        { key: "provider", type: "select", options: TTS_CATALOG_PROVIDERS },
       ],
     },
   },

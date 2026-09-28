@@ -149,7 +149,13 @@ export function invalidateAuthCache(userId: string): void {
 // Public route whitelist — no auth required
 // ---------------------------------------------------------------------------
 
-const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
+/**
+ * `bearer: true` marks a route the hook lets through that still checks a
+ * bearer itself (the MCP transport's OAuth, the API-token lane). Every other
+ * public route needs no credential at all — what the OpenAPI document tells
+ * callers (`isAnonymousRoute`).
+ */
+const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; bearer?: true }[] = [
   { path: "/health" },
   // Version + update availability — presence data only, same class as /health.
   { path: "/v1/version" },
@@ -269,8 +275,8 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   // to discover OAuth via /.well-known/oauth-protected-resource.
   // Valid ndr_app_* and Supabase JWT tokens still resolve userId in the middleware
   // (per existing public-route token-handling logic).
-  { method: "POST", path: "/mcp" },
-  { method: "GET", path: "/mcp" },
+  { method: "POST", path: "/mcp", bearer: true },
+  { method: "GET", path: "/mcp", bearer: true },
   // Upload proxy: token in URL path is HMAC-signed and authoritative,
   // route validates internally. No bearer-token needed.
   { method: "PUT", path: "/v1/upload-proxy/", prefix: true },
@@ -282,20 +288,27 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   // IMPORTANT: trailing slash is deliberate — "/v1/api/" matches "/v1/api/run", "/v1/api/schema", etc.
   // but NOT "/v1/api-tokens" (CRUD routes that require JWT auth).
   // These routes authenticate via Bearer token (API token), not JWT.
-  { path: "/v1/api/", prefix: true },
+  { path: "/v1/api/", prefix: true, bearer: true },
 ]
 
-function isPublicRoute(method: string, url: string): boolean {
+function matchPublicRoute(method: string, url: string): (typeof PUBLIC_ROUTES)[number] | undefined {
   const path = url.split("?")[0] ?? url
   for (const route of PUBLIC_ROUTES) {
     if (route.method && route.method !== method) continue
-    if (route.prefix) {
-      if (path.startsWith(route.path)) return true
-    } else {
-      if (path === route.path) return true
-    }
+    if (route.prefix ? path.startsWith(route.path) : path === route.path) return route
   }
-  return false
+  return undefined
+}
+
+function isPublicRoute(method: string, url: string): boolean {
+  return matchPublicRoute(method, url) !== undefined
+}
+
+/** A route that takes no credential at all: public, and not one that checks a
+ *  bearer itself. The OpenAPI document marks these `security: []`. */
+export function isAnonymousRoute(method: string, url: string): boolean {
+  const route = matchPublicRoute(method, url)
+  return route !== undefined && route.bearer !== true
 }
 
 /** Test-only accessor for the private public-route matcher (the query-string

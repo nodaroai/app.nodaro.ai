@@ -8,12 +8,11 @@ import { getMyApps } from "@/lib/api"
 import { isMultiUser } from "@/lib/edition"
 import { useT, type MessageKey } from "@/lib/i18n"
 import { surfaceNavHidden, surfacePlatformLinks } from "@/lib/surface-selectors"
+import { useDocsPageUrl } from "@/lib/node-docs/node-docs"
 import { cn } from "@/lib/utils"
 import { SectionTitle } from "./home-section"
 import { HOME_OUTLINE_BUTTON, HOME_QUIET_LINK } from "./home-ui"
 import { computePathProgress, derivePathSignals, type PathLevel, type PathStepId } from "./your-path-progress"
-
-const DOCS_URL = "https://nodaroai.github.io/app.nodaro.ai/"
 
 /** The MiniApps page's "My apps" cache entry — one request serves both. */
 const MY_APPS_QUERY_KEY = ["my-apps"] as const
@@ -37,6 +36,7 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
 /** "Your path" on the Explore tab: the first-run milestones and the docs. */
 export function YourPathSection() {
   const t = useT()
+  const docsPageUrl = useDocsPageUrl()
   const { user } = useAuth()
   const { data: stats } = useStats("user", user?.id)
   const { data: workflows } = useMyWorkflows()
@@ -113,7 +113,7 @@ export function YourPathSection() {
             <div className="text-xl font-bold text-[var(--home-strong)]">{t("home.docs.title")}</div>
             <p className="mt-1.5 max-w-[320px] text-pretty text-[13px] text-[var(--home-muted)]">{t("home.docs.body")}</p>
             <a
-              href={DOCS_URL}
+              href={docsPageUrl("")}
               target="_blank"
               rel="noopener noreferrer"
               className={cn(HOME_OUTLINE_BUTTON, "mt-3.5")}
