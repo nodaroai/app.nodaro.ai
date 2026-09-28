@@ -1827,6 +1827,38 @@ describe("text-to-video", () => {
 // generate-video (negative handle parity — synthetic alias to t2v/i2v)
 // ---------------------------------------------------------------------------
 
+describe("generate-image — Settings input", () => {
+  const settingsNodes = [
+    { id: "ratio", type: "aspect-ratio", data: { label: "Aspect Ratio", ratio: "9:16" } },
+    { id: "nb", type: "provider", data: { label: "Provider", category: "image", provider: "nano-banana" } },
+    { id: "veo", type: "provider", data: { label: "Video model", category: "video", provider: "veo3" } },
+  ]
+  const wire = (source: string) => ({ id: `e-${source}`, source, target: "n1", targetHandle: "settings" })
+
+  it("runs the wired model at the wired ratio", async () => {
+    const node = makeNode("generate-image", { provider: "nano-banana-pro", aspectRatio: "16:9" })
+    mockNodes = [node, ...settingsNodes]
+    mockEdges = [wire("ratio"), wire("nb")]
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a cat" })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    mockCollectAncestorRefs.mockReturnValue([])
+    await executeNode(node, makeCtx())
+    const call = mockRunImageGeneration.mock.calls[0]
+    expect(call[4]).toBe("nano-banana")
+    expect(call[5]).toBe("9:16")
+  })
+
+  it("refuses a wired video model before any request", async () => {
+    const node = makeNode("generate-image", { provider: "nano-banana-pro" })
+    mockNodes = [node, ...settingsNodes]
+    mockEdges = [wire("veo")]
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a cat" })
+    await expect(executeNode(node, makeCtx())).rejects.toThrow()
+    expect(mockRunImageGeneration).not.toHaveBeenCalled()
+    expect(mockToastError).toHaveBeenCalled()
+  })
+})
+
 describe("generate-video — Settings input", () => {
   const settingsNodes = [
     { id: "ratio", type: "aspect-ratio", data: { label: "Aspect Ratio", ratio: "4:5" } },

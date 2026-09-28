@@ -7,10 +7,11 @@
  * renamed from `subjects` → `assets`. Legacy edge handles (`style`,
  * `cinematography`, `subjects`) are migrated on load by source type.
  */
-import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, SETTINGS_INPUT_HANDLE, settingsInputAccepts } from "@nodaro/shared"
 import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
 
-export const GENERATE_IMAGE_INPUT_HANDLES = ["prompt", "negative", "references", "assets", "elements", "look"] as const
+// + the Settings input (Aspect Ratio / Provider), one input for all.
+export const GENERATE_IMAGE_INPUT_HANDLES = ["prompt", "negative", "references", "assets", "elements", "look", SETTINGS_INPUT_HANDLE] as const
 
 export type GenerateImageInputHandle = typeof GENERATE_IMAGE_INPUT_HANDLES[number]
 
@@ -244,6 +245,8 @@ export function isValidGenerateImageConnection(
     case "style":
       // Legacy: accept any picker (pre-migration backwards compat).
       return isPickerType(sourceNodeType)
+    case SETTINGS_INPUT_HANDLE:
+      return settingsInputAccepts("generate-image", sourceNodeType)
     default:
       // Unknown handle (legacy or external) — let it through; other validators
       // may still reject. Defensive default.

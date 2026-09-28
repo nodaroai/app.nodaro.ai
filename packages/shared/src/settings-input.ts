@@ -13,8 +13,8 @@
  * is one row here.
  */
 
-import { MODEL_CATALOG, normalizeVideoRequestParams } from "./model-catalog.js"
-import { DEFAULT_VIDEO_PROVIDER, GVP_DEFAULT_PROVIDER, GVP_SUPPORTED_PROVIDERS, VIDEO_GEN_PROVIDERS } from "./model-constants.js"
+import { MODEL_CATALOG, fitAspectRatioToModel } from "./model-catalog.js"
+import { DEFAULT_VIDEO_PROVIDER, GVP_DEFAULT_PROVIDER, GVP_SUPPORTED_PROVIDERS, IMAGE_GEN_PROVIDERS, VIDEO_GEN_PROVIDERS } from "./model-constants.js"
 import { getParameterValue } from "./parameter-node-value.js"
 import { isAutoVideoDuration } from "./video-duration-auto.js"
 
@@ -37,24 +37,27 @@ export type SettingsField = (typeof SETTINGS_SOURCE_FIELDS)[SettingsSourceType]
  * - `models`: the models a wired Provider may name — a Provider node can hold
  *   any category's model, and this node runs only these;
  * - `defaultModel`: the model it renders with when its data names none;
- * - `duration`: how it takes a wired Duration. "model" fits the length to one
- *   the model renders (a Duration node holds a script's length, 60 s by
- *   default, while one clip is 4–30 s). "total" keeps it: Generate Video Pro
- *   stitches segments to reach the requested total, and its engine clamps
- *   that total to the range the model's segment lengths allow;
- * - `fitAspectRatio`: a wired ratio as the model renders it — the lane's own
- *   normalizer, which the run applies again (idempotent), so the node shows
- *   the ratio the run uses.
+ * - `duration` (when it takes one): how it takes a wired Duration. "model"
+ *   fits the length to one the model renders (a Duration node holds a
+ *   script's length, 60 s by default, while one clip is 4–30 s). "total"
+ *   keeps it: Generate Video Pro stitches segments to reach the requested
+ *   total, and its engine clamps that total to the range the model's segment
+ *   lengths allow;
+ * - `modelList`: the field holding the node's several models, when it can run
+ *   more than one per run (Generate Image's `providers`, one image each). A
+ *   wired Provider sets THE model, so the list becomes that one model.
+ *
+ * A wired Aspect Ratio is fitted to the model by `fitAspectRatioToModel`, the
+ * rule the video lane's normalizer applies (and a still-valid ratio passes
+ * every later normalizer unchanged), so the node shows the ratio it runs with.
  */
 interface SettingsConsumer {
   readonly accepts: readonly SettingsSourceType[]
   readonly models: readonly string[]
   readonly defaultModel: string
-  readonly duration: "model" | "total"
-  readonly fitAspectRatio: (model: string, ratio: string) => string | undefined
+  readonly duration?: "model" | "total"
+  readonly modelList?: string
 }
-
-const fitVideoAspectRatio = (model: string, ratio: string) => normalizeVideoRequestParams(model, { aspectRatio: ratio }).aspectRatio
 
 const VIDEO_SETTINGS: readonly SettingsSourceType[] = ["aspect-ratio", "duration", "provider"]
 
@@ -64,7 +67,6 @@ const SETTINGS_CONSUMERS: Readonly<Record<string, SettingsConsumer>> = {
     models: VIDEO_GEN_PROVIDERS,
     defaultModel: DEFAULT_VIDEO_PROVIDER,
     duration: "model",
-    fitAspectRatio: fitVideoAspectRatio,
   },
   // Generate Video Pro has Generate Video's handles by construction
   // (generate-video-pro-handles.ts re-exports them), so it takes the same
@@ -74,7 +76,15 @@ const SETTINGS_CONSUMERS: Readonly<Record<string, SettingsConsumer>> = {
     models: GVP_SUPPORTED_PROVIDERS,
     defaultModel: GVP_DEFAULT_PROVIDER,
     duration: "total",
-    fitAspectRatio: fitVideoAspectRatio,
+  },
+  // A still image has no length, so no Duration.
+  "generate-image": {
+    accepts: ["aspect-ratio", "provider"],
+    models: IMAGE_GEN_PROVIDERS,
+    // The node's own default (NODE_DEFINITIONS) — only used to fit a wired
+    // ratio when the node names no model.
+    defaultModel: "nano-banana-pro",
+    modelList: "providers",
   },
 }
 
@@ -180,8 +190,10 @@ export type SettingsInputProblem = { readonly kind: "provider-not-accepted"; rea
  * - a wired Provider must name a model this consumer runs: a Provider node set
  *   to an image model cannot drive Generate Video, and the run refuses with
  *   `problem` rather than sending an image model to the video provider;
+ * - a wired Provider on a node that runs several models per run replaces the
+ *   list with its one model (see `SettingsConsumer.modelList`);
  * - a wired Duration is fitted to the model (see `SettingsConsumer.duration`);
- * - a wired Aspect Ratio is fitted to the model by the lane's own normalizer.
+ * - a wired Aspect Ratio is fitted to the model (`fitAspectRatioToModel`).
  */
 export function applySettingsInput(
   consumerType: string,
@@ -201,6 +213,7 @@ export function applySettingsInput(
     if (!consumer.models.includes(value)) {
       return { data: next, problem: { kind: "provider-not-accepted", sourceId: providerSource.sourceId, value } }
     }
+    if (consumer.modelList) next = { ...next, [consumer.modelList]: [value] }
   }
 
   const model = (typeof next.provider === "string" && next.provider) || consumer.defaultModel
@@ -210,8 +223,7 @@ export function applySettingsInput(
     if (Number.isFinite(seconds)) next = { ...next, duration: snapToModelDuration(model, seconds) }
   }
   if (connected.some((c) => c.sourceType === "aspect-ratio") && typeof next.aspectRatio === "string") {
-    const fitted = consumer.fitAspectRatio(model, next.aspectRatio)
-    if (fitted) next = { ...next, aspectRatio: fitted }
+    next = { ...next, aspectRatio: fitAspectRatioToModel(model, next.aspectRatio) }
   }
   return { data: next }
 }
@@ -258,4 +270,35 @@ export function resolveWiredSettings(
   }
   const applied = applySettingsInput(consumerType, consumerId, next, edges, typeOf)
   return applied.problem ? { data: applied.data, wired, problem: applied.problem } : { data: applied.data, wired }
+}
+
+interface SettingsNodeLike {
+  readonly id?: string
+  readonly type?: string | null
+  readonly data?: unknown
+}
+
+interface SettingsEdgeLike {
+  readonly source?: string
+  readonly target: string
+  readonly targetHandle?: string | null
+}
+
+/**
+ * `node` as it runs, for the readers that plan or price a run before any
+ * resolver: the workflow estimates, the Run price, and the fan-out plan (a
+ * wired Provider turns a several-model image run into one). A node with no
+ * Settings input — or a caller without the graph — gets `node` back as is.
+ */
+export function withWiredSettings<T extends SettingsNodeLike>(
+  node: T,
+  nodes?: ReadonlyArray<SettingsNodeLike>,
+  edges?: ReadonlyArray<SettingsEdgeLike>,
+): T {
+  const type = node.type ?? ""
+  if (!nodes || !edges || !node.id || !SETTINGS_CONSUMERS[type]) return node
+  const graphNodes = nodes.flatMap((n) => (n.id ? [{ id: n.id, type: n.type, data: n.data }] : []))
+  const graphEdges = edges.map((e) => ({ source: e.source ?? "", target: e.target, targetHandle: e.targetHandle }))
+  const { data } = resolveWiredSettings(node.id, type, (node.data ?? {}) as Record<string, unknown>, graphNodes, graphEdges)
+  return { ...node, data }
 }

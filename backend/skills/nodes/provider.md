@@ -33,14 +33,15 @@ generated_from: 261eeb7ee
 
 ## When to use
 
-Chooses the model of the node it is wired into. Set `category` (`image` or `video`) and `provider` to a model id from that category (`list_models`), then wire the `provider` output into a node's `settings` input (Generate Video, Generate Video Pro). The value replaces that node's own `provider` at run time; one Provider node can drive several nodes.
+Chooses the model of the node it is wired into. Set `category` (`image` or `video`) and `provider` to a model id from that category (`list_models`), then wire the `provider` output into a node's `settings` input — Generate Image for an image model; Generate Video or Generate Video Pro for a video model. The value replaces that node's own `provider` at run time; one Provider node can drive several nodes.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas
 
-- The model must be one the wired node runs: a Provider set to an image model (or to a video model Generate Video Pro doesn't offer) makes that node's run stop before anything is charged, naming the Provider node.
+- The model must be one the wired node runs: an image model on a video node (or the reverse), or a video model Generate Video Pro doesn't offer, makes that node's run stop before anything is charged, naming the Provider node.
+- On a Generate Image node set to several models (`providers`), a wired Provider replaces the list: the node runs only the wired model, once.
 - `model` is unused; older Provider nodes may still carry it next to a vendor name, and the settings panel moves them to a real model.
 
 <!-- AUTO-GEN:START examples -->

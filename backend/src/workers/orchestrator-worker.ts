@@ -63,7 +63,7 @@ import type {
 } from "../services/workflow-engine/types.js"
 import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs, workflowCapMs } from "../lib/job-budget.js"
 import { executionBudgetExcessMs } from "../lib/execution-budget.js"
-import { filterCloneNodes, PARAMETER_NODE_TYPES, migrateEdgeOutputMode, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, planFanOut, type FanOutPlan, decodeProviderItem, calculateMonetizationMarkup, resolveEffectiveTier } from "@nodaro/shared"
+import { filterCloneNodes, PARAMETER_NODE_TYPES, migrateEdgeOutputMode, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, planFanOut, type FanOutPlan, decodeProviderItem, calculateMonetizationMarkup, resolveEffectiveTier, withWiredSettings } from "@nodaro/shared"
 import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts"
 import { applyInputOverridesToNodes } from "./apply-input-overrides.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
@@ -1146,10 +1146,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
 
           // Check for list fan-out input. The plan pins every iteration to the
           // ROW it reads and carries the handle the driving list is wired to.
+          // Planned on the node as it runs: a Provider wired into its
+          // Settings input makes a several-model image run one model.
           const expanded = planFanOut(
             getListFanOutForNode(node, edges, nodeStates, nodes, triggerData),
             node.type,
-            node.data as Record<string, unknown>,
+            withWiredSettings(node, nodes, edges).data as Record<string, unknown>,
           )
 
           let result: ExecuteNodeResult

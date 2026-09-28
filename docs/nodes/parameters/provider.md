@@ -20,24 +20,24 @@ Provider nodes saved before the node offered real models may hold a vendor name 
 - `in` -- optional upstream input (rarely used; Provider is typically a root parameter node)
 
 **Outputs:**
-- `provider` -- the model id. Connect it to the **Settings** input of [Generate Video](../ai-video/generate-video.md#settings-input) or [Generate Video Pro](../ai-video/generate-video-pro.md); it replaces the node's own model at run time, and the run is priced for that model.
+- `provider` -- the model id. Connect it to the **Settings** input of [Generate Image](../ai-image/generate-image.md) (an image Provider), or of [Generate Video](../ai-video/generate-video.md#settings-input) or [Generate Video Pro](../ai-video/generate-video-pro.md) (a video Provider); it replaces the node's own model at run time, and the run is priced for that model. A Generate Image node set to several models runs only the wired one.
 
 ## Supported Providers
 
 - **Image**: the Generate Image models.
 - **Video**: the Generate Video models. Generate Video Pro runs a subset of them (see its page).
 
-The model must be one the wired node runs. A Provider set to an image model — or to a video model Generate Video Pro doesn't offer — stops that node's run before anything is charged, and the error names the Provider node. The node's chips show the problem in red before you run.
+The model must be one the wired node runs. A Provider set to an image model on a video node (or the reverse), or to a video model Generate Video Pro doesn't offer, stops that node's run before anything is charged, and the error names the Provider node. The node's chips show the problem in red before you run.
 
 ## Best Practices
 
 - Use one Provider node when several generation nodes should use the same model -- changing it updates every connected node at once.
-- Set the category to match the nodes it drives: a video Provider for Generate Video and Generate Video Pro.
+- Set the category to match the nodes it drives: an image Provider for Generate Image, a video Provider for Generate Video and Generate Video Pro.
 - To compare models, duplicate the Provider node with different selections rather than repeatedly changing a single node.
 
 ## Common Use Cases
 
-- Switching every video node in a workflow from a fast draft model to a production model by changing one node.
+- Switching every image or video node in a workflow from a fast draft model to a production model by changing one node.
 - A/B testing video models across the same workflow by swapping the Provider node.
 - Centralizing model selection for template workflows that are reused with different models.
 

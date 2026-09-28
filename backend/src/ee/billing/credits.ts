@@ -1,4 +1,4 @@
-import { usdToCredits, SETTINGS_INPUT_CONSUMERS, PARAMETER_NODE_TYPES, resolveWiredSettings } from "@nodaro/shared"
+import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -3406,20 +3406,6 @@ function sumWorkflowEstimate(
     })
     return sum + (chargedCredits(prices, modelId) ?? chargedCredits(prices, node.type) ?? 0)
   }, 0)
-}
-
-/**
- * The node as it runs, for pricing: a node with a Settings input carries the
- * wired Aspect Ratio / Duration / Provider — the resolution both run engines
- * apply before they reserve — so the estimate prices the model and length the
- * run reserves, never less. Without edges or an id the node is priced as stored.
- */
-function withWiredSettings(node: EstimateNode, nodes: ReadonlyArray<EstimateNode>, edges?: ReadonlyArray<EstimateEdge>): EstimateNode {
-  if (!edges || !node.id || !SETTINGS_INPUT_CONSUMERS[node.type]) return node
-  const graphNodes = nodes.flatMap((n) => (n.id ? [{ id: n.id, type: n.type, data: n.data }] : []))
-  const graphEdges = edges.map((e) => ({ source: e.source ?? "", target: e.target, targetHandle: e.targetHandle }))
-  const { data } = resolveWiredSettings(node.id, node.type, node.data ?? {}, graphNodes, graphEdges)
-  return { ...node, data }
 }
 
 /**

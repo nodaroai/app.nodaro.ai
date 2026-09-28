@@ -7,7 +7,8 @@ import { settingsInputFields } from "./settings-input.js"
  * mapped source's value verbatim.
  */
 export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> = {
-  "generate-image":      ["prompt", "style", "negativePrompt"],
+  // + the fields its Settings input sets (settings-input.ts).
+  "generate-image":      ["prompt", "style", "negativePrompt", ...settingsInputFields("generate-image")],
   "edit-image":          ["prompt", "style", "negativePrompt"],
   "image-to-image":      ["prompt", "style", "negativePrompt"],
   "modify-image":        ["prompt", "style", "negativePrompt"],

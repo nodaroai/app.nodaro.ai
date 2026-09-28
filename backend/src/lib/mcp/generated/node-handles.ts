@@ -62,7 +62,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "framing": { inputs: ["in", "picker-json"], outputs: ["out"] },
   "furniture": { inputs: ["in"], outputs: ["out"] },
   "generate-3d-scene": { inputs: ["references"], outputs: ["composition"] },
-  "generate-image": { inputs: ["prompt", "negative", "references", "assets", "elements", "look"], outputs: ["image"] },
+  "generate-image": { inputs: ["prompt", "negative", "references", "assets", "elements", "look", "settings"], outputs: ["image"] },
   "generate-mask": { inputs: ["image"], outputs: ["image", "mask"] },
   "generate-music": { inputs: ["prompt", "ref-audio", "audio-style"], outputs: ["audio"] },
   "generate-script": { inputs: ["prompt", "field-tone", "field-styleGuide", "field-sceneCount", "field-targetLength"], outputs: ["scenes", "images", "dialogue", "music", "sfx", "characters", "locations"] },

@@ -4,7 +4,7 @@ import { useT } from "@/lib/i18n"
 import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, LayoutGrid, Expand, Download, Link, Type, Pencil, Aperture, Minus, Users, Sparkles, RotateCcw } from "lucide-react"
+import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, LayoutGrid, Expand, Download, Link, Type, Pencil, Aperture, Minus, Users, Sparkles, RotateCcw, SlidersHorizontal } from "lucide-react"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidGenerateImageConnection } from "@/lib/generate-image-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
@@ -20,6 +20,7 @@ const ACCEPTS_REFERENCES = (t: string) => isValidGenerateImageConnection("refere
 const ACCEPTS_ASSETS     = (t: string) => isValidGenerateImageConnection("assets",     t, isPickerType)
 const ACCEPTS_ELEMENTS   = (t: string) => isValidGenerateImageConnection("elements",   t, isPickerType)
 const ACCEPTS_LOOK       = (t: string) => isValidGenerateImageConnection("look",       t, isPickerType)
+const ACCEPTS_SETTINGS   = (t: string) => isValidGenerateImageConnection(SETTINGS_INPUT_HANDLE, t, isPickerType)
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
@@ -42,7 +43,9 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { EditableNodeLabel } from "./editable-node-label"
-import { getModel } from "@nodaro/shared"
+import { getModel, SETTINGS_INPUT_HANDLE } from "@nodaro/shared"
+import { useWiredSettings } from "@/hooks/use-wired-settings"
+import { SettingsChips } from "./settings-chips"
 import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
 
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
@@ -68,6 +71,11 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const handleTop = (px: number) =>
     showInline ? `calc(100% - ${chromeHeight}px - ${px}px)` : `calc(100% - ${px}px)`
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
+  // What the node runs with once its Settings input is read (a wired Aspect
+  // Ratio / Provider — a Provider also makes a several-model node one model).
+  // Its chips, run strip and price read it, the resolution the engines apply.
+  const settings = useWiredSettings(id, "generate-image", nodeData as unknown as Record<string, unknown>)
+  const runData = settings.data as unknown as GenerateImageData
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -118,17 +126,17 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   // see the unified sizing effect in `base-node.tsx`. No per-node sizing
   // logic needed here.
   const creditModelId = buildCreditModelIdentifier(
-    nodeData.provider ?? "nano-banana-pro",
-    nodeData as unknown as Record<string, unknown>,
+    runData.provider ?? "nano-banana-pro",
+    runData as unknown as Record<string, unknown>,
   )
   // Single-provider primary cost (also primes the cache). Multi-provider total
   // is the SUM across all selected providers — `RunNodeButton` will further
   // multiply by repeatCount and any upstream-list fan-out, so we just supply
   // the per-press cost here.
   const primaryCredits = useModelCredits(creditModelId, 1)
-  const isMultiProvider = (nodeData.providers?.length ?? 0) >= 2
-  const providersForSum = isMultiProvider ? (nodeData.providers as readonly string[]) : []
-  const providerSum = useProvidersCreditsSum(providersForSum, nodeData as unknown as Record<string, unknown>)
+  const isMultiProvider = (runData.providers?.length ?? 0) >= 2
+  const providersForSum = isMultiProvider ? (runData.providers as readonly string[]) : []
+  const providerSum = useProvidersCreditsSum(providersForSum, runData as unknown as Record<string, unknown>)
   // While the multi-provider queries are still loading, providerSum is 0 — pass
   // 0 so RunNodeButton hides the credit pill rather than flashing a stale value.
   const credits = isMultiProvider ? providerSum : primaryCredits
@@ -367,6 +375,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         <GenerateImageQuickToolbar
           nodeId={id}
           data={nodeData}
+          settings={settings}
           credits={credits}
           isRunning={status === "running"}
           onAnyOpenChange={setToolbarDropdownOpen}
@@ -397,6 +406,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         { id: "assets",     type: "target", position: Position.Left,  customStyle: { top: handleTop(120), left: '-29px' }, external: true },
         { id: "elements",   type: "target", position: Position.Left,  customStyle: { top: handleTop(152), left: '-29px' }, external: true },
         { id: "look",       type: "target", position: Position.Left,  customStyle: { top: handleTop(184), left: '-29px' }, external: true },
+        { id: SETTINGS_INPUT_HANDLE, type: "target", position: Position.Left, customStyle: { top: handleTop(216), left: '-29px' }, external: true },
         { id: "image",      type: "source", position: Position.Right, customStyle: { top: '24px',          right: '-29px' }, external: true },
       ]}
     >
@@ -405,10 +415,16 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           `group` scope stays tight to the preview so result-hover controls work. */}
       <div className="relative w-full h-full group">
         {renderPreview()}
+        {/* The wired settings, always visible; over a result they give way to
+            its hover controls. */}
+        <SettingsChips
+          view={settings}
+          className={`absolute top-2 left-2 z-10 max-w-[calc(100%-16px)] transition-opacity ${activeUrl ? "group-hover:opacity-0 group-hover:pointer-events-none" : ""}`}
+        />
       </div>
     </BaseNode>
     {/* Generate Image v2.1 — typed handle pips stacked from bottom-up:
-        Prompt → Negative → References → Assets → Elements → Look.
+        Prompt → Negative → References → Assets → Elements → Look → Settings.
         Prompt is the primary (closest to bottom-left). "Look" + "Elements"
         replace the single legacy "Style"; "Assets" replaces "Subjects" —
         accepts split by registry family so the popup mirrors the picker
@@ -420,6 +436,8 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
     <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="assets"     type="target" position={Position.Left}  label="Assets"     color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top={handleTop(120)} orderMatters accepts={ACCEPTS_ASSETS} />
     <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="elements"   type="target" position={Position.Left}  label="Elements"   color={HANDLE_COLORS.look} icon={<Sparkles />}  side="left"  top={handleTop(152)} accepts={ACCEPTS_ELEMENTS} />
     <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="look"       type="target" position={Position.Left}  label="Look"       color={HANDLE_COLORS.look} icon={<Aperture />}  side="left"  top={handleTop(184)} accepts={ACCEPTS_LOOK} />
+    {/* Settings: the Aspect Ratio / Provider nodes, one input for all; the node lists what is wired as chips. */}
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId={SETTINGS_INPUT_HANDLE} type="target" position={Position.Left} label="Settings" color={HANDLE_COLORS.look} icon={<SlidersHorizontal />} side="left" top={handleTop(216)} accepts={ACCEPTS_SETTINGS} />
     {/* Output image shares the References color (#22D3EE) — both are "image" type. */}
     <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="image"      type="source" position={Position.Right} label="Image"      color={HANDLE_COLORS.image} icon={<ImageIcon />} side="right" top="24px" />
     {activeUrl && (

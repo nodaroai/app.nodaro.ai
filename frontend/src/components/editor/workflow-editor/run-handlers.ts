@@ -24,7 +24,7 @@ import {
 import { estimateRunCredits } from "./estimate-run-credits";
 import { wordTimingsPreflight } from "./add-captions-preflight";
 import { nestedWordTimingsPreflight } from "./sub-workflow-preflight";
-import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, unwrapEditPlanOutput } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, unwrapEditPlanOutput, withWiredSettings } from "@nodaro/shared"
 import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
@@ -564,7 +564,9 @@ export async function handleRunSingleNode(
   const expanded = planFanOut(
     getListFanOutForNode(node, currentNodes, currentEdges),
     node.type ?? "",
-    node.data as Record<string, unknown>,
+    // Planned on the node as it runs: a Provider wired into its Settings
+    // input makes a several-model image run one model.
+    withWiredSettings(node, currentNodes, currentEdges).data as Record<string, unknown>,
   );
 
   // One key per click of Run-on-this-node. Reused by all retries inside

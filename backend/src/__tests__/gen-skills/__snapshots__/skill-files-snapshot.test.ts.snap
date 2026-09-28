@@ -74,7 +74,7 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
   "node-data-shape": "**Type:** \`generate-image\`
 **Category:** ai
 **Credit cost:** \`2-620\` at list price — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's charged figure.
-**Inputs (target handles):** \`prompt\`, \`negative\`, \`references\`, \`assets\`, \`elements\`, \`look\`
+**Inputs (target handles):** \`prompt\`, \`negative\`, \`references\`, \`assets\`, \`elements\`, \`look\`, \`settings\`
 **Outputs (source handles):** \`image\`
 
 **Required data fields:**

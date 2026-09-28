@@ -38,7 +38,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `action-fx` | Action FX | parameter | Pick environmental effects (multi-pick) from the action-fx catalog (earthquake, lightning, explosion, falling-objects, ...) | `in`:any | `out`:look | NO |
 | `aesthetic` | Aesthetic / Microtrend | parameter | Pick a microtrend aesthetic from 46 entries (y2k, cottagecore, vaporwave, dark-academia, ...) | `in`:any | `out`:look | NO |
 | `animal` | Animal | parameter | Pick an animal from 126 entries across subcategories (mammal, bird, reptile, sea, insect, etc.) | `in`:any | `out`:look | NO |
-| `aspect-ratio` | Aspect Ratio | parameter | Set the aspect ratio of a Generate Video / Generate Video Pro node through its `settings` input | `in`:any | `ratio`:param | NO |
+| `aspect-ratio` | Aspect Ratio | parameter | Set the aspect ratio of a Generate Image / Generate Video / Generate Video Pro node through its `settings` input | `in`:any | `ratio`:param | NO |
 | `atmosphere` | Atmosphere | parameter | Pick an atmospheric condition from 40 entries (clear, fog, dust, rain, snow, smoke, ...) | `in`:any | `out`:look | NO |
 | `backdrop` | Backdrop | parameter | Pick a studio backdrop from 40 entries (white-seamless, cyc-wall, gradient, painted, ...) | `in`:any | `out`:look | NO |
 | `camera-format` | Camera / Film Stock | parameter | Pick a camera or film format from 31 entries (35mm-film, IMAX, super-8, polaroid, vhs, ...) | `in`:any, `picker-json`:picker-json | `out`:look | NO |
@@ -67,7 +67,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `photographer` | Photographer / Artist Style | parameter | Pick from 67 photographers, artists, directors, illustrators, or painters (Tim Walker, Deakins, Lubezki, Ghibli, Rutkowski, ...) | `in`:any | `out`:look | NO |
 | `pose` | Pose | parameter | Pick a pose from 81 entries across categories (standing, sitting, action, dynamic) | `in`:any | `out`:look | NO |
 | `post-process-effects` | Post-Process Effects | parameter | Pick a post-processing effect from 18 entries (vignette-soft, film-grain, light-leak, chromatic-aberration, ...) | `in`:any | `out`:look | NO |
-| `provider` | Provider | parameter | Choose a model (image or video) for the nodes it is wired into — sets a Generate Video / Generate Video Pro model through its `settings` input | `in`:any | `provider`:param | NO |
+| `provider` | Provider | parameter | Choose a model (image or video) for the nodes it is wired into — sets a Generate Image / Generate Video / Generate Video Pro model through its `settings` input | `in`:any | `provider`:param | NO |
 | `render-quality` | Render Quality | parameter | Pick a render-pipeline preset from 24 entries (raytracing, octane, unreal, blender, ...) | `in`:any | `out`:look | NO |
 | `scene-count` | Scene Count | parameter | Specify the number of scenes for script generation nodes | `in`:any | `scene_count`:param | NO |
 | `setting` | Setting | parameter | Pick a setting from 66 entries across 4 categories (indoor, urban, nature, fantastical) | `in`:any | `out`:look | NO |
@@ -94,7 +94,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `extend-video` | Extend Video | ai | Continue a generated video with a new prompt direction | `video`:video, `cinematography`:look, `prompt`:text | `video`:video | NO |
 | `face-swap` | Face Swap | ai | Replace the face in a video with a face from a reference image | `face`:face, `video`:video | `out`:video | NO |
 | `forced-alignment` | Forced Alignment | ai | Generate word-level timestamps by aligning a transcript to its corresponding audio | `audio`:audio, `transcript`:text | `data`:json | NO |
-| `generate-image` | Generate Image | ai | Generate an image from a text prompt using an AI provider | `prompt`:text, `negative`:text, `references`:image, `assets`:identity, `elements`:look, `look`:look | `image`:image | NO |
+| `generate-image` | Generate Image | ai | Generate an image from a text prompt using an AI provider | `prompt`:text, `negative`:text, `references`:image, `assets`:identity, `elements`:look, `look`:look, `settings`:param | `image`:image | NO |
 | `generate-mask` | Generate Mask | ai | Produce a binary segmentation mask for a subject described by a text prompt (Grounded SAM) | `image`:image | `image`:image, `mask`:mask | NO |
 | `generate-music` | Generate Music | ai | Generate music with MiniMax | `prompt`:text, `ref-audio`:audio, `audio-style`:audio | `audio`:audio | NO |
 | `generate-script` | Generate Script | ai | AI-powered multi-scene script generation with cinematography details, character actions, and structured scene breakdowns | `prompt`:text | `scenes`:video, `images`:image, `dialogue`:text, `music`:audio, `sfx`:audio, `characters`:identity, `locations`:identity | NO |

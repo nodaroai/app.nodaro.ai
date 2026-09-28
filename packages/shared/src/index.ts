@@ -656,6 +656,7 @@ export {
   snapToModelDuration,
   applySettingsInput,
   resolveWiredSettings,
+  withWiredSettings,
   type SettingsInputProblem,
   type WiredSetting,
   type SettingsSourceType,
@@ -942,6 +943,7 @@ export {
   buildModelMenu,
   normalizeModelInput,
   normalizeVideoRequestParams,
+  fitAspectRatioToModel,
   defaultResolutionFor,
 } from "./model-catalog.js"
 export type {

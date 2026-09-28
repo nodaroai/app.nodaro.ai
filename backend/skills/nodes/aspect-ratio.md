@@ -28,7 +28,7 @@ generated_from: c607aa02c
 
 ## When to use
 
-Sets the aspect ratio of the node it is wired into. Wire its `ratio` output into a Generate Video or Generate Video Pro `settings` input; the value replaces the node's own `aspectRatio` at run time.
+Sets the aspect ratio of the node it is wired into. Wire its `ratio` output into a Generate Image, Generate Video or Generate Video Pro `settings` input; the value replaces the node's own `aspectRatio` at run time.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->

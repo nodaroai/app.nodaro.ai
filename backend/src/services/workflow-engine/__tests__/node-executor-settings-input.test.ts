@@ -71,6 +71,29 @@ const settings: SimpleNode[] = [
 ]
 const wire = (source: string): SimpleEdge => ({ id: `e-${source}`, source, target: "v", targetHandle: "settings" }) as SimpleEdge
 
+const image: SimpleNode = { id: "i", type: "generate-image", data: { label: "Image", prompt: "a cat", provider: "nano-banana-pro", providers: ["nano-banana-pro", "seedream"], aspectRatio: "16:9" } }
+const imageModel: SimpleNode = { id: "nb", type: "provider", data: { label: "Provider", category: "image", provider: "nano-banana" } }
+const wireImage = (source: string): SimpleEdge => ({ id: `ei-${source}`, source, target: "i", targetHandle: "settings" }) as SimpleEdge
+
+describe("node-executor — Settings input on Generate Image", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("builds the payload with the wired model as the node's one model", async () => {
+    void executeNode(image, {}, [wireImage("nb"), wireImage("ratio")], [image, imageModel, ...settings], {}, ctx()).catch(() => {})
+    await vi.waitFor(() => expect(mockBuildPayload).toHaveBeenCalled())
+    const [built] = mockBuildPayload.mock.calls[0] as unknown as [SimpleNode]
+    expect(built.data).toMatchObject({ provider: "nano-banana", providers: ["nano-banana"] })
+  })
+
+  it("refuses a wired video model before any job row", async () => {
+    await expect(executeNode(image, {}, [wireImage("veo")], [image, ...settings], {}, ctx())).rejects.toMatchObject({
+      code: "settings_provider_not_accepted",
+    })
+    expect(mockBuildPayload).not.toHaveBeenCalled()
+    expect(mockJobInsert).not.toHaveBeenCalled()
+  })
+})
+
 describe("node-executor — Settings input", () => {
   beforeEach(() => vi.clearAllMocks())
 

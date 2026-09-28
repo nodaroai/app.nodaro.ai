@@ -217,6 +217,7 @@ const GENERATE_IMAGE_HANDLE_LABELS: Record<string, string> = {
   assets: "Assets",
   elements: "Elements",
   look: "Look",
+  [SETTINGS_INPUT_HANDLE]: "Settings",
 }
 
 /** Friendly labels for Generate Video's input handles (mirrors the node

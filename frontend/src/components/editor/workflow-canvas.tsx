@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, useMemo, useRef, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { useDismissableLayerSurface } from "@radix-ui/react-dismissable-layer"
-import { buildRangeLabel as buildRangeLabelShared, isCollectInEdge, type SelectorMode } from "@nodaro/shared"
+import { buildRangeLabel as buildRangeLabelShared, isCollectInEdge, withWiredSettings, type SelectorMode } from "@nodaro/shared"
 import {
   ReactFlow,
   MiniMap,
@@ -1186,8 +1186,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       // in AnimatedFlowEdge. Recomputes every time `nodes` changes (which
       // includes provider switches via updateNodeData), so the live state
       // tracks the panel selection without explicit edge data writes.
+      // Of the model the node RUNS — a Provider wired into its Settings input sets it.
       const targetHandleLimit = edge.targetHandle
-        ? getHandleConnectionLimit(targetNode, edge.targetHandle)
+        ? getHandleConnectionLimit(targetNode ? withWiredSettings(targetNode, nodes, edges) : undefined, edge.targetHandle)
         : null
       const disabledByProvider = targetHandleLimit?.limit === 0
       const unusedPromptReason = unusedPromptEdges.get(edge.id)

@@ -10,12 +10,16 @@ import {
   settingsProviderModels,
   settingsSourceForField,
   snapToModelDuration,
+  withWiredSettings,
 } from "../settings-input.js"
 import { NODE_MAPPABLE_FIELDS } from "../node-mappable-fields.js"
-import { DEFAULT_VIDEO_PROVIDER, GVP_SUPPORTED_PROVIDERS, VIDEO_GEN_PROVIDERS } from "../model-constants.js"
+import { DEFAULT_VIDEO_PROVIDER, GVP_SUPPORTED_PROVIDERS, IMAGE_GEN_PROVIDERS, VIDEO_GEN_PROVIDERS } from "../model-constants.js"
+import { fitAspectRatioToModel, normalizeVideoRequestParams } from "../model-catalog.js"
 
 const nodes = [
   { id: "gv", type: "generate-video", data: { provider: "seedance-2", duration: 8, aspectRatio: "16:9" } },
+  { id: "gi", type: "generate-image", data: { provider: "nano-banana-pro", providers: ["nano-banana-pro", "seedream"], aspectRatio: "16:9" } },
+  { id: "nb", type: "provider", data: { label: "Image model", category: "image", provider: "nano-banana" } },
   { id: "gvp", type: "generate-video-pro", data: { provider: "seedance-2", duration: 30 } },
   { id: "ratio", type: "aspect-ratio", data: { label: "Aspect Ratio", ratio: "9:16" } },
   { id: "len", type: "duration", data: { label: "Duration", seconds: 60 } },
@@ -49,7 +53,14 @@ describe("Settings input consumers", () => {
   it("accepts each consumer's own models", () => {
     expect(settingsProviderModels("generate-video")).toEqual(VIDEO_GEN_PROVIDERS)
     expect(settingsProviderModels("generate-video-pro")).toEqual(GVP_SUPPORTED_PROVIDERS)
+    expect(settingsProviderModels("generate-image")).toEqual(IMAGE_GEN_PROVIDERS)
     expect(settingsProviderModels("llm-chat")).toEqual([])
+  })
+
+  it("takes Aspect Ratio and Provider on Generate Image, and no Duration", () => {
+    expect(settingsInputAccepts("generate-image", "aspect-ratio")).toBe(true)
+    expect(settingsInputAccepts("generate-image", "provider")).toBe(true)
+    expect(settingsInputAccepts("generate-image", "duration")).toBe(false)
   })
 })
 
@@ -121,6 +132,62 @@ describe("applySettingsInput", () => {
     const edges = [wire("veo", "gvp")]
     const result = applySettingsInput("generate-video-pro", "gvp", { provider: "veo3" }, edges, typeOf)
     expect(result.problem?.sourceId).toBe("veo")
+  })
+})
+
+describe("Generate Image", () => {
+  const wireImage = (source: string) => wire(source, "gi")
+
+  it("a wired Provider makes a several-model node one model", () => {
+    const resolved = resolveWiredSettings("gi", "generate-image", nodes[1]!.data, nodes, [wireImage("nb")])
+    expect(resolved.data).toMatchObject({ provider: "nano-banana", providers: ["nano-banana"] })
+  })
+
+  it("refuses a video model", () => {
+    expect(resolveWiredSettings("gi", "generate-image", nodes[1]!.data, nodes, [wireImage("veo")]).problem?.value).toBe("veo3")
+  })
+
+  it("fits a wired ratio to the image model", () => {
+    const resolved = resolveWiredSettings("gi", "generate-image", nodes[1]!.data, nodes, [wireImage("ratio")])
+    expect(resolved.data.aspectRatio).toBe(fitAspectRatioToModel("nano-banana-pro", "9:16"))
+  })
+
+  it("leaves the model list alone when no Provider is wired", () => {
+    const resolved = resolveWiredSettings("gi", "generate-image", nodes[1]!.data, nodes, [wireImage("ratio")])
+    expect(resolved.data.providers).toEqual(["nano-banana-pro", "seedream"])
+  })
+})
+
+describe("fitAspectRatioToModel", () => {
+  it("keeps a ratio the model lists, in the catalog's spelling", () => {
+    expect(fitAspectRatioToModel("seedance-2", "16:9")).toBe("16:9")
+    expect(fitAspectRatioToModel("seedance-2", "ADAPTIVE")).toBe("ADAPTIVE")
+  })
+
+  it("fits an unlisted ratio to the nearest listed one, keeping its orientation", () => {
+    expect(fitAspectRatioToModel("seedance-2", "4:5")).toBe("3:4")
+    expect(fitAspectRatioToModel("veo3", "4:5")).toBe("9:16")
+  })
+
+  it("passes through for a model without a ratio list or an unknown model", () => {
+    expect(fitAspectRatioToModel("kling-3.0", "4:5")).toBe("4:5")
+    expect(fitAspectRatioToModel("not-a-model", "4:5")).toBe("4:5")
+  })
+
+  // The video lane's normalizer applies the same rule — one implementation.
+  it("agrees with the video lane's normalizer", () => {
+    for (const ratio of ["4:5", "21:9", "1:1", "5:4", "2:3"]) {
+      expect(normalizeVideoRequestParams("seedance-2", { aspectRatio: ratio }).aspectRatio).toBe(fitAspectRatioToModel("seedance-2", ratio))
+    }
+  })
+})
+
+describe("withWiredSettings", () => {
+  it("returns the node as it runs, and the node itself without the graph", () => {
+    const image = nodes[1]!
+    expect(withWiredSettings(image, nodes, [wire("nb", "gi")]).data).toMatchObject({ providers: ["nano-banana"] })
+    expect(withWiredSettings(image)).toBe(image)
+    expect(withWiredSettings({ id: "t", type: "tone", data: {} }, nodes, [])).toEqual({ id: "t", type: "tone", data: {} })
   })
 })
 

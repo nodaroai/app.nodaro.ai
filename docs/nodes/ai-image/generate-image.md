@@ -32,7 +32,7 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 
 **Inputs (Handles v2.1):**
 
-The Generate Image node has 6 typed input handles on its left edge (color-coded pips), stacked from the bottom up: Prompt (closest to the corner) → Negative → References → Assets → Elements → Look. Click any handle pip to manage connections (jump to, disconnect, add new). Drag from a handle as usual to wire upstream nodes.
+The Generate Image node has 7 typed input handles on its left edge (color-coded pips), stacked from the bottom up: Prompt (closest to the corner) → Negative → References → Assets → Elements → Look → Settings. Click any handle pip to manage connections (jump to, disconnect, add new). Drag from a handle as usual to wire upstream nodes.
 
 | Handle | Color | Accepts | Description |
 |--------|-------|---------|-------------|
@@ -42,6 +42,13 @@ The Generate Image node has 6 typed input handles on its left edge (color-coded 
 | `assets` | rose | Identity nodes (Character, Location, Object, Face) | Identity-locked refs with `@mention` expansion and canonical descriptions. (Renamed from `subjects` in v2.1.) |
 | `elements` | indigo | "Subject / Object" family pickers (Person, Pose, Animal, Vehicle, Weapon, Furniture, Material, Held-Prop, Styling, Instrumentation) | Pickers wired here tail-append their value to the prompt at execution time. |
 | `look` | indigo | "Look" + "Camera" family pickers (Style, Lens, Lighting, Color Look, Framing, Camera Format, Photographer, Aesthetic, Era, Photo Genre, Mood, Atmosphere, Backdrop, Exposure Settings, Render Quality, Composition Effects, Post-Process Effects, Tone, Camera Motion, Temporal, Transition, Character FX) | Pickers wired here tail-append their value to the prompt — same runtime path as the legacy `cinematography` handle. |
+| `settings` | indigo | Aspect Ratio / Provider | Sets the node's aspect ratio and model from a wired node (see below). |
+
+**Settings input:** one `settings` input takes the Generation Settings nodes a still image uses — [Aspect Ratio](../parameters/aspect-ratio.md) and [Provider](../parameters/provider.md) — and each wired value replaces the node's own field at run time. The node lists what is wired as chips (e.g. `9:16 · Nano Banana`), and the settings panel shows those fields as connected.
+
+- **Aspect Ratio** replaces `aspectRatio`. A ratio the model doesn't render runs as the nearest one it does.
+- **Provider** replaces the model. It must name an image model; a Provider set to a video model stops the run before anything is charged, and the error names the Provider node. A node set to several models (one image each) runs only the wired model, once.
+- When two nodes of one kind are wired, the last connection wins. The Run price is the price of the wired model, and a note under the Run button says so while a setting is wired.
 
 **Variable defaults:** any `{Label}` reference can carry a fallback with `||` — `{Label || default}`. If nothing provides `Label`, the trimmed default is used; e.g. `generate a {person || man} running` becomes "generate a man running" when no `person` is wired, or uses the wired/picked value when it is. `{person || }` (empty after `||`) resolves to nothing when unset.
 

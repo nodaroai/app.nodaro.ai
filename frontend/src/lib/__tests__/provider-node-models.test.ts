@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { DEFAULT_VIDEO_PROVIDER, IMAGE_GEN_PROVIDERS, settingsProviderModels } from "@nodaro/shared"
+import { DEFAULT_VIDEO_PROVIDER, settingsProviderModels } from "@nodaro/shared"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import {
   DEFAULT_PROVIDER_NODE_CATEGORY,
@@ -16,10 +16,10 @@ describe("Provider node models", () => {
     expect(refused).toEqual([])
   })
 
-  it("offers only real image model ids", () => {
-    const known = new Set<string>(IMAGE_GEN_PROVIDERS)
-    const unknown = PROVIDER_NODE_CATEGORIES.image.models.map((m) => m.value).filter((id) => !known.has(id))
-    expect(unknown).toEqual([])
+  it("offers only image models Generate Image's Settings input runs", () => {
+    const accepted = new Set(settingsProviderModels("generate-image"))
+    const refused = PROVIDER_NODE_CATEGORIES.image.models.map((m) => m.value).filter((id) => !accepted.has(id))
+    expect(refused).toEqual([])
   })
 
   it("starts each category on a model it offers", () => {
