@@ -1211,7 +1211,10 @@ Every AI prompt node also lists `promptPrefix` and `promptSuffix` (`text`) in
 `inputSchema` — see [Prompt pre & post text](./prompt-pre-post-text.md).
 
 Neither endpoint requires authentication; they expose only registry
-metadata and prices. No scopes required.
+metadata and prices. No scopes required. Both describe what a USER of the
+instance can use: a node the deployment withholds from users is absent, and
+Web Scrape's description leaves out any source it withdraws (its Instagram
+source follows the Instagram node's availability).
 
 ### Model catalog
 

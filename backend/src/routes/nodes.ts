@@ -1,12 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { hasCredits } from "../lib/config.js"
 import { CLOUD_ONLY_NODE_TYPES, NODARO_EXCLUSIVE_NODE_TYPES } from "../lib/cloud-only-nodes.js"
-import { isNodeDenied, USER_VIEWER } from "../lib/surface-deny.js"
+import { effectiveDeniedWebScrapeSources, isNodeDenied, USER_VIEWER } from "../lib/surface-deny.js"
 import { scene3DProAvailable } from "../services/scene3d/scene3d-engine.js"
 import { isNodaroConnected } from "../lib/nodaro-connect.js"
 import { z } from "zod"
 import { PRO3D_RENDER_NODE_TYPE } from "@nodaro/shared"
-import { getEnrichedRegistry, findNode, chargedDescriptor } from "../lib/node-registry.js"
+import { getEnrichedRegistry, findNode, chargedDescriptor, webScrapeDescription, type NodeDescriptor } from "../lib/node-registry.js"
 import { loadChargedPrices } from "../lib/pricing/charged-prices.js"
 
 
@@ -44,6 +44,18 @@ openApiRegistry.registerPath({
 
 const typeParams = z.object({ type: z.string().min(1) })
 
+/**
+ * A descriptor as a USER of this deployment sees it. Web Scrape's description
+ * drops the sources withdrawn from users (the Instagram source follows the
+ * Instagram node's availability), like the editor's source dropdown does.
+ * Always the user view: these routes answer with `Cache-Control: public`.
+ */
+function describedForUsers(desc: NodeDescriptor): NodeDescriptor {
+  if (desc.type !== "web-scrape") return desc
+  const withdrawn = effectiveDeniedWebScrapeSources(USER_VIEWER)
+  return withdrawn.length === 0 ? desc : { ...desc, description: webScrapeDescription(new Set(withdrawn)) }
+}
+
 export async function nodesRoutes(app: FastifyInstance) {
   app.get("/v1/nodes", async (_req, reply) => {
     // Editions without the Cloud plugin lane must not advertise nodes they
@@ -74,7 +86,7 @@ export async function nodesRoutes(app: FastifyInstance) {
     const prices = await loadChargedPrices()
     return reply
       .header("Cache-Control", "public, max-age=300")
-      .send({ data: data.map((n) => chargedDescriptor(n, prices)) })
+      .send({ data: data.map((n) => describedForUsers(chargedDescriptor(n, prices))) })
   })
 
   app.get("/v1/nodes/:type", async (req, reply) => {
@@ -115,6 +127,6 @@ export async function nodesRoutes(app: FastifyInstance) {
     }
     return reply
       .header("Cache-Control", "public, max-age=300")
-      .send({ data: chargedDescriptor(node, await loadChargedPrices()) })
+      .send({ data: describedForUsers(chargedDescriptor(node, await loadChargedPrices())) })
   })
 }

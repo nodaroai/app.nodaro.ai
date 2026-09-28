@@ -1,6 +1,7 @@
 import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, MOTION_TRANSFER_PROVIDERS, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
+import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { hasCredits } from "./config.js"
 import type { ChargedPrices } from "./pricing/charged-prices.js"
@@ -218,6 +219,31 @@ function creditBandFor(type: string): number | string {
   const min = Math.min(...prices) * minUnits
   const max = Math.max(...prices) * maxUnits
   return min === max ? min : `${min}-${max}`
+}
+
+/** How Web Scrape's description names each source. A Record over the actor
+ *  ids, so a new source cannot ship without a name here. */
+const WEB_SCRAPE_SOURCE_NAMES: Readonly<Record<ScraperActorId, string>> = {
+  "content-crawler": "web pages",
+  "google-search": "Google Search",
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  rss: "RSS feeds",
+}
+
+/**
+ * Web Scrape's description, naming the sources it offers. The registry states
+ * every source; `GET /v1/nodes` passes the ones this deployment withdraws from
+ * its users (the Instagram source follows the Instagram node's availability),
+ * so the description never promises a source a user cannot pick.
+ */
+export function webScrapeDescription(withdrawn: ReadonlySet<string> = new Set()): string {
+  // The shared actor table's order, which is the order the sources are listed in.
+  const names = (Object.keys(SCRAPER_ACTOR_LABELS) as ScraperActorId[])
+    .filter((id) => !withdrawn.has(id))
+    .map((id) => WEB_SCRAPE_SOURCE_NAMES[id])
+  const list = names.length <= 2 ? names.join(" or ") : `${names.slice(0, -1).join(", ")}, or ${names[names.length - 1]}`
+  return `Fetch data from ${list} and emit structured JSON.`
 }
 
 export type NodeCategory =
@@ -439,7 +465,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     label: "Web Scrape",
     category: "input",
     // outputType: data — emits a structured JSON array via the `json` handle (creditCost auto-filled from STATIC_CREDIT_COSTS = 2).
-    description: "Fetch data from web pages, Google Search, Instagram, TikTok, or RSS feeds and emit structured JSON.",
+    description: webScrapeDescription(),
     outputType: "data",
   },
   {
