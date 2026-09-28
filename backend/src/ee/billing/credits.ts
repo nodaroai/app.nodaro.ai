@@ -1,4 +1,4 @@
-import { usdToCredits } from "@nodaro/shared"
+import { usdToCredits, SETTINGS_INPUT_CONSUMERS, PARAMETER_NODE_TYPES, resolveWiredSettings } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -3390,17 +3390,36 @@ function sumWorkflowEstimate(
   prices: ChargedPriceTable,
 ): number {
   return nodes.reduce((sum, node) => {
+    // A parameter node (Provider, Duration, a picker) is read, never run: no
+    // job, no charge. A Provider's data names a model ("veo3"), which the
+    // lookups below would otherwise price as a run of that model. The editor's
+    // estimate already counts executable nodes only.
+    if (PARAMETER_NODE_TYPES.has(node.type)) return sum
     // Image Overlay is base + 2 per extra platform render — the shared formula,
     // marked up once as a whole, the way its route's creditGuard reserves it.
     if (node.type === "image-overlay") {
       return sum + prices.charge("image-overlay", imageOverlayCredits((node.data?.variants as unknown[] | undefined)))
     }
-    const modelId = getNodeModelIdentifier(node, {
+    const modelId = getNodeModelIdentifier(withWiredSettings(node, nodes, edges), {
       timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
       audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
     })
     return sum + (chargedCredits(prices, modelId) ?? chargedCredits(prices, node.type) ?? 0)
   }, 0)
+}
+
+/**
+ * The node as it runs, for pricing: a node with a Settings input carries the
+ * wired Aspect Ratio / Duration / Provider — the resolution both run engines
+ * apply before they reserve — so the estimate prices the model and length the
+ * run reserves, never less. Without edges or an id the node is priced as stored.
+ */
+function withWiredSettings(node: EstimateNode, nodes: ReadonlyArray<EstimateNode>, edges?: ReadonlyArray<EstimateEdge>): EstimateNode {
+  if (!edges || !node.id || !SETTINGS_INPUT_CONSUMERS[node.type]) return node
+  const graphNodes = nodes.flatMap((n) => (n.id ? [{ id: n.id, type: n.type, data: n.data }] : []))
+  const graphEdges = edges.map((e) => ({ source: e.source ?? "", target: e.target, targetHandle: e.targetHandle }))
+  const { data } = resolveWiredSettings(node.id, node.type, node.data ?? {}, graphNodes, graphEdges)
+  return { ...node, data }
 }
 
 /**

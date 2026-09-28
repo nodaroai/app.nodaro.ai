@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-09-27T12:51:23.223Z
-generated_from: c607aa02c
+generated_at: 2026-09-28T22:17:11.724Z
+generated_from: 41c73564b
 ---
 
 # Generate Video
@@ -10,7 +10,7 @@ generated_from: c607aa02c
 **Type:** `generate-video`
 **Category:** ai
 **Credit cost:** `10-8550` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
-**Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`, `audio`, `audioReferences`, `assets`, `elements`, `look`
+**Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`, `audio`, `audioReferences`, `assets`, `elements`, `look`, `settings`
 **Outputs (source handles):** `video`
 
 **Required data fields:**
@@ -126,7 +126,8 @@ The per-family doctrine below (Kling, MiniMax, VEO, Gemini Omni, Grok, Wan, Happ
 
 ## Common gotchas
 
-(Add prose here.)
+- The `settings` input takes Aspect Ratio, Duration and Provider nodes (one input for all). Each wired value replaces the node's own `aspectRatio`, `duration` or `provider` at run time and is fitted to the model; the estimate prices the wired values.
+- A wired Provider must name a video model this node runs, or the run stops before anything is charged.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

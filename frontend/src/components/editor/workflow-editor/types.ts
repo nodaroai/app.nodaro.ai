@@ -3,6 +3,7 @@ import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
+import { withWiredSettings } from "@/lib/wired-settings";
 import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
@@ -468,9 +469,16 @@ export function videoAuditAnalysisWired(
  * never-under-quoting default.
  */
 export function estimateNodeCredits(
-  node: { id?: string; type?: string; data?: Record<string, unknown> },
-  edges?: ReadonlyArray<{ target: string; targetHandle?: string | null }>,
+  storedNode: { id?: string; type?: string; data?: Record<string, unknown> },
+  edges?: ReadonlyArray<{ source?: string; target: string; targetHandle?: string | null }>,
+  /** With `edges`, lets a node with a Settings input be priced as it runs. */
+  nodes?: ReadonlyArray<{ id: string; type?: string | null; data?: unknown }>,
 ): number {
+  const node = withWiredSettings(
+    storedNode,
+    edges?.map((e) => ({ source: e.source ?? "", target: e.target, targetHandle: e.targetHandle })),
+    nodes,
+  )
   const nodeType = node.type ?? ""
   // Component nodes: use the published estimatedCredits stored on the node data
   if (nodeType === "component" && node.data) {

@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
-import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS } from "@nodaro/shared";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
@@ -1249,6 +1249,20 @@ function executeNodeCore(
       edges,
     )
     node = { ...node, data: resolvedData } as WorkflowNode
+  }
+
+  // The Settings input — the same step as the orchestrator's (node-executor):
+  // snap a wired Duration to the model, refuse a wired Provider this node
+  // cannot run, before any request is sent.
+  if (SETTINGS_INPUT_CONSUMERS[node.type ?? ""]) {
+    const settings = applySettingsInput(node.type ?? "", node.id, node.data as Record<string, unknown>, edges, (id) => nodes.find((n) => n.id === id)?.type)
+    if (settings.problem) {
+      const source = nodes.find((n) => n.id === settings.problem!.sourceId)
+      const sourceLabel = ((source?.data as { label?: string } | undefined)?.label) || "Provider"
+      toast.error(nodeRunError(nodeLabel, "nodeRun.settingsProviderNotAccepted", { source: sourceLabel, value: settings.problem.value }));
+      return Promise.reject(new Error("Settings provider not accepted"));
+    }
+    node = { ...node, data: settings.data } as WorkflowNode
   }
 
   if (node.type === "generate-script") {

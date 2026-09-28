@@ -260,6 +260,7 @@ const HANDLE_LABELS_JA: Record<string, string> = {
   "Audio or Video": "オーディオまたは動画",
   "Voices": "音声",
   "Look": "ルック",
+  "Settings": "設定",
   "Elements": "エレメント",
   "Assets": "アセット",
   "Scene": "シーン",

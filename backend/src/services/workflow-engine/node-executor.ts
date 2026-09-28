@@ -1,6 +1,6 @@
 import { projectDubbingCreditOverride } from "../../lib/dubbing-pricing.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
-import { assertCanvasExecutionAllowed, imageOverlayCredits } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS } from "@nodaro/shared"
 /**
  * Node executor — dispatches node execution based on type category.
  *
@@ -401,6 +401,25 @@ export async function executeNode(
       edges,
     )
     node = { ...node, data: resolvedData }
+  }
+
+  // The Settings input (Generation Settings nodes wired into one handle): the
+  // resolver above wrote each wired value into its field; this snaps a wired
+  // Duration to a length the model renders and refuses a wired Provider the
+  // node cannot run — before any job row or reservation exists.
+  if (SETTINGS_INPUT_CONSUMERS[node.type]) {
+    const settings = applySettingsInput(node.type, node.id, node.data, edges, (id) => allNodes.find((n) => n.id === id)?.type)
+    if (settings.problem) {
+      const source = allNodes.find((n) => n.id === settings.problem!.sourceId)
+      const sourceLabel = ((source?.data as { label?: string } | undefined)?.label) || "Provider"
+      const err = new Error(
+        `settings_provider_not_accepted: the ${sourceLabel} node wired into Settings is set to "${settings.problem.value}", ` +
+          `which this node cannot run. Choose one of this node's models in the ${sourceLabel} node.`,
+      ) as Error & { code?: string }
+      err.code = "settings_provider_not_accepted"
+      throw err
+    }
+    node = { ...node, data: settings.data }
   }
 
   // Component nodes (published apps executed as sub-executions).

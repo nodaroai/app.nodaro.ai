@@ -242,15 +242,16 @@ describe("GenerateVideoNode", () => {
     })
   })
 
-  describe("handles — 11 inputs + 1 output", () => {
-    it("has 11 input typed pips on the left + 1 output pip on the right", () => {
+  describe("handles — 12 inputs + 1 output", () => {
+    it("has 12 input typed pips on the left + 1 output pip on the right", () => {
       renderNode()
-      // 11 input pips
+      // 12 input pips
       const inputIds = [
         "prompt", "negative",
         "startFrame", "endFrame", "imageReferences", "videoReferences",
         "audio", "audioReferences",
         "assets", "elements", "look",
+        "settings",
       ]
       for (const id of inputIds) {
         const pip = screen.getByTestId(`pip-${id}`)
@@ -263,13 +264,14 @@ describe("GenerateVideoNode", () => {
       expect(videoPip).toHaveAttribute("data-position", "right")
     })
 
-    it("has 11 target handle configs + 1 source on BaseNode (external true)", () => {
+    it("has 12 target handle configs + 1 source on BaseNode (external true)", () => {
       renderNode()
       const inputIds = [
         "prompt", "negative",
         "startFrame", "endFrame", "imageReferences", "videoReferences",
         "audio", "audioReferences",
         "assets", "elements", "look",
+        "settings",
       ]
       for (const id of inputIds) {
         const h = screen.getByTestId(`handle-config-${id}`)
@@ -282,7 +284,7 @@ describe("GenerateVideoNode", () => {
       expect(out).toHaveAttribute("data-position", "right")
     })
 
-    it("grouped vertical spacing — text cluster at 24/52, image at 92/120/148/176, audio at 216/244, pickers at 284/312/340", () => {
+    it("grouped vertical spacing — text cluster at 24/52, image at 92/120/148/176, audio at 216/244, pickers at 284/312/340, settings at 380", () => {
       renderNode()
       // Text cluster (28 between)
       expect(screen.getByTestId("pip-prompt")).toHaveAttribute("data-top", "calc(100% - 24px)")
@@ -299,6 +301,8 @@ describe("GenerateVideoNode", () => {
       expect(screen.getByTestId("pip-assets")).toHaveAttribute("data-top", "calc(100% - 284px)")
       expect(screen.getByTestId("pip-elements")).toHaveAttribute("data-top", "calc(100% - 312px)")
       expect(screen.getByTestId("pip-look")).toHaveAttribute("data-top", "calc(100% - 340px)")
+      // Settings: its own cluster (40 gap → 380)
+      expect(screen.getByTestId("pip-settings")).toHaveAttribute("data-top", "calc(100% - 380px)")
       // Output handle pinned to 24px from top — symmetric with bottom-most input
       expect(screen.getByTestId("pip-video")).toHaveAttribute("data-top", "24px")
     })

@@ -1,4 +1,4 @@
-import { resolveFieldMappings as sharedResolve, PARAMETER_NODE_TYPES, getParameterValue } from "@nodaro/shared"
+import { resolveFieldMappings as sharedResolve, PARAMETER_NODE_TYPES, getParameterValue, settingsSourceForField } from "@nodaro/shared"
 export { NODE_MAPPABLE_FIELDS } from "@nodaro/shared"
 import { extractNodeOutput } from "./execution-graph"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
@@ -29,10 +29,17 @@ export function resolveFieldMappings(
       }
       return extractNodeOutput(sourceNode) ?? undefined
     },
-    // A live edge into a `field-<key>` handle wins over fieldMappings/{} —
-    // the user explicitly wired this field, so route that source's output to it.
+    // A live edge into a `field-<key>` handle, or a Generation Settings node
+    // wired into the node's Settings input for this field, wins over
+    // fieldMappings/{} — the user explicitly wired this field, so route that
+    // source's output to it.
     nodeId && edges
-      ? (field) => edges.find((e) => e.target === nodeId && e.targetHandle === `field-${field}`)?.source
+      ? (field) => {
+          const direct = edges.find((e) => e.target === nodeId && e.targetHandle === `field-${field}`)?.source
+          if (direct) return direct
+          const consumerType = nodes.find((n) => n.id === nodeId)?.type ?? ""
+          return settingsSourceForField(nodeId, consumerType, field, edges, (id) => nodes.find((n) => n.id === id)?.type)
+        }
       : undefined,
   )
 }

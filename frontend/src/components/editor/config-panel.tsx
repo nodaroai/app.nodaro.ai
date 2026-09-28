@@ -44,6 +44,7 @@ import { getOutputMinuteUnits, NO_RERUNS } from "@/components/editor/workflow-ed
 import { NodeLookPreviewStyleScope } from "@/components/nodes/look-preview-style"
 import { NodeDocsPill } from "@/components/editor/node-docs/node-docs-pill"
 import { NodeDocsTypeContext } from "@/components/editor/node-docs/node-docs-context"
+import { WiredSettingsScope } from "@/components/editor/config-panels/wired-settings-context"
 import {
   getConnectedSources,
   getModelIdentifier,
@@ -1064,6 +1065,8 @@ export function ConfigPanel() {
                   set (real render / illustration), and the switch above the
                   grid writes the node — so grid and canvas card never differ. */}
               <NodeLookPreviewStyleScope nodeId={selectedNodeId ?? undefined} nodeType={nodeType} data={nodeData}>
+              {/* Fields a wired Generation Settings node sets show as wired in every MappableField. */}
+              <WiredSettingsScope nodeId={selectedNodeId ?? ""} nodeType={nodeType} data={nodeData as Record<string, unknown>}>
               {isExpanded ? (
                 <TileCommitContext.Provider value={{ commit: closeFullscreenSettings }}>
                   <NodeTypeConfig
@@ -1087,6 +1090,7 @@ export function ConfigPanel() {
                   selectedNodeId={selectedNodeId ?? undefined}
                 />
               )}
+              </WiredSettingsScope>
               </NodeLookPreviewStyleScope>
             </ParameterPreviewContext.Provider>
             </NodeDocsTypeContext.Provider>

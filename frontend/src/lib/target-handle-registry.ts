@@ -1,6 +1,6 @@
 import { ANALYZABLE_PICKER_TYPES } from "@nodaro/prompts"
 import { OVERLAY_HANDLE_IDS } from "@/types/nodes"
-import { VIDEO_OVERLAY_HANDLE_IDS } from "@nodaro/shared"
+import { VIDEO_OVERLAY_HANDLE_IDS, SETTINGS_INPUT_HANDLE } from "@nodaro/shared"
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
 import { GENERATE_VIDEO_INPUT_HANDLES, isValidGenerateVideoConnection } from "./generate-video-handles"
 import { GENERATE_VIDEO_PRO_INPUT_HANDLES, isValidGenerateVideoProConnection } from "./generate-video-pro-handles"
@@ -219,9 +219,11 @@ const GENERATE_IMAGE_HANDLE_LABELS: Record<string, string> = {
   look: "Look",
 }
 
-/** Friendly labels for Generate Video's eleven input handles (mirrors the
- *  node component's HandleWithPopover `label` props). There is no exported
- *  GENERATE_VIDEO_*_LABELS map — kept local like GENERATE_IMAGE_HANDLE_LABELS. */
+/** Friendly labels for Generate Video's input handles (mirrors the node
+ *  component's HandleWithPopover `label` props), and Generate Video Pro's —
+ *  it has the same handles by construction (generate-video-pro-handles.ts).
+ *  There is no exported GENERATE_VIDEO_*_LABELS map — kept local like
+ *  GENERATE_IMAGE_HANDLE_LABELS. */
 const GENERATE_VIDEO_HANDLE_LABELS: Record<string, string> = {
   prompt: "Prompt",
   negative: "Negative",
@@ -234,19 +236,11 @@ const GENERATE_VIDEO_HANDLE_LABELS: Record<string, string> = {
   assets: "Assets",
   elements: "Elements",
   look: "Look",
-}
-
-/** Friendly labels for Generate Video Pro's three input handles — trimmed
- *  subset of GENERATE_VIDEO_HANDLE_LABELS. No exported GENERATE_VIDEO_PRO_*_LABELS
- *  map — kept local like its sibling above. */
-const GENERATE_VIDEO_PRO_HANDLE_LABELS: Record<string, string> = {
-  prompt: "Prompt",
-  startFrame: "Start Frame",
-  imageReferences: "Image Refs",
+  [SETTINGS_INPUT_HANDLE]: "Settings",
 }
 
 /** Friendly labels for Edit Video Pro's three input handles — sibling of
- *  GENERATE_VIDEO_PRO_HANDLE_LABELS with `video` swapped in for startFrame
+ *  Generate Video Pro's labels with `video` swapped in for startFrame
  *  (the required source clip to edit, not an optional reference frame). No
  *  exported EDIT_VIDEO_PRO_*_LABELS map — kept local like its sibling. */
 const EDIT_VIDEO_PRO_HANDLE_LABELS: Record<string, string> = {
@@ -291,12 +285,12 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     accepts: (sourceType: string) =>
       isValidGenerateVideoConnection(handleId, sourceType, isVisualPickerType),
   })),
-  // Generate Video Pro mirrors Generate Video, trimmed to its three input
-  // handles built from GENERATE_VIDEO_PRO_INPUT_HANDLES so the popover
+  // Generate Video Pro mirrors Generate Video (the same handles by
+  // construction), built from GENERATE_VIDEO_PRO_INPUT_HANDLES so the popover
   // candidate set can't drift from the rendered handle set.
   "generate-video-pro": GENERATE_VIDEO_PRO_INPUT_HANDLES.map((handleId) => ({
     handleId,
-    label: GENERATE_VIDEO_PRO_HANDLE_LABELS[handleId] ?? handleId,
+    label: GENERATE_VIDEO_HANDLE_LABELS[handleId] ?? handleId,
     accepts: (sourceType: string) =>
       isValidGenerateVideoProConnection(handleId, sourceType, isVisualPickerType),
   })),

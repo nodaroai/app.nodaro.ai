@@ -152,6 +152,7 @@ const SAMPLE_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
   "scene-count": { count: 5 },
   "duration": { seconds: 8 },
   "aspect-ratio": { ratio: "16:9" },
+  "provider": { category: "video", provider: "seedance-2" },
   "music-genre": { genre: firstId(MUSIC_GENRES) },
   "music-mood": { emotion: firstId(MUSIC_EMOTIONS) },
   "instrumentation": { instruments: [firstId(INSTRUMENTS)] },

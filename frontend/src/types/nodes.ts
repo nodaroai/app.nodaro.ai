@@ -544,9 +544,14 @@ export type StyleGuideData = {
 export type ProviderData = {
   [key: string]: unknown
   label: string
+  /** Which models the node offers (`lib/provider-node-models.ts`). "voice" and
+   *  "script" only on nodes saved before it offered real models; the panel
+   *  moves them to "image". */
   category: "image" | "video" | "voice" | "script"
+  /** The model id it sets on the node whose Settings input it is wired into. */
   provider: string
-  model: string
+  /** Unused: the variant older Provider nodes stored beside a vendor name. */
+  model?: string
 }
 
 export type SceneCountData = {
@@ -6976,7 +6981,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: ["in"],
     outputs: ["provider"],
-    defaultData: { label: "Provider", category: "image", provider: "nano-banana", model: "" },
+    // The video default (DEFAULT_VIDEO_PROVIDER, written out: gen-skills parses
+    // this file textually): Generate Video / Generate Video Pro are the nodes a
+    // Provider drives through their Settings input.
+    defaultData: { label: "Provider", category: "video", provider: "seedance-2-fast" },
   },
   {
     type: "scene-count",
@@ -7567,7 +7575,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // Mirrors GENERATE_VIDEO_INPUT_HANDLES (the handle set the node renders) so
     // every input is offered as a connection candidate; kept in lockstep by the
     // drift test in enumerate-connection-options.test.ts.
-    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look"],
+    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look", "settings"],
     outputs: ["video"],
     // duration is the literal DEFAULT_VIDEO_DURATION_SEC (the API's default):
     // gen-skills parses this file textually and cannot resolve a constant. At 5 s
@@ -7612,7 +7620,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Generate Video Pro",
     category: "ai",
     creditCost: 82,
-    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look"],
+    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look", "settings"],
     outputs: ["video"],
     defaultData: {
       label: "Generate Video Pro",

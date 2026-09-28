@@ -496,7 +496,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const total = executableNodes.reduce((sum, node) => {
         const modelId = getModelIdentifier(node, storeEdges, storeNodes);
         const cached = getCachedCredits(modelId);
-        const cost = cached !== undefined ? cached : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, storeEdges);
+        const cost = cached !== undefined ? cached : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, storeEdges, storeNodes);
         const multiplier = getCostMultiplier(node, storeNodes, storeEdges, rerunIds);
         return sum + cost * multiplier;
       }, 0);
@@ -967,7 +967,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const cached = getCachedCredits(getModelIdentifier(node, storeEdges, storeNodes));
     const cost = cached !== undefined
       ? cached
-      : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, storeEdges);
+      : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, storeEdges, storeNodes);
     // One node's own cost: nothing upstream re-runs, so its inputs are what they are.
     return cost * getCostMultiplier(node, storeNodes, storeEdges, NO_RERUNS);
   }

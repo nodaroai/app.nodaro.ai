@@ -49,12 +49,19 @@ describe("generate-video-handles", () => {
     expect(isValidGenerateVideoConnection("elements", "weird-picker", (t) => t === "weird-picker")).toBe(true)
   })
 
+  it("settings accepts the Aspect Ratio, Duration and Provider nodes only", () => {
+    for (const t of ["aspect-ratio", "duration", "provider"]) expect(isValidGenerateVideoConnection("settings", t, isPicker)).toBe(true)
+    expect(isValidGenerateVideoConnection("settings", "text-prompt", isPicker)).toBe(false)
+    expect(isValidGenerateVideoConnection("settings", "lens", (t) => t === "lens")).toBe(false)
+    expect(isValidGenerateVideoConnection("settings", "scene-count", isPicker)).toBe(false)
+  })
+
   it("returns false for unknown handle ids", () => {
     expect(isValidGenerateVideoConnection("unknown", "text-prompt", isPicker)).toBe(false)
   })
 
-  it("GENERATE_VIDEO_INPUT_HANDLES has 11 entries", () => {
-    expect(GENERATE_VIDEO_INPUT_HANDLES).toHaveLength(11)
+  it("GENERATE_VIDEO_INPUT_HANDLES has 12 entries", () => {
+    expect(GENERATE_VIDEO_INPUT_HANDLES).toHaveLength(12)
   })
 
   it("negative rejects visual pickers (unlike prompt)", () => {

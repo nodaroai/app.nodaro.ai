@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useContext, useEffect, useRef, useState } from "react"
+import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 import { InlineGluedStripContext } from "./inline-glued-strip-context"
 import { useStore } from "@xyflow/react"
 import { Sparkles, Ratio, Maximize2, Clock, Settings2, Copy } from "lucide-react"
@@ -20,6 +20,10 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import { videoImageGateBlocked } from "@/lib/video-image-gate"
 import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
+import { getModel } from "@nodaro/shared"
+import type { WiredSettingsView } from "@/hooks/use-wired-settings"
+import { SettingsPriceNote } from "./settings-chips"
 import type { GenerateVideoNodeData } from "@/types/nodes"
 
 interface GenerateVideoQuickToolbarProps {
@@ -32,6 +36,10 @@ interface GenerateVideoQuickToolbarProps {
    *  active (the dropdown items render in a portal outside the node's
    *  hover area, which would otherwise trigger NodeToolbar's hide). */
   readonly onAnyOpenChange?: (open: boolean) => void
+  /** The node's Settings input as read by the node: the strip shows the values
+   *  the node runs with, a wired field is fixed (its node sets it), and a Run
+   *  the Settings input refuses is disabled with the reason. */
+  readonly settings?: WiredSettingsView
 }
 
 /**
@@ -54,7 +62,11 @@ export function GenerateVideoQuickToolbar({
   credits,
   isRunning,
   onAnyOpenChange,
+  settings,
 }: GenerateVideoQuickToolbarProps) {
+  // The values the node runs with (wired settings applied); the strip's
+  // handlers still write the node's own fields.
+  const stripData = (settings?.data ?? data) as GenerateVideoNodeData
   // Compact threshold = (toolbar natural width) > 1.5 × (visible node width).
   // The toolbar renders at fixed DOM scale (NodeToolbar's portal isn't
   // zoom-scaled), while the node IS scaled by the canvas zoom. So when
@@ -74,14 +86,26 @@ export function GenerateVideoQuickToolbar({
   const isCompact = TOOLBAR_NATURAL_WIDTH > visibleNodeWidth * 1.5
 
   const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   // Primitive selector: one boolean, so an unrelated edge change can't
   // re-render the toolbar.
   const imageGateBlocked = useWorkflowStore((s) =>
-    videoImageGateBlocked({ id: nodeId, type: "generate-video", data: data as Record<string, unknown> }, s.edges),
+    videoImageGateBlocked({ id: nodeId, type: "generate-video", data: stripData as Record<string, unknown> }, s.edges),
   )
-  const runDisabledReason = imageGateBlocked
-    ? t("node.imageRequiredHint", { model: (data.provider as string | undefined) ?? "" })
-    : undefined
+  // A field its Settings input sets → the wired node's label (the control is fixed).
+  const wiredFrom = new Map<string, string>(
+    (settings?.wired ?? []).map((w) => [w.field, localizeNode(settings?.labels[w.sourceId] ?? w.sourceType)]),
+  )
+  const refused = settings?.problem
+  const runDisabledReason = refused
+    ? t("node.settingsProviderRefused", {
+        model: getModel(refused.value)?.label ?? refused.value,
+        source: localizeNode(settings?.labels[refused.sourceId] ?? "provider"),
+      })
+    : imageGateBlocked
+      ? t("node.imageRequiredHint", { model: (stripData.provider as string | undefined) ?? "" })
+      : undefined
+  const runDisabled = imageGateBlocked || !!refused
 
   // NodeToolbar renders at fixed DOM scale (its portal sits outside the
   // React Flow zoom transform), so its visual size doesn't track zoom by
@@ -96,6 +120,19 @@ export function GenerateVideoQuickToolbar({
   const toolbarTransform = glued
     ? undefined
     : ({ transform: `scale(${toolbarScale})`, transformOrigin: "50% 0%" } as const)
+  // With a wired Settings input the pill carries the approved price note
+  // underneath; the pair then scales as one.
+  const priceNote = settings && settings.wired.length > 0 ? <SettingsPriceNote /> : null
+  const pillStyle = priceNote ? undefined : toolbarTransform
+  const withPriceNote = (pill: ReactNode) =>
+    priceNote ? (
+      <div className="flex flex-col items-center" style={toolbarTransform}>
+        {pill}
+        {priceNote}
+      </div>
+    ) : (
+      pill
+    )
 
   // Open-state tracking: increment on each select/popover open, decrement
   // on close. While count > 0 we report `open=true` upward so the parent
@@ -157,7 +194,7 @@ export function GenerateVideoQuickToolbar({
     onResolutionChange: handleResolutionChange,
     onRepeatChange: handleRepeatChange,
     runSingleNode,
-  } = useGenerateVideoStripModel(nodeId, data)
+  } = useGenerateVideoStripModel(nodeId, stripData)
 
   // Ghost select trigger — no border, no background by default, subtle
   // hover only. Icon prefix + value + small chevron. `!` modifiers beat
@@ -195,10 +232,10 @@ export function GenerateVideoQuickToolbar({
       durationShort,
       resolutionShort,
     ].filter(Boolean).join(" · ")
-    return (
+    return withPriceNote(
       <div
         className={`${containerClass} gap-1.5`}
-        style={toolbarTransform}
+        style={pillStyle}
         onClick={(e) => e.stopPropagation()}
       >
         <PromptEditButton nodeId={nodeId} compact />
@@ -224,7 +261,7 @@ export function GenerateVideoQuickToolbar({
             onClick={(e) => e.stopPropagation()}
           >
             <ToolbarSetting label={t("node.model")} icon={<Sparkles className="w-3 h-3" />}>
-              <ModelSearchSelect disabled={isRunning}
+              <ModelSearchSelect disabled={isRunning || wiredFrom.has("provider")}
                 value={currentProvider}
                 onChange={handleModelChange}
                 onOpenChange={handleOpenChange}
@@ -237,8 +274,8 @@ export function GenerateVideoQuickToolbar({
             </ToolbarSetting>
             {aspectOptions.length > 0 && (
               <ToolbarSetting label={t("node.aspect")} icon={<Ratio className="w-3 h-3" />}>
-                <Select disabled={isRunning} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
-                  <SelectTrigger className={ghostPopoverTriggerClass}>
+                <Select disabled={isRunning || wiredFrom.has("aspectRatio")} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
+                  <SelectTrigger className={ghostPopoverTriggerClass} title={wiredFrom.has("aspectRatio") ? t("node.fromSource", { source: wiredFrom.get("aspectRatio") ?? "" }) : undefined}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="node-menu-surface">
@@ -252,11 +289,12 @@ export function GenerateVideoQuickToolbar({
             {durationOptions.length > 0 && (
               <ToolbarSetting label={t("field.duration")} icon={<Clock className="w-3 h-3" />}>
                 <Select
+                  disabled={wiredFrom.has("duration")}
                   value={currentDuration !== undefined ? String(currentDuration) : ""}
                   onValueChange={handleDurationChange}
                   onOpenChange={handleOpenChange}
                 >
-                  <SelectTrigger className={ghostPopoverTriggerClass}>
+                  <SelectTrigger className={ghostPopoverTriggerClass} title={wiredFrom.has("duration") ? t("node.fromSource", { source: wiredFrom.get("duration") ?? "" }) : undefined}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="node-menu-surface">
@@ -306,10 +344,10 @@ export function GenerateVideoQuickToolbar({
           credits={credits}
           isRunning={isRunning}
           onRun={(nid) => runSingleNode?.(nid)}
-          disabled={imageGateBlocked}
+          disabled={runDisabled}
           disabledReason={runDisabledReason}
         />
-      </div>
+      </div>,
     )
   }
 
@@ -320,10 +358,10 @@ export function GenerateVideoQuickToolbar({
   // threaded as `afterAspect` (rendered between aspect and resolution in the
   // shared row). The model-row capability tooltip is threaded via
   // `modelGetTooltip`.
-  return (
+  return withPriceNote(
     <div
       className={`${containerClass} gap-0.5`}
-      style={toolbarTransform}
+      style={pillStyle}
       onClick={(e) => e.stopPropagation()}
     >
       <NodeRunStripControls
@@ -331,8 +369,9 @@ export function GenerateVideoQuickToolbar({
         isRunning={isRunning}
         credits={credits}
         onRun={(nid) => runSingleNode?.(nid)}
-        runDisabled={imageGateBlocked}
+        runDisabled={runDisabled}
         runDisabledReason={runDisabledReason}
+        lockedFields={wiredFrom}
         onOpenChange={handleOpenChange}
         isMulti={false}
         modelLabel={modelLabel}
@@ -356,11 +395,12 @@ export function GenerateVideoQuickToolbar({
              aspect, matching the original order. */
           durationOptions.length > 0 ? (
             <Select
+              disabled={wiredFrom.has("duration")}
               value={currentDuration !== undefined ? String(currentDuration) : ""}
               onValueChange={handleDurationChange}
               onOpenChange={handleOpenChange}
             >
-              <SelectTrigger className={ghostTriggerClass}>
+              <SelectTrigger className={ghostTriggerClass} title={wiredFrom.has("duration") ? t("node.fromSource", { source: wiredFrom.get("duration") ?? "" }) : undefined}>
                 <Clock className="opacity-70" />
                 <SelectValue>{durationShort}</SelectValue>
               </SelectTrigger>
@@ -375,7 +415,7 @@ export function GenerateVideoQuickToolbar({
           ) : null
         }
       />
-    </div>
+    </div>,
   )
 }
 

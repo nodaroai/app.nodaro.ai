@@ -321,7 +321,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
       if (!node) continue
 
       if (EXECUTABLE_TYPES.has(node.type ?? "")) {
-        totalCredits += estimateNodeCredits(node as { id?: string; type?: string; data?: Record<string, unknown> }, edges)
+        totalCredits += estimateNodeCredits(node as { id?: string; type?: string; data?: Record<string, unknown> }, edges, nodes)
       }
 
       for (const edge of edgesBySource.get(current) ?? []) {

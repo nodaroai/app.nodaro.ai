@@ -260,6 +260,7 @@ const HANDLE_LABELS_KO: Record<string, string> = {
   "Audio or Video": "오디오 또는 동영상",
   "Voices": "보이스",
   "Look": "룩",
+  "Settings": "설정",
   "Elements": "요소",
   "Assets": "에셋",
   "Scene": "장면",

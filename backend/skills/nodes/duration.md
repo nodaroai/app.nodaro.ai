@@ -28,7 +28,7 @@ generated_from: c607aa02c
 
 ## When to use
 
-Sets a Generate Script node's target length in seconds. Wire its `duration` output into Generate Script's `field-targetLength` input; the value replaces the script's own `targetLength` at run time.
+Sets a length in seconds. Wire its `duration` output into Generate Script's `field-targetLength` input (the script's target length) or into a Generate Video / Generate Video Pro `settings` input (the video's duration); the value replaces the node's own field at run time.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->
@@ -36,7 +36,7 @@ Sets a Generate Script node's target length in seconds. Wire its `duration` outp
 ## Common gotchas
 
 - It reports its number as text; the script coerces it to whole seconds and clamps it to 5–600.
-- Video and audio generation nodes don't take this connection.
+- On Generate Video it becomes the nearest duration the model renders (60 on Seedance 2 → 15 s; a tie goes to the shorter one), and the run is priced at that length. On Generate Video Pro it is the total length to stitch, clamped to that node's range.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

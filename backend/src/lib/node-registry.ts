@@ -1561,13 +1561,13 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "voice-delivery",  label: "Voice Delivery",  category: "parameter", description: "Pick pace + emotion + archetype for ElevenLabs Voice Design.", outputType: "text" },
 
   // ---- Text / value parameter pickers (PARAMETER_NODE_TYPES in @nodaro/shared → outputType text) ----
-  { type: "provider",     label: "Provider",     category: "parameter", description: "Select an AI provider and model (image / video / voice / script) to override the default provider on connected generation nodes.", outputType: "text", creditCost: 0 },
+  { type: "provider",     label: "Provider",     category: "parameter", description: "Choose a model (image or video) for the nodes it is wired into: its provider output sets the model of a Generate Video or Generate Video Pro node through that node's settings input.", outputType: "text", creditCost: 0 },
   { type: "tone",         label: "Tone",         category: "parameter", description: "Define a tone or style modifier text (e.g., \"cinematic\", \"cheerful\") to influence connected AI nodes.", outputType: "text" },
   { type: "style-guide",  label: "Style Guide",  category: "parameter", description: "Define visual style reference text for consistent aesthetics across AI generation nodes in a workflow.", outputType: "text" },
   { type: "motion",       label: "Motion",       category: "parameter", description: "Define the motion intensity level for connected video generation nodes.", outputType: "text" },
   { type: "scene-count",  label: "Scene Count",  category: "parameter", description: "Specify the number of scenes for script generation nodes.", outputType: "text" },
-  { type: "duration",     label: "Duration",     category: "parameter", description: "Set a target duration in seconds for connected video or audio generation nodes.", outputType: "text" },
-  { type: "aspect-ratio", label: "Aspect Ratio", category: "parameter", description: "Set the target aspect ratio for connected image and video generation nodes.", outputType: "text" },
+  { type: "duration",     label: "Duration",     category: "parameter", description: "Set a length in seconds: a Generate Script node's target length (its field-targetLength input) or a Generate Video / Generate Video Pro duration (their settings input).", outputType: "text" },
+  { type: "aspect-ratio", label: "Aspect Ratio", category: "parameter", description: "Set the aspect ratio of a Generate Video or Generate Video Pro node through its settings input.", outputType: "text" },
 
   // ---- Look family (15) — visual style, look, mood, atmosphere ----
   { type: "setting",              label: "Setting",              category: "parameter", description: "Pick a setting from 63 entries across 4 categories (indoor, urban, nature, fantastical). Emits a setting-description prompt fragment via the cinematography handle.", outputType: "text" },

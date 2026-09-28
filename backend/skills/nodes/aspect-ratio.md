@@ -28,14 +28,14 @@ generated_from: c607aa02c
 
 ## When to use
 
-(Add prose here. Auto-gen will preserve it across regenerations.)
+Sets the aspect ratio of the node it is wired into. Wire its `ratio` output into a Generate Video or Generate Video Pro `settings` input; the value replaces the node's own `aspectRatio` at run time.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas
 
-(Add prose here.)
+- A ratio the model doesn't render is fitted to the nearest one it does (e.g. `4:5` on Seedance 2 runs as `3:4`); the node's chips show the fitted ratio.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

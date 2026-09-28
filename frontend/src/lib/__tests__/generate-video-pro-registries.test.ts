@@ -27,8 +27,8 @@ describe("generate-video-pro registries", () => {
     expect(VIDEO_PRODUCER_TYPES.has("generate-video-pro")).toBe(true)
   })
 
-  it("NODE_MAPPABLE_FIELDS exposes only prompt (no negativePrompt field on the node)", () => {
-    expect(NODE_MAPPABLE_FIELDS["generate-video-pro"]).toEqual(["prompt"])
+  it("NODE_MAPPABLE_FIELDS exposes prompt and the Settings input's fields (no negativePrompt field on the node)", () => {
+    expect(NODE_MAPPABLE_FIELDS["generate-video-pro"]).toEqual(["prompt", "aspectRatio", "duration", "provider"])
   })
 
   it("MAIN_TEXT_HANDLE wires the real 'prompt' handle (NOT generate-video's stale 'in')", () => {

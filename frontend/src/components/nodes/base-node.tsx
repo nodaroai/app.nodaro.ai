@@ -67,6 +67,9 @@ interface BaseNodeProps {
    *  toolbars that supply their own zoom-scaled pill. Mutually exclusive with
    *  {@link topToolbarContent}. */
   readonly rawToolbarContent?: ReactNode
+  /** A line under the framed run strip (`topToolbarContent`), e.g. the
+   *  Settings input's price note. Bespoke `rawToolbarContent` draws its own. */
+  readonly runStripFootnote?: ReactNode
   /** Force `topToolbarContent`'s NodeToolbar to stay visible regardless of
    *  hover. Used when the toolbar contains dropdowns/popovers whose portaled
    *  content lands outside the node's hover boundary — without this the
@@ -168,6 +171,7 @@ function BaseNodeComponent({
   bottomToolbarContent,
   topToolbarContent,
   rawToolbarContent,
+  runStripFootnote,
   keepTopToolbarVisible,
   className,
   imageAspectRatio,
@@ -886,7 +890,7 @@ function BaseNodeComponent({
               <InlineGluedStripContext.Provider value={true}>
                 {rawToolbarContent
                   ? rawToolbarContent
-                  : <NodeRunStripShell>{topToolbarContent ?? <NodeSettingsButton nodeId={id} />}</NodeRunStripShell>}
+                  : <NodeRunStripShell footnote={runStripFootnote}>{topToolbarContent ?? <NodeSettingsButton nodeId={id} />}</NodeRunStripShell>}
               </InlineGluedStripContext.Provider>
             </div>
           )
@@ -908,7 +912,7 @@ function BaseNodeComponent({
             >
               {rawToolbarContent
                 ? rawToolbarContent
-                : <NodeRunStripShell>{topToolbarContent ?? <NodeSettingsButton nodeId={id} />}</NodeRunStripShell>}
+                : <NodeRunStripShell footnote={runStripFootnote}>{topToolbarContent ?? <NodeSettingsButton nodeId={id} />}</NodeRunStripShell>}
             </div>
           </NodeToolbar>
         )

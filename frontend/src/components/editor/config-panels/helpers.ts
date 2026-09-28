@@ -5,6 +5,7 @@ import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/typ
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
+import { withWiredSettings } from "@/lib/wired-settings"
 import type { LlmFeature } from "@nodaro/shared"
 /** Every node type whose output is prose/text. Used to build the compatible
  *  source list for any text-shaped field so the MappableField dropdown is
@@ -359,10 +360,12 @@ export function addCaptionsCreditId(
  * and an under-quote only for an imported or MCP-written 2560 px plan.
  */
 export function getModelIdentifier(
-  node: WorkflowNode,
+  storedNode: WorkflowNode,
   edges?: ReadonlyArray<WorkflowEdge>,
   nodes?: ReadonlyArray<WorkflowNode>,
 ): string {
+  // Priced as it runs: a wired Settings input sets the model and length.
+  const node = withWiredSettings(storedNode, edges, nodes)
   const data = node.data as Record<string, unknown>
   if (node.type === "dubbing" && /^(he|heb)$/i.test(String(data.targetLanguage ?? ""))) return "elevenlabs-dubbing-v2"
 

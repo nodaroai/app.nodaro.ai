@@ -644,6 +644,24 @@ export {
 
 export { NODE_MAPPABLE_FIELDS, SUNO_FIELD_HANDLE_FIELDS, fieldKeyFromHandle } from "./node-mappable-fields.js"
 export {
+  SETTINGS_INPUT_HANDLE,
+  SETTINGS_SOURCE_FIELDS,
+  SETTINGS_INPUT_CONSUMERS,
+  isSettingsSourceType,
+  settingsInputAccepts,
+  settingsInputFields,
+  settingsSourceForField,
+  connectedSettingsSources,
+  settingsProviderModels,
+  snapToModelDuration,
+  applySettingsInput,
+  resolveWiredSettings,
+  type SettingsInputProblem,
+  type WiredSetting,
+  type SettingsSourceType,
+  type SettingsField,
+} from "./settings-input.js"
+export {
   readScriptSettings,
   SCRIPT_SCENE_COUNT_RANGE,
   SCRIPT_TARGET_DURATION_RANGE,

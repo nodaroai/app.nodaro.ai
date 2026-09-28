@@ -260,6 +260,7 @@ const HANDLE_LABELS_PT_BR: Record<string, string> = {
   "Audio or Video": "Áudio ou vídeo",
   "Voices": "Vozes",
   "Look": "Look",
+  "Settings": "Configurações",
   "Elements": "Elementos",
   "Assets": "Entidades",
   "Scene": "Cena",

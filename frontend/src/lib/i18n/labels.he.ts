@@ -269,6 +269,7 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "Voices": "קולות",
   // Consumer input/output pips
   "Look": "מראה",
+  "Settings": "הגדרות",
   "Elements": "אלמנטים",
   "Assets": "נכסים",
   "Scene": "סצנה",

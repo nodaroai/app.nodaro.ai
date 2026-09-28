@@ -94,10 +94,6 @@ vi.mock("../run-node-button", () => ({
   ),
 }))
 
-vi.mock("@/lib/providers-config", () => ({
-  getProviderLabel: (_cat: string, provider: string) => provider,
-}))
-
 vi.mock("@/ee/hooks/use-model-credits", () => ({
   useModelCredits: () => 1,
 }))
@@ -174,7 +170,9 @@ const SIMPLE_NODES: SimpleNodeTestConfig[] = [
     Component: ProviderNode,
     expectedCategory: "parameter",
     expectedCredits: 0,
-    defaultData: { label: "Provider", provider: "openai", model: "gpt-4", category: "text" },
+    defaultData: { label: "Provider", provider: "seedance-2", category: "video" },
+    // The model's catalog name, not its id.
+    contentAssertion: { text: "Seedance 2" },
     placeholderAssertion: { text: "Select provider..." },
   },
   {

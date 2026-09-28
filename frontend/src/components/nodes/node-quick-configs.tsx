@@ -899,6 +899,7 @@ export function QuickConfigSelect({
   data,
   disabled,
   onOpenChange,
+  wiredFrom,
 }: {
   readonly nodeId: string
   readonly control: QuickConfigControl
@@ -907,6 +908,9 @@ export function QuickConfigSelect({
   readonly data: Record<string, unknown>
   readonly disabled?: boolean
   readonly onOpenChange?: (open: boolean) => void
+  /** The label of the node that sets this field through a Settings input: the
+   *  control shows its value, fixed, and never snaps the node's own field. */
+  readonly wiredFrom?: string
 }) {
   const t = useT()
   const localizeOption = useLocalizeOptionLabel()
@@ -947,6 +951,7 @@ export function QuickConfigSelect({
   // lists `options` is a stable ref, so this only runs when `value` changes.)
   // A customRange control accepts ANY in-range numeric — never snap those.
   useEffect(() => {
+    if (wiredFrom !== undefined) return
     if (value === "" || value == null) return
     if (options.length === 0) {
       // Hide-only fields (preserveOnHide) keep their stored value across modes;
@@ -959,7 +964,7 @@ export function QuickConfigSelect({
       updateNodeData(nodeId, control.write ? control.write(next) : { [control.field]: coerceQuickConfigValue(control, next) })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, options, nodeId, control, updateNodeData])
+  }, [value, options, nodeId, control, updateNodeData, wiredFrom])
 
   // No lever for the current provider → render nothing (matches the panel,
   // which hides provider-irrelevant controls).
@@ -1003,9 +1008,9 @@ export function QuickConfigSelect({
               writeValue(v)
             }}
             onOpenChange={onOpenChange}
-            disabled={disabled}
+            disabled={disabled || wiredFrom !== undefined}
           >
-            <SelectTrigger className={ghostTriggerClass} aria-label={control.ariaLabel} title={control.ariaLabel}>
+            <SelectTrigger className={ghostTriggerClass} aria-label={control.ariaLabel} title={wiredFrom !== undefined ? t("node.fromSource", { source: wiredFrom }) : control.ariaLabel}>
               {Icon && <Icon />}
               <SelectValue placeholder={shownLabel}>{shownLabel}</SelectValue>
             </SelectTrigger>

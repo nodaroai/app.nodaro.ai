@@ -1,3 +1,5 @@
+import { settingsInputFields } from "./settings-input.js"
+
 /**
  * Per-node-type list of field names eligible for fieldMappings resolution.
  * Text fields also participate in {} injection when the resolver sees a
@@ -14,10 +16,13 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   // Unified t2v/i2v node — replaced the two deprecated keys above (kept only
   // for back-compat with un-migrated workflow JSON). Mirrors text-to-video so
   // fieldMappings/{} injection AND missing-ref detection work on the live node.
-  "generate-video":      ["prompt", "negativePrompt"],
+  // + the fields its Settings input sets (settings-input.ts): a Generation
+  // Settings node wired there overrides the node's own aspect ratio, duration
+  // and model at run time, through the same resolver as a field mapping.
+  "generate-video":      ["prompt", "negativePrompt", ...settingsInputFields("generate-video")],
   // Trimmed multi-segment stitch variant of generate-video — prompt only, no
-  // negativePrompt field on the node.
-  "generate-video-pro":  ["prompt"],
+  // negativePrompt field on the node; + the fields its Settings input sets.
+  "generate-video-pro":  ["prompt", ...settingsInputFields("generate-video-pro")],
   // Span-replace sibling of generate-video-pro — prompt only, no
   // negativePrompt field on the node.
   "edit-video-pro":      ["prompt"],

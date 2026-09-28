@@ -1827,6 +1827,40 @@ describe("text-to-video", () => {
 // generate-video (negative handle parity — synthetic alias to t2v/i2v)
 // ---------------------------------------------------------------------------
 
+describe("generate-video — Settings input", () => {
+  const settingsNodes = [
+    { id: "ratio", type: "aspect-ratio", data: { label: "Aspect Ratio", ratio: "4:5" } },
+    { id: "len", type: "duration", data: { label: "Duration", seconds: 60 } },
+    { id: "veo", type: "provider", data: { label: "Provider", category: "video", provider: "veo3" } },
+    { id: "img", type: "provider", data: { label: "Image model", category: "image", provider: "nano-banana" } },
+  ]
+  const wire = (source: string) => ({ id: `e-${source}`, source, target: "n1", targetHandle: "settings" })
+
+  it("runs with the wired Aspect Ratio, Duration and Provider, fitted to the model", async () => {
+    const node = makeNode("generate-video", { provider: "seedance-2-fast", duration: 4, aspectRatio: "16:9" })
+    mockNodes = [node, ...settingsNodes]
+    mockEdges = [wire("ratio"), wire("len"), wire("veo")]
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a sunset" })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(node, makeCtx())
+    const call = mockRunTextToVideoGeneration.mock.calls[0]
+    expect(call[3]).toBe("veo3")
+    // 60 s → VEO 3.1's longest length (4/6/8); 4:5 → its nearest ratio.
+    expect(call[4]).toMatchObject({ duration: 8, aspectRatio: "9:16" })
+  })
+
+  it("refuses a wired Provider naming a model the node cannot run, before any request", async () => {
+    const node = makeNode("generate-video", { provider: "seedance-2-fast" })
+    mockNodes = [node, ...settingsNodes]
+    mockEdges = [wire("img")]
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a sunset" })
+    await expect(executeNode(node, makeCtx())).rejects.toThrow()
+    expect(mockRunTextToVideoGeneration).not.toHaveBeenCalled()
+    expect(mockRunVideoGeneration).not.toHaveBeenCalled()
+    expect(mockToastError).toHaveBeenCalled()
+  })
+})
+
 describe("generate-video — negative handle parity", () => {
   // generate-video is structurally aliased to text-to-video / image-to-video
   // at execute-node.ts:2014–2021 — the synthetic-node branch rewrites

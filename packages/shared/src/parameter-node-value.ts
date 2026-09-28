@@ -51,6 +51,10 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
   "scene-count",
   "duration",
   "aspect-ratio",
+  // Generation Settings "Provider": a model id read from data at run time, like
+  // duration / aspect-ratio (it used to be only a SKIP node, so a server run
+  // could not read it at all).
+  "provider",
   "music-genre",
   "music-mood",
   "instrumentation",
@@ -76,6 +80,7 @@ export const HINT_EXEMPT_PARAMETER_TYPES: ReadonlySet<string> = new Set([
   "scene-count",
   "duration",
   "aspect-ratio",
+  "provider",
 ])
 
 /**
@@ -357,6 +362,8 @@ export function getParameterValue(
       return data.seconds != null ? String(data.seconds) : undefined
     case "aspect-ratio":
       return trim(data.ratio)
+    case "provider":
+      return trim(data.provider)
     default:
       return undefined
   }

@@ -186,10 +186,10 @@ Free-form or enum settings that feed AI / video / audio generation nodes via Fie
 |------|-------------|-------------|
 | [Tone](./parameters/tone.md) | Define tone/style for AI generation | Set consistent tone across script and image generation |
 | [Style Guide](./parameters/style-guide.md) | Visual style reference text | Maintain consistent visual aesthetics across generated assets |
-| [Provider](./parameters/provider.md) | Select AI provider and model | Route generation to a specific model for downstream nodes |
+| [Provider](./parameters/provider.md) | Choose the model of the nodes it's wired into | Switch every connected video node's model from one place (their Settings input) |
 | [Scene Count](./parameters/scene-count.md) | Specify number of scenes to generate | Control script generation output length |
-| [Duration](./parameters/duration.md) | Set target duration in seconds | Define video or audio length for downstream nodes |
-| [Aspect Ratio](./parameters/aspect-ratio.md) | Define video/image aspect ratio | Set consistent dimensions (16:9, 9:16, 1:1, 4:5) |
+| [Duration](./parameters/duration.md) | Set target duration in seconds | A script's target length, or a video's duration (Settings input) |
+| [Aspect Ratio](./parameters/aspect-ratio.md) | Define a video's aspect ratio | Set consistent dimensions (16:9, 9:16, 1:1, 4:3, 4:5) across video nodes (Settings input) |
 | [Motion](./parameters/motion.md) | Control motion intensity | Adjust video generation movement (subtle/moderate/dynamic) |
 
 ### Picker nodes — Look family
