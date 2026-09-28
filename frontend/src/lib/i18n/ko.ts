@@ -2517,7 +2517,7 @@ export const ko: ChromeDict = {
   "integ.tabAll": "전체",
   "integ.tabConnected": "연결됨",
   "integ.tabSocial": "SNS",
-  "integ.tabPublishing": "블로그",
+  "integ.tabPublishing": "사이트·블로그",
   "integ.countConnected": "{n}개 연결됨",
   "integ.countAvailable": "{n}개 사용 가능",
   "integ.sectionAll": "모든 게시 대상",

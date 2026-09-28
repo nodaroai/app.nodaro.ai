@@ -9,6 +9,11 @@ type TabKey = "common" | CombineTransitionGroup
 
 const TAB_ORDER: ReadonlyArray<TabKey> = ["common", ...COMBINE_TRANSITION_GROUP_ORDER]
 
+/** Every English string the picker renders besides the tile labels — the
+ *  host localizes them through `localizeLabel` and its coverage test walks
+ *  this list. */
+export const COMBINE_TRANSITION_PICKER_CAPTIONS: readonly string[] = ["Common", "Transition category"]
+
 const TAB_LABELS: Record<TabKey, string> = {
   common: "Common",
   ...COMBINE_TRANSITION_GROUP_LABELS,
@@ -19,7 +24,12 @@ const FADE_OVERLAY_IDS = new Set<string>(["dip-to-black", "dip-to-white", "fadeg
 interface CombineTransitionPickerProps {
   readonly value: string
   readonly onChange: (id: string) => void
+  /** Localizes an English tile, tab or caption string — the host app's
+   *  option-label table. Identity when omitted, so English hosts need nothing. */
+  readonly localizeLabel?: (english: string) => string
 }
+
+const identity = (s: string): string => s
 
 /**
  * Tabbed picker for the combine-videos `transition` field.
@@ -35,6 +45,7 @@ interface CombineTransitionPickerProps {
 export const CombineTransitionPicker = memo(function CombineTransitionPicker({
   value,
   onChange,
+  localizeLabel = identity,
 }: CombineTransitionPickerProps) {
   const byTab = useMemo<Record<TabKey, CombineTransition[]>>(() => {
     const out: Record<TabKey, CombineTransition[]> = {
@@ -72,7 +83,7 @@ export const CombineTransitionPicker = memo(function CombineTransitionPicker({
     <div className="flex flex-col gap-2">
       <div
         role="tablist"
-        aria-label="Transition category"
+        aria-label={localizeLabel("Transition category")}
         className="flex flex-wrap gap-x-3 gap-y-1 border-b border-gray-200 dark:border-[#2D2D2D]"
       >
         {TAB_ORDER.map((tab) => {
@@ -94,7 +105,7 @@ export const CombineTransitionPicker = memo(function CombineTransitionPicker({
                     : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40",
               )}
             >
-              <span>{TAB_LABELS[tab]}</span>
+              <span>{localizeLabel(TAB_LABELS[tab])}</span>
               {hasPick && !active && (
                 <span className="inline-block size-1.5 rounded-full bg-[#ff0073]" aria-hidden="true" />
               )}
@@ -105,13 +116,14 @@ export const CombineTransitionPicker = memo(function CombineTransitionPicker({
 
       <div
         role="radiogroup"
-        aria-label={`${TAB_LABELS[activeTab]} transitions`}
+        aria-label={localizeLabel(TAB_LABELS[activeTab])}
         className="grid grid-cols-3 gap-1.5"
       >
         {activeEntries.map((entry) => (
           <TransitionTile
             key={entry.id}
             entry={entry}
+            label={localizeLabel(entry.label)}
             selected={entry.id === value}
             onSelect={() => onChange(entry.id)}
           />
@@ -123,10 +135,12 @@ export const CombineTransitionPicker = memo(function CombineTransitionPicker({
 
 function TransitionTile({
   entry,
+  label,
   selected,
   onSelect,
 }: {
   readonly entry: CombineTransition
+  readonly label: string
   readonly selected: boolean
   readonly onSelect: () => void
 }) {
@@ -149,7 +163,7 @@ function TransitionTile({
         {overlayId && <div className={cn("ct-overlay", `ct-overlay-${overlayId}`)} />}
         <div className={cn("ct-a", `ct-anim-${entry.id}`)} />
       </div>
-      <span className="ct-tile-label">{entry.label}</span>
+      <span className="ct-tile-label">{label}</span>
     </button>
   )
 }

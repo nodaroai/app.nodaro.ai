@@ -2579,7 +2579,7 @@ export const ja: ChromeDict = {
   "integ.tabAll": "すべて",
   "integ.tabConnected": "接続済み",
   "integ.tabSocial": "SNS",
-  "integ.tabPublishing": "ブログ",
+  "integ.tabPublishing": "サイト・ブログ",
   "integ.countConnected": "{n} 件接続済み",
   "integ.countAvailable": "{n} 件利用可能",
   "integ.sectionAll": "すべての公開先",

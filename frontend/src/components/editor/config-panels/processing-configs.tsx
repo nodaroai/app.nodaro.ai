@@ -1,6 +1,6 @@
 "use client"
 
-import { useLocalizeNodeLabel, useLocalizeHandleLabel } from "@/lib/i18n/labels"
+import { useLocalizeNodeLabel, useLocalizeHandleLabel, useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
@@ -109,6 +109,7 @@ const CROSSFADE_CURVE_KEYS: Record<
 
 export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<CombineVideosData>) {
   const t = useT()
+  const localizeOption = useLocalizeOptionLabel()
   // Fail-safe (CLAUDE.md pitfall-5 pattern): the manual trim fields are
   // HIDDEN under the smart methods (2026-07-24 — manual and smart are
   // ALTERNATIVE boundary-cut methods, not layers), so custom manual values
@@ -135,6 +136,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         <CombineTransitionPicker
           value={data.transition}
           onChange={(id) => onUpdate({ transition: id })}
+          localizeLabel={localizeOption}
         />
       </div>
 
