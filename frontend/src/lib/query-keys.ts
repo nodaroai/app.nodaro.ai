@@ -199,6 +199,12 @@ export const queryKeys = {
       ["executions", "list", params.status ?? "", String(params.viewAll ?? false), params.cursor ?? ""] as const,
   },
 
+  // Apps with OAuth access to the user's account
+  connectedApps: {
+    all: ["connected-apps"] as const,
+    list: () => ["connected-apps", "list"] as const,
+  },
+
   // API Tokens
   apiTokens: {
     all: ["api-tokens"] as const,

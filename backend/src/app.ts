@@ -282,6 +282,7 @@ import { nodesRoutes } from "./routes/nodes.js"
 import { pickerCatalogsRoutes } from "./routes/picker-catalogs.js"
 import { catalogsRoutes } from "./routes/catalogs.js"
 import { oauthRoutes } from "./routes/oauth.js"
+import { connectedAppsRoutes } from "./routes/connected-apps.js"
 import { registerOauthRegister } from "./routes/oauth-register.js"
 import { oauthPluginConnectRoutes, POLL_KEY_HEADER } from "./routes/oauth-plugin-connect.js"
 import { ssoRoutes } from "./routes/sso.js"
@@ -745,6 +746,8 @@ export async function buildApp() {
   await app.register(pickerCatalogsRoutes)
   await app.register(catalogsRoutes)
   await app.register(oauthRoutes)
+  // The grants a user gave through OAuth, and the button that takes one back.
+  await app.register(connectedAppsRoutes)
   await registerOauthRegister(app)
   await app.register(oauthPluginConnectRoutes)
   await app.register(ssoRoutes)

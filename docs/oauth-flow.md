@@ -519,10 +519,21 @@ curl -X POST https://nodaro.example.com/v1/oauth/revoke \
 Server-side, this sets `revoked_at` on the token row. Subsequent API
 calls with the revoked token return HTTP 401.
 
-**Users can also revoke from the Nodaro UI** at
-`/settings/developer-apps` (the "Authorized apps" section lists every
-app they've granted access to and offers a per-app revoke button).
-Treat 401 errors as "the user revoked" → re-prompt for consent.
+**Users can also revoke from the Nodaro UI**, under **Settings →
+Connected apps** (`/settings/connected-apps`). It lists every app and AI
+assistant (MCP client) with access to their account — its kind, when it
+was connected, when it was last used and the scopes it holds — with a
+revoke button on each. Revoking there ends the grant and every token
+issued under it at once. Treat 401 errors as "the user revoked" →
+re-prompt for consent.
+
+The screen reads two routes, for a signed-in browser session only (an
+app token cannot list or revoke the grants it lives under):
+
+| Method | Path | Returns |
+|--------|------|---------|
+| `GET` | `/v1/me/connected-apps` | `{ apps: [{ authorizationId, name, kind, homepageUrl, scopes, connectedAt, lastUsedAt }] }` — `kind` is `user` (a developer app), `first_party_mcp`, `dynamic_mcp` (an MCP client that registered itself; it chose its own name) or `community_instance` (a self-hosted install) |
+| `POST` | `/v1/me/connected-apps/:authorizationId/revoke` | `{ ok: true }`; 404 when the grant is not the caller's or is already revoked |
 
 When to call `revoke()` from your code:
 

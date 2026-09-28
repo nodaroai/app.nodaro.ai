@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import {
   Loader2, Globe, Lock, RotateCcw, FileText, Save, Info,
   Pencil, X, Download, Upload, Key, ChevronRight, LayoutList,
-  Plus, Trash2, Sparkles, Braces, KeyRound,
+  Plus, Trash2, Sparkles, Braces, KeyRound, Plug,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -400,6 +400,24 @@ export default function SettingsPage() {
           <ChevronRight className={cn("h-5 w-5 text-muted-foreground", isRtl && "rotate-180")} />
         </Link>
       )}
+
+      {/* Connected apps — every edition: OAuth apps and AI assistants (MCP)
+          reach an account on community installs too. */}
+      <Link
+        to="/settings/connected-apps"
+        className="mt-6 flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-6 hover:bg-muted/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <Plug className="h-5 w-5 text-muted-foreground" />
+          <div>
+            <h2 className="text-base font-semibold">{t("settings.connectedApps")}</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {t("settings.connectedAppsDesc")}
+            </p>
+          </div>
+        </div>
+        <ChevronRight className={cn("h-5 w-5 text-muted-foreground", isRtl && "rotate-180")} />
+      </Link>
 
       {/* Provider keys — self-hosted editions manage them under Integrations
           (next to the nodaro.ai connection); this is the pointer for anyone

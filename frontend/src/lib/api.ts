@@ -7601,6 +7601,30 @@ export async function getSharedExecutionStatus(
 // API Tokens
 // ---------------------------------------------------------------------------
 
+/** An app the user let into their account through OAuth (`GET /v1/me/connected-apps`). */
+export interface ConnectedApp {
+  authorizationId: string
+  /** The app's name. An MCP client that registered itself (`dynamic_mcp`) chose it. */
+  name: string | null
+  kind: "user" | "first_party_mcp" | "dynamic_mcp" | "community_instance" | (string & {})
+  homepageUrl: string | null
+  scopes: string[]
+  connectedAt: string
+  lastUsedAt: string | null
+}
+
+/** Every app with access to the user's account. Browser sessions only. */
+export async function listConnectedApps(): Promise<{ apps: ConnectedApp[] }> {
+  return apiRequest("/v1/me/connected-apps", "apiErr.listConnectedApps")
+}
+
+/** End an app's access: its grant and every token issued under it. */
+export async function revokeConnectedApp(authorizationId: string): Promise<{ ok: true }> {
+  return apiRequest(`/v1/me/connected-apps/${encodeURIComponent(authorizationId)}/revoke`, "apiErr.revokeConnectedApp", {
+    method: "POST",
+  })
+}
+
 export interface ApiToken {
   id: string
   name: string

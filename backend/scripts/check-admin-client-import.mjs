@@ -120,6 +120,14 @@ const ALLOWED_PATHS = [
   // req.userId)` in-handler (audited 2026-04-28). Service-role required
   // for atomic count+insert under the 5-app per-user cap.
   /^src\/routes\/developer-apps\.ts$/,
+  // Connected apps (/v1/me/connected-apps): browser-session only; every read
+  // and write scopes `.eq("user_id", req.userId)` on the grant in-handler.
+  // Service-role required: the listing joins `developer_apps` for the app's
+  // name, and that table's RLS lets only the app's OWNER read it (the user
+  // who granted access usually is not); revoking writes `developer_app_tokens`,
+  // whose RLS gives users SELECT only. Token writes are keyed by the grant id
+  // the caller-scoped update just returned, never by a request value alone.
+  /^src\/routes\/connected-apps\.ts$/,
 
   // OAuth: /v1/oauth/token is authenticated by client_id+client_secret,
   // not a user JWT — no user context to drive RLS. Token revocation is

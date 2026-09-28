@@ -78,6 +78,8 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "/settings/api",
   "/settings/developer-apps",
   "/settings/developer-apps/:id",
+  // Reached from the Settings page's "Connected apps" card (every edition).
+  "/settings/connected-apps",
 
   // Organizations axis — gated by org membership / hasOrganizations(), not a nav entry.
   "/join",
