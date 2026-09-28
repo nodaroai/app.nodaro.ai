@@ -222,6 +222,16 @@ describe("generate_video preset application", () => {
     expect(body?.presetId).toBeUndefined()
   })
 
+  // MiniMax Music follows a reference track; without one the route refuses, so
+  // the tool asks for it instead of dispatching.
+  it("asks for a reference track on minimax (route not hit)", async () => {
+    const { result, minimaxBody } = await runGenerateMusic({ prompt: "a ballad", model: "minimax" })
+
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toMatch(/reference_audio_url/)
+    expect(minimaxBody).toBeUndefined()
+  })
+
   it("lets an explicit prompt OVERRIDE the preset's prompt", async () => {
     const { result, body } = await runGenerateVideo({
       presetId: "generate-video/slow-push-in",
@@ -305,10 +315,12 @@ describe("generate_music preset application", () => {
     const { result, minimaxBody } = await runGenerateMusic({
       presetId: "generate-music/lofi-study",
       model: "minimax",
+      reference_audio_url: "https://cdn.nodaro.ai/audio/ref.mp3",
     })
 
     expect(result.isError).toBeUndefined()
     expect(minimaxBody?.provider).toBe("minimax")
+    expect(minimaxBody?.referenceAudioUrl).toBe("https://cdn.nodaro.ai/audio/ref.mp3")
     expect(minimaxBody?.genre).toBe("lofi")
     expect(minimaxBody?.mood).toBe("chill, relaxed, nostalgic")
     expect(minimaxBody?.duration).toBe(30)
@@ -384,6 +396,7 @@ describe("generate_music preset application", () => {
     const { result, sunoBody, minimaxBody } = await runGenerateMusic({
       presetId: "11111111-1111-1111-1111-111111111111",
       prompt: "x",
+      reference_audio_url: "https://cdn.nodaro.ai/audio/ref.mp3",
     })
 
     expect(result.isError).toBeUndefined()

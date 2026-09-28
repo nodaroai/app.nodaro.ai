@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
-import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider } from "@nodaro/shared";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
@@ -3346,7 +3346,9 @@ function executeNodeCore(
     // no reference song / voice / instrumental (E006), so say so here instead
     // of spending a round trip to be told. Same refusal the route and the DAG
     // payload-builder make; this one just arrives instantly.
-    if ((d.provider || "minimax") === "minimax" && !refUrl) {
+    // The model the node runs — a saved model that is gone runs the default.
+    const musicProvider = resolveMusicProvider(d.provider);
+    if (musicProvider === "minimax" && !refUrl) {
       toast.error(nodeRunError(d.label, "nodeRun.miniMaxNeedsAReferenceSong"));
       return Promise.reject(new Error("Reference audio required"));
     }
@@ -3356,7 +3358,7 @@ function executeNodeCore(
       () =>
         generateMusicApi(
           finalPrompt,
-          d.provider || undefined,
+          musicProvider,
           d.duration || undefined,
           finalGenre || undefined,
           finalMood || undefined,

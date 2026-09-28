@@ -159,7 +159,7 @@ exports[`per-node skill file snapshots > generate-music.md auto-gen blocks match
   "data": {
     "label": "Generate Music",
     "prompt": "",
-    "provider": "suno",
+    "provider": "minimax",
     "duration": 8,
     "genre": "",
     "mood": "",
@@ -184,7 +184,9 @@ exports[`per-node skill file snapshots > generate-music.md auto-gen blocks match
 - \`lyrics\`
 - \`title\`
 - \`genre\`
-- \`mood\`",
+- \`mood\`
+- \`reference_audio_url\`
+- \`reference_audio_asset_id\`",
   "node-data-shape": "**Type:** \`generate-music\`
 **Category:** ai
 **Credit cost:** \`180\` at list price — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's charged figure.
@@ -221,7 +223,7 @@ exports[`per-node skill file snapshots > generate-music.md auto-gen blocks match
 {
   "label": "Generate Music",
   "prompt": "",
-  "provider": "suno",
+  "provider": "minimax",
   "duration": 8,
   "genre": "",
   "mood": "",

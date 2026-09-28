@@ -1,7 +1,7 @@
 ---
 node_type: generate-music
-generated_at: 2026-09-27T12:51:23.420Z
-generated_from: c607aa02c
+generated_at: 2026-09-28T23:06:56.298Z
+generated_from: ec71996de
 ---
 
 # generate-music
@@ -43,7 +43,7 @@ generated_from: c607aa02c
 {
   "label": "Generate Music",
   "prompt": "",
-  "provider": "suno",
+  "provider": "minimax",
   "duration": 8,
   "genre": "",
   "mood": "",
@@ -71,6 +71,8 @@ generated_from: c607aa02c
 - `title`
 - `genre`
 - `mood`
+- `reference_audio_url`
+- `reference_audio_asset_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use
@@ -96,7 +98,7 @@ Single soundtrack for the assembled video — after all video shots are approved
   "data": {
     "label": "Generate Music",
     "prompt": "",
-    "provider": "suno",
+    "provider": "minimax",
     "duration": 8,
     "genre": "",
     "mood": "",

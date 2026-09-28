@@ -1,6 +1,6 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
@@ -372,6 +372,10 @@ export function getModelIdentifier(
   // Render Video: the frame-size tier of the plan it will actually send, from
   // the SAME resolver the orchestrator uses to pick the row it charges.
   if (node.type === "render-video") return renderVideoCreditIdForNode(node, nodes, edges)
+
+  // Generate Music reserves on the music id whatever the model (the route and
+  // the orchestrator both do); the model id "minimax" is the MiniMax VIDEO price.
+  if (node.type === "generate-music") return MUSIC_CREDIT_ID
 
   // Component nodes: return empty string so the fallback estimateNodeCredits is used
   // (component cost depends on estimatedCredits from the published metadata, not a model lookup)

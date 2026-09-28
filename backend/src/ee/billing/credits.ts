@@ -1,4 +1,4 @@
-import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings } from "@nodaro/shared"
+import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -3472,6 +3472,10 @@ function getNodeModelIdentifier(
 
   // AI Writer always uses "ai-writer"
   if (nodeType === "ai-writer") return "ai-writer"
+
+  // Generate Music reserves on the music id whatever the model (the route and
+  // the payload builder both do); the model id "minimax" is the MiniMax VIDEO price.
+  if (nodeType === "generate-music") return MUSIC_CREDIT_ID
 
   // LLM Chat uses tiered credit identifier based on selected model. Reasoning
   // effort and advanced mode are passed through too — actual billing bumps a

@@ -408,6 +408,14 @@ const GET_RECIPE_UGC_SENTENCE_BYTES = 136
 // this suite: 373_062 total − 372_935 base = 127 B, which keeps the 37 B of
 // headroom the list had before.
 const GENERATE_SCRIPT_STYLE_GUIDE_BYTES = 127
+// RAISED 2026-09-29 by two arguments on `generate_music` and nothing else:
+// `reference_audio_url` / `reference_audio_asset_id`. MiniMax Music follows a
+// reference track and its route refuses a run without one, so `model:
+// "minimax"` could never run over MCP; the model's line now says so instead of
+// "short instrumental loops". No tool was added, so the fixture does NOT move.
+// measured by this suite: 373_260 total − 373_053 base = 207 B, which keeps the
+// 46 B of headroom the list had before.
+const GENERATE_MUSIC_REFERENCE_BYTES = 207
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -443,7 +451,8 @@ export const TOOL_WIRE_BUDGET = {
     AUDIO_SYNC_TOOL_BYTES +
     UGC_BUILDER_TOOL_BYTES +
     GET_RECIPE_UGC_SENTENCE_BYTES +
-    GENERATE_SCRIPT_STYLE_GUIDE_BYTES,
+    GENERATE_SCRIPT_STYLE_GUIDE_BYTES +
+    GENERATE_MUSIC_REFERENCE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

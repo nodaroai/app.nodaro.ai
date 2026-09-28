@@ -7916,7 +7916,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 5,
     inputs: ["prompt", "ref-audio", "audio-style"],
     outputs: ["audio"],
-    defaultData: { label: "Generate Music", prompt: "", provider: "suno", duration: 8, genre: "", mood: "", instrumental: true, lyrics: "", referenceAudioUrl: "", referenceYouTubeUrl: "", referenceSource: "none", modelVersion: "stereo-large", fieldMappings: {} },
+    // "minimax" is DEFAULT_MUSIC_PROVIDER, written out (gen-skills parses this
+    // file textually). New nodes used to start on "suno", a model this node
+    // never ran: every first run failed validation.
+    defaultData: { label: "Generate Music", prompt: "", provider: "minimax", duration: 8, genre: "", mood: "", instrumental: true, lyrics: "", referenceAudioUrl: "", referenceYouTubeUrl: "", referenceSource: "none", modelVersion: "stereo-large", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "audio" as const }],
     exposableFields: [
       { key: "duration", label: "Duration (s)", type: "slider" as const, min: 1, max: 60, step: 1 },

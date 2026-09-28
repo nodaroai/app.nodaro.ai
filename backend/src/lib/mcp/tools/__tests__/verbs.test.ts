@@ -452,12 +452,15 @@ describe("generate_music verb", () => {
       model: "minimax",
       duration: 20,
       instrumental: true,
+      reference_audio_url: "https://cdn.nodaro.ai/audio/ref.mp3",
     })
 
     expect(result.isError).toBeUndefined()
     expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-gm")
     expect(received.body?.provider).toBe("minimax")
     expect(received.body?.duration).toBe(20)
+    // MiniMax Music follows a reference track — the route refuses a run without one.
+    expect(received.body?.referenceAudioUrl).toBe("https://cdn.nodaro.ai/audio/ref.mp3")
   })
 
   it("dispatches model=suno-v5 to /v1/suno/generate with model=V5", async () => {

@@ -273,6 +273,7 @@ import {
   rejectManualEdit,
   rejectAllManualEdits,
 } from "../execute-node"
+import { generateMusicApi } from "@/lib/api"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -2074,6 +2075,17 @@ describe("generate-music", () => {
     await expect(promise).rejects.toThrow("Reference audio required")
     expect(mockToastError).toHaveBeenCalled()
     expect(mockPollJobWithNodeUpdate).not.toHaveBeenCalled()
+  })
+
+  // New nodes started on "suno" — a model this node never ran, so every first
+  // run failed validation. A model that is gone runs as MiniMax Music.
+  it.each(["suno", "musicgen"])("sends MiniMax Music for a node saved with %s", async (provider) => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "jazz", audioUrl: "https://cdn.example/ref.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("generate-music", { provider }), makeCtx())
+    const apiCall = mockPollJobWithNodeUpdate.mock.calls[0][1] as () => Promise<unknown>
+    await apiCall()
+    expect(vi.mocked(generateMusicApi).mock.calls[0]?.[1]).toBe("minimax")
   })
 
   it("calls pollJobWithNodeUpdate via runProcessingNode", async () => {

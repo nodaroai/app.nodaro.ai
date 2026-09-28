@@ -33,8 +33,14 @@ The Generate Music node produces original music with MiniMax, steered by a **ref
 
 ## Inputs & Outputs
 
-- **Input**: `in` -- optional upstream text connection for dynamic prompt via field mapping; an upstream **audio** connection supplies the required reference track
+- **Inputs**: `prompt` -- text producers for the prompt; `ref-audio` -- an audio node that supplies the required reference track; `audio-style` -- Music Genre / Music Mood / Instrumentation nodes
 - **Output**: `audio` -- generated music track (URL)
+
+## Credit pricing
+
+Every run is priced on the `generate-music` rate, whatever the model: the node's price, the workflow estimate and the reservation all read it.
+
+A node saved with a model this node no longer offers — or the `suno` that new nodes used to start on — runs as MiniMax Music, and opening its settings stores that model.
 ## Best Practices
 
 - Write detailed prompts that specify genre, instruments, tempo, mood, and structure. "Upbeat electronic dance track, 120 BPM, synth leads, punchy drums, building energy" works better than "dance music."
@@ -56,4 +62,4 @@ The Generate Music node produces original music with MiniMax, steered by a **ref
 - The prompt maximum is 3000 characters, providing room for very detailed descriptions including specific instruments, arrangement notes, and dynamic changes.
 - The output is never a copy of the reference: it influences mood and instrumentation rather than melody.
 - Generated music tracks can be connected to Merge Video & Audio for adding background music to video, or to Mix Audio for layering with other audio sources.
-- Use the `instrumental` option to generate music without vocals, and the `duration` field to control track length. (This node generates via MiniMax; Suno model/version selection lives in the dedicated Suno nodes.)
+- Use the `instrumental` option to generate music without vocals. MiniMax Music takes no length setting: the reference and the lyrics shape the track. (This node generates via MiniMax; Suno model/version selection lives in the dedicated Suno nodes.)

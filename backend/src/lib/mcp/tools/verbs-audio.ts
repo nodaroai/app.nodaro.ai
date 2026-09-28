@@ -101,7 +101,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "Generate a music track from a text prompt. Returns a job_id.\n\n" +
         "**Picking a model**: Default `suno-v6` (flagship: richer detail, natural vocals). " +
         "`suno-v6_wild` is bolder and less predictable; `suno-v6_mini` is faster. " +
-        "`suno-v5_5` / `suno-v5` / `suno` are earlier generations. `minimax` for short instrumental loops. " +
+        "`suno-v5_5` / `suno-v5` / `suno` are earlier generations. `minimax` follows a reference track. " +
         "For instrumental tracks set `instrumental: true`; for songs with vocals " +
         "provide `lyrics`.\n\n" +
         "**Presets/templates**: call list_node_presets { nodeType: \"generate-music\" } " +
@@ -138,7 +138,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             `Music model. Default ${DEFAULT_SUNO_CATALOG_ID}; suno-v6_wild bolder, suno-v6_mini faster; ` +
-            "suno-v5_5 / suno-v5 / suno earlier; minimax for short instrumental loops.",
+            "suno-v5_5 / suno-v5 / suno earlier; minimax needs a reference_audio_url.",
           ),
         duration: z.number().min(1).max(30).optional(),
         instrumental: z.boolean().optional(),
@@ -155,6 +155,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         ),
         genre: z.string().optional(),
         mood: z.string().optional(),
+        reference_audio_url: z.string().url().optional().describe("minimax: the song, voice or instrumental it follows."),
+        reference_audio_asset_id: z.string().optional().describe("Or a Nodaro audio job id."),
       },
               outputSchema: {
           jobId: z.string(),
@@ -256,6 +258,33 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       // MiniMax goes through /v1/generate-music. Dispatch by catalog id.
       const sunoVersion = SUNO_VERSION_BY_CATALOG_ID.get(modelId)
       const isSuno = sunoVersion !== undefined
+      // MiniMax Music is reference-conditioned: without a reference track the
+      // provider refuses the run, so ask for one here instead of dispatching a
+      // job the route will refuse.
+      const referenceAudioUrl = isSuno
+        ? undefined
+        : ((effective.reference_audio_url as string | undefined) ??
+          (effective.reference_audio_asset_id
+            ? await resolveAssetId({
+                assetId: effective.reference_audio_asset_id as string,
+                userId: session.userId,
+                expectedKind: "audio",
+              })
+            : undefined) ??
+          undefined)
+      if (!isSuno && !referenceAudioUrl) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                "minimax (MiniMax Music) needs a reference song, voice or instrumental: pass reference_audio_url " +
+                "or reference_audio_asset_id — or use a Suno model (the default), which needs none.",
+            },
+          ],
+          isError: true as const,
+        }
+      }
       const url = isSuno ? "/v1/suno/generate" : "/v1/generate-music"
       // Fold mcp's generic `genre` + `mood` into suno's `style` (same intent)
       // — previously `mood` was silently dropped on the suno path. In custom
@@ -313,6 +342,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             lyrics,
             genre,
             mood,
+            referenceAudioUrl,
             mcp_client: session.clientName,
             userId: session.userId,
           }
