@@ -1,10 +1,12 @@
 import { getCharacter, getObjectById, getLocationById } from "@/lib/api"
-import { resolveSheetSections, planSheetGeneration } from "@nodaro/shared"
+import { resolveSheetSections, planSheetGeneration, referenceSheetCreditId } from "@nodaro/shared"
 import type { EntityKind, SheetType, SheetFlavour } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { SHEET_TAB_ADAPTERS } from "./sheet-tab-adapter"
+import { fetchModelCredits } from "@/hooks/use-model-credit-cost"
+import { SHEET_TAB_ADAPTERS, SHEET_PANEL_PROVIDER } from "./sheet-tab-adapter"
 import { pollJobToCompletion } from "../workflow-editor/poll-job"
-import { creditUnits } from "@/lib/credit-units"
+import { creditUnitLabel, creditUnits } from "@/lib/credit-units"
+import { tx } from "@/lib/i18n"
 import { WorkflowStaleError, type ExecutionContext } from "../workflow-editor/types"
 
 /**
@@ -61,14 +63,47 @@ async function runBounded<T>(items: readonly T[], limit: number, fn: (item: T) =
   await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, worker))
 }
 
-function defaultConfirm(missingCount: number, label: string, assemblyFee: number): boolean {
-  const n = missingCount
-  const estTotal = n + assemblyFee // panels are ≈1 credit each (nano-banana) + the flat assembly fee
-  return window.confirm(
-    `"${label}": this reference sheet needs ${n} more panel${n === 1 ? "" : "s"} generated from the ` +
-      `main image — about ${creditUnits(n)} credit${creditUnits(n) === 1 ? "" : "s"} (≈${creditUnits(1)} each), then composing adds ${creditUnits(assemblyFee)} ` +
-      `credits. ≈ ${creditUnits(estTotal)} credits total. Generate now?`,
-  )
+/** The live prices the cost confirm quotes: one panel, and composing the sheet. */
+export interface SheetPrices {
+  readonly panel: number
+  readonly compose: number
+}
+
+/** How long the confirm waits for the prices before it asks without them. The
+ *  lookup has no timeout of its own, and a stalled one must not stall the run. */
+export const SHEET_PRICE_WAIT_MS = 5000
+
+/** Both prices for this sheet, or `undefined` when either is unknown (a build
+ *  without credits, a failed lookup, or one still pending after the wait) —
+ *  the confirm then quotes no figure. */
+async function fetchSheetPrices(flavour: SheetFlavour): Promise<SheetPrices | undefined> {
+  let timer: number | undefined
+  const waited = new Promise<undefined>((resolve) => { timer = window.setTimeout(resolve, SHEET_PRICE_WAIT_MS) })
+  const looked = Promise.all([
+    fetchModelCredits(SHEET_PANEL_PROVIDER),
+    fetchModelCredits(referenceSheetCreditId(flavour)),
+  ])
+  const answer = await Promise.race([looked, waited])
+  window.clearTimeout(timer)
+  if (!answer) return undefined
+  const [panel, compose] = answer
+  return panel !== undefined && panel > 0 && compose !== undefined && compose > 0 ? { panel, compose } : undefined
+}
+
+/** The cost confirm's message: every panel at its live price plus the compose
+ *  fee when both are known, the panel count alone otherwise. */
+export function sheetPanelsConfirmText(missingCount: number, label: string, prices: SheetPrices | undefined): string {
+  const one = missingCount === 1
+  if (!prices) return tx(one ? "sheet.confirmPanelsOne" : "sheet.confirmPanels", { label, n: missingCount })
+  const panels = missingCount * prices.panel
+  return tx(one ? "sheet.confirmPanelsPricedOne" : "sheet.confirmPanelsPriced", {
+    label,
+    n: missingCount,
+    panels: creditUnits(panels),
+    compose: creditUnits(prices.compose),
+    total: creditUnits(panels + prices.compose),
+    u: creditUnitLabel(tx("credits.unitShort")),
+  })
 }
 
 export async function ensureNodeSheetPanels(args: {
@@ -79,9 +114,6 @@ export async function ensureNodeSheetPanels(args: {
   ctx: ExecutionContext
   nodeId: string
   label: string
-  /** Flat assembly fee (still 4 / motion 6) — shown in the cost confirm so the
-   *  user sees the panel cost + assembly total before generating. Default 4. */
-  assemblyFee?: number
   /** Override the cost confirm (tests). Return false to cancel. */
   confirm?: (missingCount: number, label: string) => boolean
 }): Promise<void> {
@@ -103,8 +135,8 @@ export async function ensureNodeSheetPanels(args: {
     throw new Error(`Approve a main image for the connected ${entityKind} before generating its sheet`)
   }
 
-  const assemblyFee = args.assemblyFee ?? 4
-  const confirm = args.confirm ?? ((n, l) => defaultConfirm(n, l, assemblyFee))
+  const prices = args.confirm ? undefined : await fetchSheetPrices(flavour)
+  const confirm = args.confirm ?? ((n, l) => window.confirm(sheetPanelsConfirmText(n, l, prices)))
   if (!confirm(missing.length, label)) throw new Error(SHEET_STAGE_A_CANCELLED)
   if (ctx.signal?.aborted) throw new Error(SHEET_STAGE_A_CANCELLED)
 

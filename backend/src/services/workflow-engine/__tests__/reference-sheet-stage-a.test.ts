@@ -95,6 +95,21 @@ describe("ensureWorkflowSheetPanels (workflow-run Stage A)", () => {
     expect(body.attachToColumn).toBe("angles")
   })
 
+  it("asks every panel for the sheet's panel model", async () => {
+    vi.useFakeTimers()
+    const p = ensureWorkflowSheetPanels(sheetNode, ctx, graph())
+    await vi.runAllTimersAsync()
+    await p
+
+    expect(fetchMock).toHaveBeenCalled()
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(
+        JSON.parse((init as { body: string }).body).provider,
+        "the editor's SHEET_PANEL_PROVIDER (sheet-tab-adapter.ts) and docs/nodes/ai-image/reference-sheet.md name this model too — change them together",
+      ).toBe("nano-banana")
+    }
+  })
+
   it("no-ops (no generation) when the entity already has every planned panel", async () => {
     entityRow = { ...baseRow(), angles: plannedVariants.map((v) => ({ name: v, url: `u/${v}` })) }
     await ensureWorkflowSheetPanels(sheetNode, ctx, graph())

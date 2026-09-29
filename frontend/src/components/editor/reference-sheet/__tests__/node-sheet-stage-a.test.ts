@@ -26,7 +26,16 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: { getState: () => ({ updateNodeData }) },
 }))
 
-import { ensureNodeSheetPanels, SHEET_STAGE_A_CANCELLED } from "../node-sheet-stage-a"
+// The live charged price per credit id; a missing id is "no price" (a build
+// without credits, or a failed lookup). The confirm used to print a fixed
+// 1 credit per panel and 4 (6 for motion) to compose, ten-fold stale.
+const livePrices = vi.hoisted(() => ({ byId: {} as Record<string, number | undefined> }))
+const fetchModelCredits = vi.fn(async (id: string) => livePrices.byId[id])
+vi.mock("@/hooks/use-model-credit-cost", () => ({
+  fetchModelCredits: (id: string) => fetchModelCredits(id),
+}))
+
+import { ensureNodeSheetPanels, sheetPanelsConfirmText, SHEET_PRICE_WAIT_MS, SHEET_STAGE_A_CANCELLED } from "../node-sheet-stage-a"
 
 const ctx = { signal: undefined } as unknown as ExecutionContext
 
@@ -105,5 +114,111 @@ describe("ensureNodeSheetPanels", () => {
 
     await expect(ensureNodeSheetPanels({ ...base, confirm })).rejects.toThrow(/main image/i)
     expect(generateCharacterAsset).not.toHaveBeenCalled()
+  })
+
+  it("asks each panel for the model its price is quoted by", async () => {
+    getCharacter.mockResolvedValue(charRow())
+    await ensureNodeSheetPanels({ ...base, confirm: () => true })
+
+    expect(generateCharacterAsset).toHaveBeenCalled()
+    for (const [req] of generateCharacterAsset.mock.calls) expect(req).toMatchObject({ provider: "nano-banana" })
+  })
+})
+
+describe("the cost confirm before panels are generated", () => {
+  const missingCount = () =>
+    planSheetGeneration("character", resolveSheetSections("character", "turnaround"), base.flavour, {}, "Hero").missing.length
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getCharacter.mockResolvedValue(charRow()) // empty buckets → every planned panel missing
+    livePrices.byId = { "nano-banana": 10, "reference-sheet:assembly": 40, "reference-sheet:assembly-motion": 60 }
+  })
+
+  async function confirmMessage(flavour = base.flavour): Promise<string> {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false)
+    await expect(ensureNodeSheetPanels({ ...base, flavour })).rejects.toThrow(SHEET_STAGE_A_CANCELLED)
+    expect(confirm).toHaveBeenCalledTimes(1)
+    return String(confirm.mock.calls[0]?.[0])
+  }
+
+  it("quotes every missing panel at the live panel price plus the live compose fee", async () => {
+    const n = missingCount()
+    expect(n).toBeGreaterThan(1)
+
+    const message = await confirmMessage()
+
+    expect(message).toContain(`${n} more panels`)
+    expect(message).toContain(`about ${n * 10} CR`)
+    expect(message).toContain("adds 40 CR")
+    expect(message).toContain(`about ${n * 10 + 40} CR in all`)
+    expect(fetchModelCredits).toHaveBeenCalledWith("nano-banana")
+    expect(fetchModelCredits).toHaveBeenCalledWith("reference-sheet:assembly")
+    expect(generateCharacterAsset).not.toHaveBeenCalled()
+  })
+
+  it("a motion sheet quotes the motion compose fee", async () => {
+    const message = await confirmMessage({ ...base.flavour, outputFormat: "motion" as never })
+
+    expect(message).toContain("adds 60 CR")
+    expect(fetchModelCredits).toHaveBeenCalledWith("reference-sheet:assembly-motion")
+  })
+
+  it("with no live price it names the panel count and quotes no figure", async () => {
+    livePrices.byId = { "nano-banana": 10 } // the compose price did not load
+
+    const message = await confirmMessage()
+
+    expect(message).toContain(`${missingCount()} more panels`)
+    expect(message).not.toMatch(/\d+ CR/)
+  })
+
+  it("a price lookup that never answers doesn't hold the run: after the wait it asks without figures", async () => {
+    vi.useFakeTimers()
+    try {
+      const never = () => new Promise<number | undefined>(() => {})
+      fetchModelCredits.mockImplementationOnce(never).mockImplementationOnce(never)
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false)
+
+      const run = expect(ensureNodeSheetPanels(base)).rejects.toThrow(SHEET_STAGE_A_CANCELLED)
+      await vi.advanceTimersByTimeAsync(SHEET_PRICE_WAIT_MS)
+      await run
+
+      expect(confirm).toHaveBeenCalledTimes(1)
+      expect(String(confirm.mock.calls[0]?.[0])).toContain(`${missingCount()} more panels`)
+      expect(String(confirm.mock.calls[0]?.[0])).not.toMatch(/\d+ CR/)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("a custom confirm skips the price lookup", async () => {
+    await expect(ensureNodeSheetPanels({ ...base, confirm: () => false })).rejects.toThrow(SHEET_STAGE_A_CANCELLED)
+    expect(fetchModelCredits).not.toHaveBeenCalled()
+  })
+})
+
+// The worked examples in docs/nodes/ai-image/reference-sheet.md ("Pricing").
+describe("sheetPanelsConfirmText", () => {
+  it("prices four new panels plus the compose fee (4×10 + 40 = 80)", () => {
+    const message = sheetPanelsConfirmText(4, "Hero sheet", { panel: 10, compose: 40 })
+    expect(message).toBe(
+      "“Hero sheet” needs 4 more panels made from the main image, about 40 CR. " +
+        "Composing the sheet then adds 40 CR: about 80 CR in all. Generate them now?",
+    )
+  })
+
+  it("prices one panel in the singular (1×10 + 40 = 50)", () => {
+    const message = sheetPanelsConfirmText(1, "Hero sheet", { panel: 10, compose: 40 })
+    expect(message).toBe(
+      "“Hero sheet” needs one more panel made from the main image, about 10 CR. " +
+        "Composing the sheet then adds 40 CR: about 50 CR in all. Generate it now?",
+    )
+  })
+
+  it("without prices it asks about the count alone", () => {
+    expect(sheetPanelsConfirmText(3, "Hero sheet", undefined)).toBe(
+      "“Hero sheet” needs 3 more panels made from the main image before the sheet can be composed. Generate them now?",
+    )
   })
 })

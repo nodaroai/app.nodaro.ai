@@ -6397,6 +6397,14 @@ export const en = {
 
   // ── Reference-sheet panel — a held result ───────────────────────────────
   "sheet.panelAwaitingReview": "Awaiting review",
+  // ── Reference-sheet node — the cost confirm before it generates the panels
+  // the entity lacks. Priced when both live prices are known ({u} is the
+  // display unit); the panel count alone otherwise (no credits, or a failed
+  // price lookup).
+  "sheet.confirmPanels": "“{label}” needs {n} more panels made from the main image before the sheet can be composed. Generate them now?",
+  "sheet.confirmPanelsOne": "“{label}” needs one more panel made from the main image before the sheet can be composed. Generate it now?",
+  "sheet.confirmPanelsPriced": "“{label}” needs {n} more panels made from the main image, about {panels} {u}. Composing the sheet then adds {compose} {u}: about {total} {u} in all. Generate them now?",
+  "sheet.confirmPanelsPricedOne": "“{label}” needs one more panel made from the main image, about {panels} {u}. Composing the sheet then adds {compose} {u}: about {total} {u} in all. Generate it now?",
 
   // ── Content review (operator surface, /admin/review) ────────────────────
   "adminReview.title": "Content Review",

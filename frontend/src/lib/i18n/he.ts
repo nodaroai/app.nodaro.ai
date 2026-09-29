@@ -6352,6 +6352,11 @@ export const he: ChromeDict = {
 
   // Reference-sheet panel — a held result
   "sheet.panelAwaitingReview": "ממתין לבדיקה",
+  // Reference-sheet node — the cost confirm before it generates missing panels
+  "sheet.confirmPanels": "לרכיב \"{label}\" חסרים עוד {n} פאנלים שנוצרים מהתמונה הראשית, ורק אחריהם אפשר להרכיב את הגיליון. ליצור אותם עכשיו?",
+  "sheet.confirmPanelsOne": "לרכיב \"{label}\" חסר עוד פאנל אחד שנוצר מהתמונה הראשית, ורק אחריו אפשר להרכיב את הגיליון. ליצור אותו עכשיו?",
+  "sheet.confirmPanelsPriced": "לרכיב \"{label}\" חסרים עוד {n} פאנלים שנוצרים מהתמונה הראשית, בכ־{panels} {u}. הרכבת הגיליון מוסיפה {compose} {u}, ובסך הכול כ־{total} {u}. ליצור אותם עכשיו?",
+  "sheet.confirmPanelsPricedOne": "לרכיב \"{label}\" חסר עוד פאנל אחד שנוצר מהתמונה הראשית, בכ־{panels} {u}. הרכבת הגיליון מוסיפה {compose} {u}, ובסך הכול כ־{total} {u}. ליצור אותו עכשיו?",
 
   // Content review (operator surface, /admin/review). Glossary: review = בדיקה.
   "adminReview.title": "בדיקת תוכן",
