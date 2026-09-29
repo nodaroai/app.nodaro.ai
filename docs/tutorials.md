@@ -6,31 +6,31 @@ home screen (`/projects`, or **Tutorials** in the sidebar): the **Tutorials**
 row under **Level up** shows them as cards, and **All tutorials** opens the
 full list, organized by category.
 
-## Two flavors per category
+## Two kinds of tutorial
 
-Each category mixes two kinds of tutorial. In the full list, categories with
-both flavors show two subsections; categories with only one drop the
-subheading.
+The full list has a filter for each kind — **All**, **Video Courses** and
+**Written Tutorials** — and under **All** it shows them as two sections with
+those names. Inside a section, tutorials are grouped by category.
 
-### 📹 Watch & Learn — video tutorials
+### Video Courses
 
-Walk through a feature in a few minutes. Click any card to open the video
-in a modal player. These are read-only — you watch, you learn, you go back
-to your work.
+Walk through a feature in a few minutes. These cards are marked **Video**;
+click one to open the video in a player. They are read-only — you watch, you
+learn, you go back to your work.
 
-### ⚡ Try It Yourself — flow tutorials
+### Written Tutorials
 
 Hands-on workflow templates you can run yourself. Each one is a complete,
 pre-wired Nodaro workflow with the right nodes, providers, and parameters
-already in place. The complexity badge tells you roughly how involved it
-is, and the credit estimate is what one run will cost.
+already in place. These cards are marked **Tutorial**; the complexity badge
+tells you roughly how involved one is, and the credit estimate is what one
+run will cost.
 
 ## Guided walkthroughs
 
-Some flow tutorials open into a **guided walkthrough** instead of dropping
-you straight into the editor — a full-screen page that explains the
-workflow before you run anything. Cards that have one say so; the rest go
-to the usual template preview.
+Some written tutorials open into a **guided walkthrough** — a full-screen
+page that explains the workflow before you run anything. A card opens its
+walkthrough when it has one, and the template preview (below) otherwise.
 
 A walkthrough has two views, switched from the bar at the top:
 
@@ -46,21 +46,21 @@ A walkthrough has two views, switched from the bar at the top:
   they say — the node count at the bottom tells you how many.
 
 Nothing on either view spends credits. **Run tutorial** in the top-right
-clones the workflow into one of your projects, exactly like Clone & Try
-below, and that copy is what you run.
+copies the workflow into your default project (**My Recent Flows**) and
+opens the copy in the editor, and that copy is what you run.
 
 Every walkthrough lives at a shareable `/tutorials/<slug>` URL. The page is
 viewable without signing in — sending someone a link just works; they are
 asked to log in only when they press **Run tutorial**.
 
-## Clone & Try
+## Clone to Project
 
-Hit **Clone & Try** on any flow tutorial card to copy the workflow into one
-of your projects:
+A written tutorial without a walkthrough opens in the template preview. To
+copy its workflow into one of your projects:
 
-1. Pick the target project from the dropdown
-2. Click **Clone & Open**
-3. You land in the editor with a fresh copy of the workflow
+1. Pick the target project from the **Select project** dropdown
+2. Click **Clone to Project**
+3. You land on that project's page, with the copy in its workflow list
 
 The original tutorial is untouched — you're working on your own copy. Run
 it as-is, tweak the parameters, or pull the graph apart to see how each

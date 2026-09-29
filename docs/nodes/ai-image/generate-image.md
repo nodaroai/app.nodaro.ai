@@ -36,10 +36,10 @@ The Generate Image node has 7 typed input handles on its left edge (color-coded 
 
 | Handle | Color | Accepts | Description |
 |--------|-------|---------|-------------|
-| `prompt` | pink | Text producers (Text Prompt, AI Writer, Generate Script, Combine Text, Image-to-Text, Generate Text) + all parameter pickers (as `{Label}` variable sources) | Main prompt text. Picker values are also available as `{Picker Label}` in the prompt regardless of wiring — variable substitution is workflow-wide. |
+| `prompt` | blue | Text producers (Text Prompt, AI Writer, Generate Script, Combine Text, Image-to-Text, Generate Text) + all parameter pickers (as `{Label}` variable sources) | Main prompt text. Picker values are also available as `{Picker Label}` in the prompt regardless of wiring — variable substitution is workflow-wide. |
 | `negative` | red | Text producers | "Avoid" string — what the model should not generate. Useful for sharing one negative across many Generate Image nodes. |
-| `references` | cyan | Image producers (Upload Image, Generate Image, Edit Image, Image-to-Image, Modify Image, Upscale, Remove Background) | Reference images for the provider. **Order matters** — provider semantics depend on the order of refs. |
-| `assets` | rose | Identity nodes (Character, Location, Object, Face) | Identity-locked refs with `@mention` expansion and canonical descriptions. (Renamed from `subjects` in v2.1.) |
+| `references` | pink | Image producers (Upload Image, Generate Image, Edit Image, Image-to-Image, Modify Image, Upscale, Remove Background) | Reference images for the provider. **Order matters** — provider semantics depend on the order of refs. |
+| `assets` | light pink | Identity nodes (Character, Location, Object, Face) | Identity-locked refs with `@mention` expansion and canonical descriptions. (Renamed from `subjects` in v2.1.) |
 | `elements` | indigo | "Subject / Object" family pickers (Person, Pose, Animal, Vehicle, Weapon, Furniture, Material, Held-Prop, Styling, Instrumentation) | Pickers wired here tail-append their value to the prompt at execution time. |
 | `look` | indigo | "Look" + "Camera" family pickers (Style, Lens, Lighting, Color Look, Framing, Camera Format, Photographer, Aesthetic, Era, Photo Genre, Mood, Atmosphere, Backdrop, Exposure Settings, Render Quality, Composition Effects, Post-Process Effects, Tone, Camera Motion, Temporal, Transition, Character FX) | Pickers wired here tail-append their value to the prompt — same runtime path as the legacy `cinematography` handle. |
 | `settings` | indigo | Aspect Ratio / Provider | Sets the node's aspect ratio and model from a wired node (see below). |
@@ -57,7 +57,7 @@ The Generate Image node has 7 typed input handles on its left edge (color-coded 
 **Variable highlighting:** in the prompt editor (config panel and the ⌘E prompt modal), `{Label}` variables are highlighted — cyan when a matching upstream node is wired (or for built-in template variables like `{userPrompt}`), amber when nothing upstream provides that label yet. Amber means "nothing wired", not "will fail": a `{Label || default}` variable still resolves to its default at run time. Inside `{Label || default}`, the default text renders bright when it will actually be injected (nothing wired, or the wired node's text is empty) and greyed-out with a strikethrough when a wired node's value overrides it.
 
 **Outputs:**
-- `image` (cyan) — generated image URL. Shares the References color since both are "image" type.
+- `image` (pink) — generated image URL. Shares the References color since both are "image" type.
 
 **Managing connections:** Click any handle pip to open a popover that lists currently connected nodes. Each row has a "jump to" button (centers the canvas on the upstream node) and a "disconnect" button. The popover also has an "Add new" button that opens a filtered node picker showing only types compatible with that handle.
 

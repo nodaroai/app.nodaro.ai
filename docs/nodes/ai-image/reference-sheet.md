@@ -50,8 +50,8 @@ You can also generate sheets directly from the **Sheet** tab inside an entity's 
 
 | Handle | Color | Type | Description |
 |--------|-------|------|-------------|
-| `sheet` | cyan | image | The composited reference sheet as a single image. Download it, display it, or wire it anywhere an image is accepted — but note it is a **poster** (it carries text/labels), so it is not meant to be used as a generation reference. |
-| `panels` | rose | reference | The clean panel set (the individual panel images, no poster chrome). Wire this into an image or video generator's reference input for multi-image consistency. |
+| `sheet` | pink | image | The composited reference sheet as a single image. Download it, display it, or wire it anywhere an image is accepted — but note it is a **poster** (it carries text/labels), so it is not meant to be used as a generation reference. |
+| `panels` | violet | reference | The clean panel set (the individual panel images, no poster chrome). Wire this into an image or video generator's reference input for multi-image consistency. |
 
 **Use the right output:** for a deliverable you show a human, use `sheet`. To drive consistency in downstream generation, use `panels` — the text poster is never used as a generation reference.
 
