@@ -452,7 +452,7 @@ Available on **Cloud** edition only. Community + Business return 403 `edition_re
 | GET | `/v1/pipelines/:id/events` | `pipelines:read` | SSE stream |
 | GET | `/v1/pipelines/:id/stages/:stage_name` | `pipelines:read` | Fetch one stage |
 | POST | `/v1/pipelines/:id/cancel` | `pipelines:execute` | Cancel + refund |
-| GET | `/v1/pipelines/:id/pending-approvals` | `pipelines:approve` | List stages awaiting approval |
+| GET | `/v1/pipelines/:id/pending-approvals` | `pipelines:read` | List stages awaiting approval |
 | POST | `/v1/pipelines/:id/stages/:stage_name/approve` | `pipelines:approve` | Approve a stage |
 | POST | `/v1/pipelines/:id/stages/:stage_name/reject` | `pipelines:approve` | Reject + feedback |
 

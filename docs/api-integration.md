@@ -2368,7 +2368,7 @@ orchestrator.
 
 **Response (201):** `{ pipelineId: string, clonedStages: string[], clonedEntities: number }`
 
-**Errors:** 400 (pipeline_not_completed, invalid_stage) · 404 (pipeline_not_found) · 403 (forbidden) · 401 (unauthorized)
+**Errors:** 400 (pipeline_not_completed, invalid_stage) · 404 (pipeline_not_found, also for a pipeline that is not yours) · 401 (unauthorized)
 
 **Scope (OAuth):** `pipelines:execute`
 

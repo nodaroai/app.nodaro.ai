@@ -364,7 +364,11 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     "/v1/pipelines/:id/pending-approvals",
     async (req, reply) => {
       if (!gateEdition(reply)) return
-      if (!gateScope(req, reply, "pipelines:approve")) return
+      // A read: listing what waits for approval changes nothing. `pipelines:read`
+      // is what the OAuth consent screen, the SDK and the MCP tool all promise;
+      // this route alone asked for `pipelines:approve`, so an app granted read
+      // got a 403 here and the same list over MCP.
+      if (!gateScope(req, reply, "pipelines:read")) return
       const userId = gateAuth(req, reply)
       if (!userId) return
 

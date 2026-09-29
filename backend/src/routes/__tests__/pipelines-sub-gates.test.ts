@@ -595,3 +595,22 @@ describe("POST /v1/pipelines/:id/sub-gates/:gate/reject", () => {
     await app.close()
   })
 })
+
+// Listing what waits for approval is a read. The OAuth consent screen, the SDK
+// and the MCP tool all put it under `pipelines:read`; the route alone asked for
+// `pipelines:approve`, so an app granted read got a 403 here.
+describe("GET /v1/pipelines/:id/pending-approvals — scope", () => {
+  it("lets an app granted pipelines:read through the scope gate", async () => {
+    const app = await makeApp({ appAuth: true, scopes: ["pipelines:read"] })
+    const res = await app.inject({ method: "GET", url: `/v1/pipelines/${PIPELINE_ID}/pending-approvals` })
+    expect(res.statusCode).not.toBe(403)
+    await app.close()
+  })
+
+  it("refuses an app without pipelines:read", async () => {
+    const app = await makeApp({ appAuth: true, scopes: ["pipelines:approve"] })
+    const res = await app.inject({ method: "GET", url: `/v1/pipelines/${PIPELINE_ID}/pending-approvals` })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+})
