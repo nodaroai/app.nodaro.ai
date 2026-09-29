@@ -18,7 +18,7 @@
 | New OAuth scope or auth flow change | `docs/oauth-flow.md` |
 | New deployment env var or build step | `docs/deployment.md` |
 | New SDK feature or method | `docs/sdk-reference.md`, `docs/sdk-quickstart.md` |
-| MCP tool added/changed | `docs/mcp/` |
+| MCP tool added/changed | `docs/mcp/` — a new tool needs an entry in `docs/mcp/tools.md` (a `###` heading naming the tool, or a row in one of its Tool tables). `cd backend && npm run gen:skills` then regenerates the Scopes table there and all of `docs/mcp/tool-parameters.md` from the registered tools; `gen:skills:check` fails CI on a tool with no entry, an entry for a removed tool, or a stale generated page |
 
 **Rules:**
 - Pricing math in docs MUST match the runtime formula. If you write a formula in code, write the same formula in the doc.
