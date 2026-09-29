@@ -227,6 +227,20 @@ export function clearImageCriticMetadata(
 export const VIDEO_CRITIC_FRAME_MODES = ["first_last", "first_middle_last", "five_evenly"] as const
 export type VideoCriticFrameMode = (typeof VIDEO_CRITIC_FRAME_MODES)[number]
 
+/**
+ * Credits the pipeline's upfront estimate reserves per shot for the Video
+ * Critic, by frame mode — a worst case; what goes unused is refunded when the
+ * pipeline completes. The config panel quotes these as "up to N credits per
+ * shot". The server derives its reservation separately, and a test there
+ * fails when the two disagree (they drifted ten-fold across a credit
+ * re-denomination while the panel still read ~2 / ~3 / ~4).
+ */
+export const VIDEO_CRITIC_RESERVED_CREDITS_PER_SHOT: Readonly<Record<VideoCriticFrameMode, number>> = {
+  first_last: 20,
+  first_middle_last: 30,
+  five_evenly: 40,
+}
+
 /** Cap=1 retry per shot — cost-aware (every retry is a full paid video
  *  generation, the priciest step in the loop). */
 export const VIDEO_CRITIC_MAX_RETRIES = 1

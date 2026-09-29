@@ -48,6 +48,8 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { useT, tx } from "@/lib/i18n"
+import { formatNumber } from "@/lib/i18n/format"
+import { useModelCredits } from "@/hooks/use-model-credit-cost"
 
 // Mirrors EMOTIONAL_BEAT in packages/shared/src/pipeline-types.ts. Duplicated
 // here rather than imported because the shared module only exports it as a
@@ -424,6 +426,9 @@ function SceneEditor({
   onRegenerate,
 }: SceneEditorProps) {
   const t = useT()
+  // The live charged price of one regeneration (0 while loading and on
+  // editions without credits, which then show no price at all).
+  const regenCredits = useModelCredits("regenerate-scene")
   const [description, setDescription] = useState(scene.description)
   const [duration, setDuration] = useState(scene.duration_seconds)
   const [emotionalBeat, setEmotionalBeat] = useState<EmotionalBeat>(
@@ -662,7 +667,7 @@ function SceneEditor({
         {!showFeedbackPanel && (
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-muted-foreground">
-              {t("pipe.regenCostLabel")}
+              {regenCredits > 0 ? t("pipe.regenCostLabel", { n: formatNumber(regenCredits) }) : null}
             </span>
             <Button
               type="button"
@@ -746,7 +751,9 @@ function SceneEditor({
                 ) : (
                   <>
                     <Sparkles className="me-1.5 h-3 w-3" aria-hidden="true" />
-                    {t("pipe.regenerateWithCost", { cost: t("pipe.regenCostLabel") })}
+                    {regenCredits > 0
+                      ? t("pipe.regenerateWithCost", { cost: t("pipe.regenCostLabel", { n: formatNumber(regenCredits) }) })
+                      : t("pipe.regenerate")}
                   </>
                 )}
               </Button>
