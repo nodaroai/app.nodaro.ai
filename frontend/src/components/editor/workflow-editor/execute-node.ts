@@ -118,7 +118,7 @@ import { tx } from "@/lib/i18n";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
   readPromptAffixes, unwrapEditPlanOutput, clampEditPlanClipCount, asEditPlanMode, asEditPlanTier, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, uiResolutionFill, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN, DEFAULT_TRANSCRIBE_NODE_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, normalizeCaptionNumericLevers } from "@nodaro/shared"
-import { applyPromptAffixes, appendPromptHints, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
+import { applyPromptAffixes, appendPromptHints, ownMotionHint, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
@@ -2713,9 +2713,15 @@ function executeNodeCore(
     // them in; a provider with no reference support keeps the legacy strip.
     const i2vProviderSupportsRefs = !!nodeProvider && hasFeature(nodeProvider, "reference-image");
     if (!i2vProviderSupportsRefs) prompt = stripVideoImageTokens(prompt)
-    // Inject motion + cinematography hints into prompt
+    // Inject motion + cinematography hints into prompt. The node's own Motion
+    // setting follows its REAL type: a Generate Video node re-typed here (the
+    // `__appendWired` marker) applies it exactly as its text-to-video twin does.
     const motionHints: string[] = [];
-    if (i2vData.motionEnabled && i2vData.motion) motionHints.push(`${i2vData.motion} motion`);
+    const i2vOwnMotion = ownMotionHint(
+      (node.data as Record<string, unknown>).__appendWired === true ? "generate-video" : "image-to-video",
+      node.data as Record<string, unknown>,
+    );
+    if (i2vOwnMotion) motionHints.push(i2vOwnMotion);
     // Bullet consumer (stamps character elements onto the video ref) → exclude here.
     const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
     for (const h of cinematographyHints) motionHints.push(h);
@@ -3104,10 +3110,19 @@ function executeNodeCore(
     let prompt: string | undefined = promptOf("text-to-video", (node.data as Record<string, unknown>).__appendWired === true);
     if (!t2vProviderSupportsRefs) prompt = stripVideoImageTokens(prompt);
     {
+      // A Generate Video node re-typed here keeps its own Motion setting — the
+      // orchestrator applies it in both modes, and the control shows in both. A
+      // legacy text-to-video node has none (`ownMotionHint` answers undefined).
+      const hints: string[] = [];
+      const t2vOwnMotion = ownMotionHint(
+        (node.data as Record<string, unknown>).__appendWired === true ? "generate-video" : "text-to-video",
+        node.data as Record<string, unknown>,
+      );
+      if (t2vOwnMotion) hints.push(t2vOwnMotion);
       // Bullet consumer (stamps character elements onto the video ref) → exclude here.
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
-      if (cinematographyHints.length > 0) {
-        prompt = appendPromptHints(prompt, cinematographyHints);
+      for (const h of collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true })) hints.push(h);
+      if (hints.length > 0) {
+        prompt = appendPromptHints(prompt, hints);
       }
     }
     {

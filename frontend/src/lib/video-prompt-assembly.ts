@@ -17,7 +17,7 @@
 
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ExtraRef } from "@/types/nodes"
 import { characterMentionSlug, isGeminiOmniProvider, isSeedanceVideoEditProvider, extractCharacterLoraFields, characterMentionableAssetArrays, resolveEffectiveSourceType, resolveVideoProviderForMode, hasFeature, countRefModalityEdges, type ReferenceModality } from "@nodaro/shared"
-import { computeNodePrompt, buildSeedanceVideoEditPrompt, characterLockToRefLock, collectIdentityLockClause, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, resolveVideoReferenceCore, type CharacterMeta } from "@nodaro/prompts"
+import { computeNodePrompt, ownMotionHint, buildSeedanceVideoEditPrompt, characterLockToRefLock, collectIdentityLockClause, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, resolveVideoReferenceCore, type CharacterMeta } from "@nodaro/prompts"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
@@ -536,22 +536,18 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
   }
 
   // ── Hint folding ──
-  if (effectiveType === "image-to-video") {
-    // i2v ONLY: motion hint + cinematography hints merged into ONE list, then
-    // joined to the body with ". " (execute-node.ts:2290-2295).
-    const motionHints: string[] = []
-    if (data.motionEnabled && data.motion) motionHints.push(`${data.motion as string} motion`)
-    for (const h of collectCinematographyHints(id, nodes, edges, { excludeCharacterElements: true })) motionHints.push(h)
-    if (motionHints.length > 0 && prompt) prompt = `${prompt}. ${motionHints.join(", ")}`
-    else if (motionHints.length > 0) prompt = motionHints.join(", ")
-  } else {
-    // t2v / v2v / s2v / cinematic-avatar / extend-video / video-retake:
-    // cinematography hints only (execute-node.ts t2v:2519-2523 et al).
-    const hints = collectCinematographyHints(id, nodes, edges, { excludeCharacterElements: true })
-    if (hints.length > 0) {
-      const joined = hints.join(", ")
-      prompt = prompt ? `${prompt}. ${joined}` : joined
-    }
+  // The node's own Motion setting first, then the cinematography hints, joined
+  // to the body with ". " (execute-node.ts's i2v and t2v branches). The Motion
+  // setting follows the REAL node type (`nodeType`): legacy image-to-video and
+  // Generate Video in either mode carry it; t2v / v2v / s2v / cinematic-avatar /
+  // extend-video / video-retake add cinematography hints only.
+  const hints: string[] = []
+  const ownMotion = ownMotionHint(nodeType, data)
+  if (ownMotion) hints.push(ownMotion)
+  for (const h of collectCinematographyHints(id, nodes, edges, { excludeCharacterElements: true })) hints.push(h)
+  if (hints.length > 0) {
+    const joined = hints.join(", ")
+    prompt = prompt ? `${prompt}. ${joined}` : joined
   }
 
   // ── Identity-lock clause (joined with a single space) ──

@@ -486,6 +486,7 @@ Common fields:
 | Frame fit | Select | `Match output size` | How a wired start/end frame is reshaped before the model sees it |
 | Send frames as | Select | `Auto` | Whether that frame rides as a frame or as a bound reference image |
 | Inject Character Context | Checkbox | off | When an upstream Character has identity-injection on |
+| Motion hint | Checkbox + Select (`subtle` / `moderate` / `dynamic`) | off; `moderate` once ticked | Adds "<step> motion" (e.g. `dynamic motion`) to the prompt, before the Look hints, with or without a start frame. Separate from a [Motion](../parameters/motion.md) node wired into the `settings` input, which adds its own fuller clause. |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ### Resolution, aspect ratio and duration corrections
