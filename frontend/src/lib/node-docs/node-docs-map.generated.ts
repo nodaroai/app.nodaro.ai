@@ -2,7 +2,7 @@
 import type { NodeDocsSection } from "./node-docs"
 
 /** The date the docs site produced the snapshot. */
-export const NODE_DOCS_SNAPSHOT_DATE = "2026-09-27"
+export const NODE_DOCS_SNAPSHOT_DATE = "2026-09-28"
 
 /** The sections each node's page has, in page order. */
 export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSection[]>> = {
@@ -10,7 +10,7 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "generate-image": ["when-to-use", "quick-start", "inputs", "settings", "models", "tips", "api", "faq"],
   "modify-image": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "faq"],
   "upscale-image": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "faq"],
-  "remove-background": ["when-to-use", "quick-start", "inputs", "tips", "faq"],
+  "remove-background": ["when-to-use", "quick-start", "inputs", "models", "tips", "faq"],
   "generate-mask": ["when-to-use", "quick-start", "inputs", "settings", "credits", "troubleshooting", "tips", "faq"],
   "paint-mask": ["when-to-use", "quick-start", "inputs", "settings", "faq"],
   "image-collage": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "api", "faq"],
@@ -22,7 +22,7 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "describe-to-picker": ["when-to-use", "quick-start", "inputs", "settings", "credits", "troubleshooting", "tips", "faq"],
   "image-critic": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "faq"],
   "upload-video": ["when-to-use", "quick-start", "inputs", "tips", "faq"],
-  "generate-video": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
+  "generate-video": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "troubleshooting", "api", "faq"],
   "generate-video-pro": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "troubleshooting", "api", "faq"],
   "suno-music-video": ["when-to-use", "quick-start", "credits", "tips", "faq"],
   "still-to-video": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "faq"],
@@ -38,7 +38,7 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "face-swap": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "faq"],
   "extend-video": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "api", "faq"],
   "edit-video-pro": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "faq"],
-  "video-retake": ["when-to-use", "quick-start", "inputs", "settings", "credits", "limits", "tips", "faq"],
+  "video-retake": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "limits", "tips", "faq"],
   "video-to-video": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "faq"],
   "switchx": ["when-to-use", "quick-start", "inputs", "settings", "limits", "credits", "tips", "faq"],
   "trim-video": ["when-to-use", "quick-start", "inputs", "credits", "tips", "faq"],

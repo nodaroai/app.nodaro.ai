@@ -378,12 +378,13 @@ Every node links to its page in the public docs (nodaro.ai/docs).
   - the "Docs" pill in the settings panel header, which opens `#settings`; hovering shows the summary, a chip per section and "Open full docs"
   - "Compare models" beside the model picker's heading, to `#models`
 - **Which sections a page has** comes from the docs site's snapshot, `lib/node-docs/node-docs-links.json`. A deep link shows only when the page has that section.
-  - The app ships two maps generated from it by `npm -w frontend run gen:node-docs` (pass a new file to replace the snapshot first): `node-docs-map.generated.ts` (type → sections) and `node-docs-summaries.generated.ts`, a separate chunk loaded when a popover opens.
+  - The docs site rebuilds the snapshot on every deploy and serves it at `https://nodaro.ai/docs/node-links.json`. `npm -w frontend run gen:node-docs -- --live` fetches it, writes it as 2-space JSON (so the diff shows only what changed) and regenerates. A file path or another URL works too.
+  - The app ships two maps generated from it: `node-docs-map.generated.ts` (type → sections) and `node-docs-summaries.generated.ts`, a separate chunk loaded when a popover opens.
   - The summaries are English, so they show only to an English interface.
 - **White-label.** Docs links are platform links. Every component that renders one checks `nodeDocsLinksShown()` (`surfacePlatformLinks()`), so a deployment that hides platform links shows none; the node-docs test enforces the check.
 - **Compare models.** `<MappableField field="provider">` shows it by itself. A panel that builds its own model heading renders `<CompareModelsLink />` beside it. It reads the node type from `NodeDocsTypeContext`, which only the editor's settings panel provides.
 - **Guards:**
-  - `lib/node-docs/__tests__/node-docs.test.ts` fails when a picker node has no page. Admin-only previews are skipped; nodes whose page is being written go in `AWAITING_DOCS_PAGE`. It also fails when the generated maps drift from the snapshot.
+  - `lib/node-docs/__tests__/node-docs.test.ts` fails when a picker node has no page. Admin-only previews are skipped. A node without a published page (for example one the deployment's availability settings still hide from users) goes in `AWAITING_DOCS_PAGE` with its reason. It also fails when the generated maps drift from the snapshot.
   - `components/editor/node-docs/__tests__/compare-models-coverage.test.ts` fails when a node whose page has a Models section shows no "Compare models". Nodes with no model picker go in `NO_MODEL_PICKER`.
 
 ---

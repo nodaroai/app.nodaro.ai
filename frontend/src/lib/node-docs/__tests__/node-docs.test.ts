@@ -20,14 +20,17 @@ interface Snapshot {
 const snapshot: Snapshot = JSON.parse(readFileSync(join(__dirname, "..", "node-docs-links.json"), "utf-8"))
 
 /**
- * Picker nodes whose docs page is being written. A new node in the picker
- * fails this file until its page exists (or it is listed here), so every node
- * the editor offers gets a page. An entry must leave once its page is in the
- * snapshot: the test fails while it lingers.
+ * Picker nodes whose docs page is not published yet, each with the reason. A
+ * new node in the picker fails this file until its page exists (or it is
+ * listed here), so every node the editor offers gets a page. An entry must
+ * leave once its page is in the snapshot: the test fails while it lingers.
+ *
+ * A node the deployment's availability settings hide from users is not
+ * `adminOnly` in code, so it is listed here rather than skipped.
  */
 const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
-  "meta-ads-scrape": "page being written on the docs site (2026-09-27)",
-  "instagram-scrape": "page being written on the docs site (2026-09-27)",
+  "meta-ads-scrape": "hidden from users in production (availability settings); the page is written and held until release",
+  "instagram-scrape": "hidden from users in production (availability settings); the page is written and held until release",
 }
 
 const hasPage = (type: string) => type in NODE_DOCS_SECTIONS || type in NODE_DOCS_ALIASES

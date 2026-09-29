@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-27",
+  "generatedAt": "2026-09-28",
   "howToLink": {
     "link": "https://nodaro.ai/docs/node/{type}",
     "withLanguage": "https://nodaro.ai/docs/node/{type}?lang={lang}",
@@ -120,6 +120,7 @@
         "when-to-use",
         "quick-start",
         "inputs",
+        "models",
         "tips",
         "faq"
       ]
@@ -337,6 +338,7 @@
         "quick-start",
         "inputs",
         "settings",
+        "models",
         "credits",
         "tips",
         "troubleshooting",
@@ -630,6 +632,7 @@
         "quick-start",
         "inputs",
         "settings",
+        "models",
         "credits",
         "limits",
         "tips",

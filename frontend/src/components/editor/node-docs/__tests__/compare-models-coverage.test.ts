@@ -17,6 +17,8 @@ const NO_MODEL_PICKER: Readonly<Record<string, string>> = {
   "audio-isolation": "one model; the panel has no model picker",
   "forced-alignment": "one model; the panel has no model picker",
   "text-to-dialogue": "ElevenLabs Dialogue v3 only; the panel has no model picker",
+  "remove-background": "one model (Recraft); the panel has no model picker",
+  "video-retake": "LTX 2.3 Pro only; the panel has no model picker",
 }
 
 const editorDir = join(__dirname, "..", "..")
@@ -26,9 +28,13 @@ const configFiles = (readdirSync(configDir, { recursive: true }) as string[])
   .filter((f) => f.endsWith(".tsx") && !f.includes("__tests__"))
   .map((f) => readFileSync(join(configDir, f), "utf-8").split("\n"))
 
-/** The component config-panel.tsx renders for a node type. */
+/** The component config-panel.tsx renders for a node type: the first component in its `case`,
+ *  which may be wrapped in a fragment beside other elements (Generate Video's director button). */
 function componentOf(type: string): string {
-  const match = panelSource.match(new RegExp(`case "${type}":[^<]*<([A-Z]\\w+)`))
+  const start = panelSource.indexOf(`case "${type}":`)
+  const next = start < 0 ? -1 : panelSource.indexOf("case \"", start + 1)
+  const body = start < 0 ? "" : panelSource.slice(start, next < 0 ? undefined : next)
+  const match = body.match(/<([A-Z]\w+)/)
   if (!match) throw new Error(`config-panel.tsx renders no component for "${type}"`)
   return match[1]
 }
