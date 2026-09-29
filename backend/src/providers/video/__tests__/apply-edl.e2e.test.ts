@@ -55,6 +55,12 @@ vi.mock("../ffmpeg-utils.js", async (importOriginal) => {
   }
 })
 
+// Every case here spawns real ffmpeg (building its sources, then rendering), so
+// a shared CI runner can take well over vitest's 5 s default: two cases that
+// had no limit of their own timed out in CI on an unrelated PR. One limit for
+// the file covers every case, present and future; the slow ones keep theirs.
+vi.setConfig({ testTimeout: 120_000 })
+
 // In-memory R2 for the checkpoint/resume cases. Every other case renders with
 // `checkpoint:false` and never imports storage.
 const r2 = vi.hoisted(() => ({
