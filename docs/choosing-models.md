@@ -6,7 +6,7 @@ Every table on this page is **generated from Nodaro's model catalog** — it nev
 
 ## How credits and tiers work
 
-- **1 credit = $0.002.** Per-generation cost depends on the model, resolution, duration, and quality. The number in each table is the **default variant** (the bare model with no resolution/quality upgrade); higher settings cost more.
+- **Prices are in credits.** Per-generation cost depends on the model, resolution, duration, and quality. The number in each table is the **default variant** (the bare model with no resolution/quality upgrade); higher settings cost more.
 - The tables show **list prices**. The price a run is charged on your instance may differ: it is the figure on the node's Run button, and what `GET /v1/models` and the MCP `list_models` tool return.
 - The **Tier** column is a quick budget signal, **relative within each modality**: each tier holds about a third of that modality's models, by default price (models at the same price share a tier).
   - **Everyday** — cheap and fast; the right default for drafts, iteration, and most work.
