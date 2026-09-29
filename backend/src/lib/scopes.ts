@@ -1,41 +1,32 @@
-export const ALL_SCOPES = [
-  "workflows:read",
-  "workflows:write",
-  "workflows:execute",
-  "jobs:read",
-  "assets:read",
-  "assets:write",
-  "credits:read",
-  "apps:read",
-  "pipelines:read",
-  "pipelines:execute",
-  "pipelines:approve",
-  "presets:read",
-  // Workspaces. Deliberately NOT grandfathered onto existing grants: a token
-  // issued before organizations existed was consented to by someone who
-  // could not have been agreeing to let an app choose where their work
-  // lands. Both are ENFORCED — the MCP workspace tools refuse to register
-  // without them.
-  //
-  // `organizations:read` and `members:write` are deliberately ABSENT until
-  // something checks them. A scope in this list is published in
-  // `scopes_supported` and handed to any DCR client that asks for
-  // everything, so declaring one early would authorize every token issued in
-  // the meantime for a capability that did not exist yet — the same
-  // grandfathering this comment exists to avoid, moved forward in time
-  // instead of back. The organization ROUTES are also not scope-checked at
-  // all yet: enforcement here is opt-in per route, those routes live in the
-  // private plugin, and the plugin's request type carries `userId` and
-  // nothing else, so it cannot see `req.appAuthorization`. Closing that
-  // needs the toolkit request type widened in BOTH repos with the app-side
-  // change merged FIRST (see backend/CLAUDE.md on plugin-version ordering),
-  // and which scope each route requires is a product decision. Add the two
-  // scopes back in the same change that makes them mean something.
-  "workspaces:read",
-  "workspaces:write",
-] as const
+import { OAUTH_SCOPES, type OAuthScope } from "@nodaro/shared"
 
-export type Scope = typeof ALL_SCOPES[number]
+// The list itself lives in @nodaro/shared (OAUTH_SCOPES) — the public API
+// contract the SDK types against, so a scope added here reaches the SDK.
+//
+// The workspace scopes (`workspaces:read` / `workspaces:write`) are
+// deliberately NOT grandfathered onto existing grants: a token
+// issued before organizations existed was consented to by someone who
+// could not have been agreeing to let an app choose where their work
+// lands. Both are ENFORCED — the MCP workspace tools refuse to register
+// without them.
+//
+// `organizations:read` and `members:write` are deliberately ABSENT until
+// something checks them. A scope in OAUTH_SCOPES is published in
+// `scopes_supported` and handed to any DCR client that asks for
+// everything, so declaring one early would authorize every token issued in
+// the meantime for a capability that did not exist yet — the same
+// grandfathering this comment exists to avoid, moved forward in time
+// instead of back. The organization ROUTES are also not scope-checked at
+// all yet: enforcement here is opt-in per route, those routes live in the
+// private plugin, and the plugin's request type carries `userId` and
+// nothing else, so it cannot see `req.appAuthorization`. Closing that
+// needs the toolkit request type widened in BOTH repos with the app-side
+// change merged FIRST (see backend/CLAUDE.md on plugin-version ordering),
+// and which scope each route requires is a product decision. Add the two
+// scopes back in the same change that makes them mean something.
+export const ALL_SCOPES = OAUTH_SCOPES
+
+export type Scope = OAuthScope
 
 const ALL_SCOPES_SET = new Set<string>(ALL_SCOPES)
 

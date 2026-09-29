@@ -647,6 +647,8 @@ export {
 } from "./node-default-mappings.js"
 
 export { NODE_MAPPABLE_FIELDS, SUNO_FIELD_HANDLE_FIELDS, fieldKeyFromHandle } from "./node-mappable-fields.js"
+export { OAUTH_SCOPES, type OAuthScope } from "./oauth-scopes.js"
+export { RECAST_SEGMENT_PACKS, type RecastSegmentPack } from "./recast-segment-packs.js"
 export {
   SETTINGS_INPUT_HANDLE,
   SETTINGS_SOURCE_FIELDS,

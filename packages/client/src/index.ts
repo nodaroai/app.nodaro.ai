@@ -103,6 +103,7 @@ export {
   type RecastScriptValidationError,
   type RecastScriptImportResult,
   type CreateRecastInput,
+  type RecastSegmentPack,
   type EstimateRecastInput,
   type RecastEstimate,
   type RecastRunSnapshot,
@@ -119,6 +120,8 @@ export {
   type RecastRescoreResponse,
   type ResolveRecastGateInput,
 } from "./resources/recast.js"
+// The values `segmentSec` takes, for a caller that offers them as choices.
+export { RECAST_SEGMENT_PACKS } from "@nodaro/shared"
 export {
   StudioResource,
   StudioProductionsResource,
@@ -577,3 +580,20 @@ export type {
   CopilotWiredAsset,
   CopilotMemorySavedFrameData,
 } from "./resources/copilot.js"
+
+// Types that appear in public method signatures — the entry point exports every
+// type the resource modules export (guarded by __tests__/public-types.test.ts).
+export type { CreatureVoice } from "./resources/creatures.js"
+export type { GenerateLocationMotionInput } from "./resources/locations.js"
+export type { ModelFamilyGroup } from "./resources/models.js"
+export type { ReferenceCaptionParams, AssembleNarratedVideoParams, RunNodeOptions } from "./resources/nodes.js"
+export type { TextToPickerParams, TextToPickerResult } from "./resources/picker-catalogs.js"
+export type { PipelineRecord, PendingApproval, PipelineTimeline } from "./resources/pipelines.js"
+export type {
+  Pro3DRenderParams,
+  Pro3DRenderRunParams,
+  Pro3DRenderQuote,
+  Pro3DRenderRunOptions,
+  Pro3DRenderJobOutput,
+} from "./resources/scene3d-types.js"
+export type { Collaborator, AddCollaboratorInput, SharedWorkflow, DroppedCollaborator } from "./resources/workflows.js"

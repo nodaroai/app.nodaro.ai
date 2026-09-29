@@ -255,9 +255,18 @@ export interface NodeJobOutput {
 export interface RunAndWaitOptions {
   /**
    * Abort the run/poll loop. Aborting (or passing an already-aborted signal)
-   * stops polling and rejects with {@link JobAbortedError}.
+   * stops polling and rejects with {@link JobAbortedError}, whose `jobId`
+   * names the job once it was submitted. Aborting stops the WAITING only: the
+   * job keeps running and is charged, unless {@link cancelOnAbort} is set.
    */
   readonly signal?: AbortSignal
+  /**
+   * Also cancel the job when `signal` aborts after it was submitted
+   * (`POST /v1/jobs/:id/cancel`, which refunds its credit hold). Best effort:
+   * a failed cancel still rejects with the {@link JobAbortedError}. Default
+   * `false` — aborting only stops waiting.
+   */
+  readonly cancelOnAbort?: boolean
   /** Called with each lean status the poll loop observes (running → terminal). */
   readonly onProgress?: (status: JobStatusResult) => void
   /** Poll interval in ms. Default 2000. */
@@ -436,7 +445,7 @@ export class NodesResource {
    *
    * @param type        Node type slug, applied to every entry.
    * @param paramsList  One request body per candidate.
-   * @param opts        Shared `signal` / `onProgress` / `pollMs` / `maxMs`.
+   * @param opts        Shared `signal` / `cancelOnAbort` / `onProgress` / `pollMs` / `maxMs`.
    */
   async runMany(
     type: string,
@@ -455,11 +464,28 @@ export class NodesResource {
     )
   }
 
+  /** {@link pollUntilSettled}, plus what an abort does to the job: it keeps
+   *  running unless `cancelOnAbort` asks to cancel it too, and the rejection
+   *  always names it (an abort landing mid-sleep carries no id of its own). */
+  private async pollJob(
+    jobId: string,
+    label: string,
+    opts: RunAndWaitOptions,
+  ): Promise<NodeJobOutput> {
+    try {
+      return await this.pollUntilSettled(jobId, label, opts)
+    } catch (err) {
+      if (!(err instanceof JobAbortedError)) throw err
+      if (opts.cancelOnAbort) await this.client.jobs.cancel(jobId).catch(() => undefined)
+      throw err.jobId ? err : new JobAbortedError(err.message, jobId)
+    }
+  }
+
   /** Poll an already-kicked job id until it stops moving; resolve output_data
    *  or throw. Two non-terminal statuses end the loop: an abort, and
    *  `pending_review` (a job policy held the output for a human — see
    *  {@link JobHeldError}). */
-  private async pollJob(
+  private async pollUntilSettled(
     jobId: string,
     label: string,
     opts: RunAndWaitOptions,

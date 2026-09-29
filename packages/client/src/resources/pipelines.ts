@@ -207,8 +207,9 @@ export class PipelinesResource {
   }
 
   /**
-   * Approve a Stage-7 sub-gate (`dialogue_recheck` / `silent_cut`) so the
-   * orchestrator resumes from the next sub-step. Requires `pipelines:approve`.
+   * Approve a sub-gate so the orchestrator resumes from the next sub-step:
+   * Stage 7's `silent_cut_preview` or `dialogue_recheck`, or Stage 6's
+   * `match_cut_break_pending`. Requires `pipelines:approve`.
    */
   approveSubGate(
     id: string,

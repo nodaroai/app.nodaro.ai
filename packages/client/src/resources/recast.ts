@@ -1,3 +1,6 @@
+import type { RecastSegmentPack } from "@nodaro/shared"
+/** How a recast render packs scenes into parts — `RECAST_SEGMENT_PACKS` in `@nodaro/shared`. */
+export type { RecastSegmentPack } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -47,7 +50,8 @@ export interface CreateRecastInput {
   /** Required (`true`) for faithful renders of authored scripts. */
   rightsAttested?: boolean
   resolution?: string
-  segmentSec?: number
+  /** How the render packs scenes into parts — a name, not seconds. */
+  segmentSec?: RecastSegmentPack
   renderMethod?: string
   /** Opt in to the interactive walk (pick-1-of-3 gates surfaced via `get()`). */
   interactive?: boolean
@@ -247,7 +251,7 @@ export class RecastResource {
   /** Start rendering a `planned` run. Idempotent server-side. */
   start(
     recastId: string,
-    opts: { segmentSec?: number; provider?: string } = {},
+    opts: { segmentSec?: RecastSegmentPack; provider?: string } = {},
   ): Promise<{ gvpJobId?: string }> {
     return this.client.request("POST", `/v1/recast/${encodeURIComponent(recastId)}/start`, {
       body: opts,

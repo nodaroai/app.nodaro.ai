@@ -591,16 +591,18 @@ to the resource type, so TypeScript autocomplete works on every field of
 
 ## 6. Browser vs Node
 
-`@nodaro/sdk` has zero dependencies and uses only `fetch` and `URL`. Both
-are global in:
+`@nodaro/sdk` needs **Node 20 or newer** (`engines.node: ">=20"`), or any
+runtime with a global `fetch` and `URL`:
 
-- Node 18 or newer
+- Node 20+
 - All modern browsers
 - React Native (built-in fetch polyfill)
 - Cloudflare Workers, Deno, Bun
 
-No fetch polyfill needed. If you're on Node 16 or older, install
-`undici` and pass `fetch: undici.fetch` (see section 7).
+It depends on two Nodaro packages, installed with it: `@nodaro/shared` (the
+wire types and model catalog) and `@nodaro/prompts` (prompt helpers).
+`@supabase/supabase-js` and `@supabase/ssr` are optional peer dependencies —
+install them only if you use `supabaseAuth` in a browser app.
 
 **CORS for browser apps:** when calling Nodaro from a browser using an OAuth
 access token, your origin must be on the developer app's `allowedOrigins`
@@ -628,7 +630,6 @@ const client = createClient({
 - **Tests** — pass a mock that returns canned `Response` objects
 - **Retries** — wrap the global fetch in a retry-on-5xx helper
 - **Telemetry** — wrap with OpenTelemetry / Datadog tracing
-- **Older Node** — pass `undici.fetch` to use undici on Node 16
 
 `timeoutMs` aborts the request via `AbortController` after the given milliseconds.
 Long-running operations like video generation should use `workflows.run()` plus

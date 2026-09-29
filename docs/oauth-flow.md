@@ -193,8 +193,9 @@ actual gate, so any valid Nodaro scope may be requested at authorize-time.
 
 ## 4. Scope vocabulary
 
-There are 11 scopes total. The canonical list lives in
-[`backend/src/lib/scopes.ts`](https://github.com/nodaroai/app.nodaro.ai/blob/main/backend/src/lib/scopes.ts).
+There are 14 scopes total. The canonical list is `OAUTH_SCOPES` in
+[`packages/shared/src/oauth-scopes.ts`](https://github.com/nodaroai/app.nodaro.ai/blob/main/packages/shared/src/oauth-scopes.ts)
+— the server validates against it and `@nodaro/sdk` types `DeveloperAppScope` from it.
 
 | Scope | What it grants | Routes gated today |
 |-------|----------------|--------------------|
@@ -209,12 +210,16 @@ There are 11 scopes total. The canonical list lives in
 | `pipelines:read` | Read the user's Story-to-Video pipelines | `GET /v1/pipelines/*` |
 | `pipelines:execute` | Run / branch pipeline stages | `POST /v1/pipelines/:id/branch` and run routes |
 | `pipelines:approve` | Approve pipeline stage output | pipeline approval routes; the scene-helper routes (`POST /v1/pipelines/:id/entities/:sceneId/helpers/*`) |
+| `presets:read` | Read the user's saved node presets | `GET /v1/node-presets`, `GET /v1/node-presets/factory`, `GET /v1/node-preset-groups`; the MCP `list_node_presets` / `get_node_preset` tools |
+| `workspaces:read` | See the workspaces the user belongs to | the MCP `list_workspaces` tool |
+| `workspaces:write` | Choose which workspace the app works in | the MCP `select_workspace` tool |
 
 > **Honest disclosure:** most scopes gate real routes today —
 > `workflows:read`, `workflows:write`, `workflows:execute`, `jobs:read`,
-> and the three `pipelines:*` scopes. Only four are reserved names that
-> future routes will gate: `assets:read`, `assets:write`, `credits:read`,
-> and `apps:read`. Request scopes only if you actually intend to use them —
+> the three `pipelines:*` scopes, `presets:read` and the two `workspaces:*`
+> scopes. Only four are reserved names that future routes will gate:
+> `assets:read`, `assets:write`, `credits:read`, and `apps:read`. The two
+> `workspaces:*` scopes are never added to a grant made before they existed. Request scopes only if you actually intend to use them —
 > minimal scope sets earn user trust.
 
 The exact scope description shown to the user on the consent screen is

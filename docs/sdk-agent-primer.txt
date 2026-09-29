@@ -27,8 +27,8 @@ Core pattern (all generation is async; runAndWait submits + polls + resolves):
   // outputs: .imageUrl / .videoUrl / .audioUrl on the resolved object
 
 Models available (full lists with credit costs, as raw markdown):
-  image: https://nodaroai.github.io/app.nodaro.ai/nodes/ai-image/generate-image.md
-  video: https://nodaroai.github.io/app.nodaro.ai/nodes/ai-video/generate-video.md
+  image: https://nodaro.ai/docs/nodes/image/generate-image.md
+  video: https://nodaro.ai/docs/nodes/video/generate-video.md
   (or at runtime: client.nodes.get(type) → data.providers + credits.modelCosts)
 
 Model choice:
@@ -56,17 +56,18 @@ Voice / audio surface (client.voices, client.media, client.audio):
   - Interactive flow: voices.analyze (detect speakers first) →
     voices.recast({ output: "stems", analysis }) → voices.exportMix(tracks) —
     inspect speakers before paying, mix stems before rendering.
-  - Also: voices.change (single-voice), design / remix / dub, clone from URL
-    or file; client.media.downloadVideo (+downloadVideoProgress SSE) / trim /
-    videoMetadata; client.audio.separate / isolate / applyFx / mix.
+  - Also: voices.change (single-voice), design / remix / dub;
+    client.media.downloadVideo (+downloadVideoProgress SSE) / trimVideo /
+    trimAudio / videoMetadata; client.audio.separate / isolate / applyFx / mix.
 
 Rules:
   - Generations cost credits; catch InsufficientCreditsError (has .required /
     .available). All errors are typed classes exported from @nodaro/sdk.
   - Prefer client.nodes.runAndWait over hand-rolled polling; for manual loops
     use client.jobs.getStatus(id) (lean poll endpoint).
-  - 24 resources on the client (workflows, characters, voices, media, audio,
-    pipelines, …):
-    full reference https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md
+  - One resource per area on the client (workflows, characters, voices,
+    media, audio, pipelines, …), each listed at
+    https://nodaro.ai/docs/developers/sdk/client.md
+    full reference https://nodaro.ai/docs/developers/sdk.md
   - Node catalog + per-node params:
-    https://nodaroai.github.io/app.nodaro.ai/nodes/ (all pages exist as .md)
+    https://nodaro.ai/docs/nodes.md (every docs page has a .md twin)

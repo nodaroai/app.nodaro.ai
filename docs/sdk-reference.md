@@ -1117,7 +1117,11 @@ resolveGate(recastId: string, input: ResolveRecastGateInput): Promise<Record<str
 ```
 
 `create` requires `workflowId` (an existing workflow you own) and
-`analysisJobId`; quote with `estimate` first — creating buys the plan. On
+`analysisJobId`; quote with `estimate` first — creating buys the plan.
+`segmentSec` (on `estimate`, `create` and `start`) names how the render packs
+scenes into parts — a name, not seconds (`RecastSegmentPack`, the values
+exported as `RECAST_SEGMENT_PACKS`): `"scenes-max"` (Long, the fewest seams),
+`"scenes"` (Short) or `"max"` (the longest parts the model allows). On
 interactive runs the platform advances every non-gate step server-side; poll
 `get()` and answer pending gates (`cast` / `sheet` / `anchors` / `music`) with
 `resolveGate` — the pick itself is free. Gates only open for gate kinds the
@@ -1569,7 +1573,7 @@ without a `jobId` field.
 ```ts
 const result = await client.nodes.run("generate-image", {
   prompt: "a snow leopard in the mountains",
-  provider: "recraft",
+  provider: "nano-banana-pro",
 })
 if ("jobId" in result) {
   const { data: job } = await client.jobs.get(result.jobId)
@@ -1848,7 +1852,8 @@ Resolves the job's typed `output_data` (`NodeJobOutput`) on `completed`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `signal` | `AbortSignal` | — | Abort the poll loop; rejects with `JobAbortedError`. |
+| `signal` | `AbortSignal` | — | Abort the poll loop; rejects with `JobAbortedError` (its `jobId` names the job once submitted). Aborting stops the **waiting** only — the job keeps running and is charged unless `cancelOnAbort` is set. |
+| `cancelOnAbort` | `boolean` | `false` | Also cancel the submitted job when `signal` aborts (`POST /v1/jobs/:id/cancel`, which refunds its hold). Best effort: a failed cancel still rejects with the `JobAbortedError`. |
 | `onProgress` | `(status: JobStatusResult) => void` | — | Called with each lean status observed. |
 | `pollMs` | `number` | `2000` | Poll interval in ms. |
 | `maxMs` | `number` | `900_000` | Wall-clock cap before `JobTimeoutError`. |
@@ -1857,7 +1862,7 @@ Throws (all typed, catchable by `instanceof`):
 - `InsufficientCreditsError` / `StorageExceededError` — surfaced by `run()` before any poll.
 - `JobFailedError` — terminal `failed`/`cancelled` (carries `error_message` + `jobId`).
 - `JobTimeoutError` — `maxMs` deadline exceeded.
-- `JobAbortedError` — `signal` fired.
+- `JobAbortedError` — `signal` fired. The job itself keeps running unless `cancelOnAbort` is set; to stop it later, `jobs.cancel(err.jobId)`.
 - `JobHeldError` — the job entered `pending_review` (`code = "job_held"`, carries `jobId`; see
   [Errors](#class-jobhelderror-extends-nodaroerror)). Only on
   deployments that register a job policy. It does NOT cancel the job: the
@@ -1884,7 +1889,7 @@ Throws (all typed, catchable by `instanceof`):
 ```ts
 const output = await client.nodes.runAndWait("generate-image", {
   prompt: "a snow leopard in the mountains",
-  provider: "recraft",
+  provider: "nano-banana-pro",
 })
 console.log(output.imageUrl)
 ```
@@ -2965,8 +2970,9 @@ await client.pipelines.rejectStage(id, "script", "Make the story darker and more
 approveSubGate(id: string, gate: SubGateName): Promise<{ ok: true; gate: SubGateName; resumed_at: string }>
 ```
 
-Approve a Stage-7 sub-gate (`dialogue_recheck` / `silent_cut`) so the
-orchestrator resumes from the next sub-step. Requires `pipelines:approve`.
+Approve a sub-gate so the orchestrator resumes from the next sub-step:
+Stage 7's `silent_cut_preview` or `dialogue_recheck`, or Stage 6's
+`match_cut_break_pending`. Requires `pipelines:approve`.
 
 ```ts
 await client.pipelines.approveSubGate(id, "dialogue_recheck")
@@ -4553,8 +4559,8 @@ instead of failing the whole batch.
 | `errors` | `string[]` | Identifiers where the lookup itself failed. |
 
 ```ts
-const { data, missing } = await client.credits.modelCosts(["recraft:v3", "kling:v2.1"])
-console.log(data["recraft:v3"])  // e.g. 2
+const { data, missing } = await client.credits.modelCosts(["nano-banana-pro", "seedance-2-fast"])
+console.log(data["nano-banana-pro"])  // its credit price
 if (missing.length) console.warn("No price for:", missing)
 ```
 
@@ -5468,7 +5474,7 @@ not two.
 ### Developer apps
 
 - `DeveloperApp` — app record (without secret)
-- `DeveloperAppScope` — union of valid scope strings
+- `DeveloperAppScope` — union of valid scope strings (the server's list, `OAUTH_SCOPES` in `@nodaro/shared`)
 - `DeveloperAppStatus` — `"active" | "suspended" | "pending_review"`
 - `CreateDeveloperAppInput`, `UpdateDeveloperAppInput`
 - `CreateDeveloperAppResult` — `DeveloperApp & { clientSecret }`

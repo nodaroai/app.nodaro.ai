@@ -1,21 +1,11 @@
+import type { OAuthScope } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
- * OAuth scopes that a developer app may request. Mirrors
- * `backend/src/lib/scopes.ts#ALL_SCOPES`.
+ * OAuth scopes that a developer app may request — the server's own list
+ * (`OAUTH_SCOPES` in `@nodaro/shared`), so it cannot fall behind.
  */
-export type DeveloperAppScope =
-  | "workflows:read"
-  | "workflows:write"
-  | "workflows:execute"
-  | "jobs:read"
-  | "assets:read"
-  | "assets:write"
-  | "credits:read"
-  | "apps:read"
-  | "pipelines:read"
-  | "pipelines:execute"
-  | "pipelines:approve"
+export type DeveloperAppScope = OAuthScope
 
 export type DeveloperAppStatus = "active" | "suspended" | "pending_review"
 

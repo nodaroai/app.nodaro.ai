@@ -179,7 +179,7 @@ nodaro audio combine --segment <url> --segment "<url>@12-95" --watch
 ```
 
 The authoritative per-flag reference for every command group is the
-[CLI reference](https://nodaroai.github.io/app.nodaro.ai/cli.html) — this README
+[CLI reference](https://nodaro.ai/docs/developers/cli/commands) — this README
 shows the shape, not every option.
 
 ### Three ways to run something

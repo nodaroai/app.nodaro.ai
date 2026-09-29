@@ -187,10 +187,10 @@ nodaro recast validate --file script.json [--json]      # free validation; exit 
 nodaro recast import --file script.json --rights-attested [--json]
 #   imports a VALIDATED authored script as a completed analysis (free); --rights-attested asserts
 #   the script is your own work — authored recasts render Faithful, exactly as written
-nodaro recast estimate --analysis-job <id> [--fidelity faithful] [--resolution <r>] [--segment-sec <n>] [--json]
-nodaro recast create --workflow <id> --analysis-job <id> [--rights-attested] [--fidelity faithful] [--resolution <r>] [--segment-sec <n>] [--json]
+nodaro recast estimate --analysis-job <id> [--fidelity faithful] [--resolution <r>] [--segment-pack scenes-max|scenes|max] [--json]
+nodaro recast create --workflow <id> --analysis-job <id> [--rights-attested] [--fidelity faithful] [--resolution <r>] [--segment-pack scenes-max|scenes|max] [--json]
 #   BUYS THE PLAN (credits) — run `estimate` first; returns the run id
-nodaro recast start <recastId> [--segment-sec <n>] [--json]   # render a planned run (idempotent)
+nodaro recast start <recastId> [--segment-pack scenes-max|scenes|max] [--json]   # render a planned run (idempotent)
 nodaro recast status <recastId> [--json]                # poll status + any pending interactive step
 
 # Prompt — AI wizard that turns a rough idea into an optimized prompt
