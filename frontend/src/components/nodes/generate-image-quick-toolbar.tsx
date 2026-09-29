@@ -19,7 +19,7 @@ import type { GenerateImageData } from "@/types/nodes"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { getModel } from "@nodaro/shared"
-import type { WiredSettingsView } from "@/hooks/use-wired-settings"
+import { wiredFieldSources, type WiredSettingsView } from "@/hooks/use-wired-settings"
 import { SettingsPriceNote } from "./settings-chips"
 
 interface GenerateImageQuickToolbarProps {
@@ -69,9 +69,7 @@ export function GenerateImageQuickToolbar({
   // handlers still write the node's own fields.
   const stripData = (settings?.data ?? data) as GenerateImageData
   // A field its Settings input sets → the wired node's label (the control is fixed).
-  const wiredFrom = new Map<string, string>(
-    (settings?.wired ?? []).map((w) => [w.field, localizeNode(settings?.labels[w.sourceId] ?? w.sourceType)]),
-  )
+  const wiredFrom = wiredFieldSources(settings, localizeNode)
   const refused = settings?.problem
   const runDisabledReason = refused
     ? t("node.settingsProviderRefused", {

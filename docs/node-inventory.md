@@ -59,7 +59,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `loop-subject` | Loop Subject | parameter | Pick a loop subject from 35 entries across 2 categories | `in`:any | `out`:look | NO |
 | `material` | Material | parameter | Pick a material from 66 entries (silk, leather, metal, glass, marble, ...) | `in`:any | `out`:look | NO |
 | `mood` | Mood | parameter | Pick a mood from 50 entries (calm, tense, melancholic, joyful, ominous, ...) | `in`:any | `out`:look | NO |
-| `motion` | Motion | parameter | Define the motion intensity level for connected video generation nodes | `in`:any | `out`:param | NO |
+| `motion` | Motion | parameter | Set how much a video moves: adds a subtle / moderate / dynamic clause to a Generate Video / Generate Video Pro prompt through its `settings` input | `in`:any | `out`:param | NO |
 | `music-genre` | Music Genre | parameter | Pick a music genre (single or up to 3 for fusion) with optional subgenre and era | `in`:any | `out`:audio | NO |
 | `music-mood` | Music Mood | parameter | Pick energy + emotion + vibe for music generation | `in`:any | `out`:audio | NO |
 | `person` | Person | parameter | Multi-dim picker for person attributes — type, age, ethnicity, build, body proportions, face shape, jawline, cheekbones, facial fullness, eyes (shape, eyelid type, canthal tilt, spacing, brow distance), nose, nose tip, lip fullness, lip shape, hair, eyebrows, skin, facial hair, distinctive features (~575 options across 29 fields, incl. a dedicated facial-geometry layer) | `picker-json`:picker-json | `out`:look | NO |

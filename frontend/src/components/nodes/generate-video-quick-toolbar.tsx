@@ -22,7 +22,7 @@ import { videoImageGateBlocked } from "@/lib/video-image-gate"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { getModel } from "@nodaro/shared"
-import type { WiredSettingsView } from "@/hooks/use-wired-settings"
+import { wiredFieldSources, type WiredSettingsView } from "@/hooks/use-wired-settings"
 import { SettingsPriceNote } from "./settings-chips"
 import type { GenerateVideoNodeData } from "@/types/nodes"
 
@@ -93,9 +93,7 @@ export function GenerateVideoQuickToolbar({
     videoImageGateBlocked({ id: nodeId, type: "generate-video", data: stripData as Record<string, unknown> }, s.edges),
   )
   // A field its Settings input sets → the wired node's label (the control is fixed).
-  const wiredFrom = new Map<string, string>(
-    (settings?.wired ?? []).map((w) => [w.field, localizeNode(settings?.labels[w.sourceId] ?? w.sourceType)]),
-  )
+  const wiredFrom = wiredFieldSources(settings, localizeNode)
   const refused = settings?.problem
   const runDisabledReason = refused
     ? t("node.settingsProviderRefused", {

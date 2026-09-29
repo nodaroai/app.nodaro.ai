@@ -41,10 +41,11 @@ describe("extractNodeOutput — parameter nodes", () => {
     // composeCameraMotionHintFromConnections returns the motion's prompt hint
     expect(out!.toLowerCase()).toContain("orbit")
   })
-  it("returns undefined for legacy motion nodes (no hint generator)", () => {
-    // Legacy `motion` dim isn't in getParameterPromptHint. Field mappings
-    // still read the bare value via getParameterValue.
-    expect(extractNodeOutput(makeNode("motion", { motion: "moderate" }))).toBeUndefined()
+  it("returns Motion's prompt clause", () => {
+    // Motion adds a clause to a video prompt (through the Settings input, or
+    // as a {Motion} reference). Field mappings still read the bare value via
+    // getParameterValue.
+    expect(extractNodeOutput(makeNode("motion", { motion: "moderate" }))).toMatch(/moderate, natural motion/)
   })
   it("returns tone value for tone nodes", () => {
     expect(extractNodeOutput(makeNode("tone", { tone: "dramatic" }))).toBe("dramatic")

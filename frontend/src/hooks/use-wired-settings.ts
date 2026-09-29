@@ -14,6 +14,22 @@ export interface WiredSettingsView {
 const NO_WIRED_SETTINGS = ""
 
 /**
+ * Each field a wired setting sets → the (localized) label of the node that
+ * sets it — what a run strip or panel shows beside the fixed control. A
+ * prompt-clause setting (Motion) sets no field, so it has no entry.
+ */
+export function wiredFieldSources(
+  view: WiredSettingsView | undefined,
+  localizeNode: (label: string) => string,
+): ReadonlyMap<string, string> {
+  return new Map(
+    (view?.wired ?? []).flatMap((w) =>
+      w.field ? [[w.field, localizeNode(view?.labels[w.sourceId] ?? w.sourceType)] as const] : [],
+    ),
+  )
+}
+
+/**
  * What a node with a Settings input runs with, for its chips, its run strip
  * and its price — the same `resolveWiredSettings` the workflow estimate and
  * both run engines go through. The store subscription is a string of what is

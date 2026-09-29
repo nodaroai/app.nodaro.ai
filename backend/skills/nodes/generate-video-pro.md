@@ -109,7 +109,7 @@ generated_from: 41c73564b
 
 ## Common gotchas
 
-- The `settings` input takes Aspect Ratio, Duration and Provider nodes (one input for all). A wired Duration is the total length to stitch; a wired Provider must name one of this node's models (`list_models`), or the run stops before anything is charged.
+- The `settings` input takes Aspect Ratio, Duration, Provider and Motion nodes (one input for all). A wired Duration is the total length to stitch; a wired Provider must name one of this node's models (`list_models`), or the run stops before anything is charged; Motion adds a clause to the prompt.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

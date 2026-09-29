@@ -37,10 +37,12 @@ export function WiredSettingsScope({
   const fields = useMemo(
     () =>
       new Map<string, WiredSettingField>(
-        view.wired.map((w) => [
-          w.field,
-          { label: view.labels[w.sourceId] ?? w.sourceType, value: wiredSettingText(w, view.data), refused: view.problem?.sourceId === w.sourceId },
-        ]),
+        // A prompt-clause setting (Motion) sets no field, so no panel field shows it.
+        view.wired.flatMap((w) =>
+          w.field
+            ? [[w.field, { label: view.labels[w.sourceId] ?? w.sourceType, value: wiredSettingText(w, view.data), refused: view.problem?.sourceId === w.sourceId }] as const]
+            : [],
+        ),
       ),
     [view],
   )

@@ -6,7 +6,7 @@ import { PromptEditButton } from "./prompt-edit-button"
 import { QuickConfigSelect, getQuickConfigs, readQuickConfigValue } from "./node-quick-configs"
 import { nodeHasPromptField } from "@/lib/prompt-fields"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useWiredSettings } from "@/hooks/use-wired-settings"
+import { useWiredSettings, wiredFieldSources } from "@/hooks/use-wired-settings"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { getModel } from "@nodaro/shared"
 import { useT } from "@/lib/i18n"
@@ -54,9 +54,7 @@ export function NodeQuickStrip({ nodeId, credits, isRunning, children, disabled,
   const t = useT()
   const localizeNode = useLocalizeNodeLabel()
   const settings = useWiredSettings(nodeId, node?.type ?? "", data)
-  const wiredFrom = new Map<string, string>(
-    settings.wired.map((w) => [w.field, localizeNode(settings.labels[w.sourceId] ?? w.sourceType)]),
-  )
+  const wiredFrom = wiredFieldSources(settings, localizeNode)
   const refused = settings.problem
   const refusedReason = refused
     ? t("node.settingsProviderRefused", {

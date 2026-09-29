@@ -1,8 +1,8 @@
 /**
  * The "Settings" input: ONE input handle on a generation node that takes the
- * Generation Settings nodes (Aspect Ratio, Duration, Provider) and sets the
- * consumer's own field for each. The editor shows it as a single pip, with the
- * connected values listed inside the node.
+ * Generation Settings nodes. Aspect Ratio, Duration and Provider set the
+ * consumer's own field; Motion adds a clause to its prompt. The editor shows it
+ * as a single pip, with the connected values listed inside the node.
  *
  * Every reader goes through this module, so they cannot disagree about what a
  * node runs with: both run engines (their field-mapping wrappers ask
@@ -28,8 +28,31 @@ export const SETTINGS_SOURCE_FIELDS = {
   provider: "provider",
 } as const
 
-export type SettingsSourceType = keyof typeof SETTINGS_SOURCE_FIELDS
-export type SettingsField = (typeof SETTINGS_SOURCE_FIELDS)[SettingsSourceType]
+/**
+ * Generation Settings nodes a Settings input takes as a prompt CLAUSE rather
+ * than a field: Motion (how much the shot moves). Each engine's hint collector
+ * adds its clause beside the Look family's, under the same Inject Look switch
+ * (`isSettingsHintEdge`).
+ */
+export const SETTINGS_HINT_SOURCES = ["motion"] as const
+
+export type SettingsFieldSourceType = keyof typeof SETTINGS_SOURCE_FIELDS
+export type SettingsHintSourceType = (typeof SETTINGS_HINT_SOURCES)[number]
+export type SettingsSourceType = SettingsFieldSourceType | SettingsHintSourceType
+export type SettingsField = (typeof SETTINGS_SOURCE_FIELDS)[SettingsFieldSourceType]
+
+/** Every Generation Settings node type a Settings input can take. */
+export const SETTINGS_SOURCE_TYPES: readonly SettingsSourceType[] = [
+  ...(Object.keys(SETTINGS_SOURCE_FIELDS) as SettingsFieldSourceType[]),
+  ...SETTINGS_HINT_SOURCES,
+]
+
+/** The consumer field a setting sets; none for a prompt-clause setting. */
+function fieldOf(sourceType: SettingsSourceType): SettingsField | undefined {
+  return Object.prototype.hasOwnProperty.call(SETTINGS_SOURCE_FIELDS, sourceType)
+    ? SETTINGS_SOURCE_FIELDS[sourceType as SettingsFieldSourceType]
+    : undefined
+}
 
 /**
  * A node with a Settings input:
@@ -59,7 +82,8 @@ interface SettingsConsumer {
   readonly modelList?: string
 }
 
-const VIDEO_SETTINGS: readonly SettingsSourceType[] = ["aspect-ratio", "duration", "provider"]
+// Motion is a video-only clause (VIDEO_ONLY_PARAMETER_NODE_TYPES).
+const VIDEO_SETTINGS: readonly SettingsSourceType[] = ["aspect-ratio", "duration", "provider", "motion"]
 
 const SETTINGS_CONSUMERS: Readonly<Record<string, SettingsConsumer>> = {
   "generate-video": {
@@ -94,7 +118,12 @@ export const SETTINGS_INPUT_CONSUMERS: Readonly<Record<string, readonly Settings
 )
 
 export function isSettingsSourceType(type: string | undefined | null): type is SettingsSourceType {
-  return typeof type === "string" && Object.prototype.hasOwnProperty.call(SETTINGS_SOURCE_FIELDS, type)
+  return typeof type === "string" && (SETTINGS_SOURCE_TYPES as readonly string[]).includes(type)
+}
+
+/** Whether a Generation Settings node adds a prompt clause rather than setting a field. */
+export function isSettingsHintSource(type: string | undefined | null): type is SettingsHintSourceType {
+  return typeof type === "string" && (SETTINGS_HINT_SOURCES as readonly string[]).includes(type)
 }
 
 /** Whether `consumerType`'s Settings input takes a `sourceType` node. */
@@ -104,7 +133,10 @@ export function settingsInputAccepts(consumerType: string, sourceType: string): 
 
 /** The consumer fields a Settings input can set, for `NODE_MAPPABLE_FIELDS`. */
 export function settingsInputFields(consumerType: string): SettingsField[] {
-  return (SETTINGS_INPUT_CONSUMERS[consumerType] ?? []).map((t) => SETTINGS_SOURCE_FIELDS[t])
+  return (SETTINGS_INPUT_CONSUMERS[consumerType] ?? []).flatMap((t) => {
+    const field = fieldOf(t)
+    return field ? [field] : []
+  })
 }
 
 /** The models a wired Provider may name on `consumerType` (empty for a non-consumer). */
@@ -119,10 +151,27 @@ interface SettingsEdge {
 }
 
 /**
- * The node wired into `consumerId`'s Settings input that sets `field`, or
+ * The `sourceType` node wired into `consumerId`'s Settings input, or
  * undefined. When two nodes of one kind are wired, the LAST edge wins — the
  * same rule as every other single-value input.
  */
+export function settingsSourceForType(
+  consumerId: string,
+  consumerType: string,
+  sourceType: SettingsSourceType,
+  edges: ReadonlyArray<SettingsEdge>,
+  typeOf: (nodeId: string) => string | undefined | null,
+): string | undefined {
+  if (!settingsInputAccepts(consumerType, sourceType)) return undefined
+  let found: string | undefined
+  for (const edge of edges) {
+    if (edge.target !== consumerId || edge.targetHandle !== SETTINGS_INPUT_HANDLE) continue
+    if (typeOf(edge.source) === sourceType) found = edge.source
+  }
+  return found
+}
+
+/** The node wired into `consumerId`'s Settings input that sets `field`, or undefined (last edge wins). */
 export function settingsSourceForField(
   consumerId: string,
   consumerType: string,
@@ -130,15 +179,26 @@ export function settingsSourceForField(
   edges: ReadonlyArray<SettingsEdge>,
   typeOf: (nodeId: string) => string | undefined | null,
 ): string | undefined {
-  let found: string | undefined
-  for (const edge of edges) {
-    if (edge.target !== consumerId || edge.targetHandle !== SETTINGS_INPUT_HANDLE) continue
-    const sourceType = typeOf(edge.source)
-    if (!isSettingsSourceType(sourceType)) continue
-    if (!settingsInputAccepts(consumerType, sourceType)) continue
-    if (SETTINGS_SOURCE_FIELDS[sourceType] === field) found = edge.source
-  }
-  return found
+  const sourceType = (SETTINGS_INPUT_CONSUMERS[consumerType] ?? []).find((t) => fieldOf(t) === field)
+  return sourceType ? settingsSourceForType(consumerId, consumerType, sourceType, edges, typeOf) : undefined
+}
+
+/**
+ * Whether `edge` brings a prompt-clause setting (Motion) into its target's
+ * Settings input and is the one of its kind that applies (the last edge). The
+ * hint collectors of both engines ask this, so the clause a run gets is the
+ * one the node's chips show.
+ */
+export function isSettingsHintEdge(
+  edge: SettingsEdge,
+  consumerType: string,
+  edges: ReadonlyArray<SettingsEdge>,
+  typeOf: (nodeId: string) => string | undefined | null,
+): boolean {
+  if (edge.targetHandle !== SETTINGS_INPUT_HANDLE) return false
+  const sourceType = typeOf(edge.source)
+  if (!isSettingsHintSource(sourceType)) return false
+  return settingsSourceForType(edge.target, consumerType, sourceType, edges, typeOf) === edge.source
 }
 
 /**
@@ -150,12 +210,13 @@ export function connectedSettingsSources(
   consumerType: string,
   edges: ReadonlyArray<SettingsEdge>,
   typeOf: (nodeId: string) => string | undefined | null,
-): Array<{ sourceType: SettingsSourceType; field: SettingsField; sourceId: string }> {
-  const out: Array<{ sourceType: SettingsSourceType; field: SettingsField; sourceId: string }> = []
+): Array<{ sourceType: SettingsSourceType; field?: SettingsField; sourceId: string }> {
+  const out: Array<{ sourceType: SettingsSourceType; field?: SettingsField; sourceId: string }> = []
   for (const sourceType of SETTINGS_INPUT_CONSUMERS[consumerType] ?? []) {
-    const field = SETTINGS_SOURCE_FIELDS[sourceType]
-    const sourceId = settingsSourceForField(consumerId, consumerType, field, edges, typeOf)
-    if (sourceId) out.push({ sourceType, field, sourceId })
+    const sourceId = settingsSourceForType(consumerId, consumerType, sourceType, edges, typeOf)
+    if (!sourceId) continue
+    const field = fieldOf(sourceType)
+    out.push(field ? { sourceType, field, sourceId } : { sourceType, sourceId })
   }
   return out
 }
@@ -237,7 +298,8 @@ interface SettingsGraphNode {
 /** One setting wired into a node's Settings input. */
 export interface WiredSetting {
   readonly sourceType: SettingsSourceType
-  readonly field: SettingsField
+  /** The field it sets; none for a prompt-clause setting (Motion). */
+  readonly field?: SettingsField
   readonly sourceId: string
   /** The value the wired node holds, read the way the run engines read it. */
   readonly value: string | undefined
@@ -266,7 +328,7 @@ export function resolveWiredSettings(
   if (wired.length === 0) return { data: { ...data }, wired }
   let next: Record<string, unknown> = { ...data }
   for (const w of wired) {
-    if (w.value != null) next = { ...next, [w.field]: w.value }
+    if (w.field && w.value != null) next = { ...next, [w.field]: w.value }
   }
   const applied = applySettingsInput(consumerType, consumerId, next, edges, typeOf)
   return applied.problem ? { data: applied.data, wired, problem: applied.problem } : { data: applied.data, wired }

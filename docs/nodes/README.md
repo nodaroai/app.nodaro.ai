@@ -190,7 +190,7 @@ Free-form or enum settings that feed AI / video / audio generation nodes via Fie
 | [Scene Count](./parameters/scene-count.md) | Specify number of scenes to generate | Control script generation output length |
 | [Duration](./parameters/duration.md) | Set target duration in seconds | A script's target length, or a video's duration (Settings input) |
 | [Aspect Ratio](./parameters/aspect-ratio.md) | Define an image or video aspect ratio | Set consistent dimensions (16:9, 9:16, 1:1, 4:3, 4:5) across generation nodes (Settings input) |
-| [Motion](./parameters/motion.md) | Control motion intensity | Adjust video generation movement (subtle/moderate/dynamic) |
+| [Motion](./parameters/motion.md) | Control motion intensity | A subtle / moderate / dynamic clause in a video node's prompt (Settings input) |
 
 ### Picker nodes — Look family
 

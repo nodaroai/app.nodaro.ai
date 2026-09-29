@@ -11,6 +11,7 @@ import {
   settingsSourceForField,
   snapToModelDuration,
   withWiredSettings,
+  isSettingsHintEdge,
 } from "../settings-input.js"
 import { NODE_MAPPABLE_FIELDS } from "../node-mappable-fields.js"
 import { DEFAULT_VIDEO_PROVIDER, GVP_SUPPORTED_PROVIDERS, IMAGE_GEN_PROVIDERS, VIDEO_GEN_PROVIDERS } from "../model-constants.js"
@@ -188,6 +189,41 @@ describe("withWiredSettings", () => {
     expect(withWiredSettings(image, nodes, [wire("nb", "gi")]).data).toMatchObject({ providers: ["nano-banana"] })
     expect(withWiredSettings(image)).toBe(image)
     expect(withWiredSettings({ id: "t", type: "tone", data: {} }, nodes, [])).toEqual({ id: "t", type: "tone", data: {} })
+  })
+})
+
+describe("Motion (a prompt-clause setting)", () => {
+  const motion = { id: "mo", type: "motion", data: { label: "Motion", motion: "subtle" } }
+  const motion2 = { id: "mo2", type: "motion", data: { label: "Motion 2", motion: "dynamic" } }
+  const graph = [...nodes, motion, motion2]
+  const typeOfGraph = (id: string) => graph.find((n) => n.id === id)?.type
+
+  it("is taken by the video nodes, not by Generate Image, and sets no field", () => {
+    expect(settingsInputAccepts("generate-video", "motion")).toBe(true)
+    expect(settingsInputAccepts("generate-video-pro", "motion")).toBe(true)
+    expect(settingsInputAccepts("generate-image", "motion")).toBe(false)
+    expect(settingsInputFields("generate-video")).toEqual(["aspectRatio", "duration", "provider"])
+  })
+
+  it("is listed as wired, without a field, and writes nothing into the data", () => {
+    const resolved = resolveWiredSettings("gv", "generate-video", nodes[0]!.data, graph, [wire("mo")])
+    expect(resolved.wired).toEqual([{ sourceType: "motion", sourceId: "mo", value: "subtle" }])
+    expect(resolved.data).toEqual(nodes[0]!.data)
+  })
+
+  it("brings its clause only from the last Motion wired", () => {
+    const edges = [wire("mo"), wire("mo2")]
+    expect(isSettingsHintEdge(edges[0]!, "generate-video", edges, typeOfGraph)).toBe(false)
+    expect(isSettingsHintEdge(edges[1]!, "generate-video", edges, typeOfGraph)).toBe(true)
+  })
+
+  it("brings no clause into a node that does not take it, or through another handle", () => {
+    expect(isSettingsHintEdge(wire("mo", "gi"), "generate-image", [wire("mo", "gi")], typeOfGraph)).toBe(false)
+    expect(isSettingsHintEdge(wire("mo", "gv", "look"), "generate-video", [wire("mo", "gv", "look")], typeOfGraph)).toBe(false)
+  })
+
+  it("does not count as the field setting of its kind", () => {
+    expect(settingsSourceForField("gv", "generate-video", "duration", [wire("mo")], typeOfGraph)).toBeUndefined()
   })
 })
 

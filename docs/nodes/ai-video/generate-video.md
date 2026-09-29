@@ -28,18 +28,19 @@ Mode is chosen automatically at execution time from the wiring shape — there i
 | `assets` | target | Character / Face / Location / Object | no | Identity references |
 | `look` | target | Setting / Lens / Lighting / Mood / Style / Color Look / ... | no | Look-family pickers |
 | `elements` | target | Person / Pose / Animal / Action FX / ... | no | Elements-family pickers |
-| `settings` | target | Aspect Ratio / Duration / Provider | no | Sets the node's aspect ratio, duration and model from a wired node (see below) |
+| `settings` | target | Aspect Ratio / Duration / Provider / Motion | no | Sets the node's aspect ratio, duration and model from a wired node, and adds a Motion clause to the prompt (see below) |
 | `video` | source | n/a | n/a | Output video URL |
 
 `imageReferences`, `videoReferences`, and `audioReferences` are order-sensitive — drag-to-reorder writes `referenceImageOrder` (and friends) on the node so the order survives workflow saves and is honored at execution.
 
 ### Settings input
 
-One `settings` input takes the Generation Settings nodes — [Aspect Ratio](../parameters/aspect-ratio.md), [Duration](../parameters/duration.md) and [Provider](../parameters/provider.md) — and each wired value replaces the node's own field at run time. The node lists what is wired as chips (e.g. `16:9 · 8s · Seedance 2`), and the settings panel shows those fields as connected.
+One `settings` input takes the Generation Settings nodes — [Aspect Ratio](../parameters/aspect-ratio.md), [Duration](../parameters/duration.md), [Provider](../parameters/provider.md) and [Motion](../parameters/motion.md). The first three replace the node's own field at run time; Motion adds a clause to the prompt. The node lists what is wired as chips (e.g. `16:9 · 8s · Seedance 2`), and the settings panel shows those fields as connected.
 
 - **Aspect Ratio** replaces `aspectRatio`. A ratio the model doesn't render runs as the nearest one it does (`4:5` on Seedance 2 runs as `3:4`).
 - **Duration** replaces `duration`, fitted to the nearest length the model renders; a tie goes to the shorter length. A 60-second Duration node runs as 15 s on Seedance 2 and 8 s on VEO 3.1 (4 / 6 / 8 s).
 - **Provider** replaces `provider`. It must name a video model this node runs; a Provider set to an image model stops the run before anything is charged, and the error names the Provider node.
+- **Motion** adds how much the shot moves ("subtle, gentle motion…" / "moderate, natural motion…" / "dynamic, energetic motion…") beside the Look hints, under the same Inject Look switch.
 - When two nodes of one kind are wired, the last connection wins.
 
 The price is the price of the wired values: the Run button, the workflow total and the reservation all use the fitted duration and the wired model. A note under the Run button says so while a setting is wired.

@@ -126,7 +126,7 @@ The per-family doctrine below (Kling, MiniMax, VEO, Gemini Omni, Grok, Wan, Happ
 
 ## Common gotchas
 
-- The `settings` input takes Aspect Ratio, Duration and Provider nodes (one input for all). Each wired value replaces the node's own `aspectRatio`, `duration` or `provider` at run time and is fitted to the model; the estimate prices the wired values.
+- The `settings` input takes Aspect Ratio, Duration, Provider and Motion nodes (one input for all). The first three replace the node's own `aspectRatio`, `duration` or `provider` at run time, fitted to the model (the estimate prices the wired values); Motion adds a clause to the prompt.
 - A wired Provider must name a video model this node runs, or the run stops before anything is charged.
 
 <!-- AUTO-GEN:START examples -->

@@ -3,13 +3,20 @@
 import { memo } from "react"
 import { AlertCircle, SlidersHorizontal } from "lucide-react"
 import { getModel, type WiredSetting } from "@nodaro/shared"
-import { useT } from "@/lib/i18n"
+import { labelOf, useT, type MessageKey } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { WiredSettingsView } from "@/hooks/use-wired-settings"
 
+/** Motion's three steps, as its own panel names them. */
+const MOTION_LABELS: Readonly<Record<"subtle" | "moderate" | "dynamic", MessageKey>> = {
+  subtle: "vidcfg.subtle",
+  moderate: "vidcfg.moderate",
+  dynamic: "vidcfg.dynamic",
+}
+
 /** A wired setting as the node's chip and settings panel print it: the value the node runs with. */
 export function wiredSettingText(w: WiredSetting, data: Readonly<Record<string, unknown>>): string {
-  const value = data[w.field] ?? w.value
+  const value = (w.field ? data[w.field] : undefined) ?? w.value
   if (w.sourceType === "duration") return `${String(value ?? "")}s`
   if (w.sourceType === "provider") {
     const id = String(value ?? "")
@@ -41,7 +48,7 @@ export const SettingsChips = memo(function SettingsChips({
       </span>
       {view.wired.map((w) => {
         const source = localizeNode(view.labels[w.sourceId] ?? w.sourceType)
-        const text = wiredSettingText(w, view.data)
+        const text = w.sourceType === "motion" ? labelOf(MOTION_LABELS, String(w.value ?? ""), t) : wiredSettingText(w, view.data)
         const refused = view.problem?.sourceId === w.sourceId
         return (
           <span

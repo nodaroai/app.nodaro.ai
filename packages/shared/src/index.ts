@@ -657,6 +657,11 @@ export {
   settingsInputAccepts,
   settingsInputFields,
   settingsSourceForField,
+  settingsSourceForType,
+  isSettingsHintEdge,
+  isSettingsHintSource,
+  SETTINGS_HINT_SOURCES,
+  SETTINGS_SOURCE_TYPES,
   connectedSettingsSources,
   settingsProviderModels,
   snapToModelDuration,
@@ -666,6 +671,8 @@ export {
   type SettingsInputProblem,
   type WiredSetting,
   type SettingsSourceType,
+  type SettingsFieldSourceType,
+  type SettingsHintSourceType,
   type SettingsField,
 } from "./settings-input.js"
 export {
