@@ -17,6 +17,10 @@ import { LLM_TEXT_INPUT_MAX } from "./model-constants.js"
 
 export const SCRIPT_SCENE_COUNT_RANGE = { min: 1, max: 20 } as const
 export const SCRIPT_TARGET_DURATION_RANGE = { min: 5, max: 600 } as const
+/** What the script generator uses when a request leaves the field out. */
+export const SCRIPT_SCENE_COUNT_DEFAULT = 5
+/** Seconds; what the script generator uses when a request leaves it out. */
+export const SCRIPT_TARGET_DURATION_DEFAULT = 60
 export const SCRIPT_TONE_MAX_LENGTH = 200
 export const SCRIPT_STYLE_GUIDE_MAX_LENGTH = LLM_TEXT_INPUT_MAX
 

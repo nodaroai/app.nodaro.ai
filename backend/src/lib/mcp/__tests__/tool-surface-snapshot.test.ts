@@ -416,6 +416,16 @@ const GENERATE_SCRIPT_STYLE_GUIDE_BYTES = 127
 // measured by this suite: 373_260 total − 373_053 base = 207 B, which keeps the
 // 46 B of headroom the list had before.
 const GENERATE_MUSIC_REFERENCE_BYTES = 207
+// Docs review of the generated tool-parameters page (docs/mcp/): the 3D scene
+// tools' `references[]` say what `objectId` is and that v1 takes a whole clip
+// (`startSeconds` / `endSeconds` are refused otherwise); `generate_speech`
+// names `elevenlabs` as the legacy id of `elevenlabs-turbo`; `generate_music`
+// names the `suno-v5-5` spelling; `generate_script` states its defaults. Less:
+// the three pipeline-chat `stage` enums drop the unwired `shot_list` and the
+// "Wired today" sentence. No tool was added, so the fixture does NOT move.
+// measured by this suite: 373_669 total − 373_260 base = 409 B, which keeps
+// the 46 B of headroom the list had before.
+const DOCS_REVIEW_WORDING_BYTES = 409
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -452,7 +462,8 @@ export const TOOL_WIRE_BUDGET = {
     UGC_BUILDER_TOOL_BYTES +
     GET_RECIPE_UGC_SENTENCE_BYTES +
     GENERATE_SCRIPT_STYLE_GUIDE_BYTES +
-    GENERATE_MUSIC_REFERENCE_BYTES,
+    GENERATE_MUSIC_REFERENCE_BYTES +
+    DOCS_REVIEW_WORDING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

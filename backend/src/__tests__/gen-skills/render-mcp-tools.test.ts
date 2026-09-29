@@ -84,6 +84,43 @@ describe("renderToolParametersDoc", () => {
   })
 })
 
+describe("renderToolParametersDoc — fixed values and branches", () => {
+  const shapes = surface("cloud", {
+    render: [
+      { all: ["workflows:execute"] },
+      {
+        fps: z.union([z.literal(24), z.literal(30)]).optional(),
+        stability: z.union([z.literal(0), z.literal(0.5), z.literal(1)]).optional().describe("How stable"),
+        dry_run: z.literal(false).optional(),
+        size: z.union([z.number().int().min(1), z.literal("auto")]).optional(),
+        source: z.discriminatedUnion("kind", [
+          z.object({ kind: z.literal("prompt"), prompt: z.string(), style: z.string().optional() }),
+          z.object({ kind: z.literal("scene"), scene_id: z.string(), style: z.string() }),
+        ]),
+      },
+    ],
+  })
+  const doc = renderToolParametersDoc(shapes, shapes)
+
+  it("lists a union of fixed values once, as one of them", () => {
+    expect(doc).toContain("| `fps` | number |  | One of `24`, `30`. |")
+    expect(doc).toContain("| `stability` | number |  | How stable. One of `0`, `0.5`, `1`. |")
+    expect(doc).toContain("| `dry_run` | boolean |  | Always `false`. |")
+    expect(doc).not.toMatch(/Always `24`\. Always/)
+  })
+
+  it("names the fixed values a free-typed union also takes", () => {
+    expect(doc).toContain("| `size` | integer or string |  | Also takes `auto`. At least 1. |")
+  })
+
+  it("merges a discriminated union's branches and says which fields belong to which", () => {
+    expect(doc).toContain("| `source.kind` | string | yes | One of `prompt`, `scene`. |")
+    expect(doc).toContain("| `source.prompt` | string |  | Only when `kind` is `prompt` (required there). |")
+    expect(doc).toContain("| `source.scene_id` | string |  | Only when `kind` is `scene` (required there). |")
+    expect(doc).toContain("| `source.style` | string |  | Required when `kind` is `scene`. |")
+  })
+})
+
 describe("renderScopesBlock", () => {
   const block = renderScopesBlock(cloud, community)
 

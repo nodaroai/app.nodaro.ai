@@ -138,7 +138,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             `Music model. Default ${DEFAULT_SUNO_CATALOG_ID}; suno-v6_wild bolder, suno-v6_mini faster; ` +
-            "suno-v5_5 / suno-v5 / suno earlier; minimax needs a reference_audio_url.",
+            "suno-v5_5 (also as suno-v5-5) / suno-v5 / suno earlier; minimax needs a reference_audio_url.",
           ),
         duration: z.number().min(1).max(30).optional(),
         instrumental: z.boolean().optional(),
@@ -435,7 +435,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "`elevenlabs-multilingual` is a legacy v2 model via a third-party " +
             "wrapper known to garble some languages (Hebrew observed) — only " +
             "use it for a v2-only-verified voice (`text` is capped at 5,000 chars on " +
-            "every model — split longer scripts). Call " +
+            "every model — split longer scripts). `elevenlabs` is the legacy id " +
+            "of `elevenlabs-turbo`. Call " +
             "list_models { kind: \"audio\", mode: \"tts\" } for the full sheet.",
           ),
         voice_type: z.enum(["premade", "custom", "library"]).optional(),

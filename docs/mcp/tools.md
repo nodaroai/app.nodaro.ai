@@ -1537,8 +1537,9 @@ All upload tools require `assets:write`. Three upload strategies are provided
 ## Pipeline tools
 
 Pipeline tools appear only when your authorization grants the relevant
-`pipelines:read` / `pipelines:execute` / `pipelines:approve` scopes (the
-enterprise Story-to-Video pipeline engine; Cloud/Business).
+`pipelines:read` / `pipelines:execute` / `pipelines:approve` scopes. They are
+**Nodaro Cloud only** (the Story-to-Video pipeline engine): self-hosted
+Community and Business installs do not register them.
 
 | Tool | Scope | Description |
 |------|-------|-------------|
@@ -1734,7 +1735,7 @@ client name. Use to verify the connector is wired up correctly.
 
 ### `start_film_director`
 
-**Scope:** none (always visible)
+**Scope:** none (always visible) · **Nodaro Cloud only** (self-hosted installs do not register it)
 
 Returns the Film Director skill — a multi-step prompt that instructs the
 LLM to drive a 10-stage director workflow (script → characters →

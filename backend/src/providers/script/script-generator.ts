@@ -1,6 +1,6 @@
 import { resolveLlmParams, type LlmAdvancedInput } from "../../lib/llm-advanced-mode.js"
 import { llmComplete } from "../../lib/llm-client.js"
-import { getLlmModel, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { getLlmModel, LLM_FEATURE_DEFAULTS, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_DEFAULT } from "@nodaro/shared"
 import type { LlmReasoningEffort } from "@nodaro/shared"
 
 export interface ScriptSceneCharacter {
@@ -146,7 +146,7 @@ export function resolveScriptModelId(provider?: ScriptProvider, llmModel?: strin
 
 export async function generateScript(
   prompt: string,
-  sceneCount: number = 5,
+  sceneCount: number = SCRIPT_SCENE_COUNT_DEFAULT,
   tone?: string,
   targetDuration?: number,
   provider?: ScriptProvider,
@@ -161,7 +161,7 @@ export async function generateScript(
 ): Promise<GeneratedScript> {
   const resolvedModelId = resolveScriptModelId(provider, llmModel)
 
-  const duration = targetDuration ?? 60
+  const duration = targetDuration ?? SCRIPT_TARGET_DURATION_DEFAULT
 
   let userPrompt = `Create a ${sceneCount}-scene cinematic script for the following concept:\n\n${prompt}\n\nTarget duration: ${duration} seconds.`
   if (tone) {

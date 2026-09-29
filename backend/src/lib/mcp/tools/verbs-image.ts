@@ -18,7 +18,7 @@ import {
 } from "./_verb-helpers.js"
 import { LLM_MCP_FIELDS, llmPayloadFields } from "./_llm-fields.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, readPromptAffixes, SCRIPT_SCENE_COUNT_RANGE, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared"
+import { modelIdsByKindMode, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, readPromptAffixes, SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared"
 import { applyPromptAffixes } from "@nodaro/prompts"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { normalizeImageInput } from "../normalize.js"
@@ -1114,9 +1114,9 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         "Models: gemini (default), claude, gpt.",
       inputSchema: {
         prompt: z.string().min(1).max(10000).describe("High-level description of the video (topic, style, audience, etc.)."),
-        scene_count: z.number().int().min(SCRIPT_SCENE_COUNT_RANGE.min).max(SCRIPT_SCENE_COUNT_RANGE.max).optional().describe("Number of scenes. Default 5."),
+        scene_count: z.number().int().min(SCRIPT_SCENE_COUNT_RANGE.min).max(SCRIPT_SCENE_COUNT_RANGE.max).optional().describe(`Number of scenes. Default ${SCRIPT_SCENE_COUNT_DEFAULT}.`),
         tone: z.string().max(SCRIPT_TONE_MAX_LENGTH).optional().describe("Tone/mood of the script (e.g. 'dramatic', 'lighthearted')."),
-        target_duration: z.number().int().min(SCRIPT_TARGET_DURATION_RANGE.min).max(SCRIPT_TARGET_DURATION_RANGE.max).optional().describe("Approximate total video duration in seconds."),
+        target_duration: z.number().int().min(SCRIPT_TARGET_DURATION_RANGE.min).max(SCRIPT_TARGET_DURATION_RANGE.max).optional().describe(`Approximate total video duration in seconds. Default ${SCRIPT_TARGET_DURATION_DEFAULT}.`),
         style_guide: z.string().max(SCRIPT_STYLE_GUIDE_MAX_LENGTH).optional().describe("Style the script follows: voice, look, pacing (e.g. 'noir, short lines')."),
         model: z.enum(["gemini", "claude", "gpt"]).optional().describe("LLM to use. Default gemini."),
       },

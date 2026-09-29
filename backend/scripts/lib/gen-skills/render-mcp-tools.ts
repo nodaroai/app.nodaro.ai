@@ -45,11 +45,24 @@ function unionOf(s: Json): Json[] | undefined {
   return (s.anyOf ?? s.oneOf) as Json[] | undefined
 }
 
+/** Distinct schemas, compared by content. */
+function uniqueSchemas(schemas: Json[]): Json[] {
+  const seen = new Map<string, Json>()
+  for (const schema of schemas) seen.set(JSON.stringify(schema), schema)
+  return [...seen.values()]
+}
+
+/** "integer or number" says no more than "number". */
+function joinTypes(types: string[]): string {
+  const set = unique(types)
+  return (set.includes("number") ? set.filter((t) => t !== "integer") : set).join(" or ")
+}
+
 function typeOf(s: Json): string {
   const union = unionOf(s)
-  if (union) return unique(union.map(typeOf)).join(" or ")
-  if (Array.isArray(s.enum)) return unique(s.enum.map(valueType)).join(" or ")
-  if ("const" in s) return valueType(s.const)
+  if (union) return joinTypes(union.map(typeOf))
+  if (Array.isArray(s.enum)) return joinTypes(s.enum.map(valueType))
+  if ("const" in s) return typeof s.type === "string" ? s.type : valueType(s.const)
   if (s.type === "array") {
     const item = typeOf((s.items ?? {}) as Json)
     return item.includes(" or ") ? `(${item})[]` : `${item}[]`
@@ -57,9 +70,30 @@ function typeOf(s: Json): string {
   if (s.type === "object" && s.additionalProperties && typeof s.additionalProperties === "object" && !s.properties) {
     return `object (map of ${typeOf(s.additionalProperties as Json)})`
   }
-  if (Array.isArray(s.type)) return (s.type as string[]).join(" or ")
+  if (Array.isArray(s.type)) return joinTypes(s.type as string[])
   if (s.type === "string" && s.format === "uri") return "string (URL)"
   return typeof s.type === "string" ? s.type : "any"
+}
+
+/**
+ * The values a field is limited to, as one sentence: `enum` and `const` on the
+ * schema or on the members of its union ("One of `24`, `30`."). A union that
+ * also takes a free type lists its fixed values as extras ("Also takes …").
+ */
+function allowedValuesNote(s: Json): string | undefined {
+  const union = unionOf(s)
+  const members = union ?? [s]
+  const values: unknown[] = []
+  let free = false
+  for (const member of members) {
+    if (Array.isArray(member.enum)) values.push(...member.enum)
+    else if ("const" in member) values.push(member.const)
+    else if (member.type !== "null") free = true
+  }
+  const distinct = [...new Map(values.map((v) => [JSON.stringify(v), v])).values()]
+  if (!distinct.length) return undefined
+  if (free && union) return `Also takes ${distinct.map(code).join(", ")}.`
+  return distinct.length === 1 ? `Always ${code(distinct[0])}.` : `One of ${distinct.map(code).join(", ")}.`
 }
 
 /** "From 2 to 64." and the like; zod's safe-integer bounds say nothing. */
@@ -72,10 +106,9 @@ function bound(min: unknown, max: unknown, unit: (n: number) => string): string 
   return undefined
 }
 
+/** Numeric, length and item-count limits (the allowed values are {@link allowedValuesNote}'s). */
 function constraints(s: Json): string[] {
   const out: string[] = []
-  if (Array.isArray(s.enum)) out.push(`One of ${s.enum.map(code).join(", ")}.`)
-  if ("const" in s) out.push(`Always ${code(s.const)}.`)
   const plain = (n: number) => String(n)
   out.push(
     ...[
@@ -89,32 +122,95 @@ function constraints(s: Json): string[] {
   return out
 }
 
-function describe(s: Json): string {
+function describe(s: Json, extra?: string): string {
   const union = unionOf(s) ?? []
   const text = (s.description ?? union.find((m) => typeof m.description === "string")?.description) as
     | string
     | undefined
-  const notes = unique([s, ...union].flatMap(constraints))
+  const allowed = allowedValuesNote(s)
+  const notes = unique([...(allowed ? [allowed] : []), ...[s, ...union].flatMap(constraints)])
   if ("default" in s) notes.push(`Default ${code(s.default)}.`)
+  if (extra) notes.push(extra)
   const sentence = text?.trim()
   // The notes follow as sentences of their own.
   const lead = sentence && notes.length && !/[.!?:]$/.test(sentence) ? `${sentence}.` : sentence
   return [lead, ...notes].filter(Boolean).join(" ")
 }
 
-/** The fields of an object schema (or of the object in a nullable union). */
-function fieldsOf(s: Json): Array<[name: string, schema: Json, required: boolean]> {
+interface Field {
+  name: string
+  schema: Json
+  required: boolean
+  /** Which branch of a discriminated union the field belongs to, when not all. */
+  note?: string
+}
+
+/**
+ * The property that tells a union's object branches apart: present in every
+ * branch, with a fixed value in each (`kind: "prompt" | "scene" | …`).
+ */
+function discriminatorOf(objects: Json[]): string | undefined {
+  const first = objects[0]!.properties as Record<string, Json>
+  return Object.keys(first).find((name) =>
+    objects.every((object) => {
+      const property = (object.properties as Record<string, Json>)[name]
+      return property !== undefined && "const" in property
+    }),
+  )
+}
+
+/**
+ * The fields of an object schema. A union of objects (a nullable object, or a
+ * discriminated union) merges its branches: a field in several branches takes
+ * every shape it has there, and a field of some branches says which.
+ */
+function fieldsOf(s: Json): Field[] {
   const objects = [s, ...(unionOf(s) ?? [])].filter((m) => m.type === "object" && m.properties)
   if (!objects.length) return []
-  const single = objects.length === 1
-  const seen = new Map<string, [Json, boolean]>()
+  if (objects.length === 1) {
+    const required = new Set((objects[0]!.required ?? []) as string[])
+    return Object.entries(objects[0]!.properties as Record<string, Json>).map(([name, schema]) => ({
+      name,
+      schema,
+      required: required.has(name),
+    }))
+  }
+  const tag = discriminatorOf(objects)
+  const byName = new Map<string, { schemas: Json[]; tags: unknown[]; requiredTags: unknown[] }>()
   for (const object of objects) {
+    const value = tag ? ((object.properties as Record<string, Json>)[tag]!.const as unknown) : undefined
     const required = new Set((object.required ?? []) as string[])
     for (const [name, schema] of Object.entries(object.properties as Record<string, Json>)) {
-      if (!seen.has(name)) seen.set(name, [schema, single && required.has(name)])
+      const entry = byName.get(name) ?? { schemas: [], tags: [], requiredTags: [] }
+      entry.schemas.push(schema)
+      entry.tags.push(value)
+      if (required.has(name)) entry.requiredTags.push(value)
+      byName.set(name, entry)
     }
   }
-  return [...seen].map(([name, [schema, required]]) => [name, schema, required])
+  return [...byName].map(([name, entry]) => {
+    const shapes = uniqueSchemas(entry.schemas)
+    const when = (values: unknown[]) => `\`${tag}\` is ${values.map(code).join(" or ")}`
+    const inAll = entry.tags.length === objects.length
+    const requiredEverywhereItAppears = entry.requiredTags.length === entry.tags.length
+    let note: string | undefined
+    if (tag && name !== tag) {
+      if (!inAll) {
+        note = `Only when ${when(entry.tags)}`
+        if (requiredEverywhereItAppears) note += " (required there)."
+        else if (entry.requiredTags.length) note += `; required when ${when(entry.requiredTags)}.`
+        else note += "."
+      } else if (entry.requiredTags.length && !requiredEverywhereItAppears) {
+        note = `Required when ${when(entry.requiredTags)}.`
+      }
+    }
+    return {
+      name,
+      schema: shapes.length === 1 ? shapes[0]! : { anyOf: shapes },
+      required: inAll && requiredEverywhereItAppears,
+      ...(note ? { note } : {}),
+    }
+  })
 }
 
 function itemsOf(s: Json): Json | undefined {
@@ -129,16 +225,16 @@ interface Row {
   description: string
 }
 
-function collectRows(name: string, s: Json, required: boolean, depth: number, rows: Row[]): void {
-  rows.push({ name, type: typeOf(s), required, description: describe(s) })
+function collectRows(name: string, s: Json, required: boolean, depth: number, rows: Row[], note?: string): void {
+  rows.push({ name, type: typeOf(s), required, description: describe(s, note) })
   if (depth >= MAX_FIELD_DEPTH) return
-  for (const [child, schema, childRequired] of fieldsOf(s)) {
-    collectRows(`${name}.${child}`, schema, childRequired, depth + 1, rows)
+  for (const field of fieldsOf(s)) {
+    collectRows(`${name}.${field.name}`, field.schema, field.required, depth + 1, rows, field.note)
   }
   const items = itemsOf(s)
   if (items) {
-    for (const [child, schema, childRequired] of fieldsOf(items)) {
-      collectRows(`${name}[].${child}`, schema, childRequired, depth + 1, rows)
+    for (const field of fieldsOf(items)) {
+      collectRows(`${name}[].${field.name}`, field.schema, field.required, depth + 1, rows, field.note)
     }
   }
 }

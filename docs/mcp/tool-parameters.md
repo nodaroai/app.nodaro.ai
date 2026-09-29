@@ -160,7 +160,7 @@ Needs `pipelines:approve` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `pipeline_id` | string | yes | The id of the pipeline |
-| `stage` | string | yes | The stage the chat turn belongs to. One of `script`, `shot_list`, `post_merge`. |
+| `stage` | string | yes | The stage the chat turn belongs to. One of `script`, `post_merge`. |
 | `turn_id` | string | yes | The id of the assistant turn whose proposed_change you want to apply |
 
 ## `apply_edl`
@@ -336,7 +336,7 @@ Needs `pipelines:approve` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `pipeline_id` | string | yes | The id of the pipeline |
-| `stage` | string | yes | The stage to chat with — must be awaiting_approval. Wired today: script, post_merge. One of `script`, `shot_list`, `post_merge`. |
+| `stage` | string | yes | The stage to chat with — must be awaiting_approval. One of `script`, `post_merge`. |
 | `message` | string | yes | The user message to send to the refinement director. From 1 to 8000 characters. |
 
 ## `check_balance`
@@ -594,9 +594,9 @@ Needs `workflows:execute`.
 | `references[].url` | string | yes | From 1 to 2048 characters. |
 | `references[].kind` | string | yes | One of `image`, `video`. |
 | `references[].role` | string | yes | One of `appearance`, `layout`, `motion`. |
-| `references[].objectId` | string |  | From 1 to 64 characters. |
-| `references[].startSeconds` | number |  | From 0 to 86400. |
-| `references[].endSeconds` | number |  | From 0 to 86400. |
+| `references[].objectId` | string |  | Scene object it depicts, e.g. the hero. From 1 to 64 characters. |
+| `references[].startSeconds` | number |  | v1 uses the whole clip; leave unset. From 0 to 86400. |
+| `references[].endSeconds` | number |  | v1 uses the whole clip; leave unset. From 0 to 86400. |
 | `llm_model` | string |  |  |
 | `reasoning_effort` | string |  |  |
 
@@ -742,9 +742,9 @@ Needs `workflows:execute`.
 | `references[].url` | string | yes | From 1 to 2048 characters. |
 | `references[].kind` | string | yes | One of `image`, `video`. |
 | `references[].role` | string | yes | One of `appearance`, `layout`, `motion`. |
-| `references[].objectId` | string |  | From 1 to 64 characters. |
-| `references[].startSeconds` | number |  | From 0 to 86400. |
-| `references[].endSeconds` | number |  | From 0 to 86400. |
+| `references[].objectId` | string |  | Scene object it depicts, e.g. the hero. From 1 to 64 characters. |
+| `references[].startSeconds` | number |  | v1 uses the whole clip; leave unset. From 0 to 86400. |
+| `references[].endSeconds` | number |  | v1 uses the whole clip; leave unset. From 0 to 86400. |
 | `llm_model` | string |  |  |
 | `reasoning_effort` | string |  |  |
 
@@ -830,7 +830,7 @@ Needs `workflows:execute`.
 | `dialogue` | object[] | yes | The script, in speaking order. Reuse voice_ids across lines for the same character. From 1 to 200 items. |
 | `dialogue[].text` | string | yes | What this line says. `[audio tags]` allowed. At least 1 character. |
 | `dialogue[].voice_id` | string | yes | Voice for this line — a premade voice NAME (recommended; same naming as `generate_speech`: Rachel, Aria, Roger, Sarah, Laura, Charlie, George, Callum, River, Liam, Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, Brian, Daniel, Lily, Bill) or an ElevenLabs UUID of a voice the user has cloned/saved. DO NOT invent UUIDs. At least 1 character. |
-| `stability` | integer or number |  | v3 stability: 0 = most variable, 0.5 = balanced, 1 = most stable. Always `0`. Always `0.5`. Always `1`. |
+| `stability` | number |  | v3 stability: 0 = most variable, 0.5 = balanced, 1 = most stable. One of `0`, `0.5`, `1`. |
 | `language_code` | string |  | ISO 639-1 hint (e.g. "en", "he"). Omit for auto-detect. At most 10 characters. |
 | `seed` | integer |  | Deterministic sampling. Omit for random. From 0 to 4294967295. |
 | `apply_text_normalization` | string |  | Spell out numbers/dates/abbreviations. Default auto. One of `auto`, `on`, `off`. |
@@ -968,7 +968,7 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `prompt` | string |  | From 1 to 2000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your prompt. From 1 to 200 characters. |
-| `model` | string |  | Music model. Default suno-v6; suno-v6_wild bolder, suno-v6_mini faster; suno-v5_5 / suno-v5 / suno earlier; minimax needs a reference_audio_url. One of `suno`, `suno-v5`, `suno-v5_5`, `suno-v6`, `suno-v6_wild`, `suno-v6_mini`, `suno-v5-5`, `minimax`. |
+| `model` | string |  | Music model. Default suno-v6; suno-v6_wild bolder, suno-v6_mini faster; suno-v5_5 (also as suno-v5-5) / suno-v5 / suno earlier; minimax needs a reference_audio_url. One of `suno`, `suno-v5`, `suno-v5_5`, `suno-v6`, `suno-v6_wild`, `suno-v6_mini`, `suno-v5-5`, `minimax`. |
 | `duration` | number |  | From 1 to 30. |
 | `instrumental` | boolean |  |  |
 | `lyrics` | string |  | The exact words to sing, with [Intro]/[Verse]/[Chorus] structure tags on their own lines. Supplying them switches Suno to custom mode, where they are sung as written (and `duration` starts working); without them the model invents its own words from the prompt. At most 2000 characters. |
@@ -1043,7 +1043,7 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | High-level description of the video (topic, style, audience, etc.). From 1 to 10000 characters. |
 | `scene_count` | integer |  | Number of scenes. Default 5. From 1 to 20. |
 | `tone` | string |  | Tone/mood of the script (e.g. 'dramatic', 'lighthearted'). At most 200 characters. |
-| `target_duration` | integer |  | Approximate total video duration in seconds. From 5 to 600. |
+| `target_duration` | integer |  | Approximate total video duration in seconds. Default 60. From 5 to 600. |
 | `style_guide` | string |  | Style the script follows: voice, look, pacing (e.g. 'noir, short lines'). At most 100000 characters. |
 | `model` | string |  | LLM to use. Default gemini. One of `gemini`, `claude`, `gpt`. |
 
@@ -1056,7 +1056,7 @@ Needs `workflows:execute`.
 | `text` | string | yes | From 1 to 5000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; the preset tunes delivery (speed/stability/style). Explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your text. From 1 to 200 characters. |
 | `voice_id` | string |  | Voice — pass a premade voice NAME (recommended) or an ElevenLabs UUID (only for custom voices the user has explicitly cloned). DO NOT invent UUIDs — passing an unknown UUID fails with 'voice_not_found'. Premade names: Rachel, Aria, Roger, Sarah, Laura, Charlie, George, Callum, River, Liam, Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, Brian, Daniel, Lily, Bill. If unsure pick by character: female warm = Rachel; female young = Aria / Lily; male deep = Roger / Brian; male neutral = George / Daniel; British = Charlie / Charlotte. Defaults to Rachel. |
-| `model` | string |  | TTS model. Default `elevenlabs-v3` (newest) supports `[audio tags]` like `[laughs]`, `[whispers]`, `[sighs]` for emotion, and is fully multilingual — use it for ALL languages including Hebrew/Arabic/CJK. `elevenlabs-turbo` is cheaper for plain narration. `elevenlabs-multilingual` is a legacy v2 model via a third-party wrapper known to garble some languages (Hebrew observed) — only use it for a v2-only-verified voice (`text` is capped at 5,000 chars on every model — split longer scripts). Call list_models { kind: "audio", mode: "tts" } for the full sheet. One of `elevenlabs-v3`, `elevenlabs-turbo`, `elevenlabs-multilingual`, `elevenlabs`. |
+| `model` | string |  | TTS model. Default `elevenlabs-v3` (newest) supports `[audio tags]` like `[laughs]`, `[whispers]`, `[sighs]` for emotion, and is fully multilingual — use it for ALL languages including Hebrew/Arabic/CJK. `elevenlabs-turbo` is cheaper for plain narration. `elevenlabs-multilingual` is a legacy v2 model via a third-party wrapper known to garble some languages (Hebrew observed) — only use it for a v2-only-verified voice (`text` is capped at 5,000 chars on every model — split longer scripts). `elevenlabs` is the legacy id of `elevenlabs-turbo`. Call list_models { kind: "audio", mode: "tts" } for the full sheet. One of `elevenlabs-v3`, `elevenlabs-turbo`, `elevenlabs-multilingual`, `elevenlabs`. |
 | `voice_type` | string |  | One of `premade`, `custom`, `library`. |
 | `stability` | number |  | From 0 to 1. |
 | `similarity_boost` | number |  | From 0 to 1. |
@@ -1291,7 +1291,7 @@ Needs `pipelines:read` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `pipeline_id` | string | yes | The id of the pipeline |
-| `stage` | string | yes | The chat-enabled stage to list turns for. One of `script`, `shot_list`, `post_merge`. |
+| `stage` | string | yes | The chat-enabled stage to list turns for. One of `script`, `post_merge`. |
 
 ## `get_pipeline_status`
 
@@ -1936,32 +1936,32 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `source` | object | yes | Exactly one of prompt / scene / local-export. |
-| `source.kind` | string |  | Always `prompt`. |
-| `source.prompt` | string |  | From 1 to 8000 characters. |
-| `source.input_assets` | object[] |  | At most 8 items. |
+| `source.kind` | string | yes | One of `prompt`, `scene`, `local-export`. |
+| `source.prompt` | string |  | From 1 to 8000 characters. Only when `kind` is `prompt` (required there). |
+| `source.input_assets` | object[] |  | At most 8 items. Only when `kind` is `prompt`. |
 | `source.input_assets[].id` | string | yes |  |
 | `source.input_assets[].revisionId` | string | yes |  |
 | `source.input_assets[].assetId` | string | yes |  |
 | `source.input_assets[].label` | string |  | From 1 to 64 characters. |
-| `source.references` | object[] |  | Up to 8 references, at most 1 video. Images guide appearance/layout; video guides layout/motion. At most 8 items. |
+| `source.references` | object[] |  | Up to 8 references, at most 1 video. Images guide appearance/layout; video guides layout/motion. At most 8 items. Only when `kind` is `prompt`. |
 | `source.references[].id` | string | yes | From 1 to 64 characters. |
 | `source.references[].url` | string | yes | From 1 to 2048 characters. |
 | `source.references[].kind` | string | yes | One of `image`, `video`. |
 | `source.references[].role` | string | yes | One of `appearance`, `layout`, `motion`. |
-| `source.references[].objectId` | string |  | From 1 to 64 characters. |
-| `source.references[].startSeconds` | number |  | From 0 to 86400. |
-| `source.references[].endSeconds` | number |  | From 0 to 86400. |
-| `source.revision_id` | string |  | From 1 to 200 characters. |
-| `source.source_job_id` | string |  | Required for Basic scenes retained only in job history. Optional for retained revisions, which use current scene permissions. From 1 to 200 characters. |
-| `source.edit_prompt` | string |  | OMIT for a render-only export. Supplying it revises the scene and costs authoring. From 1 to 8000 characters. |
-| `source.export_id` | string |  | From 1 to 200 characters. |
-| `source.connection_id` | string |  | From 1 to 200 characters. |
+| `source.references[].objectId` | string |  | Scene object it depicts, e.g. the hero. From 1 to 64 characters. |
+| `source.references[].startSeconds` | number |  | v1 uses the whole clip; leave unset. From 0 to 86400. |
+| `source.references[].endSeconds` | number |  | v1 uses the whole clip; leave unset. From 0 to 86400. |
+| `source.revision_id` | string |  | From 1 to 200 characters. Only when `kind` is `scene` (required there). |
+| `source.source_job_id` | string |  | Required for Basic scenes retained only in job history. Optional for retained revisions, which use current scene permissions. From 1 to 200 characters. Only when `kind` is `scene`. |
+| `source.edit_prompt` | string |  | OMIT for a render-only export. Supplying it revises the scene and costs authoring. From 1 to 8000 characters. Only when `kind` is `scene`. |
+| `source.export_id` | string |  | From 1 to 200 characters. Only when `kind` is `local-export` (required there). |
+| `source.connection_id` | string |  | From 1 to 200 characters. Only when `kind` is `local-export` (required there). |
 | `engine` | string |  | One of `blender-cloud`, `blender-local`. |
 | `duration_seconds` | number |  | Omit for a scene source unless deliberately re-timing it; a conflicting override is rejected. From 1 to 60. |
 | `fps` | integer |  | From 15 to 60. |
 | `aspect_ratio` | string |  | One of `16:9`, `9:16`, `1:1`, `4:5`, `21:9`. |
-| `quality` | string |  | One of `standard`. |
-| `style` | string |  | One of `clay`. |
+| `quality` | string |  | Always `standard`. |
+| `style` | string |  | Always `clay`. |
 | `max_repair_passes` | integer |  | Correction budget, 0-2. Each pass is paid work; default 2. From 0 to 2. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
@@ -2210,7 +2210,7 @@ Needs `workflows:execute`.
 | `intensity` | integer |  | From 1 to 10. |
 | `resolution` | string |  | One of `720p`, `1080p`, `4K`. |
 | `aspect_ratio` | string |  | One of `16:9`, `9:16`, `1:1`, `4:3`. |
-| `fps` | integer |  | Always `24`. Always `30`. |
+| `fps` | number |  | One of `24`, `30`. |
 | `fit` | string |  | One of `cover`, `contain`. |
 | `pad_color` | string |  |  |
 
@@ -2289,7 +2289,7 @@ Needs `workflows:execute`.
 | `intensity` | integer |  | Motion strength 1-10 (default 3). Ignored when motion is none. From 1 to 10. |
 | `resolution` | string |  | One of `720p`, `1080p`, `4K`. |
 | `aspect_ratio` | string |  | One of `16:9`, `9:16`, `1:1`, `4:3`. |
-| `fps` | integer |  | Always `24`. Always `30`. |
+| `fps` | number |  | One of `24`, `30`. |
 | `fit` | string |  | One of `cover`, `contain`. |
 | `pad_color` | string |  | Letterbox color when fit=contain (default #000000). |
 
