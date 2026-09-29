@@ -455,7 +455,7 @@ The audio step is reserved as an add-on **on top of** the base video cost — sa
 | `audio_driven` (Seedance 2 / MiniMax H3) | `elevenlabs-dialogue` | +25 (per 1K chars) |
 | `native_speech` (VEO 3.x) | `elevenlabs-voice-changer` | +40 |
 
-Example: `veo3.1` 8s / 1080p i2v voiced = 17 (base) + 4 (revoice) = **21 credits**.
+Example: `veo3.1` 8s / 1080p i2v voiced = 170 (base) + 40 (revoice) = **210 credits**.
 
 ### Fallback behavior
 

@@ -46,9 +46,9 @@ Any vision-capable LLM configured in the editor. The default is Claude Sonnet 4.
 
 | LLM tier | Credits per call |
 |----------|-----------------|
-| Economy (Gemini Flash, Claude Haiku) | 1 |
-| Standard (Claude Sonnet 4.6, GPT-5.2) -- default | 1 |
-| Premium (Claude Opus 4.6, GPT-5.4, Gemini Pro) | 2 |
+| Economy (Gemini Flash, Claude Haiku) | 10 |
+| Standard (Claude Sonnet 4.6, GPT-5.2) -- default | 5 |
+| Premium (Claude Opus 4.6, GPT-5.4, Gemini Pro) | 20 |
 
 The `all` mode does NOT multiply the cost -- every dimension is scored in a single VLM call.
 

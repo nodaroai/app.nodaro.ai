@@ -63,16 +63,16 @@ Credits follow the standard LLM pricing tiers, evaluated at each engine's typica
 
 | Engine | Tier | Credits |
 |--------|------|---------|
-| Classic (elements) | Economy | 1 |
-| Classic (elements) | Standard | 2 |
-| Classic (elements) | Premium | 3 |
+| Classic (elements) | Economy | 10 |
+| Classic (elements) | Standard | 10 |
+| Classic (elements) | Premium | 30 |
 | Lottie | Economy | 1 |
-| Lottie | Standard | 5 |
-| Lottie | Premium | 8 |
+| Lottie | Standard | 33 |
+| Lottie | Premium | 80 |
 
 The tier is determined by the selected LLM model (Economy / Standard / Premium).
 
-**Why Lottie costs more.** A Lottie author call on the Standard tier authors a substantially larger payload than the Classic engine's elements DSL at the same tier, which is why Standard lands at **5 credits** for Lottie versus **2 credits** for Classic — both derived from the same formula, evaluated at each engine's typical output size.
+**Why Lottie costs more.** A Lottie author call on the Standard tier authors a substantially larger payload than the Classic engine's elements DSL at the same tier, which is why Standard lands at **33 credits** for Lottie versus **10 credits** for Classic — both derived from the same formula, evaluated at each engine's typical output size.
 
 **Reasoning effort and tier.** Selecting `xhigh` or `max` effort on a reasoning-capable model bills **one tier up** (economy → standard, standard → premium; premium is unchanged) — the same rule the Generate Text node documents in full at [Reasoning effort](../ai-text/llm-chat.md#reasoning-effort). `Auto` and every other level apply the vendor default and never change the tier shown above.
 

@@ -39,4 +39,4 @@ The QA Check node sends upstream text to an LLM (default Gemini 3.6 Flash) and a
 
 ## Pricing
 
-Costs **1 credit** per check, regardless of the LLM tier selected.
+Costs **1 credit** per check on the default (economy) tier; **10 credits** on the standard or premium tier.

@@ -501,9 +501,9 @@ generation routes:
   motion clip. Provider defaults to `kling` (~275 credits / 10-second clip; `kling:5s` = 138).
 - `POST /v1/characters/:id/approve-portrait` — currently free; the LLM
   caption is uncharged. (See the route's TODO comment in
-  `backend/src/routes/character-portrait-approval.ts` for the pending 1-CR
+  `backend/src/routes/character-portrait-approval.ts` for the pending 7-CR
   caption charge.)
-- `POST /v1/characters/:id/llm-caption` — currently free; same TODO as above.
+- `POST /v1/characters/:id/llm-caption` — 7 credits per call (the `prompt-helper` price).
 
 `creditCost` is fetched from the `model_pricing` table at runtime. See the
 [Architecture](./architecture.md) doc for the full credit-flow walkthrough.

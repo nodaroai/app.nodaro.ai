@@ -44,19 +44,19 @@ Modify Image exposes the full image-to-image provider catalog plus Nano Banana E
 
 ## Pricing
 
-Credits depend on the selected provider, and several providers cost more at higher quality/resolution settings. Typical costs range from **1 credit** (Nano Banana) to **~62 credits** (Flux 2 Max at 4 MP with 8 references). Representative base rates:
+Credits depend on the selected provider, and several providers cost more at higher quality/resolution settings. Typical costs range from **10 credits** (Nano Banana) to **~620 credits** (Flux 2 Max at 4 MP with 8 references). Representative base rates:
 
 | Provider | Credits |
 |----------|---------|
-| Nano Banana | 1 |
-| Flux-2 Pro | 2 (1K) → 2 (2K) |
-| Nano Banana Edit | 2 |
-| Flux-2 | 4 (1K) → 6 (2K) |
-| GPT Image | 4 (medium) → 6 (high) |
-| Seedream 5 Pro | 3 (basic / 1K) → 6 (high / 2K) |
-| Ideogram Edit / Remix | 5 (Balanced) → 3 (Turbo) / 6 (Quality) |
-| Nano Banana Pro | 5 (1K/2K) → 6 (4K) |
-| Flux 2 Max | ~7 credits at default (2 MP, 0 refs); ranges ~2–62 depending on resolution and reference count |
+| Nano Banana | 10 |
+| Flux-2 Pro | 13 (1K) → 20 (2K) |
+| Nano Banana Edit | 10 |
+| Flux-2 | 60 (1K) → 60 (2K) |
+| GPT Image | 10 (medium) → 60 (high) |
+| Seedream 5 Pro | 19 (basic / 1K) → 60 (high / 2K) |
+| Ideogram Edit / Remix | 45 (Balanced) → 30 (Turbo) / 60 (Quality) |
+| Nano Banana Pro | 45 (1K/2K) → 60 (4K) |
+| Flux 2 Max | ~70 credits at default (2 MP, 0 refs); ranges ~18–620 depending on resolution and reference count |
 
 The exact credit cost for the selected provider and settings is shown on the node's Run button before you generate.
 

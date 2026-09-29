@@ -101,10 +101,10 @@ Credits are metered by the **actual length** of the generated video. A hold is p
 
 | Engine | 720p | 1080p | 4K |
 |--------|-----:|------:|---:|
-| Avatar IV | ~3.8 credits/sec | ~5 credits/sec | ~10 credits/sec |
-| Avatar V | ~5 credits/sec | ~6.3 credits/sec | ~12.5 credits/sec |
+| Avatar IV | ~30 credits/sec | ~40 credits/sec | ~80 credits/sec |
+| Avatar V | ~40 credits/sec | ~50 credits/sec | ~100 credits/sec |
 
-Examples (Avatar IV, 720p): a **30-second** clip ≈ **113 credits**; a **1-minute** clip ≈ **225 credits**. Higher resolutions and Avatar V cost proportionally more. Captions add no extra cost.
+Examples (Avatar IV, 720p): a **30-second** clip ≈ **900 credits**; a **1-minute** clip ≈ **1,800 credits**. Higher resolutions and Avatar V cost proportionally more. Captions add no extra cost.
 
 > The exact credit cost is shown in the editor before you run, and the final charge always reflects the real clip length.
 

@@ -73,14 +73,14 @@ Reference images add **no extra credits** — the rates below are unchanged.
 
 ### Seedance 2 Extend credits
 
-Pricing is per duration tier × resolution (the same rates as Seedance 2 generation with a video reference, plus a flat 3-credit stitch overhead baked into every row). Off-tier durations snap up to the next tier (e.g. 6s bills as 8s):
+Pricing is per duration tier × resolution (the same rates as Seedance 2 generation with a video reference, plus a flat 30-credit stitch overhead baked into every row). Off-tier durations snap up to the next tier (e.g. 6s bills as 8s):
 
 | Seconds added | 480p | 720p | 1080p |
 |---|---|---|---|
-| up to 4s | 15 | 28 | 41 |
-| up to 8s | 26 | 53 | 78 |
-| up to 12s | 38 | 78 | 116 |
-| up to 15s | 47 | 97 | 144 |
+| up to 4s | 150 | 280 | 410 |
+| up to 8s | 260 | 530 | 780 |
+| up to 12s | 380 | 780 | 1160 |
+| up to 15s | 470 | 970 | 1440 |
 
 ## Best Practices
 

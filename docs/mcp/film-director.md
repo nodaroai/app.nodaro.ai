@@ -6,7 +6,7 @@ You watch the workflow fill up stage-by-stage. The result is both a finished vid
 
 ## What you'll need
 
-- A Nodaro account with enough credits for the film you have in mind (typical 30-second short: 200-500 credits)
+- A Nodaro account with enough credits for the film you have in mind (typical 30-second short: 2,000-5,000 credits)
 - Claude (Claude.ai or Claude Code) connected to Nodaro per [Connecting Claude.ai](./connecting-claude.md)
 - The skill installed in your Claude environment (see [Installing the skill](#installing-the-skill) below)
 - A browser tab open to your Nodaro editor — keep it visible

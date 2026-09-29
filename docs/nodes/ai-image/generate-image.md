@@ -78,7 +78,7 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | nano-banana | Nano Banana | Fast drafts, iteration, storyboards | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 5:4, 4:5, 21:9 |
 | nano-banana-pro | Nano Banana Pro | Higher detail, production-ready images | Same as Nano Banana |
 | nano-banana-2 | Nano Banana 2 | Updated Nano Banana with web grounding | Same as Nano Banana |
-| nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K drafts and iteration (Gemini 3.1 Flash-Lite). Flat **20 credits** per image — no resolution tiers. | auto, 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4, 21:9, 4:1, 1:4, 8:1, 1:8 |
+| nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K drafts and iteration (Gemini 3.1 Flash-Lite). Flat **10 credits** per image — no resolution tiers. | auto, 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4, 21:9, 4:1, 1:4, 8:1, 1:8 |
 | grok | Grok | Creative and stylized imagery | 1:1, 16:9, 9:16, 3:2, 2:3 |
 | grok-2 | Grok Imagine 2 | Latest Grok (Imagine Image 2.0) — expressive, high-contrast imagery, priced the same as Grok v1. Generations can chain into the **free** Grok segment map and region-targeted edits (see [Edit Image](./edit-image.md#grok-imagine-2-task-chained-editing)). Attach ONE reference image and it auto-routes through Grok's segment-map → image-edit chain (`grok-2-i2i`, same 10-credit price) — the result preserves the reference's composition while applying your prompt. Extra references beyond the first are ignored. | 1:1, 16:9, 9:16, 3:2, 2:3 |
 | flux | Flux | Photorealistic, highest quality output | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3 |
@@ -96,7 +96,7 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | qwen | Qwen | Versatile, good at diverse styles | 1:1, 16:9, 9:16, 4:3, 3:4 |
 | seedream | Seedream | Photorealistic, high detail | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 21:9 |
 | seedream-5-lite | Seedream 5 Lite | Latest Seedream, fast and sharp | Same as Seedream |
-| seedream-5-pro | Seedream 5 Pro | Flagship Seedream, best instruction following. Quality-tiered pricing: **3 credits** at basic (1K output) / **6 credits** at high (2K output). | Same as Seedream |
+| seedream-5-pro | Seedream 5 Pro | Flagship Seedream, best instruction following. Quality-tiered pricing: **18 credits** at basic (1K output) / **60 credits** at high (2K output). | Same as Seedream |
 | z-image | Z-Image | Fast, lightweight generation. **Shortest prompt limit in the catalog: 1 000 characters** | 1:1, 16:9, 9:16, 4:3, 3:4 |
 | wan-2.7 | Wan 2.7 | Text-to-image, 1K/2K/4K resolution, up to 9 optional reference images | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |
 | wan-2.7-pro | Wan 2.7 Pro | Higher quality text-to-image, 1K/2K/4K resolution | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |

@@ -220,7 +220,7 @@ reserve = 100 (fee) + ceil(refPerSec × (K × T + D))
 
 where **K** is the number of regenerated segments, **D** the sum of their planned lengths, and **T** the Continuation context setting. Every regenerated segment — the first included — bills at the reference rate, because each re-seeds off the previous footage (the kept prefix for the first one). `fromSegment = 1` degenerates to the fresh-run formula over the same fixed lengths. At commit, only regenerated segments that actually completed are charged; a continuation that produced nothing new refunds in full.
 
-**Worked example (720p, `seedance-2`, the 60s / 5-segment plan above).** Stopped after segment 3 with segment 4 in flight: the delivered video covers segments 1–3, billed for 4 dispatched segments — `10 + ceil(10.25 × 14) + ceil(6.25 × (3 × 2 + 36)) = 10 + 144 + 263 = 417` credits, the rest of the 508-credit reserve refunded. Continuing from segment 4 reserves `10 + ceil(6.25 × (2 × 2 + 24)) = 10 + 175 = 185` credits for the two regenerated segments.
+**Worked example (720p, `seedance-2`, the 60s / 5-segment plan above).** Stopped after segment 3 with segment 4 in flight: the delivered video covers segments 1–3, billed for 4 dispatched segments — `100 + ceil(102.5 × 14) + ceil(62.5 × (3 × 2 + 36)) = 100 + 1435 + 2625 = 4160` credits, the rest of the 5076-credit reserve refunded. Continuing from segment 4 reserves `100 + ceil(62.5 × (2 × 2 + 24)) = 100 + 1750 = 1850` credits for the two regenerated segments.
 
 ## Smart cut
 

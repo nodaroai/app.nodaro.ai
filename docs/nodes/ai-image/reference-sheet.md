@@ -71,7 +71,7 @@ Cost = **(newly-generated panels at the entity provider's rate)** + a flat **40-
 |----------|------|---------|
 | Turnaround reusing 4 angles the entity already has | `0 + 40` | **40** |
 | 4 new angles generated with Nano Banana (10 cr each) | `4×10 + 40` | **80** |
-| Full reference with 4 new angles generated with Flux 2 Pro (23 cr each at its 2 MP default) | `4×23 + 40` | **132** |
+| Full reference with 4 new angles generated with Flux 2 Pro (38 cr each at its 2 MP default) | `4×38 + 40` | **192** |
 
 The flat assembly fee covers layout, palette extraction, and compositing. The node's Run button shows the assembly fee; when panels need generating, the node first asks you to confirm how many it will generate (each charged at the entity provider's rate) before it starts.
 

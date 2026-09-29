@@ -29,7 +29,7 @@ The Extract Frame node converts a frame of video into a still image you can rout
 
 ## Credit Cost
 
-**1 credit** per extraction, regardless of mode or video length.
+**10 credits** per extraction, regardless of mode or video length.
 
 ## Best Practices
 
@@ -51,7 +51,7 @@ The Extract Frame node converts a frame of video into a still image you can rout
 
 ## Tips
 
-- Frame extraction does NOT incur Topaz / VEO / KIE provider charges — it's a local FFmpeg operation costing one Nodaro credit for orchestration.
+- Frame extraction does NOT incur Topaz / VEO / KIE provider charges — it's a local FFmpeg operation costing ten Nodaro credits for orchestration.
 - The frame is exported as PNG (lossless), not JPEG — safe to route into upscale, edit-image, or as the anchor frame for video continuation (extends) without adding compression artifacts to the chain.
 - `frame-index` and `frame-from-end` hard-fail if the source's fps or frame-count probe yields an invalid value (rather than silently mis-converting).
 - Combine with **Combine Videos** to take a still from clip A, run it through Generate Image to remix, and stitch the result back into a new clip.

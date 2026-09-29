@@ -698,10 +698,10 @@ below are the shared pricing formula's current outputs:
 
 | Tier | ≤60s | ≤180s | ≤360s | ≤600s |
 |------|------|-------|-------|-------|
-| `fast` (economy) | 180 | 185 | 514 | 846 |
-| `pro` (default) | 215 | 231 | 636 | 1050 |
-| `mixed` / `mixed-fast` | 268 | 289 | 724 | 1169 |
-| `smart` (highest accuracy) | 410 | 500 | 1259 | 2064 |
+| `fast` (economy) | 181 | 185 | 515 | 848 |
+| `pro` (default) | 216 | 232 | 640 | 1056 |
+| `mixed` / `mixed-fast` | 270 | 291 | 729 | 1177 |
+| `smart` (highest accuracy) | 413 | 503 | 1267 | 2076 |
 
 The live tool description carries these same numbers — it is generated from the
 shared pricing table at server start, so it is always current. This table is
@@ -731,8 +731,8 @@ current outputs:
 
 | Family | ≤60s | ≤180s | ≤360s | ≤600s |
 |--------|------|-------|-------|-------|
-| `video-audit` (analysis wired) | 213 | 289 | 659 | 1066 |
-| `video-audit:auto` (no analysis — auto-runs one first) | 393 | 474 | 1173 | 1912 |
+| `video-audit` (analysis wired) | 215 | 290 | 663 | 1073 |
+| `video-audit:auto` (no analysis — auto-runs one first) | 396 | 475 | 1178 | 1921 |
 
 The live tool description carries these same numbers — it is generated from the
 shared pricing table at server start, so it is always current. This table is
