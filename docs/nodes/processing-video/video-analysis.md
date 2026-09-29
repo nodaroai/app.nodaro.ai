@@ -412,13 +412,11 @@ the result's `warnings`.
 > real terms did not rise. It is not exactly 10× because the formula rounds up
 > to a whole credit: with finer credits there is less to round away, so each
 > bucket was re-derived from the formula rather than multiplied. That rounding
-> is why the ≤60s `fast` bucket is 23 rather than 30.
+> is why the ≤60s `fast` bucket came out at 23 rather than 30 at the time (the
+> later reprices above replaced those figures).
 
-> **Repriced 2026-07-28.** Video Analysis now runs on the model provider's own
-> API rather than through a reseller, which is what lets it send real media to
-> the model instead of a link. Those calls cost roughly 3.3–3.5× more per token,
-> and the prices above are the same formula re-run against them — the margin on
-> this node is unchanged.
+> **Repriced 2026-07-28.** Video Analysis now sends the video itself to the
+> model instead of a link to it, and the prices were recalculated for that.
 
 Longer videos cost more because they are analyzed in more overlapping windows (a
 video over 180s is split into ~150-second windows), and higher tiers cost more
