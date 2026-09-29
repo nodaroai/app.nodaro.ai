@@ -2876,7 +2876,8 @@ Start a new pipeline (headless film generation) — the programmatic equivalent
 of the studio's "Create film". In Auto mode the engine self-advances to
 completion; poll `get()` for status and `getTimeline()` for the assembled
 output. In manual/guided mode, drive it with `pendingApprovals()` +
-`approveStage()` / `approveSubGate()`. Requires `pipelines:execute` scope.
+`approveStage()` / `approveSubGate()` / `acceptMatchCutBreak()`. Requires
+`pipelines:execute` scope.
 
 ```ts
 const { id } = await client.pipelines.create({ /* PipelineInput */ })
@@ -2967,15 +2968,35 @@ await client.pipelines.rejectStage(id, "script", "Make the story darker and more
 #### `approveSubGate(id, gate)`
 
 ```ts
-approveSubGate(id: string, gate: SubGateName): Promise<{ ok: true; gate: SubGateName; resumed_at: string }>
+approveSubGate(id: string, gate: AnimateSubGate): Promise<{ ok: true; gate: AnimateSubGate; resumed_at: string }>
 ```
 
-Approve a sub-gate so the orchestrator resumes from the next sub-step:
-Stage 7's `silent_cut_preview` or `dialogue_recheck`, or Stage 6's
-`match_cut_break_pending`. Requires `pipelines:approve`.
+Approve a Stage 7 (`animate_audio_edit`) sub-gate — `silent_cut_preview` or
+`dialogue_recheck` (`AnimateSubGate`, the values are `ANIMATE_SUB_GATES` in
+`@nodaro/shared`) — so the orchestrator resumes from the next sub-step.
+Stage 6's `match_cut_break_pending` is not approved here: the route answers
+400 `invalid_sub_gate`, and each break is accepted with
+`acceptMatchCutBreak()`. Requires `pipelines:approve`.
 
 ```ts
 await client.pipelines.approveSubGate(id, "dialogue_recheck")
+```
+
+#### `acceptMatchCutBreak(id, sceneId, shotId)`
+
+```ts
+acceptMatchCutBreak(id: string, sceneId: string, shotId: string): Promise<{ ok: true; pendingRemaining: number }>
+```
+
+Accept one match-cut break that Stage 6 (`scene_images`) flagged. While any
+break is pending, the stage pauses at the `match_cut_break_pending` sub-gate,
+and its output (`getStage(id, "scene_images")`) lists the pending shot ids
+under `match_cut_break_pending`. `sceneId` is the scene entity that holds the
+shot. Accepting the last break resumes the stage; `pendingRemaining` says how
+many are left. Requires `pipelines:approve`.
+
+```ts
+await client.pipelines.acceptMatchCutBreak(id, sceneId, "shot-2")
 ```
 
 #### `getStage(id, stage)`
@@ -4899,6 +4920,16 @@ get(slug: string): Promise<{ data: CommunityCard }>
 const { data: listing } = await client.community.get("detective-mara")
 ```
 
+#### `getFull(slug)`
+
+```ts
+getFull(slug: string): Promise<{ data: CommunityFullDetail }>
+```
+
+`GET /v1/community/detail/:slug/full` → the full read-only detail: the card
+plus the stored public snapshot (assets, voice and text) needed to render the
+whole listing.
+
 #### `favorites()`
 
 ```ts
@@ -5411,7 +5442,7 @@ not two.
 ### Pipelines
 
 - `PipelineRecord` — pipeline state: `{ id, status, current_stage, spent_credits, reserved_credits, upfront_credit_estimate, branched_from_pipeline_id, branched_from_stage, mode, failure_reason, current_progress_message }`
-- `PipelineStatus`, `PipelineMode`, `PipelineStageName`, `SubGateName`, `ChatEnabledStage` — re-exported from `@nodaro/shared`
+- `PipelineInput`, `PipelineStatus`, `PipelineMode`, `PipelineStageName`, `SubGateName`, `AnimateSubGate`, `ChatEnabledStage`, `ProposedChange` — re-exported from `@nodaro/shared`
 - `PipelineInput` — body for `create()`, re-exported from `@nodaro/shared`
 - `PendingApproval` — `{ stage_name: PipelineStageName; output: unknown }`
 - `PipelineTimeline` — `{ fps, width, height, scenes, musicUrl?, narrationUrl?, animateProgress? }`
@@ -5500,7 +5531,7 @@ not two.
 
 ### Community
 
-- `CommunityCard` — a public community listing (shared character/location/object)
+- `CommunityCard` — a public community listing (shared character/location/object); `CommunityFullDetail` — the card plus its public snapshot (`getFull`)
 - `CommunityEntityType` — `"character" | "location" | "object"`
 - `CommunitySort` — `"newest" | "popular"`
 - `CommunityReportReason` — accepted `report()` reasons

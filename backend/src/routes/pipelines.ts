@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
-import { CHAT_ENABLED_STAGES, CHAT_TURN_CAPS, CHAT_WIRED_STAGES, ENTITY_TYPES, EntityRejectInputSchema, IMAGE_CRITIC_UNRESOLVABLE, PIPELINE_STAGE_NAMES, PipelineInputSchema, PipelineStageNameSchema, SubGateNameSchema, clearImageCriticMetadata, clearVideoCriticMetadata, type ChatEnabledStage, type EntityType, type JsonPatch, type PipelineStageName, type ProposedChange, type ShowrunnerPlan } from "@nodaro/shared"
+import { CHAT_ENABLED_STAGES, CHAT_TURN_CAPS, CHAT_WIRED_STAGES, ENTITY_TYPES, EntityRejectInputSchema, IMAGE_CRITIC_UNRESOLVABLE, PIPELINE_STAGE_NAMES, PipelineInputSchema, PipelineStageNameSchema, ANIMATE_SUB_GATES, AnimateSubGateSchema, MATCH_CUT_BREAK_GATE, clearImageCriticMetadata, clearVideoCriticMetadata, type ChatEnabledStage, type EntityType, type JsonPatch, type PipelineStageName, type ProposedChange, type ShowrunnerPlan } from "@nodaro/shared"
 import { getIdentityLockClause } from "@nodaro/prompts"
 import { hasCredits } from "../lib/config.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -119,6 +119,19 @@ function gateScope(req: FastifyRequest, reply: FastifyReply, scope: Scope): bool
     return false
   }
   return true
+}
+
+/**
+ * The 400 body for a sub-gate these routes do not resolve. Stage 6's match-cut
+ * gate is a real gate that clears elsewhere, so it is named with the route
+ * that clears it rather than rejected as an unknown value.
+ */
+function invalidSubGate(gate: string, issues: z.ZodError["issues"]): { code: string; message: string; issues: z.ZodError["issues"] } {
+  const message =
+    gate === MATCH_CUT_BREAK_GATE
+      ? `${MATCH_CUT_BREAK_GATE} clears one break at a time: accept each with POST /v1/pipelines/:id/entities/:sceneId/helpers/accept_match_cut_break`
+      : `A sub-gate these routes resolve is one of: ${ANIMATE_SUB_GATES.join(", ")}`
+  return { code: "invalid_sub_gate", message, issues }
 }
 
 function gateAuth(req: FastifyRequest, reply: FastifyReply): string | null {
@@ -2833,11 +2846,9 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       const userId = gateAuth(req, reply)
       if (!userId) return
 
-      const gateParsed = SubGateNameSchema.safeParse(req.params.gate)
+      const gateParsed = AnimateSubGateSchema.safeParse(req.params.gate)
       if (!gateParsed.success) {
-        return reply.status(400).send({
-          error: { code: "invalid_sub_gate", issues: gateParsed.error.issues },
-        })
+        return reply.status(400).send({ error: invalidSubGate(req.params.gate, gateParsed.error.issues) })
       }
       const gate = gateParsed.data
 
@@ -2923,11 +2934,9 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       const userId = gateAuth(req, reply)
       if (!userId) return
 
-      const gateParsed = SubGateNameSchema.safeParse(req.params.gate)
+      const gateParsed = AnimateSubGateSchema.safeParse(req.params.gate)
       if (!gateParsed.success) {
-        return reply.status(400).send({
-          error: { code: "invalid_sub_gate", issues: gateParsed.error.issues },
-        })
+        return reply.status(400).send({ error: invalidSubGate(req.params.gate, gateParsed.error.issues) })
       }
       const gate = gateParsed.data
 

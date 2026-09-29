@@ -401,7 +401,16 @@ export type {
   ChatStageResult,
   ApplyChatProposalResult,
 } from "./resources/pipelines.js"
-export type { PipelineStageName } from "./resources/pipelines.js"
+export type {
+  PipelineStageName,
+  PipelineInput,
+  PipelineStatus,
+  PipelineMode,
+  SubGateName,
+  AnimateSubGate,
+  ChatEnabledStage,
+  ProposedChange,
+} from "./resources/pipelines.js"
 
 export type {
   ReduceStrategyId,
@@ -463,6 +472,7 @@ export type {
 
 export type {
   CommunityCard,
+  CommunityFullDetail,
   CommunityEntityType,
   CommunitySort,
   CommunityReportReason,
