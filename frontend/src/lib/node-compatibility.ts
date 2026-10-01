@@ -38,6 +38,10 @@ const TYPED_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set([
   // video-audit emits the SAME payload on the same handles — including into
   // another audit's `analysis` target, which only TARGET_HANDLE_ACCEPTS knows.
   "video-audit",
+  // Content Recipe feeds Content Ideas' `recipes` target, which only
+  // TARGET_HANDLE_ACCEPTS knows; Content Ideas feeds text inputs per idea.
+  "content-recipe",
+  "content-ideas",
   // describe-to-picker emits picker JSON on its `picker-json` source handle;
   // its source-direction popover must consult TARGET_HANDLE_ACCEPTS (where the
   // analyzable pickers' `picker-json` targets are registered) so it surfaces them.
@@ -261,6 +265,10 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   //     `transcript` (JSON) input — same handle id, no new entry needed here.
   //     Drift mirror of the registry.
   "edl", "sources",
+  //   - Content Recipe's `link` (the post's page link: Video URL or text) and
+  //     Content Ideas' `recipes` (recipe producers + text) and `field-brand`
+  //     (text only). Drift mirror of the registry.
+  "link", "recipes", "field-brand",
 ])
 /** Subset that requires consumer-type dispatch — the dev-time warning in
  *  getCompatibleNodes triggers when one of these is passed without a

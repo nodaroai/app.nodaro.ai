@@ -19,7 +19,7 @@ import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/apply-edl-plan.js
 import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { PIPELINE_PINNABLE_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_BUCKET_MINUTES, buildEditPlanCreditId, type EditPlanTier } from "@nodaro/shared"
+import { PIPELINE_PINNABLE_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_BUCKET_MINUTES, buildEditPlanCreditId, type EditPlanTier, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
@@ -1601,6 +1601,21 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "image-critic": 5,
   "image-critic:economy": 10,
   "image-critic:premium": 20,
+  // Content Recipe — one structured call over one post, flat per call by the
+  // model's tier (owner decision 2026-10-01). Cloud-only: the private plugin
+  // runs it; these are the public prices it is billed at.
+  "content-recipe:economy": 5,
+  "content-recipe": 20,
+  "content-recipe:premium": 35,
+  // Content Ideas — charged per batch of up to five ideas (owner decision
+  // 2026-10-02): 1–5 ideas bill the base id, 6–10 the `:10` id at two batches.
+  // The count rule lives in @nodaro/shared content-recipe-ideas.ts.
+  "content-ideas:economy": 10,
+  "content-ideas": 35,
+  "content-ideas:premium": 50,
+  "content-ideas:10:economy": 20,
+  "content-ideas:10": 70,
+  "content-ideas:10:premium": 100,
   "character": 20,
   "object": 20,
   "location": 20,
@@ -3486,6 +3501,16 @@ function getNodeModelIdentifier(
     const llmModel = data.llmModel as string | undefined
     const reasoningEffort = data.reasoningEffort as string | undefined
     return buildLlmCreditIdentifier("llm-chat", llmModel, reasoningEffort, data.advancedMode === true)
+  }
+
+  // Content Recipe / Content Ideas: the same ids the plugin route and the
+  // orchestrator reserve — the EFFECTIVE model's tier (an unset model is the
+  // economy default, never the bare id) and, for ideas, the count bucket.
+  if (nodeType === "content-recipe") {
+    return contentRecipeCreditId(data.llmModel, data.reasoningEffort as string | undefined)
+  }
+  if (nodeType === "content-ideas") {
+    return contentIdeasCreditId(data.count, data.llmModel, data.reasoningEffort as string | undefined)
   }
 
   // Suno: the ROUTE contract decides which operations are version-priced.

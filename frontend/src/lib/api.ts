@@ -4426,6 +4426,60 @@ export async function startVideoAnalysis(params: {
 }
 
 /**
+ * Content Recipe (cloud) — one post's material in (a Video Analysis result, a
+ * scraped post, a caption or transcript), a queued recipe job out. Poll the
+ * job; its output_data is { json: recipe, text, model, warnings? }.
+ */
+export async function startContentRecipe(params: {
+  source: string
+  sourceUrl?: string
+  focus?: string
+  llmModel?: string
+  reasoningEffort?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { source: params.source }
+  if (params.sourceUrl) body.sourceUrl = params.sourceUrl
+  if (params.focus) body.focus = params.focus
+  if (params.llmModel) body.llmModel = params.llmModel
+  if (params.reasoningEffort) body.reasoningEffort = params.reasoningEffort
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/content-recipe", {
+    body,
+    workflowId: true,
+    label: "apiErr.startContentRecipe",
+  })
+}
+
+/**
+ * Content Ideas (cloud) — recipes + a brand profile in, a queued ideas job
+ * out. Poll the job; its output_data is { json: ideas, text, listResults:
+ * one brief per idea, model, warnings? }.
+ */
+export async function startContentIdeas(params: {
+  recipes: string[]
+  brand?: string
+  count?: number
+  language?: string
+  llmModel?: string
+  reasoningEffort?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { recipes: params.recipes }
+  if (params.brand) body.brand = params.brand
+  if (params.count !== undefined) body.count = params.count
+  if (params.language) body.language = params.language
+  if (params.llmModel) body.llmModel = params.llmModel
+  if (params.reasoningEffort) body.reasoningEffort = params.reasoningEffort
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/content-ideas", {
+    body,
+    workflowId: true,
+    label: "apiErr.startContentIdeas",
+  })
+}
+
+/**
  * AI Audit (`video-audit`) — re-watches a clip against a finished analysis and
  * returns the corrected analysis plus a disclosure report.
  *

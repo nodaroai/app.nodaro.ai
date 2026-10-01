@@ -2,7 +2,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
-import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference } from "@nodaro/shared"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
@@ -20,7 +20,6 @@ import type {
 } from "@/types/nodes";
 import { loopColInputHandle, OVERLAY_HANDLE_IDS } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE, computeGroupBuckets, computeCollectBuckets } from "./execution-graph";
-import { FAN_IN_NODE_TYPES } from "./types";
 import { TEXT_PRODUCER_TYPES, IDENTITY_TYPES } from "@/lib/generate-image-handles";
 import { ANALYSIS_PRODUCER_TYPES } from "@/lib/data-handles";
 import { isVisualPickerType } from "@/lib/parameter-picker-types";
@@ -743,6 +742,11 @@ export interface FrontendResolvedInputs {
    *  fanned out) so the reduce strategy can fold it into a single value.
    *  Mirror of backend FrontendResolvedInputs.inputs. */
   inputs?: string[];
+  /** content-recipe: the post's own link from a wire into the `link` handle —
+   *  a Video URL node's PAGE link (never its downloaded file) or a text node's
+   *  text. Mirror of backend ResolvedInputs.sourceLink (named so it is not
+   *  read as a media URL slot). */
+  sourceLink?: string;
 }
 
 /** Append an asset to the manual-edit inputAssets accumulator. */
@@ -894,6 +898,15 @@ export function extractNodeOutputAsList(
     const splitResults = data.splitResults as string[] | undefined;
     if (splitResults && splitResults.length > 0) return splitResults;
   }
+  // Content Ideas: one brief per idea — what the next node runs once per idea
+  // on. Read before the generic `generatedJson` list, which would hand it the
+  // idea's raw JSON instead. Mirror of the backend saved-state branch.
+  if (node.type === "content-ideas") {
+    const briefs = Array.isArray(data.ideaBriefs)
+      ? (data.ideaBriefs as unknown[]).filter((b): b is string => typeof b === "string" && b.trim() !== "")
+      : [];
+    return briefs.length > 0 ? briefs : undefined;
+  }
   // Selector emits dual-output lists keyed by edge sourceHandle. The "rest"
   // handle returns the unselected remainder; any other handle (typically
   // "picked", or omitted) returns the picked items. Falls back to the in-store
@@ -992,7 +1005,7 @@ export function getListFanOutForNode(
   // running N redundant POST /v1/reduce calls (each charging credits) when a
   // user wires List → Reduce directly without an intermediate fanned-out
   // node. Mirrors backend input-resolver.ts FAN_IN_NODE_TYPES early-return.
-  if (FAN_IN_NODE_TYPES.has(node.type ?? "")) return undefined;
+  if (isFanInNodeType(node.type)) return undefined;
 
   const incomingEdges = edges.filter((e) => e.target === node.id && e.targetHandle !== VARIABLES_HANDLE_ID);
 
@@ -1270,8 +1283,9 @@ export function resolveNodeInputs(
     // fold the list into one value, they are never fanned out per-item. When
     // upstream has no list (no fan-out happened), wrap its single output as
     // `[output]` so the strategy still has something to fold. Mirrors backend
-    // input-resolver.ts FAN_IN_NODE_TYPES branch.
-    if (node.type && FAN_IN_NODE_TYPES.has(node.type)) {
+    // input-resolver.ts fan-in branch. Per EDGE: Choose Best folds every wire,
+    // Content Ideas only its `recipes` wire (FAN_IN_TARGETS in @nodaro/shared).
+    if (isFanInEdge(node.type, srcEdge.targetHandle)) {
       const edgeData = srcEdge.data as Record<string, unknown> | undefined;
       const filtered: string[] = srcListResults && srcListResults.length > 0
         ? selectListItems(srcListResults, edgeData as SelectorFields | undefined)
@@ -1717,6 +1731,17 @@ export function resolveNodeInputs(
         const analysisJson = (src.data as { generatedJson?: unknown }).generatedJson;
         if (analysisJson !== undefined && analysisJson !== null) inputs.analysis = analysisJson;
       }
+      continue;
+    }
+
+    // content-recipe `link` handle: the post's own address, cited on the
+    // recipe and never fetched. A Video URL node is read for its PAGE link —
+    // its `video` output is the downloaded FILE, which identifies nothing.
+    // Any other source contributes its text. Gated on node.type. Mirror of
+    // the backend input-resolver branch.
+    if (node.type === "content-recipe" && srcEdge.targetHandle === "link") {
+      const link = src.type === "youtube-video" ? videoLinkPageUrl(src.data as Record<string, unknown>) : output;
+      if (typeof link === "string" && link.trim() !== "") inputs.sourceLink = link.trim();
       continue;
     }
 

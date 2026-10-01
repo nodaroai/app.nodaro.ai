@@ -17,7 +17,7 @@ import type { SimpleNode, ResolvedInputs } from "../types.js"
 /** Measured on frontend/src/components/editor/workflow-editor/execute-node.ts
  *  @ origin/dev d7815542 with the window+regex in the last test below. Bump it
  *  ONLY together with a new table row or a justified PARITY_EXEMPT entry. */
-const FRONTEND_MEDIA_REFUSAL_COUNT = 84 // recounted, same guards: the refusals moved into the i18n dictionary and are now read from there, not from a 3-line source window (which over-matched 2 neighbouring lines); +1 video-overlay: base video (table row); +2 image-overlay: base image (table row) + overlay layers (the case throws its own); +1 silence-detect (audio/video source, table row); +1 apply-edl (the "connect an EDL" guard over-matches "connect a"; JSON-input guard, exempt below); +1 edit-plan (the "connect a transcript" guard over-matches "connect a"; JSON-input guard, exempt below); +1 audio-sync ("connect at least 2 recordings" — a source-COUNT guard, exempt below)
+const FRONTEND_MEDIA_REFUSAL_COUNT = 86 // recounted, same guards: the refusals moved into the i18n dictionary and are now read from there, not from a 3-line source window (which over-matched 2 neighbouring lines); +1 video-overlay: base video (table row); +2 image-overlay: base image (table row) + overlay layers (the case throws its own); +1 silence-detect (audio/video source, table row); +1 apply-edl (the "connect an EDL" guard over-matches "connect a"; JSON-input guard, exempt below); +1 edit-plan (the "connect a transcript" guard over-matches "connect a"; JSON-input guard, exempt below); +1 audio-sync ("connect at least 2 recordings" — a source-COUNT guard, exempt below); +2 content-recipe / content-ideas ("connect a Video Analysis, a post or some text" / "connect at least one Content Recipe" — text-input guards over-matching "connect a", exempt below)
 
 const JOB = "job-media-required"
 const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
@@ -355,6 +355,8 @@ describe("required media inputs", () => {
       "after-effects",           // :6895 no video input connected
       "lottie-overlay",          // :6972 no video input connected
       "render-video",            // :7295 no media assets connected
+      "content-recipe",          // connect a Video Analysis, a post or some text (text-input guard, exempt below)
+      "content-ideas",           // connect at least one Content Recipe (text-input guard, exempt below)
     ]
     // Nodes whose frontend refusal CANNOT be mirrored by a media-only table row
     // without refusing graphs that run today (M-12b), or whose refusal already
@@ -399,6 +401,10 @@ describe("required media inputs", () => {
         "the frontend refusal is 'connect an EDL' — a JSON-input guard, not a media one (its media resolves from EdlSource.url inside the EDL). The backend enforces parity by building + validating the effective EDL in the payload-builder case (validateEffectiveEdl throws before the reservation), so a media-only REQUIRED_MEDIA_INPUTS row would be wrong.",
       "edit-plan":
         "the counted refusal is 'connect a transcript' — a JSON-input guard, not a media one (edit-plan reads the transcript, never pixels). buildPayload DOES enforce parity: its edit-plan case throws for BOTH an unresolved transcript AND empty sources before the reserve (mirroring the two frontend refusals). A REQUIRED_MEDIA_INPUTS row would still be wrong because the PRIMARY guard is the JSON transcript, and the media guard is a source-COUNT (min 1), not a specific typed-URL slot that table models.",
+      "content-recipe":
+        "the refusal is about its MATERIAL — text or an analysis JSON on the `in` wire — never a media URL (the `link` wire is a citation, not media). buildPayload enforces parity: its content-recipe case throws for empty material before the reserve (pinned by content-recipe-ideas.test.ts).",
+      "content-ideas":
+        "the refusal is a recipe-COUNT guard over text folded from the `recipes` wire, not a media slot. buildPayload enforces parity: its content-ideas case throws when no recipe arrived, before the reserve (pinned by content-recipe-ideas.test.ts).",
       "audio-sync":
         "the guard is a source-COUNT (2..6 recordings on one `sources` handle, each kept with its node id), not a typed-URL slot the table models. buildPayload DOES enforce parity: its audio-sync case throws for fewer than 2 or more than 6 wired recordings, and for any source that is not a fetchable media URL, before the reserve (pinned by ee/billing/__tests__/audio-sync-credits.test.ts).",
     }

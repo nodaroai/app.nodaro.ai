@@ -37,6 +37,8 @@ export const LIST_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "deduplicate", "merge-lists", "sort-list",
   "selector",
   "ai-writer", "llm-chat", "generate-script",
+  // Content Ideas: one brief per idea, fanned out per idea (FAN_OUT_EACH_TYPES).
+  "content-ideas",
 ])
 
 /**
@@ -92,6 +94,9 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   // FAN_OUT_EACH_TYPES), but the handle is still a json/data producer — so it
   // feeds apply-edl's `edl` input (ACCEPTS_JSON). See unwrapEditPlanOutput.
   "edit-plan",
+  // Content Recipe's `json` handle carries the recipe object (its `text`
+  // handle stays in DATA_TEXT_PRODUCER_TYPES) — a dual producer like transcribe.
+  "content-recipe",
 ])
 
 /** True when `sourceType` can flow into a generic data input (text, list,

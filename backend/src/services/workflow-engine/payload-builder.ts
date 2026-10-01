@@ -3,6 +3,7 @@ import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credi
 import {
   pro3DRenderShotStills, assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle, clampEditPlanClipCount } from "@nodaro/shared"
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
+import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 /**
@@ -4048,6 +4049,63 @@ export function buildPayload(
         // no execution context and the worker consumes neither field.
         nodeId: node.id,
         usageLogId,
+      })
+    }
+
+    case "content-recipe": {
+      // Cloud-only: the private plugin runs it. The orchestrated twin of POST
+      // /v1/content-recipe — same job name, same payload — so the route's
+      // validation is repeated here (the plugin handler re-checks it too). The
+      // material is the text on the `in` wire: a Video Analysis result's JSON,
+      // a scraped post, a caption or transcript — or, under a fan-out, the
+      // current item. The post link comes from the `link` wire, else the typed
+      // field; it is cited, never fetched.
+      const source = (resolvedInputs.overridePrompt ?? resolvedInputs.prompt ?? "").trim()
+      if (!source) {
+        throw new Error("content-recipe: connect a Video Analysis, a post or some text to the node's input")
+      }
+      const llmModel = effectiveContentModel("content-recipe", data.llmModel)
+      const reasoningEffort = typeof data.reasoningEffort === "string" ? data.reasoningEffort : undefined
+      const typedLink = typeof data.sourceUrl === "string" && data.sourceUrl.trim() ? data.sourceUrl.trim() : undefined
+      const focus = typeof data.focus === "string" && data.focus.trim() ? data.focus.trim().slice(0, 2_000) : undefined
+      return simpleResult("content-recipe", contentRecipeCreditId(llmModel, reasoningEffort), {
+        jobId,
+        usageLogId,
+        source: source.slice(0, CONTENT_RECIPE_SOURCE_MAX),
+        sourceUrl: resolvedInputs.sourceLink ?? typedLink,
+        focus,
+        llmModel,
+        reasoningEffort,
+        nodeId: node.id,
+      })
+    }
+
+    case "content-ideas": {
+      // Cloud-only, like content-recipe. Every recipe wired into `recipes` —
+      // several Content Recipe nodes and/or one that ran once per post —
+      // arrives folded on inputs.inputs (FAN_IN_TARGETS). The brand and the
+      // language are fields (a `field-brand` wire was resolved into data).
+      const recipes = (resolvedInputs.inputs ?? [])
+        .filter((r): r is string => typeof r === "string" && r.trim() !== "")
+        .slice(0, CONTENT_IDEAS_MAX_RECIPE_INPUTS)
+      if (recipes.length === 0) {
+        throw new Error("content-ideas: connect at least one Content Recipe to the Recipes input")
+      }
+      const count = clampContentIdeasCount(data.count)
+      const llmModel = effectiveContentModel("content-ideas", data.llmModel)
+      const reasoningEffort = typeof data.reasoningEffort === "string" ? data.reasoningEffort : undefined
+      const brand = typeof data.brand === "string" && data.brand.trim() ? data.brand.trim().slice(0, CONTENT_IDEAS_BRAND_MAX) : undefined
+      const language = typeof data.language === "string" && data.language.trim() ? data.language.trim().slice(0, CONTENT_IDEAS_LANGUAGE_MAX) : undefined
+      return simpleResult("content-ideas", contentIdeasCreditId(count, llmModel, reasoningEffort), {
+        jobId,
+        usageLogId,
+        recipes,
+        brand,
+        count,
+        language,
+        llmModel,
+        reasoningEffort,
+        nodeId: node.id,
       })
     }
 

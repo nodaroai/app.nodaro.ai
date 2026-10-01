@@ -52,6 +52,7 @@ import {
   ACCEPTS_ANALYSIS,
   ACCEPTS_JSON,
 } from "./data-handles"
+import { isValidContentConnection } from "./content-handles"
 import {
   isValidEditImageConnection,
   isValidModifyImageConnection,
@@ -535,6 +536,12 @@ export function isValidWorkflowConnection(
   // and the source-direction popover agree.
   if (targetType === "video-analysis" && connection.targetHandle === "video") {
     return ACCEPTS_VIDEO(imageSourceType)
+  }
+  // Content Recipe (`in` material, `link` source post) and Content Ideas
+  // (`recipes`, `field-brand`) — the same predicates as the node pips and the
+  // source-direction popovers (content-handles.ts), so the three agree.
+  if ((targetType === "content-recipe" || targetType === "content-ideas") && connection.targetHandle) {
+    return isValidContentConnection(targetType, connection.targetHandle, imageSourceType)
   }
   // AI Audit — `video` takes the clip (same predicate as video-analysis);
   // `analysis` takes a finished analysis to re-verify (leave it unwired and the

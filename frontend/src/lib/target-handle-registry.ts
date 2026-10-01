@@ -8,6 +8,7 @@ import { EDIT_VIDEO_PRO_INPUT_HANDLES, isValidEditVideoProConnection } from "./e
 import { VIDEO_RETAKE_HANDLE_IDS, isValidVideoRetakeConnection } from "./video-retake-handles"
 import { isValidVideoSfxConnection } from "./video-sfx-handles"
 import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "./ffmpeg-handles"
+import { ACCEPTS_BRAND_TEXT, ACCEPTS_CONTENT_MATERIAL, ACCEPTS_POST_LINK, ACCEPTS_RECIPE } from "./content-handles"
 import {
   isValidListNodeConnection,
   isValidWebScrapeConnection,
@@ -343,6 +344,19 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   // Video Analysis takes ONE video on its `video` target and emits a scene-
   // breakdown JSON on its `json` source. Video producers light up here.
   "video-analysis":     [{ handleId: "video", label: "Video", accepts: ACCEPTS_VIDEO }],
+  // Content Recipe reads one post's material (a Video Analysis, a scraped post,
+  // a caption) on `in` and cites the post's link from `link` (a Video URL
+  // node's page link, or text). Same predicates as the node's own pips.
+  "content-recipe":     [
+    { handleId: "in",   label: "Source material", accepts: ACCEPTS_CONTENT_MATERIAL },
+    { handleId: "link", label: "Source post", accepts: ACCEPTS_POST_LINK },
+  ],
+  // Content Ideas folds every recipe wired into `recipes`; the brand profile
+  // is a text field it can also take from a wire.
+  "content-ideas":      [
+    { handleId: "recipes",     label: "Recipes", accepts: ACCEPTS_RECIPE },
+    { handleId: "field-brand", label: "Brand",   accepts: ACCEPTS_BRAND_TEXT },
+  ],
   // AI Audit re-watches ONE clip against an OPTIONAL finished analysis. Both
   // targets are enumerated so a video producer AND an analysis producer each
   // light up the right pip (an unwired `analysis` is a valid, pricier run).

@@ -1191,6 +1191,9 @@ export {
   AUDIO_PRODUCER_TYPES,
   DYNAMIC_PRODUCER_TYPES,
   FAN_OUT_EACH_TYPES,
+  FAN_IN_TARGETS,
+  isFanInNodeType,
+  isFanInEdge,
 } from "./producer-types.js"
 
 export { SUNO_TRACK_SOURCE_TYPES } from "./suno-track-sources.js"
@@ -1207,6 +1210,7 @@ export {
   detectVideoLinkPlatform,
   videoLinkDownloadedFile,
   resolveVideoLinkOutput,
+  videoLinkPageUrl,
   videoLinkNeedsDownload,
 } from "./video-link.js"
 export type { VideoLinkPlatform, VideoLinkNodeFields } from "./video-link.js"
@@ -1291,6 +1295,9 @@ export * from "./video-analysis.js"
 // Also hosts video-audit's sibling pricing (VIDEO_AUDIT_BUCKET_CREDITS +
 // buildVideoAuditCreditId / videoAuditCreditsForBucket / bucketSecondsFromAuditCreditId).
 export * from "./video-analysis-pricing.js"
+
+// --- Content Recipe / Content Ideas pricing (credit ids + the per-five-ideas rule) ---
+export * from "./content-recipe-ideas.js"
 
 // --- Unified video node UI-default fills (panel snap == strip == DAG payload) ---
 export * from "./video-ui-defaults.js"

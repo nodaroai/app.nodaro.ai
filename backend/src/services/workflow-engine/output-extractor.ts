@@ -741,6 +741,13 @@ export function getPrimaryOutput(
     return JSON.stringify(plan)
   }
 
+  // Content Recipe: `json` → the recipe object, stringified for generic
+  // consumers (Extract Field reads state.output.json directly). `text` / no
+  // handle fall through to TEXT_SOURCE_TYPES below (the readable recipe).
+  if (sourceType === "content-recipe" && sourceHandle === "json") {
+    return output.json === undefined ? undefined : JSON.stringify(output.json)
+  }
+
   // Describe-to-picker: single `picker-json` output (a structured catalog JSON
   // object). Stringify for generic text consumers; Extract Field / the picker
   // consumer read state.output.json directly (bypassing getPrimaryOutput).
@@ -1134,6 +1141,30 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     if (imageUrl) out.imageUrl = imageUrl
     if (maskUrl) out.maskUrl = maskUrl
     return out.imageUrl || out.maskUrl ? out : undefined
+  }
+
+  // Content Recipe → the recipe object + its readable text, so a skipped /
+  // "Run from here" recipe still feeds Content Ideas. NEVER generatedResults:
+  // a run history there would be read as a LIST of recipes by the fan-in.
+  if (type === "content-recipe") {
+    const out: NodeOutput = {}
+    if (data.generatedJson && typeof data.generatedJson === "object") out.json = data.generatedJson
+    if (typeof data.generatedText === "string" && data.generatedText.trim()) out.text = data.generatedText
+    return out.json !== undefined || out.text ? out : undefined
+  }
+
+  // Content Ideas → the ideas array, the digest, and one brief per idea on
+  // listResults — the per-item value a downstream fan-out runs on (the
+  // generic generatedJson list would hand it raw JSON instead of the brief).
+  if (type === "content-ideas") {
+    const briefs = Array.isArray(data.ideaBriefs)
+      ? (data.ideaBriefs as unknown[]).filter((b): b is string => typeof b === "string" && b.trim() !== "")
+      : []
+    if (briefs.length === 0) return undefined
+    const out: NodeOutput = { listResults: briefs }
+    if (Array.isArray(data.generatedJson)) out.json = data.generatedJson
+    out.text = typeof data.generatedText === "string" && data.generatedText.trim() ? data.generatedText : briefs.join("\n\n")
+    return out
   }
 
   // Reduce (fan-in) → the aggregated string persisted on data.result. Without

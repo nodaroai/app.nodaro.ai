@@ -12,7 +12,7 @@ import type {
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, ANALYSIS_PRODUCER_TYPES } from "./output-extractor.js"
 import {
-  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
+  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle } from "@nodaro/shared"
@@ -197,8 +197,10 @@ export function resolveNodeInputs(
     // `inputs.inputs` array regardless of edgeOutputMode — collect strategies
     // fold the list into one value, they are never fanned out per-item. When
     // upstream has no list (no fan-out happened), wrap its single output as
-    // `[output]` so the strategy still has something to fold.
-    if (FAN_IN_NODE_TYPES.has(targetNode.type)) {
+    // `[output]` so the strategy still has something to fold. Per EDGE, not per
+    // node: Choose Best folds every wire, Content Ideas only its `recipes` wire
+    // (its `field-brand` wire is a field) — FAN_IN_TARGETS in @nodaro/shared.
+    if (isFanInEdge(targetNode.type, edge.targetHandle)) {
       // llm-chat `items` edge: the fold source is the current ===NEXT=== split
       // (not the stale-generatedResults-derived effectiveListResults, which we
       // zeroed above), so a reduce over `items` folds the same blocks the
@@ -814,7 +816,7 @@ export function getListFanOutForNode(
   // Fan-in targets consume the upstream list — they are NOT fanned out themselves.
   // Returning undefined here keeps the orchestrator from creating one execution
   // per upstream item and lets resolveNodeInputs populate `inputs.inputs` instead.
-  if (FAN_IN_NODE_TYPES.has(targetNode.type)) return undefined
+  if (isFanInNodeType(targetNode.type)) return undefined
 
   // Build O(1) lookup indexes once (replaces per-edge linear array scans).
   const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
@@ -1131,6 +1133,10 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "telegram-account-trigger",
   // Telegram Channel Feed — the recent posts' text.
   "telegram-channel-feed",
+  // Content Recipe (the readable recipe) and Content Ideas (one brief per idea,
+  // or the digest) — text is the primary output of both.
+  "content-recipe",
+  "content-ideas",
 ])
 
 // Preview routes by actual media type, not always to text (handled in routeOutput)
@@ -1144,11 +1150,6 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
  *  list wired to either handle lands in the right array instead of being
  *  joined into a single comma-separated string. */
 const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combine-audio", "image-collage", "assemble-narrated-video", "slideshow"])
-
-/** Target node types that consume an upstream list as a single fan-in input.
- *  The resolver collects all upstream items into `inputs.inputs` and skips
- *  per-item routing entirely — the strategy folds the list into one value. */
-const FAN_IN_NODE_TYPES = new Set(["reduce"])
 
 // REFERENCE_HANDLE_MAP now lives in `@nodaro/shared` (single source of truth):
 // the same 6 legacy + canonical handle aliases drive BOTH this resolver's
@@ -1489,6 +1490,18 @@ function routeOutput(
       const analysis = nodeStates[src.id]?.output?.json ?? extractSavedNodeOutput(src)?.json
       if (analysis !== undefined && analysis !== null) inputs.analysis = analysis
     }
+    return
+  }
+
+  // --- content-recipe `link` handle: the post's own address, cited on the
+  // recipe and never fetched. A Video URL node is read for its PAGE link —
+  // the `video` output it would otherwise route here is the downloaded FILE,
+  // which identifies nothing. Any other source contributes its text. Gated on
+  // the target type (a handle-name-only interceptor would hijack same-named
+  // handles elsewhere). Mirrors the frontend node-input-resolver. ---
+  if (targetType === "content-recipe" && edge.targetHandle === "link") {
+    const link = srcType === "youtube-video" ? videoLinkPageUrl(src.data) : output
+    if (typeof link === "string" && link.trim() !== "") inputs.sourceLink = link.trim()
     return
   }
 

@@ -4,6 +4,7 @@ import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@n
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry , NodaroConnectionRequiredError } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
+import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output";
 import { registerNodeRunAbort, clearNodeRunAbort } from "@/lib/node-run-abort";
 import { isNotFound } from "@/lib/api-errors";
 import { hasCredits } from "@/lib/edition";
@@ -1004,6 +1005,19 @@ function applyRestoredJobCompletion(
     return;
   }
 
+  // Content Recipe / Content Ideas: a recipe object or the ideas, never a
+  // media URL — the live run's own mapping (lib/content-run-output.ts).
+  if (isContentNodeType(nodeType)) {
+    updateNodeData(nodeId, {
+      ...(contentRunResultPatch(nodeType, job.output_data) ?? { executionStatus: "completed" }),
+      currentJobId: undefined,
+      currentJobProgress: undefined,
+      jobAwaitingReview: undefined,
+    });
+    toast.success(tx("run.backgroundJobCompleted"));
+    return;
+  }
+
   // audio-sync: the offsets are `output_data.json` (→ `data.generatedJson`),
   // not a media URL — same recovery gap as the analysis branch above.
   if (nodeType === "audio-sync") {
@@ -1380,6 +1394,8 @@ interface NodeExecutionState {
     imageUrls?: readonly string[];
     audioUrls?: readonly string[];
     text?: string;
+    /** A structured result (Content Recipe's recipe, Content Ideas' ideas). Mirrors backend NodeOutput. */
+    json?: unknown;
     /** Fan-in (reduce / Choose Best) aggregated value. Mirrors backend NodeOutput. */
     result?: string;
     /** Reduce strategy meta beside `result` (selectedIndex / reasoning / summary). */
@@ -1513,9 +1529,12 @@ function syncNodeStatesToStore(
 
     // Re-sync results when node is already completed but generatedResults
     // is empty/missing (polling caught status before output was persisted).
+    // Content Ideas' list is its briefs on `ideaBriefs`, never generatedResults,
+    // so "no generatedResults yet" is its normal completed state, not a gap.
     const needsResultSync =
       state.status === "completed" &&
       currentStatus === "completed" &&
+      !isContentNodeType(node.type) &&
       state.output?.listResults &&
       state.output.listResults.length > 1 &&
       !((data.generatedResults as GeneratedResult[] | undefined)?.length);
@@ -1532,7 +1551,13 @@ function syncNodeStatesToStore(
         // between and nothing else would ever clear it.
         jobAwaitingReview: undefined,
       };
-      if (state.output) {
+      if (state.output && isContentNodeType(node.type)) {
+        // Content Recipe / Content Ideas: the live run's own mapping
+        // (lib/content-run-output.ts). Never the generic writes below — the
+        // briefs on __listResults would clone the node on the canvas, and a
+        // text history in generatedResults would be read as a list.
+        Object.assign(updates, contentRunResultPatch(node.type, state.output as Record<string, unknown>) ?? {});
+      } else if (state.output) {
         const nodeType = node.type ?? "";
         if (state.output.imageUrl) {
           if (["character", "face", "object", "location"].includes(nodeType)) {

@@ -13,7 +13,7 @@ Complete reference for all nodes available in the Nodaro.ai visual workflow edit
 
 ## Quick Reference
 
-- **Total Nodes:** 183 creatable from the picker
+- **Total Nodes:** 185 creatable from the picker
 - **Tabs:** 9  ·  **Families:** 46
 
 ---
@@ -48,14 +48,14 @@ the foot of the list.
 |---|---|
 | **Add Your Own** | Upload Video |
 | **Create** | Generate Video · Generate Video Pro · Music Video · Still to Video · Slideshow |
-| **Story & Script** | Story → Video · Scene · Generate Script |
+| **Story & Script** | Story → Video · Scene · Content Ideas · Generate Script |
 | **Animate & Perform** | AI Avatar · Cinematic Avatar · Lip Sync · Speech to Video · Motion Transfer · Face Swap |
 | **Continue & Restyle** | Extend Video · Edit Video Pro · Retake Video · Video to Video · Relight & Switch |
 | **Cut & Assemble** | Trim Video · Combine Videos · Apply EDL · Assemble Narrated Video · Adjust Speed · Loop Video · Fade In/Out · Composite · Compose Video · Split into Chunks · Manual Edit |
 | **Sound for Video** | Video SFX · Merge Video & Audio · Extract Audio · Remove Audio |
 | **Titles, Graphics & Captions** | 3D Title · Motion Graphics · After Effects · Lottie Overlay · Add Captions · Render Video |
 | **Format & Export** | Resize Video · Social Media Format · Upscale Video · Transcode Video · Gif to Video |
-| **Analyze** | Video Analysis · AI Audit |
+| **Analyze** | Video Analysis · AI Audit · Content Recipe |
 
 ### Audio
 
@@ -274,6 +274,8 @@ Generate, transform, or extract text using AI models.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
+| [Content Ideas](./ai-text/content-ideas.md) | One or more Content Recipes + your brand → concrete post ideas (hook, format, beats, shot list, why it fits). Emits a list: the next node runs once per idea. Cloud only | Turn posts that worked into a batch of on-brand ideas, then scripts |
+| [Content Recipe](./ai-text/content-recipe.md) | Why a post worked: hook, format label, timed beats, why it works, CTA, sound, pace — as data and text. Cloud only | Reverse-engineer a competitor or viral post (best after Video Analysis) |
 | [Generate Script](./ai-text/generate-script.md) | AI multi-scene script with cinematography | Create structured video scripts with scene descriptions and camera directions |
 | [Prompt](./ai-text/llm-chat.md) | LLM text generation from a prompt (formerly "Generate Text") (selectable model, optional image/video/audio refs). Two outputs: full `text` and a `===NEXT===`-split `items` fan-out list. Built-in + user templates; "Create N Image Nodes" fan-out | Rewrite/transform text, caption media, brainstorm, or fan out N image prompts |
 | [QA Check](./ai-text/qa-check.md) | LLM quality gate — scores text 0.0-1.0, returns pass/fail + reason | Validate generated scripts or captions before they continue downstream |

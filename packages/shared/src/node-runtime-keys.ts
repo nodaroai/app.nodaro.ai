@@ -90,6 +90,13 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   "webhookSuccess",
   "webhookStatusCode",
   "webhookResponseBody",
+  // Content Ideas: one creative brief per idea (the node's list output — kept
+  // out of __listResults, which would clone the node). And the non-fatal notes
+  // a Content Recipe / Content Ideas run returns ("read the first of 3 posts").
+  // Both are RESULTS: they persist, and a preset, a template or a run-only
+  // patch must never treat them as config.
+  "ideaBriefs",
+  "runWarnings",
   // When the editor's "Clear results" last emptied this node (ISO time). Not a
   // result and not config: bookkeeping that tells the load-time recovery lanes
   // "this node is empty ON PURPOSE" — without it, every reload reads an empty

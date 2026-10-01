@@ -157,6 +157,15 @@ export function resolveVideoLinkOutput(data: VideoLinkNodeFields): string | unde
 }
 
 /**
+ * The page link a Video URL node was given (the post's own address), never
+ * the downloaded file. Read by consumers that CITE a post rather than watch
+ * it — Content Recipe's "Source post" input stores it as the recipe's source.
+ */
+export function videoLinkPageUrl(data: VideoLinkNodeFields): string | undefined {
+  return trimmed(data.youtubeUrl)
+}
+
+/**
  * True when the node holds a social link with no file for it yet — the state
  * in which its output is a web PAGE, which no video consumer can read.
  */

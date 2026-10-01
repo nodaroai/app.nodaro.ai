@@ -165,6 +165,11 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "video-analysis": { ids: familyIds("video-analysis") },
   "video-audit": { ids: familyIds("video-audit") },
   "edit-plan": { ids: familyIds("edit-plan") },
+  "content-recipe": { ids: familyIds("content-recipe") },
+  "content-ideas": {
+    ids: familyIds("content-ideas"),
+    note: "Charged per batch of up to five ideas: a run of 6–10 ideas bills two batches (the `content-ideas:10` rows).",
+  },
   "audio-sync": {
     ids: familyIds("audio-sync"),
     note: "Priced per source aligned to the reference: 10 × (sources − 1), 2 to 6 sources.",
@@ -970,6 +975,45 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     description: "AI-powered multi-scene script generation with cinematography details, character actions, and structured scene breakdowns.",
     outputType: "text",
     creditCost: creditBandFor("generate-script"),
+  },
+  {
+    type: "content-recipe",
+    label: "Content Recipe",
+    category: "ai-text",
+    // Cloud-only (a private plugin runs it). One structured model call over one
+    // post's material — a Video Analysis result, a scraped post, or text.
+    // Outputs: `json` (the recipe object) and `text` (the readable recipe).
+    description:
+      "Why a post worked, as a reusable recipe: the hook (what is said, written and seen in the first 3 seconds), a format label with confidence, timed beats, why it works, CTA, sound and pace. Reads a Video Analysis, a scraped post or text; wire the Video URL node into Source post to cite the link.",
+    outputType: "data",
+    creditCost: creditBandFor("content-recipe"),
+    inputSchema: {
+      fields: [
+        { key: "llmModel", type: "string" },
+        { key: "focus", type: "string" },
+        { key: "sourceUrl", type: "string" },
+      ],
+    },
+  },
+  {
+    type: "content-ideas",
+    label: "Content Ideas",
+    category: "ai-text",
+    // Cloud-only (a private plugin runs it). Folds every recipe wired into
+    // `recipes`; emits one creative brief per idea on listResults, so the node
+    // after it runs once per idea (FAN_OUT_EACH_TYPES).
+    description:
+      "Turn one or more Content Recipes plus a brand profile into concrete post ideas — hook, format, beats, shot list, why it fits the brand, and the post that inspired it. Borrows structure, never the original's words, footage, music or faces. Emits a list: the next node runs once per idea.",
+    outputType: "text",
+    creditCost: creditBandFor("content-ideas"),
+    inputSchema: {
+      fields: [
+        { key: "brand", type: "string" },
+        { key: "count", type: "number" },
+        { key: "language", type: "string" },
+        { key: "llmModel", type: "string" },
+      ],
+    },
   },
   {
     type: "image-to-text",

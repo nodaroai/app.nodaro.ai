@@ -2,7 +2,7 @@
 
 One row per node **type**. Generative model wrappers are not rows — a type that dispatches to a whole model family is a single row, and the model family is named in "what it does".
 
-**Scope:** the 189 entries of `NODE_DEFINITIONS` (`frontend/src/types/nodes.ts`) plus the 2 deprecated type strings the loader still migrates (`loop` → `list`, `ai-writer` → `llm-chat`) = **191 rows**. One entry, `preview`, is retired (soft-delete, 2026-08): it stays in `NODE_DEFINITIONS` so saved workflows keep loading, but is no longer creatable — see its row.
+**Scope:** the 191 entries of `NODE_DEFINITIONS` (`frontend/src/types/nodes.ts`) plus the 2 deprecated type strings the loader still migrates (`loop` → `list`, `ai-writer` → `llm-chat`) = **193 rows**. One entry, `preview`, is retired (soft-delete, 2026-08): it stays in `NODE_DEFINITIONS` so saved workflows keep loading, but is no longer creatable — see its row.
 
 **Where each column comes from**
 
@@ -172,6 +172,8 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `trim-audio` | Trim Audio | processing | Extract a section of audio or extract audio from video | `in`:audio | `audio`:audio | NO |
 | `trim-video` | Trim Video | processing | Trim a video by start/end seconds | `in`:video | `video`:video | NO |
 | `video-analysis` | Video Analysis | processing | Scene-segmented analysis of a video: prompt-ready visuals, camera language, mode-tagged audio, castable entity slots | `video`:video | `json`:json, `text`:text | NO |
+| `content-recipe` | Content Recipe | ai | Why a post worked, as a reusable recipe: the hook (what is said, written and seen in the first 3 seconds), a format label with confidence, timed beats, why it works, CTA, sound and pace. Reads a Video Analysis, a scraped post or text (Cloud only) | `in`:text, `link`:text | `json`:json, `text`:text | NO |
+| `content-ideas` | Content Ideas | ai | Turn one or more Content Recipes plus a brand profile into concrete post ideas; emits a list so the next node runs once per idea (Cloud only) | `recipes`:text, `field-brand`:text | `ideas`:list | NO |
 | `video-audit` | AI Audit | processing | Re-watch a video against its analysis and disclose every fix | `video`:video, `analysis`:json | `json`:json, `text`:text | NO |
 | `video-composer` | Compose Video | processing | AI-powered scene-graph video composition from natural language prompts | `in`:identity | `composition`:composition | NO |
 | `video-overlay` | Video Overlay | processing | Timed image layers over a video, rendered locally in one FFmpeg pass (no AI, no provider key): up to 20 layers, each shown during its own start–end window as a card, a corner badge, full frame or a custom box, with an optional short fade-and-scale in and out; the base audio is copied untouched and an optional output aspect reframes the video. A live, draggable preview on the node; the panel adds a read-only timeline | `video`:video (base), `overlay`…`overlay12`:image (one per layer slot; layers 13 and up take an image URL) | `video-out`:video | NO |

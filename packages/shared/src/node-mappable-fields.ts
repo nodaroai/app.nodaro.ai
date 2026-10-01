@@ -79,6 +79,12 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   "web-scrape":          ["query", "url", "target"],
   "meta-ads-scrape":     ["query", "pageUrls"],
   "instagram-scrape":    ["targets"],
+  // Content Recipe's material arrives on its `in` wire and the post link on
+  // its `link` wire (a Video URL node's page link) — only the focus is a field.
+  "content-recipe":      ["focus"],
+  // Content Ideas folds its recipes on the `recipes` wire (FAN_IN_TARGETS);
+  // the brand profile and the language are fields a Text node can feed.
+  "content-ideas":       ["brand", "language"],
 }
 
 /** suno-generate secondary text fields exposed as `field-<key>` canvas handles. */

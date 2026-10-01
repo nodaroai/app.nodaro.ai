@@ -80,7 +80,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "video-story-script",
     label: "Story & Script",
     tab: "video",
-    types: ["generative-pipeline", "scene", "generate-script"],
+    types: ["generative-pipeline", "scene", "content-ideas", "generate-script"],
   },
   {
     id: "video-animate-perform",
@@ -122,7 +122,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "video-analyze",
     label: "Analyze",
     tab: "video",
-    types: ["video-analysis", "video-audit"],
+    types: ["video-analysis", "video-audit", "content-recipe"],
   },
   {
     id: "audio-add-your-own",

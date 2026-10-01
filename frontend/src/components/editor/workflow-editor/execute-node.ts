@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
 import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider } from "@nodaro/shared";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
+import { contentRunResultPatch } from "@/lib/content-run-output";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
@@ -105,6 +106,8 @@ import {
   metaAdsScrape,
   instagramScrape,
   startVideoAnalysis,
+  startContentRecipe,
+  startContentIdeas,
   runVideoAudit,
   editPlan,
   executeReduce,
@@ -114,6 +117,7 @@ import { scrapeResultPatch } from "@/components/nodes/scrape-result-recovery";
 import { applyMetaAdsScrapeFailure, applyMetaAdsScrapeResult, metaAdsScrapeRunStartPatch } from "@/components/nodes/meta-ads-scrape-run-state";
 import { applyInstagramScrapeFailure, applyInstagramScrapeResult, instagramScrapeRunStartPatch } from "@/components/nodes/instagram-scrape-run-state";
 import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets } from "@nodaro/shared";
+import { clampContentIdeasCount, CONTENT_IDEAS_MAX_RECIPE_INPUTS } from "@nodaro/shared";
 import { tx } from "@/lib/i18n";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
@@ -235,6 +239,8 @@ import type {
   VoiceDesignData,
   ForcedAlignmentData,
   VideoAnalysisNodeData,
+  ContentRecipeNodeData,
+  ContentIdeasNodeData,
   VideoAuditNodeData,
   SubWorkflowData,
   SocialMediaFormatData,
@@ -4101,6 +4107,128 @@ function executeNodeCore(
           reject(err);
         });
     });
+  }
+
+  if (node.type === "content-recipe") {
+    const d = node.data as ContentRecipeNodeData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    // The material is the text on the `in` wire — or, under a fan-out, this
+    // iteration's item (one scraped post). Mirror of payload-builder.
+    const source = (overridePrompt ?? inputs.prompt ?? "").trim();
+    if (!source) {
+      toast.error(nodeRunError(d.label, "nodeRun.contentRecipeNeedsMaterial"));
+      return Promise.reject(new Error("No material"));
+    }
+    updateNodeData(node.id, {
+      ...RUN_START_RESET,
+      generatedJson: undefined,
+      generatedText: undefined,
+      runWarnings: undefined,
+      currentJobProgress: undefined,
+    });
+    setUserPromptTemplate(undefined);
+    let recipeJobId = "";
+    return startContentRecipe({
+      source,
+      // The `link` wire (a Video URL node's page link) wins over the typed link.
+      sourceUrl: inputs.sourceLink ?? (d.sourceUrl?.trim() || undefined),
+      focus: d.focus?.trim() || undefined,
+      llmModel: d.llmModel,
+      reasoningEffort: d.reasoningEffort,
+      userId: ctx.userId,
+    })
+      .then(({ jobId }) => {
+        recipeJobId = jobId;
+        updateNodeData(node.id, { currentJobId: jobId });
+        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal, budgetMs: 10 * 60_000 });
+      })
+      .then((output) => {
+        // Run discarded/replaced — the job still lands in the library, but its
+        // result must not overwrite the node.
+        if (shouldAbandonNode(node.id, recipeJobId)) return "";
+        // One mapping with the reload recovery (lib/content-run-output.ts).
+        const patch = contentRunResultPatch("content-recipe", output);
+        if (!patch) throw new Error(tx("nodeRun.contentRecipeFailed"));
+        updateNodeData(node.id, { ...patch, currentJobId: undefined, currentJobProgress: undefined });
+        guardedToast.success(tx("nodeRun.contentRecipeComplete"));
+        return patch.generatedText as string;
+      })
+      .catch((err: Error) => {
+        // Stop → the poll was aborted; the central Stop handler already restored
+        // the node, so don't overwrite it with a failure (mirrors the scrapers).
+        if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
+        if (recipeJobId && shouldAbandonNode(node.id, recipeJobId)) return "";
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err?.message || tx("nodeRun.contentRecipeFailed"),
+          currentJobId: undefined,
+          currentJobProgress: undefined,
+        });
+        if (!checkStorageError(err, ctx)) {
+          guardedToast.error(tx("nodeRun.contentRecipeFailed"), { description: err?.message });
+        }
+        throw err;
+      });
+  }
+
+  if (node.type === "content-ideas") {
+    const d = node.data as ContentIdeasNodeData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    // Every recipe wired into `recipes` arrives folded on inputs.inputs (the
+    // fan-in branch of the resolver); brand / language were resolved into data.
+    const recipes = (inputs.inputs ?? []).filter((r): r is string => typeof r === "string" && r.trim() !== "");
+    if (recipes.length === 0) {
+      toast.error(nodeRunError(d.label, "nodeRun.contentIdeasNeedsRecipe"));
+      return Promise.reject(new Error("No recipe"));
+    }
+    updateNodeData(node.id, {
+      ...RUN_START_RESET,
+      generatedJson: undefined,
+      ideaBriefs: undefined,
+      generatedText: undefined,
+      runWarnings: undefined,
+      currentJobProgress: undefined,
+    });
+    setUserPromptTemplate(undefined);
+    let ideasJobId = "";
+    return startContentIdeas({
+      recipes: recipes.slice(0, CONTENT_IDEAS_MAX_RECIPE_INPUTS),
+      brand: d.brand?.trim() || undefined,
+      count: clampContentIdeasCount(d.count),
+      language: d.language?.trim() || undefined,
+      llmModel: d.llmModel,
+      reasoningEffort: d.reasoningEffort,
+      userId: ctx.userId,
+    })
+      .then(({ jobId }) => {
+        ideasJobId = jobId;
+        updateNodeData(node.id, { currentJobId: jobId });
+        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal, budgetMs: 15 * 60_000 });
+      })
+      .then((output) => {
+        if (shouldAbandonNode(node.id, ideasJobId)) return "";
+        // One brief per idea on ideaBriefs — the list the next node runs on.
+        // Same mapping as the reload recovery (lib/content-run-output.ts).
+        const patch = contentRunResultPatch("content-ideas", output);
+        if (!patch) throw new Error(tx("nodeRun.contentIdeasFailed"));
+        updateNodeData(node.id, { ...patch, currentJobId: undefined, currentJobProgress: undefined });
+        guardedToast.success(tx("nodeRun.contentIdeasComplete", { count: (patch.ideaBriefs as string[]).length }));
+        return patch.generatedText as string;
+      })
+      .catch((err: Error) => {
+        if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
+        if (ideasJobId && shouldAbandonNode(node.id, ideasJobId)) return "";
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err?.message || tx("nodeRun.contentIdeasFailed"),
+          currentJobId: undefined,
+          currentJobProgress: undefined,
+        });
+        if (!checkStorageError(err, ctx)) {
+          guardedToast.error(tx("nodeRun.contentIdeasFailed"), { description: err?.message });
+        }
+        throw err;
+      });
   }
 
   if (node.type === "video-audit") {

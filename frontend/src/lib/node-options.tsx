@@ -61,6 +61,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   Lightbulb,
+  ChefHat,
   Linkedin,
   List,
   ListFilter,
@@ -676,6 +677,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "video-story-script",
   },
   {
+    type: "content-ideas",
+    label: "Content Ideas",
+    icon: <Lightbulb className="h-4 w-4" />,
+    category: "AI",
+    group: "video-story-script",
+    keywords: ["post ideas", "content ideas", "brainstorm", "hooks", "brand", "steal the format", "ideation", "social media"],
+  },
+  {
     type: "llm-chat",
     label: "Prompt",
     icon: <MessageSquare className="h-4 w-4" />,
@@ -1225,6 +1234,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Processing",
     group: "video-analyze",
     keywords: ["analyze video", "scene breakdown", "shot list", "understand video", "describe video", "storyboard from video"],
+  },
+  {
+    type: "content-recipe",
+    label: "Content Recipe",
+    icon: <ChefHat className="h-4 w-4" />,
+    category: "AI",
+    group: "video-analyze",
+    keywords: ["why it works", "hook", "format", "viral", "competitor post", "steal the format", "content recipe", "beats", "tiktok", "reels"],
   },
   {
     type: "video-audit",

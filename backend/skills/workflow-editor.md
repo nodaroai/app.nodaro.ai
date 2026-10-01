@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-09-27T10:07:57.599Z
-generated_from: fc0ee97cf
+generated_at: 2026-10-01T22:35:14.386Z
+generated_from: 9efb4473c
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -104,6 +104,8 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `component` — Component
 - `composite` — Composite
 - `composition-effects` — Composition Effects
+- `content-ideas` — Content Ideas
+- `content-recipe` — Content Recipe
 - `creature` — Animal/Creature Asset
 - `deduplicate` — Remove Duplicates
 - `describe-to-picker` — Describe to Picker

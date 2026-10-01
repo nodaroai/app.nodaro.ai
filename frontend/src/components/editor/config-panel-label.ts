@@ -116,6 +116,8 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "combine-videos": "Combine Videos",
   "apply-edl": "Apply EDL",
   "edit-plan": "Edit Plan",
+  "content-recipe": "Content Recipe",
+  "content-ideas": "Content Ideas",
   "assemble-narrated-video": "Assemble Narrated Video",
   "image-collage": "Image Collage",
   "image-overlay": "Image Overlay",

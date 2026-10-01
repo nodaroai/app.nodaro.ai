@@ -36,7 +36,8 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { normalizeTemplateCategory } from "@nodaro/shared"
 import { supabase } from "../supabase.js"
-import { config, isCloud } from "../config.js"
+import { config, hasCredits, isCloud } from "../config.js"
+import { findCloudOnlyNodeTypes } from "../cloud-only-nodes.js"
 import { isTransportError, withTransportRetry, type TransportRetryOptions } from "../boot-retry.js"
 import { TUTORIAL_SYSTEM_EMAIL } from "../system-account.js"
 import { loadTutorialPacks, parsePackDirList } from "./packs.js"
@@ -404,7 +405,19 @@ async function runSeed(): Promise<void> {
   const projectId = await ensureSystemProject(userId)
 
   const counts = { created: 0, updated: 0, unchanged: 0 }
+  const notForThisEdition: string[] = []
   const seedDoc = async (doc: TutorialTemplateDoc) => {
+    // A template built on a Cloud-only node is skipped where that node cannot
+    // run — the same gate POST /v1/workflows applies, read off the doc's own
+    // nodes (never the authored nodeTypesUsed, which can drift). Seeding it
+    // would list a tutorial whose clone the workflow routes then refuse.
+    if (!hasCredits()) {
+      const cloudOnly = findCloudOnlyNodeTypes(doc.nodes as ReadonlyArray<{ type?: unknown }>)
+      if (cloudOnly.length > 0) {
+        notForThisEdition.push(`${doc.slug} (${cloudOnly.join(", ")})`)
+        return
+      }
+    }
     try {
       counts[await seedOne(doc, userId, projectId)] += 1
     } catch (err) {
@@ -440,6 +453,9 @@ async function runSeed(): Promise<void> {
     for (const doc of pack.docs) await seedDoc(doc)
   }
 
+  if (notForThisEdition.length > 0) {
+    console.log(`[tutorial-seed] not seeded on this edition (Cloud-only nodes): ${notForThisEdition.join("; ")}`)
+  }
   if (counts.created || counts.updated) {
     console.log(
       `[tutorial-seed] ${counts.created} created, ${counts.updated} updated, ${counts.unchanged} unchanged`,

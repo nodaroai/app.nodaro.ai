@@ -416,4 +416,9 @@ export const TEXT_SOURCE_TYPES = new Set([
   "preview",
   "generate-script",
   "list",
+  // Content Recipe: the readable recipe (its `json` handle is stringified in
+  // getPrimaryOutput). Content Ideas: the digest of all ideas — each idea's
+  // own brief travels per item on listResults.
+  "content-recipe",
+  "content-ideas",
 ])

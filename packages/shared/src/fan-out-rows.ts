@@ -45,6 +45,10 @@ export const NON_PROMPT_TEXT_LANES: Readonly<Record<string, "*" | readonly strin
   silence: ["edit-plan"],
   qrText: ["image-overlay"],
   transition: ["slideshow"],
+  // Content Recipe's `link` carries the post's address (inputs.sourceLink), not
+  // the material it analyzes — a list of links fanned through it must not be
+  // written into the material too.
+  link: ["content-recipe"],
 }
 
 /** Does a TEXT list wired to `targetHandle` of a `nodeType` node feed its prompt slot? */

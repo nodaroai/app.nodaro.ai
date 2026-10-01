@@ -157,6 +157,8 @@ import {
   CombineVideosConfig,
   ApplyEdlConfig,
   EditPlanConfig,
+  ContentRecipeConfig,
+  ContentIdeasConfig,
   AssembleNarratedVideoConfig,
   ImageCollageConfig,
   ImageOverlayConfig,
@@ -268,6 +270,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
   "llm-chat", "web-scrape", "meta-ads-scrape", "instagram-scrape", "video-analysis", "video-audit",
+  "content-recipe", "content-ideas",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "generate-3d-scene", "edit-3d-scene", "pro-3d-render",
   "image-to-text", "qa-check", "transcribe", "describe-to-picker",
@@ -488,6 +491,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "combine-videos": return <CombineVideosConfig {...configProps} />
     case "apply-edl": return <ApplyEdlConfig {...configProps} />
     case "edit-plan": return <EditPlanConfig {...configProps} />
+    case "content-recipe": return <ContentRecipeConfig {...configProps} />
+    case "content-ideas": return <ContentIdeasConfig {...configProps} />
     case "assemble-narrated-video": return <AssembleNarratedVideoConfig {...configProps} />
     case "image-collage": return <ImageCollageConfig {...configProps} />
     case "image-overlay": return <ImageOverlayConfig {...configProps} nodeId={selectedNodeId} />

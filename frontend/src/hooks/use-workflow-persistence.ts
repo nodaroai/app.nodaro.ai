@@ -5,6 +5,7 @@ import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "
 import { applyWorkflowAccess } from "@/hooks/workflow-access-mode"
 import { classifyZeroRowSave, isSaveRefused } from "@/hooks/workflow-save-refusal"
 import { tx } from "@/lib/i18n"
+import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
 import { reconcileWorkflowNodeResults } from "@/lib/reconcile-node-results"
 import { reconcileCompletedSingleNodeJobs, buildScene3DRecoveryPatch, isScene3DNodeType } from "@/lib/reconcile-completed-jobs"
 import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
@@ -73,6 +74,8 @@ interface NodeExecutionState {
     videoUrl?: string
     audioUrl?: string
     text?: string
+    /** A structured result (Content Recipe's recipe, Content Ideas' ideas). Mirrors backend NodeOutput. */
+    json?: unknown
     script?: unknown
     generatedVoiceId?: string
     alignment?: unknown
@@ -405,7 +408,11 @@ export function applyBackendExecutionState(
     // Map backend status → frontend executionStatus
     if (state.status === "completed") {
       data.executionStatus = "completed"
-      if (state.output) {
+      if (state.output && isContentNodeType(node.type)) {
+        // Content Recipe / Content Ideas: the live run's own mapping — the
+        // generic list/result writes below do not fit a recipe or the briefs.
+        Object.assign(data, contentRunResultPatch(node.type, state.output as Record<string, unknown>) ?? {})
+      } else if (state.output) {
         const nodeType = node.type ?? ""
         if (isScene3DNodeType(nodeType) && state.output.plan) {
           Object.assign(data, buildScene3DRecoveryPatch(data, {
@@ -525,6 +532,14 @@ export function applyCompletedExecutionResults(
     // Their results were already synced (via SSE or a previous load).
     // Any changes the user made (e.g. deleting images) should be respected.
     if (data.executionStatus === "completed") return node
+
+    // Content Recipe / Content Ideas: a recipe or the ideas, never a media URL —
+    // the live run's own mapping. Skipped when the node already holds a result.
+    if (isContentNodeType(node.type)) {
+      if (data.generatedJson || data.generatedText) return node
+      const patch = contentRunResultPatch(node.type, state.output as Record<string, unknown>)
+      return patch ? { ...node, data: { ...data, ...patch } as SceneNodeData } : node
+    }
 
     const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
 

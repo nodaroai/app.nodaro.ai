@@ -50,6 +50,10 @@ export const CLOUD_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
   // Telegram account trigger: listens through an account held by a private
   // plugin daemon on the cloud; no relay fronts it.
   "telegram-account-trigger",
+  // Content Recipe + Content Ideas ("steal the format"): the prompts are a
+  // private plugin's and no relay fronts them yet.
+  "content-recipe",
+  "content-ideas",
 ])
 
 /**

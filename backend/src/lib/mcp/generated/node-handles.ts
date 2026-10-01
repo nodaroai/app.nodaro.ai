@@ -39,6 +39,8 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "component": { inputs: ["in"], outputs: ["out"] },
   "composite": { inputs: ["video1", "video2", "video3", "video4"], outputs: ["composition"] },
   "composition-effects": { inputs: ["in"], outputs: ["out"] },
+  "content-ideas": { inputs: ["recipes", "field-brand"], outputs: ["ideas"] },
+  "content-recipe": { inputs: ["in", "link"], outputs: ["json", "text"] },
   "creature": { inputs: ["in", "type"], outputs: ["creatureRef", "image"] },
   "deduplicate": { inputs: ["in"], outputs: ["out"] },
   "describe-to-picker": { inputs: ["image"], outputs: ["picker-json"] },

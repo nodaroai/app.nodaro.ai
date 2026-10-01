@@ -3,7 +3,7 @@ import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -67,6 +67,19 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   // (clips·premium·180m = 1480), never-under-quote — mirrors video-analysis's
   // fallback rationale so a run never fails mid-DAG after transcribe charged.
   "edit-plan": 1480,
+  // Content Recipe / Content Ideas: the node badge and the run-level estimate
+  // name the composite (contentRecipeCreditId / contentIdeasCreditId — model
+  // tier, and for ideas the per-five-ideas bucket) and read it here on a cold
+  // cache. Mirrors STATIC_CREDIT_COSTS.
+  "content-recipe:economy": 5,
+  "content-recipe": 20,
+  "content-recipe:premium": 35,
+  "content-ideas:economy": 10,
+  "content-ideas": 35,
+  "content-ideas:premium": 50,
+  "content-ideas:10:economy": 20,
+  "content-ideas:10": 70,
+  "content-ideas:10:premium": 100,
   "assemble-narrated-video": 40,
   "image-collage": 20,
   "image-overlay": 10,
@@ -543,6 +556,17 @@ export function estimateNodeCredits(
       ? VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(model, bucketSec)] ?? NODE_CREDIT_COSTS["video-analysis"] ?? 0
       : NODE_CREDIT_COSTS["video-analysis"] ?? 0
   }
+  // Content Recipe / Content Ideas: the composite the run reserves (the
+  // effective model's tier; for ideas, the per-five-ideas bucket) — the live
+  // charged price when cached, else the cold-cache table above.
+  if (nodeType === "content-recipe" && node.data) {
+    const id = contentRecipeCreditId(node.data.llmModel, node.data.reasoningEffort as string | undefined)
+    return getCachedCredits(id) ?? NODE_CREDIT_COSTS[id] ?? 0
+  }
+  if (nodeType === "content-ideas" && node.data) {
+    const id = contentIdeasCreditId(node.data.count, node.data.llmModel, node.data.reasoningEffort as string | undefined)
+    return getCachedCredits(id) ?? NODE_CREDIT_COSTS[id] ?? 0
+  }
   // Audio Sync: priced per source aligned to the reference — the wired source
   // count, from the edges (the SAME count getModelIdentifier and the node pill
   // read). No edges → the 6-source ceiling (never under-quote).
@@ -707,6 +731,9 @@ export const EXECUTABLE_TYPES = new Set([
   // analysis (same payload shape as video-analysis, so it chains anywhere an
   // analysis does). Priced per family × duration bucket (estimateNodeCredits).
   "video-audit",
+  // Steal-the-format pair — cloud plugin nodes (job + poll, like video-analysis).
+  "content-recipe",
+  "content-ideas",
   "router",
   "teleport-send",
   "teleport-receive",
@@ -717,9 +744,10 @@ export const EXECUTABLE_TYPES = new Set([
   "reference-board",
 ]);
 
-/** Frontend mirror of backend's FAN_IN_NODE_TYPES.
- * Used to skip fan-out for nodes that consume listResults whole. */
-export const FAN_IN_NODE_TYPES = new Set(["reduce"])
+/** The node types that fold their inputs into one run (Choose Best, Content
+ * Ideas) — DERIVED from @nodaro/shared FAN_IN_TARGETS, the one table both
+ * engines read (per edge, via isFanInEdge). */
+export const FAN_IN_NODE_TYPES: ReadonlySet<string> = new Set(Object.keys(FAN_IN_TARGETS))
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 20;
 

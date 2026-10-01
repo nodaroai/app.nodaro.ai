@@ -1,6 +1,6 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
@@ -380,6 +380,12 @@ export function getModelIdentifier(
   // Component nodes: return empty string so the fallback estimateNodeCredits is used
   // (component cost depends on estimatedCredits from the published metadata, not a model lookup)
   if (node.type === "component") return ""
+
+  // Content Recipe / Content Ideas: the shared builders — the same ids the
+  // cloud route, the orchestrator and the node badge use (the effective
+  // model's tier; ideas add the per-five-ideas bucket).
+  if (node.type === "content-recipe") return contentRecipeCreditId(data.llmModel, data.reasoningEffort as string | undefined)
+  if (node.type === "content-ideas") return contentIdeasCreditId(data.count, data.llmModel, data.reasoningEffort as string | undefined)
 
   // motion-graphics: feature is engine-dependent (design §8 — every credit-id site branches on engine)
   if (node.type === "motion-graphics") {

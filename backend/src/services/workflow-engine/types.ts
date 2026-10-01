@@ -461,6 +461,10 @@ export interface ResolvedInputs {
    *  (the same id an edit plan mints as that recording's EdlSource id). The
    *  payload builder orders them by the node's `sourceOrder`. */
   audioSyncSources?: Array<{ nodeId: string; url: string }>
+  /** content-recipe: the post's own link, from a wire into the node's `link`
+   *  handle — a Video URL node's PAGE link (never its downloaded file) or a
+   *  text node's text. Cited on the recipe, never fetched. */
+  sourceLink?: string
 }
 
 // ---------------------------------------------------------------------------

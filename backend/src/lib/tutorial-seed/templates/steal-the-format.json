@@ -1,0 +1,351 @@
+{
+  "slug": "steal-the-format",
+  "name": "Steal the Format",
+  "description": "Paste a post that worked and a few lines about your brand; get five post ideas built on the same format, each with a short script. The structure is borrowed, never the words, footage, music, faces or logos.",
+  "markdownDescription": "## Steal the Format\n\nPaste a post that worked and a few lines about your brand, and get five post ideas built on the same format, each with a short script. The ideas borrow the post's structure (its format, hook mechanic, beat order and pacing), never its words, footage, music, faces or logos.\n\n1. **Post link**: a TikTok, Reels, Shorts or YouTube link. Paste it into the Video URL node and run once its download has finished.\n2. **Your brand**: what you sell, who it is for, your tone, and what you never do.\n3. **Video Analysis**: reads the post, its timings, words, on-screen text and sound.\n4. **Content Recipe**: explains why the post works, from the hook and the format to the beats, the call to action and the pace.\n5. **Content Ideas**: five ideas for your brand on the same structure.\n6. **Scripts**: one short script per idea. The workflow ends at the scripts.",
+  "category": "social-creatives",
+  "outputTypes": [
+    "text"
+  ],
+  "tags": [
+    "social",
+    "short-form",
+    "content-ideas",
+    "hooks",
+    "scripts",
+    "tiktok",
+    "reels"
+  ],
+  "complexity": "intermediate",
+  "estimatedCredits": 282,
+  "nodeTypesUsed": [
+    "youtube-video",
+    "text-prompt",
+    "video-analysis",
+    "content-recipe",
+    "content-ideas",
+    "generate-script",
+    "sticky-note"
+  ],
+  "providersUsed": [
+    "gemini-3.1-pro",
+    "gemini-3.6-flash"
+  ],
+  "previewMediaUrl": null,
+  "previewMediaType": null,
+  "tutorialCategorySlug": "workflows",
+  "tutorialSortOrder": 45,
+  "nodes": [
+    {
+      "id": "note-intro",
+      "type": "sticky-note",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "data": {
+        "bold": false,
+        "color": "#26221a",
+        "italic": false,
+        "fontSize": "xl",
+        "alignment": "left",
+        "textColor": "#ffffff",
+        "label": "How it works",
+        "title": "Steal the format: how it works",
+        "text": "Paste the link of a post that worked and a few lines about your brand. You get five post ideas built on the same format, each with a short script.\n\n1. Post link: a TikTok, Reels, Shorts or YouTube link. Paste it into the Video URL node and run once its download has finished.\n2. Your brand: what you sell, who it is for, your tone, and what you never do.\n3. Video Analysis: reads the post, its timings, words, on-screen text and sound.\n4. Content Recipe: explains why the post works, from the hook and the format to the beats, the call to action and the pace.\n5. Content Ideas: five ideas for your brand that reuse the structure. Never the words, footage, music, faces or logos.\n6. Scripts: one short script per idea. The workflow ends here.",
+        "width": 1180,
+        "height": 650
+      }
+    },
+    {
+      "id": "note-post",
+      "type": "sticky-note",
+      "position": {
+        "x": 0,
+        "y": 810
+      },
+      "data": {
+        "bold": false,
+        "color": "#26221a",
+        "italic": false,
+        "fontSize": "xl",
+        "alignment": "left",
+        "textColor": "#ffffff",
+        "label": "Step 1",
+        "title": "1 · Post link",
+        "text": "Paste the link of one post that performed: TikTok, Instagram Reels, YouTube Shorts or YouTube. The Video URL node downloads the post as soon as the link lands; run the workflow once the download has finished. Posts up to three minutes keep the analysis at its lowest prices.",
+        "width": 640,
+        "height": 270
+      }
+    },
+    {
+      "id": "note-brand",
+      "type": "sticky-note",
+      "position": {
+        "x": 0,
+        "y": 1530
+      },
+      "data": {
+        "bold": false,
+        "color": "#26221a",
+        "italic": false,
+        "fontSize": "xl",
+        "alignment": "left",
+        "textColor": "#ffffff",
+        "label": "Step 2",
+        "title": "2 · Your brand",
+        "text": "A few plain lines: what you sell, who it is for, your tone, an offer, and what the brand never does. The ideas are only as specific as this text, and they are written in its language.",
+        "width": 640,
+        "height": 270
+      }
+    },
+    {
+      "id": "note-analysis",
+      "type": "sticky-note",
+      "position": {
+        "x": 1540,
+        "y": 810
+      },
+      "data": {
+        "bold": false,
+        "color": "#26221a",
+        "italic": false,
+        "fontSize": "xl",
+        "alignment": "left",
+        "textColor": "#ffffff",
+        "label": "Step 3",
+        "title": "3 · Video Analysis",
+        "text": "Watches the post and writes down what happens and when: the scenes, every spoken word, the on-screen text and the sound. Priced by the post's length.",
+        "width": 640,
+        "height": 270
+      }
+    },
+    {
+      "id": "note-recipe",
+      "type": "sticky-note",
+      "position": {
+        "x": 2260,
+        "y": 810
+      },
+      "data": {
+        "bold": false,
+        "color": "#26221a",
+        "italic": false,
+        "fontSize": "xl",
+        "alignment": "left",
+        "textColor": "#ffffff",
+        "label": "Step 4",
+        "title": "4 · Content Recipe",
+        "text": "Turns the analysis into a recipe: the hook in the first three seconds and why it stops the scroll, the format, the beats, why it works, the call to action, the sound and the pace. The post's link rides along, so every idea points back to it.",
+        "width": 640,
+        "height": 270
+      }
+    },
+    {
+      "id": "note-ideas",
+      "type": "sticky-note",
+      "position": {
+        "x": 2980,
+        "y": 810
+      },
+      "data": {
+        "bold": false,
+        "color": "#26221a",
+        "italic": false,
+        "fontSize": "xl",
+        "alignment": "left",
+        "textColor": "#ffffff",
+        "label": "Step 5",
+        "title": "5 · Content Ideas",
+        "text": "Five ideas for your brand on the same structure: format, hook mechanic, beat order and pacing. Never the original's words, footage, music, faces or brand marks. Set 1 to 10 ideas in its settings; six or more cost a second batch.",
+        "width": 640,
+        "height": 270
+      }
+    },
+    {
+      "id": "note-scripts",
+      "type": "sticky-note",
+      "position": {
+        "x": 3700,
+        "y": 810
+      },
+      "data": {
+        "bold": false,
+        "color": "#26221a",
+        "italic": false,
+        "fontSize": "xl",
+        "alignment": "left",
+        "textColor": "#ffffff",
+        "label": "Step 6",
+        "title": "6 · Scripts",
+        "text": "Runs once per idea: one short script each, scene by scene, with the spoken lines and what to show. The workflow stops at the scripts. Film them, or wire them into your video nodes.",
+        "width": 640,
+        "height": 270
+      }
+    },
+    {
+      "id": "post",
+      "type": "youtube-video",
+      "position": {
+        "x": 700,
+        "y": 810
+      },
+      "data": {
+        "label": "Post link",
+        "youtubeUrl": "",
+        "videoId": "",
+        "title": "",
+        "thumbnailUrl": ""
+      }
+    },
+    {
+      "id": "brand",
+      "type": "text-prompt",
+      "position": {
+        "x": 700,
+        "y": 1530
+      },
+      "data": {
+        "label": "Your brand",
+        "text": "Brand: QUILLO, a two-person ceramics studio selling hand-thrown mugs online. Product: the Quillo mug, speckled glaze, 350 ml, dishwasher-safe, every one slightly different. Audience: people who make their morning coffee a small ritual, 25 to 40, often working from home. Tone: warm, a little dry, never salesy. Offer: free shipping on two mugs. Never: countdown timers, fake urgency, or making fun of other brands.",
+        "width": 420,
+        "height": 260,
+        "variables": {}
+      }
+    },
+    {
+      "id": "analysis",
+      "type": "video-analysis",
+      "position": {
+        "x": 1540,
+        "y": 1280
+      },
+      "data": {
+        "label": "Video Analysis",
+        "analysisFocus": "",
+        "executionStatus": "idle"
+      },
+      "width": 480,
+      "height": 600,
+      "className": "rf-resized"
+    },
+    {
+      "id": "recipe",
+      "type": "content-recipe",
+      "position": {
+        "x": 2260,
+        "y": 1280
+      },
+      "data": {
+        "label": "Content Recipe",
+        "llmModel": "gemini-3.6-flash",
+        "focus": "",
+        "sourceUrl": "",
+        "fieldMappings": {},
+        "executionStatus": "idle"
+      },
+      "width": 480,
+      "height": 600,
+      "className": "rf-resized"
+    },
+    {
+      "id": "ideas",
+      "type": "content-ideas",
+      "position": {
+        "x": 2980,
+        "y": 1280
+      },
+      "data": {
+        "label": "Content Ideas",
+        "llmModel": "gemini-3.6-flash",
+        "brand": "",
+        "count": 5,
+        "language": "",
+        "fieldMappings": {},
+        "executionStatus": "idle"
+      },
+      "width": 480,
+      "height": 600,
+      "className": "rf-resized"
+    },
+    {
+      "id": "script",
+      "type": "generate-script",
+      "position": {
+        "x": 3700,
+        "y": 1280
+      },
+      "data": {
+        "label": "Script",
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "llmModel": "gemini-3.6-flash",
+        "sceneCount": 5,
+        "styleGuide": "Short vertical social video (9:16). Open on the idea's hook in the first second. Keep the idea's beat order. Spoken lines short and natural; on-screen text where the idea calls for it.",
+        "structure": "freeform",
+        "tone": "",
+        "targetLength": 30,
+        "fieldMappings": {}
+      },
+      "width": 480,
+      "height": 600,
+      "className": "rf-resized"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-post-analysis",
+      "source": "post",
+      "target": "analysis",
+      "sourceHandle": "video",
+      "targetHandle": "video"
+    },
+    {
+      "id": "e-post-recipe",
+      "source": "post",
+      "target": "recipe",
+      "sourceHandle": "video",
+      "targetHandle": "link"
+    },
+    {
+      "id": "e-analysis-recipe",
+      "source": "analysis",
+      "target": "recipe",
+      "sourceHandle": "json",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-recipe-ideas",
+      "source": "recipe",
+      "target": "ideas",
+      "sourceHandle": "text",
+      "targetHandle": "recipes"
+    },
+    {
+      "id": "e-brand-ideas",
+      "source": "brand",
+      "target": "ideas",
+      "sourceHandle": "prompt",
+      "targetHandle": "field-brand"
+    },
+    {
+      "id": "e-ideas-script",
+      "source": "ideas",
+      "target": "script",
+      "sourceHandle": "ideas",
+      "targetHandle": "prompt"
+    }
+  ],
+  "settings": {
+    "viewport": {
+      "x": 80,
+      "y": 60,
+      "zoom": 0.3
+    },
+    "flowPromptTemplates": {},
+    "characterDefinitions": [],
+    "presentationSettings": {
+      "runTarget": "workflow"
+    }
+  }
+}

@@ -786,6 +786,22 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   // normalizeEdl would treat `[edl]` as an EDL with no sources/segments →
   // validate 400. Emit the FIRST clip (one valid EDL), or nothing when empty.
   // Mirrors the backend getPrimaryOutput edit-plan branch.
+  // Content Recipe: `json` → the recipe object, stringified; `text` / no
+  // handle → the readable recipe. Mirrors the backend getPrimaryOutput branch
+  // (TEXT_SOURCE_TYPES + its json-handle case).
+  if (type === "content-recipe") {
+    const d = node.data as { generatedJson?: unknown; generatedText?: string };
+    if (sourceHandle === "json") return d.generatedJson === undefined ? undefined : JSON.stringify(d.generatedJson);
+    return d.generatedText?.trim() ? d.generatedText : undefined;
+  }
+  // Content Ideas: the SCALAR value is the digest of every idea. The per-idea
+  // briefs a fan-out runs on come from extractNodeOutputAsList (ideaBriefs).
+  if (type === "content-ideas") {
+    const d = node.data as { generatedText?: string; ideaBriefs?: unknown };
+    if (d.generatedText?.trim()) return d.generatedText;
+    const briefs = Array.isArray(d.ideaBriefs) ? d.ideaBriefs.filter((b): b is string => typeof b === "string" && b.trim() !== "") : [];
+    return briefs.length > 0 ? briefs.join("\n\n") : undefined;
+  }
   if (type === "edit-plan") {
     const d = node.data as { generatedJson?: unknown };
     const plan = d.generatedJson;
@@ -1174,6 +1190,10 @@ export function detectPreviewItemType(
   if (nodeType === "audio-sync") return "data"
   // edit-plan emits an EDL plan (json), never a media URL — classify as data.
   if (nodeType === "edit-plan") return "data"
+  // Content Recipe's `json` handle is the recipe object; its `text` handle
+  // and Content Ideas are readable text.
+  if (nodeType === "content-recipe") return sourceHandle === "json" ? "data" : "text"
+  if (nodeType === "content-ideas") return "text"
   // apply-edl `json` handle = the remapped Transcript (data). Its media handle
   // falls through to the URL regex below (mp4 → video, m4a → audio).
   if (nodeType === "apply-edl" && sourceHandle === "json") return "data"

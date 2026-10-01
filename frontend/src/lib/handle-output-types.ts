@@ -168,4 +168,6 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "instagram-scrape": { json: "look", text: "text", image: "image", video: "video" },
   "webhook-output": { out: "approve" },
   "youtube-video": { video: "video" },
+  "content-recipe": { json: "look", text: "text" },
+  "content-ideas": { ideas: "list" },
 }

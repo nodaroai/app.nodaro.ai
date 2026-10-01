@@ -111,6 +111,8 @@ import { LLMChatNode } from "./llm-chat-node";
 import { CombineVideosNode } from "./combine-videos-node";
 import { ApplyEdlNode } from "./apply-edl-node";
 import { EditPlanNode } from "./edit-plan-node";
+import { ContentRecipeNode } from "./content-recipe-node";
+import { ContentIdeasNode } from "./content-ideas-node";
 import { ImageCollageNode } from "./image-collage-node";
 import { ImageOverlayNode } from "./image-overlay-node";
 import { VideoOverlayNode } from "./video-overlay-node";
@@ -324,6 +326,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "combine-videos": CombineVideosNode,
   "apply-edl": ApplyEdlNode,
   "edit-plan": EditPlanNode,
+  "content-recipe": ContentRecipeNode,
+  "content-ideas": ContentIdeasNode,
   "image-collage": ImageCollageNode,
   "image-overlay": ImageOverlayNode,
   "video-overlay": VideoOverlayNode,

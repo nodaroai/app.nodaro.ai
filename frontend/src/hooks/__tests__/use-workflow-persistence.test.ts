@@ -1907,3 +1907,41 @@ describe("syncNodeResultsFromDB — a Video Overlay single-node Run that finishe
     expect(videoOverlayResultFresh("K1", results[0])).toBe(true)
   })
 })
+
+// Content Recipe / Content Ideas on both load-time lanes: the live run's own
+// mapping (lib/content-run-output.ts) — the briefs on ideaBriefs, never on
+// __listResults (which would clone the node) or generatedResults.
+describe("Content Recipe / Content Ideas — both load-time lanes", () => {
+  const ideasNode = () => [{ id: "ideas", type: "content-ideas", position: { x: 0, y: 0 }, data: { label: "Content Ideas" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+  const state = {
+    status: "completed" as const,
+    output: { json: [{ title: "one" }], text: "CONTENT IDEAS (1)", listResults: ["IDEA 1 of 1: one"] },
+  }
+
+  it("applyCompletedExecutionResults (a run that finished while the editor was closed)", () => {
+    const [out] = applyCompletedExecutionResults(ideasNode(), { ideas: state }, null)
+    const data = out!.data as Record<string, unknown>
+    expect(data).toMatchObject({ executionStatus: "completed", generatedJson: [{ title: "one" }], ideaBriefs: ["IDEA 1 of 1: one"], generatedText: "CONTENT IDEAS (1)" })
+    expect(data.__listResults).toBeUndefined()
+    expect(data.generatedResults).toBeUndefined()
+  })
+
+  it("applyCompletedExecutionResults leaves a node that already holds a result alone", () => {
+    const nodes = [{ id: "ideas", type: "content-ideas", position: { x: 0, y: 0 }, data: { label: "Content Ideas", generatedText: "mine" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+    const [out] = applyCompletedExecutionResults(nodes, { ideas: state }, null)
+    expect((out!.data as Record<string, unknown>).generatedText).toBe("mine")
+  })
+
+  it("applyBackendExecutionState (a reload while the run is still active)", () => {
+    const [out] = applyBackendExecutionState(ideasNode(), { ideas: state })
+    const data = out!.data as Record<string, unknown>
+    expect(data.ideaBriefs).toEqual(["IDEA 1 of 1: one"])
+    expect(data.__listResults).toBeUndefined()
+  })
+
+  it("a recipe lands as its object and its text", () => {
+    const nodes = [{ id: "recipe", type: "content-recipe", position: { x: 0, y: 0 }, data: { label: "Content Recipe" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+    const [out] = applyCompletedExecutionResults(nodes, { recipe: { status: "completed", output: { json: { version: 1 }, text: "CONTENT RECIPE: t" } } }, null)
+    expect(out!.data).toMatchObject({ generatedJson: { version: 1 }, generatedText: "CONTENT RECIPE: t" })
+  })
+})
