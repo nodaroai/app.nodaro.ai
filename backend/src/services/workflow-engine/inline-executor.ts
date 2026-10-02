@@ -10,6 +10,7 @@ export type { FilterListCondition }
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeOutput, NodeExecutionState, OrchestratorContext } from "./types.js"
 import { getPrimaryOutput, extractSourceNodeOutput } from "./output-extractor.js"
 import { getNodeOutput } from "./input-resolver.js"
+import { savedDataAllowed } from "./saved-data.js"
 import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
 import { supabase } from "../../lib/supabase.js"
 import { insertInternalJob } from "../../lib/insert-job.js"
@@ -172,7 +173,7 @@ export function executeExtractField(
     const spread = spreadJsonArrayIfSingleton(state.output.listResults)
     value = spread.map((item) => tryParseJson(item))
   } else {
-    const text = state?.output?.text ?? extractSavedTextFallback(src)
+    const text = state?.output?.text ?? (savedDataAllowed(state) ? extractSavedTextFallback(src) : undefined)
     if (typeof text !== "string" || text.length === 0) {
       return { extractedText: "", text: "", listResults: [] }
     }
@@ -231,7 +232,7 @@ export function executeJsonProcess(
   if (state?.output?.json !== undefined) {
     input = state.output.json
   } else {
-    const text = state?.output?.text ?? extractSavedTextFallback(src)
+    const text = state?.output?.text ?? (savedDataAllowed(state) ? extractSavedTextFallback(src) : undefined)
     if (typeof text !== "string" || text.length === 0) {
       return { text: "", processedResult: null, listResults: [] }
     }

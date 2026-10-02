@@ -45,6 +45,7 @@ import { resolveNodeInputs, getListInputForNode, getListFanOutForNode } from "..
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
 import { extractSourceNodeOutput, extractSavedNodeOutput } from "../services/workflow-engine/output-extractor.js"
+import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
 import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { labelRefHintContext } from "../services/workflow-engine/label-ref-hint-context.js"
 import {
@@ -870,20 +871,10 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         // executable filter excludes it (status === "completed"), and the
         // render-video payload reads output.plan FIRST (payload-builder §render-video),
         // so the frozen plan — not a re-roll — drives the render.
-        nodeStates[node.id] = {
-          status: "completed",
-          output: { plan: node.data.motionPlan as Record<string, unknown> },
-          completedAt: new Date().toISOString(),
-        }
+        nodeStates[node.id] = seededFromSavedData({ plan: node.data.motionPlan as Record<string, unknown> })
       } else if (isSourceNode(node.type)) {
         const output = extractSourceNodeOutput(node, triggerData)
-        if (output) {
-          nodeStates[node.id] = {
-            status: "completed",
-            output,
-            completedAt: new Date().toISOString(),
-          }
-        }
+        if (output) nodeStates[node.id] = seededFromSavedData(output)
       } else if (node.type && PARAMETER_NODE_TYPES.has(node.type)) {
         // Parameter pickers (mood, action-fx, loop-subject, person, etc.) emit
         // a prompt fragment via FieldMappings — they never make API calls and
@@ -895,29 +886,15 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         // Graph-composed pickers (labelRefHintContext) get the run graph, so
         // that text matches the editor (wired names, minor-age floor).
         const hint = getParameterPromptHint(node, labelRefHintContext(node, nodes, edges))
-        nodeStates[node.id] = {
-          status: "completed",
-          output: hint ? { text: hint } : {},
-          completedAt: new Date().toISOString(),
-        }
+        nodeStates[node.id] = seededFromSavedData(hint ? { text: hint } : {})
       } else if (skippedIds.has(node.id)) {
         // Skipped = frozen: don't re-execute, but preserve saved output
         // so downstream nodes can still resolve inputs from this node.
-        const output = extractSavedNodeOutput(node) ?? extractSourceNodeOutput(node, triggerData)
-        nodeStates[node.id] = {
-          status: "completed",
-          output: output ?? undefined,
-          completedAt: new Date().toISOString(),
-        }
+        nodeStates[node.id] = seededFromSavedData(extractSavedNodeOutput(node) ?? extractSourceNodeOutput(node, triggerData))
       } else if (nodeSubset && !nodeSubset.has(node.id)) {
         // Node is outside the requested subset — treat as pre-completed
         // so downstream nodes can resolve inputs from its saved data.
-        const output = extractSavedNodeOutput(node) ?? extractSourceNodeOutput(node, triggerData)
-        nodeStates[node.id] = {
-          status: "completed",
-          output: output ?? undefined,
-          completedAt: new Date().toISOString(),
-        }
+        nodeStates[node.id] = seededFromSavedData(extractSavedNodeOutput(node) ?? extractSourceNodeOutput(node, triggerData))
       }
     }
 
@@ -936,7 +913,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // Compute nodes downstream of upload-* nodes — their jobs should be force_private
     ctx.uploadDescendantIds = getUploadDescendantIds(nodes, edges)
 
-    // Initialize all executable nodes as "pending" so they appear in the UI immediately
+    // Every executable node is marked "pending" (below, after the fan-out
+    // pre-scan) so it appears in the UI immediately.
     const executableNodes = nodes.filter((n) => {
       if (isSourceNode(n.type)) return false
       if (isSkipNode(n.type)) return false
@@ -951,19 +929,15 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       return true
     })
 
-    for (const node of executableNodes) {
-      if (!nodeStates[node.id]) {
-        nodeStates[node.id] = {
-          status: "pending",
-          nodeType: node.type,
-        }
-      }
-    }
-
     // 5b. Pre-scan for fan-out to get accurate initial total_nodes.
     //     Source node outputs are already in nodeStates, so direct fan-out
     //     from list/loop nodes can be detected. Transitive fan-out (through
     //     text-prompts) is also detected since getListInputForNode handles it.
+    //     It runs BEFORE the executable nodes are marked pending: a node that
+    //     has not run yet has no state here, so its saved list sizes the
+    //     estimate (saved-data.ts) — an estimate is all this count is. Marked
+    //     pending first, every such node would count once and the progress
+    //     would overshoot its total.
     let totalExecutions = executableNodes.length
     for (const node of executableNodes) {
       const listItems = getListInputForNode(
@@ -994,6 +968,15 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         totalExecutions += expandedCount - 1
       } else if (repeatCount > 1) {
         totalExecutions += repeatCount - 1
+      }
+    }
+
+    for (const node of executableNodes) {
+      if (!nodeStates[node.id]) {
+        nodeStates[node.id] = {
+          status: "pending",
+          nodeType: node.type,
+        }
       }
     }
 

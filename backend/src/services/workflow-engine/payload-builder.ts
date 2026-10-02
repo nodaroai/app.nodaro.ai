@@ -39,7 +39,8 @@ import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-m
 import { buildEffectiveEdl, validateEffectiveEdl } from "../../lib/apply-edl-plan.js"
 import { audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES } from "../../providers/audio/audio-sync-budget.js"
-import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
+import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput, savedOutputFor } from "./output-extractor.js"
+import { savedDataAllowed } from "./saved-data.js"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
@@ -561,12 +562,12 @@ function keepSeedance2MentionsAsRefs(
 // Ancestor reference image collection — delegates to shared implementation
 // ---------------------------------------------------------------------------
 
-/** Get image URL from execution state, falling back to saved node data (matches frontend). */
+/** Get image URL from execution state, falling back to saved node data (matches frontend) — only for a node this run did not run or gate. */
 function getNodeImageUrl(
   node: SimpleNode,
   nodeStates: Record<string, NodeExecutionState>,
 ): string | undefined {
-  return nodeStates[node.id]?.output?.imageUrl ?? extractSavedNodeOutput(node)?.imageUrl
+  return nodeStates[node.id]?.output?.imageUrl ?? savedOutputFor(node, nodeStates[node.id])?.imageUrl
 }
 
 function collectAncestorRefs(
@@ -1799,7 +1800,8 @@ function extractListItems(
   if (node.type === "split-text") {
     const state = states[node.id]
     if (state?.output?.splitResults) return state.output.splitResults
-    return (data.splitResults as string[] | undefined) ?? []
+    // A Split Text this run ran or gated never hands over its saved split.
+    return (savedDataAllowed(state) ? (data.splitResults as string[] | undefined) : undefined) ?? []
   }
   return []
 }
@@ -1919,7 +1921,8 @@ export function buildNodeRefMap(
         // editor passes it there; every other type stays context-free.
         output = getParameterPromptHint(node, labelRefHintContext(node, nodes, edges)) || undefined
       } else {
-        const saved = extractSavedNodeOutput(node)
+        // A node this run ran or gated has no saved stand-in (saved-data.ts).
+        const saved = savedOutputFor(node, state)
         if (saved) {
           output = saved.text ?? saved.imageUrl ?? saved.videoUrl ?? saved.audioUrl
             ?? (saved.json !== undefined && saved.json !== null ? JSON.stringify(saved.json) : undefined)
@@ -7099,7 +7102,8 @@ function scene3DGraphReferences(
     if (edge.target !== node.id || edge.targetHandle !== "references" || seen.has(edge.source)) continue
     const source = ctx?.nodes?.find((candidate) => candidate.id === edge.source)
     if (!source) continue
-    const output = ctx?.nodeStates?.[source.id]?.output ?? extractSourceNodeOutput(source) ?? extractSavedNodeOutput(source)
+    const sourceState = ctx?.nodeStates?.[source.id]
+    const output = sourceState?.output ?? (savedDataAllowed(sourceState) ? (extractSourceNodeOutput(source) ?? extractSavedNodeOutput(source)) : undefined)
     const url = output ? getPrimaryOutput(output, source.type, edge.sourceHandle) : undefined
     if (!url || !/^https?:\/\//.test(url)) continue
     seen.add(source.id)

@@ -202,6 +202,11 @@ export interface NodeExecutionState {
    *  while a child is legitimately under review. Cleared when the job leaves
    *  review. */
   awaitingReview?: boolean
+  /** The run built this state from the node's saved data (or its own config)
+   *  instead of running it: a source or parameter node, a node frozen with
+   *  Skip, a node outside a partial run's subset. Only then may a reader fall
+   *  back to the node's saved results — see `saved-data.ts`. */
+  fromSavedData?: true
 }
 
 /**

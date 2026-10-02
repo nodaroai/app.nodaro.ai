@@ -22,7 +22,7 @@ describe("Backend parity — group/collect", () => {
       { id: "t1", type: "text-prompt", data: { text: "hello" }, parentId: "g" },
       { id: "t2", type: "text-prompt", data: { text: "world" }, parentId: "g" },
     ]
-    const result = extractSourceNodeOutputAsList(nodes[0], undefined, "out-text", { nodes, edges: [] })
+    const result = extractSourceNodeOutputAsList(nodes[0], undefined, "out-text", { nodes, edges: [], nodeStates: {} })
     expect(result).toEqual(["hello", "world"])
   })
 
@@ -36,7 +36,7 @@ describe("Backend parity — group/collect", () => {
       { id: "e1", source: "t1", target: "c", targetHandle: "in" },
       { id: "e2", source: "t2", target: "c", targetHandle: "in" },
     ]
-    const result = extractSourceNodeOutputAsList(nodes[0], undefined, "out-text", { nodes, edges })
+    const result = extractSourceNodeOutputAsList(nodes[0], undefined, "out-text", { nodes, edges, nodeStates: {} })
     expect(result).toEqual(["second", "first"])
   })
 
@@ -45,7 +45,7 @@ describe("Backend parity — group/collect", () => {
       { id: "g", type: "group", data: {} },
       { id: "t1", type: "text-prompt", data: { text: "first" }, parentId: "g" },
     ]
-    const result = extractSourceNodeOutput(nodes[0], undefined, "out-text", { nodes, edges: [] })
+    const result = extractSourceNodeOutput(nodes[0], undefined, "out-text", { nodes, edges: [], nodeStates: {} })
     expect(result).toEqual({ text: "first" })
   })
 })

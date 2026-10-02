@@ -23,6 +23,7 @@ import {
 import { resolveNodeInputs } from "./input-resolver.js"
 import { normalizeLegacyNodeTypes } from "./normalize-node-types.js"
 import { extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
+import { seededFromSavedData } from "./saved-data.js"
 import { executeNode } from "./node-executor.js"
 import { labelRefHintContext } from "./label-ref-hint-context.js"
 import type {
@@ -366,13 +367,7 @@ export async function executeSubWorkflow(
       }
     } else if (isSourceNode(subNode.type)) {
       const sourceOutput = extractSourceNodeOutput(subNode)
-      if (sourceOutput) {
-        nodeStates[subNode.id] = {
-          status: "completed",
-          output: sourceOutput,
-          completedAt: new Date().toISOString(),
-        }
-      }
+      if (sourceOutput) nodeStates[subNode.id] = seededFromSavedData(sourceOutput)
     } else if (subNode.type && PARAMETER_NODE_TYPES.has(subNode.type)) {
       // Parameter pickers (mood, action-fx, lens, person, etc.) emit a prompt
       // fragment via FieldMappings — they have no executable handler. Mirror the
@@ -381,11 +376,7 @@ export async function executeSubWorkflow(
       // type" → fail the whole sub-workflow), while still exposing their hint.
       // Graph-composed pickers get the SUB-graph (labelRefHintContext).
       const hint = getParameterPromptHint(subNode, labelRefHintContext(subNode, subNodes, subEdges))
-      nodeStates[subNode.id] = {
-        status: "completed",
-        output: hint ? { text: hint } : {},
-        completedAt: new Date().toISOString(),
-      }
+      nodeStates[subNode.id] = seededFromSavedData(hint ? { text: hint } : {})
     }
   }
 
@@ -393,8 +384,13 @@ export async function executeSubWorkflow(
   const levels = buildExecutionLevels(subNodes, subEdges)
   const skippedIds = getEffectivelySkippedIds(subNodes, subEdges)
 
+  // Skipped by the person = frozen: no run, and its saved results may still
+  // stand in for it downstream. Unlike the main run's frozen seed, this state
+  // carries no output: a reader that falls back through `savedDataAllowed`
+  // gets the saved results, one that reads only `state.output` (some media
+  // inputs) gets nothing — an older divergence, left as it was here.
   for (const nodeId of skippedIds) {
-    nodeStates[nodeId] = { status: "skipped", completedAt: new Date().toISOString() }
+    nodeStates[nodeId] = { status: "skipped", completedAt: new Date().toISOString(), fromSavedData: true }
   }
 
   // Execute level by level

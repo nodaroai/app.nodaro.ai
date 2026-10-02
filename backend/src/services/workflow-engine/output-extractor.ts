@@ -7,7 +7,8 @@
  * 2. Node `data` fields (for source nodes like text-prompt, upload-*)
  */
 
-import type { SimpleNode, SimpleEdge, NodeOutput } from "./types.js"
+import type { SimpleNode, SimpleEdge, NodeOutput, NodeExecutionState } from "./types.js"
+import { savedDataAllowed } from "./saved-data.js"
 import {
   IMAGE_SOURCE_TYPES,
   VIDEO_SOURCE_TYPES,
@@ -26,12 +27,17 @@ export { extractAllGeneratedResults }
  * outputs. Group buckets read members from `nodes` filtered by `parentId`;
  * Collect buckets read members from incoming `edges` (sorted by data.order).
  *
- * Always optional — callers that don't have access pass `undefined`, in
- * which case the group/collect cases return `undefined` / `[]`.
+ * The context itself is optional — callers that don't have access pass
+ * `undefined`, in which case the group/collect cases return `undefined` / `[]`.
+ * Its `nodeStates` is not: a context without them would read every member's
+ * saved data, so a caller outside a run passes `{}` on purpose.
  */
 export interface ExtractContext {
   nodes: SimpleNode[]
   edges: SimpleEdge[]
+  /** This run's node states: a Group / Collect member that ran or was gated
+   *  is read from here, never from its saved data (saved-data.ts). */
+  nodeStates: Record<string, NodeExecutionState>
 }
 
 /**
@@ -48,13 +54,14 @@ export interface ExtractContext {
 function computeBackendGroupBuckets(
   group: SimpleNode,
   allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
 ): AggregationBuckets {
   const children = allNodes.filter((n) => n.parentId === group.id)
   const members: Member[] = []
   for (const child of children) {
     const t = getOutputType(child.type)
     if (!isAggregateableType(t)) continue
-    const out = extractPrimaryNodeOutput(child)
+    const out = memberOutput(child, nodeStates)
     if (!out) continue
     const val = out.text ?? out.imageUrl ?? out.videoUrl ?? out.audioUrl
     if (!val) continue
@@ -73,6 +80,7 @@ function computeBackendCollectBuckets(
   collect: SimpleNode,
   allNodes: SimpleNode[],
   edges: SimpleEdge[],
+  nodeStates: Record<string, NodeExecutionState>,
 ): AggregationBuckets {
   const incoming = edges.filter(
     (e) => e.target === collect.id && isCollectInEdge(e),
@@ -88,7 +96,7 @@ function computeBackendCollectBuckets(
     if (!src) continue
     const t = getOutputType(src.type)
     if (!isAggregateableType(t)) continue
-    const out = extractPrimaryNodeOutput(src)
+    const out = memberOutput(src, nodeStates)
     if (!out) continue
     const val = out.text ?? out.imageUrl ?? out.videoUrl ?? out.audioUrl
     if (!val) continue
@@ -110,6 +118,18 @@ function computeBackendCollectBuckets(
  */
 function extractPrimaryNodeOutput(node: SimpleNode): NodeOutput | undefined {
   return extractSourceNodeOutput(node) ?? extractSavedNodeOutput(node)
+}
+
+/** A Group / Collect member's value in this run: its state's output, else (only when allowed) its saved one. */
+function memberOutput(node: SimpleNode, nodeStates: Record<string, NodeExecutionState>): NodeOutput | undefined {
+  const state = nodeStates[node.id]
+  if (state?.output) return state.output
+  return savedDataAllowed(state) ? extractPrimaryNodeOutput(node) : undefined
+}
+
+/** The node's saved output, unless this run ran or gated it (saved-data.ts). */
+export function savedOutputFor(node: SimpleNode, state: NodeExecutionState | undefined): NodeOutput | undefined {
+  return savedDataAllowed(state) ? extractSavedNodeOutput(node) : undefined
 }
 
 function processedResultToText(r: unknown): string | undefined {
@@ -236,8 +256,8 @@ export function extractSourceNodeOutput(
   if (type === "group" || type === "collect") {
     if (!context) return undefined
     const buckets = type === "group"
-      ? computeBackendGroupBuckets(node, context.nodes)
-      : computeBackendCollectBuckets(node, context.nodes, context.edges)
+      ? computeBackendGroupBuckets(node, context.nodes, context.nodeStates)
+      : computeBackendCollectBuckets(node, context.nodes, context.edges, context.nodeStates)
     const requestedType = parseGroupHandle(sourceHandle)
     if (!requestedType) return undefined
     const firstItem = buckets[requestedType][0]
@@ -434,8 +454,8 @@ export function extractSourceNodeOutputAsList(
   if (type === "group" || type === "collect") {
     if (!context) return undefined
     const buckets = type === "group"
-      ? computeBackendGroupBuckets(node, context.nodes)
-      : computeBackendCollectBuckets(node, context.nodes, context.edges)
+      ? computeBackendGroupBuckets(node, context.nodes, context.nodeStates)
+      : computeBackendCollectBuckets(node, context.nodes, context.edges, context.nodeStates)
     const requestedType = parseGroupHandle(sourceHandle)
     if (!requestedType) return undefined
     const items = buckets[requestedType]

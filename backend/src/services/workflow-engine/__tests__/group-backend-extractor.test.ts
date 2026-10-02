@@ -3,7 +3,7 @@
  *
  * The orchestrator-worker path (published-app runs, scheduled runs, webhook
  * triggers) resolves group/collect outputs by calling extractSourceNodeOutput
- * / extractSourceNodeOutputAsList with a context payload `{ nodes, edges }`.
+ * / extractSourceNodeOutputAsList with a context payload `{ nodes, edges, nodeStates: {} }`.
  * Without a context, group/collect return undefined — graceful no-op for
  * legacy callers that don't have graph access.
  */
@@ -24,7 +24,7 @@ describe("Backend extractor — group", () => {
       { id: "t2", type: "text-prompt", data: { text: "world" }, parentId: "g" },
     ]
     const edges: SimpleEdge[] = []
-    const result = extractSourceNodeOutputAsList(nodes[0], undefined, "out-text", { nodes, edges })
+    const result = extractSourceNodeOutputAsList(nodes[0], undefined, "out-text", { nodes, edges, nodeStates: {} })
     expect(result).toEqual(["hello", "world"])
   })
 
@@ -33,7 +33,7 @@ describe("Backend extractor — group", () => {
       { id: "g", type: "group", data: {} },
       { id: "t1", type: "text-prompt", data: { text: "hello" }, parentId: "g" },
     ]
-    const result = extractSourceNodeOutput(nodes[0], undefined, "out-text", { nodes, edges: [] })
+    const result = extractSourceNodeOutput(nodes[0], undefined, "out-text", { nodes, edges: [], nodeStates: {} })
     expect(result).toEqual({ text: "hello" })
   })
 
@@ -48,7 +48,7 @@ describe("Backend extractor — group", () => {
       { id: "g", type: "group", data: {} },
       { id: "t1", type: "text-prompt", data: { text: "hello" }, parentId: "g" },
     ]
-    expect(extractSourceNodeOutput(nodes[0], undefined, undefined, { nodes, edges: [] })).toBeUndefined()
+    expect(extractSourceNodeOutput(nodes[0], undefined, undefined, { nodes, edges: [], nodeStates: {} })).toBeUndefined()
   })
 
   it("returns undefined when bucket is empty for requested type", () => {
@@ -57,7 +57,7 @@ describe("Backend extractor — group", () => {
       { id: "t1", type: "text-prompt", data: { text: "hello" }, parentId: "g" },
     ]
     // Group has only text members; out-image returns nothing.
-    expect(extractSourceNodeOutput(nodes[0], undefined, "out-image", { nodes, edges: [] })).toBeUndefined()
+    expect(extractSourceNodeOutput(nodes[0], undefined, "out-image", { nodes, edges: [], nodeStates: {} })).toBeUndefined()
   })
 
   it("getPrimaryOutput on a group NodeOutput routes by sourceHandle", () => {
@@ -77,9 +77,9 @@ describe("Backend extractor — group", () => {
       { id: "p1", type: "mood", data: { mood: "happy" }, parentId: "g" },
       { id: "t1", type: "text-prompt", data: { text: "hello" }, parentId: "g" },
     ]
-    const result = extractSourceNodeOutputAsList(nodes[0], undefined, "out-text", { nodes, edges: [] })
+    const result = extractSourceNodeOutputAsList(nodes[0], undefined, "out-text", { nodes, edges: [], nodeStates: {} })
     expect(result).toBeUndefined() // single item — list semantics require >1
-    const scalar = extractSourceNodeOutput(nodes[0], undefined, "out-text", { nodes, edges: [] })
+    const scalar = extractSourceNodeOutput(nodes[0], undefined, "out-text", { nodes, edges: [], nodeStates: {} })
     expect(scalar).toEqual({ text: "hello" })
   })
 })
@@ -95,7 +95,7 @@ describe("Backend extractor — collect", () => {
       { id: "e1", source: "t1", target: "c", targetHandle: "in" },
       { id: "e2", source: "t2", target: "c", targetHandle: "in" },
     ]
-    const result = extractSourceNodeOutputAsList(nodes[0], undefined, "out-text", { nodes, edges })
+    const result = extractSourceNodeOutputAsList(nodes[0], undefined, "out-text", { nodes, edges, nodeStates: {} })
     expect(result).toEqual(["one", "two"])
   })
 
@@ -110,7 +110,7 @@ describe("Backend extractor — collect", () => {
       { id: "e1", source: "t1", target: "c", targetHandle: "in" },
       { id: "e2", source: "t2", target: "c", targetHandle: "in" },
     ]
-    const result = extractSourceNodeOutputAsList(nodes[0], undefined, "out-text", { nodes, edges })
+    const result = extractSourceNodeOutputAsList(nodes[0], undefined, "out-text", { nodes, edges, nodeStates: {} })
     expect(result).toEqual(["two", "one"])
   })
 
@@ -122,7 +122,7 @@ describe("Backend extractor — collect", () => {
     const edges: SimpleEdge[] = [
       { id: "e1", source: "t1", target: "c", targetHandle: "in" },
     ]
-    const result = extractSourceNodeOutput(nodes[0], undefined, "out-text", { nodes, edges })
+    const result = extractSourceNodeOutput(nodes[0], undefined, "out-text", { nodes, edges, nodeStates: {} })
     expect(result).toEqual({ text: "hello" })
   })
 
@@ -141,7 +141,7 @@ describe("Backend extractor — collect", () => {
     const edges: SimpleEdge[] = [
       { id: "e1", source: "t1", target: "c", targetHandle: "config" },
     ]
-    expect(extractSourceNodeOutput(nodes[0], undefined, "out-text", { nodes, edges })).toBeUndefined()
+    expect(extractSourceNodeOutput(nodes[0], undefined, "out-text", { nodes, edges, nodeStates: {} })).toBeUndefined()
   })
 
   it("getPrimaryOutput on a collect NodeOutput routes by sourceHandle", () => {
