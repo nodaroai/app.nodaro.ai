@@ -29,8 +29,9 @@ scene can later be re-cast onto your own characters, objects, or locations.
 
 ## Inputs & Outputs
 
-**Inputs:** Video (optional handle) — a wired upstream video, or a YouTube URL
-set in config.
+**Inputs:** Video (optional handle) — a wired upstream video, a post's link
+wired from a text output (for example the Telegram Account Trigger's **Video
+link**), or a YouTube URL set in config.
 **Outputs:** Analysis JSON (`meta` + `slots` + `scenes[]`) on the `json` output
 handle, and the same analysis as a plain string on the `text` output handle —
 wire `text` directly into any prompt/text input (for example Generate Video
@@ -46,16 +47,23 @@ original without you extracting or wiring a single frame.
 
 ### Source precedence
 
-You provide the source one of two ways:
+You provide the source one of three ways:
 
 - **Wired video** — connect any video producer to the node's video input.
+- **Wired link** — connect a text output that carries a post's link to the same
+  video input, for example the Telegram Account Trigger's **Video link** or a
+  Text node. The wire must carry just the link: a lone `http(s)` link is read,
+  any other text on that wire is ignored, and the node then asks for a video
+  or a link. A message that carries a video file (a Telegram bot trigger's
+  video message) is analyzed as the file.
 - **YouTube URL** — set `youtubeUrl` in the node config.
 
-**Precedence, not exactly-one:** a wired video input **always wins**. A stale
-`youtubeUrl` left in config alongside a wired video never rejects the run and is
-ignored — the wired video is analyzed. YouTube URLs must be `youtube.com` /
-`youtu.be` hosts; **live streams are rejected** (wait for the stream to end and
-the VOD to become available). Any source is capped at **10 minutes (600s)**.
+**Precedence, not exactly-one:** a wired video input **always wins**, then a
+wired link, then the link in config. A stale `youtubeUrl` left in config
+alongside a wired video or a wired link never rejects the run and is ignored.
+Links, typed or wired, must be `youtube.com` / `youtu.be` hosts; **live streams
+are rejected** (wait for the stream to end and the VOD to become available).
+Any source is capped at **10 minutes (600s)**.
 
 ## Configuration
 

@@ -16,7 +16,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
 import { useUpstreamVideoProbe } from "@/hooks/use-upstream-video-probe"
-import { ACCEPTS_VIDEO } from "@/lib/ffmpeg-handles"
+import { ACCEPTS_VIDEO_OR_POST_LINK } from "@/lib/video-analysis-handles"
 import { DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { buildVideoAnalysisCreditId, resolveVideoAnalysisModel } from "@nodaro/shared"
 import type { VideoAnalysisResult } from "@nodaro/shared"
@@ -203,7 +203,7 @@ function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="video-analysis" handleId="video" type="target" position={Position.Left}  label="Video"       color={HANDLE_COLORS.video}    icon={<Film />}   side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="video-analysis" handleId="video" type="target" position={Position.Left}  label="Video"       color={HANDLE_COLORS.video}    icon={<Film />}   side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO_OR_POST_LINK} />
       <HandleWithPopover nodeId={id} nodeType="video-analysis" handleId="json"  type="source" position={Position.Right} label={t("node.scenesJson")} color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="24px" />
       {/* Same payload as `json`, typed as TEXT — wires straight into prompt/
           text inputs (extractNodeOutput stringifies for both handles). */}

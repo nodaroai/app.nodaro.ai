@@ -8,6 +8,8 @@
  *   - Choose Best still folds every wire, whatever its handle;
  *   - Content Recipe's `link` wire carries a Video URL node's PAGE link, never
  *     the downloaded file;
+ *   - Video Analysis's `video` wire from a text output carries a post's link
+ *     to fetch, while a Video URL node there is still the downloaded file;
  *   - a finished Content Ideas node hands the next node one brief per idea.
  */
 import { describe, it, expect, vi } from "vitest"
@@ -93,6 +95,44 @@ describe("Content Recipe — the link wire carries the post's page link", () => 
     const text = node("T", "text-prompt", { text: "https://x.com/a/status/1" })
     const inputs = resolveNodeInputs(recipe, [text, recipe], [edge("T", "R", "prompt", "link")])
     expect(inputs.sourceLink).toBe("https://x.com/a/status/1")
+  })
+})
+
+describe("Video Analysis — a text output on the video input is the post to fetch", () => {
+  it("takes a text node's link as the post's link — not a file, not a prompt", () => {
+    const va = node("A", "video-analysis")
+    const text = node("T", "text-prompt", { text: " https://www.tiktok.com/@a/video/1 " })
+    const inputs = resolveNodeInputs(va, [text, va], [edge("T", "A", "prompt", "video")])
+    expect(inputs.videoPageUrl).toBe("https://www.tiktok.com/@a/video/1")
+    expect(inputs.videoUrl).toBeUndefined()
+    expect(inputs.prompt).toBeUndefined()
+  })
+
+  it("words that are not a link bring nothing", () => {
+    const va = node("A", "video-analysis")
+    const text = node("T", "text-prompt", { text: "Five things nobody tells you" })
+    const inputs = resolveNodeInputs(va, [text, va], [edge("T", "A", "prompt", "video")])
+    expect(inputs.videoPageUrl).toBeUndefined()
+    expect(inputs.prompt).toBeUndefined()
+  })
+
+  it("a link with words around it is not a link", () => {
+    const va = node("A", "video-analysis")
+    const text = node("T", "text-prompt", { text: "https://youtu.be/dQw4w9WgXcQ what a clip" })
+    const inputs = resolveNodeInputs(va, [text, va], [edge("T", "A", "prompt", "video")])
+    expect(inputs.videoPageUrl).toBeUndefined()
+  })
+
+  it("a Video URL node is still the downloaded file", () => {
+    const va = node("A", "video-analysis")
+    const clip = node("V", "youtube-video", {
+      youtubeUrl: "https://www.tiktok.com/@a/video/1",
+      downloadedVideoUrl: "https://r2.example/videos/v.mp4",
+      downloadedFromUrl: "https://www.tiktok.com/@a/video/1",
+    })
+    const inputs = resolveNodeInputs(va, [clip, va], [edge("V", "A", "video", "video")])
+    expect(inputs.videoUrl).toBe("https://r2.example/videos/v.mp4")
+    expect(inputs.videoPageUrl).toBeUndefined()
   })
 })
 

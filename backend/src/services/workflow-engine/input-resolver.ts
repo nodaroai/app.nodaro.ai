@@ -12,7 +12,7 @@ import type {
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, savedOutputFor, ANALYSIS_PRODUCER_TYPES, type ExtractContext } from "./output-extractor.js"
 import {
-  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl } from "@nodaro/shared"
+  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle } from "@nodaro/shared"
@@ -1530,6 +1530,27 @@ function routeOutput(
   if (targetType === "content-recipe" && edge.targetHandle === "link") {
     const link = srcType === "youtube-video" ? videoLinkPageUrl(src.data) : output
     if (typeof link === "string" && link.trim() !== "") inputs.sourceLink = link.trim()
+    return
+  }
+
+  // --- video-analysis `video` handle given a LINK: a text output (the
+  // Telegram Account Trigger's Video link, a Text node) carries a post's
+  // address, which the node fetches and analyzes — read like its own link
+  // field. Only a lone http(s) link is kept; any other text contributes
+  // nothing, so the node's own refusal names the missing source. A video or
+  // dynamic producer is not a link, and neither is a source whose output
+  // carries a video FILE (a bot trigger's video message): those fall through
+  // to the file routing below. Gated on the target type. Mirrors the frontend
+  // node-input-resolver. ---
+  if (
+    targetType === "video-analysis" &&
+    edge.targetHandle === "video" &&
+    !VIDEO_PRODUCER_TYPES.has(srcType) &&
+    !DYNAMIC_PRODUCER_TYPES.has(srcType) &&
+    !nodeStates[src.id]?.output?.videoUrl
+  ) {
+    const link = output.trim()
+    if (/^https?:\/\/\S+$/i.test(link)) inputs.videoPageUrl = link
     return
   }
 

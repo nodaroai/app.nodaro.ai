@@ -53,6 +53,7 @@ import {
   ACCEPTS_JSON,
 } from "./data-handles"
 import { isValidContentConnection } from "./content-handles"
+import { ACCEPTS_VIDEO_OR_POST_LINK } from "./video-analysis-handles"
 import {
   isValidEditImageConnection,
   isValidModifyImageConnection,
@@ -531,11 +532,11 @@ export function isValidWorkflowConnection(
       imageSourceType,
     )
   }
-  // Video Analysis — single `video` target accepts video producers. Inline
-  // ACCEPTS_VIDEO (same predicate the handle popover uses) so drag-to-connect
-  // and the source-direction popover agree.
+  // Video Analysis — single `video` target: a video file, or a post's link from
+  // a text output. The same predicate as the node pip and the handle popover,
+  // so drag-to-connect and the source-direction popover agree.
   if (targetType === "video-analysis" && connection.targetHandle === "video") {
-    return ACCEPTS_VIDEO(imageSourceType)
+    return ACCEPTS_VIDEO_OR_POST_LINK(imageSourceType)
   }
   // Content Recipe (`in` material, `link` source post) and Content Ideas
   // (`recipes`, `field-brand`) — the same predicates as the node pips and the

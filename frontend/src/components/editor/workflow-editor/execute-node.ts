@@ -3983,10 +3983,11 @@ function executeNodeCore(
 
   if (node.type === "video-analysis") {
     const d = node.data as VideoAnalysisNodeData;
-    // Source precedence mirrors the backend: a wired video wins; else the
-    // YouTube URL from node data. At least one must be present.
+    // Source precedence mirrors the backend: a wired video wins; else a post's
+    // link wired into the `video` handle; else the link in node data. At
+    // least one must be present.
     const videoUrl = inputs.videoUrl;
-    const youtubeUrl = d.youtubeUrl?.trim() || undefined;
+    const youtubeUrl = inputs.videoPageUrl ?? (d.youtubeUrl?.trim() || undefined);
     if (!videoUrl && !youtubeUrl) {
       toast.error(nodeRunError(d.label, "nodeRun.connectAVideoOrSet"));
       return Promise.reject(new Error("No video source"));

@@ -194,6 +194,66 @@ describe("account trigger outputs — a normal wire", () => {
   })
 })
 
+describe("account trigger outputs — Video link into Video Analysis", () => {
+  const va: SimpleNode = { id: "va", type: "video-analysis", data: {} }
+
+  function vaInputs(triggerData: Record<string, unknown>, sourceHandle: string) {
+    const edges: SimpleEdge[] = [{ id: "e", source: "trig", target: "va", sourceHandle, targetHandle: "video" } as SimpleEdge]
+    return resolveNodeInputs(va, edges, triggerState(triggerData), [TRIGGER, va])
+  }
+
+  it("the link reaches the node as the post to fetch — not as a video file, not as a prompt", () => {
+    const resolved = vaInputs(VIDEO_POST, "videoLink")
+    expect(resolved.videoPageUrl).toBe(VIDEO_POST.videoLink)
+    expect(resolved.videoUrl).toBeUndefined()
+    expect(resolved.prompt).toBeUndefined()
+  })
+
+  it("a text post's empty Video link brings nothing", () => {
+    const resolved = vaInputs(TEXT_POST, "videoLink")
+    expect(resolved.videoPageUrl).toBeUndefined()
+    expect(resolved.videoUrl).toBeUndefined()
+  })
+
+  it("words on that wire are not a link (Post text wired in by mistake)", () => {
+    const resolved = vaInputs(TEXT_POST, "postText")
+    expect(resolved.videoPageUrl).toBeUndefined()
+    expect(resolved.prompt).toBeUndefined()
+  })
+
+  it("a link with words around it is not a link", () => {
+    const resolved = vaInputs({ ...VIDEO_POST, videoLink: `${VIDEO_POST.videoLink} what a clip` }, "videoLink")
+    expect(resolved.videoPageUrl).toBeUndefined()
+  })
+
+  it("a bot trigger's video message is still the FILE, whichever of its handles is wired", () => {
+    const bot: SimpleNode = { id: "bot", type: "telegram-trigger", data: {} }
+    const states = { bot: { status: "completed", output: extractSourceNodeOutput(bot, { text: "https://youtu.be/dQw4w9WgXcQ", videoUrl: "https://r2.example.com/tg/v.mp4" }) } as NodeExecutionState }
+    for (const sourceHandle of ["text", "videoUrl"]) {
+      const edges: SimpleEdge[] = [{ id: "e", source: "bot", target: "va", sourceHandle, targetHandle: "video" } as SimpleEdge]
+      const resolved = resolveNodeInputs(va, edges, states, [bot, va])
+      expect(resolved.videoUrl, sourceHandle).toBe("https://r2.example.com/tg/v.mp4")
+      expect(resolved.videoPageUrl, sourceHandle).toBeUndefined()
+    }
+  })
+
+  it("a bot trigger's message that is just a link is the post to fetch", () => {
+    const bot: SimpleNode = { id: "bot", type: "telegram-trigger", data: {} }
+    const states = { bot: { status: "completed", output: extractSourceNodeOutput(bot, { text: "https://youtu.be/dQw4w9WgXcQ" }) } as NodeExecutionState }
+    const edges: SimpleEdge[] = [{ id: "e", source: "bot", target: "va", sourceHandle: "text", targetHandle: "video" } as SimpleEdge]
+    expect(resolveNodeInputs(va, edges, states, [bot, va]).videoPageUrl).toBe("https://youtu.be/dQw4w9WgXcQ")
+  })
+
+  it("a video producer on the same input is still the file to analyze", () => {
+    const clip: SimpleNode = { id: "vid", type: "generate-video", data: {} }
+    const edges: SimpleEdge[] = [{ id: "e", source: "vid", target: "va", targetHandle: "video" } as SimpleEdge]
+    const states = { vid: { status: "completed", output: { videoUrl: "https://cdn.example.com/clip.mp4" } } as NodeExecutionState }
+    const resolved = resolveNodeInputs(va, edges, states, [clip, va])
+    expect(resolved.videoUrl).toBe("https://cdn.example.com/clip.mp4")
+    expect(resolved.videoPageUrl).toBeUndefined()
+  })
+})
+
 describe("a field pip reads the wire's own output", () => {
   it("from the trigger's Video link — the link, not the message", () => {
     const edges: SimpleEdge[] = [{ id: "e", source: "trig", target: "va", sourceHandle: "videoLink", targetHandle: "field-youtubeUrl" } as SimpleEdge]

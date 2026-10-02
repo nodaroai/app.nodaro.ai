@@ -41,6 +41,13 @@ describe("videoAnalysisPostDuration", () => {
     expect(probe).toHaveBeenCalledWith("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
   })
 
+  it("probes a post link wired into the video input, before the node's own field", async () => {
+    const probe = probeOf({ durationSec: 20 })
+    expect(await videoAnalysisPostDuration(va({ youtubeUrl: "https://youtu.be/dQw4w9WgXcQ" }), { videoPageUrl: REEL }, deps(probe))).toBe(20)
+    expect(probe).toHaveBeenCalledTimes(1)
+    expect(probe).toHaveBeenCalledWith(REEL)
+  })
+
   it("leaves alone: a wired or typed video file, a length the run already knows, a link that is not a post, another node", async () => {
     const probe = probeOf({ durationSec: 30 })
     const d = deps(probe)

@@ -208,8 +208,9 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   // Non-media alternative: an upstream VEO/Runway task id runs without a URL.
   "video-upscale": { anyOf: ["videoUrl", "kieTaskId"], kind: "video", noun: "a video (or an upstream VEO task)" },
   "extend-video": { anyOf: ["videoUrl", "kieTaskId"], kind: "video", noun: "a video (or an upstream VEO/Runway task)" },
-  // Non-media alternative: the node's own YouTube URL.
-  "video-analysis": { anyOf: ["videoUrl", "youtubeUrl"], kind: "video", noun: "a video or a YouTube URL" },
+  // Non-media alternatives: a post's link wired into the `video` handle, or the
+  // node's own link field.
+  "video-analysis": { anyOf: ["videoUrl", "videoPageUrl", "youtubeUrl"], kind: "video", noun: "a video, or a link to a post's video" },
 
   // --- Audio in ---
   "audio-isolation": { anyOf: ["audioUrl"], kind: "audio", noun: "an audio track" },
@@ -4018,8 +4019,10 @@ export function buildPayload(
       //   3. unknown → <model>:600s ceiling  — the only silent-ceiling path
       // videoUrl wins over youtubeUrl (mirrors the video-analysis route, now in
       // @nodaroai/cloud-plugins), so a wired/config clip nulls youtubeUrl downstream.
+      // The link itself: a post's link wired into the `video` handle, else the
+      // node's own field.
       const videoUrl = resolvedInputs.videoUrl ?? (data.videoUrl as string | undefined)
-      const youtubeUrl = videoUrl ? undefined : (data.youtubeUrl as string | undefined)
+      const youtubeUrl = videoUrl ? undefined : (resolvedInputs.videoPageUrl ?? (data.youtubeUrl as string | undefined))
       const probed = data.probedYoutube as { url: string; durationSec: number } | undefined
       const durationSec =
         resolvedInputs.videoDuration ??

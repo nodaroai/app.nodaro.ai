@@ -163,6 +163,12 @@ describe("required media inputs", () => {
     expect(() => assertRequiredMediaInputs("video-analysis", {}, node("video-analysis").data)).toThrow(/video_required/)
   })
 
+  it("video-analysis: a post's link wired into its video input is a source too, and the refusal names it", () => {
+    const empty = node("video-analysis").data
+    expect(() => assertRequiredMediaInputs("video-analysis", { videoPageUrl: "https://youtu.be/abc" }, empty)).not.toThrow()
+    expect(() => assertRequiredMediaInputs("video-analysis", {}, empty)).toThrow(/a link to a post's video/)
+  })
+
   it("leaves untabled node types alone", () => {
     expect(() => assertRequiredMediaInputs("generate-image", {}, node("generate-image").data)).not.toThrow()
   })

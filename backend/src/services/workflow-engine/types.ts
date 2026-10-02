@@ -470,6 +470,11 @@ export interface ResolvedInputs {
    *  handle — a Video URL node's PAGE link (never its downloaded file) or a
    *  text node's text. Cited on the recipe, never fetched. */
   sourceLink?: string
+  /** video-analysis: a post's link from a TEXT output wired into the node's
+   *  `video` handle (the Telegram Account Trigger's Video link, a Text node).
+   *  Read like the node's own link field, and before it; a wired video file
+   *  still wins over both. Only an http(s) link is kept. */
+  videoPageUrl?: string
 }
 
 // ---------------------------------------------------------------------------

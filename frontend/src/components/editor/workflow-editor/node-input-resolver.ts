@@ -747,6 +747,11 @@ export interface FrontendResolvedInputs {
    *  text. Mirror of backend ResolvedInputs.sourceLink (named so it is not
    *  read as a media URL slot). */
   sourceLink?: string;
+  /** video-analysis: a post's link from a TEXT output wired into the `video`
+   *  handle (the Telegram Account Trigger's Video link, a Text node). Read
+   *  like the node's own link field, and before it; a wired video file still
+   *  wins over both. Mirror of backend ResolvedInputs.videoPageUrl. */
+  videoPageUrl?: string;
 }
 
 /** Append an asset to the manual-edit inputAssets accumulator. */
@@ -1742,6 +1747,21 @@ export function resolveNodeInputs(
     if (node.type === "content-recipe" && srcEdge.targetHandle === "link") {
       const link = src.type === "youtube-video" ? videoLinkPageUrl(src.data as Record<string, unknown>) : output;
       if (typeof link === "string" && link.trim() !== "") inputs.sourceLink = link.trim();
+      continue;
+    }
+
+    // video-analysis `video` handle given a LINK: a text output (the Telegram
+    // Account Trigger's Video link, a Text node) carries a post's address,
+    // which the node fetches and analyzes — read like its own link field.
+    // Only a lone http(s) link is kept; any other text contributes nothing,
+    // so the node's own refusal names the missing source. A video or dynamic
+    // producer is not a link: it falls through to the file routing below.
+    // (The server also lets a trigger message that carries a video FILE fall
+    // through; the editor never runs a trigger.) Gated on node.type. Mirror
+    // of the backend input-resolver branch.
+    if (node.type === "video-analysis" && srcEdge.targetHandle === "video" && !VIDEO_PRODUCER_TYPES.has(src.type ?? "") && !DYNAMIC_PRODUCER_TYPES.has(src.type ?? "")) {
+      const link = output.trim();
+      if (/^https?:\/\/\S+$/i.test(link)) inputs.videoPageUrl = link;
       continue;
     }
 

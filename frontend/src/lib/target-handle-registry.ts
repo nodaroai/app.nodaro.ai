@@ -9,6 +9,7 @@ import { VIDEO_RETAKE_HANDLE_IDS, isValidVideoRetakeConnection } from "./video-r
 import { isValidVideoSfxConnection } from "./video-sfx-handles"
 import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "./ffmpeg-handles"
 import { ACCEPTS_BRAND_TEXT, ACCEPTS_CONTENT_MATERIAL, ACCEPTS_POST_LINK, ACCEPTS_RECIPE } from "./content-handles"
+import { ACCEPTS_VIDEO_OR_POST_LINK } from "./video-analysis-handles"
 import {
   isValidListNodeConnection,
   isValidWebScrapeConnection,
@@ -341,9 +342,10 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   // direction popovers (drag from a producer's output pip) walk this
   // map to find which ffmpeg consumers + handles light up.
   "trim-video":         [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
-  // Video Analysis takes ONE video on its `video` target and emits a scene-
-  // breakdown JSON on its `json` source. Video producers light up here.
-  "video-analysis":     [{ handleId: "video", label: "Video", accepts: ACCEPTS_VIDEO }],
+  // Video Analysis takes ONE video on its `video` target (a file, or a post's
+  // link from a text output) and emits a scene-breakdown JSON on its `json`
+  // source. Video and text producers light up here.
+  "video-analysis":     [{ handleId: "video", label: "Video", accepts: ACCEPTS_VIDEO_OR_POST_LINK }],
   // Content Recipe reads one post's material (a Video Analysis, a scraped post,
   // a caption) on `in` and cites the post's link from `link` (a Video URL
   // node's page link, or text). Same predicates as the node's own pips.

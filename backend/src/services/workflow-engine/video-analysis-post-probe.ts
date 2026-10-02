@@ -165,7 +165,8 @@ export async function videoAnalysisPostDuration(
   // the run already knows is the trusted one.
   if (resolvedInputs.videoUrl || (typeof data.videoUrl === "string" && data.videoUrl !== "")) return null
   if (resolvedInputs.videoDuration !== undefined) return null
-  const link = typeof data.youtubeUrl === "string" ? data.youtubeUrl.trim() : ""
+  // The link the payload will carry: one wired into the `video` handle, else the node's own field.
+  const link = (resolvedInputs.videoPageUrl ?? (typeof data.youtubeUrl === "string" ? data.youtubeUrl : "")).trim()
   const post = link ? socialPostOf(link) : null
   if (!post) return null
 
