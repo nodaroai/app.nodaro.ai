@@ -170,7 +170,9 @@ describe("buildPayload — video-audit", () => {
   })
 
   it("(h) every family × bucket combination resolves to a real row in the shared table", () => {
-    for (const [durationSec, bucket] of [[10, 60], [61, 180], [200, 360], [500, 600], [99999, 600]] as const) {
+    // 64 s: the first whole second past the 60s bucket and its 3-second pricing
+    // grace (VIDEO_ANALYSIS_BUCKET_GRACE_SEC) — a 61 s clip now prices as 60s.
+    for (const [durationSec, bucket] of [[10, 60], [61, 60], [64, 180], [200, 360], [500, 600], [99999, 600]] as const) {
       for (const analysis of [ANALYSIS, undefined]) {
         const result = buildPayload(
           node(),

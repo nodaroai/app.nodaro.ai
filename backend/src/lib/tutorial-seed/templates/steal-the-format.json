@@ -73,7 +73,7 @@
         "textColor": "#ffffff",
         "label": "Step 1",
         "title": "1 · Post link",
-        "text": "Paste the link of one post that performed: TikTok, Instagram Reels, YouTube Shorts or YouTube. The Video URL node downloads the post as soon as the link lands; run the workflow once the download has finished. Posts up to three minutes keep the analysis at its lowest prices.",
+        "text": "Paste the link of one post that performed: TikTok, Instagram Reels, YouTube Shorts or YouTube. The Video URL node downloads the post as soon as the link lands; run the workflow once the download has finished. A post up to a minute costs the least to analyze. A longer YouTube video asks you to pick a part in the node first: up to 10 minutes, the first minute is usually enough.",
         "width": 640,
         "height": 270
       }

@@ -68,8 +68,8 @@ describe("links that URL parsers read differently", () => {
 })
 
 describe("consumers that do not need the video file", () => {
-  it("names exactly the three readers that take the audio track or the page link", () => {
-    expect([...VIDEO_LINK_TOLERANT_CONSUMER_TYPES].sort()).toEqual(["dubbing", "suno-cover", "transcribe"])
+  it("names exactly the readers that take the audio track or the page link", () => {
+    expect([...VIDEO_LINK_TOLERANT_CONSUMER_TYPES].sort()).toEqual(["content-recipe", "dubbing", "suno-cover", "transcribe"])
   })
 })
 

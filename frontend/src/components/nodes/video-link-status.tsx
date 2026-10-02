@@ -8,8 +8,12 @@
  */
 import { useEffect, useId, useState, type ReactNode } from "react"
 import { AlertCircle, CheckCircle2, Download, Loader2 } from "lucide-react"
+import { useShallow } from "zustand/react/shallow"
 import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { videoLinkLengthLimit } from "@/lib/video-link-length-limits"
+import { NODE_DEF_MAP } from "@/types/nodes"
 import {
   DOWNLOAD_ERROR_KEYS,
   deriveVideoLinkView,
@@ -87,6 +91,28 @@ function SecondaryButton({ onClick, children }: { onClick(): void; children: Rea
   )
 }
 
+/** The length limit of the nodes this Video URL feeds, as the chooser shows it. */
+interface ChooserLimit {
+  readonly maxSec: number
+  readonly cheapestSec: number
+  /** The limiting node type's name, in the interface language. */
+  readonly consumer: string
+}
+
+/** The strictest length limit among the nodes this one feeds, or null. */
+function useChooserLimit(nodeId: string): ChooserLimit | null {
+  const localizeNodeLabel = useLocalizeNodeLabel()
+  const limit = useWorkflowStore(
+    useShallow((s) => {
+      const found = videoLinkLengthLimit(nodeId, s.nodes ?? [], s.edges ?? [])
+      return found ? { maxSec: found.maxSec, cheapestSec: found.cheapestSec, consumerType: found.consumerType } : null
+    }),
+  )
+  if (!limit) return null
+  const consumer = localizeNodeLabel(NODE_DEF_MAP.get(limit.consumerType)?.label ?? limit.consumerType)
+  return { maxSec: limit.maxSec, cheapestSec: limit.cheapestSec, consumer }
+}
+
 function RangeChooser({
   nodeId,
   variant,
@@ -106,12 +132,20 @@ function RangeChooser({
   const t = useT()
   const tone = TONE[variant]
   const fieldId = useId()
+  const limit = useChooserLimit(nodeId)
   const [fromText, setFromText] = useState("0:00")
-  const [toText, setToText] = useState(() => formatTimecode(durationSec === null ? 60 : Math.min(durationSec, 60)))
-  const [problem, setProblem] = useState<"format" | "order" | "beyond" | null>(null)
+  // Start on the part that costs the least downstream (a minute when nothing
+  // limits it), never past the video's end.
+  const [toText, setToText] = useState(() => {
+    const preferred = limit?.cheapestSec ?? 60
+    return formatTimecode(durationSec === null ? preferred : Math.min(durationSec, preferred))
+  })
+  const [problem, setProblem] = useState<"format" | "order" | "beyond" | "tooLong" | null>(null)
+  // The whole video is offered only when the nodes after it can read all of it.
+  const wholeFits = limit === null || (durationSec !== null && durationSec <= limit.maxSec)
 
   const downloadPart = () => {
-    const range = validateRange(fromText, toText, durationSec)
+    const range = validateRange(fromText, toText, durationSec, limit?.maxSec)
     if (!range.ok) {
       setProblem(range.reason)
       return
@@ -152,6 +186,15 @@ function RangeChooser({
           ? t("videolink.unknownLength")
           : t("videolink.longVideo", { duration: formatTimecode(durationSec) })}
       </p>
+      {limit && (
+        <p className={`${tone.text} text-foreground`}>
+          {t("videolink.limit", {
+            consumer: limit.consumer,
+            max: formatTimecode(limit.maxSec),
+            cheapest: formatTimecode(limit.cheapestSec),
+          })}
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-3">
         {field(`${fieldId}-from`, t("videolink.from"), fromText, setFromText)}
         {field(`${fieldId}-to`, t("videolink.to"), toText, setToText)}
@@ -162,14 +205,16 @@ function RangeChooser({
             ? t("videolink.rangeFormat")
             : problem === "order"
               ? t("videolink.rangeOrder")
-              : t("videolink.rangeBeyond", { duration: formatTimecode(durationSec ?? 0) })}
+              : problem === "tooLong" && limit
+                ? t("videolink.rangeTooLong", { consumer: limit.consumer, max: formatTimecode(limit.maxSec) })
+                : t("videolink.rangeBeyond", { duration: formatTimecode(durationSec ?? 0) })}
         </p>
       )}
       <PrimaryButton variant={variant} onClick={downloadPart}>
         <Download className="w-3.5 h-3.5" />
         {t("videolink.downloadPart")}
       </PrimaryButton>
-      <SecondaryButton onClick={downloadWhole}>{t("videolink.downloadWhole")}</SecondaryButton>
+      {wholeFits && <SecondaryButton onClick={downloadWhole}>{t("videolink.downloadWhole")}</SecondaryButton>}
       {onCancel && <SecondaryButton onClick={onCancel}>{t("videolink.cancel")}</SecondaryButton>}
       <p className="text-[10px] text-muted-foreground/70">{t("videolink.partNote")}</p>
     </div>

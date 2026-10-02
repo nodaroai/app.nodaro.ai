@@ -365,7 +365,11 @@ every downstream consumer should render from today.
 
 Video Analysis is **dynamically priced** by duration bucket and quality tier. The
 bucket is the smallest of **60s / 180s / 360s / 600s** that fits the video's
-probed duration; each tier has its own per-bucket price. The table below is
+probed duration, with a **3-second pricing grace**: a video up to 1:03 is priced as
+≤60s, up to 3:03 as ≤180s, up to 6:03 as ≤360s
+(`VIDEO_ANALYSIS_BUCKET_GRACE_SEC`). A part of a longer YouTube video cut at
+1:00 in the Video URL node downloads at about 1:03, because the cut lands on
+keyframes, and is priced as a minute. Each tier has its own per-bucket price. The table below is
 published as `VIDEO_ANALYSIS_BUCKET_CREDITS` in
 `packages/shared/src/video-analysis-pricing.ts` (the credit prices users are
 charged) — generated and drift-guarded internally, never hand-written.
@@ -438,12 +442,13 @@ several economy-tier donor rolls — and always refines the merged result. That
 repetition is the main reason a tier costs what it does, and it is why the
 mixed and smart tiers sit well above a single-model tier.
 
-**±3-second duration tolerance.** Credits are reserved up front from the bucket
-that fits the probed (metadata) duration. After download, the worker re-probes
-the true duration and re-checks the bucket with a **±3-second grace**
-(`VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC`) — `ffprobe` floats routinely run a
-fraction of a second over a nominal length, and zero tolerance would wrongly
-bump a genuine 1:00 / 3:00 / 6:00 / 10:00 video into the next (pricier) bucket.
+**Duration tolerance.** Credits are reserved up front from the bucket that fits
+the probed (metadata) duration, grace included. After download, the worker
+re-probes the true duration and re-checks it against the reserved bucket with a
+**6-second allowance** (`VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC`). That is the
+3-second pricing grace plus 3 seconds for `ffprobe` floats, which routinely run a
+fraction of a second over a nominal length. So a video the grace priced into a
+bucket is never refused at its true length.
 
 **Missing-duration fallback.** If the duration can't be determined at submit
 time, the ceiling bucket (≤600s) price is reserved. In practice the route probes
@@ -462,9 +467,10 @@ refunded.
 
 ## Limits
 
-- **Maximum duration:** 600 seconds (10 minutes) for any source. Enforced
-  strictly at submit time, then re-checked worker-side after download (±3s
-  grace, as above).
+- **Maximum duration:** 600 seconds (10 minutes) for any source. Enforced at
+  submit time, then re-checked worker-side after download (with the allowance
+  above). A longer YouTube video wired from a Video URL node asks for a part
+  of up to 10 minutes before the run; a part of up to a minute costs the least.
 - **YouTube hosts only:** `youtube.com` / `youtu.be`. Other URL hosts are
   rejected.
 - **No live streams:** a YouTube live stream is rejected up front — analyze the
