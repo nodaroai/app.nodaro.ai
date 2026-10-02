@@ -3,7 +3,7 @@ import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -904,6 +904,40 @@ function editPlanClipFanOut(
 }
 
 /**
+ * Downstream executions one Content Ideas run fans out: one per idea. Not
+ * re-running → its saved briefs are what iterate (exact). Running → it writes
+ * `count` ideas, clamped the way the run clamps it (1–10, default 5).
+ */
+function contentIdeasFanOut(
+  data: Record<string, unknown>,
+  reruns: boolean,
+  selector?: SelectorFields,
+): number {
+  const saved = Array.isArray(data.ideaBriefs)
+    ? data.ideaBriefs.filter((b) => typeof b === "string" && b.trim() !== "").length
+    : 0;
+  const ideas = !reruns && saved > 0 ? saved : clampContentIdeasCount(data.count);
+  const kept = fanOutCount(Array.from({ length: ideas }, (_, i) => String(i + 1)), selector);
+  return kept > 0 ? kept : 1;
+}
+
+/**
+ * How many times one run of a fan-out PRODUCER makes the node after it run,
+ * for every `FAN_OUT_EACH_TYPES` member that is not a list operation (a list
+ * operation's count is its items, read below). Keyed by node type; the value
+ * reads the producer's data, whether it is about to run again, and the edge's
+ * selector. A producer missing here is estimated as ONE run downstream — which
+ * under-quotes and lets a run pass the balance precheck it cannot finish, so
+ * `__tests__/cost-multiplier.test.ts` fails the build for any such producer.
+ */
+export const PRODUCER_FAN_OUT: Readonly<
+  Record<string, (data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields) => number>
+> = {
+  "edit-plan": editPlanClipFanOut,
+  "content-ideas": contentIdeasFanOut,
+};
+
+/**
  * The clips fan-out a node INHERITS from further upstream: Clip Pack renders each
  * clip (edit-plan ⇒ apply-edl) and then captions each render across an explicit
  * "each" edge (apply-edl ⇒ add-captions), so the captions node runs once per clip
@@ -965,10 +999,12 @@ function getBaseFanOut(
     const edgeData = edge.data as Record<string, unknown> | undefined;
     const selector = edgeData as SelectorFields | undefined;
 
-    // Edit Plan in `clips` mode: one downstream execution per clip (it is in
-    // FAN_OUT_EACH_TYPES, but has no `items`/`rows` for the list reads below).
-    if (sourceNode.type === "edit-plan") {
-      const n = editPlanClipFanOut(sourceNode.data as Record<string, unknown>, rerunIds.has(sourceNode.id), selector);
+    // A fan-out producer (Edit Plan in `clips` mode, Content Ideas): one
+    // downstream execution per item it emits. It is in FAN_OUT_EACH_TYPES but
+    // has no `items`/`rows` for the list reads below — see PRODUCER_FAN_OUT.
+    const producer = PRODUCER_FAN_OUT[sourceNode.type ?? ""];
+    if (producer) {
+      const n = producer(sourceNode.data as Record<string, unknown>, rerunIds.has(sourceNode.id), selector);
       if (n > 1) return n;
     }
 
