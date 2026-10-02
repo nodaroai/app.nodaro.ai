@@ -15,7 +15,7 @@ import {
   pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
-import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle } from "@nodaro/shared"
+import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle } from "@nodaro/shared"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { jsonArrayItems, listFor, savedDataAllowed } from "./saved-data.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -1706,6 +1706,18 @@ function routeOutput(
   // (never a fake image ref). A photo message thus feeds a References/image
   // input directly; a text message feeds a prompt. ---
   if (srcType === "telegram-trigger" || srcType === "telegram-account-trigger") {
+    // An account trigger's NAMED output (a post field, a message fact) is text:
+    // route the value this wire carries — `output` was resolved from the
+    // edge's own handle — never the message in its place. An empty one routes
+    // nothing. The message handle (`out`, an older `text`, or no handle) is
+    // routed by the message's media kind below.
+    if (srcType === "telegram-account-trigger" && isTelegramAccountTriggerNamedHandle(edge.sourceHandle)) {
+      if (output) {
+        if (SOCIAL_POST_NODE_TYPES.has(targetType)) inputs.caption = output
+        else inputs.prompt = output
+      }
+      return
+    }
     const out = nodeStates[src.id]?.output
     const refKey = REFERENCE_HANDLE_MAP[edge.targetHandle ?? ""]
     if (out?.imageUrl && (refKey === "referenceImageUrls" || edge.targetHandle === "image" || edge.targetHandle === "references")) {

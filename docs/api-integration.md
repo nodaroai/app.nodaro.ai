@@ -663,8 +663,16 @@ re-project a workflow (`{ data: { synced, created, updated, removed } }`).
 Its optional body `{ vouchNodeIds: [...] }` names the trigger nodes the
 caller just added; only an owner's own browser session can vouch, and only
 those rows count as the owner's own runs for a plain stored credential.
+Likewise `accountNodes: [{ id, settings }]` names the Telegram Account
+Triggers the owner's editor changed, each with the listening settings it set
+(`telegramAccountListeningSignature` in `@nodaro/shared`): only the owner's
+own browser session can name them, and one is armed, widened or re-pointed
+only while the stored node still says exactly that. Any other save made as
+the owner (a token, a connected app, MCP) can switch an account trigger off,
+never on.
 Inspect a workflow's triggers with `GET /v1/workflows/<id>/triggers`; pause
-or resume one with `PATCH /v1/workflow-triggers/<id>`. Triggers you create directly with
+or resume one with `PATCH /v1/workflow-triggers/<id>` (a Telegram Account
+Trigger's row can only be paused there: it is started in the editor). Triggers you create directly with
 `POST /v1/workflow-triggers` are not managed by any node, so saving the
 workflow never changes or removes them.
 

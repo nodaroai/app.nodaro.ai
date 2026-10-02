@@ -16,11 +16,18 @@ import {
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
 import {
-  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, resolveVideoLinkOutput } from "@nodaro/shared"
+  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle } from "@nodaro/shared"
 import type { SceneData, Transcript } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/prompts"
 export { extractVideoDurationFromNode } from "@nodaro/shared"
 export { extractAllGeneratedResults }
+
+/** Triggers whose handles name values in `output.paramOutputs` (see getPrimaryOutput). */
+const NAMED_OUTPUT_TRIGGER_TYPES: ReadonlySet<string> = new Set([
+  "webhook-trigger",
+  "telegram-trigger",
+  "telegram-account-trigger",
+])
 
 /**
  * Workflow context required by extractors to compute group/collect bucket
@@ -392,10 +399,7 @@ export function extractSourceNodeOutput(
       return { text: (triggerData.timestamp as string) ?? new Date().toISOString() }
     }
 
-    // The account lane carries the same message shape as the bot lane, plus
-    // who sent it and what kind of chat it came from.
-    case "telegram-trigger":
-    case "telegram-account-trigger": {
+    case "telegram-trigger": {
       const td = triggerData || {}
       const output: NodeOutput = {}
       if (td.text) output.text = td.text as string
@@ -410,6 +414,24 @@ export function extractSourceNodeOutput(
       if (td.chatType) paramOutputs["chatType"] = td.chatType as string
       if (Object.keys(paramOutputs).length > 0) output.paramOutputs = paramOutputs
       return Object.keys(output).length > 0 ? output : { text: JSON.stringify(td) }
+    }
+
+    // The account lane: the message, plus its named outputs (@nodaro/shared
+    // telegram-account-trigger). Every post field is present even when empty,
+    // so a wire from one carries "" — never the message text in its place.
+    case "telegram-account-trigger": {
+      const td = triggerData || {}
+      const output: NodeOutput = { paramOutputs: telegramAccountTriggerOutputs(td) }
+      if (td.text) output.text = td.text as string
+      if (td.imageUrl) output.imageUrl = td.imageUrl as string
+      if (td.videoUrl) output.videoUrl = td.videoUrl as string
+      if (td.audioUrl) output.audioUrl = td.audioUrl as string
+      // No message and no message facts (a Run with no Telegram message behind
+      // it): the message output stays the raw trigger data, as it always was.
+      const hasMessage = output.text !== undefined || output.imageUrl !== undefined || output.videoUrl !== undefined || output.audioUrl !== undefined
+      const hasFacts = ["chatId", "messageId", "senderId", "chatType"].some((key) => !!td[key])
+      if (!hasMessage && !hasFacts) output.text = JSON.stringify(td)
+      return output
     }
 
     case "sub-workflow-input": {
@@ -598,6 +620,24 @@ export function getPrimaryOutput(
       if (firstValue) return firstValue
     }
     return output.text
+  }
+
+  // Triggers with named outputs (a webhook's params, a Telegram message's
+  // fields): a wire from a named handle carries THAT value in every reader —
+  // routers, connected Lists, field pips and {Label} refs read here, not
+  // through routeOutput. An account trigger's named output that is empty
+  // answers "", never the message text in its place. Mirrors the frontend
+  // execution-graph.ts trigger branches.
+  if (sourceType === "telegram-account-trigger" && isTelegramAccountTriggerNamedHandle(sourceHandle)) {
+    return output.paramOutputs?.[sourceHandle] ?? ""
+  }
+  if (
+    NAMED_OUTPUT_TRIGGER_TYPES.has(sourceType) &&
+    sourceHandle &&
+    output.paramOutputs &&
+    Object.prototype.hasOwnProperty.call(output.paramOutputs, sourceHandle)
+  ) {
+    return output.paramOutputs[sourceHandle]
   }
 
   // motion-graphics (lottie engine): the `lottie` source handle emits the

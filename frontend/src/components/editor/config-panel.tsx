@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { recordingAccountTriggerUpdate } from "@/lib/account-trigger-intent"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { useLocaleStore } from "@/lib/locale-store"
@@ -328,6 +329,13 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
   selectedNodeId: string | undefined
 }) {
   const t = useT()
+  // A Telegram account trigger's panel is the one place its owner sets what it
+  // listens to: what it says after each change here is what the next trigger
+  // sync names as theirs (account-trigger-intent.ts).
+  const updateAccountTrigger = useMemo(
+    () => (selectedNodeId ? recordingAccountTriggerUpdate(selectedNodeId, updateNodeData, () => useWorkflowStore.getState()) : () => {}),
+    [selectedNodeId, updateNodeData],
+  )
   // Phase 1D.1 — Stage 6 (scene_images) query for match-cut verdict display.
   // Runs only when a scene node is selected and its data carries pipeline_id.
   // Polls at 5 s intervals while the panel is open (same cadence as the
@@ -559,7 +567,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "telegram-post": return <TelegramPostConfig {...configProps} />
     case "publish-social": return <PublishSocialConfig {...configProps} />
     case "telegram-trigger": return <TelegramTriggerConfig {...configProps} />
-    case "telegram-account-trigger": return <TelegramAccountTriggerConfig {...configProps} />
+    // Keyed by node: a draft typed for one trigger never lands on another.
+    case "telegram-account-trigger": return <TelegramAccountTriggerConfig key={selectedNodeId ?? ""} {...configProps} onUpdate={updateAccountTrigger} />
     case "telegram-channel-feed": return <TelegramChannelFeedConfig {...configProps} />
     case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
     case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />
@@ -800,6 +809,7 @@ export function ConfigPanel() {
     if (!selectedNodeId) return
     updateNodeData(selectedNodeId, data)
   }, [selectedNodeId, updateNodeData])
+
 
   const handleMapField = useCallback((field: string, sourceNodeId: string | null) => {
     const current = { ...fieldMappings }

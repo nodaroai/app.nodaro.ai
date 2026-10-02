@@ -522,13 +522,23 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
     if (bodyParsed.data.config !== undefined || bodyParsed.data.isActive === true) {
       const { data: trig } = await supabase
         .from("workflow_triggers")
-        .select("workflow_id, config")
+        .select("workflow_id, config, type")
         .eq("id", paramsParsed.data.id)
         .eq("user_id", req.userId)
         .maybeSingle()
       if (!trig) {
         return reply.status(404).send({
           error: { code: "not_found", message: "Trigger not found" },
+        })
+      }
+      // A Telegram account trigger listens to the owner's own messages: it is
+      // started and changed in the editor only. Pausing it here stays allowed.
+      if (trig.type === "telegram_account") {
+        return reply.status(403).send({
+          error: {
+            code: "editor_only",
+            message: "A Telegram account trigger is started and changed in the editor. It can only be paused here.",
+          },
         })
       }
       if (bodyParsed.data.isActive === true && !(await canRunWorkflow(req.userId, trig.workflow_id as string))) {

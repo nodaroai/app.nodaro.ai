@@ -318,7 +318,7 @@ describe("useWorkflowPersistence — save", () => {
 
     expect(mockSyncWorkflowTriggers).toHaveBeenCalledTimes(1)
     // …vouching for exactly the node this save added.
-    expect(mockSyncWorkflowTriggers).toHaveBeenCalledWith("existing-wf-id", ["s1"])
+    expect(mockSyncWorkflowTriggers).toHaveBeenCalledWith("existing-wf-id", ["s1"], [])
   })
 
   it("a save that REMOVED the Schedule Trigger node still asks the server, so the row goes with it", async () => {
@@ -336,10 +336,10 @@ describe("useWorkflowPersistence — save", () => {
       await result.current.save()
     })
 
-    expect(mockSyncWorkflowTriggers).toHaveBeenCalledWith("existing-wf-id", [])
+    expect(mockSyncWorkflowTriggers).toHaveBeenCalledWith("existing-wf-id", [], [])
   })
 
-  it("add, then remove, through the same hook with NO saved snapshot (the full-save path never advances it): both saves sync", async () => {
+  it("add, then remove, through the same hook: both saves sync", async () => {
     const schedule = { id: "s1", type: "schedule-trigger", position: { x: 0, y: 0 }, data: { cron: "*/5 * * * *" } }
     resetStoreState({ workflowId: "existing-wf-id", workflowName: "My Flow", nodes: [makeNode("n1"), schedule], edges: [] })
     setupSupabaseUpdate()
@@ -347,16 +347,16 @@ describe("useWorkflowPersistence — save", () => {
     await act(async () => {
       await result.current.save()
     })
-    expect(mockSyncWorkflowTriggers).toHaveBeenNthCalledWith(1, "existing-wf-id", ["s1"])
+    expect(mockSyncWorkflowTriggers).toHaveBeenNthCalledWith(1, "existing-wf-id", ["s1"], [])
 
-    // The node is removed; the store still has no snapshot (a full save does not set one).
+    // The node is removed (the store here is reset, so this save starts from no snapshot).
     resetStoreState({ workflowId: "existing-wf-id", workflowName: "My Flow", nodes: [makeNode("n1")], edges: [] })
     setupSupabaseUpdate()
     await act(async () => {
       await result.current.save()
     })
     expect(mockSyncWorkflowTriggers).toHaveBeenCalledTimes(2)
-    expect(mockSyncWorkflowTriggers).toHaveBeenNthCalledWith(2, "existing-wf-id", [])
+    expect(mockSyncWorkflowTriggers).toHaveBeenNthCalledWith(2, "existing-wf-id", [], [])
   })
 
   it("serialises overlapping save() calls — the second waits for the first and never sends the stale CAS token", async () => {
@@ -514,7 +514,7 @@ describe("useWorkflowPersistence — save", () => {
       await result.current.save()
     })
 
-    expect(mockApplySaveSuccess).toHaveBeenCalledWith("T61", 5, undefined, 3)
+    expect(mockApplySaveSuccess).toHaveBeenCalledWith("T61", 5, expect.objectContaining({ nodes: expect.any(Array) }), 3)
   })
 
   it("does NOT call setWorkflowId on update (existing workflow)", async () => {
@@ -1094,8 +1094,21 @@ describe("useWorkflowPersistence — save", () => {
     // Batched: markClean + setLoadedUpdatedAt + setRemoteUpdatedAt + status
     // flip happen in one Zustand set() to close the realtime echo race.
     expect(mockApplySaveSuccess).toHaveBeenCalledTimes(1)
-    // (no delta snapshot on the full path; the dirty epoch the graph was read at)
-    expect(mockApplySaveSuccess).toHaveBeenCalledWith("2026-03-04T12:00:00Z", 5, undefined, 0)
+    // (the graph this write left on the server; the dirty epoch the graph was read at)
+    expect(mockApplySaveSuccess).toHaveBeenCalledWith("2026-03-04T12:00:00Z", 5, expect.objectContaining({ nodes: expect.any(Array) }), 0)
+  })
+
+  it("a full save advances the saved snapshot to the graph it wrote — the next save starts from it, not from the last load", async () => {
+    resetStoreState({ workflowId: "w1", workflowName: "My Flow", nodes: [makeNode("n1"), makeNode("n2")] })
+    setupSupabaseUpdate(null, "2026-03-04T12:00:00Z")
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+    await act(async () => {
+      await result.current.save()
+    })
+    const snapshot = mockApplySaveSuccess.mock.calls[0]![2] as { nodes: Array<{ id: string }>; edges: unknown[]; name: string }
+    expect(snapshot.nodes.map((n) => n.id)).toEqual(["n1", "n2"])
+    expect(snapshot.edges).toEqual([])
+    expect(snapshot.name).toBe("My Flow")
   })
 
   it("does NOT call applySaveSuccess on save failure", async () => {
@@ -1386,7 +1399,7 @@ describe("useWorkflowPersistence — save", () => {
     await act(async () => {
       await result.current.save()
     })
-    expect(mockSyncWorkflowTriggers).toHaveBeenNthCalledWith(1, "wf-a", ["s1"])
+    expect(mockSyncWorkflowTriggers).toHaveBeenNthCalledWith(1, "wf-a", ["s1"], [])
 
     // The same hook instance now serves workflow B, loaded WITH that schedule:
     // its first save syncs once (a node that never had a row gets one) but
@@ -1404,7 +1417,7 @@ describe("useWorkflowPersistence — save", () => {
       await result.current.save()
     })
     expect(mockSyncWorkflowTriggers).toHaveBeenCalledTimes(2)
-    expect(mockSyncWorkflowTriggers).toHaveBeenNthCalledWith(2, "wf-b", [])
+    expect(mockSyncWorkflowTriggers).toHaveBeenNthCalledWith(2, "wf-b", [], [])
   })
 
   it("delta: a save that added a Schedule Trigger node asks the server to project it after the RPC landed", async () => {
@@ -1433,7 +1446,7 @@ describe("useWorkflowPersistence — save", () => {
 
       expect(mockSupabaseRpc).toHaveBeenCalledTimes(1)
       expect(mockSyncWorkflowTriggers).toHaveBeenCalledTimes(1)
-      expect(mockSyncWorkflowTriggers).toHaveBeenCalledWith("w1", ["s1"])
+      expect(mockSyncWorkflowTriggers).toHaveBeenCalledWith("w1", ["s1"], [])
     } finally {
       vi.unstubAllEnvs()
     }

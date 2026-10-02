@@ -1,7 +1,7 @@
 ---
 node_type: telegram-account-trigger
-generated_at: 2026-09-27T12:51:25.671Z
-generated_from: c607aa02c
+generated_at: 2026-10-02T00:36:40.522Z
+generated_from: 5f14bf98e
 ---
 
 # Telegram Account Trigger
@@ -11,7 +11,7 @@ generated_from: c607aa02c
 **Category:** input
 **Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** (none)
-**Outputs (source handles):** `text`, `chatId`, `messageId`, `senderId`
+**Outputs (source handles):** `out`, `videoLink`, `postText`, `postLink`
 
 **Required data fields:**
 - `label: string`
@@ -23,6 +23,7 @@ generated_from: c607aa02c
 - `messageTypeFilters?: string[]`
 - `keywords?: string[]`
 - `includeOutgoing?: boolean`
+- `inboxMode?: boolean`
 - `isActive?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 
@@ -34,6 +35,7 @@ generated_from: c607aa02c
   "messageTypeFilters": [],
   "keywords": [],
   "includeOutgoing": false,
+  "inboxMode": false,
   "isActive": false
 }
 ```
@@ -67,6 +69,7 @@ generated_from: c607aa02c
     "messageTypeFilters": [],
     "keywords": [],
     "includeOutgoing": false,
+    "inboxMode": false,
     "isActive": false
   }
 }

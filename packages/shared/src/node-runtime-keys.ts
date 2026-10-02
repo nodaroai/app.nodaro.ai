@@ -103,6 +103,8 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // node as "ran while the editor was closed" and paints the last run back.
   // Persisted (never transient): the reload is exactly when it is read.
   "resultsClearedAt",
+  // A trigger's last run values (also in TRANSIENT_RUNTIME_KEYS: never saved).
+  "__triggerData",
 ])
 
 /**
@@ -140,6 +142,10 @@ export const TRANSIENT_RUNTIME_KEYS: ReadonlySet<string> = new Set([
   // `downloadStatus` + `downloadId`; the percent is re-read from the server.
   "downloadPercent",
   "downloadPhase",
+  // A trigger's last run values, shown in the editor after a run (a webhook's
+  // body, a Telegram message and its post). Never saved: the workflow is not
+  // where a message's content is kept — runs are, under their retention.
+  "__triggerData",
 ])
 
 /**

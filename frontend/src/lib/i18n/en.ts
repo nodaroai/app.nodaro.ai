@@ -10282,6 +10282,18 @@ export const en = {
   "tgtrig.cardListeningOne": "Listening to {n} chat",
   "tgtrig.cardOff": "Not listening",
   "tgtrig.cardConfigure": "Configure the Telegram account trigger…",
+  "tgtrig.cardInbox": "Inbox: one run per shared post",
+  "tgtrig.inboxMode": "Inbox mode",
+  "tgtrig.inboxModeHint": "Only your own shares start a run: a post link (one run per link) or a forwarded post. Every other message is ignored. Your own messages are always included.",
+  "tgtrig.savedMessages": "Saved Messages",
+  "tgtrig.selectedChats": "Selected chats",
+  "tgtrig.unknownChat": "Chat {id} (not in your recent chats)",
+  "tgtrig.removeChat": "Remove {name}",
+  "tgtrig.senders": "Only from these senders",
+  "tgtrig.sendersHint": "Telegram user ids. Clear them to hear everyone in the chosen chats.",
+  "tgtrig.clearSenders": "Clear",
+  "tgtrig.accountUnknown": "This account isn't one of your connected Telegram accounts.",
+  "tgtrig.chatsCannotStart": "Your chats couldn't be loaded, so listening can't start.",
   // Failed API calls: the headline per action (lib/api.ts), the translated reasons by
   // server error code and the join between them (lib/api-error-copy.ts).
   "apiErr.startImageGeneration": "Failed to start image generation",

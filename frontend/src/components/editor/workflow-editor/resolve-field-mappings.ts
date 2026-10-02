@@ -16,7 +16,7 @@ export function resolveFieldMappings(
     data,
     upstreamText,
     mappableFieldNames,
-    (sourceNodeId) => {
+    (sourceNodeId, sourceHandle) => {
       const sourceNode = nodes.find((n) => n.id === sourceNodeId)
       if (!sourceNode) return undefined
       // Field mappings on non-text targets (e.g. mapping a `framing` field to a
@@ -27,7 +27,9 @@ export function resolveFieldMappings(
       if (PARAMETER_NODE_TYPES.has(sourceType)) {
         return getParameterValue(sourceNode.data as Record<string, unknown>, sourceType)
       }
-      return extractNodeOutput(sourceNode) ?? undefined
+      // The wire's own output (a Router's route, a trigger's named output),
+      // not the source's primary value. Mirrors the backend resolver.
+      return extractNodeOutput(sourceNode, sourceHandle ?? undefined) ?? undefined
     },
     // A live edge into a `field-<key>` handle, or a Generation Settings node
     // wired into the node's Settings input for this field, wins over
@@ -35,8 +37,8 @@ export function resolveFieldMappings(
     // source's output to it.
     nodeId && edges
       ? (field) => {
-          const direct = edges.find((e) => e.target === nodeId && e.targetHandle === `field-${field}`)?.source
-          if (direct) return direct
+          const edge = edges.find((e) => e.target === nodeId && e.targetHandle === `field-${field}`)
+          if (edge) return { sourceNodeId: edge.source, sourceHandle: edge.sourceHandle }
           const consumerType = nodes.find((n) => n.id === nodeId)?.type ?? ""
           return settingsSourceForField(nodeId, consumerType, field, edges, (id) => nodes.find((n) => n.id === id)?.type)
         }

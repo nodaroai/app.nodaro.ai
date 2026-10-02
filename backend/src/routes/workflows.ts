@@ -24,7 +24,7 @@ import {
   changesStudioPublishFlag,
 } from "../lib/studio-audience.js"
 import { loadWorkflowFor, toAccessRow } from "../lib/workflow-route-access.js"
-import { reconcileWorkflowTriggers, type GraphNode, type ReconcileResult } from "../lib/workflow-trigger-sync.js"
+import { reconcileWorkflowTriggers, type ChangedAccountNode, type GraphNode, type ReconcileResult } from "../lib/workflow-trigger-sync.js"
 import { isProjectedTriggerNodeType } from "@nodaro/shared"
 import { graphNeedsCredentialGate, sendCredentialUnbound, unboundCredentialUsesFor, workflowIsExposed } from "../lib/credential-gate.js"
 import { deltaTouchesVideoOverlay, videoOverlayDeltaUpserts, type DeltaNode, type VideoOverlayDeltaInput } from "../lib/video-overlay-delta.js"
@@ -297,6 +297,11 @@ type EdgeRecord = Record<string, unknown>
 
 const syncTriggersBody = z.object({
   vouchNodeIds: z.array(z.string().min(1).max(200)).max(200).optional(),
+  /** Account triggers the editor changed in this save, each with the listening settings it set. */
+  accountNodes: z
+    .array(z.object({ id: z.string().min(1).max(200), settings: z.string().min(2).max(16_384) }))
+    .max(200)
+    .optional(),
 })
 
 /**
@@ -323,6 +328,7 @@ async function syncTriggersForSavedWorkflow(
   workflowId: string,
   row: Record<string, unknown>,
   vouchNodeIds?: ReadonlyArray<string>,
+  accountNodes?: ReadonlyArray<ChangedAccountNode>,
 ): Promise<ReconcileResult> {
   const ownerId = typeof row.user_id === "string" ? row.user_id : ""
   if (!ownerId) return { created: 0, updated: 0, removed: 0 }
@@ -331,13 +337,20 @@ async function syncTriggersForSavedWorkflow(
   // may not, and a node that was already stored is not this save's to vouch
   // for. The API lanes pass nothing here and never vouch.
   const ownerSession = req.authKind === "jwt" && req.userId === ownerId
+  // Anyone acting AS the owner — their editor, a token, a connected app.
+  const ownerIdentity = req.userId === ownerId
   const result = await reconcileWorkflowTriggers({
     workflowId,
     userId: ownerId,
     nodes: row.nodes as readonly GraphNode[] | undefined,
     vouchNodeIds: ownerSession && vouchNodeIds && vouchNodeIds.length > 0 ? vouchNodeIds : undefined,
-    // Any of the owner's own sessions or tokens — never an editor of a shared workflow.
-    ownerActing: req.userId === ownerId,
+    // The account lane is in reach of a save made AS the owner, never of an
+    // editor of a shared workflow: there it can switch a trigger off.
+    ownerActing: ownerIdentity,
+    // Arming, widening or re-pointing one is the owner's decision in their own
+    // editor: only their browser session names what it changed, with the
+    // settings it set — never a token or a connected app acting AS them.
+    accountNodes: ownerSession && accountNodes && accountNodes.length > 0 ? accountNodes : undefined,
   })
   if (result.error) {
     req.log.warn({ err: result.error, workflowId }, "workflow trigger sync failed")
@@ -1367,7 +1380,7 @@ export async function workflowRoutes(app: FastifyInstance) {
     )
     if (!loaded.ok) return
 
-    const result = await syncTriggersForSavedWorkflow(req, params.id, loaded.row, body.vouchNodeIds)
+    const result = await syncTriggersForSavedWorkflow(req, params.id, loaded.row, body.vouchNodeIds, body.accountNodes)
     return reply.send({
       data: {
         synced: !result.error,

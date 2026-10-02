@@ -104,6 +104,16 @@ describe("stripTransientRuntimeData", () => {
     expect(out[0]!.type).toBe("generate-image")
   })
 
+  it("never saves a trigger's last run values — run history keeps them, under its retention", () => {
+    const trigger = {
+      id: "t1",
+      type: "telegram-account-trigger",
+      data: { label: "Inbox", chatIds: ["777"], __triggerData: { text: "a message", senderId: "555" } },
+    }
+    const [out] = stripTransientRuntimeData([trigger])
+    expect(out!.data).toEqual({ label: "Inbox", chatIds: ["777"] })
+  })
+
   it("passes through nodes without data and avoids copying when nothing is transient", () => {
     const bare = { id: "n2" } as { id: string; data?: Record<string, unknown> }
     const clean = { id: "n3", data: { label: "T", prompt: "p" } }

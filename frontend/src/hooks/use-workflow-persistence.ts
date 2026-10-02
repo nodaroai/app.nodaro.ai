@@ -20,6 +20,7 @@ import { collectRestorableSingleNodeJobs, applySingleNodeJobRestore } from "@/li
 import { refreshEntityNodes } from "@/lib/entity-node-data"
 import { settledBeforeClear } from "@/lib/results-cleared"
 import { createTriggerSyncTracker, syncTriggersAfterSave, type TriggerSyncTracker } from "@/lib/trigger-sync-after-save"
+import { adoptUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 
@@ -941,6 +942,19 @@ export function useWorkflowPersistence(projectId?: string) {
         // full write.
         const nodesBeforeSave = useWorkflowStore.getState().lastSavedSnapshot?.nodes
         let createdWorkflowId: string | null = null
+        const viewportAtSave = useWorkflowStore.getState().savedViewport
+        // What this write leaves on the server, so the next save starts from it
+        // (the delta path's base, and the trigger sync's "stored graph the save
+        // started from") instead of from the last load or delta.
+        const savedSnapshot = {
+          nodes,
+          edges,
+          name: workflowName,
+          characterDefinitions,
+          flowPromptTemplates,
+          presentationSettings,
+          savedViewport: viewportAtSave,
+        }
         const payload = {
           project_id: resolvedProjectId,
           name: workflowName,
@@ -954,7 +968,7 @@ export function useWorkflowPersistence(projectId?: string) {
             characterDefinitions: JSON.parse(JSON.stringify(characterDefinitions)),
             flowPromptTemplates: JSON.parse(JSON.stringify(flowPromptTemplates)),
             presentationSettings: JSON.parse(JSON.stringify(presentationSettings)),
-            viewport: useWorkflowStore.getState().savedViewport,
+            viewport: viewportAtSave,
           },
         }
 
@@ -1088,7 +1102,7 @@ export function useWorkflowPersistence(projectId?: string) {
             typeof (data as { version?: unknown }).version === "number"
               ? ((data as { version: number }).version)
               : null,
-            undefined,
+            savedSnapshot,
             epochAtStart,
           )
         } else {
@@ -1125,12 +1139,16 @@ export function useWorkflowPersistence(projectId?: string) {
           // The window between insert and re-subscribe is broadcast-safe.
           setWorkflowId(data.id)
           createdWorkflowId = data.id as string
+          // What the owner set in this workflow's trigger panels before it had
+          // an id is now this workflow's — and only this one's (the sync below
+          // reads it under the new id).
+          adoptUnsavedAccountTriggerIntents(createdWorkflowId)
           applySaveSuccess(
             data.updated_at as string,
             typeof (data as { version?: unknown }).version === "number"
               ? ((data as { version: number }).version)
               : null,
-            undefined,
+            savedSnapshot,
             epochAtStart,
           )
         }

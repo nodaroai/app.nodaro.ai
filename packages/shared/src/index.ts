@@ -693,6 +693,16 @@ export {
   PROJECTED_TRIGGER_NODE_TYPES,
   isProjectedTriggerNodeType,
 } from "./trigger-node-types.js"
+export {
+  TELEGRAM_ACCOUNT_TRIGGER_MESSAGE_HANDLE,
+  TELEGRAM_ACCOUNT_TRIGGER_POST_FIELDS,
+  TELEGRAM_ACCOUNT_TRIGGER_MESSAGE_FIELDS,
+  TELEGRAM_ACCOUNT_TRIGGER_OUTPUT_HANDLES,
+  isTelegramAccountTriggerNamedHandle,
+  telegramAccountTriggerOutputs,
+  telegramAccountListeningSignature,
+  type TelegramAccountTriggerPostField,
+} from "./telegram-account-trigger.js"
 
 export { buildFeedMaps, nodeFeedsAnything, type FeedNode, type FeedEdge, type FeedMaps } from "./trigger-feeds.js"
 
@@ -851,7 +861,7 @@ export {
 export type { LottieOverlayCatalogEntry } from "./lottie-overlay-catalog.js"
 
 
-export { resolveFieldMappings, resolveLocationFields } from "./resolve-field-mappings.js"
+export { resolveFieldMappings, resolveLocationFields, type FieldEdgeSource } from "./resolve-field-mappings.js"
 
 export { resolveNodeRefs, parseNodeRef, canonicalVarName, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, REF_HANDLE_CATEGORY, REFERENCE_HANDLE_MAP, referenceModalityForHandle, FRAME_TARGET_HANDLES, countRefModalityEdges, REF_TOKEN_NAMESPACE_PREFIXES, classifyRefToken, unresolvedRefTokens } from "./node-refs.js"
 export type { RefCandidate, ReferenceModality, RefModalityEdge, RefTokenKind } from "./node-refs.js"

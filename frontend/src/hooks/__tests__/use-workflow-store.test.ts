@@ -800,3 +800,17 @@ describe("userTextTemplates (Generate Text user templates)", () => {
     expect(useWorkflowStore.getState().isDirty).toBe(false)
   })
 })
+
+describe("buildDuplicatedNodeData — a Telegram account trigger", () => {
+  it("a copy starts stopped: its owner turns it on in the panel", () => {
+    type Src = Parameters<typeof buildDuplicatedNodeData>[0]
+    const copy = buildDuplicatedNodeData({
+      id: "ta1",
+      type: "telegram-account-trigger",
+      position: { x: 0, y: 0 },
+      data: { label: "Inbox", accountId: "acc-1", chatIds: ["777"], isActive: true },
+    } as unknown as Src) as Record<string, unknown>
+    expect(copy.isActive).toBe(false)
+    expect(copy.chatIds).toEqual(["777"])
+  })
+})

@@ -6404,6 +6404,12 @@ export type TelegramAccountTriggerData = {
   keywords?: string[]
   /** The owner's own messages from their other devices. */
   includeOutgoing?: boolean
+  /**
+   * Inbox mode: only the owner's own shares start a run — a post link (one
+   * run per link) or a forwarded post — and every other message is ignored.
+   * Fills the post outputs (`videoLink`, `postText`, `postLink`).
+   */
+  inboxMode?: boolean
   isActive?: boolean
   executionStatus?: "idle" | "running" | "completed" | "failed"
 }
@@ -10032,13 +10038,16 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "input",
     creditCost: 0,
     inputs: [],
-    outputs: ["text", "chatId", "messageId", "senderId"],
+    // A literal on purpose (gen:skills reads it statically); a test pins it to
+    // @nodaro/shared TELEGRAM_ACCOUNT_TRIGGER_OUTPUT_HANDLES.
+    outputs: ["out", "videoLink", "postText", "postLink"],
     defaultData: {
       label: "Telegram Account Trigger",
       chatIds: [],
       messageTypeFilters: [],
       keywords: [],
       includeOutgoing: false,
+      inboxMode: false,
       isActive: false,
     } as TelegramAccountTriggerData,
   },

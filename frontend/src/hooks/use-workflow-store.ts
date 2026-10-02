@@ -14,7 +14,7 @@ import { NODE_DEFINITIONS, NODE_DEF_MAP, TELEPORTER_CHANNEL_COLORS, LOOP_COL_ADD
 import { HANDLE_OUTPUT_TYPES } from "@/lib/handle-output-types"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
-import { filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge, overlayVariantIdFromHandle } from "@nodaro/shared"
+import { filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge, overlayVariantIdFromHandle, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE } from "@nodaro/shared"
 import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { NodeDoubleClickAction } from "@/lib/node-double-click-action"
@@ -24,6 +24,7 @@ import { ensureNodePositions } from "@/lib/node-position"
 import { findNonOverlappingPosition, nodeRect, DEFAULT_PLACEMENT_SIZE } from "@/lib/find-free-position"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
 import { refreshEntityNodes } from "@/lib/entity-node-data"
+import { discardUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
 import { orderNodesParentFirst, localToWorld } from "@/components/editor/workflow-editor/group-coords"
 import { MAIN_TEXT_HANDLE, TEXT_PRODUCING_SOURCE_TYPES } from "@/lib/main-text-handle"
 import { resolveNodeDefaults, rememberSelection, pickRelevantFields, isNodeDefaultType, readMemory, type AdminDefault } from "@/lib/node-defaults"
@@ -231,6 +232,11 @@ function getNodeOutputForPreview(
       messageId: String((triggerData?.messageId ?? d.messageId) || ""),
       senderId: String((triggerData?.senderId ?? d.senderId) || ""),
       chatType: String((triggerData?.chatType ?? d.chatType) || ""),
+    }
+    // The account trigger's named outputs show what they carry, never the message.
+    if (t === "telegram-account-trigger" && isTelegramAccountTriggerNamedHandle(sourceHandle)) {
+      const value = telegramAccountTriggerOutputs(triggerData)[sourceHandle]
+      return value ? { type: classifyPreviewValue(t, value, sourceHandle), value } : null
     }
     const value = sourceHandle ? fields[sourceHandle] : fields.text
     return value ? { type: classifyPreviewValue(t, value, sourceHandle), value } : null
@@ -917,6 +923,9 @@ export function buildDuplicatedNodeData(
   for (const dbIdField of ["characterDbId", "objectDbId", "locationDbId", "faceDbId"]) {
     if (dbIdField in d) d[dbIdField] = ""
   }
+  // A copy of a Telegram account trigger starts stopped: listening is turned
+  // on in the panel, by the trigger's owner, for each trigger.
+  if (source.type === TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE) d.isActive = false
 
   // Generate fresh UUIDs for sub-workflow port IDs and routeIds
   if (source.type === "sub-workflow-input" || source.type === "sub-workflow-output") {
@@ -2122,6 +2131,8 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   },
 
   loadWorkflow: (id, name, nodes, edges, characterDefinitions, flowPromptTemplates, presentationSettings, viewport) => {
+    // What was set in an unsaved workflow's trigger panels never carries over.
+    discardUnsavedAccountTriggerIntents()
     nextNodeId =
       nodes.reduce((max, n) => {
         const num = parseInt(n.id.replace("node_", ""), 10)
@@ -2769,6 +2780,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   setIsWorkflowLoading: (loading) => set({ isWorkflowLoading: loading }),
 
   clearWorkflow: () => {
+    discardUnsavedAccountTriggerIntents()
     nextNodeId = 1
     set((state) => ({
       workflowId: null,

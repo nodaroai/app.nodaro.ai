@@ -52,6 +52,7 @@ import {
   buildSaveCharacterPayloadFromExport,
   buildSaveObjectPayloadFromExport,
   buildSaveLocationPayloadFromExport,
+  injectableNodes,
 } from "./editor-toolbar-inject-helpers"
 import { createClient } from "@/lib/supabase"
 import { ensureNodePositions } from "@/lib/node-position"
@@ -242,7 +243,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
     }
     setImporting(true)
     try {
-      let nodesToImport = [...data.nodes]
+      let nodesToImport = injectableNodes(data.nodes)
       const assetIdMap: Record<string, string> = {}
 
       if (data.assets) {

@@ -7410,10 +7410,12 @@ export async function listWorkflowTriggers(workflowId: string): Promise<Workflow
 export async function syncWorkflowTriggers(
   workflowId: string,
   vouchNodeIds: ReadonlyArray<string> = [],
+  /** Account triggers this editor session changed, each with the listening settings it set. */
+  accountNodes: ReadonlyArray<{ readonly id: string; readonly settings: string }> = [],
 ): Promise<{ data: { synced: boolean; created: number; updated: number; removed: number; reason?: string } }> {
   return apiRequest(`/v1/workflows/${encodeURIComponent(workflowId)}/sync-triggers`, "apiErr.syncTriggers", {
     method: "POST",
-    body: { vouchNodeIds: [...vouchNodeIds] },
+    body: { vouchNodeIds: [...vouchNodeIds], accountNodes: accountNodes.map((n) => ({ id: n.id, settings: n.settings })) },
   })
 }
 
@@ -9496,6 +9498,8 @@ export interface TelegramChatSummary {
   readonly lastMessageAt?: string
   /** No message in 30+ days. */
   readonly dormant: boolean
+  /** The account's own Saved Messages (the panel shows its name in the interface language). */
+  readonly isSelf?: boolean
 }
 
 export function listTelegramAccountChats(accountId: string): Promise<{ chats: TelegramChatSummary[] }> {

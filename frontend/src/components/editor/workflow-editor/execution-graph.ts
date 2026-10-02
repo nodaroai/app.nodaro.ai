@@ -1,6 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, type Transcript } from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript } from "@nodaro/shared";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
@@ -258,6 +258,12 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       senderId: String((triggerData?.senderId ?? data.senderId) || ""),
       chatType: String((triggerData?.chatType ?? data.chatType) || ""),
     };
+    // The account trigger's named outputs: an empty one answers "", never the
+    // message text — the backend getPrimaryOutput trigger branch answers the
+    // same, so a field pip it feeds is emptied the same way in both engines.
+    if (type === "telegram-account-trigger" && isTelegramAccountTriggerNamedHandle(sourceHandle)) {
+      return telegramAccountTriggerOutputs(triggerData)[sourceHandle] ?? "";
+    }
     if (sourceHandle && fields[sourceHandle] !== undefined) {
       return fields[sourceHandle] || undefined;
     }
