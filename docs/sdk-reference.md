@@ -37,6 +37,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.uploads`](#clientuploads)
   - [`client.library`](#clientlibrary)
   - [`client.presets`](#clientpresets)
+  - [`client.savedPosts`](#clientsavedposts)
   - [`client.pickerCatalogs`](#clientpickercatalogs)
   - [`client.shots`](#clientshots)
   - [`client.community`](#clientcommunity)
@@ -4698,6 +4699,66 @@ const orbit = data.find((p) => p.id === "generate-video/orbit-360")
 
 ---
 
+### `client.savedPosts`
+
+The inspiration wall: save a post you found (a Social Search result) with a
+note and tags, list and filter your saves, change or remove them. A save keeps
+a snapshot of the post and a copy of its still in your storage. OAuth app
+tokens need `assets:read` for the reads and `assets:write` for the writes
+(no-op for user/API-key auth).
+
+#### `list(params?)`
+
+```ts
+list(params?: ListSavedPostsParams): Promise<ListSavedPostsResult>
+```
+
+`GET /v1/saved-posts` → your saves, newest first. Filter by `platform`, `tag`
+or words `q` (in the note, the post's text or its title); page with `cursor`
+(the previous page's `nextCursor`) and `limit` (1-100, default 40).
+
+```ts
+let page = await client.savedPosts.list({ tag: "hooks" })
+for (const save of page.data) console.log(save.url, save.note)
+while (page.nextCursor) page = await client.savedPosts.list({ tag: "hooks", cursor: page.nextCursor })
+```
+
+#### `save(input)`
+
+```ts
+save(input: SavePostInput): Promise<SavedPost>
+```
+
+`POST /v1/saved-posts` → save a post (`input.post` is a `SocialPost`, exactly
+as Social Search returns it), with an optional `note` and `tags`. Saving a post
+that is already saved updates its note and tags and returns the existing save.
+
+```ts
+const run = await client.nodes.runAndWait("social-search", { platform: "tiktok", query: "meal prep" })
+const save = await client.savedPosts.save({ post: run.json[0], note: "strong opener", tags: ["hooks"] })
+```
+
+#### `lookup(postIds)`
+
+```ts
+lookup(postIds: readonly string[]): Promise<SavedPostsLookupResult>
+```
+
+`POST /v1/saved-posts/lookup` → which of these posts (`SocialPost.id`, up to
+200) you saved: `{ saved: [{ postId, id }] }`.
+
+#### `update(id, input)` / `delete(id)`
+
+```ts
+update(id: string, input: UpdateSavedPostInput): Promise<SavedPost>
+delete(id: string): Promise<void>
+```
+
+`PATCH` / `DELETE /v1/saved-posts/:id` → change a save's note or tags, or
+remove the save and its copied still.
+
+---
+
 ### `client.pickerCatalogs`
 
 Discover the valid values for **parameter-picker** nodes — the curated catalogs
@@ -5331,6 +5392,14 @@ Every type used in a public method signature is re-exported from
 - `SocialSearchJobOutput` — what `nodes.runAndWait("social-search", …)` resolves: `{ json: SocialPost[], platform, mode, query, warnings? }`
 - `SocialPost` / `SocialPostAuthor` / `SocialPostMetrics` / `SocialPostMedia` — one post, the same shape on every platform
 - `SocialPlatform` / `SocialSearchMode` / `SocialSearchPeriod` / `SocialSearchSort` / `SocialSearchCount` / `SocialSearchVideoKind` — the vocabularies
+
+### Saved posts
+
+- `SavedPost` — one save: `{ id, postId, platform, url, post, thumbnailUrl, note, tags, source, createdAt, updatedAt }`
+- `SavePostInput` / `UpdateSavedPostInput` — the `save()` / `update()` bodies
+- `ListSavedPostsParams` / `ListSavedPostsResult` — `list()`'s filters and page (`{ data, nextCursor }`)
+- `SavedPostsLookupResult` — `lookup()`'s answer
+- `SavedPostSource` — where a save came from: `picker`, `competitors`, `manual`, `api`
 
 ### Client identity
 

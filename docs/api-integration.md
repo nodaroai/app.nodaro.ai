@@ -2513,6 +2513,65 @@ curl -s -X DELETE "https://app.nodaro.ai/v1/node-presets/favorites?nodeType=gene
   -H "Authorization: Bearer $NODARO_TOKEN" | jq .
 ```
 
+## 16b. Saved posts (inspiration wall)
+
+Save a post you found (a [Social Search](./nodes/input/social-search.md) result)
+with a note and tags, then come back to it on the **Inspiration** page or feed
+it into a workflow. A save keeps a snapshot of the post, because links and
+numbers on the platform change, and the post's still is copied into your
+storage so the wall outlives the platform's expiring image links. The copy
+counts toward your storage and stays out of the media picker. One save per
+post: saving the same post again updates its note and tags.
+
+| Method | Path | Query / Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/saved-posts` | `platform`, `tag`, `q`, `cursor`, `limit` (1-100, default 40) | Your saves, newest first. Returns `{ data: SavedPost[], nextCursor }`. |
+| `POST` | `/v1/saved-posts` | body `{ post, note?, tags?, source? }` | Save a post (`post` is a `SocialPost`, exactly as Social Search returns it). `201` with the new save; `200` with the existing save when the post was already saved. |
+| `POST` | `/v1/saved-posts/lookup` | body `{ postIds }` (up to 200) | Which of these posts you saved. Returns `{ saved: [{ postId, id }] }`. |
+| `PATCH` | `/v1/saved-posts/:id` | body `{ note?, tags? }` | Change a save's note or tags. |
+| `DELETE` | `/v1/saved-posts/:id` | none | Remove a save and its copied still. Returns `{ success: true }`. |
+
+Tags are stored lower-case without a leading `#`: at most 10 per save, 40
+characters each. A comma in any script splits a tag (`"hooks, openers"` is two
+tags), and braces, quotes and backslashes are removed. A note is up to 2,000
+characters. `q` finds words in the note, the post's text and its title.
+`nextCursor` is an opaque token; pass it back as `?cursor=` for the next page
+(`null` on the last page). A cursor the list did not give out is refused with
+`400 invalid_cursor`.
+
+The post is checked before it is stored. A post without an id, a supported
+platform, an `http(s)` link, an author (`handle` and `name`) or text is refused
+with `400`; any other field of the wrong kind (a count that is not a number, a
+link that is not `http(s)`) is dropped. A post snapshot over 64 KB is refused
+with `413 post_too_large`.
+
+`thumbnailUrl` is the copied still, or `null` when there is none (the copy
+failed, or it was cleaned up under the account's
+[media retention](#8b-pay-as-you-go-accounts)); the post's own
+`media.thumbnailUrl` is then the only, expiring, link. Saving the post again
+copies the still again.
+
+OAuth app tokens need `assets:read` for the reads and `assets:write` for the
+writes (no-op for user / API-key auth: you own the resources). Saving is
+limited to 30 requests a minute per token (`429`). On a server that does not
+have saved posts yet, the reads answer empty and the writes answer
+`503 not_available`.
+
+```bash
+# Save one post from a Social Search run (post.json holds that post)
+curl -s -X POST https://app.nodaro.ai/v1/saved-posts \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --slurpfile p post.json '{post: $p[0], note: "strong hook", tags: ["hooks"]}')" | jq .
+
+# Your saved TikTok posts tagged "hooks"
+curl -s "https://app.nodaro.ai/v1/saved-posts?platform=tiktok&tag=hooks" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | {url, note}'
+```
+
+The same routes are wrapped by the SDK (`client.savedPosts`), the MCP tools
+(`save_post` / `list_saved_posts`) and the CLI (`nodaro saved-posts`).
+
 ## 17. Community
 
 The Community Library is an **admin-curated** catalog of shared characters,

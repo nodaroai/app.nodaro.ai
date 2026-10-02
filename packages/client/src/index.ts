@@ -59,7 +59,15 @@ export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter,
   SocialSearchPeriod,
   SocialSearchSort,
   SocialSearchCount,
-  SocialSearchVideoKind } from "@nodaro/shared"
+  SocialSearchVideoKind,
+  // Saved posts (`client.savedPosts`): the inspiration wall.
+  SavedPost,
+  SavedPostSource,
+  SavePostInput,
+  UpdateSavedPostInput,
+  ListSavedPostsParams,
+  ListSavedPostsResult,
+  SavedPostsLookupResult } from "@nodaro/shared"
 // `unwrapEditPlanOutput` (value) — the sanctioned way to read an edit-plan job's
 // `output_data` (normalizes clips → bare `Edl[]` and strips `viaNodaroCloud`).
 export { unwrapEditPlanOutput } from "@nodaro/shared"
@@ -90,6 +98,7 @@ export { CreditsResource } from "./resources/credits.js"
 export { UploadsResource } from "./resources/uploads.js"
 export { LibraryResource } from "./resources/library.js"
 export { PresetsResource } from "./resources/node-presets.js"
+export { SavedPostsResource } from "./resources/saved-posts.js"
 export { CommunityResource } from "./resources/community.js"
 export { PickerCatalogsResource } from "./resources/picker-catalogs.js"
 export {

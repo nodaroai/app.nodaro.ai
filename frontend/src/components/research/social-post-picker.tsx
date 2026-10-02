@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Search } from "lucide-react"
+import { toast } from "sonner"
 import { socialSearchPickTop, socialSearchPlatform, type SocialPost } from "@nodaro/shared"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -11,6 +12,7 @@ import { useT, type MessageKey } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { SocialSearchNodeData } from "@/types/nodes"
 import { applySocialSearchPicks, socialSearchResults } from "@/components/nodes/social-search-run-state"
+import { useSavedPostLookup, useSavedPostMutations } from "@/hooks/queries/use-saved-posts-queries"
 import { SOCIAL_PLATFORM_META } from "./social-platforms"
 import { SocialPostCard } from "./social-post-card"
 
@@ -74,12 +76,49 @@ export function SocialPostPicker({
   const [filter, setFilter] = useState("")
   const [now] = useState(() => Date.now())
 
+  // Saving to the inspiration wall. `savedNow` holds what this window changed
+  // (postId -> save id, or null once removed) so a bookmark does not flick
+  // back while the lookup refetches.
+  const postIds = useMemo(() => results.map((p) => p.id), [results])
+  const lookup = useSavedPostLookup(postIds, open)
+  const { save, remove } = useSavedPostMutations()
+  const [savedNow, setSavedNow] = useState<Readonly<Record<string, string | null>>>({})
+  // Every post being saved or removed right now (several can be in flight).
+  const [saving, setSaving] = useState<ReadonlySet<string>>(() => new Set())
+  const saveIdOf = (postId: string): string | null =>
+    postId in savedNow ? savedNow[postId] ?? null : lookup.data?.get(postId) ?? null
+  const toggleSave = async (post: SocialPost) => {
+    if (saving.has(post.id)) return
+    const saveId = saveIdOf(post.id)
+    setSaving((cur) => new Set(cur).add(post.id))
+    try {
+      if (saveId) {
+        await remove.mutateAsync(saveId)
+        setSavedNow((cur) => ({ ...cur, [post.id]: null }))
+        toast.success(t("social.removedFromWall"))
+      } else {
+        const created = await save.mutateAsync({ post, source: "picker" })
+        setSavedNow((cur) => ({ ...cur, [post.id]: created.id }))
+        toast.success(t("social.savedToWall"))
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t(saveId ? "apiErr.deleteSavedPost" : "apiErr.savePost"))
+    } finally {
+      setSaving((cur) => {
+        const next = new Set(cur)
+        next.delete(post.id)
+        return next
+      })
+    }
+  }
+
   // Each time the window opens it starts from what the node holds now.
   useEffect(() => {
     if (!open) return
     setPicked(Array.isArray(data.pickedIds) ? data.pickedIds.filter((id) => results.some((p) => p.id === id)) : [])
     setKeep(data.keepPicks === true)
     setFilter("")
+    setSavedNow({})
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const shown = useMemo(() => filterPickerPosts(sortPickerPosts(results, sort), filter), [results, sort, filter])
@@ -141,7 +180,17 @@ export function SocialPostPicker({
               {shown.map((post) => {
                 const at = picked.indexOf(post.id)
                 return (
-                  <SocialPostCard key={post.id} post={post} picked={at >= 0} order={at >= 0 ? at + 1 : undefined} onToggle={() => toggle(post.id)} now={now} />
+                  <SocialPostCard
+                    key={post.id}
+                    post={post}
+                    picked={at >= 0}
+                    order={at >= 0 ? at + 1 : undefined}
+                    onToggle={() => toggle(post.id)}
+                    now={now}
+                    saved={saveIdOf(post.id) !== null}
+                    saveBusy={saving.has(post.id)}
+                    onToggleSave={() => void toggleSave(post)}
+                  />
                 )
               })}
             </div>

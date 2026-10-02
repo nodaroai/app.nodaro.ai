@@ -26,6 +26,7 @@ import { CreditsResource } from "./resources/credits.js"
 import { UploadsResource } from "./resources/uploads.js"
 import { LibraryResource } from "./resources/library.js"
 import { PresetsResource } from "./resources/node-presets.js"
+import { SavedPostsResource } from "./resources/saved-posts.js"
 import { PickerCatalogsResource } from "./resources/picker-catalogs.js"
 import { CatalogsResource } from "./resources/catalogs.js"
 import { ModelsResource } from "./resources/models.js"
@@ -184,6 +185,7 @@ export class NodaroClient {
   readonly uploads: UploadsResource
   readonly library: LibraryResource
   readonly presets: PresetsResource
+  readonly savedPosts: SavedPostsResource
   readonly pickerCatalogs: PickerCatalogsResource
   readonly catalogs: CatalogsResource
   readonly models: ModelsResource
@@ -236,6 +238,7 @@ export class NodaroClient {
     this.uploads = new UploadsResource(this)
     this.library = new LibraryResource(this)
     this.presets = new PresetsResource(this)
+    this.savedPosts = new SavedPostsResource(this)
     this.pickerCatalogs = new PickerCatalogsResource(this)
     this.catalogs = new CatalogsResource(this)
     this.models = new ModelsResource(this)

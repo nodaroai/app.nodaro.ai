@@ -433,6 +433,14 @@ const DOCS_REVIEW_WORDING_BYTES = 409
 // 376_790 total − 373_669 base = 3_121 B, well under the 8_192 B per-tool
 // budget, and the list keeps the 46 B of headroom it had before.
 const SOCIAL_SEARCH_TOOL_BYTES = 3_121
+// RAISED 2026-10-02 by save_post and list_saved_posts and nothing else — two
+// NEW cloud-only tools (the inspiration wall), registered beside social_search
+// inside the hasCredits() block and gated by assets:write / assets:read, so
+// cloud/all names them and the community sets and the scope-less sets do not.
+// measured by this suite: 378_637 total − 376_790 base = 1_847 B, both far
+// under the 8_192 B per-tool budget, and the list keeps the 46 B of headroom
+// it had before.
+const SAVED_POST_TOOLS_BYTES = 1_847
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -471,7 +479,8 @@ export const TOOL_WIRE_BUDGET = {
     GENERATE_SCRIPT_STYLE_GUIDE_BYTES +
     GENERATE_MUSIC_REFERENCE_BYTES +
     DOCS_REVIEW_WORDING_BYTES +
-    SOCIAL_SEARCH_TOOL_BYTES,
+    SOCIAL_SEARCH_TOOL_BYTES +
+    SAVED_POST_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

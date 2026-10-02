@@ -38,6 +38,14 @@ export const queryKeys = {
     detail: (userId: string) => ["user-settings", userId] as const,
   },
 
+  // Saved posts (the inspiration wall; per-user)
+  savedPosts: {
+    all: ["savedPosts"] as const,
+    list: (filters: { platform?: string; tag?: string; q?: string }) =>
+      ["savedPosts", "list", filters.platform ?? "", filters.tag ?? "", filters.q ?? ""] as const,
+    lookup: (postIds: readonly string[]) => ["savedPosts", "lookup", postIds.join("|")] as const,
+  },
+
   // Node presets
   nodePresets: {
     all: ["nodePresets"] as const,

@@ -31,6 +31,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Build a workflow by describing it** (in-app chat that edits your canvas; Cloud) → [Workflow Copilot](./features/workflow-copilot.md)
 - **Wipe a run off the canvas before changing the workflow** (what Clear results removes, what it never touches, and how to get it back) → [Clear results](./features/clear-results.md)
 - **Free credits on a new account** (what the signup grant is, and when activation asks for a card; Cloud) → [Free credits](./features/free-credits.md)
+- **Keep the posts worth coming back to** (save Social Search results with notes and tags, find them again; Cloud) → [Inspiration](./features/inspiration.md)
 - **Connect an AI client (Claude.ai, Cursor, Cline, Continue, Goose) via MCP** → [MCP](./mcp/index.md)
 - **Contribute to Nodaro** → [Architecture](./architecture.md) → [Contributing](./contributing.md)
 

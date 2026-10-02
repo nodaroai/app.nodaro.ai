@@ -165,6 +165,13 @@ nodaro pickers analyze "<text>" [--target <types>] [--instructions <text>] [--mo
 #   AI Fill: choose picker values from a free-text description (credit-billed LLM call);
 #   --target limits to a comma-separated list of picker node types (default: all analyzable)
 
+# Saved posts — the inspiration wall (posts saved from Social Search, with notes and tags)
+nodaro saved-posts list [--platform <p>] [--tag <t>] [--q <words>] [--limit <n>] [--cursor <c>] [--json]
+nodaro saved-posts save --file <post.json|-> [--index <n>] [--note <text>] [--tag <t>]... [--json]
+#   --file holds one post, or a Social Search output list (--index picks one, default 0)
+nodaro saved-posts update <id> [--note <text>] [--tag <t>]... [--clear-tags] [--json]
+nodaro saved-posts delete <id>                         # also removes the copied still
+
 # Catalog — maintain a deployment's VENDORED catalog packs (offline, file-based; no auth/client)
 nodaro catalog snapshot --in <file>                     # echo a detail=full /v1/catalogs projection + sidecars JSON
 nodaro catalog diff-upstream --baseline <f> --upstream <f> --pack <f> [--write <f>]
@@ -514,6 +521,14 @@ nodaro nodes run social-search   --param platform=tiktok --param query="ai video
 
 # An advertiser's running ads on Meta
 nodaro nodes run social-search   --param platform=meta_ads --param mode=account --param query="Brand Name" --watch
+```
+
+Keep the posts worth coming back to on your inspiration wall: save one from the run's output with a note and tags.
+
+```bash
+nodaro jobs get <jobId> --json | jq '.output_data.json' > posts.json
+nodaro saved-posts save --file posts.json --index 2 --note "strong opener" --tag hooks
+nodaro saved-posts list --tag hooks
 ```
 
 ## Output formatting

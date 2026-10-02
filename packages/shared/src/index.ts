@@ -880,6 +880,23 @@ export {
   type SocialSearchParams,
 } from "./social-search.js"
 
+export {
+  SAVED_POST_SOURCES,
+  SAVED_POST_NOTE_MAX,
+  SAVED_POST_MAX_TAGS,
+  SAVED_POST_TAG_MAX,
+  SAVED_POSTS_PAGE_MAX,
+  SAVED_POSTS_LOOKUP_MAX,
+  normalizeSavedPostTags,
+  type SavedPostSource,
+  type SavedPost,
+  type SavePostInput,
+  type UpdateSavedPostInput,
+  type ListSavedPostsParams,
+  type ListSavedPostsResult,
+  type SavedPostsLookupResult,
+} from "./saved-posts.js"
+
 export { VARIABLES_HANDLE_ID, buildConditionVariables } from "./condition-variables.js"
 
 export { extractAllGeneratedResults, extractGeneratedJsonAsList, spreadJsonArrayIfSingleton } from "./generated-results.js"

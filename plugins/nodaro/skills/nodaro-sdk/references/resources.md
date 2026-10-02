@@ -27,6 +27,7 @@
 | `uploads` | Signed upload URLs for image / video / audio |
 | `library` | Generated-media library |
 | `presets` | Node presets (factory + user) |
+| `savedPosts` | Inspiration wall: save, list, look up, update, delete saved posts |
 | `pickerCatalogs` | Parameter-picker catalog discovery |
 | `catalogs` | Catalog packs a deployment registered (`GET /v1/catalogs`) |
 | `models` | Model catalog: capabilities + credit prices (`GET /v1/models`) |

@@ -198,6 +198,13 @@ const ALLOWED_PATHS = [
   // the DB-level guard.
   /^src\/routes\/prompt-snippets\.ts$/,
 
+  // Saved posts (the inspiration wall): per-user CRUD collection, same shape
+  // as prompt-snippets. Every handler derives `userId = req.userId` (401 if
+  // absent) and every query chains `.eq("user_id", userId)`; inserts carry
+  // `user_id: userId`. saved_posts grants nothing to client roles, so this
+  // route (and its tenant-scope lint entry) is the only way in.
+  /^src\/routes\/saved-posts\.ts$/,
+
   // Embeds / og-tags: fetch public-facing metadata by id, not user-scoped.
   /^src\/routes\/embed\.ts$/,
   /^src\/routes\/og-tags\.ts$/,

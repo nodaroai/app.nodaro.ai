@@ -6,7 +6,9 @@
 
 Social Search finds public posts on one platform and returns them in one shape, whatever the platform: the link, who posted it, when, the words, the still and (where the platform gives one) the video, and the numbers — views, likes, comments, shares, saves, or a Reddit score. Meta ads also carry how long the ad has run, how many versions it has, its call to action and where it links.
 
-After a search, open **Pick posts** on the node to browse the results as cards and pick the posts this node passes on, in the order you want them. With no picks, the node passes on the first few (5 by default). Wire the `json` output into Content Recipe, Video Analysis, a List or Extract Field; set the wire to **Each** to run the next node once per post.
+After a search, open **Pick posts** on the node to browse the results as cards and pick the posts this node passes on, in the order you want them. With no picks, the node passes on the first few (5 by default). Wire the `json` output into Content Recipe, a List or Extract Field; set the wire to **Each** to run the next node once per post. To analyze each post's video, take its link with Extract Field (field `url`) and wire that into Video Analysis's video input.
+
+The bookmark on each card saves the post to [Inspiration](../../features/inspiration.md), your wall of saved posts with notes and tags. Saving does not pick the post.
 
 Social Search runs on Nodaro Cloud. It is in preview for admins.
 

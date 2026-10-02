@@ -1672,6 +1672,18 @@ Needs `workflows:read`.
 
 No parameters.
 
+## `list_saved_posts`
+
+Needs `assets:read` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `platform` | string |  | One of `tiktok`, `instagram`, `youtube`, `x`, `reddit`, `linkedin`, `meta_ads`. |
+| `tag` | string |  | At most 40 characters. |
+| `q` | string |  | Words to find in the note or the post. At most 200 characters. |
+| `limit` | integer |  | Default 20. From 1 to 100. |
+| `cursor` | string |  | next_cursor from the previous call. At most 100 characters. |
+
 ## `list_shot_shapes`
 
 Always visible.
@@ -2138,6 +2150,16 @@ Needs `workflows:execute`.
 | `aspect_ratio` | string or null |  |  |
 | `resolution` | string or null |  |  |
 | `quality` | string or null |  |  |
+
+## `save_post`
+
+Needs `assets:write` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `post` | object (map of any) | yes | One post exactly as social_search returned it. |
+| `note` | string |  | Why it is worth keeping. At most 2000 characters. |
+| `tags` | string[] |  | Short labels, e.g. hooks. At most 10 items. |
 
 ## `score_studio_production`
 

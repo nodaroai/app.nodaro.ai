@@ -1,7 +1,7 @@
 "use client"
 
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react"
-import { Check, ExternalLink, Eye, Heart, MessageCircle, Play, ThumbsUp } from "lucide-react"
+import { Bookmark, BookmarkCheck, Check, ExternalLink, Eye, Heart, MessageCircle, Play, ThumbsUp } from "lucide-react"
 import type { SocialPost } from "@nodaro/shared"
 import { MetaAdMedia } from "@/components/nodes/meta-ad-media"
 import { useT } from "@/lib/i18n"
@@ -20,17 +20,17 @@ export function socialPostLink(post: SocialPost): string | null {
   }
 }
 
-function initialOf(post: SocialPost): string {
+export function initialOf(post: SocialPost): string {
   const who = (post.author.handle || post.author.name || post.container || "?").replace(/^@/, "").trim()
   return who ? who.charAt(0).toUpperCase() : "?"
 }
 
-function whoOf(post: SocialPost): string {
+export function whoOf(post: SocialPost): string {
   if (post.author.handle) return `@${post.author.handle.replace(/^@/, "")}`
   return post.author.name || post.container || ""
 }
 
-function adDays(post: SocialPost, now: number): number | null {
+export function adDays(post: SocialPost, now: number): number | null {
   if (post.platform !== "meta_ads" || !post.publishedAt) return null
   const start = Date.parse(post.publishedAt)
   if (Number.isNaN(start)) return null
@@ -38,7 +38,7 @@ function adDays(post: SocialPost, now: number): number | null {
   return Math.max(0, Math.round(((Number.isNaN(ended) ? now : ended) - start) / 86_400_000))
 }
 
-function Metric({ icon, value, label }: { readonly icon: ReactNode; readonly value: number; readonly label: string }) {
+export function Metric({ icon, value, label }: { readonly icon: ReactNode; readonly value: number; readonly label: string }) {
   return (
     <span className="flex items-center gap-1" title={label}>
       <span className="sr-only">{label}</span>
@@ -51,7 +51,8 @@ function Metric({ icon, value, label }: { readonly icon: ReactNode; readonly val
 /**
  * One post in the picker grid: its still, who posted it, when, its numbers,
  * the first words — and a pick toggle. Clicking anywhere on the card toggles
- * the pick; the link opens the post in a new tab without toggling.
+ * the pick; the link opens the post in a new tab and the bookmark saves it to
+ * the inspiration wall, neither toggling the pick.
  */
 export function SocialPostCard({
   post,
@@ -59,6 +60,9 @@ export function SocialPostCard({
   order,
   onToggle,
   now,
+  saved,
+  saveBusy,
+  onToggleSave,
 }: {
   readonly post: SocialPost
   readonly picked: boolean
@@ -66,6 +70,10 @@ export function SocialPostCard({
   readonly order?: number
   readonly onToggle: () => void
   readonly now: number
+  /** On the inspiration wall. The bookmark shows only with `onToggleSave`. */
+  readonly saved?: boolean
+  readonly saveBusy?: boolean
+  readonly onToggleSave?: () => void
 }) {
   const t = useT()
   const m = post.metrics
@@ -96,6 +104,26 @@ export function SocialPostCard({
         initial={initialOf(post)}
         className={cn("w-full", portrait ? "aspect-[3/4]" : "aspect-video")}
       >
+        {onToggleSave && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleSave()
+            }}
+            onKeyDown={stop}
+            disabled={saveBusy}
+            aria-pressed={saved === true}
+            aria-label={saved ? t("social.savedRemove") : t("social.saveToWall")}
+            title={saved ? t("social.savedRemove") : t("social.saveToWall")}
+            className={cn(
+              "absolute start-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full border transition-colors disabled:opacity-60",
+              saved ? "border-[#FF0073] bg-[#FF0073] text-white" : "border-white/80 bg-black/40 text-white hover:bg-black/60",
+            )}
+          >
+            {saved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
+          </button>
+        )}
         {post.media.kind === "video" && (
           <span className="absolute bottom-1.5 start-1.5 flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10.5px] font-bold text-white">
             <Play className="h-3 w-3" />

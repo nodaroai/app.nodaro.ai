@@ -4618,6 +4618,45 @@ export async function socialSearch(
   return apiJson("/v1/social-search", { body: { ...params }, workflowId: true, label: "apiErr.socialSearchFailed" })
 }
 
+// ---- Saved posts (the inspiration wall) ----
+
+type SavedPost = import("@nodaro/shared").SavedPost
+
+export async function listSavedPosts(
+  params: import("@nodaro/shared").ListSavedPostsParams = {},
+): Promise<import("@nodaro/shared").ListSavedPostsResult> {
+  const qs = new URLSearchParams()
+  if (params.platform) qs.set("platform", params.platform)
+  if (params.tag) qs.set("tag", params.tag)
+  if (params.q) qs.set("q", params.q)
+  if (params.cursor) qs.set("cursor", params.cursor)
+  if (params.limit) qs.set("limit", String(params.limit))
+  const query = qs.toString()
+  return apiJson(`/v1/saved-posts${query ? `?${query}` : ""}`, { method: "GET", label: "apiErr.loadSavedPosts" })
+}
+
+/** Which of these posts (`SocialPost.id`) the caller saved, as postId -> save id. */
+export async function lookupSavedPosts(postIds: readonly string[]): Promise<ReadonlyMap<string, string>> {
+  if (postIds.length === 0) return new Map()
+  const res = await apiJson<import("@nodaro/shared").SavedPostsLookupResult>("/v1/saved-posts/lookup", {
+    body: { postIds: [...postIds] },
+    label: "apiErr.loadSavedPosts",
+  })
+  return new Map(res.saved.map((s) => [s.postId, s.id]))
+}
+
+export async function savePost(input: import("@nodaro/shared").SavePostInput): Promise<SavedPost> {
+  return apiJson("/v1/saved-posts", { body: { ...input }, label: "apiErr.savePost" })
+}
+
+export async function updateSavedPost(id: string, input: import("@nodaro/shared").UpdateSavedPostInput): Promise<SavedPost> {
+  return apiJson(`/v1/saved-posts/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.updateSavedPost" })
+}
+
+export async function deleteSavedPost(id: string): Promise<void> {
+  await apiJson(`/v1/saved-posts/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteSavedPost" })
+}
+
 export async function sunoGenerateApi(params: {
   prompt: string
   model?: string

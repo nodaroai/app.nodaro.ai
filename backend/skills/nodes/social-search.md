@@ -78,8 +78,9 @@ an admin preview until it opens to everyone). Set `platform`
 `sort` (relevance/popular/newest) shape them. The node outputs `json` — the
 posts it passes on, as an array — and `text`, the same posts as a digest. A
 person picks posts in the editor; a workflow run without picks passes on the
-first `pickTop` (default 5). Wire `json` into Content Recipe or Video Analysis
-with the edge in **Each** mode to run once per post.
+first `pickTop` (default 5). Wire `json` into Content Recipe with the edge in
+**Each** mode to run once per post. Video Analysis takes a post by its link:
+put Extract Field (`url`) between them, with the edge into it in **Each** mode.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->

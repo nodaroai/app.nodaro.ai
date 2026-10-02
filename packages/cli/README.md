@@ -175,6 +175,7 @@ nodaro audio combine --segment <url> --segment "<url>@12-95" --watch
 #   locations / objects — Location & Object Studio CRUD + motion
 #   prompt      — the prompt wizard (analyze / generate / wizard)
 #   presets     — node presets (factory + your own)
+#   saved-posts — the inspiration wall: posts saved from Social Search
 #   community   — shared characters/locations/objects: browse, clone, favorites
 ```
 
