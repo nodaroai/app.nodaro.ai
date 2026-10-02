@@ -128,13 +128,18 @@ async function accountIsOwners(accountId: string, userId: string): Promise<boole
  * The row's node is on the stored graph AND switched on there. A write that
  * switched it off — from any lane, the Copilot or an API token included —
  * stops the listener at once, before any trigger sync catches up.
+ *
+ * `nodes` is jsonb, so the pattern goes as JSON text: the client sends an
+ * ARRAY given to `.contains()` as a Postgres array literal (`{…}`), which a
+ * jsonb column refuses ("invalid input syntax for type json").
  */
 async function triggerNodeArmedOnGraph(workflowId: string, nodeId: string, lane: PluginTriggerLane): Promise<boolean> {
+  const armedNode = { id: nodeId, type: NODE_TYPE_BY_LANE[lane], data: ARMED_DATA_BY_LANE[lane] }
   const { data, error } = await supabase
     .from("workflows")
     .select("id")
     .eq("id", workflowId)
-    .contains("nodes", [{ id: nodeId, type: NODE_TYPE_BY_LANE[lane], data: ARMED_DATA_BY_LANE[lane] }])
+    .contains("nodes", JSON.stringify([armedNode]))
     .maybeSingle()
   if (error) throw new Error(`workflows read failed: ${error.message}`)
   return data !== null

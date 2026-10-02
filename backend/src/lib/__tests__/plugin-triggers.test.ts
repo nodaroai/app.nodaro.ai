@@ -11,6 +11,8 @@ const state = vi.hoisted(() => ({
   accountOwned: true,
   /** The stored graph's nodes; the fire path asks for its node by containment. */
   graphNodes: [] as Record<string, unknown>[],
+  /** Each containment operand as the real client puts it on the wire. */
+  graphOperands: [] as string[],
   inFlight: 0,
   rateCount: 1,
   offers: 0,
@@ -27,7 +29,16 @@ const state = vi.hoisted(() => ({
   rateIncrs: 0,
 }))
 
-vi.mock("../supabase.js", () => {
+vi.mock("../supabase.js", async () => {
+  // What `.contains()` sends is the REAL client's choice (an array becomes a
+  // Postgres array literal, not JSON), so the fake reads the operand the real
+  // client writes, the way Postgres reads it for the jsonb `nodes` column.
+  const { createClient } = await vi.importActual<typeof import("@supabase/supabase-js")>("@supabase/supabase-js")
+  const wire = createClient("http://postgrest.test", "test-key", { auth: { autoRefreshToken: false, persistSession: false } })
+  const operandOf = (col: string, want: unknown): string => {
+    const built = wire.from("workflows").select("id").contains(col, want as string) as unknown as { url: URL }
+    return (built.url.searchParams.get(col) ?? "").replace(/^cs\./, "")
+  }
   /** Postgres JSONB `@>`: every part of `want` is in `have`. */
   const contains = (have: unknown, want: unknown): boolean => {
     if (Array.isArray(want)) return Array.isArray(have) && want.every((w) => have.some((h) => contains(h, w)))
@@ -40,12 +51,20 @@ vi.mock("../supabase.js", () => {
   const chain = (onThen: () => unknown, onMaybe?: () => unknown, record?: (col: string, val: unknown) => void) => {
     const c: Record<string, unknown> = {}
     let containsOk = true
+    let containsError: string | null = null
     for (const m of ["select", "in"]) c[m] = () => c
-    c.contains = (_col: string, want: unknown) => {
-      containsOk = contains(state.graphNodes, want)
+    c.contains = (col: string, want: unknown) => {
+      const operand = operandOf(col, want)
+      state.graphOperands.push(operand)
+      try {
+        containsOk = contains(state.graphNodes, JSON.parse(operand))
+      } catch {
+        containsError = "invalid input syntax for type json"
+      }
       return c
     }
     c.containsOk = () => containsOk
+    c.containsError = () => containsError
     c.eq = (col: string, val: unknown) => {
       record?.(col, val)
       return c
@@ -83,7 +102,11 @@ vi.mock("../supabase.js", () => {
           )
         }
         if (table === "workflows") {
-          const c: Record<string, unknown> = chain(() => null, () => ({ data: (c.containsOk as () => boolean)() ? { id: "wf-row" } : null, error: null }))
+          const c: Record<string, unknown> = chain(() => null, () => {
+            const refused = (c.containsError as () => string | null)()
+            if (refused) return { data: null, error: { message: refused } }
+            return { data: (c.containsOk as () => boolean)() ? { id: "wf-row" } : null, error: null }
+          })
           return c
         }
         // workflow_executions: the in-flight count, or the insert
@@ -162,6 +185,7 @@ beforeEach(() => {
   state.listRows = []
   state.accountOwned = true
   state.graphNodes = [{ id: "text-1", type: "text-prompt", data: {} }, ARMED_NODE]
+  state.graphOperands = []
   state.inFlight = 0
   state.rateCount = 1
   state.offers = 0
@@ -195,6 +219,12 @@ describe("firePluginTrigger", () => {
     expect(job).toMatchObject({ executionId: "exec-1", workflowId: "wf-row", userId: "user-row", triggerType: "telegram_account", triggerNodeId: "node-7" })
     expect(opts).toEqual({ jobId: "exec-1" })
     expect(state.triggerUpdates).toEqual([{ last_triggered_at: expect.any(String) }])
+  })
+
+  it("asks the stored graph in JSON, the only operand the jsonb nodes column reads", async () => {
+    expect(await firePluginTrigger(FIRE)).toEqual({ fired: true, executionId: "exec-1" })
+    expect(state.graphOperands).toHaveLength(1)
+    expect(JSON.parse(state.graphOperands[0])).toEqual([{ id: "node-7", type: "telegram-account-trigger", data: { isActive: true } }])
   })
 
   it.each([
