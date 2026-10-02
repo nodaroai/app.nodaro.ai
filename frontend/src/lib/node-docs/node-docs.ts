@@ -93,49 +93,70 @@ export function useNodeDocsUrl(): (type: string, section?: NodeDocsSection) => s
   return useCallback((type: string, section?: NodeDocsSection) => docsUrlForNode(type, { section, lang }), [lang])
 }
 
-/**
- * The summaries exist in English only, so they are shown only to an English
- * interface; another language shows the node's name and sections without one.
- */
-export const NODE_DOCS_SUMMARY_LANGUAGE = "en"
+/** The language whose summary every page has: the fallback for any other. */
+export const NODE_DOCS_FALLBACK_LANGUAGE = "en"
 
 type Summaries = Readonly<Record<string, string>>
-let summaries: Summaries | null = null
-let loading: Promise<Summaries> | null = null
 
-function loadSummaries(): Promise<Summaries> {
-  loading ??= import("./node-docs-summaries.generated").then((m) => {
-    summaries = m.NODE_DOCS_SUMMARIES
-    return summaries
-  })
-  return loading
+/** One chunk per language the docs translate (`summaries/<lang>.generated.ts`), keyed by lowercase language. */
+const SUMMARY_CHUNKS: ReadonlyMap<string, () => Promise<{ NODE_DOCS_SUMMARIES: Summaries }>> = new Map(
+  Object.entries(import.meta.glob<{ NODE_DOCS_SUMMARIES: Summaries }>("./summaries/*.generated.ts")).map(
+    ([path, load]) => [path.slice("./summaries/".length, -".generated.ts".length).toLowerCase(), load],
+  ),
+)
+const loadedSummaries = new Map<string, Summaries>()
+const loadingSummaries = new Map<string, Promise<void>>()
+
+function loadSummaries(lang: string): Promise<void> {
+  const load = SUMMARY_CHUNKS.get(lang)
+  if (!load || loadedSummaries.has(lang)) return Promise.resolve()
+  let pending = loadingSummaries.get(lang)
+  if (!pending) {
+    pending = load()
+      .then((m) => {
+        loadedSummaries.set(lang, m.NODE_DOCS_SUMMARIES)
+      })
+      .finally(() => loadingSummaries.delete(lang))
+    loadingSummaries.set(lang, pending)
+  }
+  return pending
 }
 
 /**
- * The page's one-line summary, loaded on first use (a separate chunk the editor
- * does not carry until a docs popover opens). Undefined until it arrives, in
- * any language but English, and for a type with no page.
+ * A page's summary in `lang` when the page is translated into it, otherwise
+ * in English. Language ids match in any letter case (`pt-BR`, `pt-br`).
+ */
+export function nodeDocsSummaryFrom(byLang: ReadonlyMap<string, Summaries>, lang: string, type: string): string | undefined {
+  const key = NODE_DOCS_ALIASES[type] ?? type
+  return byLang.get(lang.toLowerCase())?.[key] ?? byLang.get(NODE_DOCS_FALLBACK_LANGUAGE)?.[key]
+}
+
+/**
+ * The page's one-line summary in the interface language, or in English when
+ * the docs have not translated that page. Loaded on first use (separate chunks
+ * the editor does not carry until a docs popover opens). Undefined until they
+ * arrive, and for a type with no page.
  */
 export function useNodeDocsSummary(type: string, enabled: boolean): string | undefined {
-  const english = useUserLocale() === NODE_DOCS_SUMMARY_LANGUAGE
-  const [loaded, setLoaded] = useState<Summaries | null>(summaries)
-  const wanted = enabled && english
+  const lang = useUserLocale().toLowerCase()
+  const [, setVersion] = useState(0)
+  const needed = [...new Set([lang, NODE_DOCS_FALLBACK_LANGUAGE])].filter((l) => SUMMARY_CHUNKS.has(l))
+  const missing = needed.filter((l) => !loadedSummaries.has(l)).join(",")
 
   useEffect(() => {
-    if (!wanted || loaded) return
+    if (!enabled || !missing) return
     let live = true
-    loadSummaries()
-      .then((s) => {
-        if (live) setLoaded(s)
+    Promise.all(missing.split(",").map(loadSummaries))
+      .then(() => {
+        if (live) setVersion((v) => v + 1)
       })
       .catch(() => {
         // A failed chunk load only costs the summary; the popover still links.
-        loading = null
       })
     return () => {
       live = false
     }
-  }, [wanted, loaded])
+  }, [enabled, missing])
 
-  return wanted ? loaded?.[NODE_DOCS_ALIASES[type] ?? type] : undefined
+  return enabled ? nodeDocsSummaryFrom(loadedSummaries, lang, type) : undefined
 }

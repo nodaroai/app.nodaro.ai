@@ -2,12 +2,12 @@
 import type { NodeDocsSection } from "./node-docs"
 
 /** The date the docs site produced the snapshot. */
-export const NODE_DOCS_SNAPSHOT_DATE = "2026-09-28"
+export const NODE_DOCS_SNAPSHOT_DATE = "2026-09-29"
 
 /** The sections each node's page has, in page order. */
 export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSection[]>> = {
   "upload-image": ["when-to-use", "quick-start", "outputs", "settings", "tips", "faq"],
-  "generate-image": ["when-to-use", "quick-start", "inputs", "settings", "models", "tips", "api", "faq"],
+  "generate-image": ["when-to-use", "quick-start", "inputs", "settings", "models", "tips", "troubleshooting", "api", "faq"],
   "modify-image": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "faq"],
   "upscale-image": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "faq"],
   "remove-background": ["when-to-use", "quick-start", "inputs", "models", "tips", "faq"],
@@ -29,13 +29,13 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "slideshow": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "faq"],
   "generative-pipeline": ["when-to-use", "quick-start", "settings", "credits", "tips", "api", "faq"],
   "scene": ["when-to-use", "outputs", "tips", "faq"],
-  "generate-script": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "faq"],
+  "generate-script": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "troubleshooting", "faq"],
   "ai-avatar": ["when-to-use", "quick-start", "settings", "credits", "tips", "faq"],
   "cinematic-avatar": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "faq"],
   "lip-sync": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "api", "faq"],
   "speech-to-video": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "faq"],
   "motion-transfer": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "faq"],
-  "face-swap": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "faq"],
+  "face-swap": ["when-to-use", "quick-start", "inputs", "settings", "troubleshooting", "credits", "tips", "faq"],
   "extend-video": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "api", "faq"],
   "edit-video-pro": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "faq"],
   "video-retake": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "limits", "tips", "faq"],
@@ -84,7 +84,7 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "voice-remix": ["when-to-use", "quick-start", "inputs", "settings", "tips", "api", "faq"],
   "dubbing": ["when-to-use", "quick-start", "inputs", "settings", "limits", "credits", "tips", "troubleshooting", "api", "faq"],
   "suno-generate": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "api", "faq"],
-  "generate-music": ["when-to-use", "quick-start", "inputs", "settings", "tips", "faq"],
+  "generate-music": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "faq"],
   "suno-lyrics": ["when-to-use", "quick-start", "inputs", "settings", "tips", "faq"],
   "suno-cover": ["when-to-use", "quick-start", "inputs", "settings", "tips", "faq"],
   "suno-extend": ["when-to-use", "quick-start", "inputs", "settings", "tips", "troubleshooting", "faq"],
@@ -108,10 +108,10 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "audio-fx": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "api", "faq"],
   "transcribe": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "api", "faq"],
   "forced-alignment": ["when-to-use", "quick-start", "inputs", "settings", "models", "tips", "api", "faq"],
-  "provider": ["settings", "tips", "faq"],
+  "provider": ["settings", "tips", "troubleshooting", "faq"],
   "aspect-ratio": ["settings", "tips", "faq"],
   "duration": ["settings", "tips", "faq"],
-  "motion": ["settings", "faq"],
+  "motion": ["when-to-use", "settings", "faq"],
   "scene-count": ["settings", "tips", "faq"],
   "tone": ["when-to-use", "quick-start", "settings", "tips", "faq"],
   "style-guide": ["settings", "faq"],

@@ -379,8 +379,8 @@ Every node links to its page in the public docs (nodaro.ai/docs).
   - "Compare models" beside the model picker's heading, to `#models`
 - **Which sections a page has** comes from the docs site's snapshot, `lib/node-docs/node-docs-links.json`. A deep link shows only when the page has that section.
   - The docs site rebuilds the snapshot on every deploy and serves it at `https://nodaro.ai/docs/node-links.json`. `npm -w frontend run gen:node-docs -- --live` fetches it, writes it as 2-space JSON (so the diff shows only what changed) and regenerates. A file path or another URL works too.
-  - The app ships two maps generated from it: `node-docs-map.generated.ts` (type → sections) and `node-docs-summaries.generated.ts`, a separate chunk loaded when a popover opens.
-  - The summaries are English, so they show only to an English interface.
+  - The app ships what is generated from it: `node-docs-map.generated.ts` (type → sections) and `summaries/<lang>.generated.ts`, one chunk per language the docs translate, loaded when a popover opens.
+  - The popover shows the summary in the interface language when the page is translated into it (the map's `summaries.<lang>`), and in English otherwise. Only the interface language's chunk and English's are loaded.
 - **White-label.** Docs links are platform links. Every component that renders one checks `nodeDocsLinksShown()` (`surfacePlatformLinks()`), so a deployment that hides platform links shows none; the node-docs test enforces the check.
 - **Compare models.** `<MappableField field="provider">` shows it by itself. A panel that builds its own model heading renders `<CompareModelsLink />` beside it. It reads the node type from `NodeDocsTypeContext`, which only the editor's settings panel provides.
 - **Guards:**

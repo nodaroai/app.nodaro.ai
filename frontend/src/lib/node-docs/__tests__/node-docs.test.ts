@@ -3,14 +3,21 @@ import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
 import { NODE_OPTIONS } from "@/lib/node-options"
 import { NODE_DOCS_ALIASES, NODE_DOCS_SECTIONS } from "../node-docs-map.generated"
-import { NODE_DOCS_SUMMARIES } from "../node-docs-summaries.generated"
-import { NODE_DOCS_SECTION_IDS, docsUrlForNode, nodeDocsHasSection, nodeDocsSections } from "../node-docs"
+import { NODE_DOCS_SECTION_IDS, docsUrlForNode, nodeDocsHasSection, nodeDocsSections, nodeDocsSummaryFrom } from "../node-docs"
 
 interface SnapshotNode {
   readonly type: string
   readonly summary: string
+  readonly summaries?: Readonly<Record<string, string>>
   readonly sections: readonly string[]
 }
+
+/** The generated summary chunks, by language (the file name). */
+const SUMMARY_CHUNKS: Readonly<Record<string, Readonly<Record<string, string>>>> = Object.fromEntries(
+  Object.entries(
+    import.meta.glob<{ NODE_DOCS_SUMMARIES: Readonly<Record<string, string>> }>("../summaries/*.generated.ts", { eager: true }),
+  ).map(([path, m]) => [path.slice("../summaries/".length, -".generated.ts".length), m.NODE_DOCS_SUMMARIES]),
+)
 interface Snapshot {
   readonly sections: Readonly<Record<string, string>>
   readonly aliases: Readonly<Record<string, string>>
@@ -55,6 +62,30 @@ describe("docsUrlForNode", () => {
   })
 })
 
+describe("a page's summary", () => {
+  const byLang = new Map<string, Readonly<Record<string, string>>>([
+    ["ja", { "generate-image": "日本語の要約" }],
+    ["pt-br", { "generate-image": "Resumo em português" }],
+    ["en", { "generate-image": "English summary", "trim-video": "English only" }],
+  ])
+
+  it("is in the interface language when the page is translated into it", () => {
+    expect(nodeDocsSummaryFrom(byLang, "ja", "generate-image")).toBe("日本語の要約")
+    // Language ids match in any letter case.
+    expect(nodeDocsSummaryFrom(byLang, "pt-BR", "generate-image")).toBe("Resumo em português")
+  })
+
+  it("falls back to English when the page is not translated into it, or the language not at all", () => {
+    expect(nodeDocsSummaryFrom(byLang, "ja", "trim-video")).toBe("English only")
+    expect(nodeDocsSummaryFrom(byLang, "he", "generate-image")).toBe("English summary")
+  })
+
+  it("is read through an alias, and absent for a type with no page", () => {
+    expect(nodeDocsSummaryFrom(new Map([["en", { "generate-video": "Video" }]]), "en", "text-to-video")).toBe("Video")
+    expect(nodeDocsSummaryFrom(byLang, "en", "no-such-node")).toBeUndefined()
+  })
+})
+
 describe("the sections of a node's page", () => {
   it("are read through an alias for a type documented on another node's page", () => {
     for (const [from, to] of Object.entries(snapshot.aliases)) {
@@ -75,9 +106,19 @@ describe("the node-docs snapshot", () => {
     expect(Object.keys(NODE_DOCS_SECTIONS).sort()).toEqual(snapshot.nodes.map((n) => n.type).sort())
     for (const node of snapshot.nodes) {
       expect(NODE_DOCS_SECTIONS[node.type], node.type).toEqual(node.sections)
-      expect(NODE_DOCS_SUMMARIES[node.type], node.type).toBe(node.summary)
     }
     expect(NODE_DOCS_ALIASES).toEqual(snapshot.aliases)
+  })
+
+  it("has one summary chunk per language the docs translate, English for every page", () => {
+    const langs = new Set(["en", ...snapshot.nodes.flatMap((n) => Object.keys(n.summaries ?? {}))])
+    expect(Object.keys(SUMMARY_CHUNKS).sort()).toEqual([...langs].sort())
+    for (const node of snapshot.nodes) {
+      expect(SUMMARY_CHUNKS.en[node.type], node.type).toBe(node.summaries?.en ?? node.summary)
+      for (const [lang, text] of Object.entries(node.summaries ?? {})) {
+        expect(SUMMARY_CHUNKS[lang][node.type], `${lang} ${node.type}`).toBe(text)
+      }
+    }
   })
 
   it("uses only the section ids the interface has a label for", () => {

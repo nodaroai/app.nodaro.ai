@@ -108,13 +108,13 @@ describe("the Docs pill in the settings panel header", () => {
     )
   })
 
-  it("leaves the English summary out of another language, and sends that language", async () => {
+  it("shows the English summary in a language the docs have not translated, and sends that language", async () => {
     act(() => useLocaleStore.getState().setLocale("he"))
     render(<NodeDocsPill nodeType="generate-image" nodeLabel="יצירת תמונה" />)
     const pill = screen.getAllByRole("link")[0]
     expect(pill.getAttribute("href")).toContain("?lang=he&ref=app")
     fireEvent.focus(pill)
     expect(await screen.findByText("יצירת תמונה")).toBeInTheDocument()
-    expect(screen.queryByText(/Create an image from a text prompt/)).toBeNull()
+    expect(await screen.findByText(/Create an image from a text prompt/)).toBeInTheDocument()
   })
 })
