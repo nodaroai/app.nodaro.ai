@@ -442,6 +442,16 @@ time, the ceiling bucket (≤600s) price is reserved. In practice the route prob
 duration first and rejects un-probeable sources, so this fallback is only a
 safety net.
 
+**Links in a workflow run.** A link the node reads in a workflow run — typed in
+the field, or wired from another node such as a trigger's Video link — is probed
+the same way before anything is reserved, so the run is priced by the video's
+own bucket. A live stream or a video over 10 minutes is refused at that point
+and nothing is charged. When the probe cannot read the length (the page does
+not state it, or the platform did not answer), the length the editor read for
+the same link is used if there is one, else the ceiling fallback above; a
+video that then cannot be fetched fails the node and its credits are
+refunded.
+
 ## Limits
 
 - **Maximum duration:** 600 seconds (10 minutes) for any source. Enforced

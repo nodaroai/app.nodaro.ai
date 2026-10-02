@@ -382,6 +382,43 @@ export interface PluginProvidersToolkit {
    * boundary (both members above throw instances of it).
    */
   YtUrlNotAllowedError: new (message?: string) => Error
+  /**
+   * Mirrors `socialPostOf` (`providers/video/social-post-video.ts`): the
+   * canonical link when `url` is ONE post on a platform the hardened lane
+   * fetches (YouTube, TikTok, Instagram, X, Facebook), else null — a profile,
+   * a channel, a story or a share short link is not. Optional: absent on an
+   * older host.
+   */
+  socialPostVideoUrl?(url: string): string | null
+  /**
+   * Mirrors `probeSocialPostVideo`: the post's length and whether it is live,
+   * before anything is paid for. Throws `YtUrlNotAllowedError` for a link
+   * `socialPostVideoUrl` refuses. Optional: absent on an older host.
+   */
+  probeSocialPostVideo?(url: string, opts?: { signal?: AbortSignal }): Promise<{
+    durationSec: number | null
+    title: string | null
+    isLive: boolean
+  }>
+  /**
+   * Mirrors `downloadSocialPostVideo`: the hardened fetch of one post's video
+   * (that platform's extractors only, no live stream, nothing past
+   * `maxDurationSec`, a size cap, one wall-clock limit, a minimal child
+   * environment). Throws `YtUrlNotAllowedError` for a link
+   * `socialPostVideoUrl` refuses. A fetch that must not be retried rejects
+   * with an Error whose `name` is `"YtDlpHaltError"` and whose `reason` is
+   * `"refused"` (live, or past `maxDurationSec`), `"aborted"`,
+   * `"out_of_time"` or `"too_much_output"` — match it by that shape; the class
+   * lives in the host. Optional: absent on an older host.
+   */
+  downloadSocialPostVideo?(opts: {
+    url: string
+    outPath: string
+    maxDurationSec: number
+    maxFilesizeBytes?: number
+    maxHeight?: number
+    signal?: AbortSignal
+  }): Promise<void>
 }
 
 // ============================================================================

@@ -11,13 +11,21 @@
  *   (a) buildPayload handles the node (no "Unknown node type" throw — the same
  *       outage class the registry-walk guard protects, exercised live) and the
  *       orchestrator enqueues jobName "video-analysis".
- *   (b) With no probed/upstream duration, the reserved model identifier is the
- *       CEILING composite `video-analysis:gemini-3.1-pro:600s`, and that value
- *       is the SAME `reservedCreditId` the enqueued payload carries (single
- *       source of truth — commit/refund key by it).
+ *   (b) With no probed/upstream duration (and a post that does not say its
+ *       length), the reserved model identifier is the CEILING composite
+ *       `video-analysis:gemini-3.1-pro:600s`, and that value is the SAME
+ *       `reservedCreditId` the enqueued payload carries (single source of
+ *       truth — commit/refund key by it).
  *   (c) A completed job's `{ json }` flows through DIRECT_OUTPUT_KEYS into
  *       state.output.json and is consumable by a downstream extract-field node
  *       (the scenes payload reaches its input).
+ *   (d) A post link is probed BEFORE any job row, and the reserve and the
+ *       payload agree on the post's own duration bucket.
+ *   (e) A live post is refused by code before any job row, reservation or
+ *       enqueue.
+ *
+ * The social-post probe is the one network boundary on this path; it is
+ * mocked per test like the others.
  *
  * Mirrors the mocking style of `seedance2-ref-video-reserve.test.ts` /
  * `node-executor-credit-propagation.test.ts`, but deliberately keeps
@@ -30,11 +38,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // Hoisted mock state — declared before vi.mock() calls
 // ---------------------------------------------------------------------------
 
-const { mockCheckCredits, mockReserveCredits, mockVideoAdd, mockRenderAdd } = vi.hoisted(() => ({
+const { mockCheckCredits, mockReserveCredits, mockVideoAdd, mockRenderAdd, mockProbe, callOrder } = vi.hoisted(() => ({
   mockCheckCredits: vi.fn(),
   mockReserveCredits: vi.fn(),
   mockVideoAdd: vi.fn(),
   mockRenderAdd: vi.fn(),
+  mockProbe: vi.fn(),
+  // What touched the outside world, in order: "probe" and "insert".
+  callOrder: [] as string[],
 }))
 
 // The completed jobs row the poll reads back. Set per-test in beforeEach.
@@ -52,12 +63,22 @@ vi.mock("../../../lib/supabase.js", () => {
   // insert/update/select returns its own terminal so the three call chains in
   // executeWorkerNode + pollJobToCompletion never collide on `.eq`.
   const builder = {
-    insert: () => ({ select: () => ({ single: async () => ({ data: { id: JOB_ID }, error: null }) }) }),
+    insert: () => {
+      callOrder.push("insert")
+      return { select: () => ({ single: async () => ({ data: { id: JOB_ID }, error: null }) }) }
+    },
     update: () => ({ eq: async () => ({ error: null }) }),
     select: () => ({ eq: () => ({ single: async () => ({ data: jobRecord }) }) }),
   }
   return { supabase: { from: () => builder } }
 })
+
+// The post's length is read over the network (the hardened social-post lane);
+// the rest of that module, which decides what is a post, stays real.
+vi.mock("../../../providers/video/social-post-video.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../providers/video/social-post-video.js")>()),
+  probeSocialPostVideo: mockProbe,
+}))
 
 vi.mock("../../../ee/billing/credits.js", () => ({
   CreditsService: { checkCredits: mockCheckCredits, reserveCredits: mockReserveCredits },
@@ -117,7 +138,7 @@ const ANALYSIS = videoAnalysisResultSchema.parse({
 function vaNode(): SimpleNode {
   // youtubeUrl source, no probedYoutube + no upstream videoDuration → the
   // ceiling composite is the only resolvable credit id.
-  return { id: "va", type: "video-analysis", data: { youtubeUrl: "https://youtu.be/abc123" } }
+  return { id: "va", type: "video-analysis", data: { youtubeUrl: "https://youtu.be/dQw4w9WgXcQ" } }
 }
 
 function extractNode(): SimpleNode {
@@ -158,6 +179,12 @@ describe("video-analysis — orchestrated dispatch + ceiling reserve + downstrea
     }
     mockCheckCredits.mockResolvedValue({ allowed: true, balance: 5000, watermark: false })
     mockReserveCredits.mockResolvedValue({ usageLogId: "usage-va-1", creditsReserved: 3, watermark: false })
+    callOrder.splice(0)
+    // By default the post does not say its length: the ceiling path.
+    mockProbe.mockImplementation(async () => {
+      callOrder.push("probe")
+      return { durationSec: null, title: null, isLive: false }
+    })
   })
 
   it("(a) dispatches without throwing and enqueues jobName 'video-analysis' on the video queue", async () => {
@@ -209,5 +236,37 @@ describe("video-analysis — orchestrated dispatch + ceiling reserve + downstrea
     }
     const efResult = await executeNode(nodes[1], {}, EDGES, nodes, nodeStates, ctx)
     expect(efResult.output.extractedText).toBe("opening shot")
+  })
+
+  it("(d) a post link is probed before any job row, and the reserve and the payload agree on the post's own bucket", async () => {
+    mockProbe.mockImplementation(async () => {
+      callOrder.push("probe")
+      return { durationSec: 41.2, title: null, isLive: false }
+    })
+    const nodes = [vaNode(), extractNode()]
+    await executeNode(nodes[0], {}, EDGES, nodes, {}, makeCtx())
+
+    expect(mockProbe).toHaveBeenCalledWith("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    expect(callOrder).toEqual(["probe", "insert"])
+    expect(mockReserveCredits).toHaveBeenCalledTimes(1)
+    const reservedId = mockReserveCredits.mock.calls[0][2] as string
+    expect(reservedId).toBe("video-analysis:gemini-3.1-pro:60s")
+    const enqueuedPayload = mockVideoAdd.mock.calls[0][1] as Record<string, unknown>
+    expect(enqueuedPayload.reservedCreditId).toBe(reservedId)
+  })
+
+  it("(e) a live post is refused by its code before any job row, reservation or enqueue", async () => {
+    mockProbe.mockImplementation(async () => {
+      callOrder.push("probe")
+      return { durationSec: null, title: null, isLive: true }
+    })
+    const nodes = [vaNode(), extractNode()]
+
+    await expect(executeNode(nodes[0], {}, EDGES, nodes, {}, makeCtx())).rejects.toMatchObject({
+      errorCode: "live_stream_not_supported",
+    })
+    expect(callOrder).toEqual(["probe"])
+    expect(mockReserveCredits).not.toHaveBeenCalled()
+    expect(mockVideoAdd).not.toHaveBeenCalled()
   })
 })

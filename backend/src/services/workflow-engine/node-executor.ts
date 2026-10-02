@@ -29,6 +29,7 @@ import { buildNodeOutputFromJobData } from "./output-extractor.js"
 import { retainedOutputOfFailedJob } from "./failed-node-output.js"
 import { readNodeCursor, writeNodeCursor } from "./node-cursor.js"
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings.js"
+import { videoAnalysisPostDuration } from "./video-analysis-post-probe.js"
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
@@ -1527,6 +1528,12 @@ async function executeWorkerNode(
       )
     }
   }
+
+  // 0b. Video Analysis given a post's LINK (from a trigger, a mapping or the
+  // field): its length before any row or reservation, so the run is priced by
+  // the post's own bucket, and a live or over-long post is refused for free.
+  const postDurationSec = await videoAnalysisPostDuration(node, resolvedInputs)
+  if (postDurationSec !== null) resolvedInputs = { ...resolvedInputs, videoDuration: postDurationSec }
 
   // 1. Create placeholder job record (we need the jobId for payload building).
   // `node_id` is recorded in `input_data` so the reconcile cron can map a

@@ -32,6 +32,7 @@ import {
   remuxToMp4,
 } from "../../providers/video/ffmpeg-utils.js"
 import { downloadYouTubeVideo, ytMetadataProbe, YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
+import { downloadSocialPostVideo, probeSocialPostVideo, socialPostOf } from "../../providers/video/social-post-video.js"
 import { trimVideo as trimVideoCore } from "../../providers/video/trim-video.js"
 import { mixAudio } from "../../providers/video/mix-audio.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
@@ -1234,11 +1235,15 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       },
       getVideoTaskStatus,
       // The contract narrows `downloadYouTubeVideo`'s opts to {url,outPath,
-      // maxFilesizeBytes?}; the core fn's extra params are all optional, so the
-      // narrower shape is a valid subset and the reference assigns directly.
-      downloadYouTubeVideo,
+      // maxFilesizeBytes?}. Its `hardening` (raw yt-dlp arguments among them)
+      // stays internal: a plugin reaches the hardened lane only through
+      // `downloadSocialPostVideo`, whatever it passes here.
+      downloadYouTubeVideo: ({ hardening: _internal, ...opts }: Parameters<typeof downloadYouTubeVideo>[0]) => downloadYouTubeVideo(opts),
       ytMetadataProbe,
       YtUrlNotAllowedError,
+      socialPostVideoUrl: (url: string) => socialPostOf(url)?.url ?? null,
+      probeSocialPostVideo,
+      downloadSocialPostVideo,
     },
     ffmpeg: {
       runFfmpeg,
