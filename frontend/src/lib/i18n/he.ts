@@ -1351,7 +1351,7 @@ export const he: ChromeDict = {
   "cfgshared.promptAffixHint": "נעטף סביב הפרומפט בזמן ההרצה — כולל פרומפט שמגיע מחיבור או מ־fan-out — ומופיע בתצוגת הפרומפט הסופי. לא מוצג על הרכיב; נשמר בערכות.",
   "cfgshared.advancedMode": "מצב מתקדם",
   "cfgshared.advancedUnavailable": "מצב מתקדם זמין במודלים של Gemini — החליפו את המודל כדי להפעיל אותו.",
-  "cfgshared.advancedModeHint": "הריצו את המודל ישירות אצל הספק כדי לשלוט בטמפרטורה, באורך הפלט ובעומק החשיבה. העלות גבוהה בדרגת קרדיטים אחת.",
+  "cfgshared.advancedModeHint": "הריצו את המודל ישירות אצל הספק כדי לשלוט בטמפרטורה, באורך הפלט ובעומק החשיבה. העלות גבוהה בדרגת קרדיטים אחת, עד דרגת הפרימיום.",
   "cfgshared.structuredOutputTempWarn": "הרכיב הזה מבקש מהמודל פלט מובנה — מעל 0.5 בערך הוא מתחיל לשבור את המבנה.",
   "cfgshared.maxTokens": "מקסימום טוקנים",
   "cfgshared.generateWithAi": "יצירה ב-AI",

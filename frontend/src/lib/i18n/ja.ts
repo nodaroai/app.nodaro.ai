@@ -1359,7 +1359,7 @@ export const ja: ChromeDict = {
   "cfgshared.promptAffixHint": "実行時にプロンプト（接続されたプロンプトやファンアウトのプロンプトを含む）の前後に追加され、「最終」ビューに表示されます。ノード上には表示されず、プリセットに保存されます。",
   "cfgshared.advancedMode": "詳細モード",
   "cfgshared.advancedUnavailable": "詳細モードは Gemini モデルで利用できます。有効にするにはモデルを切り替えてください。",
-  "cfgshared.advancedModeHint": "このモデルをプロバイダー上で直接実行し、温度、出力の長さ、推論の深さを調整できます。料金は 1 段階上のクレジットティアになります。",
+  "cfgshared.advancedModeHint": "このモデルをプロバイダー上で直接実行し、温度、出力の長さ、推論の深さを調整できます。料金は 1 段階上のクレジットティアになります（上限はプレミアムです）。",
   "cfgshared.structuredOutputTempWarn": "このノードはモデルに構造化出力を求めています。値が 0.5 程度を超えると、形式が崩れ始めます。",
   "cfgshared.maxTokens": "最大トークン数",
   "cfgshared.generateWithAi": "AI で生成",

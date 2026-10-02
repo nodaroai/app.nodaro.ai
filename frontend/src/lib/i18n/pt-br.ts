@@ -1297,7 +1297,7 @@ export const ptBR: ChromeDict = {
   "cfgshared.promptAffixHint": "Aplicado em volta do prompt na execução — inclusive de um prompt conectado ou em fan-out — e exibido na visualização do prompt final. Não aparece no nó; é salvo nas predefinições.",
   "cfgshared.advancedMode": "Modo avançado",
   "cfgshared.advancedUnavailable": "O modo avançado está disponível nos modelos Gemini — troque o modelo para ativá-lo.",
-  "cfgshared.advancedModeHint": "Execute este modelo diretamente no provedor para controlar a temperatura, o tamanho da saída e a profundidade do raciocínio. Custa um nível de créditos a mais.",
+  "cfgshared.advancedModeHint": "Execute este modelo diretamente no provedor para controlar a temperatura, o tamanho da saída e a profundidade do raciocínio. Custa um nível de créditos a mais, até o nível premium.",
   "cfgshared.structuredOutputTempWarn": "Este nó pede ao modelo uma saída estruturada — acima de aproximadamente 0,5, ele começa a quebrar o formato.",
   "cfgshared.maxTokens": "Máx. de tokens",
   "cfgshared.generateWithAi": "Gerar com IA",

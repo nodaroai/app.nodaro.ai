@@ -1967,7 +1967,7 @@ symmetric**: `maxTokens` applies on every call — a deliberate departure from
 the LLM routes that put both levers behind the Advanced-mode gate —
 while `temperature` is **silently ignored** unless you also send
 `advancedMode: true`. Advanced mode pins the call to the vendor's own API,
-where those levers take effect, and therefore bills **one credit tier up**;
+where those levers take effect, and therefore bills **one credit tier up** (capped at premium);
 asking for it on a model with no direct lane is a 400
 `advanced_mode_unsupported`. The call is
 **synchronous and a single call may run several minutes**: each attempt is

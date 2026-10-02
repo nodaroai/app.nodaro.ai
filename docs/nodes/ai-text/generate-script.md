@@ -11,7 +11,7 @@ The Generate Script node uses Gemini Flash to produce a structured, multi-scene 
 |-------|------|---------|-------------|
 | Provider | `ScriptProvider` | `"gemini"` | AI model provider for script generation |
 | Model | `string` | `"gemini-2.5-flash"` | Specific model version |
-| Advanced mode | `boolean` | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit tier up; the node's cost badge updates immediately. Disabled with an inline reason on non-Gemini models |
+| Advanced mode | `boolean` | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit tier up, capped at premium; the node's cost badge updates immediately. Disabled with an inline reason on non-Gemini models |
 | Scene Count | `number` | `5` | Number of scenes to generate, 1 to 20 |
 | Style Guide | `string` | `""` | Optional style directions for the writing, the visuals and the pacing. Sent to the model with the topic. Supports `{Node Label}` references |
 | Tone | `string` | `""` | Optional tone descriptor (e.g., "cinematic", "playful", "dark", "documentary"), up to 200 characters. Can come from a Tone or Text node connected to the **Tone** input |

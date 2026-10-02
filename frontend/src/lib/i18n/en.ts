@@ -1360,7 +1360,7 @@ export const en = {
   "cfgshared.promptAffixHint": "Wrapped around the prompt at run time — including a wired or fan-out prompt — and shown in the Final view. Not visible on the node; captured by presets.",
   "cfgshared.advancedMode": "Advanced mode",
   "cfgshared.advancedUnavailable": "Advanced mode is available on Gemini models — switch the model to enable it.",
-  "cfgshared.advancedModeHint": "Run this model on the provider directly to control temperature, output length and reasoning depth. Costs one credit tier more.",
+  "cfgshared.advancedModeHint": "Run this model on the provider directly to control temperature, output length and reasoning depth. Costs one credit tier more, capped at premium.",
   "cfgshared.structuredOutputTempWarn": "This node asks the model for structured output — above about 0.5 it starts breaking format.",
   "cfgshared.maxTokens": "Max Tokens",
   "cfgshared.generateWithAi": "Generate with AI",

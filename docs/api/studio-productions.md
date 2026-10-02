@@ -316,7 +316,7 @@ per-shot audio merges, the join, the optional 4K finish:
     {
       "id": "combine",
       "node": "combine-videos",
-      "label": "Join 3 shots",
+      "label": "Join 2 shots",
       "creditModel": "combine-videos",
       "credits": 4,
       "params": {
