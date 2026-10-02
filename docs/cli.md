@@ -506,6 +506,16 @@ nodaro nodes run meta-ads-scrape --params-file body.json
 
 Needs `APIFY_API_TOKEN` on the server, or a connected nodaro.ai account (the scrape is relayed and billed there).
 
+Social Search (`social-search`, Nodaro Cloud) searches one platform — TikTok, Instagram, YouTube, X, Reddit, LinkedIn or Meta ads — by keyword or account. It answers with a job id; add `--watch` to wait for the posts (every post found is on the job's `output_data.json`):
+
+```bash
+# The 40 most popular TikTok videos about a topic this week
+nodaro nodes run social-search   --param platform=tiktok --param query="ai video ad" --param count=40   --param period=week --param sort=popular --watch
+
+# An advertiser's running ads on Meta
+nodaro nodes run social-search   --param platform=meta_ads --param mode=account --param query="Brand Name" --watch
+```
+
 ## Output formatting
 
 Every read command supports `--json` for machine-readable output:

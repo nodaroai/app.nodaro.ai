@@ -2,14 +2,14 @@
 
 One row per node **type**. Generative model wrappers are not rows — a type that dispatches to a whole model family is a single row, and the model family is named in "what it does".
 
-**Scope:** the 191 entries of `NODE_DEFINITIONS` (`frontend/src/types/nodes.ts`) plus the 2 deprecated type strings the loader still migrates (`loop` → `list`, `ai-writer` → `llm-chat`) = **193 rows**. One entry, `preview`, is retired (soft-delete, 2026-08): it stays in `NODE_DEFINITIONS` so saved workflows keep loading, but is no longer creatable — see its row.
+**Scope:** the 192 entries of `NODE_DEFINITIONS` (`frontend/src/types/nodes.ts`) plus the 2 deprecated type strings the loader still migrates (`loop` → `list`, `ai-writer` → `llm-chat`) = **194 rows**. One entry, `preview`, is retired (soft-delete, 2026-08): it stays in `NODE_DEFINITIONS` so saved workflows keep loading, but is no longer creatable — see its row.
 
 **Where each column comes from**
 
 | column | source |
 |---|---|
 | type / display name / category / handle names | `NODE_DEFINITIONS` in `frontend/src/types/nodes.ts` (`NODE_DEF_MAP` is built from it) |
-| what it does | `NODE_REGISTRY.description` in `backend/src/lib/node-registry.ts` (175 types); `docs/nodes/README.md` for the rest; `(inferred)` marks sentences written from the implementation because no descriptor exists |
+| what it does | `NODE_REGISTRY.description` in `backend/src/lib/node-registry.ts` (176 types); `docs/nodes/README.md` for the rest; `(inferred)` marks sentences written from the implementation because no descriptor exists |
 | handle types | the handle's colour, which *is* its data type — canonical map `frontend/src/lib/handle-colors.ts` (`HANDLE_COLORS`), family aliases in `frontend/src/lib/{ffmpeg,data,picker,audio-text,generate-image,generate-video,…}-handles.ts`, read off each node component's `HandleWithPopover`. A guard test (`handle-colors.test.ts`) fails CI if a node hardcodes a hex, so colour cannot drift from type |
 | interactive? | read from the node component + whatever surface it mounts |
 
@@ -33,6 +33,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `web-scrape` | Web Scrape | input | Fetch data from web pages, Google Search, Instagram, TikTok, or RSS feeds and emit structured JSON | `in`:text | `json`:json | NO |
 | `meta-ads-scrape` | Meta Ads | input | Pull public Facebook and Instagram ads from Meta's Ad Library by keyword, advertiser or Facebook Page and emit structured JSON (copy, CTA, images, videos) | `in`:text | `json`:json | NO |
 | `instagram-scrape` | Instagram | input | Pull public Instagram posts (images, carousels, reels) by profile or hashtag and emit structured JSON (caption, media, likes, comments) | `in`:text | `json`:json | NO |
+| `social-search` | Social Search | input | Search TikTok, Instagram, YouTube, X, Reddit, LinkedIn or Meta's Ad Library by keyword or account and get up to 60 posts with their numbers. Pick the ones to keep in the editor; a workflow run without picks passes on the first few | `in`:text | `json`:json, `text`:text | NO |
 | `webhook-trigger` | Webhook Trigger | input | Trigger the workflow via HTTP POST | — | `payload`:any | NO |
 | `youtube-video` | Video URL | input | Download video or audio from YouTube, TikTok, Instagram, Facebook, or X | `in`:text | `video`:video | NO |
 | `action-fx` | Action FX | parameter | Pick environmental effects (multi-pick) from the action-fx catalog (earthquake, lightning, explosion, falling-objects, ...) | `in`:any | `out`:look | NO |

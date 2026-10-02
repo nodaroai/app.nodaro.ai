@@ -5546,6 +5546,56 @@ export type InstagramScrapeNodeData = {
   lastGoodCount?: number
 }
 
+// --- Social Search Node Data ---
+
+export type SocialSearchNodeData = {
+  [key: string]: unknown
+  label: string
+  platform?: import("@nodaro/shared").SocialPlatform
+  /** "keyword" (default), "account" (a creator, a company page, an advertiser) or "community" (a subreddit) */
+  mode?: import("@nodaro/shared").SocialSearchMode
+  /** A keyword, or an account (handle, profile link, subreddit, company page, advertiser) */
+  query?: string
+  /** Results per search: 20, 40 or 60 */
+  count?: import("@nodaro/shared").SocialSearchCount
+  period?: import("@nodaro/shared").SocialSearchPeriod
+  sort?: import("@nodaro/shared").SocialSearchSort
+  /** TikTok keyword search: two-letter region */
+  region?: string
+  /** Meta ads: two-letter country or ALL */
+  country?: string
+  /** Meta ads: running ads only (default true) */
+  activeOnly?: boolean
+  /** Reddit keyword search inside one subreddit */
+  subreddit?: string
+  /** YouTube: all, videos or shorts */
+  videoKind?: import("@nodaro/shared").SocialSearchVideoKind
+  /** How many posts a run passes on when nobody picked (default 5) */
+  pickTop?: number
+  /** Keep the picked posts on workflow runs instead of searching again */
+  keepPicks?: boolean
+  // execution state — same #765 contract as WebScrapeNodeData
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  /** Every post the last search found (the picker's grid) */
+  searchResults?: import("@nodaro/shared").SocialPost[]
+  /** The posts a person picked, by id, in picking order */
+  pickedIds?: string[]
+  /** The posts the node passes on: the picks, else the first `pickTop` */
+  generatedJson?: import("@nodaro/shared").SocialPost[]
+  /** generatedJson as a digest, for text inputs */
+  generatedText?: string
+  /** Non-fatal notes from the last search */
+  searchWarnings?: string[]
+  lastRunOutcome?: "success" | "empty" | "failed"
+  lastRunAt?: number
+  lastRunCount?: number
+  lastRunStartedAt?: number
+  lastRunFingerprint?: string
+  lastGoodAt?: number
+  lastGoodCount?: number
+}
+
 export type MetaAdsScrapeNodeData = {
   [key: string]: unknown
   label: string
@@ -6664,6 +6714,7 @@ export type SceneNodeData =
   | AudioSyncNodeData
   | MetaAdsScrapeNodeData
   | InstagramScrapeNodeData
+  | SocialSearchNodeData
   | VideoAnalysisNodeData
   | VideoAuditNodeData
   | EditPlanNodeData
@@ -6718,6 +6769,7 @@ export type SceneNodeType =
   | "web-scrape"
   | "meta-ads-scrape"
   | "instagram-scrape"
+  | "social-search"
   | "reference-audio"
   | "tone"
   | "style-guide"
@@ -7022,6 +7074,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["json", "text", "image", "video"],
     defaultData: { label: "Instagram", mode: "profile", targets: "", count: 20, period: "30d" } as InstagramScrapeNodeData,
+  },
+  {
+    type: "social-search",
+    label: "Social Search",
+    category: "input",
+    creditCost: 10,
+    inputs: ["in"],
+    outputs: ["json", "text"],
+    defaultData: { label: "Social Search", platform: "tiktok", mode: "keyword", query: "", count: 20, period: "month", sort: "relevance", pickTop: 5 } as SocialSearchNodeData,
   },
   {
     type: "reference-audio",

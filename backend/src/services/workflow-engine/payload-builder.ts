@@ -6,6 +6,7 @@ import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOver
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
+import { socialSearchRequestFromNode, socialSearchCreditId, socialSearchPickTop } from "@nodaro/shared"
 /**
  * Build BullMQ job payloads for each node type from node data + resolved inputs.
  * Returns { jobName, queueName, payload } for worker-queued nodes.
@@ -4007,6 +4008,30 @@ export function buildPayload(
           usageLogId,
         },
       }
+    }
+
+    case "social-search": {
+      // Cloud-only: the private plugin runs the search. The orchestrated twin
+      // of POST /v1/social-search — same job name, same request — built by the
+      // ONE builder the editor's run uses. The query is the wired text when
+      // there is one (a Text node, a List item under a fan-out), else the
+      // node's own field. How many posts to pass on rides along untouched: the
+      // plugin echoes it onto the job's output, where buildNodeOutputFromJobData
+      // applies the picking rule. A person's picks are NOT sent: they belong to
+      // the search they were picked from, and this run searches again (a node
+      // that keeps its picks is frozen and never reaches this case) — the same
+      // rule as the editor's run.
+      const request = socialSearchRequestFromNode(data, resolvedInputs.overridePrompt ?? resolvedInputs.prompt)
+      if (!request.query) {
+        throw new Error("social-search: type a keyword or an account, or connect a text to the node's input")
+      }
+      return simpleResult("social-search", socialSearchCreditId(request.count ?? 20), {
+        jobId,
+        usageLogId,
+        request,
+        pick: { top: socialSearchPickTop(data.pickTop) },
+        nodeId: node.id,
+      })
     }
 
     case "video-analysis": {

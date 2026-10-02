@@ -508,6 +508,27 @@ For a guided flow, `analyze()` returns questions you answer, then `generate()`
 builds the final prompt from those selections. See
 [SDK Reference → client.promptHelper](./sdk-reference.md#clientprompthelper).
 
+### Find posts that work, then learn from them (Social Search)
+
+On Nodaro Cloud, `social-search` finds public posts on one platform by keyword
+or account, with their numbers. Find the most viewed, then hand the best one
+to any node that reads a post:
+
+```ts
+const found = await client.nodes.runAndWait("social-search", {
+  platform: "tiktok",
+  query: "ai video ad",
+  count: 40,
+  period: "week",
+  sort: "popular",
+})
+const best = found.json[0]
+console.log(best?.url, best?.metrics.views)
+```
+
+Every post has the same shape on every platform (`SocialPost`). See
+[SDK Reference → client.nodes](./sdk-reference.md#clientnodes).
+
 ### Apply a mix to a completed Recast
 
 Revisioned Recast audio is capability-gated. Read the server-authored revision,

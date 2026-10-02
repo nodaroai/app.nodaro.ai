@@ -2214,6 +2214,24 @@ Needs `workflows:execute`.
 | `fit` | string |  | One of `cover`, `contain`. |
 | `pad_color` | string |  |  |
 
+## `social_search`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `platform` | string | yes | The platform to search. One of `tiktok`, `instagram`, `youtube`, `x`, `reddit`, `linkedin`, `meta_ads`. |
+| `query` | string | yes | A keyword (X search syntax works on X), or an account: @handle or profile link; a subreddit with mode `community`; a LinkedIn company page link; a Meta advertiser name or Page ID. From 1 to 300 characters. |
+| `mode` | string |  | `keyword` (default), `account`, or `community` (Reddit only; Reddit has no `account`). One of `keyword`, `account`, `community`. |
+| `count` | number |  | Results: 20 (default), 40 or 60. One of `20`, `40`, `60`. |
+| `period` | string |  | Posted within: day, week, month (default), year, all. One of `day`, `week`, `month`, `year`, `all`. |
+| `sort` | string |  | relevance (default, the platform's order), popular, newest. One of `relevance`, `popular`, `newest`. |
+| `region` | string |  | TikTok keyword search: a two-letter region. Exactly 2 characters. |
+| `country` | string |  | Meta ads: a two-letter country, or ALL (default). From 2 to 3 characters. |
+| `active_only` | boolean |  | Meta ads: only ads running now (default true). |
+| `subreddit` | string |  | Reddit keyword search: search inside this subreddit only. At most 100 characters. |
+| `video_kind` | string |  | YouTube: all (default), videos or shorts. One of `all`, `videos`, `shorts`. |
+
 ## `speech_to_video`
 
 Needs `workflows:execute`.

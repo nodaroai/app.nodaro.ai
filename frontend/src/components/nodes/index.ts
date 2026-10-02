@@ -9,6 +9,7 @@ import { YouTubeVideoNode } from "./youtube-video-node";
 import { WebScrapeNode } from "./web-scrape-node";
 import { MetaAdsScrapeNode } from "./meta-ads-scrape-node";
 import { InstagramScrapeNode } from "./instagram-scrape-node";
+import { SocialSearchNode } from "./social-search-node";
 import { ToneNode } from "./tone-node";
 import { StyleGuideNode } from "./style-guide-node";
 import { ProviderNode } from "./provider-node";
@@ -211,6 +212,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "web-scrape": WebScrapeNode,
   "meta-ads-scrape": MetaAdsScrapeNode,
   "instagram-scrape": InstagramScrapeNode,
+  "social-search": SocialSearchNode,
   "webhook-trigger": WebhookTriggerNode,
   "schedule-trigger": ScheduleTriggerNode,
   // Parameter

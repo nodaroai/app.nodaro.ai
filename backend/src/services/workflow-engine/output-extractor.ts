@@ -16,7 +16,7 @@ import {
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
 import {
-  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle } from "@nodaro/shared"
+  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest } from "@nodaro/shared"
 import type { SceneData, Transcript } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/prompts"
 export { extractVideoDurationFromNode } from "@nodaro/shared"
@@ -772,6 +772,17 @@ export function getPrimaryOutput(
     return undefined
   }
 
+  // Social Search: `json` → the posts the node passes on (stringified for text
+  // consumers; Extract Field and List read state.output.json directly), `text`
+  // → the same posts as a digest. Unknown handles return nothing.
+  if (sourceType === "social-search") {
+    if (sourceHandle === "text") return output.text
+    if (sourceHandle === "json" || !sourceHandle) {
+      return output.json === undefined ? undefined : JSON.stringify(output.json)
+    }
+    return undefined
+  }
+
   // Video-analysis / video-audit: `json` + `text` output handles carry the SAME
   // stringified scene-segmented analysis (text is the prompt-typed alias).
   // Mirrors the web-scrape json branch — stringify for generic text consumers;
@@ -1502,6 +1513,16 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return { json, ...featuredInstagramOutputs(json, data.featuredIndex) }
   }
 
+  // Social Search → the posts the editor saved as the node's choice
+  // (data.generatedJson: a person's picks, else the first few), their digest,
+  // and one item per post. This is what a skipped node, and a node keeping its
+  // picks (isSocialSearchPickFrozen), passes on without searching again.
+  if (type === "social-search") {
+    const posts = socialPostsFrom(data.generatedJson)
+    if (posts.length === 0) return undefined
+    return { json: posts, text: socialPostsDigest(posts), listResults: posts.map((p) => JSON.stringify(p)) }
+  }
+
   // Video-analysis / video-audit: single `json` output (the scene-segmented
   // analysis object — for the audit, the CORRECTED one — persisted on
   // data.generatedJson). Mirrors web-scrape's json branch so a skipped / "Run
@@ -1772,6 +1793,25 @@ export function buildNodeOutputFromJobData(
   // webhook, app) paints the same "Last run" line the single-node Run does.
   // Type-gated: `width` / `height` / `warnings` are too generic to promote
   // into DIRECT_OUTPUT_KEYS for every node.
+  // Social Search: the plugin returns EVERY post found, with the node's
+  // picking settings echoed back (`pickedIds`, `pickTop` — sent by the
+  // payload builder). The node passes on only the chosen ones: a person's
+  // picks still among the results, else the first `pickTop`. Applied HERE so
+  // every path that rebuilds the output from the job row (live, adopted after
+  // a cancel race, a resumed fan-out) agrees. `listResults` carries one post
+  // per item for an "each" wire.
+  if (nodeType === "social-search") {
+    const pickedIds = Array.isArray(outputData.pickedIds)
+      ? (outputData.pickedIds as unknown[]).filter((id): id is string => typeof id === "string")
+      : undefined
+    const all = socialPostsFrom(outputData.json)
+    const picked = pickSocialPosts(all, pickedIds, outputData.pickTop)
+    output.json = picked
+    output.text = socialPostsDigest(picked)
+    output.listResults = picked.map((p) => JSON.stringify(p))
+    output.searchResults = all
+  }
+
   if (nodeType === "video-overlay") {
     if (Array.isArray(outputData.warnings)) output.warnings = outputData.warnings as NodeOutput["warnings"]
     if (typeof outputData.width === "number" && typeof outputData.height === "number") {

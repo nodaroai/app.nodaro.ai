@@ -18,6 +18,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "web-scrape": "Web Scrape",
   "meta-ads-scrape": "Meta Ads",
   "instagram-scrape": "Instagram",
+  "social-search": "Social Search",
   "video-analysis": "Video Analysis",
   "video-audit": "AI Audit",
   "reference-audio": "Reference Audio",

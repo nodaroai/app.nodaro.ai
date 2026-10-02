@@ -138,6 +138,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "silence-detect": { inputs: ["in"], outputs: ["json"] },
   "slideshow": { inputs: ["images", "audio", "transition"], outputs: ["video"] },
   "social-media-format": { inputs: ["media", "text"], outputs: ["media", "text"] },
+  "social-search": { inputs: ["in"], outputs: ["json", "text"] },
   "sort-list": { inputs: ["in"], outputs: ["out"] },
   "speech-to-video": { inputs: ["image", "audio", "prompt", "cinematography"], outputs: ["video"] },
   "speed-ramp": { inputs: ["in"], outputs: ["video"] },

@@ -205,6 +205,7 @@ import {
   WebScrapeConfig,
   MetaAdsScrapeConfig,
   InstagramScrapeConfig,
+  SocialSearchConfig,
   VideoAnalysisConfig,
   VideoAuditConfig,
   CombineTextConfig,
@@ -270,7 +271,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "video-upscale", "extend-video", "video-retake", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
-  "llm-chat", "web-scrape", "meta-ads-scrape", "instagram-scrape", "video-analysis", "video-audit",
+  "llm-chat", "web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "video-analysis", "video-audit",
   "content-recipe", "content-ideas",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "generate-3d-scene", "edit-3d-scene", "pro-3d-render",
@@ -362,6 +363,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "web-scrape": return <WebScrapeConfig {...configProps} />
     case "meta-ads-scrape": return <MetaAdsScrapeConfig {...configProps} />
     case "instagram-scrape": return <InstagramScrapeConfig {...configProps} />
+    case "social-search": return <SocialSearchConfig {...configProps} />
     case "video-analysis": return <VideoAnalysisConfig {...configProps} />
     case "video-audit": return <VideoAuditConfig {...configProps} />
     case "reference-audio": return <ReferenceAudioConfig {...configProps} />

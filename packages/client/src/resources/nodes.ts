@@ -2,7 +2,7 @@ import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Sce
 import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError } from "../errors.js"
-import type { ConnectedReference, DescribedReference, ModelInputAdjustment } from "@nodaro/shared"
+import type { ConnectedReference, DescribedReference, ModelInputAdjustment, SocialPost, SocialPlatform, SocialSearchMode, SocialSearchParams } from "@nodaro/shared"
 import type { DirectionFields, SubjectFields } from "@nodaro/prompts"
 
 export type NodeCategory =
@@ -229,6 +229,20 @@ export interface AssembleNarratedVideoParams {
  * `audioUrl`. Resolved by {@link NodesResource.runAndWait}. Extra fields may be
  * present, so the index signature is open.
  */
+/**
+ * The completed `social-search` job's `output_data`: EVERY post the search
+ * found, in the order it asked for (Social Search, Nodaro Cloud). Picking the
+ * posts a workflow passes on is an editor step; a direct caller gets them all.
+ */
+export interface SocialSearchJobOutput extends NodeJobOutput {
+  readonly json: readonly SocialPost[]
+  readonly platform: SocialPlatform
+  readonly mode: SocialSearchMode
+  readonly query: string
+  /** Non-fatal notes ("only part of the results could be loaded"). */
+  readonly warnings?: readonly string[]
+}
+
 export interface NodeJobOutput {
   /** `text-to-speech` / `generate-music` / audio nodes write here. For
    *  `audio-separation` this is the primary stem (vocals). */
@@ -369,6 +383,7 @@ export class NodesResource {
   run(type: "generate-video", params?: GenerateVideoParams): Promise<RunNodeResult>
   run(type: "text-to-video", params: TextToVideoParams): Promise<RunNodeResult>
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams): Promise<RunNodeResult>
+  run(type: "social-search", params: SocialSearchParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: string, params?: Record<string, unknown>, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: string, params: Record<string, unknown> = {}, options: RunNodeOptions = {}): Promise<RunNodeResult> {
     // `pro-3d-render` needs no special case: its route IS `/v1/pro-3d-render`,
@@ -422,6 +437,7 @@ export class NodesResource {
   runAndWait(type: "generate-video", params?: GenerateVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "text-to-video", params: TextToVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: "social-search", params: SocialSearchParams, opts?: RunAndWaitOptions): Promise<SocialSearchJobOutput>
   runAndWait<T extends string>(type: T, params?: Record<string, unknown>, opts?: RunAndWaitOptions): Promise<T extends "pro-3d-render" ? Pro3DRenderJobOutput : T extends "generate-3d-scene" | "edit-3d-scene" ? Scene3DJobOutput : NodeJobOutput>
   async runAndWait(
     type: string,

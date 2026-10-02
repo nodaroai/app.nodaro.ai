@@ -3,7 +3,7 @@
  * Pure functions operating on SimpleNode/SimpleEdge arrays.
  */
 
-import { buildChildrenByParent, buildFeedMaps, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared"
+import { buildChildrenByParent, buildFeedMaps, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, isSocialSearchPickFrozen } from "@nodaro/shared"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "./types.js"
 
 // The per-node legacy-type migration lives in normalize-node-types.ts (single
@@ -100,13 +100,19 @@ export function buildExecutionLevels(
  * "Skip" means "freeze" — the node keeps its existing output but does not
  * re-execute.  Downstream nodes still run using the frozen node's saved output.
  * No propagation: only directly skipped nodes are returned.
+ *
+ * A Social Search node whose author picked posts and chose "keep my picks" is
+ * frozen the same way: it passes its picks on instead of searching again
+ * (`isSocialSearchPickFrozen`, shared with the editor's run).
  */
 export function getEffectivelySkippedIds(
   nodes: SimpleNode[],
   _edges: SimpleEdge[],
 ): Set<string> {
   return new Set(
-    nodes.filter((n) => !!n.data.skipped).map((n) => n.id),
+    nodes
+      .filter((n) => !!n.data.skipped || isSocialSearchPickFrozen(n.type, n.data as Record<string, unknown>))
+      .map((n) => n.id),
   )
 }
 

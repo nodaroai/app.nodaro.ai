@@ -54,4 +54,6 @@ export const CLOUD_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
   // private plugin's and no relay fronts them yet.
   "content-recipe",
   "content-ideas",
+  // Social Search: the search runs in a private plugin and no relay fronts it.
+  "social-search",
 ])

@@ -85,6 +85,8 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   // Content Ideas folds its recipes on the `recipes` wire (FAN_IN_TARGETS);
   // the brand profile and the language are fields a Text node can feed.
   "content-ideas":       ["brand", "language"],
+  // Social Search: the keyword or account a Text node (or a List item) feeds.
+  "social-search":       ["query"],
 }
 
 /** suno-generate secondary text fields exposed as `field-<key>` canvas handles. */

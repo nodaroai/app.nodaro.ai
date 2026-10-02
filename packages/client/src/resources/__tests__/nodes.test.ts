@@ -76,6 +76,26 @@ describe("nodes resource", () => {
   })
 })
 
+describe("social-search", () => {
+  it("POSTs the typed search to /v1/social-search and resolves every post found", async () => {
+    const post = {
+      id: "tiktok:1", platform: "tiktok", url: "https://www.tiktok.com/@a/video/1", text: "hi",
+      author: { handle: "a", name: "A" }, metrics: { views: 10 }, media: { kind: "video" }, hashtags: [], extra: {},
+    }
+    const fetchMock = runThenStatuses({ jobId: "job-1" }, [
+      { status: "completed", output_data: { json: [post], platform: "tiktok", mode: "keyword", query: "ai ads" } },
+    ])
+    const c = client(fetchMock)
+    const output = await c.nodes.runAndWait("social-search", { platform: "tiktok", query: "ai ads", count: 40 })
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/social-search")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ platform: "tiktok", query: "ai ads", count: 40 })
+    // Typed: the posts arrive as SocialPost[].
+    expect(output.json[0]!.metrics.views).toBe(10)
+    expect(output.query).toBe("ai ads")
+  })
+})
+
 describe("nodes.runAndWait", () => {
   it("polls running → completed and resolves typed output_data", async () => {
     vi.useFakeTimers()

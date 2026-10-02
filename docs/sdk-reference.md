@@ -1894,6 +1894,25 @@ const output = await client.nodes.runAndWait("generate-image", {
 console.log(output.imageUrl)
 ```
 
+**Social Search** (`social-search`, Nodaro Cloud) is typed end to end: the
+params are `SocialSearchParams` and the resolved output is
+`SocialSearchJobOutput` — every post the search found (`json`, an array of
+`SocialPost`), plus `platform`, `mode`, `query` and any `warnings`. Priced
+per page of 20 results (20 / 40 / 60).
+
+```ts
+const found = await client.nodes.runAndWait("social-search", {
+  platform: "youtube",
+  query: "product demo",
+  count: 20,
+  period: "month",
+  sort: "popular",
+})
+for (const post of found.json) {
+  console.log(post.url, post.metrics.views, post.author.handle)
+}
+```
+
 #### `runMany(type, paramsList, opts?)`
 
 ```ts
@@ -5305,6 +5324,13 @@ regions and clipping straddlers. The same remap `applyEdl` performs server-side.
 
 Every type used in a public method signature is re-exported from
 `@nodaro/sdk`. Import them with `import type { ... }`.
+
+### Social Search
+
+- `SocialSearchParams` — the `nodes.run("social-search", …)` body: `{ platform, query, mode?, count?, period?, sort?, region?, country?, activeOnly?, subreddit?, videoKind? }`
+- `SocialSearchJobOutput` — what `nodes.runAndWait("social-search", …)` resolves: `{ json: SocialPost[], platform, mode, query, warnings? }`
+- `SocialPost` / `SocialPostAuthor` / `SocialPostMetrics` / `SocialPostMedia` — one post, the same shape on every platform
+- `SocialPlatform` / `SocialSearchMode` / `SocialSearchPeriod` / `SocialSearchSort` / `SocialSearchCount` / `SocialSearchVideoKind` — the vocabularies
 
 ### Client identity
 

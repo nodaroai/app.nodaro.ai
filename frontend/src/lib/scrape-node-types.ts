@@ -9,7 +9,7 @@
  * could not be wired to Prompt, Extract Field or List; a new scraper joins
  * them all here. Leaf module: no imports, so every handle module can use it.
  */
-export const SCRAPE_NODE_TYPES = ["web-scrape", "meta-ads-scrape", "instagram-scrape"] as const
+export const SCRAPE_NODE_TYPES = ["web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search"] as const
 
 export type ScrapeNodeType = (typeof SCRAPE_NODE_TYPES)[number]
 

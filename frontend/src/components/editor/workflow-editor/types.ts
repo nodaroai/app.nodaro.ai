@@ -3,7 +3,7 @@ import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -154,6 +154,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "web-scrape": 20,
   "meta-ads-scrape": 20,
   "instagram-scrape": 20,
+  // Social Search: per page of up to 20 results (packages/shared is the table).
+  ...SOCIAL_SEARCH_CREDIT_COSTS,
   // Flash floor — the real per-run cost is duration/model-bucketed (see
   // estimateNodeCredits below + the node's live useModelCredits estimate).
   // Kept equal to VIDEO_ANALYSIS_BUCKET_CREDITS' table-wide ceiling
@@ -528,6 +530,11 @@ export function estimateNodeCredits(
     const modelId = instagramScrapeCreditIdFromNode(node.data)
     return INSTAGRAM_SCRAPE_CREDIT_COSTS[modelId] ?? NODE_CREDIT_COSTS["instagram-scrape"] ?? 0
   }
+  if (nodeType === "social-search" && node.data) {
+    // The page count the run reserves — the same builder the backend uses.
+    const modelId = socialSearchCreditIdFromNode(node.data)
+    return getCachedCredits(modelId) ?? SOCIAL_SEARCH_CREDIT_COSTS[modelId] ?? NODE_CREDIT_COSTS["social-search"] ?? 0
+  }
   if (nodeType === "video-analysis" && node.data) {
     // data.llmModel stores the TIER string ("fast"/"pro"/"mixed"/"mixed-fast") —
     // resolve it to the engine id first (audit fix: the raw tier built
@@ -726,6 +733,8 @@ export const EXECUTABLE_TYPES = new Set([
   "web-scrape",
   "meta-ads-scrape",
   "instagram-scrape",
+  // Social Search — a cloud plugin node (job + poll, like video-analysis).
+  "social-search",
   "video-analysis",
   // AI Audit — re-watches a clip against an analysis and emits the CORRECTED
   // analysis (same payload shape as video-analysis, so it chains anywhere an

@@ -256,6 +256,17 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Data",
     group: "automate-get-content",
   },
+  {
+    type: "social-search",
+    label: "Social Search",
+    icon: <ScanSearch className="h-4 w-4" />,
+    category: "Data",
+    group: "automate-get-content",
+    // Preview: admin-only until its price is set and the search provider's
+    // production plan is in place (the backend gate is Admin → Availability).
+    adminOnly: true,
+    keywords: ["tiktok", "instagram", "youtube", "x", "twitter", "reddit", "linkedin", "meta ads", "ad library", "research", "trends", "competitor", "posts", "viral", "inspiration"],
+  },
   // Hidden — uncomment to restore in the Add Node UI:
   // {
   //   type: "json-process",  // note: re-add the Filter icon import if restored

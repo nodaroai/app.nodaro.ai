@@ -4607,6 +4607,17 @@ export async function instagramScrape(params: {
   return apiJson("/v1/instagram-scrape", { body: params, workflowId: true, label: "apiErr.instagramScrapeFailed" })
 }
 
+/**
+ * Social Search (Cloud): one platform, one keyword or account. Answers with a
+ * job id at once; the search runs in a worker (an X search can take two
+ * minutes), so poll the job for `output_data.json`, every post found.
+ */
+export async function socialSearch(
+  params: import("@nodaro/shared").SocialSearchParams,
+): Promise<{ jobId: string }> {
+  return apiJson("/v1/social-search", { body: { ...params }, workflowId: true, label: "apiErr.socialSearchFailed" })
+}
+
 export async function sunoGenerateApi(params: {
   prompt: string
   model?: string

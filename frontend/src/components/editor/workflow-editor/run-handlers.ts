@@ -15,7 +15,8 @@ import { queryKeys } from "@/lib/query-keys";
 import { getCachedCredits } from "@/ee/hooks/use-model-credits";
 import { spendableCredits, type CreditAllowance } from "@/lib/spendable-credits";
 import { BILLING_SURFACE_QUERY_KEY, type BillingSurface } from "@/lib/billing-surface";
-import type { GeneratedResult, WorkflowNode, WorkflowEdge, JobErrorHint, Scene3DRevisionEntry } from "@/types/nodes";
+import type { GeneratedResult, WorkflowNode, WorkflowEdge, JobErrorHint, Scene3DRevisionEntry, SocialSearchNodeData } from "@/types/nodes";
+import { socialSearchServerRunPatch } from "@/components/nodes/social-search-run-state";
 import {
   isExecutableNode,
   type ExecutionContext,
@@ -995,8 +996,9 @@ function applyRestoredJobCompletion(
   // run's own (scrapeResultPatch), so a restored result is indistinguishable
   // from one that arrived with the tab open.
   if (isScrapeNodeType(nodeType)) {
+    const nodeData = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as Record<string, unknown> | undefined;
     updateNodeData(nodeId, {
-      ...scrapeResultPatch(nodeType, job.output_data?.json, jobId),
+      ...scrapeResultPatch(nodeType, job.output_data?.json, jobId, nodeData),
       currentJobId: undefined,
       currentJobProgress: undefined,
       jobAwaitingReview: undefined,
@@ -1408,6 +1410,8 @@ interface NodeExecutionState {
     splitResults?: string[];
     combinedText?: string;
     listResults?: string[];
+    /** Social Search: every post found (the posts passed on ride on `json`). */
+    searchResults?: unknown[];
     /** Row-aligned twin of listResults (Extract Field, List output). */
     alignedListResults?: string[];
     /** Selector node `picked` output channel (selected items). */
@@ -1535,6 +1539,9 @@ function syncNodeStatesToStore(
       state.status === "completed" &&
       currentStatus === "completed" &&
       !isContentNodeType(node.type) &&
+      // Social Search's posts live on searchResults / generatedJson, never on
+      // generatedResults, so an empty generatedResults is its normal state.
+      node.type !== "social-search" &&
       state.output?.listResults &&
       state.output.listResults.length > 1 &&
       !((data.generatedResults as GeneratedResult[] | undefined)?.length);
@@ -1557,6 +1564,11 @@ function syncNodeStatesToStore(
         // briefs on __listResults would clone the node on the canvas, and a
         // text history in generatedResults would be read as a list.
         Object.assign(updates, contentRunResultPatch(node.type, state.output as Record<string, unknown>) ?? {});
+      } else if (state.output && node.type === "social-search") {
+        // Its own mapping: every post found, the ones passed on, the digest —
+        // never the generic text write below, whose run history in
+        // generatedResults would be read as a list downstream.
+        Object.assign(updates, socialSearchServerRunPatch(data as SocialSearchNodeData, state.output as Record<string, unknown>));
       } else if (state.output) {
         const nodeType = node.type ?? "";
         if (state.output.imageUrl) {

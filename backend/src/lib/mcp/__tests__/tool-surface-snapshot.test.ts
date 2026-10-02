@@ -426,6 +426,13 @@ const GENERATE_MUSIC_REFERENCE_BYTES = 207
 // measured by this suite: 373_669 total − 373_260 base = 409 B, which keeps
 // the 46 B of headroom the list had before.
 const DOCS_REVIEW_WORDING_BYTES = 409
+// RAISED 2026-10-02 by social_search and nothing else — one NEW cloud-only
+// tool (the Social Search node's MCP twin), registered inside the hasCredits()
+// block and gated by `workflows:execute`, so cloud/all names it and the
+// community sets and the scope-less sets do not. measured by this suite:
+// 376_790 total − 373_669 base = 3_121 B, well under the 8_192 B per-tool
+// budget, and the list keeps the 46 B of headroom it had before.
+const SOCIAL_SEARCH_TOOL_BYTES = 3_121
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -463,7 +470,8 @@ export const TOOL_WIRE_BUDGET = {
     GET_RECIPE_UGC_SENTENCE_BYTES +
     GENERATE_SCRIPT_STYLE_GUIDE_BYTES +
     GENERATE_MUSIC_REFERENCE_BYTES +
-    DOCS_REVIEW_WORDING_BYTES,
+    DOCS_REVIEW_WORDING_BYTES +
+    SOCIAL_SEARCH_TOOL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -105,6 +105,7 @@ import {
   webScrape,
   metaAdsScrape,
   instagramScrape,
+  socialSearch,
   startVideoAnalysis,
   startContentRecipe,
   startContentIdeas,
@@ -116,7 +117,8 @@ import { applyWebScrapeFailure, applyWebScrapeResult, webScrapeRunStartPatch } f
 import { scrapeResultPatch } from "@/components/nodes/scrape-result-recovery";
 import { applyMetaAdsScrapeFailure, applyMetaAdsScrapeResult, metaAdsScrapeRunStartPatch } from "@/components/nodes/meta-ads-scrape-run-state";
 import { applyInstagramScrapeFailure, applyInstagramScrapeResult, instagramScrapeRunStartPatch } from "@/components/nodes/instagram-scrape-run-state";
-import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets } from "@nodaro/shared";
+import { applySocialSearchFailure, applySocialSearchResult, socialSearchRunStartPatch } from "@/components/nodes/social-search-run-state";
+import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets, socialSearchRequestFromNode } from "@nodaro/shared";
 import { clampContentIdeasCount, CONTENT_IDEAS_MAX_RECIPE_INPUTS } from "@nodaro/shared";
 import { tx } from "@/lib/i18n";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
@@ -252,6 +254,7 @@ import type {
   WebScrapeNodeData,
   MetaAdsScrapeNodeData,
   InstagramScrapeNodeData,
+  SocialSearchNodeData,
   TelegramChannelFeedData,
   ExtractFieldNodeData,
   JsonProcessNodeData,
@@ -5452,6 +5455,51 @@ function executeNodeCore(
         if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
         updateNodeData(node.id, applyInstagramScrapeFailure(err.message || "Scrape failed"));
         guardedToast.error(tx("nodeRun.instagramFailed", { message: err.message }));
+        throw err;
+      });
+  }
+
+  if (node.type === "social-search") {
+    const d = node.data as SocialSearchNodeData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    // ONE request builder with the workflow orchestrator: the wired text (a
+    // Text node, a List item) is the query when there is one.
+    const request = socialSearchRequestFromNode(d, inputs.prompt);
+    if (!request.query) {
+      const message = tx("social.queryNeeded");
+      updateNodeData(node.id, applySocialSearchFailure(message));
+      guardedToast.error(message);
+      throw new Error(message);
+    }
+    updateNodeData(node.id, socialSearchRunStartPatch(d));
+    setUserPromptTemplate(undefined);
+    let searchJobId = "";
+    return socialSearch(request)
+      // The search runs in a worker (an X search can take two minutes), so the
+      // route answers with a job id; poll it to completion here.
+      .then(({ jobId }) => {
+        searchJobId = jobId;
+        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal });
+      })
+      .then((output) => {
+        // The LIVE data: "how many to pass on" may have changed while it ran.
+        const live = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data as Record<string, unknown> | undefined;
+        const patch = scrapeResultPatch("social-search", output.json, searchJobId, live ?? d) ?? applySocialSearchResult(output.json, d);
+        const warnings = Array.isArray(output.warnings) ? (output.warnings as unknown[]).filter((w): w is string => typeof w === "string") : [];
+        updateNodeData(node.id, { ...patch, searchWarnings: warnings.length ? warnings : undefined });
+        const found = typeof patch.lastRunCount === "number" ? patch.lastRunCount : 0;
+        guardedToast.success(
+          found === 0 ? tx("nodeRun.socialSearchCompleted0") : found === 1 ? tx("nodeRun.socialSearchCompletedOne") : tx("nodeRun.socialSearchCompleted", { count: found }),
+        );
+        const chosen = Array.isArray(patch.generatedJson) ? patch.generatedJson : (d.generatedJson ?? []);
+        return JSON.stringify(chosen);
+      })
+      .catch((err: Error) => {
+        // Stop → the poll was aborted; the central Stop handler already restored
+        // the node, so don't overwrite it with a failure (mirrors instagram-scrape).
+        if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
+        updateNodeData(node.id, applySocialSearchFailure(err.message || tx("node.scrapeFailed")));
+        guardedToast.error(tx("nodeRun.socialSearchFailed", { message: err.message }));
         throw err;
       });
   }

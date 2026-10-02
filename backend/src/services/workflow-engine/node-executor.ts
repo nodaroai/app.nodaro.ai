@@ -282,6 +282,8 @@ export function extractUserPromptTemplate(node: SimpleNode): string | undefined 
       return pick("query", "pageUrls")
     case "instagram-scrape":
       return pick("targets")
+    case "social-search":
+      return pick("query")
 
     // --- Social posts ---
     case "instagram-post":

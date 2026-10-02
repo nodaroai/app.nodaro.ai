@@ -386,7 +386,7 @@ export function buildCompletedResultPatch(
   // Scrapers: the result is `output_data.json` too, written through the live
   // run's own patch so the card, the counts and the kept-last-good contract are
   // identical however the result arrived.
-  if (nodeType && isScrapeNodeType(nodeType)) return scrapeResultPatch(nodeType, output.json, jobId)
+  if (nodeType && isScrapeNodeType(nodeType)) return scrapeResultPatch(nodeType, output.json, jobId, nodeData)
   // audio-sync: its offsets are `output_data.json` → `data.generatedJson`, not a
   // media URL (type-gated like the analysis branch above).
   if (nodeType === "audio-sync") {

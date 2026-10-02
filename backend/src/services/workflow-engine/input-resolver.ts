@@ -1438,6 +1438,14 @@ function routeOutput(
     return
   }
 
+  // --- Social Search: both handles are text for the target — `json` the
+  // posts stringified, `text` their digest (getPrimaryOutput narrowed it by
+  // handle). Mirrors the frontend node-input-resolver. ---
+  if (srcType === "social-search") {
+    inputs.prompt = output
+    return
+  }
+
   // --- 3D Render Pro `stills` → the WHOLE ordered contact sheet, spread into
   // referenceImageUrls. One still per shot is a set, not a pick: handing a
   // downstream model only the first would silently drop the rest of the

@@ -166,6 +166,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "audio-sync": { json: "look" },
   "meta-ads-scrape": { json: "look", text: "text", image: "image", video: "video" },
   "instagram-scrape": { json: "look", text: "text", image: "image", video: "video" },
+  "social-search": { json: "look", text: "text" },
   "webhook-output": { out: "approve" },
   "youtube-video": { video: "video" },
   "content-recipe": { json: "look", text: "text" },

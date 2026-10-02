@@ -1,6 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript } from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest } from "@nodaro/shared";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
@@ -92,9 +92,12 @@ export function getEffectivelySkippedIds(
   nodes: WorkflowNode[],
   _edges: WorkflowEdge[],
 ): Set<string> {
+  // A Social Search node keeping its picks is frozen like a skipped one: it
+  // passes its chosen posts on instead of searching again. Same rule as the
+  // backend orchestrator (`isSocialSearchPickFrozen`).
   return new Set(
     nodes
-      .filter((n) => !!(n.data as Record<string, unknown>).skipped)
+      .filter((n) => !!(n.data as Record<string, unknown>).skipped || isSocialSearchPickFrozen(n.type, n.data as Record<string, unknown>))
       .map((n) => n.id),
   );
 }
@@ -728,6 +731,16 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     if (sourceHandle === "text") return featured.text;
     if (sourceHandle === "image") return featured.imageUrl;
     if (sourceHandle === "video") return featured.videoUrl;
+    return undefined;
+  }
+  if (type === "social-search") {
+    // `json` = the posts the node passes on (a person's picks, else the first
+    // few), `text` = the same posts as a digest. Mirrors the backend
+    // getPrimaryOutput / extractSavedNodeOutput branches.
+    const chosen = socialPostsFrom((node.data as { generatedJson?: unknown }).generatedJson);
+    if (chosen.length === 0) return undefined;
+    if (sourceHandle === "text") return socialPostsDigest(chosen);
+    if (sourceHandle === "json" || !sourceHandle) return JSON.stringify(chosen);
     return undefined;
   }
   if (type === "instagram-scrape") {

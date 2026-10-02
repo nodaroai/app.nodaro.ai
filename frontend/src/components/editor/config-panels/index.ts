@@ -31,6 +31,7 @@ export { InstagramPostConfig, TiktokPostConfig, YoutubeUploadConfig, LinkedinPos
 export { WebScrapeConfig } from "./scraper-configs"
 export { MetaAdsScrapeConfig } from "./meta-ads-configs"
 export { InstagramScrapeConfig } from "./instagram-configs"
+export { SocialSearchConfig } from "./research-configs"
 export { ResultsGallery } from "./results-gallery"
 export { PresentationDisplayConfig } from "./presentation-display-config"
 export { getConnectedSources, getModelIdentifier, buildCreditModelIdentifier } from "./helpers"

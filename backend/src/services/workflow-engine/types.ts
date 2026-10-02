@@ -70,6 +70,10 @@ export interface NodeOutput {
   paramOutputs?: Record<string, string>
   /** Accumulated results from fan-out (list/loop/split-text) execution */
   listResults?: string[]
+  /** social-search: EVERY post the search found (the editor's picker grid);
+   *  `json` holds only the posts the node passes on. Lets a server-side run
+   *  repaint the node card the way the editor's own run does. */
+  searchResults?: unknown[]
   /**
    * The same list ROW-ALIGNED with the array it was cut from: one entry per
    * element, "" where the element has no value (Extract Field, List output).

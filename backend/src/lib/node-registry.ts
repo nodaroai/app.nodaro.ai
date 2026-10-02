@@ -170,6 +170,10 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
     ids: familyIds("content-ideas"),
     note: "Charged per batch of up to five ideas: a run of 6–10 ideas bills two batches (the `content-ideas:10` rows).",
   },
+  "social-search": {
+    ids: familyIds("social-search"),
+    note: "Priced per page of up to 20 results: a search for 20, 40 or 60 posts bills one, two or three pages, on any platform.",
+  },
   "audio-sync": {
     ids: familyIds("audio-sync"),
     note: "Priced per source aligned to the reference: 10 × (sources − 1), 2 to 6 sources.",
@@ -491,6 +495,29 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // outputType: data — emits a JSON array of Instagram posts via the `json` handle (creditCost auto-filled from STATIC_CREDIT_COSTS).
     description: "Pull public Instagram posts (images, carousels, reels) by profile or hashtag and emit structured JSON (caption, media, likes, comments).",
     outputType: "data",
+  },
+  {
+    type: "social-search",
+    label: "Social Search",
+    category: "input",
+    // Cloud-only (a private plugin runs the search). Outputs: `json` (the
+    // posts a run passes on — a person's picks, else the first `pickTop`) and
+    // `text` (the same posts as a digest). Each post is a SocialPost.
+    description:
+      "Search TikTok, Instagram, YouTube, X, Reddit, LinkedIn or Meta's Ad Library by keyword or account and get up to 60 posts with their numbers. Pick the ones to keep in the editor; a workflow run without picks passes on the first few.",
+    outputType: "data",
+    creditCost: creditBandFor("social-search"),
+    inputSchema: {
+      fields: [
+        { key: "platform", type: "string" },
+        { key: "mode", type: "string" },
+        { key: "query", type: "string" },
+        { key: "count", type: "number" },
+        { key: "period", type: "string" },
+        { key: "sort", type: "string" },
+        { key: "pickTop", type: "number" },
+      ],
+    },
   },
   {
     type: "video-analysis",

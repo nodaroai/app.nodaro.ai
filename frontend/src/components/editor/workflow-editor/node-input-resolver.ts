@@ -2922,6 +2922,11 @@ export function resolveNodeInputs(
       }
     } else if (src.type === "schedule-trigger") {
       inputs.prompt = output;
+    } else if (src.type === "social-search") {
+      // Both handles are text for the target: `json` the chosen posts
+      // stringified, `text` their digest (extractNodeOutput narrowed it by
+      // handle). Mirrors the backend input-resolver.
+      inputs.prompt = output;
     } else if (src.type === "meta-ads-scrape" || src.type === "instagram-scrape") {
       // Route by the HANDLE the wire leaves: `output` is already the featured
       // item's copy / creative url (or the stringified json) — extractNodeOutput

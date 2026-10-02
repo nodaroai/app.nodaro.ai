@@ -47,7 +47,19 @@ export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter,
   EditPlanMode,
   EditPlanTier,
   EdlClipSet,
-  ChapterSet } from "@nodaro/shared"
+  ChapterSet,
+  // Social Search (`nodes.run("social-search", …)`): the request and the post shape.
+  SocialSearchParams,
+  SocialPost,
+  SocialPostAuthor,
+  SocialPostMetrics,
+  SocialPostMedia,
+  SocialPlatform,
+  SocialSearchMode,
+  SocialSearchPeriod,
+  SocialSearchSort,
+  SocialSearchCount,
+  SocialSearchVideoKind } from "@nodaro/shared"
 // `unwrapEditPlanOutput` (value) — the sanctioned way to read an edit-plan job's
 // `output_data` (normalizes clips → bare `Edl[]` and strips `viaNodaroCloud`).
 export { unwrapEditPlanOutput } from "@nodaro/shared"
@@ -268,6 +280,7 @@ export type {
   RunNodeResult,
   RunNodeAdjustment,
   NodeJobOutput,
+  SocialSearchJobOutput,
   RunAndWaitOptions,
   RunManyResult,
   StructuredReferenceParams,

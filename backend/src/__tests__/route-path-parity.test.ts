@@ -254,6 +254,11 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   // workflow routes refuse a graph holding them, so nothing calls these there.
   "/v1/content-recipe",
   "/v1/content-ideas",
+  // Social Search is a Cloud-only node (CLOUD_ONLY_NODE_TYPES, no relay): its
+  // route is registered at runtime by the cloud-plugins `registerRoutes()` and
+  // deliberately absent from core. Off Cloud the pickers hide the node and the
+  // workflow routes refuse a graph holding it, so nothing calls it there.
+  "/v1/social-search",
 ])
 
 // ---------------------------------------------------------------------------

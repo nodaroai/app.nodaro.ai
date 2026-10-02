@@ -21,7 +21,7 @@ import type { WorkflowNode } from "@/types/nodes"
  */
 export function useScrapeNodeCredits(
   id: string,
-  type: "web-scrape" | "meta-ads-scrape" | "instagram-scrape",
+  type: "web-scrape" | "meta-ads-scrape" | "instagram-scrape" | "social-search",
   data: Record<string, unknown>,
 ): number {
   const node = { id, type, position: { x: 0, y: 0 }, data } as unknown as WorkflowNode

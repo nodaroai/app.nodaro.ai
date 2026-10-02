@@ -603,6 +603,9 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "instagram-scrape": [
     { handleId: "in", label: "Profiles / Hashtags", accepts: (s) => isValidWebScrapeConnection("in", s) },
   ],
+  "social-search": [
+    { handleId: "in", label: "Keyword or account", accepts: (s) => isValidWebScrapeConnection("in", s) },
+  ],
   "extract-field": [
     { handleId: "in", label: "Source", accepts: (s) => isValidExtractFieldConnection("in", s) },
   ],

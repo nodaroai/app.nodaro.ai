@@ -203,6 +203,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `silence-detect` — Silence Detect
 - `slideshow` — Slideshow
 - `social-media-format` — Social Media Format
+- `social-search` — Social Search
 - `sort-list` — Sort List
 - `speech-to-video` — Speech to Video
 - `speed-ramp` — Adjust Speed

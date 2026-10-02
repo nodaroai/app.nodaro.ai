@@ -97,6 +97,13 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // patch must never treat them as config.
   "ideaBriefs",
   "runWarnings",
+  // Social Search: every post the last search found (the picker's grid), the
+  // ids a person picked from them, and the run's non-fatal notes ("only part
+  // of the results loaded"). All RESULTS: a template, a preset or a run-only
+  // patch must never carry yesterday's posts or picks as configuration.
+  "searchResults",
+  "pickedIds",
+  "searchWarnings",
   // When the editor's "Clear results" last emptied this node (ISO time). Not a
   // result and not config: bookkeeping that tells the load-time recovery lanes
   // "this node is empty ON PURPOSE" — without it, every reload reads an empty
