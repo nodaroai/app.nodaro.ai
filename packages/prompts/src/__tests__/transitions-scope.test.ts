@@ -541,6 +541,68 @@ describe("F8 cut bodies (2026-10-03 A/B: F8 arm B on snap-to-black, jump-match a
   })
 })
 
+describe("F9 time bodies (2026-10-03 A/B at full / long: F9 arm B on seasonal-shift and flashback)", () => {
+  // Arm B, the F9 draft with the ship tidy (first letter lower-cased, no final full stop). Each is byte-identical to
+  // the body inside the prompt of the take it was rated on: seasonal-shift 01-B (428e79c6) and flashback 02-B
+  // (bc236b0c), both rendered at position full / duration long (the time-row rule), no intensity, scope shot. Both
+  // rows keep their heading, which the renderer strips. Neither body contains a colon, so the heading guard in
+  // transitions-instant.test.ts has nothing to match, and no comma item equals its row's term. weather-shift was a
+  // tie (A 4 · B 4), so the shorter body stays: today's.
+  const ROWS = [
+    {
+      id: "seasonal-shift",
+      term: "seasonal time-lapse",
+      heading: "accelerated seasonal time-lapse: ",
+      body:
+        "the same view races through the seasons in fast motion, from the season of the first shot to the sea" +
+        "son of the second, as growing things bud, turn and fall and snow comes or goes. The camera stays whe" +
+        "re it is and the framing does not change. The change flows continuously across the whole picture, ev" +
+        "ery part moving on together, until the view matches the second shot. The shot ends on the second sho" +
+        "t's season, still and fully resolved. Only the season changes, and the layout of the view stays exac" +
+        "tly the same",
+    },
+    {
+      id: "flashback",
+      term: "flashback",
+      heading: "brief flashback transition: ",
+      body:
+        "a soft warm wash spreads over the whole picture and a faint ripple drifts across it as the present m" +
+        "oment fades. The camera stays where it is and the framing does not change. Through the ripple an ear" +
+        "lier moment of the same subject comes into focus, like a memory. The shot ends on the remembered mom" +
+        "ent, steady and fully resolved, with the ripple gone. The subject stays at the same place in the fra" +
+        "me while the moment around it changes",
+    },
+  ] as const
+
+  it.each(ROWS)("$id: the catalog hint keeps its heading and carries the B body", ({ id, heading, body }) => {
+    expect(getTransitionPromptHint(id)).toBe(heading + body)
+  })
+
+  it.each(ROWS)("$id renders `term (body)` at the tile-default levers", ({ id, term, body }) => {
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "full", { scope: "shot" })).toBe(`${term} (${body})`)
+  })
+
+  it.each(ROWS)("$id at full / long in a shot window (the levers the take was rendered at)", ({ id, term, body }) => {
+    expect(composeTransitionHintFromConnections(id, [], [], { position: "full", duration: "long" }, "full", { scope: "shot" })).toBe(
+      `${term} (${body}), ${FULL_SHOT_CLAUSE}, lasting approximately 3 seconds`,
+    )
+  })
+
+  it.each(ROWS)("$id at middle / short / natural", ({ id, term, body }) => {
+    expect(composeTransitionHintFromConnections(id, [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      `${term} (${body}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
+    )
+  })
+
+  it("weather-shift keeps today's body", () => {
+    const body =
+      "same scene, framing locked — clear sky darkens to storm clouds, rain begins and intensifies then cle" +
+      "ars, sun returns through breaking clouds"
+    expect(getTransitionPromptHint("weather-shift")).toBe(`accelerated weather transition: ${body}`)
+    expect(composeTransitionHintFromConnections("weather-shift", [], [], {}, "full", { scope: "shot" })).toBe(`weather time-lapse (${body})`)
+  })
+})
+
 describe("L1 — a cut spans nothing, so `full` adds no clause", () => {
   it.each(INSTANT_IDS)("%s + full renders no position clause", (id) => {
     const out = composeTransitionHintFromConnections(id, [], [], { position: "full", duration: "short", intensity: "natural" })

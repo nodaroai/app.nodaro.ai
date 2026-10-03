@@ -131,7 +131,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "fast-forward-night-day",  label: "Fast-Forward (Night → Day)", category: "time", description: "Time-lapse night to dawn same scene",
     promptHint: "fast-forward time-lapse transition: stars fade, the sky shifts from deep night through pre-dawn blue to golden sunrise, shadows sweep in reverse, all while framing and camera position remain locked on the same scene", term: "night-to-day time-lapse" },
   { id: "seasonal-shift",          label: "Seasonal Shift",             category: "time", description: "Same scene through changing seasons",
-    promptHint: "accelerated seasonal time-lapse: foliage transitions from spring green to summer lushness to autumn red-gold to winter bare, leaves fall and regrow, snow accumulates and melts, all within the same locked framing", term: "seasonal time-lapse" },
+    promptHint: "accelerated seasonal time-lapse: the same view races through the seasons in fast motion, from the season of the first shot to the season of the second, as growing things bud, turn and fall and snow comes or goes. The camera stays where it is and the framing does not change. The change flows continuously across the whole picture, every part moving on together, until the view matches the second shot. The shot ends on the second shot's season, still and fully resolved. Only the season changes, and the layout of the view stays exactly the same", term: "seasonal time-lapse" },
   { id: "aging",                   label: "Aging",                      category: "time", description: "Subject visibly ages forward in time",
     promptHint: "accelerated aging transition: the subject visibly ages forward - fine lines deepen into wrinkles, hair greys to silver, posture settles - while the framing stays unchanged", term: "accelerated aging" },
   { id: "rewind",                  label: "Rewind",                     category: "time", description: "Time reverses, motion plays backward",
@@ -141,7 +141,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "weather-shift",           label: "Weather Shift",              category: "time", description: "Same scene through changing weather",
     promptHint: "accelerated weather transition: same scene, framing locked — clear sky darkens to storm clouds, rain begins and intensifies then clears, sun returns through breaking clouds", term: "weather time-lapse" },
   { id: "flashback",               label: "Flashback",                  category: "time", description: "Memory-flashback into a past moment of the subject",
-    promptHint: "brief flashback transition: the frame washes with a soft warm or desaturated tint, faint ripple distortion crosses the image as the present scene fades, and a remembered earlier moment resolves into focus on the same subject" },
+    promptHint: "brief flashback transition: a soft warm wash spreads over the whole picture and a faint ripple drifts across it as the present moment fades. The camera stays where it is and the framing does not change. Through the ripple an earlier moment of the same subject comes into focus, like a memory. The shot ends on the remembered moment, steady and fully resolved, with the ripple gone. The subject stays at the same place in the frame while the moment around it changes" },
 
   // ============================================================================
   // ELEMENT — 14 entries — teleport via natural element
