@@ -261,15 +261,35 @@ export function socialSearchRequestFromNode(
   }
 }
 
+/**
+ * The page link of a Social Search post, read from the node's `json` output
+ * as a wire hands it on: one post (a wire in Each mode) or the list of posts
+ * (any other wire: the first). Video Analysis reads it like its own link
+ * field, so each picked post is analyzed by its page. Undefined when the
+ * output holds no post with an http(s) link.
+ */
+export function socialSearchPostLink(output: string): string | undefined {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(output)
+  } catch {
+    return undefined
+  }
+  const post = Array.isArray(parsed) ? parsed[0] : parsed
+  const url = typeof post === "object" && post !== null ? (post as { url?: unknown }).url : undefined
+  const link = typeof url === "string" ? url.trim() : ""
+  return /^https?:\/\/\S+$/i.test(link) ? link : undefined
+}
+
 // ── Pricing ────────────────────────────────────────────────────────────────
 
 /**
- * Credits for one page of results (up to 20 posts). PRICE PENDING OWNER: the
- * owner sets every price, and this is the one number to change once they do;
- * the `model_pricing` rows seed the same values. A run is charged by the
- * results it asks for (pages), never by the platform.
+ * Credits for one page of results (up to 20 posts), set by the owner: 20 /
+ * 40 / 60 results cost 20 / 40 / 60 credits on every platform. The
+ * `model_pricing` rows seed the same values. A run is charged by the results
+ * it asks for (pages), never by the platform.
  */
-export const SOCIAL_SEARCH_CREDITS_PER_PAGE = 10
+export const SOCIAL_SEARCH_CREDITS_PER_PAGE = 20
 
 export function socialSearchCreditId(count: SocialSearchCount): string {
   return `${SOCIAL_SEARCH_NODE_TYPE}:${socialSearchPages(count)}`

@@ -95,11 +95,6 @@ export function SocialSearchConfig({ data, onUpdate, sources, fieldMappings, onM
   return (
     <div className="flex flex-col gap-3.5">
       <div className="flex flex-col gap-2">
-        <SectionLabel>{t("social.cfgLabel")}</SectionLabel>
-        <Input value={data.label ?? ""} onChange={(e) => onUpdate({ label: e.target.value })} className={fieldClass} />
-      </div>
-
-      <div className="flex flex-col gap-2">
         <SectionLabel>{t("social.cfgPlatform")}</SectionLabel>
         <div className="grid grid-cols-4 gap-1.5">
           {SOCIAL_PLATFORMS.map((p) => (

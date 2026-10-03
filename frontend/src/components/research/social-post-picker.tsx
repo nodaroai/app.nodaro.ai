@@ -15,6 +15,7 @@ import { applySocialSearchPicks, socialSearchResults } from "@/components/nodes/
 import { useSavedPostLookup, useSavedPostMutations } from "@/hooks/queries/use-saved-posts-queries"
 import { SOCIAL_PLATFORM_META } from "./social-platforms"
 import { SocialPostCard } from "./social-post-card"
+import { SocialPostPreview } from "./social-post-preview"
 
 type PickerSort = "platform" | "popular" | "newest"
 
@@ -83,6 +84,7 @@ export function SocialPostPicker({
   const lookup = useSavedPostLookup(postIds, open)
   const { save, remove } = useSavedPostMutations()
   const [savedNow, setSavedNow] = useState<Readonly<Record<string, string | null>>>({})
+  const [reading, setReading] = useState<SocialPost | null>(null)
   // Every post being saved or removed right now (several can be in flight).
   const [saving, setSaving] = useState<ReadonlySet<string>>(() => new Set())
   const saveIdOf = (postId: string): string | null =>
@@ -190,6 +192,7 @@ export function SocialPostPicker({
                     saved={saveIdOf(post.id) !== null}
                     saveBusy={saving.has(post.id)}
                     onToggleSave={() => void toggleSave(post)}
+                    onRead={() => setReading(post)}
                   />
                 )
               })}
@@ -207,6 +210,7 @@ export function SocialPostPicker({
             <Button onClick={confirm} disabled={results.length === 0}>{confirmLabel}</Button>
           </div>
         </DialogFooter>
+      <SocialPostPreview post={reading} onOpenChange={(open) => !open && setReading(null)} />
       </DialogContent>
     </Dialog>
   )

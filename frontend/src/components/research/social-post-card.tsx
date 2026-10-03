@@ -1,7 +1,7 @@
 "use client"
 
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react"
-import { Bookmark, BookmarkCheck, Check, ExternalLink, Eye, Heart, MessageCircle, Play, ThumbsUp } from "lucide-react"
+import { Bookmark, BookmarkCheck, BookOpen, Check, ExternalLink, Eye, Heart, MessageCircle, Play, ThumbsUp } from "lucide-react"
 import type { SocialPost } from "@nodaro/shared"
 import { MetaAdMedia } from "@/components/nodes/meta-ad-media"
 import { useT } from "@/lib/i18n"
@@ -63,6 +63,7 @@ export function SocialPostCard({
   saved,
   saveBusy,
   onToggleSave,
+  onRead,
 }: {
   readonly post: SocialPost
   readonly picked: boolean
@@ -74,6 +75,8 @@ export function SocialPostCard({
   readonly saved?: boolean
   readonly saveBusy?: boolean
   readonly onToggleSave?: () => void
+  /** Opens the whole post (every word, its link). Not a pick. */
+  readonly onRead?: () => void
 }) {
   const t = useT()
   const m = post.metrics
@@ -157,6 +160,19 @@ export function SocialPostCard({
           {m.comments !== undefined && <Metric icon={<MessageCircle className="h-3.5 w-3.5" />} value={m.comments} label={t("social.metricComments")} />}
           {days !== null && <span>{days === 1 ? t("social.adRunningOne") : t("social.adRunning", { days })}</span>}
           {variants > 1 && <span>{t("social.adVersions", { n: variants })}</span>}
+          {onRead && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRead()
+              }}
+              onKeyDown={stop}
+              className="ms-auto flex items-center gap-1 text-[var(--meta-ads-text-2)] hover:underline"
+            >
+              <BookOpen className="h-3 w-3" /> {t("social.readPost")}
+            </button>
+          )}
           {link && (
             <a
               href={link}
@@ -164,7 +180,7 @@ export function SocialPostCard({
               rel="noopener noreferrer"
               onClick={stop}
               onKeyDown={stop}
-              className="ms-auto flex items-center gap-1 text-[#FF0073] hover:underline"
+              className={cn("flex items-center gap-1 text-[#FF0073] hover:underline", !onRead && "ms-auto")}
             >
               {t("social.openPost")} <ExternalLink className="h-3 w-3" />
             </a>

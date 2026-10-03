@@ -860,6 +860,7 @@ export {
   socialSearchCount,
   socialSearchPages,
   socialSearchRequestFromNode,
+  socialSearchPostLink,
   socialSearchCreditId,
   socialSearchCreditIdFromNode,
   socialSearchPickTop,

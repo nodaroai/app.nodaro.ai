@@ -53,7 +53,7 @@ import {
   ACCEPTS_JSON,
 } from "./data-handles"
 import { isValidContentConnection } from "./content-handles"
-import { ACCEPTS_VIDEO_OR_POST_LINK } from "./video-analysis-handles"
+import { ACCEPTS_VIDEO_OR_POST_LINK, SOCIAL_SEARCH_POSTS_HANDLE } from "./video-analysis-handles"
 import {
   isValidEditImageConnection,
   isValidModifyImageConnection,
@@ -272,10 +272,12 @@ export function isValidWorkflowConnection(
     return isAnalyzablePicker(typeOf(connection.target) ?? "") && connection.targetHandle === "picker-json"
   }
 
-  // JSON output cannot feed media-only inputs.
+  // JSON output cannot feed media-only inputs — except a Social Search's
+  // posts into Video Analysis's video, which reads each post's page link.
   if (connection.sourceHandle === "json") {
     const th = connection.targetHandle ?? ""
-    if (MEDIA_ONLY_HANDLES.has(th)) return false
+    const postsIntoAnalysis = typeOf(connection.source) === "social-search" && typeOf(connection.target) === "video-analysis" && th === "video"
+    if (MEDIA_ONLY_HANDLES.has(th) && !postsIntoAnalysis) return false
   }
 
   // Generate Image v2.1 — enforce typed-handle compatibility.
@@ -532,10 +534,13 @@ export function isValidWorkflowConnection(
       imageSourceType,
     )
   }
-  // Video Analysis — single `video` target: a video file, or a post's link from
-  // a text output. The same predicate as the node pip and the handle popover,
-  // so drag-to-connect and the source-direction popover agree.
+  // Video Analysis — single `video` target: a video file, a post's link from
+  // a text output, or a Social Search's posts. The same predicate as the node
+  // pip and the handle popover, so drag-to-connect and the source-direction
+  // popover agree; a Social Search connects by its posts (`json`), never its
+  // digest.
   if (targetType === "video-analysis" && connection.targetHandle === "video") {
+    if (imageSourceType === "social-search") return connection.sourceHandle === SOCIAL_SEARCH_POSTS_HANDLE
     return ACCEPTS_VIDEO_OR_POST_LINK(imageSourceType)
   }
   // Content Recipe (`in` material, `link` source post) and Content Ideas

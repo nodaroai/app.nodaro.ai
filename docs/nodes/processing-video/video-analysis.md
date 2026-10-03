@@ -31,7 +31,8 @@ scene can later be re-cast onto your own characters, objects, or locations.
 
 **Inputs:** Video (optional handle) — a wired upstream video, a post's link
 wired from a text output (for example the Telegram Account Trigger's **Video
-link**), or a YouTube URL set in config.
+link**), a [Social Search](../input/social-search.md)'s posts, or a YouTube URL
+set in config.
 **Outputs:** Analysis JSON (`meta` + `slots` + `scenes[]`) on the `json` output
 handle, and the same analysis as a plain string on the `text` output handle —
 wire `text` directly into any prompt/text input (for example Generate Video
@@ -56,6 +57,10 @@ You provide the source one of three ways:
   any other text on that wire is ignored, and the node then asks for a video
   or a link. A message that carries a video file (a Telegram bot trigger's
   video message) is analyzed as the file.
+- **Social Search posts** — connect a Social Search's posts (its JSON output)
+  to the video input: each post is analyzed by its page link. A wire made in
+  the editor starts in **Each** mode, so every post the search passes on gets
+  its own analysis; on any other mode the first post is analyzed.
 - **YouTube URL** — set `youtubeUrl` in the node config.
 
 **Precedence, not exactly-one:** a wired video input **always wins**, then a

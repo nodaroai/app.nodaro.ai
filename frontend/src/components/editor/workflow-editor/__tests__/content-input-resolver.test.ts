@@ -151,3 +151,39 @@ describe("a finished Content Ideas node hands the next node one brief per idea",
     expect(extractNodeOutputAsList(node("I", "content-ideas"), "ideas")).toBeUndefined()
   })
 })
+
+describe("Video Analysis — a Social Search's posts on the video input", () => {
+  const post = (n: number) => ({
+    id: `tiktok:${n}`,
+    platform: "tiktok",
+    url: `https://www.tiktok.com/@a/video/${n}`,
+    text: `post ${n}`,
+    author: { handle: "a", name: "A" },
+    metrics: {},
+    media: { kind: "video" },
+    hashtags: [],
+    extra: {},
+  })
+
+  it("takes the post's page link from the posts output", () => {
+    const va = node("A", "video-analysis")
+    const search = node("S", "social-search", { generatedJson: [post(1), post(2)], generatedText: "1. @a: post 1" })
+    const inputs = resolveNodeInputs(va, [search, va], [edge("S", "A", "json", "video")])
+    expect(inputs.videoPageUrl).toBe("https://www.tiktok.com/@a/video/1")
+    expect(inputs.prompt).toBeUndefined()
+  })
+
+  it("hands one post per item on an Each wire, each with its own link", () => {
+    const search = node("S", "social-search", { generatedJson: [post(1), post(2)] })
+    const items = extractNodeOutputAsList(search, "json") ?? []
+    expect(items).toHaveLength(2)
+    expect(items.map((item) => JSON.parse(item).url)).toEqual(["https://www.tiktok.com/@a/video/1", "https://www.tiktok.com/@a/video/2"])
+  })
+
+  it("the digest brings no link", () => {
+    const va = node("A", "video-analysis")
+    const search = node("S", "social-search", { generatedJson: [post(1)], generatedText: "1. @a: post 1 https://www.tiktok.com/@a/video/1" })
+    const inputs = resolveNodeInputs(va, [search, va], [edge("S", "A", "text", "video")])
+    expect(inputs.videoPageUrl).toBeUndefined()
+  })
+})
