@@ -1456,8 +1456,11 @@ export {
   STUDIO_TRANSIENT_KEYS,
   STUDIO_SHOT_TRANSIENT_KEYS,
   STUDIO_SHOT_DRAFT_KEYS,
+  STUDIO_TAKE_VOICE_KEYS,
   stripStudioTransientSettings,
   stripStudioDraftSettings,
+  stripStudioDraftWorkflow,
+  stripStudioTakeVoiceRecords,
 } from "./studio-transient.js"
 
 export * from "./scene3d-v2-edit.js"

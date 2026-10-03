@@ -202,7 +202,8 @@ describe("stripStudioTransientSettings", () => {
   it("stripStudioDraftSettings drops a shot's slots AND its in-flight runs — a `view` read keeps the rest", () => {
     // The per-shot run markers go with the slots: a viewer cannot land the
     // owner's runs, and a slot-tagged marker carries that slot's unsent inputs.
-    // The bin and the document-level markers are not this strip's business.
+    // The bin and the document-level markers stay (the bin loses only the
+    // owner's drafts in it — `studio-take-voice.test.ts`).
     const settings = { studio: { version: 3, trash: [{ id: "t-1" }], pendingMusic: { jobId: "job-9" }, shots: [
       { id: "s1", pendingClips: [{ jobId: "job-1" }], pendingClip: { jobId: "job-0" },
         pendingStills: [{ jobId: "job-2", startedAt: 1, slotId: "slot-1", prompt: "an unsent idea" }],
