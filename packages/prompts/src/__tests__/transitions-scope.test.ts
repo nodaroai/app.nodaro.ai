@@ -357,6 +357,29 @@ describe("shockwave body (2026-09-25 rework: shockwave3 E1)", () => {
   })
 })
 
+describe("roll-transition body (2026-09-25 A/B: F6 arm B)", () => {
+  // The F6 roll draft, tidied (first letter lower-cased, final full stop dropped): one full turn one way
+  // that stops level, with no swing back. The rendered string at the tile default is byte-identical to
+  // the clause the winning take was generated from. The other F6 rows keep today's text.
+  const TERM = "camera roll transition"
+  const BODY =
+    "the picture rolls around its centre in one smooth, fast turn, blurred by the speed of the turn. The " +
+    "camera stays in the same spot, turning only around its lens axis. During the turn the second shot ta" +
+    "kes over, and the roll slows and stops with it level and upright. The shot ends on the second shot, " +
+    "level, upright and still. The roll turns one way only and stops once, with no swing back"
+
+  it("renders `term (body)` at the tile-default levers", () => {
+    expect(getTransitionPromptHint("roll-transition")).toBe(BODY)
+    expect(composeTransitionHintFromConnections("roll-transition", [], [], {}, "full", { scope: "shot" })).toBe(`${TERM} (${BODY})`)
+  })
+
+  it("at middle / short / natural", () => {
+    expect(composeTransitionHintFromConnections("roll-transition", [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      `${TERM} (${BODY}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
+    )
+  })
+})
+
 describe("L1 — a cut spans nothing, so `full` adds no clause", () => {
   it.each(INSTANT_IDS)("%s + full renders no position clause", (id) => {
     const out = composeTransitionHintFromConnections(id, [], [], { position: "full", duration: "short", intensity: "natural" })
