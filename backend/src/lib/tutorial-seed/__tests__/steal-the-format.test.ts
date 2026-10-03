@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url"
 import { FAN_OUT_EACH_TYPES, TEMPLATE_CATEGORIES, buildLlmCreditIdentifier } from "@nodaro/shared"
 import { NODE_HANDLES } from "../../mcp/generated/node-handles.js"
 import { CLOUD_ONLY_NODE_TYPES } from "../../cloud-only-nodes.js"
+import { publishBodySchema } from "../../template-publish-schema.js"
 import type { TutorialTemplateDoc } from "../types.js"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -51,6 +52,27 @@ describe("steal-the-format template", () => {
     expect(typeof doc.tutorialCategorySlug).toBe("string")
     expect(typeof doc.tutorialSortOrder).toBe("number")
     expect(doc.estimatedCredits).toBeGreaterThan(0)
+  })
+
+  it("carries gallery copy that fits the Publish as template form", async () => {
+    // On Cloud a gallery template is a workflow its creator publishes through
+    // that form; this file is where the text pasted into it lives. Parsed by
+    // the form's own schema, so a limit change there is a change here.
+    const { doc } = await load()
+    const form = publishBodySchema.safeParse({
+      workflowId: "00000000-0000-4000-8000-000000000000",
+      name: doc.name,
+      description: doc.description,
+      markdownDescription: doc.markdownDescription,
+      category: doc.category,
+      outputTypes: doc.outputTypes,
+      tags: doc.tags,
+    })
+    expect(form.success, JSON.stringify(form.error?.issues)).toBe(true)
+    // House style of the first-party templates: the category leads the tags,
+    // and the long description says who it is for.
+    expect(doc.tags?.[0]).toBe(doc.category)
+    expect(doc.markdownDescription).toContain("**Business use:**")
   })
 
   it("is not listed in the marketplace yet", async () => {
