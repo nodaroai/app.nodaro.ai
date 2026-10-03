@@ -7400,7 +7400,9 @@ export async function streamWorkflowExecution(
       // user stopped the run, so its results land in My Library off-canvas.
       // Short-circuit before onNodeStatesChanged so the discarded states are
       // never applied, and route to onDiscarded (not onCompleted).
-      if (eventType === "execution:discarded") {
+      // A stream that joined a run already over hears a bare "done" carrying
+      // only the row's status: a discarded one is still never painted.
+      if (eventType === "execution:discarded" || (eventType === undefined && d.status === "discarded")) {
         callbacks.onDiscarded?.(d)
         return
       }

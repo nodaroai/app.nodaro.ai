@@ -48,6 +48,18 @@ A forwarded Telegram video is read by its caption for now: the run does not rece
 
 A trigger that is **wired to something** runs only the branch behind it. A trigger **wired to nothing** runs the whole workflow. The rules are the same as the [Telegram Trigger](./telegram-trigger.md#what-a-triggered-run-executes).
 
+## Seeing a run on the canvas
+
+The same rules apply to the [Telegram Trigger](./telegram-trigger.md#seeing-a-run-on-the-canvas).
+
+- **While the flow is open:** a run a message starts shows on the nodes the way a run you start yourself does. The trigger card reads "Working on a post…", the nodes it runs show their progress, and their results stay on them when it ends. The editor looks for these runs about every 10 seconds. **Stop** on the run bar cancels that run.
+- **When you open the flow later:** the nodes show the newest message run that ended, unless you ran something in the editor since then (your own run is newer).
+- **What is never shown on the canvas:**
+  - The message itself. It stays in the run history (the **Executions** tab).
+  - A node you emptied with **Clear results** after that run.
+  - A run you stopped.
+- **A schedule or a webhook run** is not shown on the canvas. Those can fire every minute; see them in the **Executions** tab.
+
 ## Configuration
 
 | Field | Type | Default | Description |

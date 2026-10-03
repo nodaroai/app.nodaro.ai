@@ -2,7 +2,7 @@
 // mutation, and a refusal stops the run cold. Three of the four handlers execute
 // on the SERVER from the saved workflow, so a handler that forgets the gate
 // hands a web page to a video node — this file is the net for a fifth handler.
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest"
 
 const mockMarkNodesStatus = vi.fn()
 const mockExecuteNode = vi.fn()
@@ -74,7 +74,11 @@ vi.mock("../video-link-run-gate", () => ({
   ensureVideoLinksBeforeRun: (...args: unknown[]) => mockGate(...args),
 }))
 
-import { handleRun, handleRunSingleNode, handleRunFromHere, handleRunSelected } from "../run-handlers"
+import { detachActiveWorkflowStream, handleRun, handleRunSingleNode, handleRunFromHere, handleRunSelected } from "../run-handlers"
+
+// A Run started by a test leaves the module's stream slot taken; the next test
+// would meet a run "already followed" and its Run would (rightly) refuse.
+afterEach(() => detachActiveWorkflowStream())
 
 function makeCtx(overrides: Record<string, unknown> = {}) {
   return {

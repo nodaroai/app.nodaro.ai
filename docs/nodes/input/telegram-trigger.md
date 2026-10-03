@@ -25,6 +25,12 @@ A trigger that is **wired to something** runs only the branch behind it — the 
 
 "Wired" is anything that feeds another node: a drawn connection, a node inside a Group (it feeds the group), or a field mapping. A Telegram Trigger set up in the editor names its own node, so each one runs its own branch: two Telegram Triggers on the same bot with different chat filters are two scoped runs per matching message, never two runs of the whole workflow. A trigger created directly through the API names no node, so its branch is found by type — with **one** Telegram Trigger on the canvas that branch runs; with **two** there is no honest answer, and the whole workflow runs.
 
+## Seeing a run on the canvas
+
+- **While the flow is open:** a run a message starts shows on the nodes the way a run you start yourself does. The nodes it runs show their progress, and their results stay on them when it ends. The editor looks for these runs about every 10 seconds. **Stop** on the run bar cancels that run.
+- **When you open the flow later:** the nodes show the newest message run that ended, unless you ran something in the editor since then.
+- **Never on the canvas:** the message itself (it stays in the run history, the **Executions** tab), a node you emptied with **Clear results** after that run, and a run you stopped.
+
 ## Configuration
 
 | Field | Type | Default | Description |

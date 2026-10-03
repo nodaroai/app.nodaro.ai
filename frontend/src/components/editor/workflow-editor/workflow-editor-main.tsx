@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "rea
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
 import { RUN_BUTTON_GLASS_CLASS } from "@/lib/run-button-style";
 import { useNavigate } from "react-router-dom";
-import { isExpandedClone, filterCloneNodes, getOutputType, isProjectedTriggerNodeType } from "@nodaro/shared"
+import { isExpandedClone, filterCloneNodes, getOutputType } from "@nodaro/shared"
 import { ReactFlowProvider } from "@xyflow/react";
 import {
   Play,
@@ -27,8 +27,9 @@ import { EditorErrorBoundary } from "../editor-error-boundary";
 import { UnsavedChangesDialog } from "../unsaved-changes-dialog";
 import { NavigateWithGuardContext } from "@/hooks/use-navigate-with-guard";
 import { ExecutionsTab } from "../executions-tab";
-import { useTriggeredRunNotices } from "./use-triggered-run-notices";
-import { useRunFocus } from "./use-run-focus";
+import { useTriggeredRunFollow } from "./use-triggered-run-follow";
+import { FOLLOWED_TRIGGER_NODE_TYPES } from "./triggered-run-follow";
+import { followTriggeredRun, paintEndedTriggeredRun } from "./follow-triggered-run";
 import { ExecutionStatusBar } from "../execution-status-bar";
 import { CostTab } from "../cost-tab";
 import { SubWorkflowBreadcrumb } from "../sub-workflow-breadcrumb";
@@ -95,6 +96,8 @@ import {
   restorePollingForRunningJobs,
   streamBackendExecution,
   teardownActiveWorkflowStream,
+  detachActiveWorkflowStream,
+  hasActiveWorkflowStream,
 } from "./run-handlers";
 import { handleGenerateSceneImage as generateSceneImage, handleExpandStoryboard as expandStoryboard, handleCreateSceneNode as createSceneNode } from "./scene-story-handlers";
 import { handleGenerateCharacterAsset, handleGenerateObjectAsset, handleGenerateLocationAsset } from "./asset-executors";
@@ -152,15 +155,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const [activeTab, setActiveTab] = useState<"editor" | "present" | "executions" | "cost">(
     "editor",
   );
-  // A run a trigger started (a Telegram post, a webhook, a schedule): a notice, and View opens it.
-  const noticeWorkflowId = useWorkflowStore((s) => s.workflowId);
-  const [runFocus, setRunFocus] = useRunFocus(activeTab, noticeWorkflowId);
-  const hasTriggerNode = useWorkflowStore((s) => s.nodes.some((n) => isProjectedTriggerNodeType(n.type)));
-  const viewTriggeredRun = useCallback((executionId: string | null, openResult: boolean) => {
-    setActiveTab("executions");
-    setRunFocus({ executionId, openResult, at: Date.now() });
-  }, [setRunFocus]);
-  useTriggeredRunNotices(noticeWorkflowId, hasTriggerNode, viewTriggeredRun);
+  // A run a Telegram message started is followed on the canvas (wired below, after ctx).
+  // onExecutionStarted (defined before that) reaches the watch through this ref.
+  const followHandledRef = useRef<(executionId: string) => void>(() => {});
+  const followWorkflowId = useWorkflowStore((s) => s.workflowId);
+  const hasFollowedTrigger = useWorkflowStore((s) => s.nodes.some((n) => FOLLOWED_TRIGGER_NODE_TYPES.has(n.type ?? "")));
   const [sidebarVisible, setSidebarVisible] = useState(false);
   // Confirm dialog for the fallback single-node discard control. Holds the
   // action to run on confirm (or null when closed); mirrors run-node-button.tsx.
@@ -574,11 +573,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   useEffect(() => {
     if (workflowId) {
+      detachActiveWorkflowStream();
       for (const interval of pollIntervalsRef.current) {
         clearInterval(interval);
       }
       pollIntervalsRef.current.clear();
       setIsRunning(false);
+      // The left workflow's run must not stay on the bar (Discard there would discard IT).
+      setActiveExecutionId(null);
 
       ownerWorkflowIdRef.current = workflowId;
       load(workflowId).then((result) => {
@@ -616,6 +618,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         // reset those stale running nodes to idle so they don't stay stuck.
         if (
           hasRunningNodes &&
+          !hasActiveWorkflowStream() &&
           (!result.stillRunningJobs || result.stillRunningJobs.length === 0) &&
           !result.activeBackendExecution
         ) {
@@ -723,6 +726,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         clearTimeout(executionSaveTimerRef.current);
         executionSaveTimerRef.current = null;
       }
+      detachActiveWorkflowStream();
       for (const interval of pollIntervalsRef.current) {
         clearInterval(interval);
       }
@@ -884,15 +888,31 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // ---------------------------------------------------------------------------
 
   const onExecutionStarted = useCallback((id: string) => {
+    followHandledRef.current(id);
     setActiveExecutionId(id);
     queryClient.invalidateQueries({ queryKey: ["workflow-executions"] });
   }, []);
 
-  const onExecutionEnded = useCallback(() => {
+  const onExecutionEnded = useCallback((endedId?: string) => {
     setIsRunning(false);
-    setActiveExecutionId(null);
+    // A stream handed off to a newer run names its own run: the newer run keeps the bar.
+    setActiveExecutionId((current) => (endedId !== undefined && current !== null && current !== endedId ? current : null));
     queryClient.invalidateQueries({ queryKey: ["workflow-executions"] });
   }, []);
+
+  // A run a Telegram message started: followed live on the nodes like a Run
+  // (status bar, spinners, results), or painted at once when it ended unseen.
+  // Never while a Run is being confirmed, and never on a flow this person may only view.
+  const { markHandled: markFollowHandled } = useTriggeredRunFollow(followWorkflowId, hasFollowedTrigger && !isReadOnly, isRunning || isConfirming, {
+    follow: (run) => {
+      setActiveExecutionId(run.id);
+      followTriggeredRun(run, ctx, setIsRunning, onExecutionEnded);
+    },
+    paintEnded: paintEndedTriggeredRun,
+  });
+  useEffect(() => {
+    followHandledRef.current = markFollowHandled;
+  }, [markFollowHandled]);
 
   // Pure UI cleanup for a whole-workflow discard. CRITICAL: this NEVER calls a
   // workflow-level API cancel — the discard API call (discardWorkflowExecution,
@@ -1018,6 +1038,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
     }
     for (const jobId of jobIds) cancelJob(jobId).catch(() => {});
+    detachActiveWorkflowStream();
     for (const interval of pollIntervalsRef.current) clearInterval(interval);
     pollIntervalsRef.current.clear();
     setIsRunning(false);
@@ -1504,7 +1525,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
         {activeTab === "executions" && (
           <div className="absolute inset-0">
-            <ExecutionsTab className="h-full" workflowId={useWorkflowStore.getState().workflowId} focus={runFocus} />
+            <ExecutionsTab className="h-full" workflowId={useWorkflowStore.getState().workflowId} />
           </div>
         )}
 

@@ -1,6 +1,6 @@
 import type { MutableRefObject } from "react";
 import { toast } from "sonner";
-import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, isProjectedTriggerNodeType, SequenceExecutionRequiredError } from "@nodaro/shared";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry , NodaroConnectionRequiredError } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
@@ -42,6 +42,8 @@ import { buildVariantResults } from "./variant-results";
 // The restore poller shares the canvas loops' one flag writer. No cycle:
 // poll-job.ts imports nothing from this file.
 import { getJobStatusLeanForNode } from "./poll-job";
+import { FOLLOWED_LANES } from "./triggered-run-follow";
+import { beginTriggeredRunPaint } from "./triggered-run-paint";
 import { sunoVariantFields } from "@/lib/suno-ids";
 import { tx } from "@/lib/i18n";
 import { isScrapeNodeType, scrapeResultPatch } from "@/components/nodes/scrape-result-recovery";
@@ -54,9 +56,41 @@ import { planRevisionId } from "@/lib/scene3d/plan-view";
 // set finished) BEFORE starting a new run — otherwise the old stream's late
 // `execution:discarded` event would revert the NEW run's nodes and tear down its UI.
 let activeWorkflowStreamCleanup: (() => void) | null = null;
+/** The run the active stream follows — a second request for the same run keeps the first stream. */
+let activeWorkflowStreamId: string | null = null;
+/** The editor that started it (its setIsRunning): a remounted editor is another owner. */
+let activeWorkflowStreamOwner: ((v: boolean) => void) | null = null;
+/** Lets the active stream go WITHOUT its end callbacks (its editor is gone or switched workflow). */
+let activeWorkflowStreamDetach: (() => void) | null = null;
+function releaseActiveWorkflowStream(): void {
+  activeWorkflowStreamCleanup = null;
+  activeWorkflowStreamId = null;
+  activeWorkflowStreamOwner = null;
+  activeWorkflowStreamDetach = null;
+}
 export function teardownActiveWorkflowStream(): void {
   activeWorkflowStreamCleanup?.();
-  activeWorkflowStreamCleanup = null;
+  releaseActiveWorkflowStream();
+}
+/**
+ * Stop the active stream silently: no settle, no end toast, no onExecutionEnded.
+ * For an editor that unmounts or switches workflow — its callbacks have
+ * nobody left to tell, and a half-stopped stream must not keep the slot (the
+ * next editor would think the run is already followed and attach nothing).
+ */
+export function detachActiveWorkflowStream(): void {
+  activeWorkflowStreamDetach?.();
+  releaseActiveWorkflowStream();
+}
+/** Is a whole-workflow run being followed right now? A second Run must not start (nor reset anything) while one is. */
+export function hasActiveWorkflowStream(): boolean {
+  return activeWorkflowStreamCleanup !== null;
+}
+/** True — and says why — when a Run must not start because a run is already followed. */
+function refuseWhileStreaming(): boolean {
+  if (!hasActiveWorkflowStream()) return false;
+  toast.info(tx("run.alreadyRunning"));
+  return true;
 }
 
 /**
@@ -314,6 +348,9 @@ export async function handleRun(
   onExecutionEnded?: () => void,
   opts?: { skipConfirm?: boolean },
 ): Promise<void> {
+  // A run already followed (a Telegram run, a Run still going): nothing to start,
+  // and nothing may be reset or marked before the server would say the same.
+  if (refuseWhileStreaming()) return;
   // Read-only returns silently for the cases that explain themselves — a
   // Studio workflow opens with its whole toolbar gone. When the store carries
   // a REASON it is because the person cannot be expected to work it out:
@@ -480,7 +517,7 @@ export async function handleRun(
     if (err instanceof WorkflowAlreadyRunningError) {
       toast.info(tx("run.alreadyRunning"));
       onExecutionStarted?.(err.executionId);
-      streamBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
+      void attachToRunningExecution(err.executionId, ctx, setIsRunning, onExecutionEnded, () => markNodesStatus(executableIds, undefined));
       return;
     }
     setIsRunning(false);
@@ -634,6 +671,7 @@ export async function handleRunFromHere(
   onExecutionEnded?: () => void,
 ): Promise<void> {
   if (_runFromHereLock) return;
+  if (refuseWhileStreaming()) return;
   _runFromHereLock = true;
 
   try {
@@ -707,7 +745,7 @@ export async function handleRunFromHere(
     if (err instanceof WorkflowAlreadyRunningError) {
       toast.info(tx("run.alreadyRunning"));
       onExecutionStarted?.(err.executionId);
-      streamBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
+      void attachToRunningExecution(err.executionId, ctx, setIsRunning, onExecutionEnded, () => markNodesStatus(executableIds, undefined));
       return;
     }
     setIsRunning(false);
@@ -733,6 +771,7 @@ export async function handleRunSelected(
   onExecutionStarted?: (id: string) => void,
   onExecutionEnded?: () => void,
 ): Promise<void> {
+  if (refuseWhileStreaming()) return;
   // Confirm before any mutation when the selected run is estimated >100 cr.
   {
     const st = useWorkflowStore.getState();
@@ -799,7 +838,7 @@ export async function handleRunSelected(
     if (err instanceof WorkflowAlreadyRunningError) {
       toast.info(tx("run.alreadyRunning"));
       onExecutionStarted?.(err.executionId);
-      streamBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
+      void attachToRunningExecution(err.executionId, ctx, setIsRunning, onExecutionEnded, () => markNodesStatus(executableIds, undefined));
       return;
     }
     setIsRunning(false);
@@ -1120,27 +1159,37 @@ export function streamBackendExecution(
   executionId: string,
   ctx: ExecutionContext,
   setIsRunning: (v: boolean) => void,
-  onExecutionEnded?: () => void,
+  // Told which run ended, so a stream handed off to a newer run cannot clear
+  // that newer run's state.
+  onExecutionEnded?: (executionId: string) => void,
   // `isRestore` = reconnecting to an execution `listWorkflowExecutions` just
   // reported active (page reload), NOT a fresh user-initiated run. A 404 on
   // restore is almost always a read-after-write/replica race that resolves on
   // retry, so we tolerate a few more misses and give up QUIETLY (no scary
   // toast) instead of the fast 2-strike fail used for fresh runs.
-  opts: { readonly isRestore?: boolean } = {},
+  // `triggered` = a run a Telegram message started (triggered-run-paint.ts):
+  // only `paintable` states reach the canvas, and `settle` runs once it is over.
+  opts: { readonly isRestore?: boolean; readonly beginTriggered?: () => TriggeredRunPaint } = {},
 ): void {
+  // One stream per run: asked again for the run already streamed (the "already
+  // running" answer to a Run pressed while a Telegram run goes), keep the
+  // first — it carries that run's paint rules. A different run takes the slot
+  // only after the old stream ended (its own settle and end ran first).
+  if (isStreaming(executionId, setIsRunning)) return;
+  // Another editor's stream (this one remounted): let it go silently, its
+  // callbacks belong to a page that is gone. This editor's own: end it.
+  if (activeWorkflowStreamOwner !== null && activeWorkflowStreamOwner !== setIsRunning) detachActiveWorkflowStream();
+  else teardownActiveWorkflowStream();
+  // Built only now: the old stream's settle above must not undo this run's marks.
+  const triggered = opts.beginTriggered?.();
   setIsRunning(true);
   const abortController = new AbortController();
   let finished = false;
   let abandoned = false;
 
-  // Register this stream as THE active whole-workflow stream so a subsequent
-  // Discard / Run-instead can tear it down (abort SSE + set finished) before the
-  // new run starts. `cleanup` is hoisted, so referencing it here is safe.
-  activeWorkflowStreamCleanup = cleanup;
-
   const applyStates = (s: Record<string, NodeExecutionState>) => {
-    if (abandoned) return;            // a discarded run must stop painting the canvas
-    syncNodeStatesToStore(s);
+    if (abandoned || finished) return; // a discarded or ended stream stops painting the canvas
+    syncNodeStatesToStore(triggered ? triggered.paintable(s) : s);
   };
   // Whole-workflow discard reverts only IN-FLIGHT / QUEUED nodes to idle (clears the
   // node's currentJobId so the per-node poll guard bails); earlier-completed nodes
@@ -1194,15 +1243,29 @@ export function streamBackendExecution(
         // execution:completed event) and leave the UI stuck showing "running"
         // on the last node. Pull the canonical state from the DB and re-sync
         // before cleaning up so the user doesn't have to refresh.
+        // The stream's last event says "done" but not always how: a stream that
+        // joined a run already over (a reload, a followed Telegram run) hears a
+        // bare end. The fetched row says which end it was.
+        let status = "completed";
+        let errorMessage: string | undefined;
         try {
           const exec = await getWorkflowExecution(executionId);
+          if (finished) return;
+          if (exec.status === "discarded") { onDiscarded(); return; }
+          status = exec.status;
+          errorMessage = exec.errorMessage;
           const finalStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>;
           applyStates(finalStates);
         } catch {
           // Non-critical — SSE already applied what it had.
         }
+        if (finished) return;
+        if (status === "failed" || status === "cancelled" || status === "timed_out") revertActiveNodesToIdle();
         cleanup();
-        toast.success(tx("run.backendCompleted"));
+        if (status === "failed") toast.error(tx("run.backendFailed"), { description: errorMessage });
+        else if (status === "cancelled") toast.info(tx("run.backendCancelled"));
+        else if (status === "timed_out") toast.error(tx("run.backendTimedOut"));
+        else toast.success(tx("run.backendCompleted"));
       },
       onFailed: (data) => {
         if (finished) return;
@@ -1357,6 +1420,18 @@ export function streamBackendExecution(
     }, 3000),
   );
 
+  // Register this stream as THE active whole-workflow stream so a subsequent
+  // Discard / Run-instead can tear it down (abort SSE + set finished) before the
+  // new run starts. Only now, with every timer it owns created: a setup that
+  // threw halfway must not leave the slot claimed by a stream that cannot be
+  // stopped (a Run would then refuse forever), and `cleanup` / `detach` read
+  // those timers. Nothing above can hand the slot to anyone in between: every
+  // callback that ends the stream runs later, asynchronously.
+  activeWorkflowStreamCleanup = cleanup;
+  activeWorkflowStreamId = executionId;
+  activeWorkflowStreamOwner = setIsRunning;
+  activeWorkflowStreamDetach = detach;
+
   function cleanup() {
     if (finished) return;
     finished = true;
@@ -1367,9 +1442,80 @@ export function streamBackendExecution(
     // Only release the shared slot if THIS stream still owns it — a newer stream
     // may have already replaced it (Run-instead starts the new stream after this
     // one's teardown), and we must not clear the newer stream's registration.
-    if (activeWorkflowStreamCleanup === cleanup) activeWorkflowStreamCleanup = null;
-    onExecutionEnded?.();
+    if (activeWorkflowStreamCleanup === cleanup) releaseActiveWorkflowStream();
+    triggered?.settle();
+    onExecutionEnded?.(executionId);
   }
+
+  function detach() {
+    if (finished) return;
+    finished = true;
+    abortController.abort();
+    clearTimeout(pollTimeout1);
+    ctx.untrackInterval(staleCheck);
+    ctx.untrackInterval(pollInterval);
+    if (activeWorkflowStreamCleanup === cleanup) releaseActiveWorkflowStream();
+  }
+}
+
+/** Is the editor's whole-workflow stream following this run right now (for this editor, when it says which)? */
+export function isStreaming(executionId: string, owner?: (v: boolean) => void): boolean {
+  if (activeWorkflowStreamCleanup === null || activeWorkflowStreamId !== executionId) return false;
+  return owner === undefined || activeWorkflowStreamOwner === owner;
+}
+
+/**
+ * The server answered a Run with "already running" and named the run. A run
+ * a Telegram message started belongs to the workflow's owner, so this is what
+ * a Run pressed while one goes gets. Already streaming it: keep that stream
+ * and take back this click's optimistic marks. A Telegram run: follow it
+ * through its paint rules, never the plain stream (that would write the
+ * message onto the trigger card and paint nodes it only passed through).
+ * Anything else, as before.
+ */
+export async function attachToRunningExecution(
+  executionId: string,
+  ctx: ExecutionContext,
+  setIsRunning: (v: boolean) => void,
+  onExecutionEnded: ((executionId: string) => void) | undefined,
+  undoOptimistic: () => void,
+): Promise<void> {
+  let lane: string | undefined;
+  let nodeStates: Record<string, unknown> | undefined;
+  try {
+    const exec = await getWorkflowExecution(executionId);
+    lane = exec.triggerType;
+    nodeStates = exec.nodeStates;
+  } catch {
+    // The lane is unknown: stream it as before.
+  }
+  if (isStreaming(executionId, setIsRunning)) {
+    undoOptimistic();
+    return;
+  }
+  if (lane !== undefined && FOLLOWED_LANES.has(lane)) {
+    undoOptimistic();
+    streamBackendExecution(executionId, ctx, setIsRunning, onExecutionEnded, {
+      isRestore: true,
+      beginTriggered: () => beginTriggeredRunPaint({ id: executionId, nodeStates }),
+    });
+    return;
+  }
+  streamBackendExecution(executionId, ctx, setIsRunning, onExecutionEnded);
+}
+
+/**
+ * How a followed trigger-started run paints the canvas (follow-triggered-run.ts):
+ * which of its node states reach it, and what is left to do once it is over.
+ */
+export interface TriggeredRunPaint {
+  readonly paintable: (states: Record<string, NodeExecutionState>) => Record<string, NodeExecutionState>
+  readonly settle: () => void
+}
+
+/** Paint a run's node states onto the canvas — the same mapping a followed Run uses. */
+export function paintRunStates(states: Record<string, NodeExecutionState>): void {
+  syncNodeStatesToStore(states)
 }
 
 // ---------------------------------------------------------------------------
@@ -1377,7 +1523,7 @@ export function streamBackendExecution(
 // (kept as fallback when SSE is unavailable)
 // ---------------------------------------------------------------------------
 
-interface NodeExecutionState {
+export interface NodeExecutionState {
   /** The shared union (`@nodaro/shared`), so the editor, the orchestrator and
    *  the SDK partition node status against ONE list. */
   status: SharedNodeExecutionStatus;
@@ -1461,6 +1607,9 @@ interface NodeExecutionState {
   jobIds?: string[];
   nodeType?: string;
   progress?: number;
+  /** When the node started and ended in this run (absent for a node that only passed its saved data through). */
+  startedAt?: string | null;
+  completedAt?: string | null;
 }
 
 /**
@@ -1564,6 +1713,12 @@ function syncNodeStatesToStore(
         // briefs on __listResults would clone the node on the canvas, and a
         // text history in generatedResults would be read as a list.
         Object.assign(updates, contentRunResultPatch(node.type, state.output as Record<string, unknown>) ?? {});
+      } else if (state.output && isProjectedTriggerNodeType(node.type)) {
+        // A trigger node: what it received (the message, the payload, a photo
+        // or video someone sent) stays in the run history, never a saved
+        // result on the node. The editor reads a trigger's values from the
+        // transient __triggerData, which is never saved.
+        if (state.output.paramOutputs) updates.__triggerData = state.output.paramOutputs;
       } else if (state.output && node.type === "social-search") {
         // Its own mapping: every post found, the ones passed on, the digest —
         // never the generic text write below, whose run history in
@@ -1592,13 +1747,17 @@ function syncNodeStatesToStore(
         // result entry — the same mapping the single-node Run writes.
         const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(state.output) : undefined;
         if (overlayRun) Object.assign(updates, overlayRun);
+        // Not on a trigger node: its "text" is the incoming message or payload,
+        // which stays in the run history (the editor reads a trigger's values
+        // from the transient __triggerData, never from a saved result).
         if (state.output.text && !state.output.combinedText) {
           updates.generatedText = state.output.text;
           const prevTextResults = (data.generatedResults ?? []) as Array<{ text?: string; jobId?: string }>;
           const alreadyHas = prevTextResults.some((r) => r.text === state.output!.text);
           if (!alreadyHas) {
             updates.generatedResults = [
-              { text: state.output.text, jobId: state.jobId ?? `exec-${node.id}`, timestamp: new Date().toISOString() },
+              // The node's own end time when the run gives one: two open tabs then paint identical data.
+              { text: state.output.text, jobId: state.jobId ?? `exec-${node.id}`, timestamp: state.completedAt ?? new Date().toISOString() },
               ...prevTextResults,
             ];
             updates.activeResultIndex = 0;
@@ -1694,7 +1853,7 @@ function syncNodeStatesToStore(
             .filter((url) => !existingUrls.has(url))
             .map((url, i) => ({
               url,
-              timestamp: new Date().toISOString(),
+              timestamp: state.completedAt ?? new Date().toISOString(),
               jobId: state.jobIds?.[i] ?? `exec-${node.id}-${i}`,
               ...rowFields(url),
             }));
@@ -1731,7 +1890,7 @@ function syncNodeStatesToStore(
               updates.generatedResults = [
                 {
                   url: outputUrl,
-                  timestamp: new Date().toISOString(),
+                  timestamp: state.completedAt ?? new Date().toISOString(),
                   jobId: state.jobId ?? `exec-${node.id}`,
                   ...(overlayRun ?? {}),
                 },

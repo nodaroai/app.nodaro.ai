@@ -108,3 +108,20 @@ describe("streamWorkflowExecution — discarded done-event", () => {
     expect(cb.onDiscarded).not.toHaveBeenCalled()
   })
 })
+
+describe("streamWorkflowExecution — a bare done for a run already over", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("a done with no event type but a discarded status is still never painted", async () => {
+    mockStreamGet.mockReturnValue(
+      eventStream([{ type: "done", data: { status: "discarded", nodeStates: { n1: { status: "completed", output: { text: "x" } } } } }]),
+    )
+    const cb = makeCallbacks()
+    await streamWorkflowExecution("exec-late", cb)
+    expect(cb.onDiscarded).toHaveBeenCalledTimes(1)
+    expect(cb.onNodeStatesChanged).not.toHaveBeenCalled()
+    expect(cb.onCompleted).not.toHaveBeenCalled()
+  })
+})

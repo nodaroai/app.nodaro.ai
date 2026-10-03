@@ -3,7 +3,7 @@
 import { memo } from "react"
 import { useT } from "@/lib/i18n"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Link2, Send, Type, Video } from "lucide-react"
+import { Link2, Loader2, Send, Type, Video } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, TEXT_HANDLE_COLOR } from "./handle-with-popover"
@@ -37,6 +37,8 @@ function TelegramAccountTriggerNodeComponent({ id, data, selected }: NodeProps) 
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const chatCount = nodeData.chatIds?.length ?? 0
   const listening = nodeData.isActive === true && !!nodeData.accountId && chatCount > 0
+  // The editor follows a run this trigger started (follow-triggered-run.ts): the card says so while it goes.
+  const working = nodeData.executionStatus === "running"
 
   return (
     <div className="relative max-w-[220px]">
@@ -52,6 +54,7 @@ function TelegramAccountTriggerNodeComponent({ id, data, selected }: NodeProps) 
         category="input"
         credits={0}
         selected={selected}
+        isRunning={working}
         minWidth={220}
         hideHeader
         handles={TELEGRAM_ACCOUNT_TRIGGER_CARD_OUTPUTS.map((o) => ({
@@ -74,6 +77,12 @@ function TelegramAccountTriggerNodeComponent({ id, data, selected }: NodeProps) 
             {listening ? t("sched.active") : t("sched.inactive")}
           </p>
           {nodeData.inboxMode === true && <p className="text-[10px] mt-1 text-muted-foreground">{t("tgtrig.cardInbox")}</p>}
+          {working && (
+            <p className="flex items-center gap-1.5 text-[11px] mt-2 text-foreground" role="status">
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+              {t("tgtrig.cardHandling")}
+            </p>
+          )}
         </div>
       </BaseNode>
       {/* A trigger starts the run; it takes nothing from the canvas. */}
