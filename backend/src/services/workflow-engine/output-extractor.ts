@@ -7,7 +7,8 @@
  * 2. Node `data` fields (for source nodes like text-prompt, upload-*)
  */
 
-import type { SimpleNode, SimpleEdge, NodeOutput } from "./types.js"
+import type { SimpleNode, SimpleEdge, NodeOutput, NodeExecutionState } from "./types.js"
+import { savedDataAllowed } from "./saved-data.js"
 import {
   IMAGE_SOURCE_TYPES,
   VIDEO_SOURCE_TYPES,
@@ -15,23 +16,35 @@ import {
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
 import {
-  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, resolveVideoLinkOutput } from "@nodaro/shared"
+  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest } from "@nodaro/shared"
 import type { SceneData, Transcript } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/prompts"
 export { extractVideoDurationFromNode } from "@nodaro/shared"
 export { extractAllGeneratedResults }
+
+/** Triggers whose handles name values in `output.paramOutputs` (see getPrimaryOutput). */
+const NAMED_OUTPUT_TRIGGER_TYPES: ReadonlySet<string> = new Set([
+  "webhook-trigger",
+  "telegram-trigger",
+  "telegram-account-trigger",
+])
 
 /**
  * Workflow context required by extractors to compute group/collect bucket
  * outputs. Group buckets read members from `nodes` filtered by `parentId`;
  * Collect buckets read members from incoming `edges` (sorted by data.order).
  *
- * Always optional — callers that don't have access pass `undefined`, in
- * which case the group/collect cases return `undefined` / `[]`.
+ * The context itself is optional — callers that don't have access pass
+ * `undefined`, in which case the group/collect cases return `undefined` / `[]`.
+ * Its `nodeStates` is not: a context without them would read every member's
+ * saved data, so a caller outside a run passes `{}` on purpose.
  */
 export interface ExtractContext {
   nodes: SimpleNode[]
   edges: SimpleEdge[]
+  /** This run's node states: a Group / Collect member that ran or was gated
+   *  is read from here, never from its saved data (saved-data.ts). */
+  nodeStates: Record<string, NodeExecutionState>
 }
 
 /**
@@ -48,13 +61,14 @@ export interface ExtractContext {
 function computeBackendGroupBuckets(
   group: SimpleNode,
   allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
 ): AggregationBuckets {
   const children = allNodes.filter((n) => n.parentId === group.id)
   const members: Member[] = []
   for (const child of children) {
     const t = getOutputType(child.type)
     if (!isAggregateableType(t)) continue
-    const out = extractPrimaryNodeOutput(child)
+    const out = memberOutput(child, nodeStates)
     if (!out) continue
     const val = out.text ?? out.imageUrl ?? out.videoUrl ?? out.audioUrl
     if (!val) continue
@@ -73,6 +87,7 @@ function computeBackendCollectBuckets(
   collect: SimpleNode,
   allNodes: SimpleNode[],
   edges: SimpleEdge[],
+  nodeStates: Record<string, NodeExecutionState>,
 ): AggregationBuckets {
   const incoming = edges.filter(
     (e) => e.target === collect.id && isCollectInEdge(e),
@@ -88,7 +103,7 @@ function computeBackendCollectBuckets(
     if (!src) continue
     const t = getOutputType(src.type)
     if (!isAggregateableType(t)) continue
-    const out = extractPrimaryNodeOutput(src)
+    const out = memberOutput(src, nodeStates)
     if (!out) continue
     const val = out.text ?? out.imageUrl ?? out.videoUrl ?? out.audioUrl
     if (!val) continue
@@ -110,6 +125,18 @@ function computeBackendCollectBuckets(
  */
 function extractPrimaryNodeOutput(node: SimpleNode): NodeOutput | undefined {
   return extractSourceNodeOutput(node) ?? extractSavedNodeOutput(node)
+}
+
+/** A Group / Collect member's value in this run: its state's output, else (only when allowed) its saved one. */
+function memberOutput(node: SimpleNode, nodeStates: Record<string, NodeExecutionState>): NodeOutput | undefined {
+  const state = nodeStates[node.id]
+  if (state?.output) return state.output
+  return savedDataAllowed(state) ? extractPrimaryNodeOutput(node) : undefined
+}
+
+/** The node's saved output, unless this run ran or gated it (saved-data.ts). */
+export function savedOutputFor(node: SimpleNode, state: NodeExecutionState | undefined): NodeOutput | undefined {
+  return savedDataAllowed(state) ? extractSavedNodeOutput(node) : undefined
 }
 
 function processedResultToText(r: unknown): string | undefined {
@@ -236,8 +263,8 @@ export function extractSourceNodeOutput(
   if (type === "group" || type === "collect") {
     if (!context) return undefined
     const buckets = type === "group"
-      ? computeBackendGroupBuckets(node, context.nodes)
-      : computeBackendCollectBuckets(node, context.nodes, context.edges)
+      ? computeBackendGroupBuckets(node, context.nodes, context.nodeStates)
+      : computeBackendCollectBuckets(node, context.nodes, context.edges, context.nodeStates)
     const requestedType = parseGroupHandle(sourceHandle)
     if (!requestedType) return undefined
     const firstItem = buckets[requestedType][0]
@@ -383,8 +410,28 @@ export function extractSourceNodeOutput(
       const paramOutputs: Record<string, string> = {}
       if (td.chatId) paramOutputs["chatId"] = td.chatId as string
       if (td.messageId) paramOutputs["messageId"] = td.messageId as string
+      if (td.senderId) paramOutputs["senderId"] = td.senderId as string
+      if (td.chatType) paramOutputs["chatType"] = td.chatType as string
       if (Object.keys(paramOutputs).length > 0) output.paramOutputs = paramOutputs
       return Object.keys(output).length > 0 ? output : { text: JSON.stringify(td) }
+    }
+
+    // The account lane: the message, plus its named outputs (@nodaro/shared
+    // telegram-account-trigger). Every post field is present even when empty,
+    // so a wire from one carries "" — never the message text in its place.
+    case "telegram-account-trigger": {
+      const td = triggerData || {}
+      const output: NodeOutput = { paramOutputs: telegramAccountTriggerOutputs(td) }
+      if (td.text) output.text = td.text as string
+      if (td.imageUrl) output.imageUrl = td.imageUrl as string
+      if (td.videoUrl) output.videoUrl = td.videoUrl as string
+      if (td.audioUrl) output.audioUrl = td.audioUrl as string
+      // No message and no message facts (a Run with no Telegram message behind
+      // it): the message output stays the raw trigger data, as it always was.
+      const hasMessage = output.text !== undefined || output.imageUrl !== undefined || output.videoUrl !== undefined || output.audioUrl !== undefined
+      const hasFacts = ["chatId", "messageId", "senderId", "chatType"].some((key) => !!td[key])
+      if (!hasMessage && !hasFacts) output.text = JSON.stringify(td)
+      return output
     }
 
     case "sub-workflow-input": {
@@ -429,8 +476,8 @@ export function extractSourceNodeOutputAsList(
   if (type === "group" || type === "collect") {
     if (!context) return undefined
     const buckets = type === "group"
-      ? computeBackendGroupBuckets(node, context.nodes)
-      : computeBackendCollectBuckets(node, context.nodes, context.edges)
+      ? computeBackendGroupBuckets(node, context.nodes, context.nodeStates)
+      : computeBackendCollectBuckets(node, context.nodes, context.edges, context.nodeStates)
     const requestedType = parseGroupHandle(sourceHandle)
     if (!requestedType) return undefined
     const items = buckets[requestedType]
@@ -575,6 +622,24 @@ export function getPrimaryOutput(
     return output.text
   }
 
+  // Triggers with named outputs (a webhook's params, a Telegram message's
+  // fields): a wire from a named handle carries THAT value in every reader —
+  // routers, connected Lists, field pips and {Label} refs read here, not
+  // through routeOutput. An account trigger's named output that is empty
+  // answers "", never the message text in its place. Mirrors the frontend
+  // execution-graph.ts trigger branches.
+  if (sourceType === "telegram-account-trigger" && isTelegramAccountTriggerNamedHandle(sourceHandle)) {
+    return output.paramOutputs?.[sourceHandle] ?? ""
+  }
+  if (
+    NAMED_OUTPUT_TRIGGER_TYPES.has(sourceType) &&
+    sourceHandle &&
+    output.paramOutputs &&
+    Object.prototype.hasOwnProperty.call(output.paramOutputs, sourceHandle)
+  ) {
+    return output.paramOutputs[sourceHandle]
+  }
+
   // motion-graphics (lottie engine): the `lottie` source handle emits the
   // authored Lottie JSON's R2 URL (Phase 4), routed into lottie-overlay's
   // lottieAssets by input-resolver's `lottie` targetHandle case. Every other
@@ -685,6 +750,13 @@ export function getPrimaryOutput(
     return output.json === undefined ? undefined : JSON.stringify(output.json)
   }
 
+  // Audio-sync: single `json` output handle carrying { version, reference,
+  // offsets, notes }. Stringified for generic text/json consumers, exactly like
+  // silence-detect's ranges.
+  if (sourceType === "audio-sync") {
+    return output.json === undefined ? undefined : JSON.stringify(output.json)
+  }
+
   // Meta Ads scraper: `json` (the whole ad array, stringified for text
   // consumers) plus the FEATURED ad's `text` / `image` / `video` — the route
   // writes those three onto output_data, and extractSavedNodeOutput re-derives
@@ -694,6 +766,17 @@ export function getPrimaryOutput(
     if (sourceHandle === "text") return output.text
     if (sourceHandle === "image") return output.imageUrl
     if (sourceHandle === "video") return output.videoUrl
+    if (sourceHandle === "json" || !sourceHandle) {
+      return output.json === undefined ? undefined : JSON.stringify(output.json)
+    }
+    return undefined
+  }
+
+  // Social Search: `json` → the posts the node passes on (stringified for text
+  // consumers; Extract Field and List read state.output.json directly), `text`
+  // → the same posts as a digest. Unknown handles return nothing.
+  if (sourceType === "social-search") {
+    if (sourceHandle === "text") return output.text
     if (sourceHandle === "json" || !sourceHandle) {
       return output.json === undefined ? undefined : JSON.stringify(output.json)
     }
@@ -727,6 +810,13 @@ export function getPrimaryOutput(
     if (plan === undefined || plan === null) return undefined
     if (Array.isArray(plan)) return plan.length > 0 ? JSON.stringify(plan[0]) : undefined
     return JSON.stringify(plan)
+  }
+
+  // Content Recipe: `json` → the recipe object, stringified for generic
+  // consumers (Extract Field reads state.output.json directly). `text` / no
+  // handle fall through to TEXT_SOURCE_TYPES below (the readable recipe).
+  if (sourceType === "content-recipe" && sourceHandle === "json") {
+    return output.json === undefined ? undefined : JSON.stringify(output.json)
   }
 
   // Describe-to-picker: single `picker-json` output (a structured catalog JSON
@@ -1035,6 +1125,8 @@ const VIDEO_RESULT_TYPES = new Set([
   "speed-ramp",
   "loop-video",
   "fade-video",
+  // Video Overlay: timed image layers over a video — generatedVideoUrl + per-result `url`.
+  "video-overlay",
   "transcode-video",
   "manual-edit",
   // Remove Audio: video in → silent video out (stores generatedVideoUrl).
@@ -1120,6 +1212,30 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     if (imageUrl) out.imageUrl = imageUrl
     if (maskUrl) out.maskUrl = maskUrl
     return out.imageUrl || out.maskUrl ? out : undefined
+  }
+
+  // Content Recipe → the recipe object + its readable text, so a skipped /
+  // "Run from here" recipe still feeds Content Ideas. NEVER generatedResults:
+  // a run history there would be read as a LIST of recipes by the fan-in.
+  if (type === "content-recipe") {
+    const out: NodeOutput = {}
+    if (data.generatedJson && typeof data.generatedJson === "object") out.json = data.generatedJson
+    if (typeof data.generatedText === "string" && data.generatedText.trim()) out.text = data.generatedText
+    return out.json !== undefined || out.text ? out : undefined
+  }
+
+  // Content Ideas → the ideas array, the digest, and one brief per idea on
+  // listResults — the per-item value a downstream fan-out runs on (the
+  // generic generatedJson list would hand it raw JSON instead of the brief).
+  if (type === "content-ideas") {
+    const briefs = Array.isArray(data.ideaBriefs)
+      ? (data.ideaBriefs as unknown[]).filter((b): b is string => typeof b === "string" && b.trim() !== "")
+      : []
+    if (briefs.length === 0) return undefined
+    const out: NodeOutput = { listResults: briefs }
+    if (Array.isArray(data.generatedJson)) out.json = data.generatedJson
+    out.text = typeof data.generatedText === "string" && data.generatedText.trim() ? data.generatedText : briefs.join("\n\n")
+    return out
   }
 
   // Reduce (fan-in) → the aggregated string persisted on data.result. Without
@@ -1373,6 +1489,13 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return json === undefined ? undefined : { json }
   }
 
+  // Audio-sync: the same single `json` output, persisted on data.generatedJson,
+  // so a skipped / "Run from here" node hydrates its offsets without re-running.
+  if (type === "audio-sync") {
+    const json = data.generatedJson
+    return json === undefined ? undefined : { json }
+  }
+
   // Meta Ads scraper: `json` (the normalized ad array persisted on
   // data.generatedJson) plus the featured ad's text / image / video, derived
   // from `data.featuredIndex` so picking another thumb re-hydrates the typed
@@ -1388,6 +1511,16 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     const json = data.generatedJson
     if (json === undefined) return undefined
     return { json, ...featuredInstagramOutputs(json, data.featuredIndex) }
+  }
+
+  // Social Search → the posts the editor saved as the node's choice
+  // (data.generatedJson: a person's picks, else the first few), their digest,
+  // and one item per post. This is what a skipped node, and a node keeping its
+  // picks (isSocialSearchPickFrozen), passes on without searching again.
+  if (type === "social-search") {
+    const posts = socialPostsFrom(data.generatedJson)
+    if (posts.length === 0) return undefined
+    return { json: posts, text: socialPostsDigest(posts), listResults: posts.map((p) => JSON.stringify(p)) }
   }
 
   // Video-analysis / video-audit: single `json` output (the scene-segmented
@@ -1653,6 +1786,42 @@ export function buildNodeOutputFromJobData(
       output.json = plan
       if (Array.isArray(plan)) output.listResults = plan.map((c) => JSON.stringify(c))
     }
+  }
+
+  // Video Overlay: the worker's warnings, output canvas, length and the DAG
+  // run's freshness key ride on the node output, so a backend run (Execute All, Run from here, schedule,
+  // webhook, app) paints the same "Last run" line the single-node Run does.
+  // Type-gated: `width` / `height` / `warnings` are too generic to promote
+  // into DIRECT_OUTPUT_KEYS for every node.
+  // Social Search: the plugin returns EVERY post found, with the node's
+  // picking settings echoed back (`pickedIds`, `pickTop` — sent by the
+  // payload builder). The node passes on only the chosen ones: a person's
+  // picks still among the results, else the first `pickTop`. Applied HERE so
+  // every path that rebuilds the output from the job row (live, adopted after
+  // a cancel race, a resumed fan-out) agrees. `listResults` carries one post
+  // per item for an "each" wire.
+  if (nodeType === "social-search") {
+    const pickedIds = Array.isArray(outputData.pickedIds)
+      ? (outputData.pickedIds as unknown[]).filter((id): id is string => typeof id === "string")
+      : undefined
+    const all = socialPostsFrom(outputData.json)
+    const picked = pickSocialPosts(all, pickedIds, outputData.pickTop)
+    output.json = picked
+    output.text = socialPostsDigest(picked)
+    output.listResults = picked.map((p) => JSON.stringify(p))
+    output.searchResults = all
+  }
+
+  if (nodeType === "video-overlay") {
+    if (Array.isArray(outputData.warnings)) output.warnings = outputData.warnings as NodeOutput["warnings"]
+    if (typeof outputData.width === "number" && typeof outputData.height === "number") {
+      output.width = outputData.width
+      output.height = outputData.height
+    }
+    if (typeof outputData.durationSec === "number") output.durationSec = outputData.durationSec
+    // The freshness key a DAG run stamped — the node compares it with its
+    // current settings' key, so this run's result reads fresh, not "Result (old)".
+    if (typeof outputData.resultCompositionKey === "string") output.resultCompositionKey = outputData.resultCompositionKey
   }
 
   // Normalize generatedText -> text (image-to-text, ai-writer store output as generatedText)

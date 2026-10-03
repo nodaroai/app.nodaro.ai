@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { startLoadCheckout } from "@/lib/checkout"
 import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "@/lib/pricing-data"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
+import { tx, useT } from "@/lib/i18n"
 import {
   CYAN_TEXT,
   MONO_FONT,
@@ -26,6 +27,7 @@ const POPULAR_PACK_USD = 25
  * from the real load rate.
  */
 export function BuyPacksSection() {
+  const t = useT()
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [customUsd, setCustomUsd] = useState("")
 
@@ -37,7 +39,7 @@ export function BuyPacksSection() {
     return {
       usd,
       credits: credits ?? 0,
-      perCredit: credits ? `$${(usd / creditUnits(credits)).toFixed(4)} / ${creditUnitLabel("credit")}` : "",
+      perCredit: credits ? `$${(usd / creditUnits(credits)).toFixed(4)} / ${creditUnitLabel(t("credits.unit.one"))}` : "",
       popular: usd === POPULAR_PACK_USD,
     }
   })
@@ -47,7 +49,7 @@ export function BuyPacksSection() {
     try {
       await startLoadCheckout(usd)
     } catch {
-      toast.error("Failed to open checkout")
+      toast.error(tx("pricing.failedOpenCheckout"))
     } finally {
       setLoadingId(null)
     }
@@ -55,23 +57,23 @@ export function BuyPacksSection() {
 
   const amountHint =
     customCredits !== null
-      ? `≈ ${formatCredits(creditUnits(customCredits))} credits · added to top-up`
+      ? t("billing.amountHintCredits", { n: formatCredits(creditUnits(customCredits)) })
       : customUsd
-        ? `$${MIN_LOAD_USD}–$${MAX_LOAD_USD}, whole dollars`
-        : "goes to top-up · valid for 12 months"
+        ? t("credits.loadRangeWholeDollars", { min: MIN_LOAD_USD, max: MAX_LOAD_USD })
+        : t("billing.goesToTopup")
 
   return (
     <section style={sectionCardSpaced}>
       <div
         style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 4 }}
       >
-        <h2 style={sectionTitle}>Buy Credit Packs</h2>
+        <h2 style={sectionTitle}>{t("credits.buyPacksTitle")}</h2>
         <span style={{ fontSize: 12, fontWeight: 600, color: CYAN_TEXT }}>
-          → adds to Top-up
+          {t("billing.addsToTopup")}
         </span>
       </div>
       <p style={{ ...mutedParagraph, margin: "0 0 20px" }}>
-        Purchased packs land in your top-up balance and are valid for 12 months.
+        {t("billing.packsLandInTopup")}
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
@@ -118,7 +120,7 @@ export function BuyPacksSection() {
                   letterSpacing: "0.03em",
                 }}
               >
-                Popular
+                {t("pricing.popular")}
               </span>
             )}
             <div
@@ -131,7 +133,7 @@ export function BuyPacksSection() {
             >
               {formatCredits(creditUnits(pack.credits))}
             </div>
-            <div style={{ fontSize: 12, color: "var(--blg-t2-dim)", marginTop: 2 }}>{creditUnitLabel("credits")}</div>
+            <div style={{ fontSize: 12, color: "var(--blg-t2-dim)", marginTop: 2 }}>{creditUnitLabel(t("credits.unit.other"))}</div>
             <div style={{ fontSize: 19, fontWeight: 700, marginTop: 14 }}>
               ${pack.usd}
             </div>
@@ -163,7 +165,7 @@ export function BuyPacksSection() {
         }}
       >
         <span style={{ fontSize: 14, color: "var(--blg-t1-label)", fontWeight: 500 }}>
-          Or load any amount
+          {t("billing.orLoadAnyAmount")}
         </span>
         <div style={inputShell}>
           <span style={{ color: "var(--blg-t2-dim)", fontSize: 14 }}>$</span>
@@ -175,7 +177,7 @@ export function BuyPacksSection() {
             onChange={(e) => setCustomUsd(e.target.value.replace(/[^0-9]/g, ""))}
             className="placeholder:text-[var(--blg-placeholder)]"
             style={{ ...monoInput, width: 90 }}
-            aria-label="Load amount in dollars"
+            aria-label={t("credits.loadAmountAria")}
           />
         </div>
         <span style={{ fontSize: 13, color: "var(--blg-t2-dim)" }}>{amountHint}</span>
@@ -195,7 +197,7 @@ export function BuyPacksSection() {
             cursor: "pointer",
           }}
         >
-          Load credits
+          {t("credits.loadCredits")}
         </button>
       </div>
     </section>

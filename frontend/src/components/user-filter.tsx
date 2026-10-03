@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { useT, type TFunction } from "@/lib/i18n"
 
 export type UserFilterValue =
   | { readonly kind: "all" }
@@ -46,7 +47,8 @@ interface UserFilterProps {
  */
 export function UserFilter({ users, value, onChange, className }: UserFilterProps) {
   const [open, setOpen] = useState(false)
-  const label = getTriggerLabel(value, users)
+  const t = useT()
+  const label = getTriggerLabel(value, users, t)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -55,18 +57,18 @@ export function UserFilter({ users, value, onChange, className }: UserFilterProp
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          aria-label="Filter by user"
+          aria-label={t("adminReview.filterUser")}
           className={cn("w-[180px] justify-between font-normal", className)}
         >
           <span className="truncate">{label}</span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[260px] p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search users…" />
+          <CommandInput placeholder={t("misc.searchUsers")} />
           <CommandList>
-            <CommandEmpty>No users found.</CommandEmpty>
+            <CommandEmpty>{t("misc.noUsersFound")}</CommandEmpty>
             <CommandGroup>
               <CommandItem
                 value="__all"
@@ -76,7 +78,7 @@ export function UserFilter({ users, value, onChange, className }: UserFilterProp
                 }}
               >
                 <CheckMark active={value.kind === "all"} />
-                All users
+                {t("exec.allUsers")}
               </CommandItem>
               <CommandItem
                 value="__exclude_admins"
@@ -86,7 +88,7 @@ export function UserFilter({ users, value, onChange, className }: UserFilterProp
                 }}
               >
                 <CheckMark active={value.kind === "exclude_admins"} />
-                All users (excl. admins)
+                {t("misc.allUsersExclAdmins")}
               </CommandItem>
             </CommandGroup>
             <CommandSeparator />
@@ -118,7 +120,7 @@ export function UserFilter({ users, value, onChange, className }: UserFilterProp
 function CheckMark({ active }: { readonly active: boolean }) {
   return (
     <Check
-      className={cn("mr-2 h-4 w-4", active ? "opacity-100" : "opacity-0")}
+      className={cn("me-2 h-4 w-4", active ? "opacity-100" : "opacity-0")}
     />
   )
 }
@@ -135,10 +137,11 @@ function formatUserFull(u: UserFilterUser): string {
 function getTriggerLabel(
   value: UserFilterValue,
   users: ReadonlyArray<UserFilterUser>,
+  t: TFunction,
 ): string {
-  if (value.kind === "all") return "All users"
-  if (value.kind === "exclude_admins") return "Excluding admins"
+  if (value.kind === "all") return t("exec.allUsers")
+  if (value.kind === "exclude_admins") return t("misc.excludingAdmins")
   const u = users.find((x) => x.id === value.id)
-  if (!u) return "Unknown user"
+  if (!u) return t("misc.unknownUser")
   return formatUserShort(u)
 }

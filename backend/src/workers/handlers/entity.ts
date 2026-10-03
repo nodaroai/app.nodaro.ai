@@ -229,12 +229,13 @@ async function shouldRunLlmOnCloud(): Promise<boolean> {
 }
 
 const handleGenerateScript: HandlerFn = async function handleGenerateScript(job, ctx) {
-  const { prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort, advanced } = job.data as {
+  const { prompt, sceneCount, tone, targetDuration, styleGuide, provider, llmModel, reasoningEffort, advanced } = job.data as {
     jobId: string
     prompt: string
     sceneCount?: number
     tone?: string
     targetDuration?: number
+    styleGuide?: string
     provider?: ScriptProvider
     llmModel?: string
     reasoningEffort?: string
@@ -250,7 +251,7 @@ const handleGenerateScript: HandlerFn = async function handleGenerateScript(job,
         "generate-script",
         job.data as Record<string, unknown>,
       )).script as Awaited<ReturnType<typeof generateScript>>)
-    : await generateScript(prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort, advanced)
+    : await generateScript(prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort, advanced, { styleGuide })
   await setJobProgress(job, ctx.jobId, 100)
 
   if (!await shouldSaveJobResult(ctx.jobId)) return

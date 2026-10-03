@@ -283,8 +283,12 @@ export interface StudioGenerateRequest {
   shotId: string
   /** Candidates to fan out (stills); the builder clamps it to the catalog's range. */
   count?: number
-  /** The directing input mode for a clip; absent ⇒ derived from the inputs. */
-  mode?: "start" | "references"
+  /**
+   * The directing input mode for a clip; absent ⇒ derived from the scene's saved
+   * inputs (a pinned end frame included). `start` sends ONLY the start frame;
+   * `start-end` sends the start and the end frame.
+   */
+  mode?: "start" | "start-end" | "references"
   /** Price the run and return; nothing is submitted and nothing is written. */
   dryRun?: boolean
   clientRequestId?: StudioClientRequestId

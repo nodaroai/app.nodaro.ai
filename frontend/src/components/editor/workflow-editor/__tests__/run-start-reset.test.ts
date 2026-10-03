@@ -101,6 +101,9 @@ describe("run-start patches reset the whole run state", () => {
       // restorePollingForRunningJobs' backend-driven tick: the run started
       // elsewhere, and this patch mirrors orchestrator state onto the node.
       "workflow-editor/run-handlers.ts": 1,
+      // A followed Telegram run marks its trigger card as working. Not a run of
+      // the trigger: an earlier error on the card is not this run's to clear.
+      "workflow-editor/triggered-run-paint.ts": 1,
     })
   })
 
@@ -108,7 +111,8 @@ describe("run-start patches reset the whole run state", () => {
     // Without this, deleting a loop — or renaming the constant — would make the
     // guard above pass vacuously.
     const expected: Record<string, number> = {
-      "workflow-editor/execute-node.ts": 29,
+      // +1 audio-sync (podcast B3); +2 content-recipe / content-ideas.
+      "workflow-editor/execute-node.ts": 32,
       "workflow-editor/asset-executors.ts": 5,
       "workflow-editor/component-executor.ts": 1,
       "workflow-editor/list-execution.ts": 1,

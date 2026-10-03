@@ -1,95 +1,97 @@
 // Core template functions — re-exported from shared package (single source of truth)
 export { applyTemplate } from "@nodaro/prompts"
 import { resolveTemplate as sharedResolveTemplate } from "@nodaro/prompts"
+import type { MessageKey } from "@/lib/i18n"
+import type { SceneNodeType } from "@/types/nodes"
 
 export interface PromptTemplateInfo {
-  readonly label: string
+  /** Display name and help line, in the interface language. */
+  readonly labelKey: MessageKey
+  /** The prompt text sent to the model. It stays English: it is data, and the user can edit it. */
   readonly template: string
   readonly variables: readonly string[]
-  readonly description: string
+  readonly descriptionKey: MessageKey
 }
 
 export const SYSTEM_PROMPT_TEMPLATES: Record<string, PromptTemplateInfo> = {
   "character-description": {
-    label: "Character Description",
-    description:
-      "Text appended to prompt when a Character asset is connected to Generate Image",
+    labelKey: "settings.sysTplCharacterDescription",
+    descriptionKey: "settings.sysTplCharacterDescriptionDesc",
     template: "Include character '{name}': {description}.",
     variables: ["name", "description"],
   },
   "object-description": {
-    label: "Object Description",
-    description:
-      "Text appended to prompt when an Object asset is connected to Generate Image",
+    labelKey: "settings.sysTplObjectDescription",
+    descriptionKey: "settings.sysTplObjectDescriptionDesc",
     template: "Include object '{name}': {description}.",
     variables: ["name", "description"],
   },
   "location-description": {
-    label: "Location Description",
-    description:
-      "Text appended to prompt when a Location asset is connected to Generate Image",
+    labelKey: "settings.sysTplLocationDescription",
+    descriptionKey: "settings.sysTplLocationDescriptionDesc",
     template: "Include location '{name}': {description}.",
     variables: ["name", "description"],
   },
   "face-description": {
-    label: "Face Description",
-    description:
-      "Text appended to prompt when a Face asset is connected to Generate Image",
+    labelKey: "settings.sysTplFaceDescription",
+    descriptionKey: "settings.sysTplFaceDescriptionDesc",
     template:
       "Include the exact face and facial features of '{name}' from the reference image. Maintain perfect likeness and facial identity.",
     variables: ["name"],
   },
   "character-generation": {
-    label: "Character Generation",
-    description:
-      "Prompt used when generating a character image from a Character node",
+    labelKey: "settings.sysTplCharacterGeneration",
+    descriptionKey: "settings.sysTplCharacterGenerationDesc",
     template:
       "Create a full-body character portrait: {description}. Style: {style}. Gender: {gender}. High quality, detailed, consistent lighting, neutral background.",
     variables: ["description", "style", "gender"],
   },
   "object-generation": {
-    label: "Object Generation",
-    description:
-      "Prompt used when generating an object image from an Object node",
+    labelKey: "settings.sysTplObjectGeneration",
+    descriptionKey: "settings.sysTplObjectGenerationDesc",
     template:
       "Create a product photo of: {description}. Category: {category}. Clean background, professional studio lighting, high detail.",
     variables: ["description", "category"],
   },
   "location-generation": {
-    label: "Location Generation",
-    description:
-      "Prompt used when generating a location image from a Location node",
+    labelKey: "settings.sysTplLocationGeneration",
+    descriptionKey: "settings.sysTplLocationGenerationDesc",
     template:
       "Create a cinematic scene of: {description}. Category: {category}. Atmospheric lighting, high detail, wide angle.",
     variables: ["description", "category"],
   },
   "face-generation": {
-    label: "Face Generation",
-    description: "Prompt used when generating a headshot from a Face node",
+    labelKey: "settings.sysTplFaceGeneration",
+    descriptionKey: "settings.sysTplFaceGenerationDesc",
     template:
       "Create a professional close-up face portrait headshot: {description}. Style: {style}. Looking directly at camera, sharp focus on facial features, clean background, studio lighting, high resolution. Maintain exact facial identity and features from the reference image.",
     variables: ["description", "style"],
   },
   "generate-image-wrapper": {
-    label: "Generate Image Wrapper",
-    description:
-      "How the final prompt is assembled. {userPrompt} is what the user typed, {assetDescriptions} is the combined asset texts.",
+    labelKey: "settings.sysTplGenerateImageWrapper",
+    descriptionKey: "settings.sysTplGenerateImageWrapperDesc",
     template: "{userPrompt}\n{assetDescriptions}",
     variables: ["userPrompt", "assetDescriptions"],
   },
 }
 
 export interface TemplateGroup {
+  /** Stable English id (React key); never rendered. */
   readonly name: string
+  /** The group's name in the interface language (the card heading). */
+  readonly labelKey: MessageKey
+  /** The asset node whose Run generates this group's image; the tooltip names
+   *  it the way the canvas shows it. */
+  readonly nodeType: SceneNodeType
   readonly descriptionKey: string
   readonly generationKey: string
 }
 
 export const TEMPLATE_GROUPS: readonly TemplateGroup[] = [
-  { name: "Character", descriptionKey: "character-description", generationKey: "character-generation" },
-  { name: "Object", descriptionKey: "object-description", generationKey: "object-generation" },
-  { name: "Location", descriptionKey: "location-description", generationKey: "location-generation" },
-  { name: "Face", descriptionKey: "face-description", generationKey: "face-generation" },
+  { name: "Character", labelKey: "assetlib.typeCharacter", nodeType: "character", descriptionKey: "character-description", generationKey: "character-generation" },
+  { name: "Object", labelKey: "assetlib.typeObject", nodeType: "object", descriptionKey: "object-description", generationKey: "object-generation" },
+  { name: "Location", labelKey: "assetlib.typeLocation", nodeType: "location", descriptionKey: "location-description", generationKey: "location-generation" },
+  { name: "Face", labelKey: "assetlib.typeFace", nodeType: "face", descriptionKey: "face-description", generationKey: "face-generation" },
 ]
 
 export const WRAPPER_TEMPLATE_KEY = "generate-image-wrapper"

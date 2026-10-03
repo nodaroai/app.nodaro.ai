@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, cleanup, act, fireEvent } from "@testing-library/react"
 
 vi.mock("@/ee/hooks/use-model-credits", () => ({ useModelCredits: () => 0 }))
+vi.mock("@/hooks/use-model-credit-range", () => ({ useModelCreditRange: () => undefined }))
 vi.mock("lucide-react", () => new Proxy({}, {
   get: (_t, prop) => (typeof prop === "string" && prop !== "then" ? () => null : undefined),
   has: () => true,

@@ -1,4 +1,6 @@
 import { Play, Loader2, LogIn, Sparkles, RotateCcw, Plus } from "lucide-react"
+import { useT } from "@/lib/i18n"
+import { isResetAction, newRunActionLabel, type NewRunAction } from "./types"
 
 interface MobileStickyActionProps {
   isRunning: boolean
@@ -9,7 +11,7 @@ interface MobileStickyActionProps {
   onRun: () => void
   onCancel?: () => void
   onNewRun?: () => void
-  newRunLabel?: string
+  newRunAction?: NewRunAction
   onGetCredits: () => void
   inputsReadOnly?: boolean
   hidden: boolean
@@ -24,18 +26,19 @@ export function MobileStickyAction({
   onRun,
   onCancel,
   onNewRun,
-  newRunLabel,
+  newRunAction,
   onGetCredits,
   inputsReadOnly,
   hidden,
 }: MobileStickyActionProps) {
+  const t = useT()
   if (hidden || inputsReadOnly) return null
 
   const showNewRun = !!onNewRun
 
   return (
     <div
-      className="fixed left-0 right-0 z-20 bg-card/95 backdrop-blur-sm border-t border-border px-4 flex items-center gap-2"
+      className="fixed start-0 end-0 z-20 bg-card/95 backdrop-blur-sm border-t border-border px-4 flex items-center gap-2"
       style={{
         bottom: "calc(56px + var(--safe-area-bottom, 0px))",
         height: "56px",
@@ -46,17 +49,17 @@ export function MobileStickyAction({
           type="button"
           onClick={onNewRun}
           className={`shrink-0 h-11 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-colors touch-manipulation ${
-            newRunLabel === "Retry" || newRunLabel === "Clear"
+            isResetAction(newRunAction)
               ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
               : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
           }`}
         >
-          {newRunLabel === "Retry" || newRunLabel === "Clear" ? (
+          {isResetAction(newRunAction) ? (
             <RotateCcw className="h-4 w-4" />
           ) : (
             <Plus className="h-4 w-4" />
           )}
-          {newRunLabel ?? "New Run"}
+          {t(newRunActionLabel(newRunAction))}
         </button>
       )}
 
@@ -68,7 +71,7 @@ export function MobileStickyAction({
           className="flex-1 h-11 rounded-full text-sm font-medium text-white bg-red-600 hover:bg-red-700 flex items-center justify-center gap-2 transition-colors touch-manipulation disabled:opacity-50"
         >
           <Loader2 className="h-4 w-4 animate-spin" />
-          Stop
+          {t("common.stop")}
         </button>
       ) : needsMoreCredits ? (
         <button
@@ -77,7 +80,7 @@ export function MobileStickyAction({
           className="flex-1 h-11 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center justify-center gap-2 transition-colors touch-manipulation"
         >
           <Sparkles className="h-4 w-4" />
-          Get Credits
+          {t("runner.getCredits")}
         </button>
       ) : (
         <button
@@ -89,12 +92,12 @@ export function MobileStickyAction({
           {!isAuthenticated ? (
             <>
               <LogIn className="h-4 w-4" />
-              Sign in to Run
+              {t("present.signInToRun")}
             </>
           ) : (
             <>
               <Play className="h-4 w-4" />
-              Run{costLabel}
+              {t("present.run")}{costLabel}
             </>
           )}
         </button>

@@ -143,7 +143,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
                 {r.thumbnailUrl ? (
                   <CachedImage
                     src={r.thumbnailUrl}
-                    alt={`Result ${i + 1}`}
+                    alt={t("node.resultN", { n: i + 1 })}
                     className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
                       i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                     }`}
@@ -313,8 +313,8 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
 
       {/* Bottom info bar */}
       <div className="flex justify-between text-[10px] text-muted-foreground px-2">
-        <span>{nodeData.characterOrientation === "image" ? "Image Orient" : "Video Orient"}</span>
-        <span>{nodeData.resolution} (max {maxDuration}s)</span>
+        <span>{nodeData.characterOrientation === "image" ? t("node.imageOrient") : t("node.videoOrient")}</span>
+        <span>{nodeData.resolution} {t("node.maxSeconds", { n: maxDuration })}</span>
       </div>
     </BaseNode>
 

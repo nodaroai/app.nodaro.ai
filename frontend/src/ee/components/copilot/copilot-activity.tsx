@@ -7,8 +7,9 @@
  * finished steps above every answer.
  */
 import { Check, ChevronDown } from "lucide-react"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
 import type { CopilotActivity } from "@/ee/lib/copilot/types"
+import { useT } from "@/lib/i18n"
 
 const DOT: Record<CopilotActivity["status"], string> = {
   started: "bg-primary",
@@ -29,6 +30,7 @@ interface CopilotActivityRowsProps {
 }
 
 export function CopilotActivityRows({ activities, collapsed, onExpand }: CopilotActivityRowsProps) {
+  const t = useT()
   if (activities.length === 0) return null
 
   if (collapsed) {
@@ -36,11 +38,13 @@ export function CopilotActivityRows({ activities, collapsed, onExpand }: Copilot
       <button
         type="button"
         onClick={onExpand}
-        className="flex items-center gap-2 py-1.5 px-0.5 w-full border-t border-b border-border text-left"
+        className="flex items-center gap-2 py-1.5 px-0.5 w-full border-t border-b border-border text-start"
       >
         <Check className="w-3 h-3 text-[var(--copilot-dim)]" strokeWidth={2.4} />
-        <span className="text-xs text-[var(--copilot-muted)]">{S.stepsCollapsed(activities.length)}</span>
-        <ChevronDown className="w-[11px] h-[11px] text-[var(--copilot-dim)] ml-auto" strokeWidth={2.4} />
+        <span className="text-xs text-[var(--copilot-muted)]">
+          {t(activities.length === 1 ? K.stepsOne : K.stepsOther, { n: activities.length })}
+        </span>
+        <ChevronDown className="w-[11px] h-[11px] text-[var(--copilot-dim)] ms-auto" strokeWidth={2.4} />
       </button>
     )
   }
@@ -56,7 +60,7 @@ export function CopilotActivityRows({ activities, collapsed, onExpand }: Copilot
           </span>
           <span className={`text-xs ${LABEL[activity.status]}`}>{activity.label}</span>
           {activity.note && (
-            <span className="ml-auto text-[11px] text-[var(--copilot-dim)] tabular-nums truncate max-w-[45%]">
+            <span className="ms-auto text-[11px] text-[var(--copilot-dim)] tabular-nums truncate max-w-[45%]">
               {activity.note}
             </span>
           )}

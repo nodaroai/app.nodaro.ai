@@ -19,8 +19,8 @@ function ScriptingView({ data }: SceneViewProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
-        <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">Scene {data.scene_index}</div>
-        <div className="text-[10px] text-zinc-500 dark:text-zinc-400">{storyMomentLabel(data.emotional_beat)}</div>
+        <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">{t("node.sceneN", { n: data.scene_index })}</div>
+        <div className="text-[10px] text-zinc-500 dark:text-zinc-400">{storyMomentLabel(data.emotional_beat, t)}</div>
       </div>
       {data.description && (
         <p className="text-[11px] text-zinc-600 dark:text-zinc-300 line-clamp-2">{data.description}</p>
@@ -43,7 +43,7 @@ function ScriptingView({ data }: SceneViewProps) {
               <p className="text-[11px] text-zinc-700 dark:text-zinc-200 line-clamp-2">{shot.action}</p>
               {shot.dialogue_line && (
                 <p className="text-[11px] italic text-zinc-600 dark:text-zinc-300 line-clamp-2">
-                  &ldquo;{shot.dialogue_line}&rdquo;
+                  “{shot.dialogue_line}”
                 </p>
               )}
             </div>
@@ -51,7 +51,7 @@ function ScriptingView({ data }: SceneViewProps) {
         </div>
       )}
       <div className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-        {shots.length} shot{shots.length === 1 ? "" : "s"} · {data.duration_seconds}s total
+        {shots.length === 1 ? t("node.shotCountOne", { n: shots.length }) : t("node.shotCountMany", { n: shots.length })} · {t("node.secondsTotal", { n: data.duration_seconds })}
       </div>
     </div>
   )

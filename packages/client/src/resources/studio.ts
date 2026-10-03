@@ -104,7 +104,7 @@ export interface StudioShotGenerationInput {
   shotId: string
   clientRequestId?: string
   count?: number
-  mode?: "start" | "references"
+  mode?: "start" | "start-end" | "references"
   dryRun?: boolean
   /** Linked clips only: require the exact inputs returned by a reviewed quote. */
   expectedInputHash?: string

@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { creditUnits } from "@/lib/credit-units"
 import type { GeneratedScript } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
 
 export type NarrationSource = "visualDescription" | "action" | "imagePrompt"
 
@@ -43,6 +44,7 @@ export function ExpandStoryboardDialog({
   script,
   onConfirm,
 }: ExpandStoryboardDialogProps) {
+  const t = useT()
   const [layout, setLayout] = useState<"horizontal" | "vertical">("vertical")
   const [autoRun, setAutoRun] = useState(true)
   const [includeCombine, setIncludeCombine] = useState(true)
@@ -74,10 +76,10 @@ export function ExpandStoryboardDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Layers className="w-4 h-4" />
-            Expand Storyboard to Nodes
+            {t("storyboard.title")}
           </DialogTitle>
           <DialogDescription>
-            Create workflow nodes for &quot;{script.title}&quot;
+            {t("storyboard.createNodesFor", { title: script.title })}
           </DialogDescription>
         </DialogHeader>
 
@@ -87,20 +89,20 @@ export function ExpandStoryboardDialog({
             {/* Image nodes with per-scene breakdown */}
             <div className="space-y-1">
               <div className="flex justify-between font-medium">
-                <span>{sceneCount}x Generate Image nodes</span>
+                <span>{t("storyboard.imageNodesCount", { n: sceneCount })}</span>
                 <span className="text-muted-foreground">
                   {allImagesReady ? (
-                    <span className="text-green-600 dark:text-green-400">0 credits</span>
+                    <span className="text-green-600 dark:text-green-400">{t("storyboard.zeroCredits")}</span>
                   ) : (
-                    <>{scenesNeedingImages} x {creditUnits(5)} = {creditUnits(imageCost)} credits</>
+                    <>{t("storyboard.costFormula", { n: scenesNeedingImages, unit: creditUnits(5), total: creditUnits(imageCost) })}</>
                   )}
                 </span>
               </div>
-              <div className="ml-2 space-y-0.5 text-xs">
+              <div className="ms-2 space-y-0.5 text-xs">
                 {allImagesReady ? (
                   <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400 font-medium">
                     <Check className="w-3 h-3" />
-                    All images ready!
+                    {t("storyboard.allImagesReady")}
                   </div>
                 ) : (
                   scenes.map((scene) => {
@@ -114,11 +116,11 @@ export function ExpandStoryboardDialog({
                             <Circle className="w-3 h-3 text-muted-foreground/50" />
                           )}
                           <span className={hasImage ? "text-muted-foreground" : ""}>
-                            Scene {scene.sceneNumber}
+                            {t("cfgext.sceneNumbered", { index: scene.sceneNumber })}
                           </span>
                         </span>
                         <span className="text-muted-foreground">
-                          {hasImage ? "has image" : `${creditUnits(5)} credits`}
+                          {hasImage ? t("storyboard.hasImage") : t("storyboard.creditsAmount", { n: creditUnits(5) })}
                         </span>
                       </div>
                     )
@@ -126,7 +128,7 @@ export function ExpandStoryboardDialog({
                 )}
                 {scenesWithImages.length > 0 && scenesNeedingImages > 0 && (
                   <div className="text-muted-foreground/70 pt-0.5">
-                    {scenesWithImages.length}/{sceneCount} scenes already have images
+                    {t("storyboard.scenesHaveImages", { ready: scenesWithImages.length, total: sceneCount })}
                   </div>
                 )}
               </div>
@@ -136,25 +138,25 @@ export function ExpandStoryboardDialog({
               <>
                 <Separator />
                 <div className="flex justify-between">
-                  <span>{sceneCount}x Image to Video nodes</span>
-                  <span className="text-muted-foreground">{sceneCount} x {creditUnits(20)} = {creditUnits(videoCost)} credits</span>
+                  <span>{t("storyboard.videoNodesCount", { n: sceneCount })}</span>
+                  <span className="text-muted-foreground">{t("storyboard.costFormula", { n: sceneCount, unit: creditUnits(20), total: creditUnits(videoCost) })}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>{sceneCount}x Text to Speech nodes</span>
-                  <span className="text-muted-foreground">{sceneCount} x {creditUnits(3)} = {creditUnits(ttsCost)} credits</span>
+                  <span>{t("storyboard.ttsNodesCount", { n: sceneCount })}</span>
+                  <span className="text-muted-foreground">{t("storyboard.costFormula", { n: sceneCount, unit: creditUnits(3), total: creditUnits(ttsCost) })}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>{sceneCount}x Merge Video & Audio</span>
-                  <span className="text-muted-foreground/60">0 credits</span>
+                  <span>{t("storyboard.mergeNodesCount", { n: sceneCount })}</span>
+                  <span className="text-muted-foreground/60">{t("storyboard.zeroCredits")}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>{sceneCount}x Text Prompt nodes</span>
-                  <span className="text-muted-foreground/60">0 credits</span>
+                  <span>{t("storyboard.textPromptNodesCount", { n: sceneCount })}</span>
+                  <span className="text-muted-foreground/60">{t("storyboard.zeroCredits")}</span>
                 </div>
                 {includeCombine && (
                   <div className="flex justify-between">
-                    <span>1x Combine Videos node</span>
-                    <span className="text-muted-foreground">1 x {creditUnits(2)} = {creditUnits(combineCost)} credits</span>
+                    <span>{t("storyboard.combineNode")}</span>
+                    <span className="text-muted-foreground">{t("storyboard.costFormula", { n: 1, unit: creditUnits(2), total: creditUnits(combineCost) })}</span>
                   </div>
                 )}
               </>
@@ -163,15 +165,15 @@ export function ExpandStoryboardDialog({
             <div className="flex justify-between font-medium">
               <span className="flex items-center gap-1">
                 <Sparkles className="w-3.5 h-3.5" />
-                Total estimated
+                {t("storyboard.totalEstimated")}
               </span>
-              <span>{creditUnits(totalCost)} credits</span>
+              <span>{t("storyboard.creditsAmount", { n: creditUnits(totalCost) })}</span>
             </div>
           </div>
 
           {/* Node type option */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Node Type</Label>
+            <Label className="text-sm font-medium">{t("storyboard.nodeType")}</Label>
             <RadioGroup
               value={nodeType}
               onValueChange={(v) => setNodeType(v as ExpandNodeType)}
@@ -181,28 +183,28 @@ export function ExpandStoryboardDialog({
                 <RadioGroupItem value="scene" id="type-scene" />
                 <Label htmlFor="type-scene" className="flex items-center gap-1 text-sm cursor-pointer">
                   <Clapperboard className="w-3.5 h-3.5" />
-                  Scene Nodes
-                  <span className="text-muted-foreground text-xs">(recommended)</span>
+                  {t("storyboard.sceneNodes")}
+                  <span className="text-muted-foreground text-xs">{t("storyboard.recommended")}</span>
                 </Label>
               </div>
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="pipeline" id="type-pipeline" />
                 <Label htmlFor="type-pipeline" className="flex items-center gap-1 text-sm cursor-pointer">
                   <GitBranch className="w-3.5 h-3.5" />
-                  Pipeline Nodes
+                  {t("storyboard.pipelineNodes")}
                 </Label>
               </div>
             </RadioGroup>
             <p className="text-xs text-muted-foreground">
               {nodeType === "scene"
-                ? "Creates one Scene Node per scene with full editing capabilities"
-                : "Creates separate Image, Video, TTS, and Merge nodes per scene"}
+                ? t("storyboard.sceneNodesDesc")
+                : t("storyboard.pipelineNodesDesc")}
             </p>
           </div>
 
           {/* Layout option */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Layout</Label>
+            <Label className="text-sm font-medium">{t("proccfg.layout")}</Label>
             <RadioGroup
               value={layout}
               onValueChange={(v) => setLayout(v as "horizontal" | "vertical")}
@@ -212,15 +214,15 @@ export function ExpandStoryboardDialog({
                 <RadioGroupItem value="horizontal" id="layout-h" />
                 <Label htmlFor="layout-h" className="flex items-center gap-1 text-sm cursor-pointer">
                   <ArrowRight className="w-3.5 h-3.5" />
-                  Horizontal
+                  {t("storyboard.horizontal")}
                 </Label>
               </div>
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="vertical" id="layout-v" />
                 <Label htmlFor="layout-v" className="flex items-center gap-1 text-sm cursor-pointer">
                   <ArrowDown className="w-3.5 h-3.5" />
-                  Vertical
-                  <span className="text-muted-foreground text-xs">(recommended)</span>
+                  {t("storyboard.vertical")}
+                  <span className="text-muted-foreground text-xs">{t("storyboard.recommended")}</span>
                 </Label>
               </div>
             </RadioGroup>
@@ -229,18 +231,18 @@ export function ExpandStoryboardDialog({
           {/* Narration source - pipeline only */}
           {nodeType === "pipeline" && (
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Narration Text Source</Label>
+              <Label className="text-sm font-medium">{t("storyboard.narrationSource")}</Label>
               <select
                 value={narrationSource}
                 onChange={(e) => setNarrationSource(e.target.value as NarrationSource)}
                 className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
               >
-                <option value="visualDescription">Visual Description (default)</option>
-                <option value="action">Action</option>
-                <option value="imagePrompt">Image Prompt</option>
+                <option value="visualDescription">{t("storyboard.narrationVisualDesc")}</option>
+                <option value="action">{t("scriptcfg.sceneAction")}</option>
+                <option value="imagePrompt">{t("storyboard.narrationImagePrompt")}</option>
               </select>
               <p className="text-xs text-muted-foreground">
-                Text used for Text to Speech narration per scene
+                {t("storyboard.narrationSourceHint")}
               </p>
             </div>
           )}
@@ -254,7 +256,7 @@ export function ExpandStoryboardDialog({
                 onCheckedChange={(checked) => setAutoRun(checked === true)}
               />
               <Label htmlFor="auto-run" className="text-sm cursor-pointer">
-                Auto-run image generation after creating nodes
+                {t("storyboard.autoRun")}
               </Label>
             </div>
             {nodeType === "pipeline" && (
@@ -265,7 +267,7 @@ export function ExpandStoryboardDialog({
                   onCheckedChange={(checked) => setIncludeCombine(checked === true)}
                 />
                 <Label htmlFor="include-combine" className="text-sm cursor-pointer">
-                  Include Combine Videos node at the end
+                  {t("storyboard.includeCombine")}
                 </Label>
               </div>
             )}
@@ -273,8 +275,8 @@ export function ExpandStoryboardDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleConfirm}>Create Nodes</Button>
+          <Button variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
+          <Button onClick={handleConfirm}>{t("storyboard.createNodes")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

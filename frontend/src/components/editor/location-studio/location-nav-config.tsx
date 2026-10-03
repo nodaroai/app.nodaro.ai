@@ -26,29 +26,29 @@ type J = LocationStudioJobs
  * every list-bucket content page shows its asset-array `.length`.
  */
 export const LOCATION_STUDIO_NAV: StudioNavConfig<S, J> = {
-  accentActiveClassName: "text-[#22d3ee] bg-[#0e2730] border-r-2 border-[#22d3ee]",
+  accentActiveClassName: "text-[#22d3ee] bg-[#0e2730] border-e-2 border-[#22d3ee]",
   groups: [
-    { label: "Resources", pages: [
-      { key: "references", label: "References", icon: "📷", Component: ReferencesPage },
+    { label: "studioNav.resources", pages: [
+      { key: "references", label: "studioNav.references", icon: "📷", Component: ReferencesPage },
     ] },
-    { label: "Identity", pages: [
-      { key: "appearance", label: "Appearance", icon: "🏞", Component: AppearancePage },
+    { label: "studioNav.identity", pages: [
+      { key: "appearance", label: "studioNav.exterior", icon: "🏞", Component: AppearancePage },
     ] },
-    { label: "Environment", pages: [
-      { key: "timeOfDay", label: "Time of Day", icon: "🌅", Component: TimeOfDayPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.timeOfDay) }) },
-      { key: "weather", label: "Weather", icon: "🌧", Component: WeatherPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.weather) }) },
-      { key: "seasons", label: "Seasons", icon: "🍁", Component: SeasonsPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.seasons) }) },
+    { label: "studioNav.environment", pages: [
+      { key: "timeOfDay", label: "studioNav.timeOfDay", icon: "🌅", Component: TimeOfDayPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.timeOfDay) }) },
+      { key: "weather", label: "studioNav.weather", icon: "🌧", Component: WeatherPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.weather) }) },
+      { key: "seasons", label: "studioNav.seasons", icon: "🍁", Component: SeasonsPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.seasons) }) },
     ] },
-    { label: "Composition", pages: [
-      { key: "angles", label: "Angles", icon: "📐", Component: AnglesPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.angles) }) },
-      { key: "lighting", label: "Lighting", icon: "💡", Component: LightingPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.lighting) }) },
+    { label: "studioNav.composition", pages: [
+      { key: "angles", label: "studioNav.angles", icon: "📐", Component: AnglesPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.angles) }) },
+      { key: "lighting", label: "studioNav.lighting", icon: "💡", Component: LightingPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.lighting) }) },
     ] },
-    { label: "Atmosphere", pages: [
-      { key: "motion", label: "Motion", icon: "🎬", Component: MotionPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.atmosphereMotions) }) },
+    { label: "studioNav.atmosphere", pages: [
+      { key: "motion", label: "studioNav.motion", icon: "🎬", Component: MotionPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.atmosphereMotions) }) },
     ] },
-    { label: "Sheet", pages: [
-      { key: "sheet", label: "Sheet", icon: "📋", Component: SheetPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.sheets) }) },
-      { key: "board", label: "Board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.boards) }) },
+    { label: "studioNav.sheet", pages: [
+      { key: "sheet", label: "studioNav.sheet", icon: "📋", Component: SheetPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.sheets) }) },
+      { key: "board", label: "studioNav.board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.boards) }) },
     ] },
   ],
 }

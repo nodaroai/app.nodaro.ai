@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { recordingAccountTriggerUpdate } from "@/lib/account-trigger-intent"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { useLocaleStore } from "@/lib/locale-store"
@@ -41,6 +42,10 @@ import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
 import { isTileGridPickerType } from "@/lib/picker-handles"
 import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared"
 import { getOutputMinuteUnits, NO_RERUNS } from "@/components/editor/workflow-editor/types"
+import { NodeLookPreviewStyleScope } from "@/components/nodes/look-preview-style"
+import { NodeDocsPill } from "@/components/editor/node-docs/node-docs-pill"
+import { NodeDocsTypeContext } from "@/components/editor/node-docs/node-docs-context"
+import { WiredSettingsScope } from "@/components/editor/config-panels/wired-settings-context"
 import {
   getConnectedSources,
   getModelIdentifier,
@@ -136,6 +141,7 @@ import {
   SunoSeparateConfig,
   AudioSeparationConfig,
   SilenceDetectConfig,
+  AudioSyncConfig,
   SunoMusicVideoConfig,
   SunoMashupConfig,
   SunoReplaceSectionConfig,
@@ -152,9 +158,12 @@ import {
   CombineVideosConfig,
   ApplyEdlConfig,
   EditPlanConfig,
+  ContentRecipeConfig,
+  ContentIdeasConfig,
   AssembleNarratedVideoConfig,
   ImageCollageConfig,
   ImageOverlayConfig,
+  VideoOverlayConfig,
   AddCaptionsConfig,
   ResizeVideoConfig,
   SocialMediaFormatConfig,
@@ -196,6 +205,7 @@ import {
   WebScrapeConfig,
   MetaAdsScrapeConfig,
   InstagramScrapeConfig,
+  SocialSearchConfig,
   VideoAnalysisConfig,
   VideoAuditConfig,
   CombineTextConfig,
@@ -218,6 +228,7 @@ import {
   WebhookTriggerConfig,
   ScheduleTriggerConfig,
   TelegramTriggerConfig,
+  TelegramAccountTriggerConfig,
   TelegramChannelFeedConfig,
   InstagramPostConfig,
   TiktokPostConfig,
@@ -260,7 +271,8 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "video-upscale", "extend-video", "video-retake", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
-  "llm-chat", "web-scrape", "meta-ads-scrape", "instagram-scrape", "video-analysis", "video-audit",
+  "llm-chat", "web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "video-analysis", "video-audit",
+  "content-recipe", "content-ideas",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "generate-3d-scene", "edit-3d-scene", "pro-3d-render",
   "image-to-text", "qa-check", "transcribe", "describe-to-picker",
@@ -268,7 +280,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post", "publish-social",
   "component",
   // FFmpeg processing (tiered credits)
-  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "apply-edl", "edit-plan", "assemble-narrated-video", "image-collage", "image-overlay", "trim-audio", "split-media", "extract-audio", "silence-detect", "remove-audio", "trim-video", "extract-frame",
+  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "apply-edl", "edit-plan", "assemble-narrated-video", "image-collage", "image-overlay", "video-overlay", "trim-audio", "split-media", "extract-audio", "silence-detect", "audio-sync", "remove-audio", "trim-video", "extract-frame",
   "speed-ramp", "loop-video", "gif-to-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume", "audio-fx",
   "add-captions", "mix-audio", "combine-audio",
 ])
@@ -318,6 +330,13 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
   selectedNodeId: string | undefined
 }) {
   const t = useT()
+  // A Telegram account trigger's panel is the one place its owner sets what it
+  // listens to: what it says after each change here is what the next trigger
+  // sync names as theirs (account-trigger-intent.ts).
+  const updateAccountTrigger = useMemo(
+    () => (selectedNodeId ? recordingAccountTriggerUpdate(selectedNodeId, updateNodeData, () => useWorkflowStore.getState()) : () => {}),
+    [selectedNodeId, updateNodeData],
+  )
   // Phase 1D.1 — Stage 6 (scene_images) query for match-cut verdict display.
   // Runs only when a scene node is selected and its data carries pipeline_id.
   // Polls at 5 s intervals while the panel is open (same cadence as the
@@ -344,10 +363,11 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "web-scrape": return <WebScrapeConfig {...configProps} />
     case "meta-ads-scrape": return <MetaAdsScrapeConfig {...configProps} />
     case "instagram-scrape": return <InstagramScrapeConfig {...configProps} />
+    case "social-search": return <SocialSearchConfig {...configProps} />
     case "video-analysis": return <VideoAnalysisConfig {...configProps} />
     case "video-audit": return <VideoAuditConfig {...configProps} />
     case "reference-audio": return <ReferenceAudioConfig {...configProps} />
-    case "webhook-trigger": return <WebhookTriggerConfig {...configProps} />
+    case "webhook-trigger": return <WebhookTriggerConfig {...configProps} nodeId={selectedNodeId} />
     case "schedule-trigger": return <ScheduleTriggerConfig {...configProps} />
     case "tone": return <ToneConfig {...configProps} />
     case "style-guide": return <StyleGuideConfig {...configProps} />
@@ -481,9 +501,12 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "combine-videos": return <CombineVideosConfig {...configProps} />
     case "apply-edl": return <ApplyEdlConfig {...configProps} />
     case "edit-plan": return <EditPlanConfig {...configProps} />
+    case "content-recipe": return <ContentRecipeConfig {...configProps} />
+    case "content-ideas": return <ContentIdeasConfig {...configProps} />
     case "assemble-narrated-video": return <AssembleNarratedVideoConfig {...configProps} />
     case "image-collage": return <ImageCollageConfig {...configProps} />
     case "image-overlay": return <ImageOverlayConfig {...configProps} nodeId={selectedNodeId} />
+    case "video-overlay": return <VideoOverlayConfig {...configProps} nodeId={selectedNodeId} />
     case "merge-video-audio": return <MergeVideoAudioConfig {...configProps} />
     case "add-captions": return <AddCaptionsConfig {...configProps} />
     case "resize-video": return <ResizeVideoConfig {...configProps} />
@@ -492,6 +515,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "split-media": return <SplitMediaConfig {...configProps} />
     case "extract-audio": return <ExtractAudioConfig {...configProps} />
     case "silence-detect": return <SilenceDetectConfig {...configProps} />
+    case "audio-sync": return <AudioSyncConfig {...configProps} />
     case "remove-audio": return <RemoveAudioConfig {...configProps} />
     case "mix-audio": return <MixAudioConfig {...configProps} />
     case "combine-audio": return <CombineAudioConfig {...configProps} />
@@ -545,6 +569,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "telegram-post": return <TelegramPostConfig {...configProps} />
     case "publish-social": return <PublishSocialConfig {...configProps} />
     case "telegram-trigger": return <TelegramTriggerConfig {...configProps} />
+    // Keyed by node: a draft typed for one trigger never lands on another.
+    case "telegram-account-trigger": return <TelegramAccountTriggerConfig key={selectedNodeId ?? ""} {...configProps} onUpdate={updateAccountTrigger} />
     case "telegram-channel-feed": return <TelegramChannelFeedConfig {...configProps} />
     case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
     case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />
@@ -786,6 +812,7 @@ export function ConfigPanel() {
     updateNodeData(selectedNodeId, data)
   }, [selectedNodeId, updateNodeData])
 
+
   const handleMapField = useCallback((field: string, sourceNodeId: string | null) => {
     const current = { ...fieldMappings }
     if (sourceNodeId === null) {
@@ -880,6 +907,7 @@ export function ConfigPanel() {
         <div className="flex items-center gap-2">
           {/* Fullscreen: preset dropdown on the side (inline in the header row). */}
           {isExpanded && <div className="w-56">{presetDropdown}</div>}
+          <NodeDocsPill nodeType={nodeType} nodeLabel={localizeNodeLabel(nodeTypeDefaultLabel(nodeType))} />
           {!isMobile && (
             <Button
               variant="ghost"
@@ -1046,7 +1074,16 @@ export function ConfigPanel() {
                 catalog id — which ignored `data.hintMode` — and to render the
                 shared Full / Compact lever. Provided once here so every picker
                 panel, present and future, is covered with no per-panel work. */}
+            {/* The node type, for the docs links inside the node's config
+                (the model picker's "Compare models"). */}
+            <NodeDocsTypeContext.Provider value={nodeType}>
             <ParameterPreviewContext.Provider value={{ node: selectedNode, nodes, edges }}>
+              {/* The picker grid pictures its options the way this node is
+                  set (real render / illustration), and the switch above the
+                  grid writes the node — so grid and canvas card never differ. */}
+              <NodeLookPreviewStyleScope nodeId={selectedNodeId ?? undefined} nodeType={nodeType} data={nodeData}>
+              {/* Fields a wired Generation Settings node sets show as wired in every MappableField. */}
+              <WiredSettingsScope nodeId={selectedNodeId ?? ""} nodeType={nodeType} data={nodeData as Record<string, unknown>}>
               {isExpanded ? (
                 <TileCommitContext.Provider value={{ commit: closeFullscreenSettings }}>
                   <NodeTypeConfig
@@ -1070,7 +1107,10 @@ export function ConfigPanel() {
                   selectedNodeId={selectedNodeId ?? undefined}
                 />
               )}
+              </WiredSettingsScope>
+              </NodeLookPreviewStyleScope>
             </ParameterPreviewContext.Provider>
+            </NodeDocsTypeContext.Provider>
             {/* Prompt Injection — opt out of auto-injecting Look / Elements.
                Renders only for nodes with a look/cinematography or elements
                handle (gated inside the component). */}

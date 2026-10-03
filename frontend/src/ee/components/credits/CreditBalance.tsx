@@ -3,6 +3,8 @@ import { Badge } from "@/components/ui/badge"
 import { hasCredits } from "@/lib/edition"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
+import { useT } from "@/lib/i18n"
+import { formatNumber } from "@/lib/i18n/format"
 
 export { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 
@@ -12,6 +14,7 @@ interface CreditBalanceProps {
 }
 
 export function CreditBalance({ userId, onClick }: CreditBalanceProps) {
+  const t = useT()
   const { data: balance, isLoading, error } = useUserCredits(userId)
 
   if (!hasCredits()) return null
@@ -44,16 +47,16 @@ export function CreditBalance({ userId, onClick }: CreditBalanceProps) {
     <>
       <Coins className="w-4 h-4 text-muted-foreground" />
       {isPayg ? (
-        <span className="text-sm font-medium font-mono" title="Free credits (studio) / API credits (SDK, MCP, API)">
-          {creditUnits(balance.subscription).toLocaleString()}
-          <span className="text-muted-foreground"> free · </span>
-          {creditUnits(balance.topup).toLocaleString()}
+        <span className="text-sm font-medium font-mono" title={t("credits.balancePoolsTitle")}>
+          {formatNumber(creditUnits(balance.subscription))}
+          <span className="text-muted-foreground"> {t("credits.balanceFree")} · </span>
+          {formatNumber(creditUnits(balance.topup))}
           <span className="text-muted-foreground"> API</span>
         </span>
       ) : (
-        <span className="text-sm font-medium font-mono">{creditUnits(balance.total).toLocaleString()}</span>
+        <span className="text-sm font-medium font-mono">{formatNumber(creditUnits(balance.total))}</span>
       )}
-      <span className="text-xs text-muted-foreground hidden sm:inline">{creditUnitLabel("credits")}</span>
+      <span className="text-xs text-muted-foreground hidden sm:inline">{creditUnitLabel(t("credits.unit.other"))}</span>
       <Badge
         variant="secondary"
         className="text-[10px] px-1.5 py-0 h-4 capitalize"

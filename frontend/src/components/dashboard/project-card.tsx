@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { Project } from "@/hooks/queries/use-projects-queries"
 import { Badge } from "@/components/ui/badge"
+import { formatDate } from "@/lib/i18n/format"
 
 interface ProjectCardProps {
   readonly project: Project
@@ -129,14 +130,14 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
           </div>
           {showOwner && isOwn && (
             <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
-              Mine
+              {t("dash.mine")}
             </Badge>
           )}
-          <p className="text-[11px] text-muted-foreground w-32 text-right hidden sm:block flex-shrink-0">
-            {new Date(project.updatedAt).toLocaleDateString()}
+          <p className="text-[11px] text-muted-foreground w-32 text-end hidden sm:block flex-shrink-0">
+            {formatDate(project.updatedAt)}
           </p>
-          <p className="text-[11px] text-muted-foreground w-32 text-right hidden md:block flex-shrink-0">
-            {new Date(project.createdAt).toLocaleDateString()}
+          <p className="text-[11px] text-muted-foreground w-32 text-end hidden md:block flex-shrink-0">
+            {formatDate(project.createdAt)}
           </p>
           <div className="flex-shrink-0" onClick={(e) => e.preventDefault()}>
             {!readOnly && menuDropdown}
@@ -152,7 +153,7 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
             <FolderOpen className="h-12 w-12 text-zinc-500 dark:text-zinc-600" />
 
             {/* Three-dot menu — top-right, visible on hover */}
-            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute top-2 end-2 opacity-0 group-hover:opacity-100 transition-opacity">
               {!readOnly && menuDropdown}
             </div>
           </div>
@@ -179,7 +180,7 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
               )}
               {showOwner && isOwn && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
-                  Mine
+                  {t("dash.mine")}
                 </Badge>
               )}
             </div>
@@ -194,7 +195,7 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
               </p>
             )}
             <p className="text-[10px] text-muted-foreground mt-1">
-              {new Date(project.updatedAt).toLocaleDateString()}
+              {formatDate(project.updatedAt)}
             </p>
           </div>
         </Link>

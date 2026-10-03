@@ -45,7 +45,7 @@ export function ComingSoonCard({ provider }: ComingSoonCardProps) {
             {provider.label}
           </span>
           <span className="text-[11.5px] leading-[1.4] text-pretty" style={{ color: "var(--integ-muted)" }}>
-            {describeProvider(provider)}
+            {describeProvider(provider, t)}
           </span>
         </div>
       </div>

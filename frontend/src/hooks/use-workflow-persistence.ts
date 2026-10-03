@@ -5,6 +5,7 @@ import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "
 import { applyWorkflowAccess } from "@/hooks/workflow-access-mode"
 import { classifyZeroRowSave, isSaveRefused } from "@/hooks/workflow-save-refusal"
 import { tx } from "@/lib/i18n"
+import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
 import { reconcileWorkflowNodeResults } from "@/lib/reconcile-node-results"
 import { reconcileCompletedSingleNodeJobs, buildScene3DRecoveryPatch, isScene3DNodeType } from "@/lib/reconcile-completed-jobs"
 import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
@@ -19,7 +20,9 @@ import { collectRestorableSingleNodeJobs, applySingleNodeJobRestore } from "@/li
 import { refreshEntityNodes } from "@/lib/entity-node-data"
 import { settledBeforeClear } from "@/lib/results-cleared"
 import { createTriggerSyncTracker, syncTriggersAfterSave, type TriggerSyncTracker } from "@/lib/trigger-sync-after-save"
+import { adoptUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
+import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 
 /**
  * Execution statuses whose `node_states` are worth restoring onto the canvas on
@@ -72,6 +75,8 @@ interface NodeExecutionState {
     videoUrl?: string
     audioUrl?: string
     text?: string
+    /** A structured result (Content Recipe's recipe, Content Ideas' ideas). Mirrors backend NodeOutput. */
+    json?: unknown
     script?: unknown
     generatedVoiceId?: string
     alignment?: unknown
@@ -87,6 +92,14 @@ interface NodeExecutionState {
     /** Fan-in (reduce / Choose Best) aggregated value + strategy meta. */
     result?: string
     reduceMeta?: Record<string, unknown>
+    /** Video Overlay: the worker's warnings, output canvas and length, and a DAG run's freshness key. Mirrors backend NodeOutput. */
+    warnings?: readonly unknown[]
+    width?: number
+    height?: number
+    durationSec?: number
+    resultCompositionKey?: string
+    /** Video Overlay list fan-out: each row's own freshness key, row-aligned with listResults. */
+    listResultCompositionKeys?: string[]
   }
   error?: string
   /** Stable billing-refusal code — mirrors backend NodeExecutionState. */
@@ -235,11 +248,17 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
     if (job.status === "completed") {
       // Job completed - update node with result
       const outputUrl = job.output_data?.imageUrl ?? job.output_data?.videoUrl ?? job.output_data?.audioUrl
+      // Video Overlay: the job's run facts (warnings, canvas, length and the
+      // freshness key the REST job echoes) on the node and the result — the
+      // same mapping every other landing lane writes. This lane lands a run
+      // that finished while the tab was closed FIRST; once it has a result,
+      // reconcile skips the node, so leaving them off here would read "Result (old)".
+      const overlayRun = node.type === "video-overlay" ? videoOverlayRunOutputFields(job.output_data) : undefined
 
       // Update the result with the URL if it was missing
       const updatedResults = results.map((r, i) => {
         if (i === 0 && r.jobId === job.id && !r.url && outputUrl) {
-          return { ...r, url: outputUrl }
+          return { ...r, url: outputUrl, ...(overlayRun ?? {}) }
         }
         return r
       })
@@ -247,7 +266,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       // If the job was tracked by currentJobId but has no result entry, prepend one
       const hasResultForJob = updatedResults.some(r => r.jobId === job.id)
       if (!hasResultForJob && outputUrl) {
-        updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id })
+        updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id, ...(overlayRun ?? {}) })
       }
 
       const newData: Record<string, unknown> = {
@@ -257,6 +276,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
         activeResultIndex: 0,
         currentJobId: undefined,
         currentJobProgress: undefined,
+        ...(overlayRun ?? {}),
       }
 
       // Set the appropriate URL field based on output type
@@ -376,7 +396,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
  * Apply backend execution node states to frontend nodes.
  * Maps orchestrator nodeStates → node.data.executionStatus + output URLs.
  */
-function applyBackendExecutionState(
+export function applyBackendExecutionState(
   nodes: WorkflowNode[],
   nodeStates: Record<string, NodeExecutionState>,
 ): WorkflowNode[] {
@@ -389,7 +409,11 @@ function applyBackendExecutionState(
     // Map backend status → frontend executionStatus
     if (state.status === "completed") {
       data.executionStatus = "completed"
-      if (state.output) {
+      if (state.output && isContentNodeType(node.type)) {
+        // Content Recipe / Content Ideas: the live run's own mapping — the
+        // generic list/result writes below do not fit a recipe or the briefs.
+        Object.assign(data, contentRunResultPatch(node.type, state.output as Record<string, unknown>) ?? {})
+      } else if (state.output) {
         const nodeType = node.type ?? ""
         if (isScene3DNodeType(nodeType) && state.output.plan) {
           Object.assign(data, buildScene3DRecoveryPatch(data, {
@@ -409,6 +433,9 @@ function applyBackendExecutionState(
         // Voice id, stems, alignment, combined / split text — under the names
         // their readers use (#1547: this lane used to invent its own).
         Object.assign(data, namedRunOutputFields(state.output))
+        // Video Overlay: warnings / canvas / length — the live run's mapping.
+        const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(state.output) : undefined
+        if (overlayRun) Object.assign(data, overlayRun)
 
         // Build generated result entries from the output
         const listResultUrls = (state.output.listResults ?? []).filter(
@@ -418,13 +445,16 @@ function applyBackendExecutionState(
         const existingUrls = new Set(results.map(r => r.url))
 
         if (listResultUrls.length > 1) {
-          // Fan-out: multiple results from list execution
+          // Fan-out: multiple results from list execution — on Video Overlay
+          // each row carries its own composition's key.
+          const rowFields = videoOverlayListRowFields(nodeType, state.output)
           const newResults = listResultUrls
             .filter((url: string) => !existingUrls.has(url))
             .map((url: string, i: number) => ({
               url,
               timestamp: new Date().toISOString(),
               jobId: `exec-${node.id}-${i}`,
+              ...rowFields(url),
             }))
           if (newResults.length > 0) {
             data.generatedResults = [...newResults, ...results]
@@ -440,7 +470,7 @@ function applyBackendExecutionState(
           const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
           if (outputUrl && !existingUrls.has(outputUrl)) {
             data.generatedResults = [
-              { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}` },
+              { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}) },
               ...results,
             ]
             data.activeResultIndex = 0
@@ -504,6 +534,14 @@ export function applyCompletedExecutionResults(
     // Any changes the user made (e.g. deleting images) should be respected.
     if (data.executionStatus === "completed") return node
 
+    // Content Recipe / Content Ideas: a recipe or the ideas, never a media URL —
+    // the live run's own mapping. Skipped when the node already holds a result.
+    if (isContentNodeType(node.type)) {
+      if (data.generatedJson || data.generatedText) return node
+      const patch = contentRunResultPatch(node.type, state.output as Record<string, unknown>)
+      return patch ? { ...node, data: { ...data, ...patch } as SceneNodeData } : node
+    }
+
     const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
 
     // Skip if node already has results (don't overwrite newer manual runs)
@@ -535,6 +573,9 @@ export function applyCompletedExecutionResults(
     // Voice id, stems, alignment, combined / split text — under the names
     // their readers use (#1547: this lane used to invent its own).
     Object.assign(newData, namedRunOutputFields(state.output))
+    // Video Overlay: warnings / canvas / length — the live run's mapping.
+    const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(state.output) : undefined
+    if (overlayRun) Object.assign(newData, overlayRun)
     // Choose Best (reduce): winner + the judge's reasoning, same fields the
     // single-node Run writes (execute-node.ts) — mirrors syncNodeStatesToStore.
     if (nodeType === "reduce" && typeof state.output.result === "string") {
@@ -547,14 +588,17 @@ export function applyCompletedExecutionResults(
       (u: string) => u && u.startsWith("http"),
     )
     if (listResultUrls.length > 1) {
-      // Fan-out: multiple results from list execution
+      // Fan-out: multiple results from list execution — on Video Overlay each
+      // row carries its own composition's key.
       const existingUrls = new Set(existingResults.map(r => r.url))
+      const rowFields = videoOverlayListRowFields(nodeType, state.output)
       const newResults = listResultUrls
         .filter((url: string) => !existingUrls.has(url))
         .map((url: string, i: number) => ({
           url,
           timestamp: new Date().toISOString(),
           jobId: `exec-${node.id}-${i}`,
+          ...rowFields(url),
         }))
       if (newResults.length > 0) {
         newData.generatedResults = [...newResults, ...existingResults]
@@ -568,7 +612,7 @@ export function applyCompletedExecutionResults(
       newData.__listCompleted = state.output.listResults!.length
     } else if (outputUrl) {
       newData.generatedResults = [
-        { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}` },
+        { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}) },
         ...existingResults,
       ]
       newData.activeResultIndex = 0
@@ -821,11 +865,11 @@ export function useWorkflowPersistence(projectId?: string) {
             setSaveStatus("error", "Workflow was updated on another device")
             setRemoteUpdatedAt(row.updated_at ?? `conflict:${new Date().toISOString()}`)
             const reload = loadRef.current
-            toast.error("Workflow was updated on another device", {
+            toast.error(tx("toastMsg.workflowWasUpdatedOnAnother"), {
               id: "workflow-remote-conflict",
-              description: "Your unsaved edits are still here. Reload to see the latest version.",
+              description: tx("toastMsg.yourUnsavedEditsAreStill"),
               action: reload && workflowId
-                ? { label: "Reload", onClick: () => { void reload(workflowId) } }
+                ? { label: tx("misc.reload"), onClick: () => { void reload(workflowId) } }
                 : undefined,
               duration: 10_000,
             })
@@ -871,12 +915,14 @@ export function useWorkflowPersistence(projectId?: string) {
           })
           if (contested.length > 0) {
             toast.warning(
-              `Kept your edits to: ${contested
-                .map((n) => ((n.data as Record<string, unknown>).label as string) || n.id)
-                .join(", ")}`,
+              tx("toastMsg.keptYourEditsTo", {
+                nodes: contested
+                  .map((n) => ((n.data as Record<string, unknown>).label as string) || n.id)
+                  .join(tx("common.listComma")),
+              }),
               {
                 id: "delta-rebase-contested",
-                description: "These nodes were also changed on another device — your version won.",
+                description: tx("toastMsg.theseNodesWereAlsoChanged"),
               },
             )
           }
@@ -896,6 +942,19 @@ export function useWorkflowPersistence(projectId?: string) {
         // full write.
         const nodesBeforeSave = useWorkflowStore.getState().lastSavedSnapshot?.nodes
         let createdWorkflowId: string | null = null
+        const viewportAtSave = useWorkflowStore.getState().savedViewport
+        // What this write leaves on the server, so the next save starts from it
+        // (the delta path's base, and the trigger sync's "stored graph the save
+        // started from") instead of from the last load or delta.
+        const savedSnapshot = {
+          nodes,
+          edges,
+          name: workflowName,
+          characterDefinitions,
+          flowPromptTemplates,
+          presentationSettings,
+          savedViewport: viewportAtSave,
+        }
         const payload = {
           project_id: resolvedProjectId,
           name: workflowName,
@@ -909,7 +968,7 @@ export function useWorkflowPersistence(projectId?: string) {
             characterDefinitions: JSON.parse(JSON.stringify(characterDefinitions)),
             flowPromptTemplates: JSON.parse(JSON.stringify(flowPromptTemplates)),
             presentationSettings: JSON.parse(JSON.stringify(presentationSettings)),
-            viewport: useWorkflowStore.getState().savedViewport,
+            viewport: viewportAtSave,
           },
         }
 
@@ -1024,11 +1083,11 @@ export function useWorkflowPersistence(projectId?: string) {
               setRemoteUpdatedAt(`conflict:${new Date().toISOString()}`)
             }
             const reload = loadRef.current
-            toast.error("Workflow was updated on another device", {
+            toast.error(tx("toastMsg.workflowWasUpdatedOnAnother"), {
               id: "workflow-remote-conflict",
-              description: "Your unsaved edits are still here. Reload to see the latest version.",
+              description: tx("toastMsg.yourUnsavedEditsAreStill"),
               action: reload && workflowId
-                ? { label: "Reload", onClick: () => { void reload(workflowId) } }
+                ? { label: tx("misc.reload"), onClick: () => { void reload(workflowId) } }
                 : undefined,
               duration: 10_000,
             })
@@ -1043,7 +1102,7 @@ export function useWorkflowPersistence(projectId?: string) {
             typeof (data as { version?: unknown }).version === "number"
               ? ((data as { version: number }).version)
               : null,
-            undefined,
+            savedSnapshot,
             epochAtStart,
           )
         } else {
@@ -1080,12 +1139,16 @@ export function useWorkflowPersistence(projectId?: string) {
           // The window between insert and re-subscribe is broadcast-safe.
           setWorkflowId(data.id)
           createdWorkflowId = data.id as string
+          // What the owner set in this workflow's trigger panels before it had
+          // an id is now this workflow's — and only this one's (the sync below
+          // reads it under the new id).
+          adoptUnsavedAccountTriggerIntents(createdWorkflowId)
           applySaveSuccess(
             data.updated_at as string,
             typeof (data as { version?: unknown }).version === "number"
               ? ((data as { version: number }).version)
               : null,
-            undefined,
+            savedSnapshot,
             epochAtStart,
           )
         }
@@ -1422,7 +1485,7 @@ export function useWorkflowPersistence(projectId?: string) {
             .maybeSingle()
 
           if (saveError) {
-            toast.error("Failed to save synced nodes")
+            toast.error(tx("toastMsg.failedToSaveSyncedNodes"))
           } else if (sideSaved?.updated_at) {
             setLoadedUpdatedAt(sideSaved.updated_at as string)
             setLoadedVersion(typeof (sideSaved as unknown as { version?: unknown }).version === "number" ? (sideSaved as unknown as { version: number }).version : null)

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 
 import { getParameterPromptHint } from "../parameter-prompt-hint.js"
 import { PICKER_CATALOGS, type PickerCatalog, type PickerOption } from "../picker-catalogs.js"
+import { renderTransitionBases } from "../transitions.js"
 import type { HintGraphContext, HintNodeLike } from "@nodaro/shared"
 
 /**
@@ -145,6 +146,15 @@ describe("hint mode: compact injects the term instead of the promptHint", () => 
     const compact = getParameterPromptHint(node)
     const full = getParameterPromptHint(withMode(node, "full"))
 
+    // A transition only ever reaches a VIDEO prompt, where it renders as
+    // `term (hint)` in BOTH modes — the bare term did not steer the model
+    // (see `renderTransitionBases`). The mode is deliberately inert there.
+    if (probe.nodeType === "transition") {
+      expect(compact).toBe(full)
+      expect(compact.startsWith(`${probe.option.term} (`)).toBe(true)
+      return
+    }
+
     expect(compact).toContain(probe.option.term)
     expect(full).toContain(probe.option.promptHint)
     if (probe.shortens) {
@@ -170,7 +180,7 @@ describe("hint mode: compact preserves everything but the base fragment", () => 
     expect(compact.length).toBeLessThan(full.length)
   })
 
-  it("transition timing clauses are emitted identically in compact mode", () => {
+  it("transition clauses are emitted identically in compact mode", () => {
     const data = {
       transition: "cross-dissolve",
       position: "middle",
@@ -181,8 +191,8 @@ describe("hint mode: compact preserves everything but the base fragment", () => 
     expect(compact).toContain("the transition occurs in the middle of the clip")
     expect(compact).toContain("lasting approximately 1 second")
     expect(compact).toContain("with dynamic energy and assertive flourish")
-    expect(compact).toContain("cross-dissolve")
-    expect(compact.length).toBeLessThan(getParameterPromptHint({ id: "n1", type: "transition", data }).length)
+    expect(compact).toContain("cross-dissolve (")
+    expect(compact).toBe(getParameterPromptHint({ id: "n1", type: "transition", data }))
   })
 
   it("character-fx timing clauses are emitted identically in compact mode", () => {
@@ -256,7 +266,7 @@ describe("hint mode: compact preserves everything but the base fragment", () => 
     expect(compact).toBe(term)
   })
 
-  it("multi-pick joins the TERMS with the same ', and ' separator", () => {
+  it("transition multi-pick joins each `term (hint)` with the same ', and ' separator", () => {
     const options = registeredOptions("transition").filter((o) => o.promptHint.length > 0)
     const [a, b] = options
     const compact = getParameterPromptHint({
@@ -264,7 +274,9 @@ describe("hint mode: compact preserves everything but the base fragment", () => 
       type: "transition",
       data: { transition: [a.id, b.id], hintMode: "compact" },
     })
-    expect(compact).toBe(`${a.term}, and ${b.term}`)
+    expect(compact).toBe(renderTransitionBases([a.id, b.id]).join(", and "))
+    expect(compact.startsWith(`${a.term} (`)).toBe(true)
+    expect(compact).toContain(`, and ${b.term} (`)
   })
 
   it("multi-dimension composition still walks every dimension", () => {

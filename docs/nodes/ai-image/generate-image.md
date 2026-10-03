@@ -32,16 +32,23 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 
 **Inputs (Handles v2.1):**
 
-The Generate Image node has 6 typed input handles on its left edge (color-coded pips), stacked from the bottom up: Prompt (closest to the corner) → Negative → References → Assets → Elements → Look. Click any handle pip to manage connections (jump to, disconnect, add new). Drag from a handle as usual to wire upstream nodes.
+The Generate Image node has 7 typed input handles on its left edge (color-coded pips), stacked from the bottom up: Prompt (closest to the corner) → Negative → References → Assets → Elements → Look → Settings. Click any handle pip to manage connections (jump to, disconnect, add new). Drag from a handle as usual to wire upstream nodes.
 
 | Handle | Color | Accepts | Description |
 |--------|-------|---------|-------------|
-| `prompt` | pink | Text producers (Text Prompt, AI Writer, Generate Script, Combine Text, Image-to-Text, Generate Text) + all parameter pickers (as `{Label}` variable sources) | Main prompt text. Picker values are also available as `{Picker Label}` in the prompt regardless of wiring — variable substitution is workflow-wide. |
+| `prompt` | blue | Text producers (Text Prompt, AI Writer, Generate Script, Combine Text, Image-to-Text, Generate Text) + all parameter pickers (as `{Label}` variable sources) | Main prompt text. Picker values are also available as `{Picker Label}` in the prompt regardless of wiring — variable substitution is workflow-wide. |
 | `negative` | red | Text producers | "Avoid" string — what the model should not generate. Useful for sharing one negative across many Generate Image nodes. |
-| `references` | cyan | Image producers (Upload Image, Generate Image, Edit Image, Image-to-Image, Modify Image, Upscale, Remove Background) | Reference images for the provider. **Order matters** — provider semantics depend on the order of refs. |
-| `assets` | rose | Identity nodes (Character, Location, Object, Face) | Identity-locked refs with `@mention` expansion and canonical descriptions. (Renamed from `subjects` in v2.1.) |
+| `references` | pink | Image producers (Upload Image, Generate Image, Edit Image, Image-to-Image, Modify Image, Upscale, Remove Background) | Reference images for the provider. **Order matters** — provider semantics depend on the order of refs. |
+| `assets` | light pink | Identity nodes (Character, Location, Object, Face) | Identity-locked refs with `@mention` expansion and canonical descriptions. (Renamed from `subjects` in v2.1.) |
 | `elements` | indigo | "Subject / Object" family pickers (Person, Pose, Animal, Vehicle, Weapon, Furniture, Material, Held-Prop, Styling, Instrumentation) | Pickers wired here tail-append their value to the prompt at execution time. |
 | `look` | indigo | "Look" + "Camera" family pickers (Style, Lens, Lighting, Color Look, Framing, Camera Format, Photographer, Aesthetic, Era, Photo Genre, Mood, Atmosphere, Backdrop, Exposure Settings, Render Quality, Composition Effects, Post-Process Effects, Tone, Camera Motion, Temporal, Transition, Character FX) | Pickers wired here tail-append their value to the prompt — same runtime path as the legacy `cinematography` handle. |
+| `settings` | indigo | Aspect Ratio / Provider | Sets the node's aspect ratio and model from a wired node (see below). |
+
+**Settings input:** one `settings` input takes the Generation Settings nodes a still image uses — [Aspect Ratio](../parameters/aspect-ratio.md) and [Provider](../parameters/provider.md) — and each wired value replaces the node's own field at run time. The node lists what is wired as chips (e.g. `9:16 · Nano Banana`), and the settings panel shows those fields as connected.
+
+- **Aspect Ratio** replaces `aspectRatio`. A ratio the model doesn't render runs as the nearest one it does.
+- **Provider** replaces the model. It must name an image model; a Provider set to a video model stops the run before anything is charged, and the error names the Provider node. A node set to several models (one image each) runs only the wired model, once.
+- When two nodes of one kind are wired, the last connection wins. The Run price is the price of the wired model, and a note under the Run button says so while a setting is wired.
 
 **Variable defaults:** any `{Label}` reference can carry a fallback with `||` — `{Label || default}`. If nothing provides `Label`, the trimmed default is used; e.g. `generate a {person || man} running` becomes "generate a man running" when no `person` is wired, or uses the wired/picked value when it is. `{person || }` (empty after `||`) resolves to nothing when unset.
 
@@ -50,7 +57,7 @@ The Generate Image node has 6 typed input handles on its left edge (color-coded 
 **Variable highlighting:** in the prompt editor (config panel and the ⌘E prompt modal), `{Label}` variables are highlighted — cyan when a matching upstream node is wired (or for built-in template variables like `{userPrompt}`), amber when nothing upstream provides that label yet. Amber means "nothing wired", not "will fail": a `{Label || default}` variable still resolves to its default at run time. Inside `{Label || default}`, the default text renders bright when it will actually be injected (nothing wired, or the wired node's text is empty) and greyed-out with a strikethrough when a wired node's value overrides it.
 
 **Outputs:**
-- `image` (cyan) — generated image URL. Shares the References color since both are "image" type.
+- `image` (pink) — generated image URL. Shares the References color since both are "image" type.
 
 **Managing connections:** Click any handle pip to open a popover that lists currently connected nodes. Each row has a "jump to" button (centers the canvas on the upstream node) and a "disconnect" button. The popover also has an "Add new" button that opens a filtered node picker showing only types compatible with that handle.
 
@@ -71,7 +78,7 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | nano-banana | Nano Banana | Fast drafts, iteration, storyboards | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 5:4, 4:5, 21:9 |
 | nano-banana-pro | Nano Banana Pro | Higher detail, production-ready images | Same as Nano Banana |
 | nano-banana-2 | Nano Banana 2 | Updated Nano Banana with web grounding | Same as Nano Banana |
-| nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K drafts and iteration (Gemini 3.1 Flash-Lite). Flat **20 credits** per image — no resolution tiers. | auto, 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4, 21:9, 4:1, 1:4, 8:1, 1:8 |
+| nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K drafts and iteration (Gemini 3.1 Flash-Lite). Flat **10 credits** per image — no resolution tiers. | auto, 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4, 21:9, 4:1, 1:4, 8:1, 1:8 |
 | grok | Grok | Creative and stylized imagery | 1:1, 16:9, 9:16, 3:2, 2:3 |
 | grok-2 | Grok Imagine 2 | Latest Grok (Imagine Image 2.0) — expressive, high-contrast imagery, priced the same as Grok v1. Generations can chain into the **free** Grok segment map and region-targeted edits (see [Edit Image](./edit-image.md#grok-imagine-2-task-chained-editing)). Attach ONE reference image and it auto-routes through Grok's segment-map → image-edit chain (`grok-2-i2i`, same 10-credit price) — the result preserves the reference's composition while applying your prompt. Extra references beyond the first are ignored. | 1:1, 16:9, 9:16, 3:2, 2:3 |
 | flux | Flux | Photorealistic, highest quality output | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3 |
@@ -89,7 +96,7 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | qwen | Qwen | Versatile, good at diverse styles | 1:1, 16:9, 9:16, 4:3, 3:4 |
 | seedream | Seedream | Photorealistic, high detail | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 21:9 |
 | seedream-5-lite | Seedream 5 Lite | Latest Seedream, fast and sharp | Same as Seedream |
-| seedream-5-pro | Seedream 5 Pro | Flagship Seedream, best instruction following. Quality-tiered pricing: **3 credits** at basic (1K output) / **6 credits** at high (2K output). | Same as Seedream |
+| seedream-5-pro | Seedream 5 Pro | Flagship Seedream, best instruction following. Quality-tiered pricing: **18 credits** at basic (1K output) / **60 credits** at high (2K output). | Same as Seedream |
 | z-image | Z-Image | Fast, lightweight generation. **Shortest prompt limit in the catalog: 1 000 characters** | 1:1, 16:9, 9:16, 4:3, 3:4 |
 | wan-2.7 | Wan 2.7 | Text-to-image, 1K/2K/4K resolution, up to 9 optional reference images | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |
 | wan-2.7-pro | Wan 2.7 Pro | Higher quality text-to-image, 1K/2K/4K resolution | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |

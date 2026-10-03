@@ -1,3 +1,4 @@
+import type { MessageKey } from "@/lib/i18n"
 import type { ComponentType } from "react"
 
 /** Props every studio page receives. `S` is the entity studio-state type
@@ -27,7 +28,8 @@ export function stagedLen<S extends { stagedData: unknown }>(
 
 export interface StudioPageDef<S = unknown, J = unknown> {
   key: string
-  label: string
+  /** Dictionary key of the sidebar caption. */
+  label: MessageKey
   icon: string
   Component: ComponentType<StudioPageProps<S, J>>
   /** Optional badge derived from current state. */
@@ -41,14 +43,15 @@ export interface StudioVisibilityCtx {
 }
 
 export interface StudioGroupDef<S = unknown, J = unknown> {
-  label: string
+  /** Dictionary key of the group heading. */
+  label: MessageKey
   pages: StudioPageDef<S, J>[]
 }
 
 /** Tailwind classes applied to the ACTIVE sidebar item. Defaults to character-blue
  *  (see {@link DEFAULT_STUDIO_ACCENT_ACTIVE}); object/location/creature studios can
  *  override with their own accent so the shell isn't hardcoded to one entity. */
-export const DEFAULT_STUDIO_ACCENT_ACTIVE = "text-[#3b82f6] bg-[#1a2744] border-r-2 border-[#3b82f6]"
+export const DEFAULT_STUDIO_ACCENT_ACTIVE = "text-[#3b82f6] bg-[#1a2744] border-e-2 border-[#3b82f6]"
 
 export interface StudioNavConfig<S = unknown, J = unknown> {
   groups: StudioGroupDef<S, J>[]

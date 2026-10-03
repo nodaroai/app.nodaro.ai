@@ -5,15 +5,17 @@ import type { NodeProps } from "@xyflow/react"
 import { MessageCircle } from "lucide-react"
 import { getVoicePace, getVoiceEmotion, getVoiceArchetype, buildVoiceDeliveryHints } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { VoiceDeliveryData } from "@/types/nodes"
 
 function VoiceDeliveryNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as VoiceDeliveryData
+  const localizeNode = useLocalizeNodeLabel()
   const summary = [
     getVoicePace(nodeData.pace)?.label,
     getVoiceArchetype(nodeData.archetype)?.label,
     getVoiceEmotion(nodeData.emotion)?.label,
-  ].filter(Boolean).join(" / ") || "Voice Delivery"
+  ].filter(Boolean).join(" / ") || localizeNode("Voice Delivery")
   const composed = buildVoiceDeliveryHints(nodeData)
 
   return (

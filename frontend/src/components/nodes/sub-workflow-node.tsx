@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, tx } from "@/lib/i18n"
 import { memo, useEffect, useMemo } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Workflow, Expand } from "lucide-react"
@@ -105,7 +105,7 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
     if (!childProjectId) return
     openSubWorkflow({
       childWorkflowId: nodeData.referencedWorkflowId,
-      childWorkflowName: nodeData.referencedWorkflowName ?? "Untitled Workflow",
+      childWorkflowName: nodeData.referencedWorkflowName ?? tx("cfgext.subwfUntitledWorkflow"),
       childProjectId,
       navigate,
     })

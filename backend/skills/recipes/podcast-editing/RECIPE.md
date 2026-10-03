@@ -170,6 +170,10 @@ than failing mid-render, so keep these invariants when editing by hand:
 - Only a `crossfade` consumes time, and its `durationMs` must be at most 0.9 × the shorter
   of the two adjacent segments (the ffmpeg crossfade limit).
 - At most one source may have `role: "master-audio"`.
+- One render produces at most **180 minutes** of output (the rendered length — crossfade
+  overlaps subtracted, the same length the per-minute price reads). A longer edit is refused
+  with a 400 naming its length and the limit; split it into parts of at most 180 minutes
+  and render each with its own `apply_edl` call.
 - `dropped[]` ranges must be positive (`outMs > inMs`) and must not overlap any kept
   segment.
 - A segment must exist on the media it reads. Its `inMs` must be at or after the
@@ -181,6 +185,11 @@ than failing mid-render, so keep these invariants when editing by hand:
   not retried) naming the segment, the source and the track. A reach of up to one second is
   treated as rounding: the segment keeps its full length, holding the picture's last frame
   and padding the sound with silence past the track's end, so later cuts stay in sync.
+  MPEG-TS / program-stream sources (per-track timestamps not on the render's clock) are
+  checked against the length the container declares instead, with five seconds of slack —
+  unless the file's timestamps jump (two recordings joined, a reconnected stream, a
+  restarted clock), in which case the declared length misstates it and the window is not
+  checked.
 - A segment's picture source must have a real video track — an audio file, or an mp3 whose
   only "video" is embedded cover art, fails the job the same way.
 - A `layout` is accepted only when it describes what this renderer does anyway: `mode`

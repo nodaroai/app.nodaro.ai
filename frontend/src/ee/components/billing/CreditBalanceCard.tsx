@@ -5,6 +5,7 @@ import { AutoRechargeCard } from "@/ee/components/credits/AutoRechargeCard"
 import { BuyPacksSection } from "./BuyPacksSection"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
+import { useT, type TFunction } from "@/lib/i18n"
 import {
   CYAN,
   CYAN_BADGE_TEXT,
@@ -157,12 +158,12 @@ function BalanceBucket(props: BalanceBucketProps) {
   )
 }
 
-function renewalText(periodEnd: string | null): string {
+function renewalText(periodEnd: string | null, t: TFunction): string {
   if (!periodEnd) return ""
   const msLeft = new Date(periodEnd).getTime() - Date.now()
   const days = Math.max(0, Math.ceil(msLeft / 86_400_000))
-  if (days === 0) return "Renews today"
-  return `Renews in ${days} ${days === 1 ? "day" : "days"}`
+  if (days === 0) return t("billing.renewsToday")
+  return days === 1 ? t("billing.renewsInOneDay") : t("billing.renewsInDays", { n: days })
 }
 
 function BalanceSection({
@@ -170,6 +171,7 @@ function BalanceSection({
   creditsLoading,
   transactions,
 }: Omit<CreditBalanceCardProps, "showAutoRecharge">) {
+  const t = useT()
   const total = balance?.total ?? 0
   const subscriptionCredits = balance?.subscription ?? 0
   const topup = balance?.topup ?? 0
@@ -208,11 +210,11 @@ function BalanceSection({
       >
         <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
           <span style={sectionIcon}>◎</span>
-          <h2 style={sectionTitle}>Credit Balance</h2>
+          <h2 style={sectionTitle}>{t("billing.creditBalance")}</h2>
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 11, color: "var(--blg-t2-dim)", letterSpacing: "0.06em" }}>
-            TOTAL REMAINING
+            {t("billing.totalRemaining")}
           </div>
           <div
             style={{
@@ -227,8 +229,7 @@ function BalanceSection({
         </div>
       </div>
       <p style={{ ...mutedParagraph, margin: "0 0 22px", maxWidth: 620 }}>
-        Subscription credits are spent first each month. Top-up credits are used only
-        once the subscription pool runs out.
+        {t("billing.spendOrderNote")}
       </p>
 
       {creditsLoading && !balance ? (
@@ -243,42 +244,44 @@ function BalanceSection({
               borderColor="var(--blg-pink-border)"
               background="var(--blg-pink-bg)"
               labelColor="var(--blg-pink-text)"
-              label="SUBSCRIPTION"
-              badge={allocation > 0 ? "resets monthly" : "one-time grant"}
+              label={t("nav.subscription")}
+              badge={allocation > 0 ? t("billing.resetsMonthly") : t("nav.oneTimeGrant")}
               badgeColor="var(--blg-pink-badge-text)"
               badgeBackground="var(--blg-pink-chip)"
               amount={subscriptionCredits}
               amountSuffix={
-                allocation > 0 ? `of ${formatCredits(creditUnits(allocation))} left` : `${creditUnitLabel("credits")} left`
+                allocation > 0
+                  ? t("billing.ofNLeft", { n: formatCredits(creditUnits(allocation)) })
+                  : t("billing.unitLeft", { u: creditUnitLabel(t("credits.unit.other")) })
               }
               barBackground="var(--blg-pink-track)"
               barPercent={subPercent}
               footerLeft={
                 usedThisCycle !== null
-                  ? `${formatCredits(creditUnits(usedThisCycle))} used this cycle`
-                  : "No monthly allocation"
+                  ? t("billing.nUsedThisCycle", { n: formatCredits(creditUnits(usedThisCycle)) })
+                  : t("billing.noMonthlyAllocation")
               }
-              footerRight={allocation > 0 ? renewalText(balance?.periodEnd ?? null) : ""}
+              footerRight={allocation > 0 ? renewalText(balance?.periodEnd ?? null, t) : ""}
             />
             <BalanceBucket
               accent={CYAN}
               borderColor="var(--blg-cyan-border)"
               background="var(--blg-cyan-bg)"
               labelColor={CYAN_TEXT}
-              label="TOP-UP"
-              badge="valid 12 months"
+              label={t("billing.bucketTopup")}
+              badge={t("nav.validTwelveMonths")}
               badgeColor={CYAN_BADGE_TEXT}
               badgeBackground="var(--blg-cyan-chip)"
               amount={topup}
-              amountSuffix={`${creditUnitLabel("credits")} banked`}
+              amountSuffix={t("billing.unitBanked", { u: creditUnitLabel(t("credits.unit.other")) })}
               barBackground="var(--blg-cyan-track)"
               barPercent={topup > 0 ? 100 : 0}
               footerLeft={
                 lastTopupTx
-                  ? `Last purchase ${formatShortDate(lastTopupTx.created_at)} · ${formatCredits(creditUnits(lastTopupTx.credits_granted))}`
+                  ? t("billing.lastPurchase", { date: formatShortDate(lastTopupTx.created_at), n: formatCredits(creditUnits(lastTopupTx.credits_granted)) })
                   : ""
               }
-              footerRight="Used after subscription"
+              footerRight={t("billing.usedAfterSubscription")}
             />
           </div>
 
@@ -293,19 +296,19 @@ function BalanceSection({
             }}
           >
             <div>
-              <div style={statLabel}>Used today</div>
+              <div style={statLabel}>{t("billing.usedToday")}</div>
               <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
                 {formatCredits(creditUnits(balance?.dailySpent ?? 0))}
               </div>
             </div>
             <div>
-              <div style={statLabel}>Used this cycle</div>
+              <div style={statLabel}>{t("billing.usedThisCycle")}</div>
               <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
                 {usedThisCycle !== null ? formatCredits(creditUnits(usedThisCycle)) : "—"}
               </div>
             </div>
             <div>
-              <div style={statLabel}>Avg. daily burn</div>
+              <div style={statLabel}>{t("billing.avgDailyBurn")}</div>
               <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
                 {avgDailyBurn !== null ? formatCredits(creditUnits(avgDailyBurn)) : "—"}
               </div>

@@ -10,6 +10,7 @@ import { uploadImage, getImageProxyUrl, saveCharacter, saveObject, saveLocation 
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ExtractedReference } from "@/types/nodes"
+import { useT, tx } from "@/lib/i18n"
 
 type SelectionMode = "rectangle" | "lasso"
 
@@ -49,6 +50,7 @@ export function ExtractReferencesModal({
   onSave,
   suggestedMessage,
 }: ExtractReferencesModalProps) {
+  const t = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imgElRef = useRef<HTMLImageElement>(null)
   // Cache the canvas bounding rect for the duration of a drag (mousedown →
@@ -395,7 +397,7 @@ export function ExtractReferencesModal({
         const h = Math.abs(pending.rect.endY - pending.rect.startY) * scaleY
 
         if (w < 64 || h < 64) {
-          setError("Selection too small. Minimum 64x64 pixels recommended.")
+          setError(tx("editor.selectionTooSmall"))
           setSaving(false)
           return
         }
@@ -410,7 +412,7 @@ export function ExtractReferencesModal({
         boundingBox = polygonBoundingBox(naturalPoints)
 
         if (boundingBox.width < 64 || boundingBox.height < 64) {
-          setError("Selection too small. Minimum 64x64 pixels recommended.")
+          setError(tx("editor.selectionTooSmall"))
           setSaving(false)
           return
         }
@@ -488,7 +490,7 @@ export function ExtractReferencesModal({
       setLassoPoints([])
       lassoPointsRef.current = []
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to extract reference")
+      setError(err instanceof Error ? err.message : tx("editor.extractFailed"))
     } finally {
       setSaving(false)
     }
@@ -536,7 +538,7 @@ export function ExtractReferencesModal({
         <div className="flex items-center justify-between px-5 py-3 border-b">
           <div className="flex items-center gap-2">
             <Scissors className="w-4 h-4 text-purple-500" />
-            <h2 className="text-sm font-semibold">Extract References from Scene {sceneIndex + 1}</h2>
+            <h2 className="text-sm font-semibold">{t("editor.extractRefsTitle", { n: sceneIndex + 1 })}</h2>
           </div>
           {suggestedMessage && (
             <p className="text-xs text-orange-500 font-medium">{suggestedMessage}</p>
@@ -550,9 +552,9 @@ export function ExtractReferencesModal({
                   selectionMode === "lasso" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
                 }`}
                 onClick={() => setSelectionMode("lasso")}
-                title="Freeform lasso selection"
+                title={t("editor.lassoSelectionTitle")}
               >
-                <Pen className="w-3 h-3" /> Lasso
+                <Pen className="w-3 h-3" /> {t("editor.lasso")}
               </button>
               <button
                 type="button"
@@ -560,9 +562,9 @@ export function ExtractReferencesModal({
                   selectionMode === "rectangle" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
                 }`}
                 onClick={() => setSelectionMode("rectangle")}
-                title="Rectangle selection"
+                title={t("editor.rectSelectionTitle")}
               >
-                <Square className="w-3 h-3" /> Rect
+                <Square className="w-3 h-3" /> {t("editor.rect")}
               </button>
             </div>
             <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-muted">
@@ -578,7 +580,7 @@ export function ExtractReferencesModal({
               ref={imgElRef}
               src={getImageProxyUrl(imageUrl)}
               crossOrigin="anonymous"
-              alt={`Scene ${sceneIndex + 1}`}
+              alt={t("editor.sceneAlt", { n: sceneIndex + 1 })}
               className="max-w-full max-h-[500px] rounded-md border object-contain"
               onLoad={handleImageLoad}
             />
@@ -599,8 +601,8 @@ export function ExtractReferencesModal({
           {!pending && imageLoaded && (
             <p className="text-xs text-muted-foreground text-center mt-2">
               {selectionMode === "lasso"
-                ? "Click and drag to draw around the character or location"
-                : "Click and drag to draw a rectangle selection"}
+                ? t("editor.lassoHint")
+                : t("editor.rectHint")}
             </p>
           )}
 
@@ -616,7 +618,7 @@ export function ExtractReferencesModal({
               <div className="flex items-center gap-3">
                 <input
                   type="text"
-                  placeholder="Name (e.g. Hero, Castle)"
+                  placeholder={t("editor.refNamePlaceholder")}
                   className="flex-1 h-8 px-3 text-sm rounded-md border bg-background outline-none focus:ring-1 focus:ring-purple-500"
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
@@ -631,7 +633,7 @@ export function ExtractReferencesModal({
                     }`}
                     onClick={() => setTypeInput("character")}
                   >
-                    <User className="w-3 h-3" /> Character
+                    <User className="w-3 h-3" /> {t("assetlib.typeCharacter")}
                   </button>
                   <button
                     type="button"
@@ -640,7 +642,7 @@ export function ExtractReferencesModal({
                     }`}
                     onClick={() => setTypeInput("location")}
                   >
-                    <MapPin className="w-3 h-3" /> Location
+                    <MapPin className="w-3 h-3" /> {t("assetlib.typeLocation")}
                   </button>
                   <button
                     type="button"
@@ -649,7 +651,7 @@ export function ExtractReferencesModal({
                     }`}
                     onClick={() => setTypeInput("object")}
                   >
-                    <Box className="w-3 h-3" /> Object
+                    <Box className="w-3 h-3" /> {t("assetlib.typeObject")}
                   </button>
                 </div>
                 <button
@@ -658,14 +660,14 @@ export function ExtractReferencesModal({
                   disabled={!nameInput.trim() || saving}
                   onClick={handleConfirmExtraction}
                 >
-                  {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : "Add"}
+                  {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : t("common.add")}
                 </button>
                 <button
                   type="button"
                   className="h-8 px-3 text-xs rounded-md border hover:bg-muted"
                   onClick={handleCancelPending}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
               {error && (
@@ -679,16 +681,16 @@ export function ExtractReferencesModal({
           {/* Extracted references */}
           {characters.length > 0 && (
             <div className="mt-4">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Characters</span>
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t("assetlib.tabCharacters")}</span>
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {characters.map((ref) => (
-                  <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
+                  <div key={ref.id} className="flex items-center gap-2 p-1.5 pe-2 rounded-lg border bg-muted/30">
                     <CachedImage src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" thumbnail thumbnailWidth={80} />
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
                         <span className="text-[9px] text-emerald-600 flex items-center gap-0.5">
-                          <Check className="w-2.5 h-2.5" /> Saved to Library
+                          <Check className="w-2.5 h-2.5" /> {t("editor.savedToLibrary")}
                         </span>
                       )}
                     </div>
@@ -707,16 +709,16 @@ export function ExtractReferencesModal({
 
           {locations.length > 0 && (
             <div className="mt-3">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Locations</span>
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t("assetlib.tabLocations")}</span>
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {locations.map((ref) => (
-                  <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
+                  <div key={ref.id} className="flex items-center gap-2 p-1.5 pe-2 rounded-lg border bg-muted/30">
                     <CachedImage src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" thumbnail thumbnailWidth={80} />
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
                         <span className="text-[9px] text-emerald-600 flex items-center gap-0.5">
-                          <Check className="w-2.5 h-2.5" /> Saved to Library
+                          <Check className="w-2.5 h-2.5" /> {t("editor.savedToLibrary")}
                         </span>
                       )}
                     </div>
@@ -735,16 +737,16 @@ export function ExtractReferencesModal({
 
           {objects.length > 0 && (
             <div className="mt-3">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Objects</span>
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t("explore.tabObjects")}</span>
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {objects.map((ref) => (
-                  <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
+                  <div key={ref.id} className="flex items-center gap-2 p-1.5 pe-2 rounded-lg border bg-muted/30">
                     <CachedImage src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" thumbnail thumbnailWidth={80} />
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
                         <span className="text-[9px] text-emerald-600 flex items-center gap-0.5">
-                          <Check className="w-2.5 h-2.5" /> Saved to Library
+                          <Check className="w-2.5 h-2.5" /> {t("editor.savedToLibrary")}
                         </span>
                       )}
                     </div>
@@ -765,7 +767,9 @@ export function ExtractReferencesModal({
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-3 border-t">
           <span className="text-xs text-muted-foreground">
-            {references.length} reference{references.length !== 1 ? "s" : ""} extracted
+            {references.length === 1
+              ? t("editor.refsExtractedOne", { n: references.length })
+              : t("editor.refsExtracted", { n: references.length })}
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -773,14 +777,14 @@ export function ExtractReferencesModal({
               className="h-8 px-4 text-xs rounded-md border hover:bg-muted"
               onClick={onClose}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="button"
               className="h-8 px-4 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={handleSave}
             >
-              Save References
+              {t("editor.saveReferences")}
             </button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { STYLE_PRESETS } from "@nodaro/prompts"
 import { pipelinesApi } from "@/lib/pipelines-api"
+import { useT, tx } from "@/lib/i18n"
 
 /**
  * Phase 3 — Focus composer.
@@ -47,6 +48,7 @@ interface SceneEntity {
 }
 
 export function ShotInspector({ pipelineId }: { pipelineId: string }) {
+  const t = useT()
   const [scenes, setScenes] = useState<SceneEntity[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -58,7 +60,7 @@ export function ShotInspector({ pipelineId }: { pipelineId: string }) {
         if (!cancelled) setScenes(rows as unknown as SceneEntity[])
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load shots")
+        if (!cancelled) setError(e instanceof Error ? e.message : tx("pipe.cinemaFailedLoadShots"))
       })
     return () => {
       cancelled = true
@@ -66,7 +68,7 @@ export function ShotInspector({ pipelineId }: { pipelineId: string }) {
   }, [pipelineId])
 
   if (error) return <p className="text-sm text-red-400">{error}</p>
-  if (!scenes) return <p className="text-sm text-muted-foreground">Loading shots…</p>
+  if (!scenes) return <p className="text-sm text-muted-foreground">{t("pipe.cinemaLoadingShots")}</p>
 
   const withShots = scenes.filter(
     (s) => (s.metadata?.scene_node_data?.shots?.length ?? 0) > 0,
@@ -74,8 +76,7 @@ export function ShotInspector({ pipelineId }: { pipelineId: string }) {
   if (withShots.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        The director is still planning the shots — they'll appear here as each
-        scene is composed.
+        {t("pipe.cinemaDirectorPlanning")}
       </p>
     )
   }
@@ -83,8 +84,7 @@ export function ShotInspector({ pipelineId }: { pipelineId: string }) {
   return (
     <div className="max-w-4xl space-y-4">
       <p className="text-xs text-muted-foreground">
-        Focus — direct each shot. Edits to motion / duration / dialogue are saved
-        to the plan and apply the next time the shot is animated.
+        {t("pipe.cinemaFocusIntro")}
       </p>
 
       {withShots.map((scene) => {
@@ -110,17 +110,17 @@ export function ShotInspector({ pipelineId }: { pipelineId: string }) {
             <div className="mb-3 flex flex-wrap gap-1.5 text-[10px]">
               {d.video_model && (
                 <span className="rounded bg-[#ff0073]/10 px-1.5 py-0.5 text-[#ff0073]">
-                  video: {d.video_model}
+                  {t("pipe.cinemaVideoModelTag", { model: d.video_model })}
                 </span>
               )}
               {d.image_model && (
                 <span className="rounded border bg-card px-1.5 py-0.5 text-muted-foreground">
-                  image: {d.image_model}
+                  {t("pipe.cinemaImageModelTag", { model: d.image_model })}
                 </span>
               )}
               {d.shot_input_mode && (
                 <span className="rounded border bg-card px-1.5 py-0.5 text-muted-foreground">
-                  mode: {d.shot_input_mode}
+                  {t("pipe.cinemaModeTag", { mode: d.shot_input_mode })}
                 </span>
               )}
               {d.location_key && (
@@ -195,6 +195,7 @@ function ShotCard({
   shot: ShotView
   index: number
 }) {
+  const t = useT()
   const [motion, setMotion] = useState(shot.motion_prompt ?? "")
   const [keyframePrompt, setKeyframePrompt] = useState(
     shot.visual_keyframe_prompt ?? "",
@@ -222,7 +223,7 @@ function ShotCard({
       )
       setKfUrl(keyframe_url)
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Re-roll failed")
+      setErr(e instanceof Error ? e.message : tx("pipe.cinemaRerollFailed"))
     } finally {
       setRerolling(false)
     }
@@ -256,7 +257,7 @@ function ShotCard({
       setSaved(true)
       window.setTimeout(() => setSaved(false), 1500)
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Save failed")
+      setErr(e instanceof Error ? e.message : tx("editor.saveFailed"))
     } finally {
       setSaving(false)
     }
@@ -269,33 +270,33 @@ function ShotCard({
           {kfUrl ? (
             <img
               src={kfUrl}
-              alt={`Shot ${index + 1} keyframe`}
+              alt={t("pipe.cinemaShotKeyframeAlt", { n: index + 1 })}
               className="h-16 w-16 rounded object-cover"
             />
           ) : (
             <div className="flex h-16 w-16 items-center justify-center rounded bg-[var(--border-primary)] text-center text-[9px] text-muted-foreground">
-              no keyframe yet
+              {t("pipe.cinemaNoKeyframeYet")}
             </div>
           )}
           <button
             type="button"
             onClick={() => void reroll()}
             disabled={rerolling || !shot.shot_id}
-            title="Regenerate this keyframe still (costs credits)"
+            title={t("pipe.cinemaRegenKeyframeTitle")}
             className="rounded border px-1 py-0.5 text-[9px] text-foreground hover:border-[#ff0073]/50 disabled:opacity-40"
           >
-            {rerolling ? "Re-rolling…" : "Re-roll"}
+            {rerolling ? t("pipe.cinemaRerolling") : t("pipe.cinemaReroll")}
           </button>
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-xs font-medium text-foreground">Shot {index + 1}</div>
+          <div className="text-xs font-medium text-foreground">{t("pipe.shotNumber", { n: index + 1 })}</div>
           <div className="mt-0.5 flex flex-wrap gap-1">
             <CameraSelect value={shotType} onChange={setShotType} options={SHOT_TYPES} />
             <CameraSelect value={angle} onChange={setAngle} options={ANGLES} />
             <CameraSelect value={shotMotion} onChange={setShotMotion} options={MOTIONS} />
           </div>
           <label className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
-            Duration
+            {t("field.duration")}
             <input
               type="number"
               min={0.3}
@@ -311,12 +312,12 @@ function ShotCard({
       </div>
 
       <label className="mt-2 block text-[10px] text-muted-foreground">
-        Keyframe (what the shot shows)
+        {t("pipe.cinemaKeyframeLabel")}
         <textarea
           value={keyframePrompt}
           onChange={(e) => setKeyframePrompt(e.target.value)}
           rows={2}
-          placeholder="Describe the framed still…"
+          placeholder={t("pipe.cinemaFramedStillPlaceholder")}
           className="mt-0.5 w-full resize-none rounded border bg-card p-1 text-[11px] text-foreground outline-none focus:border-[#ff0073]"
         />
       </label>
@@ -334,7 +335,7 @@ function ShotCard({
         }}
         className="mt-1 w-full rounded border bg-card px-1 py-0.5 text-[10px] text-muted-foreground outline-none focus:border-[#ff0073]"
       >
-        <option value="">+ apply a look to this shot…</option>
+        <option value="">{t("pipe.cinemaApplyLook")}</option>
         {STYLE_PRESETS.map((s) => (
           <option key={s.id} value={s.id}>
             {s.label}
@@ -343,7 +344,7 @@ function ShotCard({
       </select>
 
       <label className="mt-1 block text-[10px] text-muted-foreground">
-        Motion
+        {t("pipe.cinemaMotion")}
         <textarea
           value={motion}
           onChange={(e) => setMotion(e.target.value)}
@@ -353,26 +354,26 @@ function ShotCard({
       </label>
 
       <label className="mt-1 block text-[10px] text-muted-foreground">
-        Dialogue
+        {t("audiocfg.mergeRoleDialogue")}
         <input
           type="text"
           value={dialogue}
           onChange={(e) => setDialogue(e.target.value)}
-          placeholder="(none)"
+          placeholder={t("pipe.cinemaNonePlaceholder")}
           className="mt-0.5 w-full rounded border bg-card p-1 text-[11px] text-foreground outline-none focus:border-[#ff0073]"
         />
       </label>
 
       <div className="mt-1.5 flex items-center justify-end gap-2">
         {err && <span className="text-[10px] text-red-400">{err}</span>}
-        {saved && !dirty && <span className="text-[10px] text-green-500">Saved</span>}
+        {saved && !dirty && <span className="text-[10px] text-green-500">{t("common.saved")}</span>}
         <button
           type="button"
           onClick={() => void save()}
           disabled={!dirty || saving || !shot.shot_id}
           className="rounded bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white disabled:opacity-40"
         >
-          {saving ? "Saving…" : "Save"}
+          {saving ? t("common.saving") : t("common.save")}
         </button>
       </div>
     </div>

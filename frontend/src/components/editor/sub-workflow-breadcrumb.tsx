@@ -3,6 +3,8 @@
 import { ChevronRight, Home } from "lucide-react"
 import { useSubWorkflowStack } from "@/hooks/use-sub-workflow-stack"
 import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 
 interface SubWorkflowBreadcrumbProps {
   /**
@@ -21,6 +23,7 @@ export function SubWorkflowBreadcrumb({ onJumpToRoot, onJumpTo }: SubWorkflowBre
   const t = useT()
   const rootFrame = useSubWorkflowStack((s) => s.rootFrame)
   const stack = useSubWorkflowStack((s) => s.stack)
+  const isRtl = useAppDir() === "rtl"
 
   // Nothing to show when nesting is depth 0.
   if (stack.length === 0 || !rootFrame) return null
@@ -41,7 +44,7 @@ export function SubWorkflowBreadcrumb({ onJumpToRoot, onJumpTo }: SubWorkflowBre
       </button>
       {stack.map((frame, i) => (
         <span key={`${frame.workflowId}-${i}`} className="flex items-center gap-1">
-          <ChevronRight className="w-3.5 h-3.5 text-white/40" />
+          <ChevronRight className={cn("w-3.5 h-3.5 text-white/40", isRtl && "rotate-180")} />
           <button
             type="button"
             className={

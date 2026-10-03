@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { ConcurrentModificationError, generateLocation } from "@/lib/api"
 import { optimizedImageUrl } from "@/lib/image"
+import { tx, useT } from "@/lib/i18n"
 import type { StudioPageProps } from "../../studio-shell/types"
 import { useLocationStudioJobs } from "../use-location-studio-jobs"
 import type { LocationStudioJobs } from "../use-location-studio-jobs"
@@ -34,6 +35,7 @@ import type { LocationStudioState } from "../use-location-studio"
 type Candidate = { readonly jobId: string; readonly url: string }
 
 export function AppearancePage({ state }: StudioPageProps<LocationStudioState, LocationStudioJobs>) {
+  const t = useT()
   const studio = state
   const data = studio.stagedData
   const [count, setCount] = useState<1 | 2 | 4>(1)
@@ -52,7 +54,7 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
       setCandidates((prev) => (prev.some((c) => c.jobId === j.jobId) ? prev : [...prev, { jobId: j.jobId, url: j.url }]))
     })
     jobs.onFailed((jobId) => {
-      toast.error(`Candidate ${jobId.slice(0, 8)}… failed`)
+      toast.error(tx("studio.candidateFailedId", { id: jobId.slice(0, 8) }))
     })
   }, [jobs.onResolved, jobs.onFailed])
 
@@ -64,7 +66,7 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
     if (!data) return
     if (studio.isApprovingMainImage) return
     if (!data.locationName.trim()) {
-      toast.error("Add a location name first")
+      toast.error(tx("studio.addLocationNameFirst"))
       return
     }
     try {
@@ -83,7 +85,7 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
       })
       const jobIds: ReadonlyArray<string> = result.jobIds ?? (result.jobId ? [result.jobId] : [])
       if (jobIds.length === 0) {
-        toast.error("Backend returned no job ids")
+        toast.error(tx("studio.noJobIdsReturned"))
         return
       }
       for (const id of jobIds) {
@@ -96,7 +98,7 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
 
   async function handleApprove(candidateJobId: string) {
     if (!data?.locationDbId) {
-      toast.error("Save the location first")
+      toast.error(tx("studio.saveLocationFirst"))
       return
     }
     studio.setIsApprovingMainImage(true)
@@ -105,7 +107,7 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
       // mirrors save. On 409 the hook already toasted + re-staged; we
       // just bail out of the success branch.
       await studio.approveMainImage(candidateJobId)
-      toast.success("Main image approved")
+      toast.success(tx("studio.mainImageApproved"))
       setCandidates([])
     } catch (e) {
       if (e instanceof ConcurrentModificationError) {
@@ -113,7 +115,7 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
         // the canonical state may already have a different main image.
         setCandidates([])
       } else {
-        toast.error("Approval failed")
+        toast.error(tx("studio.approvalFailed"))
       }
     } finally {
       studio.setIsApprovingMainImage(false)
@@ -141,40 +143,40 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
       <div className="space-y-6 max-w-2xl mx-auto">
         {/* Main image preview */}
         <section>
-          <h2 className="text-[12px] font-medium text-slate-300 mb-2">Main image</h2>
+          <h2 className="text-[12px] font-medium text-slate-300 mb-2">{t("studio.mainImage")}</h2>
           {data.sourceImageUrl ? (
             <img
               src={optimizedImageUrl(data.sourceImageUrl, { width: 800 })}
-              alt={data.locationName || "Location"}
+              alt={data.locationName || t("field.location")}
               loading="lazy"
               className="w-full max-h-[400px] object-contain rounded border border-[#1e293b]"
             />
           ) : (
             <div className="aspect-video bg-[#1a1d27] rounded border border-[#1e293b] flex items-center justify-center text-[11px] text-slate-500">
-              No main image yet — generate candidates below
+              {t("studio.noMainImageYet")}
             </div>
           )}
         </section>
 
         {/* Identity form */}
         <section className="space-y-3">
-          <h2 className="text-[12px] font-medium text-slate-300">Identity</h2>
+          <h2 className="text-[12px] font-medium text-slate-300">{t("studio.identity")}</h2>
           <label className="block">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Name</span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider">{t("common.name")}</span>
             <input
               type="text"
               value={data.locationName || ""}
               onChange={(e) => studio.patch({ locationName: e.target.value })}
-              placeholder="e.g. Cafe Roma at golden hour"
+              placeholder={t("studio.locationNamePh")}
               className="w-full mt-1 px-3 py-2 text-[12px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600"
             />
           </label>
           <label className="block">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Description</span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider">{t("common.description")}</span>
             <textarea
               value={data.description || ""}
               onChange={(e) => studio.patch({ description: e.target.value })}
-              placeholder="Optional — describe atmosphere, vibe, key details"
+              placeholder={t("studio.locationDescriptionPh")}
               rows={3}
               className="w-full mt-1 px-3 py-2 text-[12px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600 resize-y"
             />
@@ -184,8 +186,8 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
         {/* Generate */}
         <section>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-slate-400">Candidates:</span>
-            <div className="flex gap-1" role="group" aria-label="Candidate count">
+            <span className="text-[11px] text-slate-400">{t("studio.candidatesColon")}</span>
+            <div className="flex gap-1" role="group" aria-label={t("studio.candidateCount")}>
               {([1, 2, 4] as const).map((n) => (
                 <button
                   key={n}
@@ -206,14 +208,16 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
               type="button"
               onClick={handleGenerate}
               disabled={generateDisabled}
-              className="ml-auto px-4 py-1.5 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
+              className="ms-auto px-4 py-1.5 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
             >
-              Generate
+              {t("common.generate")}
             </button>
           </div>
           {jobs.tracked.length > 0 && (
             <div className="mt-2 text-[10px] text-slate-500">
-              Generating {jobs.tracked.length} candidate{jobs.tracked.length === 1 ? "" : "s"}…
+              {jobs.tracked.length === 1
+                ? t("studio.generatingCandidatesOne", { n: 1 })
+                : t("studio.generatingCandidatesMany", { n: jobs.tracked.length })}
             </div>
           )}
         </section>
@@ -221,13 +225,13 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
         {/* Candidates grid */}
         {candidates.length > 0 && (
           <section>
-            <h2 className="text-[12px] font-medium text-slate-300 mb-2">Candidates</h2>
+            <h2 className="text-[12px] font-medium text-slate-300 mb-2">{t("cfgext.reduceTabCandidates")}</h2>
             <div className="grid grid-cols-2 gap-3">
               {candidates.map((c) => (
                 <div key={c.jobId} className="border border-[#1e293b] rounded p-2 bg-[#0e1117]">
                   <img
                     src={optimizedImageUrl(c.url, { width: 512 })}
-                    alt="candidate"
+                    alt={t("studio.candidateAlt")}
                     loading="lazy"
                     className="w-full aspect-square object-cover rounded"
                   />
@@ -238,12 +242,12 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
                       disabled={approveDiscardDisabled}
                       title={
                         mainImageGenPending
-                          ? "Wait for in-flight candidate generations to finish"
+                          ? t("studio.waitForCandidates")
                           : undefined
                       }
                       className="flex-1 text-[11px] px-2 py-1 rounded bg-[#22d3ee] hover:bg-[#22d3ee]/90 disabled:opacity-40 disabled:cursor-not-allowed text-slate-900 font-medium"
                     >
-                      {studio.isApprovingMainImage ? "Approving…" : "Approve"}
+                      {studio.isApprovingMainImage ? t("studio.approving") : t("pipe.approve")}
                     </button>
                     <button
                       type="button"
@@ -251,12 +255,12 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
                       disabled={approveDiscardDisabled}
                       title={
                         mainImageGenPending
-                          ? "Wait for in-flight candidate generations to finish"
+                          ? t("studio.waitForCandidates")
                           : undefined
                       }
                       className="text-[11px] px-2 py-1 rounded bg-[#1a1d27] hover:bg-[#1e293b] disabled:opacity-40 disabled:cursor-not-allowed text-slate-400"
                     >
-                      Discard
+                      {t("node.discard")}
                     </button>
                   </div>
                 </div>
@@ -268,9 +272,9 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
         {/* Canonical description (LLM-authored, read-only display) */}
         {data.canonicalDescription && (
           <section className="text-[11px] bg-[#0e1117] border border-[#1e293b] p-3 rounded">
-            <div className="font-medium text-slate-300 mb-1">Canonical description</div>
+            <div className="font-medium text-slate-300 mb-1">{t("studio.canonicalDescription")}</div>
             <div className="text-slate-400 italic">{data.canonicalDescription}</div>
-            <div className="text-[9px] text-slate-600 mt-1">Auto-generated when you approved the main image.</div>
+            <div className="text-[9px] text-slate-600 mt-1">{t("studio.autoGeneratedOnApprove")}</div>
           </section>
         )}
       </div>

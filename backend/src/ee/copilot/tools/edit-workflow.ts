@@ -15,7 +15,9 @@ import {
   describeNodeAdjustments,
   EXECUTION_DATA_KEYS,
   SCHEDULE_TRIGGER_NODE_TYPE,
+  TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE,
   normalizeNodeModelParams,
+  normalizeVideoOverlayNodes,
   stripTransientRuntimeData,
   validateSubWorkflowRoutes,
   type GenericNode,
@@ -30,6 +32,26 @@ import { MAX_ASSET_REFS, resolveCopilotAssetRefs, type ResolvedAsset } from "./a
 import { collectAssetIds, rejectInventedFileSyntax, stampAssetRefs } from "./asset-wiring.js"
 import { knownNodeTypes, suggestNodeTypes, validateWorkflowEdges, type EdgeLike } from "./edge-validation.js"
 import type { CopilotToolContext } from "./types.js"
+
+/** A Telegram Account Trigger's settings that are the person's alone (see the write pipeline). */
+const ACCOUNT_TRIGGER_PERSON_FIELDS = [
+  "accountId",
+  "chatIds",
+  "chatTitles",
+  "senderIds",
+  "messageTypeFilters",
+  "keywords",
+  "includeOutgoing",
+  "inboxMode",
+  "isActive",
+] as const
+
+/** A setting sent at its empty default — what a model writing a fresh node echoes back — changes nothing. */
+function isUnsetSetting(value: unknown): boolean {
+  if (value === undefined || value === null || value === false || value === "") return true
+  if (Array.isArray(value)) return value.length === 0
+  return typeof value === "object" && Object.keys(value as object).length === 0
+}
 
 export interface UpsertNodeInput {
   id: string
@@ -345,6 +367,10 @@ function prepare(
     const data = node.data as Record<string, unknown> | undefined
     if (!data) return node
     const storedData = existingById.get(node.id)?.data as Record<string, unknown> | undefined
+    // A trigger's person-set values are compared with the stored node only
+    // when it was the SAME type: re-typing a node is a new trigger, so values
+    // planted on it under another type earlier never pass as "stored".
+    const storedTrigger = existingById.get(node.id)?.type === node.type ? storedData : undefined
     const cleaned: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(data)) {
       if (!EXECUTION_DATA_KEYS.has(key)) {
@@ -360,14 +386,33 @@ function prepare(
     // tries to arm one is refused, and a new schedule lands paused however it
     // was sent.
     if (node.type === SCHEDULE_TRIGGER_NODE_TYPE) {
-      const storedActive = storedData?.active === true
+      const storedActive = storedTrigger?.active === true
       if (cleaned.active === true && !storedActive) {
         throw new EditRejected(
           `"${node.id}" is a Schedule Trigger: it is turned on by the person, with its switch in the editor — never by an edit. Leave \`active\` out; the schedule is added paused.`,
         )
       }
-      if (storedData && "active" in storedData) cleaned.active = storedData.active
+      if (storedTrigger && "active" in storedTrigger) cleaned.active = storedTrigger.active
       else delete cleaned.active
+    }
+    // A Telegram Account Trigger listens to the PERSON'S own Telegram account:
+    // which account, which chats, what it filters and whether it listens are
+    // theirs to set in the editor. Stored settings ride across an upsert that
+    // omits them, a model that changes one is refused, and a new trigger lands
+    // with none of them (the person picks the account and the chats). Turning
+    // it OFF is the one change an edit may make: it reads nothing new.
+    if (node.type === TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE) {
+      for (const field of ACCOUNT_TRIGGER_PERSON_FIELDS) {
+        if (field === "isActive" && cleaned.isActive === false && storedTrigger?.isActive === true) continue
+        const stored = storedTrigger?.[field]
+        if (field in cleaned && JSON.stringify(cleaned[field]) !== JSON.stringify(stored) && !isUnsetSetting(cleaned[field])) {
+          throw new EditRejected(
+            `"${node.id}" is a Telegram Account Trigger: its account, chats, filters and listening switch are set by the person in the editor — never by an edit (an edit may only switch it off). Leave \`${field}\` out.`,
+          )
+        }
+        if (storedTrigger && field in storedTrigger) cleaned[field] = stored
+        else delete cleaned[field]
+      }
     }
     return { ...node, data: cleaned }
   })
@@ -376,7 +421,16 @@ function prepare(
   // draft substituted into the validation graph, which is never written.)
   const wired = stampAssetRefs(stripped, existingById, assets)
   const normalized = normalizeNodeModelParams(wired.nodes)
-  const positioned = applyLayout(normalized.nodes, fullNodes, fullEdges, new Set(addedNodeIds))
+  // Video Overlay (every write, every video-overlay node of the prospective
+  // graph): presets expanded, and a layer whose `overlay<i>` handle the full
+  // edge list wires keeps no stored `imageUrl`. A stored node that an
+  // edge-only edit wires is not among the upserts — it joins them, or its
+  // stale `imageUrl` would stay in the database.
+  const overlaid = normalizeVideoOverlayNodes(normalized.nodes, fullEdges)
+  const storedOverlays = survivingNodes.filter((n) => n.type === "video-overlay")
+  const healedStored = normalizeVideoOverlayNodes(storedOverlays, fullEdges)
+  const pulledIn = healedStored.filter((n, i) => n !== storedOverlays[i])
+  const positioned = applyLayout([...overlaid, ...pulledIn], fullNodes, fullEdges, new Set(addedNodeIds))
   const orderedUpserts = orderParentFirst(positioned)
 
   // Nothing may leave here still holding an unresolved pointer: the run engine

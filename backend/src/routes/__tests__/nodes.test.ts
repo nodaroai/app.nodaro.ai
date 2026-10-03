@@ -1,7 +1,15 @@
-import { describe, it, expect, beforeAll, afterEach } from "vitest"
+import { describe, it, expect, beforeAll, afterEach, vi } from "vitest"
 import { buildApp } from "../../app.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 import type { FastifyInstance } from "fastify"
+
+// These cases are about which nodes list, not their prices. The prices come from
+// the database through the billing module, and this app has no database: the
+// real client would sit on the network until the test times out. Prices are
+// pinned in nodes-charged-prices.test.ts and mcp/tools/__tests__/models.test.ts.
+vi.mock("../../lib/pricing/charged-prices.js", () => ({
+  loadChargedPrices: async () => ({ credits: () => undefined }),
+}))
 
 let app: FastifyInstance
 

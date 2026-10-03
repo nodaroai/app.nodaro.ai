@@ -8,6 +8,7 @@ import { warn } from "../../output.js"
 
 const mocks = {
   silenceDetect: vi.fn(),
+  audioSync: vi.fn(),
   applyEdl: vi.fn(),
   editPlan: vi.fn(),
   jobsGetStatus: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock("../../client.js", () => ({
   buildClient: () => ({
     edit: {
       silenceDetect: mocks.silenceDetect,
+      audioSync: mocks.audioSync,
       applyEdl: mocks.applyEdl,
       editPlan: mocks.editPlan,
     },
@@ -212,5 +214,43 @@ describe("edit plan", () => {
     ).rejects.toThrow("process.exit(1)")
     expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("source"))
     expect(mocks.editPlan).not.toHaveBeenCalled()
+  })
+})
+
+describe("edit audio-sync", () => {
+  it("maps --source url / id=url specs (ids minted as source-N when omitted) and --reference", async () => {
+    mocks.audioSync.mockResolvedValueOnce({ jobId: "j-as" })
+    await runCmd(
+      "edit", "audio-sync",
+      "--source", "mic=https://x/mic.m4a",
+      "--source", "https://x/cam.mp4?sig=a=b",
+      "--reference", "mic", "--json",
+    )
+    expect(mocks.audioSync).toHaveBeenCalledWith({
+      sources: [
+        { id: "mic", url: "https://x/mic.m4a" },
+        { id: "source-2", url: "https://x/cam.mp4?sig=a=b" },
+      ],
+      reference: "mic",
+    })
+  })
+
+  it("reads full rows from --sources-file", async () => {
+    mocks.audioSync.mockResolvedValueOnce({ jobId: "j" })
+    const rows = [{ id: "a", url: "https://x/a.wav" }, { id: "b", url: "https://x/b.wav" }]
+    await runCmd("edit", "audio-sync", "--sources-file", fixture("sources.json", rows), "--json")
+    expect(mocks.audioSync).toHaveBeenCalledWith({ sources: rows })
+  })
+
+  it("refuses fewer than two recordings before any request", async () => {
+    await expect(runCmd("edit", "audio-sync", "--source", "https://x/a.wav")).rejects.toThrow("process.exit(1)")
+    expect(mocks.audioSync).not.toHaveBeenCalled()
+    expect(vi.mocked(warn).mock.calls[0]?.[0]).toMatch(/2-6 recordings/)
+  })
+
+  it("refuses more than six recordings before any request", async () => {
+    const args = Array.from({ length: 7 }, (_, i) => ["--source", `https://x/${i}.wav`]).flat()
+    await expect(runCmd("edit", "audio-sync", ...args)).rejects.toThrow("process.exit(1)")
+    expect(mocks.audioSync).not.toHaveBeenCalled()
   })
 })

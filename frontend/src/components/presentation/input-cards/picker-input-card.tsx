@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { ChevronDown, Pencil, X } from "lucide-react"
 import { pickIds } from "@nodaro/shared"
 import {
@@ -24,10 +24,16 @@ import { DimensionTileGrid } from "@/lib/picker-ui"
 import { LocalePicker } from "@/components/editor/locale-picker"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { usePickerDir } from "@/lib/locale-store"
+import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
+import { usePickerLabel } from "../picker-label"
 import {
   getParameterPickerMeta,
+  hasCharacterArt,
   useCatalogPacksVersion,
+  LookPreviewStyleProvider,
+  readLookPreviewStyle,
+  useShowsLookRenders,
   type MultiDimParameterPickerMeta,
   type MultiDimValue,
   type ParameterPickerMeta,
@@ -70,8 +76,13 @@ export function PickerInputCard(props: PickerInputCardProps) {
   useCatalogPacksVersion()
   const meta = getParameterPickerMeta(props.nodeType)
   if (!meta) return null
-  if (meta.kind === "multi") return <MultiPickerCard {...props} meta={meta} />
-  return <SinglePickerCard {...props} meta={meta} />
+  // Options are pictured the way the creator set this node (real render or
+  // illustration). Read-only: app users get no switch.
+  return (
+    <LookPreviewStyleProvider style={readLookPreviewStyle(props.data)}>
+      {meta.kind === "multi" ? <MultiPickerCard {...props} meta={meta} /> : <SinglePickerCard {...props} meta={meta} />}
+    </LookPreviewStyleProvider>
+  )
 }
 
 const LABEL_CLS =
@@ -96,6 +107,8 @@ function SinglePickerCard({
   const dir = usePickerDir()
   const { resolveLabel, resolveDescription } = useLocalizedCatalog(meta.catalogId)
   const [modalOpen, setModalOpen] = useState(false)
+  const t = useT()
+  const pickerLabel = usePickerLabel(meta)
 
   const field = meta.valueField
 
@@ -127,6 +140,15 @@ function SinglePickerCard({
     writeValue(meta.defaultValue)
   }
 
+  // A picker may have no icon at all, or only for some options (a rendered
+  // look preview that this edition does not register) — null means "no icon".
+  const iconFor = (id: string): ReactNode => meta.renderIcon?.(id) ?? null
+  // Rendered look previews and the character pickers' photos read better
+  // filling the tile than in the 56px icon box; the illustrations keep the
+  // icon box they were drawn for.
+  const showsLookRenders = useShowsLookRenders(meta.nodeType)
+  const bigArt = showsLookRenders || hasCharacterArt(meta.catalogId)
+
   const grid = (
     <DimensionTileGrid
       entries={filteredEntries}
@@ -137,18 +159,20 @@ function SinglePickerCard({
           if (displayMode === "modal") setModalOpen(false)
         }
       }}
-      renderIcon={(entry) =>
-        meta.renderIcon ? (
-          <div className="size-full">{meta.renderIcon(entry.id)}</div>
+      renderIcon={(entry) => {
+        const icon = iconFor(entry.id)
+        return icon !== null ? (
+          <div className="size-full">{icon}</div>
         ) : (
           <div className="flex size-full items-center justify-center text-[10px] font-medium text-muted-foreground/80 px-1 text-center leading-tight">
             {resolveLabel(entry.id, entry.label)}
           </div>
         )
-      }
-      searchPlaceholder={`Search ${meta.label.toLowerCase()}…`}
+      }}
+      searchPlaceholder={t("present.searchLabelPlaceholder", { label: pickerLabel.toLowerCase() })}
       catalog={meta.catalogId}
       gridClassName="grid grid-cols-3 sm:grid-cols-4 gap-2"
+      iconClassName={bigArt ? "w-full aspect-square" : undefined}
     />
   )
 
@@ -172,12 +196,12 @@ function SinglePickerCard({
           >
             <SelectTrigger className="flex-1 h-9">
               <div className="flex items-center gap-2 min-w-0">
-                {meta.renderIcon && (
+                {iconFor(currentValue) !== null && (
                   <div className="size-5 shrink-0 flex items-center justify-center [&>*]:size-full">
-                    {meta.renderIcon(currentValue)}
+                    {iconFor(currentValue)}
                   </div>
                 )}
-                <SelectValue placeholder={`Select ${meta.label.toLowerCase()}…`}>
+                <SelectValue placeholder={t("present.selectLabelPlaceholder", { label: pickerLabel.toLowerCase() })}>
                   <span className="truncate text-sm">{selectedLabel}</span>
                 </SelectValue>
               </div>
@@ -186,9 +210,9 @@ function SinglePickerCard({
               {filteredEntries.map((entry) => (
                 <SelectItem key={entry.id} value={entry.id}>
                   <span className="flex items-center gap-2">
-                    {meta.renderIcon && (
+                    {iconFor(entry.id) !== null && (
                       <span className="size-4 shrink-0 flex items-center justify-center [&>*]:size-full">
-                        {meta.renderIcon(entry.id)}
+                        {iconFor(entry.id)}
                       </span>
                     )}
                     <span>{resolveLabel(entry.id, entry.label)}</span>
@@ -203,8 +227,8 @@ function SinglePickerCard({
               size="sm"
               onClick={handleClear}
               className="h-9 w-9 p-0 shrink-0 text-muted-foreground hover:text-foreground"
-              aria-label="Clear selection"
-              title="Reset to default"
+              aria-label={t("present.clearSelection")}
+              title={t("preset.resetToDefault")}
             >
               <X className="size-3.5" />
             </Button>
@@ -238,11 +262,9 @@ function SinglePickerCard({
               "size-14 shrink-0 rounded-lg overflow-hidden bg-muted/30 border border-border flex items-center justify-center transition-colors",
               !readOnly && "hover:border-[#ff0073]/50 cursor-pointer",
             )}
-            aria-label={`Change ${meta.label}`}
+            aria-label={t("present.changeLabel", { label: pickerLabel })}
           >
-            {meta.renderIcon ? (
-              meta.renderIcon(currentValue)
-            ) : (
+            {iconFor(currentValue) ?? (
               <span className="text-[10px] font-medium text-muted-foreground/80 text-center px-1 leading-tight">
                 {selectedLabel}
               </span>
@@ -267,7 +289,7 @@ function SinglePickerCard({
                 className="h-8 px-2 gap-1"
               >
                 <Pencil className="size-3.5" />
-                <span className="text-xs">Change</span>
+                <span className="text-xs">{t("present.change")}</span>
               </Button>
               {!isCleared && (
                 <Button
@@ -275,8 +297,8 @@ function SinglePickerCard({
                   size="sm"
                   onClick={handleClear}
                   className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                  aria-label="Clear selection"
-                  title="Reset to default"
+                  aria-label={t("present.clearSelection")}
+                  title={t("preset.resetToDefault")}
                 >
                   <X className="size-3.5" />
                 </Button>
@@ -288,7 +310,7 @@ function SinglePickerCard({
         <Dialog open={modalOpen} onOpenChange={setModalOpen}>
           <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-auto" dir={dir}>
             <DialogHeader>
-              <DialogTitle>{`Select ${meta.label}`}</DialogTitle>
+              <DialogTitle>{t("present.selectLabelTitle", { label: pickerLabel })}</DialogTitle>
             </DialogHeader>
             {grid}
           </DialogContent>
@@ -331,6 +353,8 @@ function MultiPickerCard({
   const dir = usePickerDir()
   const { resolveLabel } = useLocalizedCatalog(meta.catalogId)
   const [modalOpen, setModalOpen] = useState(false)
+  const t = useT()
+  const pickerLabel = usePickerLabel(meta)
 
   // Build the value object from the right source — fullscreen reads from
   // inputValues first, falls back to node.data for unset fields.
@@ -396,16 +420,16 @@ function MultiPickerCard({
           onClick={() => !readOnly && setModalOpen(true)}
           disabled={readOnly}
           className={cn(
-            "w-full rounded-md bg-muted/30 border border-border px-3 py-1.5 text-left text-sm transition-colors flex items-center justify-between gap-2",
+            "w-full rounded-md bg-muted/30 border border-border px-3 py-1.5 text-start text-sm transition-colors flex items-center justify-between gap-2",
             !readOnly && "hover:border-[#ff0073]/50 cursor-pointer",
           )}
           dir={dir}
-          aria-label={`Configure ${meta.label}`}
+          aria-label={t("present.configureLabel", { label: pickerLabel })}
         >
           <span className="flex-1 min-w-0 truncate">
             {summaryParts.length === 0 ? (
               <span className="text-muted-foreground italic">
-                {`Configure ${meta.label.toLowerCase()}…`}
+                {t("present.configureLabelHint", { label: pickerLabel.toLowerCase() })}
               </span>
             ) : (
               <span className="text-foreground">{summaryParts.join(" · ")}</span>
@@ -417,7 +441,7 @@ function MultiPickerCard({
         <Dialog open={modalOpen} onOpenChange={setModalOpen}>
           <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-auto" dir={dir}>
             <DialogHeader>
-              <DialogTitle>{`Configure ${meta.label}`}</DialogTitle>
+              <DialogTitle>{t("present.configureLabel", { label: pickerLabel })}</DialogTitle>
             </DialogHeader>
             <Picker value={value} onChange={handlePatch} />
           </DialogContent>
@@ -439,14 +463,14 @@ function MultiPickerCard({
             onClick={() => !readOnly && setModalOpen(true)}
             disabled={readOnly}
             className={cn(
-              "flex-1 min-w-0 rounded-lg bg-muted/30 border border-border px-3 py-2 text-left transition-colors",
+              "flex-1 min-w-0 rounded-lg bg-muted/30 border border-border px-3 py-2 text-start transition-colors",
               !readOnly && "hover:border-[#ff0073]/50 cursor-pointer",
             )}
-            aria-label={`Configure ${meta.label}`}
+            aria-label={t("present.configureLabel", { label: pickerLabel })}
           >
             {summaryParts.length === 0 ? (
               <p className="text-sm text-muted-foreground italic">
-                {`No ${meta.label.toLowerCase()} selected — click to configure`}
+                {t("present.noLabelSelected", { label: pickerLabel.toLowerCase() })}
               </p>
             ) : (
               <p className="text-sm text-foreground line-clamp-2">
@@ -462,7 +486,7 @@ function MultiPickerCard({
               className="h-8 px-2 gap-1 shrink-0"
             >
               <Pencil className="size-3.5" />
-              <span className="text-xs">Edit</span>
+              <span className="text-xs">{t("common.edit")}</span>
             </Button>
           )}
         </div>
@@ -470,7 +494,7 @@ function MultiPickerCard({
         <Dialog open={modalOpen} onOpenChange={setModalOpen}>
           <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-auto" dir={dir}>
             <DialogHeader>
-              <DialogTitle>{`Configure ${meta.label}`}</DialogTitle>
+              <DialogTitle>{t("present.configureLabel", { label: pickerLabel })}</DialogTitle>
             </DialogHeader>
             <Picker value={value} onChange={handlePatch} />
           </DialogContent>

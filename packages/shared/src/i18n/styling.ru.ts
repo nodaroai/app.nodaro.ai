@@ -9,6 +9,7 @@ const map: LocaleCatalogMap = {
   "makeup-editorial": { label: "Editorial", description: "Авангардный модный макияж" },
   "makeup-goth": { label: "Готический", description: "Тёмная готическая эстетика" },
   "makeup-dewy": { label: "Сияющий блеск", description: "Свежесияющая кожа в фокусе" },
+  "makeup-bare": { label: "Без макияжа", description: "Совсем без макияжа" },
 
   // -------------------- Eyewear --------------------
   "eyewear-sunglasses": { label: "Солнцезащитные очки", description: "Обычные тёмные солнцезащитные очки" },
@@ -164,6 +165,7 @@ const map: LocaleCatalogMap = {
   "outfit-one-piece-swim": { label: "Слитный купальник", description: "Облегающий слитный купальник" },
   "outfit-lingerie": { label: "Комплект белья", description: "Подходящий комплект нижнего белья" },
   "outfit-pajamas": { label: "Пижама", description: "Мягкий хлопковый пижамный комплект" },
+  "outfit-casual-home": { label: "Домашний повседневный", description: "Мягкая футболка или трикотаж и свободные брюки" },
   "outfit-bathrobe": { label: "Халат", description: "Плюшевый махровый халат" },
   "outfit-kimono": { label: "Кимоно", description: "Традиционное японское кимоно" },
   "outfit-ballerina": { label: "Балерина", description: "Классический костюм балерины" },

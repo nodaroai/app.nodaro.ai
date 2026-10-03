@@ -1,9 +1,9 @@
 # Motion
-> Define the motion intensity level for connected video generation nodes.
+> Set how much a video moves — a clause added to the prompt of the video nodes it is wired into.
 
 ## Overview
 
-The Motion parameter node specifies how much movement and dynamism should appear in generated video content. It provides three intensity levels that influence the amount of camera movement, subject motion, and visual activity in the output. This parameter is consumed by video generation nodes and script generation nodes to control the energy and pacing of generated video clips.
+The Motion parameter node specifies how much movement and dynamism should appear in generated video content. It provides three intensity levels that influence the amount of camera movement, subject motion, and visual activity in the output. Wire it into the **Settings** input of [Generate Video](../ai-video/generate-video.md#settings-input) or [Generate Video Pro](../ai-video/generate-video-pro.md): it adds a short clause to the video's prompt (below).
 
 ## Configuration
 
@@ -25,7 +25,15 @@ The Motion parameter node specifies how much movement and dynamism should appear
 - `in` -- optional upstream input (rarely used; Motion is typically a root parameter node)
 
 **Outputs:**
-- `out` -- motion intensity string, consumed by downstream video generation and script nodes
+- `out` -- connect it to a video node's **Settings** input. It adds this clause to the prompt, beside the Look family's hints (and, like them, it follows the node's **Inject Look** switch):
+
+  | Level | Clause added to the prompt |
+  |-------|----------------------------|
+  | `subtle` | "subtle, gentle motion with slow, minimal movement" |
+  | `moderate` | "moderate, natural motion at an even pace" |
+  | `dynamic` | "dynamic, energetic motion with fast, pronounced movement" |
+
+  The node shows it as a chip (e.g. `Dynamic`). When two Motion nodes are wired, the last connection wins. It is a video-only clause: still-image nodes never take it.
 ## Supported Providers
 
 Not applicable. This is a data-passing parameter node with no AI provider.
@@ -45,5 +53,5 @@ Not applicable. This is a data-passing parameter node with no AI provider.
 
 ## Tips
 
-- Motion intensity is a hint to generation nodes, not a precise control. Different video providers interpret the motion parameter differently, and the actual motion in the output will also depend on the prompt content and subject matter.
-- The output handle is named `out` (not `motion`), which means it connects to the generic input on downstream nodes.
+- Motion intensity is a hint in the prompt, not a precise control. Different video models interpret it differently, and the actual motion in the output also depends on the prompt content and subject matter.
+- To place the clause yourself, reference the node as `{Motion}` in the prompt instead: a node referenced by its label is not added a second time.

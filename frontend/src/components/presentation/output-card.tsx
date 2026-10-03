@@ -8,6 +8,7 @@ import { StatusBadge } from "./output-cards/shared"
 import type { OutputCardActions } from "./output-cards/shared"
 import { Progress } from "@/components/ui/progress"
 import { FieldBadge } from "./field-badge"
+import { useT } from "@/lib/i18n"
 import type { ExposableField } from "@nodaro/shared"
 
 export interface FieldBadgeEntry {
@@ -66,6 +67,7 @@ function OutputCardImpl({
   fieldBadges,
   actions,
 }: OutputCardProps) {
+  const t = useT()
   const showProgress = status === "running" || status === "waiting"
   const progressValue = progress ?? 0
   const badgeRow = fieldBadges && fieldBadges.length > 0 ? (
@@ -84,7 +86,7 @@ function OutputCardImpl({
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-foreground">{label}</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#ff0073]/10 text-[#ff0073] font-medium">
-              {listResults.length} results
+              {t("present.resultsCount", { n: listResults.length })}
             </span>
           </div>
           <StatusBadge status={status} />

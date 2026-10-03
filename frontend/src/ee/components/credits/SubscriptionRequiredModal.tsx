@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Sparkles } from "lucide-react"
 import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
+import { useT } from "@/lib/i18n"
 
 interface SubscriptionRequiredModalProps {
   open: boolean
@@ -24,31 +25,29 @@ interface SubscriptionRequiredModalProps {
  * the developer surfaces; studio access comes with any subscription.
  */
 export function SubscriptionRequiredModal({ open, onClose }: SubscriptionRequiredModalProps) {
+  const t = useT()
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-[#ff0073]" />
-            Subscription required
+            {t("credits.subscriptionRequired")}
           </DialogTitle>
           <DialogDescription>
-            Your credits are available through the API, SDK and MCP. Working in
-            the studio requires a subscription.
+            {t("credits.subscriptionRequiredBody")}
           </DialogDescription>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Your credit balance is untouched — keep building with it
-          programmatically, or pick a plan to unlock the studio and every other
-          Nodaro app.
+          {t("credits.subscriptionRequiredHint")}
         </p>
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={onClose}>
-            Not now
+            {t("connect.providerNotNow")}
           </Button>
           {surfaceBillingSelfServe() && (
             <Button asChild className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white">
-              <Link to="/pricing">View plans</Link>
+              <Link to="/pricing">{t("credits.viewPlans")}</Link>
             </Button>
           )}
         </DialogFooter>

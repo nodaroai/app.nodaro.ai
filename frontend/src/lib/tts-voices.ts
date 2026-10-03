@@ -1,6 +1,33 @@
+import { tx, type MessageKey } from "@/lib/i18n"
+
+export type TTSVoiceGender = "female" | "male" | "nonBinary"
+export type TTSVoiceAccent = "american" | "british" | "australian" | "englishSwedish"
+
 export interface TTSVoice {
   readonly id: string
+  /** The voice's own name — a proper noun, the same in every language. */
   readonly name: string
+  readonly gender: TTSVoiceGender
+  readonly accent: TTSVoiceAccent
+}
+
+const GENDER_KEYS: Record<TTSVoiceGender, MessageKey> = {
+  female: "audiocfg.female",
+  male: "audiocfg.male",
+  nonBinary: "voice.gender.nonBinary",
+}
+
+const ACCENT_KEYS: Record<TTSVoiceAccent, MessageKey> = {
+  american: "voice.accent.american",
+  british: "voice.accent.british",
+  australian: "voice.accent.australian",
+  englishSwedish: "voice.accent.englishSwedish",
+}
+
+/** "Rachel (Female, American)" in the interface language. */
+export function ttsVoiceLabel(voice: TTSVoice): string {
+  const qualifier = [tx(GENDER_KEYS[voice.gender]), tx(ACCENT_KEYS[voice.accent])].join(tx("common.listComma"))
+  return tx("common.qualified", { token: voice.name, qualifier })
 }
 
 // Curated "premade" voice catalog for the TTS node — all text-to-speech
@@ -10,34 +37,34 @@ export interface TTSVoice {
 // Mirrors FALLBACK_VOICES in backend/src/routes/voices.ts — keep the two in step.
 export const TTS_VOICES: readonly TTSVoice[] = [
   // Female voices
-  { id: "Alice", name: "Alice (Female, British)" },
-  { id: "Aria", name: "Aria (Female, American)" },
-  { id: "hpp4J3VqNfWAUOO0d1Us", name: "Bella (Female, American)" },
-  { id: "Charlotte", name: "Charlotte (Female, English-Swedish)" },
-  { id: "Jessica", name: "Jessica (Female, American)" },
-  { id: "Laura", name: "Laura (Female, American)" },
-  { id: "Lily", name: "Lily (Female, British)" },
-  { id: "Matilda", name: "Matilda (Female, American)" },
-  { id: "Rachel", name: "Rachel (Female, American)" },
-  { id: "Sarah", name: "Sarah (Female, American)" },
+  { id: "Alice", name: "Alice", gender: "female", accent: "british" },
+  { id: "Aria", name: "Aria", gender: "female", accent: "american" },
+  { id: "hpp4J3VqNfWAUOO0d1Us", name: "Bella", gender: "female", accent: "american" },
+  { id: "Charlotte", name: "Charlotte", gender: "female", accent: "englishSwedish" },
+  { id: "Jessica", name: "Jessica", gender: "female", accent: "american" },
+  { id: "Laura", name: "Laura", gender: "female", accent: "american" },
+  { id: "Lily", name: "Lily", gender: "female", accent: "british" },
+  { id: "Matilda", name: "Matilda", gender: "female", accent: "american" },
+  { id: "Rachel", name: "Rachel", gender: "female", accent: "american" },
+  { id: "Sarah", name: "Sarah", gender: "female", accent: "american" },
 
   // Male voices
-  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam (Male, American)" },
-  { id: "Bill", name: "Bill (Male, American)" },
-  { id: "Brian", name: "Brian (Male, American)" },
-  { id: "Callum", name: "Callum (Male, American)" },
-  { id: "Charlie", name: "Charlie (Male, Australian)" },
-  { id: "Chris", name: "Chris (Male, American)" },
-  { id: "Daniel", name: "Daniel (Male, British)" },
-  { id: "Eric", name: "Eric (Male, American)" },
-  { id: "George", name: "George (Male, British)" },
-  { id: "SOYHLrjzK2X1ezoPC6cr", name: "Harry (Male, American)" },
-  { id: "Liam", name: "Liam (Male, American)" },
-  { id: "Roger", name: "Roger (Male, American)" },
-  { id: "Will", name: "Will (Male, American)" },
+  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam", gender: "male", accent: "american" },
+  { id: "Bill", name: "Bill", gender: "male", accent: "american" },
+  { id: "Brian", name: "Brian", gender: "male", accent: "american" },
+  { id: "Callum", name: "Callum", gender: "male", accent: "american" },
+  { id: "Charlie", name: "Charlie", gender: "male", accent: "australian" },
+  { id: "Chris", name: "Chris", gender: "male", accent: "american" },
+  { id: "Daniel", name: "Daniel", gender: "male", accent: "british" },
+  { id: "Eric", name: "Eric", gender: "male", accent: "american" },
+  { id: "George", name: "George", gender: "male", accent: "british" },
+  { id: "SOYHLrjzK2X1ezoPC6cr", name: "Harry", gender: "male", accent: "american" },
+  { id: "Liam", name: "Liam", gender: "male", accent: "american" },
+  { id: "Roger", name: "Roger", gender: "male", accent: "american" },
+  { id: "Will", name: "Will", gender: "male", accent: "american" },
 
   // Non-binary voices
-  { id: "River", name: "River (Non-binary, American)" },
+  { id: "River", name: "River", gender: "nonBinary", accent: "american" },
 ]
 
 export const DEFAULT_DIALOGUE_VOICE = "Sarah"
@@ -55,5 +82,6 @@ export function getVoiceName(
     if (byName) return byName.name
   }
   // Fall back to static list
-  return TTS_VOICES.find((v) => v.id === voiceId)?.name ?? (voiceId || "Rachel")
+  const known = TTS_VOICES.find((v) => v.id === voiceId)
+  return known ? ttsVoiceLabel(known) : voiceId || "Rachel"
 }

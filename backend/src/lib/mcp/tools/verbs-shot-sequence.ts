@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { dispatchJob, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
-import { resolveAssetId } from "../asset-resolver.js"
+import { resolveSpeechSourceUrl } from "./_speech-source.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { mcpInject } from "../internal-request.js"
@@ -21,7 +21,7 @@ export function registerShotSequenceVerbs({ server, session, fastify }: Register
         "Use this to drive shot-sequence reveals (resolve_shot_sequence).",
       inputSchema: {
         audio_url: z.string().url().optional(),
-        audio_asset_id: z.string().optional().describe("Nodaro audio job id."),
+        audio_asset_id: z.string().optional().describe("Nodaro audio or video job id."),
         transcript: z.string().min(1).max(50000).describe("The exact words spoken in the audio."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
@@ -31,9 +31,7 @@ export function registerShotSequenceVerbs({ server, session, fastify }: Register
     async (args) => {
       const audioUrl =
         args.audio_url ??
-        (args.audio_asset_id
-          ? await resolveAssetId({ assetId: args.audio_asset_id, userId: session.userId, expectedKind: "audio" })
-          : null)
+        (args.audio_asset_id ? await resolveSpeechSourceUrl(args.audio_asset_id, session.userId) : null)
       if (!audioUrl)
         return { content: [{ type: "text" as const, text: "Pass audio_url or audio_asset_id." }], isError: true }
       return dispatchJob(fastify, session, {

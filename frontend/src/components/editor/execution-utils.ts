@@ -1,3 +1,6 @@
+import { tx, type MessageKey } from "@/lib/i18n"
+import { formatDate } from "@/lib/i18n/format"
+
 export const STATUS_COLORS: Record<string, string> = {
   completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
   failed: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400",
@@ -9,6 +12,26 @@ export const STATUS_COLORS: Record<string, string> = {
   // detached from the canvas. Distinct (muted grey) from cancelled's orange.
   discarded: "bg-gray-200 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300",
   timed_out: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400",
+}
+
+/** Execution and job status ids, captioned in the interface language. */
+const STATUS_KEYS: Readonly<Record<string, MessageKey>> = {
+  running: "exec.statusRunning",
+  completed: "exec.statusCompleted",
+  failed: "exec.statusFailed",
+  pending: "exec.statusPending",
+  cancelled: "exec.statusCancelled",
+  discarded: "exec.statusDiscarded",
+  stopping: "exec.statusStopping",
+  timed_out: "exec.statusTimedOut",
+  skipped: "exec.statusSkipped",
+  processing: "exec.statusProcessing",
+  queued: "node.queued",
+}
+
+/** A status badge's text; a status with no caption passes through. */
+export function statusLabel(status: string): string {
+  return Object.hasOwn(STATUS_KEYS, status) ? tx(STATUS_KEYS[status]) : status
 }
 
 export const TRIGGER_LABELS: Record<string, string> = {
@@ -29,11 +52,12 @@ export function formatRelativeTime(dateString: string): string {
   const diffHours = Math.floor(diffMins / 60)
   const diffDays = Math.floor(diffHours / 24)
 
-  if (diffSecs < 60) return "just now"
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString()
+  // Same dictionary keys as formatRelative() (English is unchanged: "5m ago").
+  if (diffSecs < 60) return tx("time.justNow")
+  if (diffMins < 60) return tx("time.minAgo", { n: diffMins })
+  if (diffHours < 24) return tx("time.hrAgo", { n: diffHours })
+  if (diffDays < 7) return tx("time.dayAgo", { n: diffDays })
+  return formatDate(date)
 }
 
 export function formatDuration(startedAt: string | undefined, completedAt: string | undefined): string {
@@ -103,6 +127,7 @@ export const JOB_TYPE_LABELS: Record<string, string> = {
   "speed-ramp": "Speed Ramp",
   "loop-video": "Loop Video",
   "fade-video": "Fade Video",
+  "video-overlay": "Video Overlay",
   "mix-audio": "Mix Audio",
   "adjust-volume": "Adjust Volume",
   "translate": "Translation",

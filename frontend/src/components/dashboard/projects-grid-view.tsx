@@ -12,6 +12,7 @@ import { UserFilter, type UserFilterUser, type UserFilterValue } from "@/compone
 import { useAllProjects, useProjects } from "@/hooks/queries/use-projects-queries"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useWorkflowSearch } from "@/hooks/use-workflow-search"
+import { formatDate } from "@/lib/i18n/format"
 
 const ALL_USERS: UserFilterValue = { kind: "all" }
 
@@ -151,7 +152,7 @@ export function ProjectsGridView({ showAll, search, adminUsers }: ProjectsGridVi
                 <div className="px-3 py-2.5">
                   <p className="text-[13px] font-semibold truncate">{wf.name}</p>
                   <p className="mt-0.5 text-[10px] text-muted-foreground truncate">
-                    {wf.projectName} &middot; {new Date(wf.updatedAt).toLocaleDateString()}
+                    {wf.projectName} &middot; {formatDate(wf.updatedAt)}
                   </p>
                 </div>
               </Link>
@@ -187,7 +188,7 @@ export function ProjectsGridView({ showAll, search, adminUsers }: ProjectsGridVi
                 type="button"
                 onClick={() => handleSort("updated")}
                 className={cn(
-                  "w-32 text-right text-[11px] hidden sm:flex items-center justify-end gap-0.5 transition-colors",
+                  "w-32 text-end text-[11px] hidden sm:flex items-center justify-end gap-0.5 transition-colors",
                   sortBy === "updated" ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -198,7 +199,7 @@ export function ProjectsGridView({ showAll, search, adminUsers }: ProjectsGridVi
                 type="button"
                 onClick={() => handleSort("created")}
                 className={cn(
-                  "w-32 text-right text-[11px] hidden md:flex items-center justify-end gap-0.5 transition-colors",
+                  "w-32 text-end text-[11px] hidden md:flex items-center justify-end gap-0.5 transition-colors",
                   sortBy === "created" ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground",
                 )}
               >

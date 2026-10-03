@@ -218,8 +218,8 @@ export class KieImageProvider
     // T2I_TO_I2I_VARIANT swap (the grok-2 fallback here covers callers that
     // bypass the route swap) and are consumed by a two-step chain: the FREE
     // segment-map endpoint accepts an arbitrary image_url and mints a task
-    // id, which image-edit consumes. Verified live: the edit preserves the
-    // reference's composition — true i2i behavior.
+    // id, which the segment edit consumes. Verified live: the edit preserves
+    // the reference's composition — true i2i behavior.
     if (referenceImageUrls?.length && provider === "grok-2") {
       provider = "grok-2-i2i"
     }
@@ -431,7 +431,7 @@ export class KieImageProvider
   }
 
   /**
-   * grok-2 reference chain: segment-map(image_url) → image-edit(task_id).
+   * grok-2 reference chain: segment-map(image_url) → segment-edit(task_id).
    * The FREE segment step mints a grok task id from an ARBITRARY hosted
    * image; the edit step then applies the prompt to it — the grok-imagine-2
    * family's only reference-image path (its t2i takes no image input).

@@ -23,8 +23,15 @@ import { clientRequestIdSchema, dispatchJob, errorResult, JOB_OUTPUT_SCHEMA, par
 import { mcpInject } from "../internal-request.js"
 import type { RegisterOpts } from "./verbs-image.js"
 
+// The clip-window fields stay in the contract (a v2 may honour them), but v1
+// analyses a video reference whole and refuses any other window at the route
+// (`scene3DReferenceListError`) — so each says so where a client reads it.
+const WHOLE_CLIP_ONLY = "v1 uses the whole clip; leave unset."
 const referenceSchema = scene3DReferenceSchema.extend({
   url: scene3DReferenceSchema.shape.url.pipe(safeUrlSchema),
+  objectId: scene3DReferenceSchema.shape.objectId.describe("Scene object it depicts, e.g. the hero."),
+  startSeconds: scene3DReferenceSchema.shape.startSeconds.describe(WHOLE_CLIP_ONLY),
+  endSeconds: scene3DReferenceSchema.shape.endSeconds.describe(WHOLE_CLIP_ONLY),
 })
 
 export const SCENE3D_MCP_AUTHORING_FIELDS = {

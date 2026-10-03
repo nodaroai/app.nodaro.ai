@@ -22,6 +22,7 @@ import {
 // computed fit still renders the graph far off frame.
 import "@xyflow/react/dist/style.css"
 import { nodeTypes } from "@/components/nodes"
+import { useT } from "@/lib/i18n"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
 import { migrateSnapshot } from "./migrate-snapshot"
 import { useRevealDecision } from "./use-reveal-decision"
@@ -116,6 +117,7 @@ function TutorialCanvasMode({ nodes, edges }: { nodes: WorkflowNode[]; edges: Wo
   const stickyCount = nodes.filter((n) => n.type === "sticky-note").length
 
   const [ready, setReady] = useState(false)
+  const t = useT()
 
   return (
     <div className="nd-canvas-mode" data-ready={ready}>
@@ -138,14 +140,14 @@ function TutorialCanvasMode({ nodes, edges }: { nodes: WorkflowNode[]; edges: Wo
           <FitWhenReady empty={prepared.nodes.length === 0} onReady={() => setReady(true)} />
         </ReactFlow>
       </ReactFlowProvider>
-      {!ready && <div className="nd-canvas-loading">Loading canvas…</div>}
+      {!ready && <div className="nd-canvas-loading">{t("templates.loadingCanvas")}</div>}
       <div className="nd-canvas-note">
-        Full canvas — every node editable in the editor. Switch back to Tutorial mode for the guided steps.
+        {t("tut.canvasNote")}
       </div>
       <div className="nd-canvas-stats">
         {/* Count what is on screen, and say plainly what is not. */}
-        {nodes.length - stickyCount} nodes
-        {stickyCount > 0 ? ` / ${stickyCount} sticky notes hidden` : ""}
+        {t("tut.nodesCount", { n: nodes.length - stickyCount })}
+        {stickyCount > 0 ? ` / ${t("tut.stickyHidden", { n: stickyCount })}` : ""}
       </div>
     </div>
   )
@@ -167,6 +169,7 @@ export function TutorialShell({
   children,
 }: TutorialShellProps) {
   const { view, setView, step, focusStep, clearStep } = focus
+  const t = useT()
 
   return (
     <div className="nd-tutorial">
@@ -181,16 +184,16 @@ export function TutorialShell({
           <span>odaro</span>
         </Link>
         <span className="nd-bar-divider" />
-        <nav className="nd-crumb" aria-label="Breadcrumb">
+        <nav className="nd-crumb" aria-label={t("tut.breadcrumb")}>
           <Link to="/projects?tab=explore">{breadcrumb}</Link>
           <span className="nd-crumb-sep">/</span>
           <span className="nd-crumb-leaf">{title}</span>
         </nav>
-        <span className="nd-pill">TUTORIAL</span>
+        <span className="nd-pill">{t("tut.pill")}</span>
 
         <span className="nd-spacer" />
 
-        <div className="nd-switch" role="tablist" aria-label="View mode">
+        <div className="nd-switch" role="tablist" aria-label={t("tut.viewMode")}>
           <button
             type="button"
             role="tab"
@@ -198,7 +201,7 @@ export function TutorialShell({
             data-active={view === "tutorial"}
             onClick={() => setView("tutorial")}
           >
-            Tutorial mode
+            {t("tut.tutorialMode")}
           </button>
           <button
             type="button"
@@ -207,7 +210,7 @@ export function TutorialShell({
             data-active={view === "canvas"}
             onClick={() => setView("canvas")}
           >
-            Canvas mode
+            {t("tut.canvasMode")}
           </button>
         </div>
 
@@ -216,7 +219,7 @@ export function TutorialShell({
         </button>
         {/* A full-screen takeover needs an obvious way out. The logo and the
             breadcrumb both lead home too, but neither reads as "close this". */}
-        <Link to="/projects?tab=explore" className="nd-close" aria-label="Close tutorial" title="Close tutorial">
+        <Link to="/projects?tab=explore" className="nd-close" aria-label={t("tut.closeTutorial")} title={t("tut.closeTutorial")}>
           <X className="h-4 w-4" />
         </Link>
       </header>
@@ -228,7 +231,7 @@ export function TutorialShell({
           <div className="nd-scroll">
             <aside className="nd-rail" onMouseLeave={clearStep}>
               <div className="nd-rail-head">
-                <div className="nd-eyebrow">Guided tutorial</div>
+                <div className="nd-eyebrow">{t("tut.guidedTutorial")}</div>
                 <h1 className="nd-rail-title">{title}</h1>
                 <p className="nd-rail-desc">{summary}</p>
                 <div className="nd-chips">
@@ -268,9 +271,9 @@ export function TutorialShell({
               )}
 
               <div className="nd-rail-foot">
-                <span>Hover a step to focus it</span>
+                <span>{t("tut.hoverStep")}</span>
                 <span className="nd-rail-count">
-                  {step === 0 ? "overview" : `step ${step} of ${steps.length}`}
+                  {step === 0 ? t("tut.overview") : t("tut.stepOf", { n: step, total: steps.length })}
                 </span>
               </div>
             </aside>

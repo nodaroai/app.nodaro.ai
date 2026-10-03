@@ -42,9 +42,9 @@ function ImageCriticDetailsModal({ isOpen, onClose, data }: ImageCriticDetailsMo
           <div className="flex items-center gap-2">
             <Eye className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-medium">
-              Image Critic — Score: {score !== undefined ? score.toFixed(2) : "—"}{" "}
+              {t("node.imageCriticScore", { score: score !== undefined ? score.toFixed(2) : "—" })}{" "}
               <span className={approved ? "text-green-500" : "text-red-500"}>
-                ({approved ? "Approved" : "Rejected"})
+                ({approved ? t("node.approved") : t("node.rejected")})
               </span>
             </span>
           </div>
@@ -67,7 +67,7 @@ function ImageCriticDetailsModal({ isOpen, onClose, data }: ImageCriticDetailsMo
           {perMode && Object.keys(perMode).length > 0 && (
             <div>
               <div className="text-xs font-semibold text-muted-foreground mb-1">
-                Per-mode breakdown
+                {t("node.perModeBreakdown")}
               </div>
               <ul className="text-xs space-y-1">
                 {Object.entries(perMode).map(([m, r]) =>
@@ -157,13 +157,13 @@ function ImageCriticNodeComponent({ id, data, selected }: NodeProps) {
       >
         <div className="flex flex-col gap-1.5">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            Mode: {nodeData.mode ?? "realism"}
+            {t("node.modeValue", { mode: nodeData.mode ?? "realism" })}
           </div>
           {hasResult ? (
             <button
               type="button"
               onClick={() => setModalOpen(true)}
-              aria-label={`Score: ${score!.toFixed(2)}, ${approved ? "approved" : "rejected"}. Click for details.`}
+              aria-label={t("node.scoreAriaLabel", { score: score!.toFixed(2), verdict: approved ? t("node.approvedLower") : t("node.rejectedLower") })}
               className={`block w-full rounded-md p-2 text-left text-xs transition-colors ${
                 approved
                   ? "bg-green-500/15 hover:bg-green-500/25"
@@ -177,7 +177,7 @@ function ImageCriticNodeComponent({ id, data, selected }: NodeProps) {
                     approved ? "text-green-500" : "text-red-500"
                   }`}
                 >
-                  {approved ? "Approved" : "Rejected"}
+                  {approved ? t("node.approved") : t("node.rejected")}
                 </span>
               </div>
               {feedback && (

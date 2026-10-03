@@ -191,7 +191,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       title: "Get Job",
       description:
         "Fetch one of your jobs by id. structuredContent is the job envelope: status (pending | processing | completed | failed | cancelled | pending_review), " +
-        "progress, jobType, assetKind, outputUrl (the finished image/video/audio), outputData, errorMessage, credits and timestamps; on failed/cancelled/pending_review " +
+        "progress, jobType, assetKind, outputUrl (the finished image/video/audio), outputData, input (the prompt as sent), errorMessage, credits and timestamps; on failed/cancelled/pending_review " +
         "also retryable, guidance and — for a safety block with a catalog fallback — suggestedProvider. " +
         "Poll every 5–10 s (an image usually finishes within a minute, a video in 2–10 minutes), or call wait_for_job to block up to 120 s.",
       inputSchema: {
@@ -329,7 +329,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       // carries credits, timestamps and the failure guidance.
       const { data: row } = await supabase
         .from("jobs")
-        .select("id, status, progress, output_data, error_message, error_hint, created_at, started_at, completed_at, job_type, credits")
+        .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, job_type, credits")
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
         .maybeSingle()

@@ -43,6 +43,7 @@ interface PickerProps {
 }
 
 function UploadPicker({ isDragOver, setIsDragOver, onFileClick, onDrop, urlValue, onUrlChange, onUrlSubmit, compact }: PickerProps) {
+  const t = useT()
   return (
     <div className={`flex flex-col gap-2 ${compact ? "" : "p-3"}`}>
       <button
@@ -58,7 +59,7 @@ function UploadPicker({ isDragOver, setIsDragOver, onFileClick, onDrop, urlValue
         onDrop={onDrop}
       >
         <Upload className="w-4 h-4" />
-        <span className="text-xs">{isDragOver ? "Drop Image" : "Choose Image"}</span>
+        <span className="text-xs">{isDragOver ? t("node.dropImage") : t("inputcfg.chooseImage")}</span>
       </button>
       <div className="flex items-center gap-1.5">
         <Link className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
@@ -72,7 +73,7 @@ function UploadPicker({ isDragOver, setIsDragOver, onFileClick, onDrop, urlValue
             if (e.key === "Enter") { e.preventDefault(); onUrlSubmit() }
           }}
           onBlur={() => { if (urlValue.trim()) onUrlSubmit() }}
-          placeholder="or paste image URL..."
+          placeholder={t("node.phOrPasteImageUrl")}
           className="w-full bg-transparent border-b border-muted-foreground/20 text-xs py-1 outline-none focus:border-[#38BDF8] transition-colors placeholder:text-muted-foreground/30"
         />
       </div>
@@ -82,10 +83,10 @@ function UploadPicker({ isDragOver, setIsDragOver, onFileClick, onDrop, urlValue
           e.stopPropagation()
           window.open("https://www.pinterest.com/search/pins/", "_blank", "noopener,noreferrer")
         }}
-        title="Open Pinterest in a new tab — find an image, right-click → Copy Image Address, paste here"
+        title={t("node.pinterestBrowseTitle")}
         className="self-center flex items-center gap-1 px-2 py-0.5 text-[10px] text-muted-foreground/50 hover:text-[#E60023] transition-colors"
       >
-        <span>or browse on Pinterest</span>
+        <span>{t("node.orBrowseOnPinterest")}</span>
         <ExternalLink className="w-2.5 h-2.5" />
       </button>
     </div>
@@ -284,7 +285,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                   <CachedImage
                     key={`${r.jobId}-${i}`}
                     src={r.url}
-                    alt={`Result ${i + 1}`}
+                    alt={t("node.resultN", { n: i + 1 })}
                     className={`w-12 h-12 object-cover rounded-lg cursor-pointer transition-all ${
                       i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                     }`}
@@ -310,7 +311,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
             {(isUploading || nodeData.isUploading) && (
               <div className="flex flex-col items-center justify-center gap-2 bg-muted/30 rounded-xl w-full h-full min-h-[80px]">
                 <Loader2 className="w-8 h-8 animate-spin text-[#38BDF8]" />
-                <p className="text-xs text-muted-foreground">Uploading...</p>
+                <p className="text-xs text-muted-foreground">{t("inputcfg.uploading")}</p>
               </div>
             )}
 
@@ -330,7 +331,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                 )}
                 <CachedImage
                   src={imageUrl}
-                  alt={nodeData.filename || "Uploaded image"}
+                  alt={nodeData.filename || t("node.uploadedImage")}
                   className="w-full h-full object-cover rounded-xl"
                   thumbnail={!useFull}
                   thumbnailWidth={320}
@@ -352,7 +353,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                   <button type="button" aria-label={t("node.removeThisResult")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-red-600/80 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
-                    title="Remove">
+                    title={t("common.remove")}>
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -361,22 +362,22 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                     onClick={(e) => { e.stopPropagation(); openImageEdit(id, imageUrl!, activeResult?.filerobotDesignStateUrl) }} title={t("node.editImage")}>
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
-                  <button type="button" aria-label="Fullscreen" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                    onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
+                  <button type="button" aria-label={t("node.fullscreen")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                    onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title={t("node.fullscreen")}>
                     <Expand className="w-3.5 h-3.5" />
                   </button>
-                  <button type="button" aria-label="Download" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                  <button type="button" aria-label={t("common.download")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
                       const a = document.createElement('a')
                       a.href = `/v1/image-proxy?url=${encodeURIComponent(imageUrl ?? '')}&download=1`
                       a.download = `${nodeData.label || 'image'}.png`
                       a.click()
-                    }} title="Download">
+                    }} title={t("common.download")}>
                     <Download className="w-3.5 h-3.5" />
                   </button>
                   <button type="button" aria-label={t("cfgshared.copyUrl")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                    onClick={(e) => { e.stopPropagation(); copyToClipboard(imageUrl ?? '', "URL copied") }} title={t("cfgshared.copyUrl")}>
+                    onClick={(e) => { e.stopPropagation(); copyToClipboard(imageUrl ?? '', t("node.urlCopied")) }} title={t("cfgshared.copyUrl")}>
                     <Link className="w-3.5 h-3.5" />
                   </button>
                   <SaveToLibraryButton url={imageUrl} type="image" />
@@ -414,7 +415,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-white/80 font-medium">{t("node.addAnotherImage")}</span>
-                  <button type="button" aria-label="Cancel"
+                  <button type="button" aria-label={t("common.cancel")}
                     className="w-6 h-6 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full"
                     onClick={(e) => { e.stopPropagation(); setShowAddOverlay(false); setPendingUrl("") }}>
                     <X className="w-3 h-3" />

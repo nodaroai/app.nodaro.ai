@@ -34,7 +34,10 @@ import {
 } from "@/hooks/queries/use-developer-apps-queries"
 import type { DeveloperAppStatus } from "@/lib/api"
 import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { ALL_SCOPES, type Scope, SCOPE_DESCRIPTIONS } from "@/lib/dev-app-scopes"
+import { formatDateTime } from "@/lib/i18n/format"
 
 function StatusBadge({ status }: { status: DeveloperAppStatus }) {
   const t = useT()
@@ -103,6 +106,7 @@ function parseLines(text: string): string[] {
 
 export default function DeveloperAppDetailPage() {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
@@ -161,7 +165,7 @@ export default function DeveloperAppDetailPage() {
           to="/settings/developer-apps"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className={cn("h-4 w-4", isRtl && "rotate-180")} />
           {t("common.back")}
         </Link>
         <p className="mt-6 text-muted-foreground">
@@ -270,7 +274,7 @@ export default function DeveloperAppDetailPage() {
           to="/settings/developer-apps"
           className="text-muted-foreground hover:text-foreground transition-colors"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className={cn("h-5 w-5", isRtl && "rotate-180")} />
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -311,9 +315,9 @@ export default function DeveloperAppDetailPage() {
             disabled={rotateMutation.isPending}
           >
             {rotateMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <Loader2 className="h-4 w-4 animate-spin me-2" />
             ) : (
-              <RotateCw className="h-4 w-4 mr-2" />
+              <RotateCw className="h-4 w-4 me-2" />
             )}
             {t("devApp.rotate")}
           </Button>
@@ -322,11 +326,11 @@ export default function DeveloperAppDetailPage() {
         <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-200 dark:border-zinc-800 text-xs text-muted-foreground">
           <div>
             <span className="block text-[10px] uppercase tracking-wide">{t("devApp.createdAt")}</span>
-            <span>{new Date(appRow.createdAt).toLocaleString()}</span>
+            <span>{formatDateTime(appRow.createdAt)}</span>
           </div>
           <div>
             <span className="block text-[10px] uppercase tracking-wide">{t("devApp.updatedAt")}</span>
-            <span>{new Date(appRow.updatedAt).toLocaleString()}</span>
+            <span>{formatDateTime(appRow.updatedAt)}</span>
           </div>
         </div>
       </div>
@@ -359,7 +363,7 @@ export default function DeveloperAppDetailPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Label htmlFor="edit-homepage">{t("devApp.homepageLabel")}</Label>
-            <Input
+            <Input dir="ltr"
               id="edit-homepage"
               type="url"
               value={homepageUrl}
@@ -370,7 +374,7 @@ export default function DeveloperAppDetailPage() {
           </div>
           <div>
             <Label htmlFor="edit-logo">{t("devApp.logoLabel")}</Label>
-            <Input
+            <Input dir="ltr"
               id="edit-logo"
               type="url"
               value={logoUrl}
@@ -383,7 +387,7 @@ export default function DeveloperAppDetailPage() {
 
         <div>
           <Label htmlFor="edit-redirects">{t("devApps.redirectsLabel")}</Label>
-          <Textarea
+          <Textarea dir="ltr"
             id="edit-redirects"
             value={redirectUrisText}
             onChange={(e) => setRedirectUrisText(e.target.value)}
@@ -397,7 +401,7 @@ export default function DeveloperAppDetailPage() {
 
         <div>
           <Label htmlFor="edit-origins">{t("devApps.originsLabel")}</Label>
-          <Textarea
+          <Textarea dir="ltr"
             id="edit-origins"
             value={allowedOriginsText}
             onChange={(e) => setAllowedOriginsText(e.target.value)}
@@ -440,7 +444,7 @@ export default function DeveloperAppDetailPage() {
             className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
             onClick={() => setConfirmDelete(true)}
           >
-            <Trash2 className="h-4 w-4 mr-2" />
+            <Trash2 className="h-4 w-4 me-2" />
             {t("devApp.deleteApp")}
           </Button>
           <Button
@@ -449,9 +453,9 @@ export default function DeveloperAppDetailPage() {
             className="bg-[#ff0073] hover:bg-[#e00067] text-white"
           >
             {updateMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <Loader2 className="h-4 w-4 animate-spin me-2" />
             ) : (
-              <Save className="h-4 w-4 mr-2" />
+              <Save className="h-4 w-4 me-2" />
             )}
             {t("devApp.saveChanges")}
           </Button>
@@ -477,7 +481,7 @@ export default function DeveloperAppDetailPage() {
               disabled={rotateMutation.isPending}
             >
               {rotateMutation.isPending && (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <Loader2 className="h-4 w-4 animate-spin me-2" />
               )}
               {t("devApp.rotate")}
             </Button>
@@ -517,10 +521,10 @@ export default function DeveloperAppDetailPage() {
               </div>
 
               <div className="relative">
-                <code className="block w-full p-3 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-sm font-mono break-all pr-10">
+                <code className="block w-full p-3 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-sm font-mono break-all pe-10">
                   {rotatedSecret}
                 </code>
-                <div className="absolute right-1 top-1">
+                <div className="absolute end-1 top-1">
                   <CopyButton text={rotatedSecret} />
                 </div>
               </div>
@@ -571,7 +575,7 @@ export default function DeveloperAppDetailPage() {
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending && (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <Loader2 className="h-4 w-4 animate-spin me-2" />
               )}
               {t("devApps.delete")}
             </Button>

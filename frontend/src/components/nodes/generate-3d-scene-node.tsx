@@ -76,10 +76,10 @@ function Generate3DSceneNodeComponent({ id, data, selected }: NodeProps) {
             )}
             <div className="text-center">
               <div className="text-sm font-medium text-[#ff0073]">
-                {objectCount} objects
+                {t("node.nObjects", { n: objectCount })}
               </div>
               <div className="text-[10px] text-muted-foreground">
-                {seconds.toFixed(1)}s{revision ? ` · rev ${revision.slice(0, 6)}` : ""}
+                {seconds.toFixed(1)}s{revision ? ` · ${t("node.revShort", { rev: revision.slice(0, 6) })}` : ""}
               </div>
             </div>
           </div>
@@ -88,7 +88,7 @@ function Generate3DSceneNodeComponent({ id, data, selected }: NodeProps) {
         {nodeData.scenePendingPlan && (
           <div className="flex items-center gap-1 text-[10px] text-amber-500">
             <History className="w-3 h-3 shrink-0" />
-            <span className="line-clamp-1">New revision waiting — open the panel</span>
+            <span className="line-clamp-1">{t("node.newRevisionWaiting")}</span>
           </div>
         )}
 
@@ -117,7 +117,7 @@ function Generate3DSceneNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="text-muted-foreground text-[10px] line-clamp-1">
-          {nodeData.scenePrompt?.trim() ? nodeData.scenePrompt : "No prompt set"}
+          {nodeData.scenePrompt?.trim() ? nodeData.scenePrompt : t("pro3d.noPrompt")}
         </div>
       </div>
     </BaseNode>

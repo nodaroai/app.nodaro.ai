@@ -197,6 +197,8 @@ const NODE_EXTRA_FIELDS: Record<string, string[]> = {
   // (a schedule starts paused), and the rules themselves are config that
   // travels.
   "schedule-trigger": ["active"],
+  // Same for a Telegram Account Trigger: listening is the importer's to start.
+  "telegram-account-trigger": ["isActive"],
   character: ["expressions", "poses", "lightingVariations", "angles", "customVariations"],
   object: ["angles", "materials", "variations", "customVariations"],
   creature: ["angles", "poses", "variations", "customVariations"],
@@ -232,6 +234,9 @@ const NODE_EXTRA_FIELDS: Record<string, string[]> = {
  */
 const UNOWNED_REF_FIELDS: Record<string, readonly string[]> = {
   "webhook-output": ["credentialId"],
+  // The exporter's connected Telegram account and its chats (a Saved Messages
+  // chat id IS the exporter's Telegram user id) — the importer picks their own.
+  "telegram-account-trigger": ["accountId", "chatIds", "chatTitles", "senderIds"],
   ...Object.fromEntries([...SOCIAL_POST_NODE_TYPES].map((type) => [type, ["connectionId"]])),
 }
 

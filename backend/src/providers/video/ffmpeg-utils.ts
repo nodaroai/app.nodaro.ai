@@ -1,4 +1,4 @@
-import { execFile, spawn } from "node:child_process"
+import { execFile, spawn, type ExecFileException } from "node:child_process"
 import { createWriteStream } from "node:fs"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
@@ -10,14 +10,195 @@ import { lookup as dnsLookup } from "node:dns/promises"
 import { isIP } from "node:net"
 import { config } from "../../lib/config.js"
 import { safeFetch, isPrivateOrReservedIP } from "../../lib/safe-fetch.js"
+import { csvFields } from "./ffprobe-csv.js"
+import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
+import {
+  DEFAULT_FFMPEG_TIMEOUT_MS,
+  DOWNLOAD_FLOOR_BYTES_PER_SEC,
+  DOWNLOAD_MAX_MS,
+  DOWNLOAD_MIN_BYTES_PER_WINDOW,
+  DOWNLOAD_RATE_WINDOW_MS,
+  DOWNLOAD_TIMEOUT_MS,
+  BIG_MEDIA_MAX_BYTES,
+  FFPROBE_TIMEOUT_MS,
+  downloadBodyDeadlineMs,
+} from "./ffmpeg-timeouts.js"
 
-export async function downloadFile(url: string, dest: string, opts: { maxBytes?: number } = {}): Promise<void> {
+// The ceilings live in a dependency-free leaf (see its header); re-exported so
+// every existing `ffmpeg-utils.js` import keeps working.
+export {
+  DEFAULT_FFMPEG_TIMEOUT_MS,
+  DOWNLOAD_FLOOR_BYTES_PER_SEC,
+  DOWNLOAD_MAX_MS,
+  DOWNLOAD_MIN_BYTES_PER_WINDOW,
+  DOWNLOAD_RATE_WINDOW_MS,
+  DOWNLOAD_TIMEOUT_MS,
+  BIG_MEDIA_MAX_BYTES,
+  FFPROBE_TIMEOUT_MS,
+  downloadBodyDeadlineMs,
+}
+
+/** The staged limits a BIG-MEDIA download runs under (production:
+ *  `BIG_MEDIA_DOWNLOAD_LIMITS`; a test passes small ones). */
+export interface DownloadLimits {
+  /** Wait for the response (status + headers); also the least a body gets,
+   *  and the grace before the minimum rate applies — within this long of the
+   *  start the opt-in path is never stricter than the default flat bound. */
+  readonly responseMs: number
+  /** The body is checked once per window of this length ... */
+  readonly windowMs: number
+  /** ... and aborted when a window delivers fewer bytes than this (a dead or
+   *  drip-fed transfer). */
+  readonly minBytesPerWindow: number
+  /** The most it may write (unless the caller passes a smaller `maxBytes`). */
+  readonly maxBytes: number
+  /** A known-size body gets size ÷ this (at least `responseMs`). */
+  readonly floorBytesPerSec: number
+  /** Nothing — response plus body — takes longer than this. */
+  readonly maxMs: number
+}
+
+/** For callers that fetch big media — apply-edl's camera originals and the
+ *  media proxy's source (decided 2026-09-25, Track 0.19). Their URLs are
+ *  user-supplied, so the limits guard a hostile one: a minimum rate per window
+ *  (a drip-feed fails within a minute) and a byte cap (a fast one cannot fill
+ *  the disk). Every other caller keeps the flat default. */
+export const BIG_MEDIA_DOWNLOAD_LIMITS: DownloadLimits = Object.freeze({
+  responseMs: DOWNLOAD_TIMEOUT_MS,
+  windowMs: DOWNLOAD_RATE_WINDOW_MS,
+  minBytesPerWindow: DOWNLOAD_MIN_BYTES_PER_WINDOW,
+  maxBytes: BIG_MEDIA_MAX_BYTES,
+  floorBytesPerSec: DOWNLOAD_FLOOR_BYTES_PER_SEC,
+  maxMs: DOWNLOAD_MAX_MS,
+})
+
+const seconds = (ms: number) => `${Math.round(ms / 1000)} s`
+
+/**
+ * Fetch `url` to `dest`.
+ *
+ * DEFAULT: one flat `DOWNLOAD_TIMEOUT_MS` (120 s) covers the response AND the
+ * body. For the ~60 callers that fetch provider results, images and
+ * user-supplied URLs that is also their only bound — a server trickling a byte
+ * a minute holds a worker at most that long, and fills at most 120 s × link
+ * rate of disk (`maxBytes` caps it further where a caller passes one).
+ *
+ * BIG MEDIA (`opts.limits`, normally `BIG_MEDIA_DOWNLOAD_LIMITS`): a transfer
+ * runs while it keeps a minimum rate — aborted when a `windowMs` window
+ * delivers under `minBytesPerWindow` (a dead or drip-fed transfer: these
+ * callers take user-supplied URLs), when a known-size body outlasts its size at
+ * the floor rate, at `maxMs` overall, or past `maxBytes` on disk. The flat 120 s
+ * could never deliver a 3-hour camera original (~15 GB). Every timeout starts
+ * "Download timeout:" and names its limit. The rate applies only after
+ * `responseMs` (review round 3 of #1656, decided 2026-09-25): a slow source the
+ * flat 120 s delivered still arrives. The body is fetched uncompressed and a
+ * compressed one is refused — the rate counts decoded bytes, so gzip would let
+ * a drip-feed pass it at ~1000:1.
+ */
+export async function downloadFile(
+  url: string,
+  dest: string,
+  opts: { maxBytes?: number; limits?: DownloadLimits } = {},
+): Promise<void> {
   // safeFetch: callers include media-process which streams user-supplied
   // sourceUrl into ffmpeg. Without DNS-aware SSRF protection, a hostname
   // resolving to an internal IP would have the response processed and the
   // result uploaded to R2 (read-oracle). See backend/src/lib/safe-fetch.ts.
-  const response = await safeFetch(url, { timeoutMs: DOWNLOAD_TIMEOUT_MS })
+  const limits = opts.limits
+  if (!limits) {
+    const response = await safeFetch(url, { timeoutMs: DOWNLOAD_TIMEOUT_MS })
+    await saveResponse(url, dest, response, opts.maxBytes, {})
+    return
+  }
+
+  const startedAt = Date.now()
+  const ctrl = new AbortController()
+  const abortWith = (what: string) => {
+    if (!ctrl.signal.aborted) ctrl.abort(new Error(`Download timeout: ${what}: ${url}`))
+  }
+  // Every timer is OURS, so every abort names its limit; safeFetch's own timer
+  // is only a backstop set past the overall ceiling.
+  let overall: ReturnType<typeof setTimeout> | undefined = setTimeout(
+    () => abortWith(`over its ${seconds(limits.maxMs)} overall ceiling`),
+    limits.maxMs,
+  )
+  let phase: ReturnType<typeof setTimeout> | undefined = setTimeout(
+    () => abortWith(`no response within ${seconds(limits.responseMs)}`),
+    limits.responseMs,
+  )
+  let rate: ReturnType<typeof setInterval> | undefined
+  const maxBytes = Math.min(opts.maxBytes ?? Infinity, limits.maxBytes)
+  try {
+    // Identity only: camera and audio originals are never sent compressed, and
+    // a compressed body would be counted decoded by the rate window below.
+    const response = await safeFetch(url, {
+      timeoutMs: limits.maxMs + 5_000,
+      signal: ctrl.signal,
+      headers: { "accept-encoding": "identity" },
+    })
+    clearTimeout(phase)
+    const encoding = contentEncoding(response)
+    if (response.ok && encoding) {
+      await response.body?.cancel().catch(() => undefined)
+      throw new Error(`Download refused: the server sent a compressed body (Content-Encoding: ${encoding}) though an uncompressed one was requested: ${url}`)
+    }
+    await saveResponse(url, dest, response, maxBytes, {
+      // The storage client takes no signal (and has no request timeout of its
+      // own — Track 0.12), so none of our limits apply to the R2 fallback.
+      onFallback: () => { clearTimeout(overall); overall = undefined },
+      onBody: () => {
+        const size = Number(response.headers?.get?.("content-length") ?? NaN)
+        const known = Number.isFinite(size) && size > 0
+        const bodyMs = downloadBodyDeadlineMs(known ? size : undefined, {
+          minMs: limits.responseMs, floorBytesPerSec: limits.floorBytesPerSec, maxMs: limits.maxMs,
+        })
+        phase = setTimeout(
+          () => abortWith(`longer than ${seconds(bodyMs)} for its size (${known ? `${Math.round(size / (1024 * 1024))} MB` : "unknown"})`),
+          bodyMs,
+        )
+        // Minimum rate: every window must deliver `minBytesPerWindow` — once
+        // `responseMs` has passed since the start, when the default path would
+        // itself have given up.
+        let windowBytes = 0
+        rate = setInterval(() => {
+          if (Date.now() - startedAt >= limits.responseMs && windowBytes < limits.minBytesPerWindow) {
+            abortWith(`too slow — ${windowBytes} bytes in the last ${seconds(limits.windowMs)}, under the ${limits.minBytesPerWindow} minimum`)
+          }
+          windowBytes = 0
+        }, limits.windowMs)
+        return (n: number) => { windowBytes += n }
+      },
+    })
+  } catch (err) {
+    // Our own abort reason says what happened; the fetch/stream layers would
+    // otherwise surface a bare "This operation was aborted".
+    if (ctrl.signal.aborted && ctrl.signal.reason instanceof Error) throw ctrl.signal.reason
+    throw err
+  } finally {
+    clearTimeout(overall)
+    clearTimeout(phase)
+    clearInterval(rate)
+  }
+}
+
+/** The response's content coding, or "" when its body is sent as is. */
+function contentEncoding(response: Response): string {
+  const value = (response.headers?.get?.("content-encoding") ?? "").trim().toLowerCase()
+  return value === "identity" ? "" : value
+}
+
+/** Write an already-fetched response to `dest` (both download paths). */
+async function saveResponse(
+  url: string,
+  dest: string,
+  response: Response,
+  maxBytes: number | undefined,
+  hooks: { readonly onFallback?: () => void; readonly onBody?: () => (bytes: number) => void },
+): Promise<void> {
   if (!response.ok) {
+    // Never leave a failed response streaming: a 4xx/5xx whose body keeps
+    // coming would otherwise hold its connection until the fetch timer fires.
+    await response.body?.cancel().catch(() => undefined)
     // Cloudflare can negative-cache a 404 per-edge for 40-55min on freshly
     // finalized media (incidents 2026-06-10/12). When the URL is OUR public
     // bucket, bypass the edge and stream straight from the R2 origin —
@@ -30,30 +211,44 @@ export async function downloadFile(url: string, dest: string, opts: { maxBytes?:
       const { r2KeyFromOurUrl, downloadR2ObjectToFile } = await import("../../lib/storage.js")
       const key = r2KeyFromOurUrl(url)
       if (key) {
+        hooks.onFallback?.()
         await downloadR2ObjectToFile(key, dest)
         return
       }
     }
     throw new Error(`Failed to download: ${url} (${response.status})`)
   }
-  const nodeStream = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
-  const { maxBytes } = opts
-  if (maxBytes !== undefined && maxBytes > 0) {
+  const capped = maxBytes !== undefined && maxBytes > 0 && Number.isFinite(maxBytes)
+  const announced = Number(response.headers?.get?.("content-length") ?? NaN)
+  if (capped && !contentEncoding(response) && announced > maxBytes) {
+    // A body that says up front it is over the cap fails at the headers
+    // (unencoded only: an encoded length is not the size on disk).
+    await response.body?.cancel().catch(() => undefined)
+    throw new Error(`Download exceeds ${Math.round(maxBytes / (1024 * 1024))} MB: ${url}`)
+  }
+  const count = hooks.onBody?.()
+  const stages: Array<NodeJS.ReadableStream | NodeJS.ReadWriteStream | NodeJS.WritableStream> = [
+    Readable.fromWeb(response.body as import("stream/web").ReadableStream),
+  ]
+  if (count) {
+    // Every chunk counts toward the current rate window.
+    stages.push(new Transform({ transform(chunk: Buffer, _enc, cb) { count(chunk.length); cb(null, chunk) } }))
+  }
+  if (capped) {
     // Byte cap for callers that fetch attacker-choosable URLs: the stream is
     // aborted as soon as the cap is crossed, so a hostile host cannot fill the
     // worker's tmpdir at line rate (each write is the caller's own work dir).
     let total = 0
-    const counter = new Transform({
+    stages.push(new Transform({
       transform(chunk: Buffer, _enc, cb) {
         total += chunk.length
         if (total > maxBytes) cb(new Error(`Download exceeds ${Math.round(maxBytes / (1024 * 1024))} MB: ${url}`))
         else cb(null, chunk)
       },
-    })
-    await pipeline(nodeStream, counter, createWriteStream(dest))
-    return
+    }))
   }
-  await pipeline(nodeStream, createWriteStream(dest))
+  stages.push(createWriteStream(dest))
+  await (pipeline as (...s: unknown[]) => Promise<void>)(...stages)
 }
 
 // FIFO semaphore serializes ffmpeg spawns so fan-out doesn't launch N ffmpeg
@@ -105,22 +300,6 @@ export async function withFfmpegSlot<T>(fn: () => Promise<T>, signal?: AbortSign
     release()
   }
 }
-
-// Hard ceiling so a hung ffmpeg can't hold its slot forever and starve the
-// FIFO queue. (It once had to stay below a 15-min BullMQ lockDuration; the
-// video worker's lock is 5 min now and BullMQ renews it while the processor
-// runs, so the lock no longer constrains this.) Exported so a handler that
-// budgets its own liveness (`HandlerFn.livenessBudgetMs`) can count the
-// spawns it makes at the default ceiling with the same number.
-export const DEFAULT_FFMPEG_TIMEOUT_MS = 10 * 60 * 1000
-
-/** Wall-clock ceiling `downloadFile` gives one fetch (safeFetch's timeout).
- *  NOT a bound on the R2-origin 404 fallback inside it, which goes through the
- *  storage client — that client has no request timeout. */
-export const DOWNLOAD_TIMEOUT_MS = 120_000
-
-/** Wall-clock ceiling of one `runFfprobe` call (its execFile watchdog). */
-export const FFPROBE_TIMEOUT_MS = 120_000
 
 /**
  * How much of ffmpeg's output a failure message carries.
@@ -174,6 +353,19 @@ export function ffmpegFailureMessage(stderr: string | undefined, fallback: strin
   return `ffmpeg failed: ${tail}`
 }
 
+/**
+ * `killed`: Node's execFile killed the child (the `timeout` watchdog or a
+ * maxBuffer overflow — ffmpeg traps the SIGTERM and exits 255, so `signal` is
+ * null and `killed` is the only reliable marker). `timedOut`: killed by the
+ * watchdog specifically. Attached to every ffmpeg / ffprobe failure so a
+ * caller can classify without parsing text (Video Overlay: a timeout is
+ * "Render exceeded the 10-minute limit"; a probe timeout stays retryable).
+ */
+function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut: boolean } {
+  const killed = error.killed === true
+  return { killed, timedOut: killed && error.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" }
+}
+
 export async function runFfmpeg(args: readonly string[], timeoutMs?: number): Promise<string> {
   const release = await acquireFfmpegSlot()
   try {
@@ -183,7 +375,7 @@ export async function runFfmpeg(args: readonly string[], timeoutMs?: number): Pr
         timeout: timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS,
       }, (error, stdout, stderr) => {
         if (error) {
-          reject(new Error(ffmpegFailureMessage(stderr, error.message)))
+          reject(Object.assign(new Error(ffmpegFailureMessage(stderr, error.message)), execFailureFlags(error)))
         } else {
           resolve(stdout)
         }
@@ -359,7 +551,7 @@ export function runFfprobe(args: readonly string[]): Promise<string> {
     // matches the safeFetch download timeout.
     execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout: FFPROBE_TIMEOUT_MS }, (error, stdout, stderr) => {
       if (error) {
-        reject(new Error(`ffprobe failed: ${stderr || error.message}`))
+        reject(Object.assign(new Error(`ffprobe failed: ${stderr || error.message}`), execFailureFlags(error)))
       } else {
         resolve(stdout)
       }
@@ -396,7 +588,7 @@ export async function getVideoFps(filePath: string): Promise<number> {
       "-v", "error", "-select_streams", "v:0",
       "-show_entries", "stream=r_frame_rate", "-of", "csv=p=0", filePath,
     ])
-    const [n, d] = out.trim().split("/").map(Number)
+    const [n, d] = (csvFields(out)[0] ?? "").split("/").map(Number)
     const fps = d ? n / d : n
     return fps && Number.isFinite(fps) && fps > 0 ? fps : 30
   } catch {
@@ -533,6 +725,110 @@ function constantFrameRate(avg: number | undefined, nominal: number | undefined)
 }
 
 /**
+ * What Video Overlay knows about its base after ONE local ffprobe call
+ * (`probeVideoOverlayBase`). `width` / `height` are the DISPLAY size — the
+ * stored size with the axes swapped for a 90°/270° rotation tag, which is what
+ * the ffmpeg CLI's autorotate hands `[0:v]` and what a browser's
+ * videoWidth/videoHeight report. `sar` is in the same (display) orientation;
+ * 1 when absent. Durations are the VIDEO stream's (AAC priming inflates the
+ * container's). The frame rates are the raw ffprobe rationals.
+ */
+export interface VideoOverlayBaseProbe {
+  readonly width: number
+  readonly height: number
+  /** Display-matrix rotation, degrees normalised to 0..359. */
+  readonly rotation: number
+  readonly sar: number
+  readonly rFrameRate?: string
+  readonly avgFrameRate?: string
+  readonly streamDurationSec: number
+  readonly startTimeSec: number
+  /** codec_name of the FIRST audio stream; null when the base is silent. */
+  readonly audioCodec: string | null
+}
+
+/**
+ * The ONE ffprobe call Video Overlay makes on its downloaded base (spec §4.2
+ * step 3). No `-select_streams` (v:0 and a:0 cannot be selected in one call):
+ * the first real video stream and the first audio stream are picked here.
+ * An embedded cover picture (`disposition.attached_pic`) is not a video — an
+ * MP3 with album art must fail as "not a video", not render one frame.
+ */
+const VIDEO_OVERLAY_PROBE_ENTRIES =
+  "stream=index,codec_type,codec_name,width,height,sample_aspect_ratio,r_frame_rate,avg_frame_rate,duration,start_time" +
+  ":stream_side_data=rotation:stream_disposition=attached_pic:stream_tags=rotate:format=duration"
+
+function parseSampleAspect(value: unknown): number {
+  if (typeof value !== "string") return 1
+  const [num, den] = value.split(":").map(Number)
+  return num !== undefined && den !== undefined && Number.isFinite(num) && Number.isFinite(den) && num > 0 && den > 0 ? num / den : 1
+}
+
+function parseRotation(stream: Record<string, unknown>): number {
+  const side = Array.isArray(stream.side_data_list) ? (stream.side_data_list as Array<Record<string, unknown>>) : []
+  const fromSide = side.map((s) => Number(s?.rotation)).find((r) => Number.isFinite(r))
+  const tag = Number((stream.tags as Record<string, unknown> | undefined)?.rotate)
+  const raw = fromSide ?? (Number.isFinite(tag) ? tag : 0)
+  return ((Math.round(raw) % 360) + 360) % 360
+}
+
+/** Pure: ffprobe JSON → the display-oriented probe, or DeterministicJobError("The base input is not a video"). */
+export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
+  const notVideo = () => new DeterministicJobError("The base input is not a video")
+  let parsed: { streams?: unknown; format?: { duration?: unknown } }
+  try {
+    parsed = JSON.parse(json) as typeof parsed
+  } catch {
+    throw notVideo()
+  }
+  const streams = Array.isArray(parsed.streams) ? (parsed.streams as Array<Record<string, unknown>>) : []
+  const video = streams.find(
+    (s) => s.codec_type === "video" && (s.disposition as { attached_pic?: unknown } | undefined)?.attached_pic !== 1,
+  )
+  const audio = streams.find((s) => s.codec_type === "audio")
+  if (!video) throw notVideo()
+  const storedW = Number(video.width)
+  const storedH = Number(video.height)
+  if (!Number.isInteger(storedW) || storedW <= 0 || !Number.isInteger(storedH) || storedH <= 0) throw notVideo()
+  const streamDur = Number(video.duration)
+  const formatDur = Number(parsed.format?.duration)
+  const streamDurationSec = Number.isFinite(streamDur) && streamDur > 0 ? streamDur : Number.isFinite(formatDur) && formatDur > 0 ? formatDur : NaN
+  if (!Number.isFinite(streamDurationSec)) throw notVideo()
+  const rotation = parseRotation(video)
+  const swap = rotation === 90 || rotation === 270
+  const sar = parseSampleAspect(video.sample_aspect_ratio)
+  const start = Number(video.start_time)
+  return {
+    width: swap ? storedH : storedW,
+    height: swap ? storedW : storedH,
+    rotation,
+    // The ffmpeg CLI's autorotate transposes the frame AND inverts its SAR.
+    sar: swap ? 1 / sar : sar,
+    ...(typeof video.r_frame_rate === "string" ? { rFrameRate: video.r_frame_rate } : {}),
+    ...(typeof video.avg_frame_rate === "string" ? { avgFrameRate: video.avg_frame_rate } : {}),
+    streamDurationSec,
+    startTimeSec: Number.isFinite(start) ? start : 0,
+    audioCodec: audio && typeof audio.codec_name === "string" ? audio.codec_name : null,
+  }
+}
+
+/**
+ * Probe the LOCAL base file. ffprobe failing on it (HTML, a PNG or an MP3
+ * saved as .mp4 …) is a deterministic refusal — fail once, refund; an
+ * ffprobe TIMEOUT stays a plain, retryable error.
+ */
+export async function probeVideoOverlayBase(path: string): Promise<VideoOverlayBaseProbe> {
+  let out: string
+  try {
+    out = await runFfprobe(["-v", "error", "-show_entries", VIDEO_OVERLAY_PROBE_ENTRIES, "-of", "json", path])
+  } catch (err) {
+    if ((err as { timedOut?: unknown }).timedOut === true) throw err
+    throw new DeterministicJobError("The base input is not a video", { cause: err })
+  }
+  return parseVideoOverlayProbe(out)
+}
+
+/**
  * Probe a video URL for dimensions + duration (+ frame rate) in a single
  * ffprobe call. Accepts a local path OR a remote http(s) URL — ffprobe reads
  * both. Remote URLs go through assertSafeProbeSource first (SSRF guard); see
@@ -617,8 +913,19 @@ export type TrackEnd =
   | { readonly state: "absent" }
   /** The track's real end, in seconds on the RENDER's clock. */
   | { readonly state: "measured"; readonly endSec: number }
-  /** The track is there but its end could not be read (no timestamps, or the scan failed). */
-  | { readonly state: "unmeasured"; readonly reason: string }
+  /** The track is there but its end could not be read (no timestamps, or the scan failed).
+   *  `declaredEndSec` is set ONLY for a re-anchoring container (MPEG-TS/PS) whose
+   *  timestamps run continuously (never back, never forward past the CLI's
+   *  fold threshold — see `dtsContinuity`): its `format.duration` is then the span of
+   *  every stream, which on the render's clock can only OVER-state a track's end
+   *  — a coarse upper bound the window check may refuse against without ever
+   *  refusing a correct edit. A TS/PS file whose timestamps jump BACK (two
+   *  recordings joined, a stream reconnect, a restarted encoder) gets none:
+   *  ffprobe's duration is then last-minus-first timestamp and UNDER-states the
+   *  content the render plays straight through (a 20 s joined file declares
+   *  10 s). A plain scan failure gets none either: there the declaration can
+   *  UNDER-report too (a Xing-less VBR mp3 of 600 s declares 554 s). */
+  | { readonly state: "unmeasured"; readonly reason: string; readonly declaredEndSec?: number }
 
 /** The picture and sound tracks of one source file. */
 export interface StreamEnds {
@@ -661,7 +968,10 @@ export interface StreamEnds {
  *    handled the same way. EXCEPTION: MPEG-TS / program-stream containers
  *    re-anchor to the earliest MAPPED stream (which chunking changes), so
  *    `format.start_time` is not the render's zero for them — both tracks come
- *    back `unmeasured` and the window check is skipped rather than made wrong.
+ *    back `unmeasured`. Their declared duration is attached as a coarse upper
+ *    bound only when a packet scan of every mapped track shows its DTS running
+ *    continuously; otherwise the window check is skipped for the source
+ *    rather than made wrong.
  *
  * Cost is I/O only and scales with file size. Packet lines are STREAMED (a
  * two-hour track is several MB of csv — past `runFfprobe`'s buffer). Local
@@ -673,16 +983,30 @@ export interface StreamEnds {
 export async function probeStreamEnds(filePath: string): Promise<StreamEnds> {
   const listing = await runFfprobe([
     "-v", "error",
-    "-show_entries", "format=start_time,format_name:stream=index,codec_type:stream_disposition=attached_pic",
+    "-show_entries", "format=start_time,duration,format_name:stream=index,codec_type:stream_disposition=attached_pic",
     "-of", "json",
     filePath,
   ])
-  const { video, audio, startSec, reAnchors } = parseStreamListing(listing)
+  const { video, audio, startSec, reAnchors, declaredSec } = parseStreamListing(listing)
   if (reAnchors) {
     // The container's timestamps do not share the render's clock (see the
-    // docstring) — measuring against them would refuse correct edits or pass
-    // bad ones. Skip the check; the render proceeds as it always has.
-    const unmeasured: TrackEnd = { state: "unmeasured", reason: "MPEG-TS/PS container re-anchors timestamps; not on the render's clock" }
+    // docstring) — measuring per track against them would refuse correct edits
+    // or pass bad ones. Its declared duration (the span of every stream) is a
+    // safe UPPER bound instead — but only while the timestamps run forward: a
+    // backward jump makes it UNDER-state the content (see `TrackEnd`), and a
+    // bound that refuses correct paid edits is worse than none. When it holds,
+    // the window check refuses past it + a wider tolerance, so an overrun
+    // cannot deliver minutes of frozen picture.
+    const mapped = [video, audio].filter((i): i is number => i !== undefined)
+    const continuity = declaredSec !== undefined ? await dtsContinuity(filePath, mapped) : undefined
+    const base = "MPEG-TS/PS container re-anchors timestamps; not on the render's clock"
+    const unmeasured: TrackEnd = {
+      state: "unmeasured",
+      reason: continuity === undefined || continuity === "monotonic"
+        ? base
+        : `${base}; ${continuity}, so its declared length is no bound`,
+      ...(declaredSec !== undefined && continuity === "monotonic" ? { declaredEndSec: declaredSec } : {}),
+    }
     return {
       video: video === undefined ? { state: "absent" } : unmeasured,
       audio: audio === undefined ? { state: "absent" } : unmeasured,
@@ -703,17 +1027,18 @@ export async function probeStreamEnds(filePath: string): Promise<StreamEnds> {
   return { video: await measure(video), audio: await measure(audio) }
 }
 
-/** From an ffprobe `-show_entries format=start_time,format_name:stream=index,
- *  codec_type:stream_disposition=attached_pic -of json` listing: the first REAL
- *  video stream (not cover art) and the first audio stream, by index, the
- *  file's start time in seconds (0 when the container reports none), and
+/** From an ffprobe `-show_entries format=start_time,duration,format_name:
+ *  stream=index,codec_type:stream_disposition=attached_pic -of json` listing:
+ *  the first REAL video stream (not cover art) and the first audio stream, by
+ *  index, the file's start time in seconds (0 when the container reports none),
  *  `reAnchors` — whether the container re-anchors timestamps to the earliest
  *  mapped stream (MPEG-TS / program stream), so `format.start_time` is not the
- *  render's zero. Exported for its unit test. */
-export function parseStreamListing(listingJson: string): { video?: number; audio?: number; startSec: number; reAnchors: boolean } {
+ *  render's zero — and `declaredSec`, the container's declared duration when it
+ *  reports a positive one. Exported for its unit test. */
+export function parseStreamListing(listingJson: string): { video?: number; audio?: number; startSec: number; reAnchors: boolean; declaredSec?: number } {
   let parsed: {
     streams?: Array<{ index?: number; codec_type?: string; disposition?: { attached_pic?: number } }>
-    format?: { start_time?: string; format_name?: string }
+    format?: { start_time?: string; duration?: string; format_name?: string }
   }
   try {
     parsed = JSON.parse(listingJson) as typeof parsed
@@ -727,12 +1052,44 @@ export function parseStreamListing(listingJson: string): { video?: number; audio
   // ffprobe joins comma-separated demuxer names, e.g. "mpegts" or "mpeg".
   const names = (parsed.format?.format_name ?? "").split(",").map((n) => n.trim())
   const reAnchors = names.includes("mpegts") || names.includes("mpegtsraw") || names.includes("mpeg")
+  const declared = Number(parsed.format?.duration)
   return {
     ...(typeof video === "number" ? { video } : {}),
     ...(typeof audio === "number" ? { audio } : {}),
     startSec: Number.isFinite(start) ? start : 0,
     reAnchors,
+    ...(Number.isFinite(declared) && declared > 0 ? { declaredSec: declared } : {}),
   }
+}
+
+/** Do these tracks' packet DTS run continuously? "monotonic" when every track
+ *  has DTS and none jumps; otherwise a short reason. A jump is either a step
+ *  BACK — within one stream DTS is non-decreasing even with B-frames (PTS is
+ *  what reorders) — or a step FORWARD past where the previous packet ENDS
+ *  (dts + duration, the CLI's own `next_dts` prediction) by more than
+ *  `DTS_JUMP_THRESHOLD_SEC`, the CLI's `-dts_delta_threshold` (so a still-image
+ *  stream whose frames each last 12 s is continuous, as the CLI sees it): both are discontinuities the
+ *  CLI folds away at render time, so the content plays straight through while
+ *  `format.duration` (last minus first timestamp) says something else. The
+ *  forward case matters: libavformat treats a timestamp more than 60 s below
+ *  the first one as a 33-bit wrap and adds 2^33 ticks, so a recording that
+ *  restarted its clock reads as one ~26.5 h forward step (a genuine wrap, which
+ *  libavformat unwraps into continuous timestamps, stays monotonic). A scan
+ *  that fails is reported, never treated as continuous. */
+export const DTS_JUMP_THRESHOLD_SEC = 10
+
+async function dtsContinuity(filePath: string, streamIndices: readonly number[]): Promise<string> {
+  if (streamIndices.length === 0) return "no mapped track to scan"
+  for (const index of streamIndices) {
+    try {
+      const { dtsSteps } = await scanPacketEnds(filePath, index)
+      if (dtsSteps === "none") return `stream ${index} carries no DTS`
+      if (dtsSteps === "discontinuous") return `stream ${index}'s timestamps jump (back, or forward by more than ${DTS_JUMP_THRESHOLD_SEC} s — a joined or reconnected recording)`
+    } catch (err) {
+      return `stream ${index} could not be scanned (${err instanceof Error ? err.message : String(err)})`
+    }
+  }
+  return "monotonic"
 }
 
 /** One packet csv line — ffprobe always writes the fields in its own order,
@@ -758,9 +1115,10 @@ export function parsePacketLine(line: string): { pts?: number; dts?: number; dur
 }
 
 /** Stream one track's packet list through ffprobe; keep the max PTS end and,
- *  for a stream with no pts at all, the max DTS end. Discarded packets never
- *  count. */
-function scanPacketEnds(filePath: string, streamIndex: number): Promise<{ maxPtsEnd?: number; maxDtsEnd?: number }> {
+ *  for a stream with no pts at all, the max DTS end, and whether its DTS ever
+ *  JUMPS — back, or forward past `DTS_JUMP_THRESHOLD_SEC` (`dtsSteps`, read by
+ *  `dtsContinuity`). Discarded packets never count. */
+function scanPacketEnds(filePath: string, streamIndex: number): Promise<{ maxPtsEnd?: number; maxDtsEnd?: number; dtsSteps: "monotonic" | "discontinuous" | "none" }> {
   return new Promise((resolve, reject) => {
     const proc = spawn("ffprobe", [
       "-v", "error",
@@ -778,12 +1136,20 @@ function scanPacketEnds(filePath: string, streamIndex: number): Promise<{ maxPts
 
     let maxPtsEnd: number | undefined
     let maxDtsEnd: number | undefined
+    let lastDts: number | undefined
+    let lastDur = 0
+    let dtsJumps = false
     let lineBuf = ""
     const take = (line: string) => {
       const pkt = parsePacketLine(line)
       if (!pkt || pkt.discard) return
       if (pkt.pts !== undefined && (maxPtsEnd === undefined || pkt.pts + pkt.dur > maxPtsEnd)) maxPtsEnd = pkt.pts + pkt.dur
       if (pkt.dts !== undefined && (maxDtsEnd === undefined || pkt.dts + pkt.dur > maxDtsEnd)) maxDtsEnd = pkt.dts + pkt.dur
+      if (pkt.dts !== undefined) {
+        if (lastDts !== undefined && (pkt.dts < lastDts || pkt.dts - (lastDts + lastDur) > DTS_JUMP_THRESHOLD_SEC)) dtsJumps = true
+        lastDts = pkt.dts
+        lastDur = pkt.dur
+      }
     }
     proc.stdout.on("data", (chunk: Buffer) => {
       lineBuf += chunk.toString()
@@ -807,6 +1173,7 @@ function scanPacketEnds(filePath: string, streamIndex: number): Promise<{ maxPts
       else resolve({
         ...(maxPtsEnd !== undefined ? { maxPtsEnd } : {}),
         ...(maxDtsEnd !== undefined ? { maxDtsEnd } : {}),
+        dtsSteps: lastDts === undefined ? "none" : dtsJumps ? "discontinuous" : "monotonic",
       })
     })
   })
@@ -876,8 +1243,8 @@ export async function probeVideoStream(filePath: string): Promise<{ codec: strin
     "-of", "csv=p=0",
     filePath,
   ])
-  // ffprobe CSV output: "h264,yuv420p"
-  const parts = output.trim().toLowerCase().split(",")
+  // ffprobe CSV output: "h264,yuv420p" (see csvFields for the shapes a plain split misreads)
+  const parts = csvFields(output.toLowerCase())
   return {
     codec: parts[0] ?? "",
     pixFmt: parts[1] ?? "",
@@ -1202,7 +1569,7 @@ async function probeFirstAudioCodec(filePath: string): Promise<string | null> {
     "-of", "csv=p=0",
     filePath,
   ])
-  const codec = output.trim().toLowerCase()
+  const codec = (csvFields(output.toLowerCase())[0] ?? "")
   return codec.length > 0 ? codec : null
 }
 

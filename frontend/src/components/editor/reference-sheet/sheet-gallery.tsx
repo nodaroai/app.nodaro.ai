@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
 import { Copy } from "lucide-react"
 import { PRESET_LABELS, type ReferenceSheet, type SheetPresetId } from "@nodaro/shared"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
@@ -21,9 +22,9 @@ export function sheetLabel(sheet: Pick<ReferenceSheet, "type" | "skin" | "flavou
 async function copyUrl(url: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(url)
-    toast.success("URL copied")
+    toast.success(tx("node.urlCopied"))
   } catch {
-    toast.error("Couldn't copy URL")
+    toast.error(tx("entity.copyUrlFailed"))
   }
 }
 
@@ -34,6 +35,7 @@ async function copyUrl(url: string): Promise<void> {
  * both the character preset panel and the classic (object/location) panel.
  */
 export function SheetGallery({ result, sheets, onSetThumbnail, accent }: SheetGalleryProps) {
+  const t = useT()
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
   const items = useMemo(() => {
@@ -51,30 +53,30 @@ export function SheetGallery({ result, sheets, onSetThumbnail, accent }: SheetGa
     <>
       {result && (
         <div className="space-y-2 pt-1">
-          <div className="text-[9px] uppercase tracking-widest text-slate-600">Result</div>
+          <div className="text-[9px] uppercase tracking-widest text-slate-600">{t("entity.sheetResult")}</div>
           <button
             type="button"
             onClick={() => setLightboxIndex(0)}
             className="relative block border border-[#1e293b] rounded overflow-hidden bg-[#0e1117] max-w-full cursor-zoom-in"
-            aria-label="Open full screen"
+            aria-label={t("entity.openFullScreen")}
           >
-            <img src={result.url} alt="Generated reference sheet" className="max-w-full max-h-[420px] object-contain" />
+            <img src={result.url} alt={t("entity.sheetResultAlt")} className="max-w-full max-h-[420px] object-contain" />
           </button>
           <div className="flex items-center gap-3">
-            <a href={result.url} download target="_blank" rel="noreferrer" className={btn}>Download</a>
-            <button type="button" onClick={() => void copyUrl(result.url)} className={btn}>Copy URL</button>
-            <button type="button" onClick={() => onSetThumbnail(result.url, result.label)} className={btn}>Set as thumbnail</button>
+            <a href={result.url} download target="_blank" rel="noreferrer" className={btn}>{t("common.download")}</a>
+            <button type="button" onClick={() => void copyUrl(result.url)} className={btn}>{t("cfgshared.copyUrl")}</button>
+            <button type="button" onClick={() => onSetThumbnail(result.url, result.label)} className={btn}>{t("entity.setAsThumbnail")}</button>
           </div>
         </div>
       )}
 
       <div className="space-y-2 pt-2 border-t border-[#1e293b]">
         <div className="text-[9px] uppercase tracking-widest text-slate-600">
-          Existing sheets {sheets.length > 0 && `(${sheets.length})`}
+          {t("entity.existingSheets")} {sheets.length > 0 && `(${sheets.length})`}
         </div>
         {sheets.length === 0 ? (
           <div className="text-[11px] text-slate-500 py-4 border border-dashed border-[#1e293b] rounded text-center">
-            No reference sheets yet — pick a preset above and generate one.
+            {t("entity.noSheetsYet")}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -87,15 +89,15 @@ export function SheetGallery({ result, sheets, onSetThumbnail, accent }: SheetGa
                     type="button"
                     onClick={() => setLightboxIndex(lbIdx)}
                     className="block w-full cursor-zoom-in"
-                    aria-label="Open full screen"
+                    aria-label={t("entity.openFullScreen")}
                   >
                     <img src={sheet.url} alt={label} loading="lazy" className="w-full h-full object-cover aspect-video" />
                   </button>
                   <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">{label}</div>
                   <div className="absolute inset-x-0 top-0 flex justify-end gap-1 p-1 opacity-0 group-hover:opacity-100">
-                    <a href={sheet.url} download target="_blank" rel="noreferrer" className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80" title="Download">↓</a>
-                    <button type="button" onClick={() => void copyUrl(sheet.url)} className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80" title="Copy URL">⧉</button>
-                    <button type="button" onClick={() => onSetThumbnail(sheet.url, label)} className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80">Set thumb</button>
+                    <a href={sheet.url} download target="_blank" rel="noreferrer" className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80" title={t("common.download")}>↓</a>
+                    <button type="button" onClick={() => void copyUrl(sheet.url)} className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80" title={t("cfgshared.copyUrl")}>⧉</button>
+                    <button type="button" onClick={() => onSetThumbnail(sheet.url, label)} className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80">{t("entity.setThumb")}</button>
                   </div>
                 </div>
               )
@@ -115,7 +117,7 @@ export function SheetGallery({ result, sheets, onSetThumbnail, accent }: SheetGa
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/40 text-white text-xs"
             style={{ outlineColor: accent }}
           >
-            <Copy className="w-4 h-4" /> Copy URL
+            <Copy className="w-4 h-4" /> {t("cfgshared.copyUrl")}
           </button>
         )}
       />

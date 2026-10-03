@@ -555,7 +555,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                     : char.referenceImageUrl ? "bg-blue-500/10 text-blue-500"
                     : "bg-orange-500/10 text-orange-500"
                   }`}>
-                    {char.category === "location" ? "location" : char.category === "object" ? "object" : char.referenceImageUrl ? "ref" : "desc"}
+                    {char.category === "location" ? t("cfgext.assetTypeLocation") : char.category === "object" ? t("cfgext.assetTypeObject") : char.referenceImageUrl ? t("entity.badgeRef") : t("entity.badgeDesc")}
                   </span>
                   {char.type === "description" && !char.referenceImageUrl && (
                     <span className="text-[8px] text-orange-500" title={t("imgcfg.needsRefTitle")}>{t("imgcfg.needsRef")}</span>
@@ -1527,7 +1527,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                     : char.referenceImageUrl ? "bg-blue-500/10 text-blue-500"
                     : "bg-orange-500/10 text-orange-500"
                   }`}>
-                    {char.category === "location" ? "location" : char.category === "object" ? "object" : char.referenceImageUrl ? "ref" : "desc"}
+                    {char.category === "location" ? t("cfgext.assetTypeLocation") : char.category === "object" ? t("cfgext.assetTypeObject") : char.referenceImageUrl ? t("entity.badgeRef") : t("entity.badgeDesc")}
                   </span>
                 </div>
                 {char.type === "description" && char.description && (

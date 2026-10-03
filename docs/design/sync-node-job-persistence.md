@@ -11,13 +11,13 @@
 
 | Node | Current behavior | Credits |
 |------|-----------------|---------|
-| instagram-post | Sync API, backend creates job but frontend ignores jobId | 1 |
-| tiktok-post | Same | 1 |
-| youtube-upload | Same | 1 |
-| linkedin-post | Same | 1 |
-| x-post | Same | 1 |
-| facebook-post | Same | 1 |
-| qa-check | Sync API, backend creates job but frontend ignores jobId | 3 |
+| instagram-post | Sync API, backend creates job but frontend ignores jobId | 10 |
+| tiktok-post | Same | 10 |
+| youtube-upload | Same | 10 |
+| linkedin-post | Same | 10 |
+| x-post | Same | 10 |
+| facebook-post | Same | 10 |
+| qa-check | Sync API, backend creates job but frontend ignores jobId | 1 |
 | save-to-storage | Sync API, backend creates job but frontend ignores jobId | 0 |
 | webhook-output | Sync API, backend does NOT create job | 0 |
 

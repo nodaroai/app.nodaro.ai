@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, useMemo, useRef, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { useDismissableLayerSurface } from "@radix-ui/react-dismissable-layer"
-import { buildRangeLabel as buildRangeLabelShared, isCollectInEdge, type SelectorMode } from "@nodaro/shared"
+import { buildRangeLabel as buildRangeLabelShared, isCollectInEdge, withWiredSettings, type SelectorMode } from "@nodaro/shared"
 import {
   ReactFlow,
   MiniMap,
@@ -90,6 +90,7 @@ import { CanvasZoomContext } from "./canvas-zoom-context"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
 import { createClient } from "@/lib/supabase"
 import { TELEPORTER_PAN_EVENT, NODE_DEF_MAP, type WorkflowNode, type WorkflowEdge, type SceneNodeType } from "@/types/nodes"
 import type { ConnectionContext } from "@/lib/node-compatibility"
@@ -591,6 +592,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const isRtl = useAppDir() === "rtl"
   // React Flow's own a11y strings, keyed to the live locale (see canvas-aria-labels).
   const locale = useLocaleStore((s) => s.locale)
+  const t = useT()
   const ariaLabelConfig = useMemo(() => canvasAriaLabelConfig(locale), [locale])
   const copilotTurnActive = useCopilotUiStore((s) => s.turnActive)
   const zoom = useStore((s) => s.transform[2])
@@ -1132,9 +1134,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     // Build a map of nodeId → node for quick lookup
     const nodeMap = new Map(nodes.map((n) => [n.id, n]))
 
-    // Edge IDs wired into a `prompt` handle the consumer's prompt doesn't use —
-    // rendered inert (grayed) by AnimatedFlowEdge. Computed once per memo run.
-    const unusedPromptEdgeIds = computeUnusedPromptEdges(nodes, edges)
+    // Edges wired into a `prompt` handle the consumer's prompt doesn't use,
+    // each with why — rendered inert (grayed) by AnimatedFlowEdge, which names
+    // the reason on hover. Computed once per memo run.
+    const unusedPromptEdges = computeUnusedPromptEdges(nodes, edges)
 
     const cache = animatedEdgeCacheRef.current
     const nextCache = new Map<string, { fields: string; rawEdge: WorkflowEdge; result: WorkflowEdge }>()
@@ -1183,11 +1186,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       // in AnimatedFlowEdge. Recomputes every time `nodes` changes (which
       // includes provider switches via updateNodeData), so the live state
       // tracks the panel selection without explicit edge data writes.
+      // Of the model the node RUNS — a Provider wired into its Settings input sets it.
       const targetHandleLimit = edge.targetHandle
-        ? getHandleConnectionLimit(targetNode, edge.targetHandle)
+        ? getHandleConnectionLimit(targetNode ? withWiredSettings(targetNode, nodes, edges) : undefined, edge.targetHandle)
         : null
       const disabledByProvider = targetHandleLimit?.limit === 0
-      const unusedPromptRef = unusedPromptEdgeIds.has(edge.id)
+      const unusedPromptReason = unusedPromptEdges.get(edge.id)
+      const unusedPromptRef = unusedPromptReason !== undefined
 
       const outputMode = resolveEffectiveOutputMode(edge, sourceNode, targetNode)
 
@@ -1210,7 +1215,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         sourceNode?.type,
         targetNode?.type,
         disabledByProvider,
-        unusedPromptRef,
+        unusedPromptReason,
         shouldHighlight,
         edgeColor,
         edgeTypeColor,
@@ -1233,7 +1238,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         ...edge,
         type: 'default', // Explicitly set type to use our AnimatedFlowEdge
         animated: hasAnimation, // Only animate for execution, not for dragging
-        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode, sourceNodeType: sourceNode?.type, targetNodeType: targetNode?.type, disabledByProvider, unusedPromptRef },
+        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode, sourceNodeType: sourceNode?.type, targetNodeType: targetNode?.type, disabledByProvider, unusedPromptRef, unusedPromptReason },
         style: styleOverride ? { ...edge.style, ...styleOverride } : edge.style,
       }
       nextCache.set(edge.id, { fields, rawEdge: edge, result: computed })
@@ -2415,7 +2420,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
           const nodesToPaste = migrateImageNodes(parsed.nodes)
           const edgesToPaste = parsed.edges ?? []
-          const clipboardName = parsed.name || "Workflow"
+          const clipboardName = parsed.name || tx("canvas.clipboardDefaultName")
 
           // Build the id map first so the parentId + loop connectedSourceId
           // remaps below see every node regardless of order. Clone data via the
@@ -2722,9 +2727,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     const { nodes: newNodes, edges: newEdges, name } = pendingImportData
     const projectId = useWorkflowStore.getState().projectId
     if (!projectId) return
-    const wf = await createWorkflow(projectId, `Imported: ${name}`)
+    const wf = await createWorkflow(projectId, tx("canvas.importedName", { name }))
     if (!wf) {
-      toast.error("Failed to create workflow")
+      toast.error(tx("canvas.createWorkflowFailed"))
       return
     }
     const supabase = createClient()
@@ -2733,7 +2738,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       edges: JSON.parse(JSON.stringify(newEdges)),
     }).eq("id", wf.id)
     if (error) {
-      toast.error("Failed to save imported nodes")
+      toast.error(tx("canvas.saveImportedFailed"))
       return
     }
     setPendingImportData(null)
@@ -2887,7 +2892,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         <Dialog open={templatesModalOpen} onOpenChange={(o) => !o && setTemplatesModalOpen(false)}>
           <DialogContent className="w-[92vw] sm:max-w-5xl h-[88vh] overflow-y-auto p-0">
             <DialogHeader className="sr-only">
-              <DialogTitle>Templates</DialogTitle>
+              <DialogTitle>{t("canvas.templates")}</DialogTitle>
             </DialogHeader>
             <Suspense fallback={null}>
               <TemplatesPageModal />
@@ -2901,7 +2906,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         <Dialog open={tutorialsModalOpen} onOpenChange={(o) => !o && setTutorialsModalOpen(false)}>
           <DialogContent className="w-[92vw] sm:max-w-5xl h-[88vh] overflow-y-auto p-6">
             <DialogHeader className="sr-only">
-              <DialogTitle>Tutorials</DialogTitle>
+              <DialogTitle>{t("canvas.tutorials")}</DialogTitle>
             </DialogHeader>
             <Suspense fallback={null}>
               <TutorialsTabModal />
@@ -2927,7 +2932,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       <div ref={dismissableSurfaceRef} className="relative w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop} onMouseMove={(e) => { lastMousePositionRef.current = { x: e.clientX, y: e.clientY } }}>
         {isReadOnly && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 rounded-full border border-[#ff0073]/40 bg-background/90 px-4 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur pointer-events-none">
-            Studio workflow — view only. Open in Studio to edit, or Clone &amp; Remix.
+            {t("canvas.studioViewOnly")}
           </div>
         )}
         <SaveRefusedPill />
@@ -3039,7 +3044,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             className="absolute top-3 end-3 z-30 shadow-sm bg-background"
             data-testid="follow-build-button"
           >
-            Follow build {isRtl ? "←" : "→"}
+            {t("canvas.followBuild")} {isRtl ? "←" : "→"}
           </Button>
         )}
         {/* Workflow-loading surface. Shown for the whole fetch window
@@ -3053,7 +3058,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         {isWorkflowLoading && (
           <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 pointer-events-none bg-background/70 backdrop-blur-[1px]">
             <Loader2 className="w-8 h-8 text-[#ff0073] animate-spin" />
-            <span className="text-sm text-muted-foreground">Loading workflow…</span>
+            <span className="text-sm text-muted-foreground">{t("canvas.loadingWorkflow")}</span>
           </div>
         )}
         {/* First-run empty-canvas surface. Gated on a loaded (not loading) workflow
@@ -3112,7 +3117,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
                 setEdgeContextMenu(null)
               }}
             >
-              Replace with Teleporter
+              {t("canvas.replaceWithTeleporter")}
             </button>
           </div>
         </>
@@ -3136,17 +3141,17 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       <Dialog open={pendingImportData !== null} onOpenChange={(open) => { if (!open) dismissImportDialog() }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Import Nodes</DialogTitle>
+            <DialogTitle>{t("canvas.importNodesTitle")}</DialogTitle>
             <DialogDescription>
-              Your canvas already has nodes. How would you like to import?
+              {t("canvas.importNodesBody")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex gap-2 sm:justify-end">
             <Button variant="outline" onClick={handleImportPaste}>
-              Paste Here
+              {t("canvas.pasteHere")}
             </Button>
             <Button onClick={handleImportNew}>
-              New Workflow
+              {t("dash.newWorkflow")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -6,7 +6,8 @@ import type { NodeProps } from "@xyflow/react"
 import { Frame } from "lucide-react"
 import { FRAMING_CATEGORY_LABELS, FRAMING_CATEGORY_ORDER, FRAMING_FIELD_BY_CATEGORY, getFraming, getFramingLabel, type FramingCategory } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
-import { FramingPreview } from "@/lib/picker-ui"
+import { LookPreviewStyleSwitch } from "./look-preview-style"
+import { FramingPreview, LookArt } from "@/lib/picker-ui"
 import { usePickerJsonConsumer } from "./use-picker-json-consumer"
 import { PICKER_CONSUMER_INPUT_HANDLES, PickerJsonHandleIcon, PickerUpdateButton } from "./picker-json-handle"
 import type { FramingData } from "@/types/nodes"
@@ -60,17 +61,21 @@ function FramingNodeComponent({ id, data, selected }: NodeProps) {
             rowGap: "1.25rem",
           }}
         >
-          {enabled.map(({ category, entryId }) => {
+          {enabled.map(({ category, entryId }, index) => {
             const entry = getFraming(entryId)
             return (
               <div key={category} className="flex flex-col gap-1">
-                <p className="text-foreground text-sm font-medium">
-                  <span className="text-muted-foreground text-[11px] uppercase tracking-wider mr-1">
-                    {FRAMING_CATEGORY_LABELS[category]}:
-                  </span>
-                  {getFramingLabel(entryId)}
-                </p>
-                <FramingPreview framingId={entryId} className="w-full aspect-[16/9]" />
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-foreground text-sm font-medium min-w-0">
+                    <span className="text-muted-foreground text-[11px] uppercase tracking-wider mr-1">
+                      {FRAMING_CATEGORY_LABELS[category]}:
+                    </span>
+                    {getFramingLabel(entryId)}
+                  </p>
+                  {/* One switch per node, on the first entry's title. */}
+                  {index === 0 && <LookPreviewStyleSwitch pickerKey="framing" />}
+                </div>
+                <LookArt pickerKey="framing" id={entryId} className="w-full aspect-[16/9]" width={640} fallback={<FramingPreview framingId={entryId} className="w-full aspect-[16/9]" />} />
                 {entry?.description && (
                   <p className="text-muted-foreground text-[11px] leading-snug">
                     {entry.description}

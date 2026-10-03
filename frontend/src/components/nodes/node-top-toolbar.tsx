@@ -3,6 +3,7 @@ import { type MouseEvent as ReactMouseEvent, type ReactNode } from "react"
 import { useStore } from "@xyflow/react"
 import { MoreHorizontal } from "lucide-react"
 import { PresetDropdown } from "@/components/editor/config-panels/node-preset-dropdown"
+import { NodeDocsButton } from "@/components/editor/node-docs/node-docs-button"
 import { flooredCanvasScale } from "@/lib/zoom-floor"
 
 /**
@@ -20,6 +21,9 @@ import { flooredCanvasScale } from "@/lib/zoom-floor"
  */
 export function NodeTopToolbar({
   nodeId,
+  nodeType,
+  showPreset,
+  showDocs,
   showActions,
   onMoreMenu,
   toolbarActions,
@@ -28,6 +32,11 @@ export function NodeTopToolbar({
   onPresetOpenChange,
 }: {
   readonly nodeId: string
+  readonly nodeType: string | undefined
+  /** Show the preset pill: on hover, while its menu is open, or whenever a preset is applied. */
+  readonly showPreset: boolean
+  /** Show the "?" docs link: on hover or while the node is selected. */
+  readonly showDocs: boolean
   /** Show the ⋯ menu + per-node actions. False when the toolbar is visible only because a preset
    *  is applied (node not hovered) — then we show just the preset pill, not the whole action row. */
   readonly showActions: boolean
@@ -42,7 +51,8 @@ export function NodeTopToolbar({
   const scale = flooredCanvasScale(canvasZoom)
   return (
     <div className="flex items-center gap-1" onMouseEnter={onEnter} onMouseLeave={onLeave}>
-      <PresetDropdown nodeId={nodeId} variant="node" zoom={scale} onOpenChange={onPresetOpenChange} />
+      {showPreset && <PresetDropdown nodeId={nodeId} variant="node" zoom={scale} onOpenChange={onPresetOpenChange} />}
+      {showDocs && nodeType && <NodeDocsButton nodeType={nodeType} size={Math.round(scale * 13)} />}
       {showActions && (
         <>
           <button

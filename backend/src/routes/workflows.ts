@@ -4,7 +4,7 @@ import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../lib/cloud-
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { findDeniedNodeTypesForUser } from "../lib/availability-viewer.js"
 import { z } from "zod"
-import { stripExportContent, stripStudioDraftSettings, stripUnownedRefs, stripTransientRuntimeData, validateSubWorkflowRoutes, WORKFLOW_VISIBILITIES, type WorkflowExport } from "@nodaro/shared"
+import { stripExportContent, stripStudioDraftSettings, stripUnownedRefs, stripTransientRuntimeData, normalizeVideoOverlayNodes, validateSubWorkflowRoutes, WORKFLOW_VISIBILITIES, type WorkflowExport } from "@nodaro/shared"
 import { publicWorkflowProjection } from "../lib/public-workflow-projection.js"
 import { supabase } from "../lib/supabase.js"
 import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../lib/default-project.js"
@@ -24,9 +24,10 @@ import {
   changesStudioPublishFlag,
 } from "../lib/studio-audience.js"
 import { loadWorkflowFor, toAccessRow } from "../lib/workflow-route-access.js"
-import { reconcileWorkflowTriggers, type GraphNode, type ReconcileResult } from "../lib/workflow-trigger-sync.js"
+import { reconcileWorkflowTriggers, type ChangedAccountNode, type GraphNode, type ReconcileResult } from "../lib/workflow-trigger-sync.js"
 import { isProjectedTriggerNodeType } from "@nodaro/shared"
 import { graphNeedsCredentialGate, sendCredentialUnbound, unboundCredentialUsesFor, workflowIsExposed } from "../lib/credential-gate.js"
+import { deltaTouchesVideoOverlay, videoOverlayDeltaUpserts, type DeltaNode, type VideoOverlayDeltaInput } from "../lib/video-overlay-delta.js"
 import type { WorkflowAccessRow } from "../lib/private-plugins/types.js"
 import {
   asObjectArray,
@@ -296,12 +297,17 @@ type EdgeRecord = Record<string, unknown>
 
 const syncTriggersBody = z.object({
   vouchNodeIds: z.array(z.string().min(1).max(200)).max(200).optional(),
+  /** Account triggers the editor changed in this save, each with the listening settings it set. */
+  accountNodes: z
+    .array(z.object({ id: z.string().min(1).max(200), settings: z.string().min(2).max(16_384) }))
+    .max(200)
+    .optional(),
 })
 
 /**
  * The edge set a delta save leaves behind: upserts replace stored edges by id,
- * deletions remove them, everything else stays. Only the credential gate reads
- * it — the RPC applies the delta itself.
+ * deletions remove them, everything else stays. The credential gate and the
+ * Video Overlay write-boundary pass read it — the RPC applies the delta itself.
  */
 export function mergeDeltaEdges(
   stored: unknown,
@@ -322,6 +328,7 @@ async function syncTriggersForSavedWorkflow(
   workflowId: string,
   row: Record<string, unknown>,
   vouchNodeIds?: ReadonlyArray<string>,
+  accountNodes?: ReadonlyArray<ChangedAccountNode>,
 ): Promise<ReconcileResult> {
   const ownerId = typeof row.user_id === "string" ? row.user_id : ""
   if (!ownerId) return { created: 0, updated: 0, removed: 0 }
@@ -330,11 +337,20 @@ async function syncTriggersForSavedWorkflow(
   // may not, and a node that was already stored is not this save's to vouch
   // for. The API lanes pass nothing here and never vouch.
   const ownerSession = req.authKind === "jwt" && req.userId === ownerId
+  // Anyone acting AS the owner — their editor, a token, a connected app.
+  const ownerIdentity = req.userId === ownerId
   const result = await reconcileWorkflowTriggers({
     workflowId,
     userId: ownerId,
     nodes: row.nodes as readonly GraphNode[] | undefined,
     vouchNodeIds: ownerSession && vouchNodeIds && vouchNodeIds.length > 0 ? vouchNodeIds : undefined,
+    // The account lane is in reach of a save made AS the owner, never of an
+    // editor of a shared workflow: there it can switch a trigger off.
+    ownerActing: ownerIdentity,
+    // Arming, widening or re-pointing one is the owner's decision in their own
+    // editor: only their browser session names what it changed, with the
+    // settings it set — never a token or a connected app acting AS them.
+    accountNodes: ownerSession && accountNodes && accountNodes.length > 0 ? accountNodes : undefined,
   })
   if (result.error) {
     req.log.warn({ err: result.error, workflowId }, "workflow trigger sync failed")
@@ -848,7 +864,10 @@ export async function workflowRoutes(app: FastifyInstance) {
         name: body.name,
         description: body.description ?? null,
         folder_id: body.folderId ?? null,
-        nodes: body.nodes ?? [],
+        // Video Overlay (D10): presets expanded, and a layer whose `overlay<i>`
+        // handle these edges wire keeps no stored `imageUrl` — this is the
+        // create the SDK's `workflows.create` posts a full graph to.
+        nodes: normalizeVideoOverlayNodes(body.nodes ?? [], body.edges),
         edges: body.edges ?? [],
         settings: body.settings ?? {},
         source_prompt: body.sourcePrompt ?? null,
@@ -1099,7 +1118,9 @@ export async function workflowRoutes(app: FastifyInstance) {
         name: body.name,
         description: body.description ?? null,
         folder_id: body.folderId ?? null,
-        nodes: body.nodes ?? [],
+        // Video Overlay (D10): presets expanded, and a layer whose `overlay<i>`
+        // handle these edges wire keeps no stored `imageUrl`.
+        nodes: normalizeVideoOverlayNodes(body.nodes ?? [], body.edges),
         edges: body.edges ?? [],
         settings: body.settings ?? {},
         source_prompt: body.sourcePrompt ?? null,
@@ -1367,7 +1388,7 @@ export async function workflowRoutes(app: FastifyInstance) {
     )
     if (!loaded.ok) return
 
-    const result = await syncTriggersForSavedWorkflow(req, params.id, loaded.row, body.vouchNodeIds)
+    const result = await syncTriggersForSavedWorkflow(req, params.id, loaded.row, body.vouchNodeIds, body.accountNodes)
     return reply.send({
       data: {
         synced: !result.error,
@@ -1502,13 +1523,35 @@ export async function workflowRoutes(app: FastifyInstance) {
           if (uses.length > 0) return sendCredentialUnbound(reply, uses)
         }
       }
+      // Video Overlay (D10): a delta that touches Video Overlay — an upserted
+      // video-overlay node, or an edge into a layer handle — is normalised
+      // against the edge set it leaves behind, and a STORED video-overlay node
+      // the pass changes joins the upserts (an agent's edge-only edit wires an
+      // existing node without sending it). Only such a delta pays for this one
+      // read. The RPC below still authorizes the write and CAS-checks
+      // baseVersion, so a read newer or older than the caller's base can only
+      // end in the RPC's 409, never in a lost edit.
+      let deltaUpsertNodes = (body.delta.upsertNodes ?? []) as unknown as ReadonlyArray<DeltaNode>
+      if (deltaTouchesVideoOverlay(body.delta as unknown as VideoOverlayDeltaInput)) {
+        const { data: storedGraph } = await supabase
+          // tenant-scope-ignore: the RPC below authorizes this caller for this id; the read only completes the delta's own node upserts and never reaches the response.
+          .from("workflows")
+          .select("nodes, edges")
+          .eq("id", params.id)
+          .maybeSingle()
+        deltaUpsertNodes = videoOverlayDeltaUpserts(
+          body.delta as unknown as VideoOverlayDeltaInput,
+          storedGraph?.nodes,
+          mergeDeltaEdges(storedGraph?.edges, body.delta.upsertEdges, body.delta.deleteEdgeIds),
+        )
+      }
       const { data: rpcData, error: rpcError } = await supabase.rpc("apply_workflow_delta", {
         p_workflow_id: params.id,
         p_base_version: body.delta.baseVersion,
         // Server-side strip mirrors the full-body path: transient run-state
         // never persists, whichever protocol carries the nodes.
         p_upsert_nodes: stripTransientRuntimeData(
-          (body.delta.upsertNodes ?? []) as Array<{ data?: Record<string, unknown> }>,
+          deltaUpsertNodes as unknown as Array<{ data?: Record<string, unknown> }>,
         ),
         p_delete_node_ids: body.delta.deleteNodeIds ?? [],
         p_upsert_edges: body.delta.upsertEdges ?? [],
@@ -1589,11 +1632,35 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (body.name !== undefined) updates.name = body.name
     if (body.description !== undefined) updates.description = body.description
     if (body.folderId !== undefined) updates.folder_id = body.folderId
+    // Set when an edges-only save writes the STORED nodes back (below): the
+    // write is then pinned to the version they were read at.
+    let pinnedToLoadedVersion = false
     if (body.nodes !== undefined) {
       // Server-side strip of transient run-state (status/jobId/progress):
       // pre-P0 clients still send it, and persisted phantom "running" state
       // is what seeded false cross-tab conflicts. Results stay untouched.
-      updates.nodes = stripTransientRuntimeData(body.nodes as Array<{ data?: Record<string, unknown> }>)
+      // Then Video Overlay (D10): presets expanded, and a layer whose
+      // `overlay<i>` handle the saved edges wire keeps no stored `imageUrl` —
+      // a body without edges keeps the stored ones, as the gate above reads.
+      updates.nodes = normalizeVideoOverlayNodes(
+        stripTransientRuntimeData(body.nodes as Array<{ data?: Record<string, unknown> }>),
+        (body.edges ?? loaded.row.edges) as ReadonlyArray<{ target?: unknown; targetHandle?: unknown }> | undefined,
+      )
+    } else if (body.edges !== undefined && Array.isArray(loaded.row.nodes)) {
+      // Video Overlay (D10) on an edges-only save: new edges can wire a STORED
+      // node's layer handle, so that node's stale `imageUrl` is cleared and the
+      // stored nodes are written back — only when the pass changed one. They
+      // were read above, so the write is pinned to that version: a concurrent
+      // node edit ends in the 409 below, never in a silently reverted node.
+      const storedNodes = loaded.row.nodes as Array<{ id?: unknown; type?: unknown; data?: unknown }>
+      const healed = normalizeVideoOverlayNodes(
+        storedNodes,
+        body.edges as ReadonlyArray<{ target?: unknown; targetHandle?: unknown }>,
+      )
+      if (healed !== storedNodes) {
+        updates.nodes = healed
+        pinnedToLoadedVersion = typeof loaded.row.version === "number"
+      }
     }
     if (body.edges !== undefined) updates.edges = body.edges
     if (body.settings !== undefined) {
@@ -1688,6 +1755,9 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (body.expectedVersion !== undefined) {
       updateQuery = updateQuery.eq("version", body.expectedVersion)
     }
+    if (pinnedToLoadedVersion) {
+      updateQuery = updateQuery.eq("version", loaded.row.version as number)
+    }
 
     const { data, error } = await updateQuery
       .select(WORKFLOW_FULL_COLS)
@@ -1703,7 +1773,7 @@ export async function workflowRoutes(app: FastifyInstance) {
       // first) — return 409 with the current `updated_at` so the caller
       // can refetch + merge. If the caller did NOT supply
       // expectedUpdatedAt, the row truly doesn't exist (or isn't owned).
-      if (body.expectedUpdatedAt || body.expectedVersion !== undefined) {
+      if (body.expectedUpdatedAt || body.expectedVersion !== undefined || pinnedToLoadedVersion) {
         const { data: currentRow } = await supabase
           // Same reason as the update above — and it must match it exactly.
           // Left scoped by user_id, this re-read would miss for every workspace
@@ -2046,7 +2116,8 @@ export async function workflowRoutes(app: FastifyInstance) {
         project_id: projectId,
         user_id: userId,
         name: wf.name,
-        nodes: remappedNodes,
+        // Video Overlay (D10): presets expanded; a wired layer keeps no `imageUrl`.
+        nodes: normalizeVideoOverlayNodes(remappedNodes, migratedEdges),
         edges: migratedEdges,
         settings: remappedSettings,
         // Where this row came from. The importer is recorded as the original

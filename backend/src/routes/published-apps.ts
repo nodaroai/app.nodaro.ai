@@ -594,7 +594,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     )
     if (unboundUses.length > 0) return sendCredentialUnbound(reply, unboundUses)
 
-    const baseEstimatedCredits = estimateWorkflowCredits(nodes as EstimateNode[], edges as EstimateEdge[])
+    const baseEstimatedCredits = await estimateWorkflowCredits(nodes as EstimateNode[], edges as EstimateEdge[])
 
     // Inherit monetization from previous version, then user defaults, then zeros
     let inheritedMonetizationEnabled = false

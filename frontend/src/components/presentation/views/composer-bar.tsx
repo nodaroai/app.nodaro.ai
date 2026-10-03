@@ -1,6 +1,7 @@
 import { ArrowUp, Loader2 } from "lucide-react"
 import type { ReactNode } from "react"
 import type { WorkflowNode } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
 import { ComposerChip } from "./composer-chip"
 
 interface ComposerBarProps {
@@ -31,6 +32,7 @@ export function ComposerBar({
   needsMoreCredits,
   onLaunch,
 }: ComposerBarProps) {
+  const t = useT()
   return (
     <div className="flex flex-wrap items-center gap-2">
       {inputNodes.map((node) => (
@@ -42,9 +44,9 @@ export function ComposerBar({
           disabled={isRunning}
         />
       ))}
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ms-auto flex items-center gap-2">
         {needsMoreCredits && !isRunning && (
-          <span className="text-[11px] font-medium text-amber-600">Insufficient credits</span>
+          <span className="text-[11px] font-medium text-amber-600">{t("present.insufficientCredits")}</span>
         )}
         <button
           type="button"
@@ -54,11 +56,11 @@ export function ComposerBar({
         >
           {isRunning ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" /> Launching…
+              <Loader2 className="h-4 w-4 animate-spin" /> {t("present.launching")}
             </>
           ) : (
             <>
-              Launch{costLabel} <ArrowUp className="h-3.5 w-3.5" />
+              {t("present.launch")}{costLabel} <ArrowUp className="h-3.5 w-3.5" />
             </>
           )}
         </button>

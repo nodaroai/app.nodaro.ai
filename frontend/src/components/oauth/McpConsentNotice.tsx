@@ -1,5 +1,7 @@
 import type { FC } from "react"
 import type { DeveloperAppKind } from "@nodaro/sdk"
+import { useT } from "@/lib/i18n"
+import { nodeDocsLinksShown, useDocsPageUrl } from "@/lib/node-docs/node-docs"
 
 export type { DeveloperAppKind }
 
@@ -18,21 +20,26 @@ export interface McpConsentNoticeProps {
  * Returns null for any other kind ("user", "first_party_mcp", etc).
  */
 export const McpConsentNotice: FC<McpConsentNoticeProps> = ({ kind, clientName }) => {
+  const t = useT()
+  const docsPageUrl = useDocsPageUrl()
   if (kind !== "dynamic_mcp") return null
   return (
-    <div className="rounded-md border-l-4 border-orange-400 bg-orange-50 dark:bg-orange-950/40 p-3 my-3">
+    <div className="rounded-md border-s-4 border-orange-400 bg-orange-50 dark:bg-orange-950/40 p-3 my-3">
       <p className="text-sm text-orange-900 dark:text-orange-200">
-        <strong>"{clientName}" was claimed via MCP.</strong> The client name is self-reported by
-        the MCP client and was not verified by Nodaro. Verify the application requesting access
-        is genuinely the one you're using before approving.{" "}
-        <a
-          href="/docs/mcp/troubleshooting"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline"
-        >
-          Learn more
-        </a>
+        <strong>{t("oauth.mcpClaimed", { name: clientName })}</strong> {t("oauth.mcpSelfReported")}
+        {nodeDocsLinksShown() && (
+          <>
+            {" "}
+            <a
+              href={docsPageUrl("mcp/troubleshooting")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              {t("common.learnMore")}
+            </a>
+          </>
+        )}
       </p>
     </div>
   )

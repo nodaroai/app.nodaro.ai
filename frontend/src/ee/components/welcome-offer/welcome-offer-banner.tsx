@@ -7,6 +7,7 @@ import { creditUnits } from "@/lib/credit-units"
 import { WelcomeCreditBadge } from "./welcome-credit-badge"
 import { useWelcomeOffer, useWelcomeOfferClaim } from "./use-welcome-offer"
 import { useWelcomeOfferStore } from "./welcome-offer-store"
+import { formatNumber } from "@/lib/i18n/format"
 
 /**
  * The companion banner at the top of the Continue tab. Three states:
@@ -35,7 +36,7 @@ export function WelcomeOfferBanner() {
       >
         <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />
-          {t("welcome.claimed", { credits: creditUnits(claimedCredits).toLocaleString() })}
+          {t("welcome.claimed", { credits: formatNumber(creditUnits(claimedCredits)) })}
         </span>
         <button
           type="button"

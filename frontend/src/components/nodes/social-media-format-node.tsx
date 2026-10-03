@@ -24,7 +24,9 @@ import type { SocialMediaPlatform } from "@/lib/social-media-specs"
 function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as SocialMediaFormatData
-  const credits = useModelCredits("ffmpeg", 1)
+  // The id the route reserves (its own row), not the generic "ffmpeg" one,
+  // which quoted half the charge.
+  const credits = useModelCredits("social-media-format", 20)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -105,13 +107,13 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
                     aria-label={t("node.expandPreview")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
-                    title="Fullscreen"
+                    title={t("node.fullscreen")}
                   >
                     <Expand className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
-                    aria-label="Download"
+                    aria-label={t("common.download")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
@@ -120,7 +122,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
                       a.download = (nodeData.label || 'video') + '.mp4'
                       a.click()
                     }}
-                    title="Download"
+                    title={t("common.download")}
                   >
                     <Download className="w-3.5 h-3.5" />
                   </button>
@@ -130,7 +132,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
-                      copyToClipboard(activeUrl, "URL copied")
+                      copyToClipboard(activeUrl, t("node.urlCopied"))
                     }}
                     title={t("cfgshared.copyUrl")}
                   >

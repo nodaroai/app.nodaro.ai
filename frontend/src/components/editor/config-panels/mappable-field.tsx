@@ -14,7 +14,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { FieldMappings } from "@/types/nodes"
+import { CompareModelsLink } from "@/components/editor/node-docs/compare-models-link"
 import { getCompatibleSources } from "./helpers"
+import { useWiredSettingField } from "./wired-settings-context"
 import type { SourceNodeInfo } from "./types"
 
 /**
@@ -33,6 +35,7 @@ export const MappableField = memo(function MappableField({
   onMapField,
   providerCategory,
   labelAction,
+  wiredHandleId,
   children,
 }: {
   readonly field: string
@@ -42,6 +45,10 @@ export const MappableField = memo(function MappableField({
   readonly onMapField: (field: string, sourceNodeId: string | null) => void
   readonly providerCategory?: string
   readonly labelAction?: React.ReactNode
+  /** The node's own input pip for this field (e.g. `field-tone`). A wire into
+   *  it sets the field at run time and wins over the source menu, so while it
+   *  is wired the field shows that source, read-only, and the menu is hidden. */
+  readonly wiredHandleId?: string
   readonly children: React.ReactNode
 }) {
   const t = useT()
@@ -50,9 +57,16 @@ export const MappableField = memo(function MappableField({
   const labelId = `${baseId}-label`
   const triggerId = `${baseId}-trigger`
   const compatible = getCompatibleSources(field, sources, providerCategory)
+  const wired = wiredHandleId ? sources.find((s) => s.targetHandle === wiredHandleId) : undefined
+  // A Generation Settings node wired into the node's Settings input sets this
+  // field at run time over the menu and the typed value (as a field pip does).
+  const settingsField = useWiredSettingField(field)
+  const settingsWire = wired ? undefined : settingsField
+  const wiredLabel = wired?.label ?? settingsWire?.label
   const mapping = fieldMappings[field]
-  const mappedSource = mapping ? compatible.find((s) => s.id === mapping.sourceNodeId) : undefined
-  const isMapped = !!mappedSource
+  const mappedSource = wired ?? (!settingsWire && mapping ? compatible.find((s) => s.id === mapping.sourceNodeId) : undefined)
+  const mappedValue = settingsWire ? settingsWire.value : mappedSource?.value
+  const isMapped = !!mappedSource || !!settingsWire
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
@@ -61,8 +75,17 @@ export const MappableField = memo(function MappableField({
           <Label id={labelId} htmlFor={triggerId} className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{label}</Label>
         </div>
         <div className="flex items-center gap-1">
+          {/* The node's model picker: "Compare models ↗" to its docs page's
+              #models (self-hides without that section or outside the panel). */}
+          {field === "provider" && <CompareModelsLink />}
           {labelAction}
-          {compatible.length > 0 && (
+          {wiredLabel !== undefined && (
+            <span className="inline-flex h-5 max-w-[160px] items-center gap-1 rounded-md bg-[#ff0073]/10 px-1.5 text-[10px] font-medium text-[#ff0073] dark:bg-[#ff0073]/15 dark:text-[#ff6aa5]">
+              <Link2 className="size-2.5 shrink-0" />
+              <span className="truncate">{localizeNode(wiredLabel)}</span>
+            </span>
+          )}
+          {wiredLabel === undefined && compatible.length > 0 && (
             <Select
               value={mapping?.sourceNodeId ?? "__manual__"}
               onValueChange={(v) => onMapField(field, v === "__manual__" ? null : v)}
@@ -93,8 +116,13 @@ export const MappableField = memo(function MappableField({
       {isMapped ? (
         <div className="flex items-start gap-1.5 rounded-lg bg-[#F8FAFC] dark:bg-[#121212] border border-gray-200 dark:border-[#2D2D2D] px-2.5 py-2">
           <Link2 className="size-3 mt-0.5 shrink-0 text-[#ff0073]" />
-          <p className="text-xs text-gray-600 dark:text-[#94A3B8] break-words whitespace-pre-wrap flex-1 min-w-0">
-            {mappedSource.value || <span className="italic text-gray-400">{tx("cfgshared.sourceNoValueYet")}</span>}
+          <p className={`text-xs break-words whitespace-pre-wrap flex-1 min-w-0 ${settingsWire?.refused ? "text-red-600 dark:text-red-400" : "text-gray-600 dark:text-[#94A3B8]"}`}>
+            {mappedValue || <span className="italic text-gray-400">{tx("cfgshared.sourceNoValueYet")}</span>}
+            {settingsWire?.refused && (
+              <span className="mt-1 block text-[11px]">
+                {t("node.settingsProviderRefused", { model: settingsWire.value, source: localizeNode(settingsWire.label) })}
+              </span>
+            )}
           </p>
         </div>
       ) : (

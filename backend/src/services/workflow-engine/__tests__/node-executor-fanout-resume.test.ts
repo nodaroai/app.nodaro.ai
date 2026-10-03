@@ -26,8 +26,8 @@ vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: vi.fn() } }))
 vi.mock("@/lib/render-queue.js", () => ({ renderQueue: { add: vi.fn() } }))
 vi.mock("@/workers/shared.js", () => ({ refundJobCredits: vi.fn() }))
 vi.mock("../payload-builder.js", () => ({ buildPayload: vi.fn() }))
-// node-executor resolves the execution's availability viewer itself; the real
-// module reaches `@nodaro/shared`'s model catalog, which the stub below omits.
+// node-executor resolves the execution's availability viewer itself; stubbed
+// so the real viewer's Supabase lookups stay out of this pure-Node test.
 vi.mock("@/lib/availability-viewer.js", () => ({
   viewerForNode: async () => ({ admin: false }),
   assertNodeAvailableForUser: async () => {},
@@ -49,7 +49,11 @@ vi.mock("@nodaro/prompts", () => ({
   getParameterPromptHint: vi.fn(() => ""), pickerFanoutTargets: vi.fn(() => []), resolveVideoReferenceCore: vi.fn(() => ({})),
   truncateForField: vi.fn((s: string) => s),
 }))
-vi.mock("@nodaro/shared", () => ({
+// Spread the real module and override only what this test drives: a
+// hand-listed stub breaks the moment any transitively imported module reads a
+// new shared export at load time (apply-edl-plan's EDL_SOURCE_ROLES did).
+vi.mock("@nodaro/shared", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@nodaro/shared")>()),
   mergeExposedSettings: vi.fn(), applyHandleInputOverride: (_e: unknown, n: unknown) => n, isHandleInputWired: () => false,
 }))
 

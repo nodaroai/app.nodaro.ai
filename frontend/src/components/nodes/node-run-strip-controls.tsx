@@ -60,11 +60,20 @@ export interface NodeRunStripControlsProps {
   /** Tailwind classes for the ghost select triggers (passed by the caller so
    *  pill and in-body can tune sizing). */
   readonly ghostTriggerClass: string
+
+  /** Fields another node sets (a Settings input), → that node's label: their
+   *  control shows the value but is fixed. */
+  readonly lockedFields?: ReadonlyMap<string, string>
 }
 
 export function NodeRunStripControls(props: NodeRunStripControlsProps) {
   const t = useT()
   const onOpen = props.onOpenChange
+  const lockedBy = (field: string): string | undefined => props.lockedFields?.get(field)
+  const lockedTitle = (field: string): string | undefined => {
+    const source = lockedBy(field)
+    return source !== undefined ? t("node.fromSource", { source }) : undefined
+  }
   return (
     <>
       <PromptEditButton nodeId={props.nodeId} />
@@ -79,7 +88,7 @@ export function NodeRunStripControls(props: NodeRunStripControlsProps) {
         </span>
       ) : (
         <ModelSearchSelect
-          disabled={props.isRunning}
+          disabled={props.isRunning || lockedBy("provider") !== undefined}
           value={props.currentProvider}
           onChange={props.onModelChange}
           onOpenChange={onOpen}
@@ -96,8 +105,8 @@ export function NodeRunStripControls(props: NodeRunStripControlsProps) {
       {props.afterModel}
 
       {props.aspectOptions.length > 0 && (
-        <Select disabled={props.isRunning} value={props.currentAspect} onValueChange={props.onAspectChange} onOpenChange={onOpen}>
-          <SelectTrigger className={props.ghostTriggerClass}>
+        <Select disabled={props.isRunning || lockedBy("aspectRatio") !== undefined} value={props.currentAspect} onValueChange={props.onAspectChange} onOpenChange={onOpen}>
+          <SelectTrigger className={props.ghostTriggerClass} title={lockedTitle("aspectRatio")}>
             <Ratio className="opacity-70" />
             <SelectValue>{props.aspectShort}</SelectValue>
           </SelectTrigger>

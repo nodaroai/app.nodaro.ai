@@ -85,19 +85,28 @@ function makeSupabaseMock(
     from(table: string) {
       if (table === "pipelines") {
         return {
-          select: (_cols: string) => ({
-            eq: (_col: string, _val: string) => ({
-              single: async () => ({
-                data: pipeline,
-                error: pipeline ? null : { message: "not found", code: "PGRST116" },
-              }),
+          select: (_cols: string) => {
+            // The owner filter behaves as in Postgres: a pipeline of another
+            // user matches no row. (The id filter is not modelled; each case
+            // has one pipeline.)
+            let owner: unknown
+            const chain = {
+              eq: (col: string, val: unknown) => {
+                if (col === "user_id") owner = val
+                return chain
+              },
+              single: async () => {
+                const visible = pipeline && (owner === undefined || pipeline.user_id === owner) ? pipeline : null
+                return { data: visible, error: visible ? null : { message: "not found", code: "PGRST116" } }
+              },
               // refundPipelineCredits looks up the new pipeline's reservation link.
               maybeSingle: async () => ({
                 data: { reservation_usage_log_id: "reservation-usage-log-id" },
                 error: null,
               }),
-            }),
-          }),
+            }
+            return chain
+          },
           insert: (row: Record<string, unknown>) => {
             fixture.pipelinesInserted.push(row)
             return {
@@ -393,6 +402,24 @@ describe("branchPipeline", () => {
     // Regression: reserved_credits was previously 0/unset → free repeatable re-run.
     expect((inserted!.reserved_credits as number) > 0).toBe(true)
     expect(inserted!.reserved_credits).toBe(inserted!.upfront_credit_estimate)
+  })
+
+  it("answers pipeline_not_found for someone else's pipeline, whatever its status (no existence oracle)", async () => {
+    // The status used to be checked before the owner, so a foreign id answered
+    // pipeline_not_completed (400) or forbidden (403) where every other
+    // pipeline route answers 404.
+    for (const status of ["running", "completed"] as const) {
+      const { client, fixture } = makeSupabaseMock(makePipeline({ status, user_id: "someone-else" }))
+      const err = await branchPipeline({
+        supabase: client as never,
+        originalPipelineId: "orig-pipeline-id",
+        fromStage: "scene_images",
+        userId: "user-1",
+      }).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(BranchPipelineError)
+      expect((err as BranchPipelineError).code).toBe("pipeline_not_found")
+      expect(fixture.pipelinesInserted).toHaveLength(0)
+    }
   })
 
   it("rejects when pipeline is not completed", async () => {

@@ -16,6 +16,7 @@
 
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { deriveReferences, nodeMedia } from "../derive-tutorial-data"
+import { tx, type TFunction } from "@/lib/i18n"
 
 type NodeData = Record<string, unknown>
 
@@ -130,6 +131,7 @@ export function deriveOneCharacterGraph(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
   order: readonly string[] = [],
+  t: TFunction = tx,
 ): OneCharacterGraph {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const candidates = nodes.filter((n) => isRecipe(n, edges))
@@ -144,7 +146,7 @@ export function deriveOneCharacterGraph(
   const recipes: Recipe[] = sorted.map((node, i) => {
     const d = (node.data ?? {}) as NodeData
     const prompt = str(d.prompt) ?? ""
-    const refs = deriveReferences(nodes, edges, node.id)
+    const refs = deriveReferences(nodes, edges, node.id, undefined, t)
     const sources = refs
       .map((r) => sourceOf(byId.get(r.nodeId), r.position, r.name))
       .filter((s): s is RecipeSource => s !== null)
@@ -156,7 +158,7 @@ export function deriveOneCharacterGraph(
     return {
       index: i + 1,
       nodeId: node.id,
-      label: str(d.label) ?? `Recipe ${i + 1}`,
+      label: str(d.label) ?? t("tut.recipeN", { n: i + 1 }),
       prompt,
       key: recipeKey(prompt),
       parts,

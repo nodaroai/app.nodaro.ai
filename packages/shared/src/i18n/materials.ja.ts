@@ -9,7 +9,7 @@ const map: LocaleCatalogMap = {
   "velvet": { label: "ベルベット", description: "ふっくらとしたベルベット" },
   "satin": { label: "サテン", description: "光沢のあるサテン" },
   "lace": { label: "レース", description: "繊細な模様のレース" },
-  "wool": { label: "ウール", description: "暖かく織られたウール" },
+  "wool": { label: "ウール", description: "暖かな織りのウール" },
   "linen": { label: "リネン", description: "自然な質感のリネン" },
   "tweed": { label: "ツイード", description: "素朴に織られたツイード" },
   "cashmere": { label: "カシミア", description: "贅沢に柔らかいカシミア" },
@@ -31,12 +31,12 @@ const map: LocaleCatalogMap = {
   // Stone
   "marble": { label: "大理石", description: "脈のある白い大理石" },
   "granite": { label: "御影石", description: "斑点のある磨かれた御影石" },
-  "obsidian": { label: "黒曜石", description: "光沢のある黒い黒曜石" },
+  "obsidian": { label: "黒曜石", description: "光沢のある黒曜石" },
   "sandstone": { label: "砂岩", description: "暖かく層状の砂岩" },
   "slate": { label: "粘板岩", description: "暗く平らな粘板岩" },
   "jade": { label: "翡翠", description: "半透明の緑の翡翠" },
   "onyx": { label: "オニキス", description: "縞模様の磨かれたオニキス" },
-  "concrete": { label: "コンクリート", description: "鋳造された工業用コンクリート" },
+  "concrete": { label: "コンクリート", description: "インダストリアルな打ち放しコンクリート" },
 
   // Wood
   "oak": { label: "オーク", description: "豊かな木目のオーク" },
@@ -78,7 +78,7 @@ const map: LocaleCatalogMap = {
   "mesh": { label: "メッシュ", description: "透けるネット生地、アスレチック／シアートップ風" },
   "patent-leather": { label: "エナメルレザー", description: "高光沢で反射するエナメル革" },
   "terrazzo": { label: "テラゾー", description: "大理石やガラスの粒を埋め込んだ複合石材" },
-  "iridescent": { label: "イリディセント", description: "色が変化する虹色の表面" },
+  "iridescent": { label: "玉虫色", description: "色が変化する虹色の表面" },
   "mother-of-pearl": { label: "マザー・オブ・パール", description: "貝の内側の真珠光沢、虹色のクリーム色" },
   "carbon-fiber": { label: "カーボンファイバー", description: "織られた黒いカーボン繊維の複合材" },
   "holographic-film": { label: "ホログラフィックフィルム", description: "光を屈折させるホログラム、虹色の輝き" },

@@ -368,7 +368,7 @@
         }
       },
       "ctx": null,
-      "expected": "locked off static camera, no camera movement"
+      "expected": "The camera is locked on a solid tripod and does not move at all for the entire shot: it never travels, never rotates, never tilts, never changes focal length. The viewpoint is completely fixed and the framing stays exactly the same from the first frame to the last.\nLife within the scene carries on naturally, but the camera holds perfectly still throughout.\nNo camera movement of any kind, no drift, no sway, no zoom."
     },
     {
       "key": "camera-motion/id:arc-left",
@@ -407,7 +407,7 @@
         }
       },
       "ctx": null,
-      "expected": "parallax camera motion, lateral movement that emphasizes the depth separation between foreground and background elements, foreground objects appearing to move faster than distant ones"
+      "expected": "The camera makes a small, smooth sideways move that shows off the depth of the scene through parallax. It eases gently a short way across, staying at the same distance and keeping its aim forward.\nThe defining quality is a STRONG parallax gradient: the nearest foreground elements slide across noticeably and quickly, the mid-distance elements shift more gently, and the most distant elements barely move at all — one smooth continuous gradient of speed from near to far that makes the separation between the layers obvious. Nothing is frozen; everything shifts, just by very different amounts according to its distance.\nThe move is modest and ambient rather than a full travelling shot: a gentle reveal of depth, not a journey across the scene.\nThe lens does not change; the camera does not push in, pull back, rotate, or shake.\nNo zoom, no forward or backward travel, no rotation, no handheld shake."
     },
     {
       "key": "camera-motion/pre-post",
@@ -422,7 +422,7 @@
         }
       },
       "ctx": null,
-      "expected": "shot on location, locked off static camera, no camera movement, no text overlays"
+      "expected": "shot on location, The camera is locked on a solid tripod and does not move at all for the entire shot: it never travels, never rotates, never tilts, never changes focal length. The viewpoint is completely fixed and the framing stays exactly the same from the first frame to the last.\nLife within the scene carries on naturally, but the camera holds perfectly still throughout.\nNo camera movement of any kind, no drift, no sway, no zoom. no text overlays"
     },
     {
       "key": "camera-motion/with-ctx",
@@ -466,7 +466,7 @@
           }
         ]
       },
-      "expected": "locked off static camera, no camera movement, beginning with wide shot, full body of the subject with visible surroundings, ending with with a calm, centered expression"
+      "expected": "The camera is locked on a solid tripod and does not move at all for the entire shot: it never travels, never rotates, never tilts, never changes focal length. The viewpoint is completely fixed and the framing stays exactly the same from the first frame to the last.\nLife within the scene carries on naturally, but the camera holds perfectly still throughout.\nNo camera movement of any kind, no drift, no sway, no zoom. beginning with wide shot, full body of the subject with visible surroundings, ending with with a calm, centered expression"
     },
     {
       "key": "camera-motion/with-ctx-pre-post",
@@ -512,7 +512,7 @@
           }
         ]
       },
-      "expected": "handheld, locked off static camera, no camera movement, beginning with wide shot, full body of the subject with visible surroundings, ending with with a calm, centered expression, 35mm"
+      "expected": "handheld, The camera is locked on a solid tripod and does not move at all for the entire shot: it never travels, never rotates, never tilts, never changes focal length. The viewpoint is completely fixed and the framing stays exactly the same from the first frame to the last.\nLife within the scene carries on naturally, but the camera holds perfectly still throughout.\nNo camera movement of any kind, no drift, no sway, no zoom. beginning with wide shot, full body of the subject with visible surroundings, ending with with a calm, centered expression, 35mm"
     },
     {
       "key": "character-fx/id:auto",
@@ -1831,7 +1831,7 @@
           "hairColor": "hair-platinum",
           "eyebrows": "brows-natural",
           "skinTone": "skin-very-fair",
-          "skinTexture": "texture-smooth",
+          "skinTexture": "texture-natural",
           "eyeColor": "eyes-brown",
           "eyeState": "eye-state-closed",
           "facialHair": "face-clean-shaven",
@@ -1839,7 +1839,7 @@
         }
       },
       "ctx": null,
-      "expected": "a man, a baby under 1 year old, of Asian descent, a California beach aesthetic — laid-back beach-town vibe, golden-hour sun-warmed energy, easy carefree mood, petite, lean build, an oval face shape, a strong, sharply defined jawline, almond-shaped eyes, a straight nose, thin lips, with chapped, cracked, weather-worn dry lips, a shaved bald head, platinum blonde hair, very pale and icy, natural eyebrows, very fair pale skin, with flawless, silky smooth skin, brown eyes, with eyes fully closed in a peaceful expression, clean-shaven, wearing glasses"
+      "expected": "a man, a baby under 1 year old, of Asian descent, a California beach aesthetic — laid-back beach-town vibe, golden-hour sun-warmed energy, easy carefree mood, petite, lean build, an oval face shape, a strong, sharply defined jawline, almond-shaped eyes, a straight nose, thin lips, with chapped, cracked, weather-worn dry lips, a shaved bald head, platinum blonde hair, very pale and icy, natural eyebrows, very fair pale skin, with natural, unretouched skin — visible pores and small, even variation in tone, brown eyes, with eyes fully closed in a peaceful expression, clean-shaven, wearing glasses"
     },
     {
       "key": "person/last-of-each",
@@ -1930,6 +1930,38 @@
       },
       "ctx": null,
       "expected": "a Crusader knight — chainmail hauberk under a white surcoat with a red cross emblem, conical helm, longsword and kite shield, devout warrior bearing, in their early 20s, around 21 years old, of Norwegian descent, a Shibuya streetwear aesthetic — Tokyo street-fashion vibe, layered post-modern mood, full-figured, full bust, pear-shaped silhouette, a heart-shaped face with a wide forehead and pointed chin, a pointed chin with a narrow jawline, high, defined cheekbones, a lean face with low facial fat and subtle hollowing beneath the cheekbones, double-eyelid eyes with a clearly defined upper crease, droopy eyes with the upper lids sitting low for a soft, sleepy gaze, upturned eyes with the outer corners lifted, positive canthal tilt, close-set eyes set close together, eyes set close beneath the brow with little brow-to-eye distance, hunter eyes, a small button nose with a rounded tip, a slightly upturned nose tip, full plump lips, a wide mouth, with lips pursed, pressed and pushed forward, long straight hair, gray hair, bold defined dark full eyebrows, tan skin, with visible swimwear tan lines on the skin, rare violet eyes with a deep purple iris, gazing off-camera with a contemplative expression, a goatee, with a small face tattoo near the eye or cheekbone"
+    },
+    {
+      "key": "person/mixed-heritage",
+      "note": "Two ethnicity picks → one mixed-heritage phrase from the entries' prompt text",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "ethnicity": [
+            "slavic",
+            "mediterranean"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "of mixed Slavic Eastern European and Mediterranean heritage"
+    },
+    {
+      "key": "person/mixed-heritage-abbrev",
+      "note": "Two ethnicity picks whose short labels are abbreviations (Pacific Isl. / East (any))",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "ethnicity": [
+            "pacific-islander",
+            "east-asian"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "of mixed Pacific Islander and East Asian heritage"
     },
     {
       "key": "person/one-dimension",
@@ -2518,17 +2550,17 @@
       "expected": "set in a cozy coffee shop interior with warm pendant lights, exposed brick walls and steam drifting over espresso machines"
     },
     {
-      "key": "setting/id:park",
+      "key": "setting/id:neon-alley",
       "note": "single-dim catalog id",
       "node": {
         "id": "n1",
         "type": "setting",
         "data": {
-          "setting": "park"
+          "setting": "neon-alley"
         }
       },
       "ctx": null,
-      "expected": "set in a leafy urban park with winding footpaths, wooden benches, tall shade trees, people lounging on grass and sunlight filtering through leaves"
+      "expected": "set in a rain-soaked neon-lit alley in a Tokyo-style nightlife district with glowing kanji signs, steam vents and reflective puddles"
     },
     {
       "key": "setting/id:wasteland",
@@ -2674,7 +2706,7 @@
         "id": "n1",
         "type": "styling",
         "data": {
-          "makeup": "makeup-dewy",
+          "makeup": "makeup-bare",
           "hairCut": "cut-sisterlocks",
           "hairTreatment": "treatment-rooted",
           "hairState": "hair-flowing",
@@ -2694,7 +2726,7 @@
         }
       },
       "ctx": null,
-      "expected": "with dewy makeup, glowing fresh skin and minimal coverage, in thin neat sisterlocks, with a rooted look — visible darker roots blending into lighter lengths, with hair flowing freely, strands cascading and rippling with subtle movement, wearing wraparound sport sunglasses, wearing a wide-brim Western cowboy hat with a creased crown, wearing a thin metallic body chain draped across the torso, with classic French tip manicure, with warrior war paint streaked across the face, dressed in a long flowing caftan robe, a full-length garment worn across the Middle East and North Africa, wearing a strapless bandeau top wrapped across the chest, in fitted lycra bike shorts ending mid-thigh, wearing a plush fur coat with a deep textured pile, with bunched knit leg warmers stacked over the calves, in woven jute-sole espadrilles with a canvas upper, a casual summer shoe, wearing glossy latex with a high-shine liquid look clinging to the body, the outfit composed of multiple stacked layers, each piece visible at the edges"
+      "expected": "with a completely bare face, no makeup at all, in thin neat sisterlocks, with a rooted look — visible darker roots blending into lighter lengths, with hair flowing freely, strands cascading and rippling with subtle movement, wearing wraparound sport sunglasses, wearing a wide-brim Western cowboy hat with a creased crown, wearing a thin metallic body chain draped across the torso, with classic French tip manicure, with warrior war paint streaked across the face, dressed in a long flowing caftan robe, a full-length garment worn across the Middle East and North Africa, wearing a strapless bandeau top wrapped across the chest, in fitted lycra bike shorts ending mid-thigh, wearing a plush fur coat with a deep textured pile, with bunched knit leg warmers stacked over the calves, in woven jute-sole espadrilles with a canvas upper, a casual summer shoe, wearing glossy latex with a high-shine liquid look clinging to the body, the outfit composed of multiple stacked layers, each piece visible at the edges"
     },
     {
       "key": "styling/mid-of-each",
@@ -2703,7 +2735,7 @@
         "id": "n1",
         "type": "styling",
         "data": {
-          "makeup": "makeup-bold-lips",
+          "makeup": "makeup-editorial",
           "hairCut": "cut-side-swept",
           "hairTreatment": "treatment-sombre",
           "hairState": "hair-voluminous",
@@ -2723,7 +2755,7 @@
         }
       },
       "ctx": null,
-      "expected": "with bold lips, a strong red or dark lipstick as the focal point, side-swept across the face with strands falling over one eye, with sombré — a subtle, soft ombré gradient, with hair full of volume, blown out and bouncy with body and lift at the roots, wearing round wire-frame glasses, John Lennon style, wearing a striped pharaonic nemes headdress with a golden uraeus cobra at the brow, wearing a black leather choker fitted close around the throat, with dark black nail polish, with tribal-inspired face markings, wrapped in a plush terrycloth bathrobe tied at the waist, wearing a thin satin camisole with delicate spaghetti straps, in casual mid-thigh shorts, wearing a quilted puffer jacket with horizontal baffles and a stand-up collar, with lace-topped thigh-high stockings cinched mid-thigh, in polished leather penny loafers, wearing warm woven wool with a soft matte surface and visible fibers, the top neatly tucked into the bottom"
+      "expected": "with avant-garde editorial makeup, artistic and unconventional, side-swept across the face with strands falling over one eye, with sombré — a subtle, soft ombré gradient, with hair full of volume, blown out and bouncy with body and lift at the roots, wearing round wire-frame glasses, John Lennon style, wearing a striped pharaonic nemes headdress with a golden uraeus cobra at the brow, wearing a black leather choker fitted close around the throat, with dark black nail polish, with tribal-inspired face markings, wrapped in a plush terrycloth bathrobe tied at the waist, wearing a thin satin camisole with delicate spaghetti straps, in casual mid-thigh shorts, wearing a quilted puffer jacket with horizontal baffles and a stand-up collar, with lace-topped thigh-high stockings cinched mid-thigh, in polished leather penny loafers, wearing warm woven wool with a soft matte surface and visible fibers, the top neatly tucked into the bottom"
     },
     {
       "key": "styling/one-dimension",
@@ -2896,7 +2928,7 @@
         }
       },
       "ctx": null,
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot"
+      "expected": "hard cut (no transition, instantaneous switch from first shot to second shot; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
     },
     {
       "key": "transition/id:auto",
@@ -2922,7 +2954,7 @@
         }
       },
       "ctx": null,
-      "expected": "the first and second scenes blend as a translucent double exposure where both images coexist semi-transparently on the frame, the first image then gradually fades out leaving the second image fully resolved"
+      "expected": "double exposure (the first and second scenes blend as a translucent double exposure where both images coexist semi-transparently on the frame, the first image then gradually fades out leaving the second image fully resolved)"
     },
     {
       "key": "transition/id:dream-ripple",
@@ -2935,7 +2967,7 @@
         }
       },
       "ctx": null,
-      "expected": "a circular ripple radiates outward across the frame as if the image were the surface of water, and where the ripple passes the first scene is replaced by the second scene"
+      "expected": "dream ripple (a circular ripple radiates outward across the frame as if the image were the surface of water, and where the ripple passes the first scene is replaced by the second scene)"
     },
     {
       "key": "transition/multi-pick",
@@ -2951,7 +2983,7 @@
         }
       },
       "ctx": null,
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot, and smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in"
+      "expected": "hard cut (no transition, instantaneous switch from first shot to second shot), and cross-dissolve (smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in)"
     },
     {
       "key": "transition/pre-post",
@@ -2966,23 +2998,23 @@
         }
       },
       "ctx": null,
-      "expected": "shot on location, no transition, hard cut, instantaneous switch from first shot to second shot, no text overlays"
+      "expected": "shot on location, hard cut (no transition, instantaneous switch from first shot to second shot; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), no text overlays"
     },
     {
       "key": "transition/timing",
-      "note": "transition with position + duration + intensity, no ctx",
+      "note": "transition with position + duration + intensity, no ctx (a non-instant row, so the duration clause is emitted)",
       "node": {
         "id": "n1",
         "type": "transition",
         "data": {
-          "transition": "none",
+          "transition": "cross-dissolve",
           "position": "middle",
           "duration": "short",
           "intensity": "dynamic"
         }
       },
       "ctx": null,
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot, the transition occurs in the middle of the clip, lasting approximately 1 second, with dynamic energy and assertive flourish"
+      "expected": "cross-dissolve (smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in), the transition occurs in the middle of the clip, lasting approximately 1 second, with dynamic energy and assertive flourish"
     },
     {
       "key": "transition/timing-auto",
@@ -2998,7 +3030,23 @@
         }
       },
       "ctx": null,
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot"
+      "expected": "hard cut (no transition, instantaneous switch from first shot to second shot; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
+    },
+    {
+      "key": "transition/timing-instant",
+      "note": "an INSTANT transition (a cut) with position + duration + intensity — the duration clause is dropped",
+      "node": {
+        "id": "n1",
+        "type": "transition",
+        "data": {
+          "transition": "none",
+          "position": "middle",
+          "duration": "short",
+          "intensity": "dynamic"
+        }
+      },
+      "ctx": null,
+      "expected": "hard cut (no transition, instantaneous switch from first shot to second shot; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of the clip"
     },
     {
       "key": "transition/with-ctx",
@@ -3042,7 +3090,7 @@
           }
         ]
       },
-      "expected": "no transition, hard cut, instantaneous switch from first shot to second shot, starting from wide shot, full body of the subject with visible surroundings, ending at with a calm, centered expression"
+      "expected": "hard cut (no transition, instantaneous switch from first shot to second shot; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), starting from wide shot, full body of the subject with visible surroundings, ending at with a calm, centered expression"
     },
     {
       "key": "transition/with-ctx-timing-multi-pick",
@@ -3094,7 +3142,7 @@
           }
         ]
       },
-      "expected": "on the beat, no transition, hard cut, instantaneous switch from first shot to second shot, and smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in, the transition occurs at the end of the clip, lasting approximately 3 seconds, with subtle restrained energy and minimal flourish, starting from wide shot, full body of the subject with visible surroundings, ending at with a calm, centered expression, hold the last frame"
+      "expected": "on the beat, hard cut (no transition, instantaneous switch from first shot to second shot), and cross-dissolve (smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in), the transition occurs at the end of the clip, lasting approximately 3 seconds, with subtle restrained energy and minimal flourish, starting from wide shot, full body of the subject with visible surroundings, ending at with a calm, centered expression, hold the last frame"
     },
     {
       "key": "unknown/type",

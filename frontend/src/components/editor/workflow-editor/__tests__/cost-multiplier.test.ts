@@ -14,7 +14,8 @@ vi.mock("@/components/editor/config-panels/helpers", () => ({
   getModelIdentifier: (n: { type?: string }) => n.type ?? "",
 }))
 
-import { getCostMultiplier, getFanOutMultiplier, getOutputMinuteUnits, NO_RERUNS } from "../types"
+import { FAN_OUT_EACH_TYPES } from "@nodaro/shared"
+import { EACH_WIRE_FAN_OUT, getCostMultiplier, getFanOutMultiplier, getOutputMinuteUnits, NO_RERUNS, PRODUCER_FAN_OUT } from "../types"
 import { estimateRunCredits } from "../estimate-run-credits"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
@@ -137,6 +138,68 @@ describe("fan-out — inherited down a clips chain, and ONLY a clips chain", () 
   })
 })
 
+describe("fan-out — Content Ideas", () => {
+  const ideas = (data: Record<string, unknown>) => n("ci", "content-ideas", data)
+  const script = n("s", "generate-script")
+  const edges = [e("ci", "s", "prompt")]
+  const reruns = ids(n("ci", "content-ideas"))
+
+  it("running: one script per requested idea — the count, clamped like the run (1–10, default 5)", () => {
+    expect(getFanOutMultiplier(script, [ideas({ count: 7 }), script], edges, reruns)).toBe(7)
+    expect(getFanOutMultiplier(script, [ideas({}), script], edges, reruns)).toBe(5)
+    expect(getFanOutMultiplier(script, [ideas({ count: 99 }), script], edges, reruns)).toBe(10)
+    expect(getFanOutMultiplier(script, [ideas({ count: 1 }), script], edges, reruns)).toBe(1)
+  })
+  it("running: the count wins over briefs a previous run left", () => {
+    expect(getFanOutMultiplier(script, [ideas({ count: 5, ideaBriefs: ["a", "b"] }), script], edges, reruns)).toBe(5)
+  })
+  it("NOT running: the saved briefs are what iterate — exactly", () => {
+    expect(getFanOutMultiplier(script, [ideas({ count: 5, ideaBriefs: ["a", " ", "b", "c"] }), script], edges, NO_RERUNS)).toBe(3)
+  })
+  it("NOT running with nothing saved yet (a fresh template): the count", () => {
+    expect(getFanOutMultiplier(script, [ideas({ count: 4 }), script], edges, NO_RERUNS)).toBe(4)
+  })
+  it("honours the edge: a selector keeps fewer; a non-each edge runs once", () => {
+    const first2 = [{ ...e("ci", "s", "prompt"), data: { selectorMode: "range", rangeFrom: "1", rangeTo: "2" } } as WorkflowEdge]
+    expect(getFanOutMultiplier(script, [ideas({ count: 5 }), script], first2, reruns)).toBe(2)
+    expect(getFanOutMultiplier(script, [ideas({ count: 5 }), script], [e("ci", "s", "prompt", "last")], reruns)).toBe(1)
+  })
+})
+
+// A fan-out producer the estimate cannot size is priced as ONE downstream run:
+// the balance precheck then passes a run that cannot finish. Every
+// FAN_OUT_EACH_TYPES member is either a list operation (counted from its items)
+// or declares its count in PRODUCER_FAN_OUT.
+describe("every fan-out producer is sized by the estimate", () => {
+  const LIST_OPERATIONS = new Set(["list", "split-text", "filter-list", "deduplicate", "merge-lists", "sort-list", "selector"])
+  it("a FAN_OUT_EACH_TYPES member that is not a list operation has a PRODUCER_FAN_OUT entry", () => {
+    const unsized = [...FAN_OUT_EACH_TYPES].filter((t) => !LIST_OPERATIONS.has(t) && !(t in PRODUCER_FAN_OUT))
+    expect(unsized).toEqual([])
+  })
+  it("PRODUCER_FAN_OUT names only fan-out producers", () => {
+    for (const t of Object.keys(PRODUCER_FAN_OUT)) expect(FAN_OUT_EACH_TYPES.has(t), t).toBe(true)
+  })
+})
+
+describe("estimateRunCredits — the shipped Steal the Format template", () => {
+  const TEMPLATE = resolve(__dirname, "../../../../../../backend/src/lib/tutorial-seed/templates/steal-the-format.json")
+  const doc = JSON.parse(readFileSync(TEMPLATE, "utf8")) as { nodes: WorkflowNode[]; edges: WorkflowEdge[] }
+
+  it("whole run: the script node is priced for the one idea its wire picks", () => {
+    const script = doc.nodes.find((x) => x.data && (x.data as { label?: string }).label === "Script")!
+    const runs = ids(...doc.nodes.filter((x) => x.type !== "sticky-note"))
+    expect(getCostMultiplier(script, doc.nodes, doc.edges, runs)).toBe(1)
+  })
+
+  it("set back to Each, the same wire prices one script per idea", () => {
+    const script = doc.nodes.find((x) => x.data && (x.data as { label?: string }).label === "Script")!
+    const ideas = doc.nodes.find((x) => x.type === "content-ideas")!
+    const each = doc.edges.map((e) => (e.target === script.id ? { ...e, data: { outputMode: "each" } } : e)) as WorkflowEdge[]
+    const runs = ids(...doc.nodes.filter((x) => x.type !== "sticky-note"))
+    expect(getCostMultiplier(script, doc.nodes, each, runs)).toBe((ideas.data as { count: number }).count)
+  })
+})
+
 describe("estimateRunCredits — the shipped podcast template shapes", () => {
   const master = n("m", "upload-audio", { metadata: { durationSeconds: 45 * 60 } })
   const tr = n("tr", "transcribe")
@@ -202,5 +265,29 @@ describe("every estimate loop multiplies by getCostMultiplier", () => {
       if (readFileSync(file, "utf8").includes("getFanOutMultiplier")) offenders.push(rel)
     }
     expect(offenders, `use getCostMultiplier (fan-out × per-minute units) in:\n${offenders.join("\n")}`).toEqual([])
+  })
+})
+
+describe("a Social Search wire set to Each", () => {
+  const post = (i: number) => ({ id: `instagram:${i}`, platform: "instagram", url: `https://www.instagram.com/reel/${i}/`, text: "", author: { handle: "a", name: "A" }, metrics: {}, media: { kind: "video" }, hashtags: [], extra: {} })
+  const va = n("va", "video-analysis", {})
+
+  it("prices the next node once per post the search holds", () => {
+    const search = n("s", "social-search", { generatedJson: [post(1), post(2)], keepPicks: true })
+    const nodes = [search, va]
+    expect(getCostMultiplier(va, nodes, [e("s", "va", "video", "each")], ids(va))).toBe(2)
+    expect(getCostMultiplier(va, nodes, [e("s", "va", "video", "each")], ids(search, va))).toBe(2)
+  })
+
+  it("prices a fresh search by the posts a run passes on, and a plain wire once", () => {
+    const search = n("s", "social-search", { generatedJson: [post(1), post(2)], pickTop: 3 })
+    const nodes = [search, va]
+    expect(getCostMultiplier(va, nodes, [e("s", "va", "video", "each")], ids(search, va))).toBe(3)
+    expect(getCostMultiplier(va, nodes, [e("s", "va", "video")], ids(va))).toBe(1)
+  })
+
+  it("is sized outside the default fan-out list", () => {
+    expect(FAN_OUT_EACH_TYPES.has("social-search")).toBe(false)
+    expect("social-search" in EACH_WIRE_FAN_OUT).toBe(true)
   })
 })

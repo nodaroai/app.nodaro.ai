@@ -2434,6 +2434,44 @@ html, body {
   direction: ltr;
 }
 
+/* Code reads left to right in every locale. Under <html dir="rtl"> a JSON
+   dump, a jq expression, a cURL line or an API key would otherwise lose its
+   braces, quotes and leading dots to the other side. `isolate` keeps an
+   inline <code> inside a Hebrew sentence from reordering the words around it.
+   An element that sets its own dir keeps it: prose shown in a <pre> (a node's
+   text output, a final prompt) carries dir="auto", so Hebrew text in it still
+   reads right to left. Guarded by rtl-direction-guards.test. */
+:where(pre, code, kbd, samp):not([dir]) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Japanese: Geist has no Japanese glyphs. Naming the Japanese system faces
+   before the generic fallback gives the same weights and metrics on every
+   machine: Hiragino on macOS and iOS, Yu Gothic UI or Meiryo on Windows,
+   Noto Sans CJK JP on Android and Linux. Scoped to lang="ja", which
+   i18n-html-dir.tsx sets on <html> (it also makes the browser draw kanji in
+   their Japanese forms rather than the Chinese ones). Every other locale
+   keeps its stack. */
+:root:lang(ja) {
+  --default-font-family: 'Geist Variable', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', 'Noto Sans CJK JP', 'Noto Sans JP', system-ui, sans-serif;
+}
+
+/* Korean: Geist has no Hangul either. The Korean system faces come before the
+   generic fallback, for the same weights and metrics on every machine:
+   - Apple SD Gothic Neo on macOS and iOS
+   - Malgun Gothic on Windows
+   - Noto Sans CJK KR on Android and Linux
+   Korean wraps between words (eojeol), like English, not between syllables:
+   keep-all stops a word breaking in the middle, and break-word still breaks
+   one that would overflow its box. That only matters in a narrow cell, and it
+   does not change how wide a box sizes itself. */
+:root:lang(ko) {
+  --default-font-family: 'Geist Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans CJK KR', 'Noto Sans KR', system-ui, sans-serif;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
 
 
 /* Welcome credits popup: the soft pink radial glow at the top of the card. */

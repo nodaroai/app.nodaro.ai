@@ -231,7 +231,7 @@ catch (err) {
 
 ## Reference
 
-- Full OAuth flow doc: https://nodaroai.github.io/app.nodaro.ai/oauth-flow.md
+- Full OAuth flow doc: https://nodaro.ai/docs/developers/oauth.md
 - SDK OAuth resource: `packages/client/src/resources/oauth.ts`
 - Backend routes: `backend/src/routes/oauth.ts` + `backend/src/routes/developer-apps.ts`
 - Scope source-of-truth: `backend/src/lib/scopes.ts`

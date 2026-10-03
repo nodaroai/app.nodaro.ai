@@ -5,6 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Scissors, FileText, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { TextItemsPreview, textItems } from "./text-items-preview"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidSplitTextConnection } from "@/lib/audio-text-handles"
@@ -32,6 +33,7 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
   useAutoExecute(id, data as Record<string, unknown>)
 
   const partCount = nodeData.splitResults?.length ?? 0
+  const parts = textItems(nodeData.splitResults)
   const separatorLabel = resolveSeparatorLabel(nodeData.separator, nodeData.customSeparator)
 
   return (
@@ -60,7 +62,12 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
         ]}
       >
         <div className="flex flex-col gap-1">
-          {partCount > 0 ? (
+          {parts.length > 0 ? (
+            <TextItemsPreview
+              items={parts}
+              summary={`${partCount === 1 ? t("inputcfg.itemOne", { n: partCount }) : t("inputcfg.items2", { n: partCount })} · ${t("node.splitBySeparator", { separator: separatorLabel })}`}
+            />
+          ) : partCount > 0 ? (
             <div className="w-full rounded-md bg-muted/30 p-2">
               <p className="text-xs text-foreground/80">
                 {partCount === 1 ? t("inputcfg.itemOne", { n: partCount }) : t("inputcfg.items2", { n: partCount })}

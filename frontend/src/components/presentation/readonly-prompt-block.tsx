@@ -1,5 +1,6 @@
 import { useMemo } from "react"
 import { renderNodeRefs } from "@/lib/render-node-refs"
+import { useT } from "@/lib/i18n"
 
 interface ReadOnlyPromptBlockProps {
   readonly text: string
@@ -8,6 +9,7 @@ interface ReadOnlyPromptBlockProps {
 }
 
 export function ReadOnlyPromptBlock({ text, refMap, className }: ReadOnlyPromptBlockProps) {
+  const t = useT()
   const rendered = useMemo(
     () => renderNodeRefs(text, refMap, "resolved"),
     [text, refMap],
@@ -20,7 +22,7 @@ export function ReadOnlyPromptBlock({ text, refMap, className }: ReadOnlyPromptB
       aria-readonly="true"
     >
       {rendered.length > 0 ? rendered : (
-        <span className="text-muted-foreground italic">No prompt text</span>
+        <span className="text-muted-foreground italic">{t("present.noPromptText")}</span>
       )}
     </div>
   )

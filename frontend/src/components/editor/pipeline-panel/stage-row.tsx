@@ -1,6 +1,7 @@
 import type { PipelineMode, PipelineStageStatus, ShowrunnerPlan } from "@nodaro/shared"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 interface Props {
   stageLabel: string
@@ -20,18 +21,20 @@ interface Props {
   mode?: PipelineMode
 }
 
-const STATUS_COPY: Record<string, string> = {
-  pending: "Waiting",
-  queued: "Queued",
-  running: "Running...",
-  awaiting_approval: "Awaiting approval",
-  approved: "Approved",
-  rejected: "Rejected — retrying",
-  failed: "Failed",
-  cancelled: "Cancelled",
+const STATUS_KEYS: Record<string, MessageKey> = {
+  pending: "pipe.statusWaiting",
+  queued: "node.queued",
+  running: "configPanel.running",
+  awaiting_approval: "pipe.statusAwaitingApproval",
+  approved: "pipe.statusApproved",
+  rejected: "pipe.statusRejectedRetrying",
+  failed: "common.failed",
+  cancelled: "exec.statusCancelled",
 }
 
 export function StageRow({ stageLabel, status, output, onApprove, onReject, disabled, mode }: Props) {
+  const t = useT()
+  const statusKey = STATUS_KEYS[status] as MessageKey | undefined
   return (
     <div className="rounded border border-zinc-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3">
       <div className="flex items-center justify-between">
@@ -46,27 +49,27 @@ export function StageRow({ stageLabel, status, output, onApprove, onReject, disa
             status === "cancelled" && "bg-zinc-100 text-zinc-700 dark:bg-[#2D2D2D] dark:text-zinc-300",
           )}
         >
-          {STATUS_COPY[status] ?? status}
+          {statusKey ? t(statusKey) : status}
         </div>
       </div>
 
       {/* Phase 1D.2a §4.5 — auto-mode hint while the stage is actively
           running. The critics make the gate decision, not the user. */}
       {mode === "auto" && status === "running" && (
-        <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400 italic">Auto: critic gating…</div>
+        <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400 italic">{t("pipe.autoCriticGating")}</div>
       )}
 
       {output && status === "awaiting_approval" && (
         <div className="mt-3 space-y-2">
           <div className="text-sm">
-            <div className="font-semibold">Title:</div> {output.title}
+            <div className="font-semibold">{t("pipe.titleLabel")}</div> {output.title}
           </div>
           <div className="text-sm">
-            <div className="font-semibold">Logline:</div> {output.logline}
+            <div className="font-semibold">{t("pipe.loglineLabel")}</div> {output.logline}
           </div>
           <div className="text-sm">
-            <div className="font-semibold">Scenes ({output.scenes.length}):</div>
-            <ul className="ml-4 mt-1 list-disc text-xs">
+            <div className="font-semibold">{t("pipe.scenesCountLabel", { n: output.scenes.length })}</div>
+            <ul className="ms-4 mt-1 list-disc text-xs">
               {output.scenes.map((s) => (
                 <li key={s.scene_index}>
                   {s.scene_index}. {s.description} · {s.duration_seconds}s
@@ -80,8 +83,8 @@ export function StageRow({ stageLabel, status, output, onApprove, onReject, disa
               the panel header. */}
           {mode !== "auto" && (
             <div className="flex gap-2 pt-2">
-              <Button size="sm" onClick={onApprove} disabled={disabled}>Approve</Button>
-              <Button size="sm" variant="outline" onClick={onReject} disabled={disabled}>Reject</Button>
+              <Button size="sm" onClick={onApprove} disabled={disabled}>{t("pipe.approve")}</Button>
+              <Button size="sm" variant="outline" onClick={onReject} disabled={disabled}>{t("cfgext.shmReject")}</Button>
             </div>
           )}
         </div>

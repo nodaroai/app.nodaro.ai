@@ -28,12 +28,13 @@ import type { SunoGenerateData } from "@/types/nodes"
  *  downstream nodes (extend / replace / separate / …) take these ids, so the
  *  node surfaces them for manual reuse in a later session. */
 function SunoIdRow({ label, value }: { readonly label: string; readonly value: string }) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
   return (
     <button
       type="button"
       className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground font-mono max-w-full"
-      title={`${label} ID: ${value} — click to copy`}
+      title={t("node.sunoIdCopyTitle", { label, value })}
       onClick={(e) => {
         e.stopPropagation()
         void navigator.clipboard.writeText(value)
@@ -259,8 +260,8 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
 
         {(sunoTaskId || sunoTrackId) && (
           <div className="flex flex-col">
-            {sunoTaskId && <SunoIdRow label="Task" value={sunoTaskId} />}
-            {sunoTrackId && <SunoIdRow label="Track" value={sunoTrackId} />}
+            {sunoTaskId && <SunoIdRow label={t("node.sunoTask")} value={sunoTaskId} />}
+            {sunoTrackId && <SunoIdRow label={t("node.sunoTrack")} value={sunoTrackId} />}
           </div>
         )}
 

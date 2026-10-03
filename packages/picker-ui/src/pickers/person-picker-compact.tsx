@@ -2,7 +2,7 @@
 
 import { memo, useId, useMemo, useRef, useState } from "react"
 import { ChevronDown, X } from "lucide-react"
-import { PERSON_DIMENSION_LABELS, PERSON_DIMENSION_SECTIONS, PERSON_FIELD_BY_DIMENSION, getPersonLabel, type PersonDimension, type PersonDimensionSection, type PersonValue } from "@nodaro/prompts"
+import { PERSON_DIMENSION_LABELS, PERSON_DIMENSION_SECTIONS, PERSON_FIELD_BY_DIMENSION, getPerson, getPersonLabel, isMinorAge, type PersonDimension, type PersonDimensionSection, type PersonValue } from "@nodaro/prompts"
 import { pickIds } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover"
@@ -10,6 +10,9 @@ import { cn } from "../lib/cn"
 import { useLocaleDir } from "../i18n"
 import { useLocalizedCatalog } from "../i18n"
 import { PersonDimensionGrid, usePersonDimension } from "./person-dimension-grid"
+import { CharacterThumb } from "./character-art-tile"
+import { characterArtShape, characterArtUrl } from "../icons/character-art"
+import { useMinorAgeFloor } from "./person-minor-floor"
 
 /** The age-dimension sentinel whose selection opens a free-form number input.
  *  Sourced from the shared catalog (person.ts) — selecting it must NOT
@@ -87,23 +90,27 @@ function DimensionPopoverBody({
   }
 
   return (
-    <div ref={bodyRef} dir={dir} className="flex flex-col gap-2">
+    <div ref={bodyRef} dir={dir} className="flex min-h-0 flex-col gap-2">
       <Input
         aria-label={`Search ${dimensionLabel.toLowerCase()}`}
         placeholder={`Search ${dimensionLabel.toLowerCase()}…`}
         value={localSearch}
         onChange={(e) => setLocalSearch(e.target.value)}
-        className="h-8 text-xs"
+        className="h-8 shrink-0 text-xs"
       />
-      <PersonDimensionGrid
-        dimension={dimension}
-        value={value}
-        onChange={handleGridChange}
-        resolveLabel={resolveLabel}
-        resolveDescription={resolveDescription}
-        matches={matches}
-        search={localSearch}
-      />
+      {/* Photo tiles are tall: the options scroll under a search box that
+          stays put, inside the height the popover has on screen. */}
+      <div className="-mx-1 min-h-0 overflow-y-auto px-1 pb-1">
+        <PersonDimensionGrid
+          dimension={dimension}
+          value={value}
+          onChange={handleGridChange}
+          resolveLabel={resolveLabel}
+          resolveDescription={resolveDescription}
+          matches={matches}
+          search={localSearch}
+        />
+      </div>
     </div>
   )
 }
@@ -133,6 +140,14 @@ function DimensionPill({
       ? `${selectedIds.length} selected`
       : getPersonLabel(selectedIds[0])
     : ""
+  // The picked option's photo, as a small round thumbnail at the chip's start —
+  // never an adult-only option's photo next to a minor's age (the floor clears
+  // such a pick right after this render; the photo must not flash meanwhile).
+  const firstId = selectedIds[0]
+  const thumbId =
+    selected && characterArtUrl("person", firstId) !== undefined && !(isMinorAge(value) && getPerson(firstId)?.adultOnly)
+      ? firstId
+      : undefined
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -141,7 +156,8 @@ function DimensionPill({
           type="button"
           aria-label={selected ? `${dimensionLabel}: ${valueLabel}` : `Choose ${dimensionLabel}`}
           className={cn(
-            "group inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer max-w-full",
+            "group inline-flex items-center gap-1.5 rounded-full border py-1 text-[11px] font-medium transition-colors cursor-pointer max-w-full",
+            thumbId ? "ps-[3px] pe-2.5" : "px-2.5",
             selected
               ? "border-[#ff0073]/40 bg-[#ff0073]/10 text-[#ff0073]"
               : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] text-gray-700 dark:text-[#E2E8F0] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
@@ -149,6 +165,14 @@ function DimensionPill({
         >
           {selected ? (
             <>
+              {thumbId && (
+                <CharacterThumb
+                  family="person"
+                  id={thumbId}
+                  shape={characterArtShape("person", dimension)}
+                  className="-my-0.5 size-[22px] rounded-full border border-white dark:border-[#111114]"
+                />
+              )}
               <span className="uppercase tracking-wide text-[9px] font-semibold text-[#ff0073]/70 shrink-0">
                 {dimensionLabel}
               </span>
@@ -184,7 +208,8 @@ function DimensionPill({
       <PopoverContent
         // [FIX 2] z-[9999] — above the z-50 of the config fullscreen modal, the
         // app-card Dialog overlay/content, and the default PopoverContent.
-        className="z-[9999] w-80"
+        // Capped to the room Radix measures on screen; the body scrolls inside.
+        className="z-[9999] flex w-80 flex-col max-h-[min(480px,var(--radix-popover-content-available-height))]"
         // [FIX 4] RTL: Radix portals outside the dir-scoped parent, so re-assert
         // the user's locale direction on the portaled content.
         dir={dir}
@@ -293,6 +318,7 @@ export const PersonPickerCompact = memo(function PersonPickerCompact({
   onChange,
   className,
 }: PersonPickerCompactProps) {
+  useMinorAgeFloor(value, onChange)
   // Ephemeral open-state, copy-on-write. Seeded lazily: open every section that
   // holds a value; if nothing is selected anywhere, open the first section.
   const [openSections, setOpenSections] = useState<ReadonlySet<string>>(() => {

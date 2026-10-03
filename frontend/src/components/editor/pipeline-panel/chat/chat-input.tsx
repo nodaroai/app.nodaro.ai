@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from "react"
 import { Button } from "@/components/ui/button"
+import { useT } from "@/lib/i18n"
 
 interface Props {
   onSend: (message: string) => void
@@ -19,6 +20,7 @@ const MAX_LEN = 8000
  * the user has hit the per-stage limit.
  */
 export function ChatInput({ onSend, isSending, isAtCap, remaining }: Props) {
+  const t = useT()
   const [draft, setDraft] = useState("")
   const trimmed = draft.trim()
   const canSend = trimmed.length > 0 && !isSending && !isAtCap
@@ -49,8 +51,8 @@ export function ChatInput({ onSend, isSending, isAtCap, remaining }: Props) {
         onKeyDown={onKeyDown}
         placeholder={
           isAtCap
-            ? "Chat limit reached for this stage."
-            : "Refine the Showrunner's plan… (Enter to send, Shift+Enter for newline)"
+            ? t("pipe.chatLimitReachedStage")
+            : t("pipe.chatInputPlaceholder")
         }
         disabled={isAtCap || isSending}
         maxLength={MAX_LEN}
@@ -60,11 +62,13 @@ export function ChatInput({ onSend, isSending, isAtCap, remaining }: Props) {
         <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
           {isAtCap ? (
             <span data-testid="chat-input-cap-reached">
-              Chat limit reached. Approve, branch, or switch to Manual Mode.
+              {t("pipe.chatLimitReachedHint")}
             </span>
           ) : (
             <span data-testid="chat-input-remaining">
-              {remaining} turn{remaining === 1 ? "" : "s"} remaining
+              {remaining === 1
+                ? t("pipe.turnsRemainingOne", { n: remaining })
+                : t("pipe.turnsRemaining", { n: remaining })}
             </span>
           )}
         </div>
@@ -74,7 +78,7 @@ export function ChatInput({ onSend, isSending, isAtCap, remaining }: Props) {
           onClick={send}
           data-testid="chat-input-send-btn"
         >
-          {isSending ? "Sending…" : "Send"}
+          {isSending ? t("pipe.sending") : t("pipe.send")}
         </Button>
       </div>
     </div>

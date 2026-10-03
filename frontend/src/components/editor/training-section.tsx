@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { hasCredits } from "@/lib/edition"
@@ -24,6 +25,7 @@ import {
   type TrainingStatus,
 } from "@/lib/api"
 import type { CharacterNodeData } from "@/types/nodes"
+import { formatDate, formatNumber } from "@/lib/i18n/format"
 
 interface TrainingSectionProps {
   readonly characterNodeId: string
@@ -34,6 +36,7 @@ const POLL_INTERVAL_MS = 8000
 const MIN_PHOTOS = 4
 
 export function TrainingSection({ characterNodeId, data }: TrainingSectionProps) {
+  const t = useT()
   const trainingEnabled = hasCredits()
   const [training, setTraining] = useState<TrainingStatus | null>(null)
   const [busy, setBusy] = useState(false)
@@ -106,7 +109,7 @@ export function TrainingSection({ characterNodeId, data }: TrainingSectionProps)
     setBusy(true)
     try {
       await startCharacterTraining(data.characterDbId)
-      toast.success("Training started — usually takes 15 minutes.")
+      toast.success(tx("editor.trainingStarted"))
       setTraining({
         status: "queued",
         trainingId: null,
@@ -127,14 +130,14 @@ export function TrainingSection({ characterNodeId, data }: TrainingSectionProps)
     if (!data?.characterDbId || busy) return
     if (
       !window.confirm(
-        "Remove the trained model? Generations will fall back to reference images.",
+        tx("editor.trainingRemoveConfirm"),
       )
     )
       return
     setBusy(true)
     try {
       await deleteCharacterLora(data.characterDbId)
-      toast.success("Trained model removed.")
+      toast.success(tx("editor.trainedModelRemoved"))
       setTraining({
         status: "untrained",
         trainingId: null,
@@ -164,20 +167,20 @@ export function TrainingSection({ characterNodeId, data }: TrainingSectionProps)
   return (
     <section className="mb-6 border-t border-border dark:border-[#2D2D2D] pt-4">
       <header className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold">High-fidelity model</h3>
+        <h3 className="text-sm font-semibold">{t("editor.highFidelityModel")}</h3>
         <span className="text-[11px] text-muted-foreground">
-          {CHARACTER_LORA_TRAINING_CREDITS.toLocaleString()} credits · ~15 min
+          {t("editor.trainingCostLine", { credits: formatNumber(CHARACTER_LORA_TRAINING_CREDITS) })}
         </span>
       </header>
 
       {status === "succeeded" && (
         <div className="flex items-center gap-3 text-sm flex-wrap">
           <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-xs font-medium">
-            Trained
+            {t("editor.trainedBadge")}
           </span>
           <span className="text-muted-foreground text-xs">
             {training?.trainedAt
-              ? `Trained ${new Date(training.trainedAt).toLocaleDateString()}`
+              ? t("editor.trainedOn", { date: formatDate(training.trainedAt) })
               : ""}
           </span>
           <button
@@ -185,17 +188,17 @@ export function TrainingSection({ characterNodeId, data }: TrainingSectionProps)
             className="text-xs underline text-muted-foreground hover:text-foreground disabled:opacity-40"
             disabled={busy || insufficientPhotos}
             onClick={handleStart}
-            title="Re-training replaces the current model."
+            title={t("editor.retrainTitle")}
           >
-            Re-train
+            {t("editor.retrain")}
           </button>
           <button
             type="button"
-            className="text-xs underline text-muted-foreground hover:text-red-500 ml-auto disabled:opacity-40"
+            className="text-xs underline text-muted-foreground hover:text-red-500 ms-auto disabled:opacity-40"
             disabled={busy}
             onClick={handleRemove}
           >
-            Remove
+            {t("common.remove")}
           </button>
         </div>
       )}
@@ -203,14 +206,14 @@ export function TrainingSection({ characterNodeId, data }: TrainingSectionProps)
       {(status === "queued" || status === "training") && (
         <div className="flex items-center gap-3 text-sm">
           <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-          <span className="text-muted-foreground">Training… (~15 min)</span>
+          <span className="text-muted-foreground">{t("editor.trainingInProgress")}</span>
           <button
             type="button"
-            className="text-xs underline text-muted-foreground hover:text-red-500 ml-auto disabled:opacity-40"
+            className="text-xs underline text-muted-foreground hover:text-red-500 ms-auto disabled:opacity-40"
             disabled={busy}
             onClick={handleRemove}
           >
-            Cancel
+            {t("common.cancel")}
           </button>
         </div>
       )}
@@ -218,7 +221,7 @@ export function TrainingSection({ characterNodeId, data }: TrainingSectionProps)
       {status === "failed" && (
         <div className="flex flex-col gap-2 text-sm">
           <div className="text-red-500 text-xs">
-            Training failed: {training?.error ?? "Unknown error"}
+            {t("editor.trainingFailed", { error: training?.error ?? t("run.unknownError") })}
           </div>
           <button
             type="button"
@@ -226,7 +229,7 @@ export function TrainingSection({ characterNodeId, data }: TrainingSectionProps)
             disabled={busy || insufficientPhotos}
             onClick={handleStart}
           >
-            Try again
+            {t("common.tryAgain")}
           </button>
         </div>
       )}
@@ -234,8 +237,7 @@ export function TrainingSection({ characterNodeId, data }: TrainingSectionProps)
       {(status === "untrained" || status === "cancelled") && (
         <div className="flex flex-col gap-2 text-sm">
           <p className="text-muted-foreground text-xs">
-            Train a custom model on this character's references for the
-            highest-fidelity identity match in image generations.
+            {t("editor.trainingDescription")}
           </p>
           <div className="flex items-center gap-2 flex-wrap">
             <Button
@@ -247,12 +249,12 @@ export function TrainingSection({ characterNodeId, data }: TrainingSectionProps)
               {busy ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                "Train high-fidelity model"
+                t("editor.trainHighFidelity")
               )}
             </Button>
             <span className="text-xs text-muted-foreground">
-              {trainingImageCount} / {MIN_PHOTOS} photos
-              {insufficientPhotos && " — add more references first"}
+              {t("editor.photosCount", { count: trainingImageCount, min: MIN_PHOTOS })}
+              {insufficientPhotos && t("editor.addMoreReferences")}
             </span>
           </div>
         </div>

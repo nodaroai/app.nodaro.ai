@@ -22,6 +22,46 @@ import { SettingPreview } from "./previews/setting-preview"
 import { MaterialPreview } from "./previews/material-preview"
 import { AtmospherePreview } from "./previews/atmosphere-preview"
 import { StylePreview } from "./previews/style-preview"
+import { LookArt } from "./look-previews/look-art"
+import { getLookPreviewUrl } from "./look-previews/registry"
+import { CharacterArt } from "./pickers/character-art-tile"
+import { characterArtUrl, type CharacterArtFamily } from "./icons/character-art"
+import { getCompositionEffectLabel, getEraLabel, getHeldPropLabel } from "@nodaro/prompts"
+
+/**
+ * Icon for a picker with no drawn preview (Era, Composition Effects): the
+ * render when this deployment registered one — with the label as the fallback
+ * if it fails to load — otherwise null, so the app card shows its own text.
+ * Reads the registry without subscribing: bootstrapLookPreviews() runs before
+ * the first render (frontend/src/main.tsx), so the answer is fixed by mount.
+ */
+function renderArtOrNull(pickerKey: string, id: string, label: string): ReactNode {
+  return getLookPreviewUrl(pickerKey, id) ? (
+    <LookArt
+      pickerKey={pickerKey}
+      id={id}
+      className="size-full"
+      width={160}
+      fallback={<span className="flex size-full items-center justify-center px-1 text-center text-[10px] leading-tight text-muted-foreground/80">{label}</span>}
+    />
+  ) : null
+}
+
+/**
+ * Icon for a character picker (Held Prop, Material, Animal): the option's
+ * photo — the one its picker tile shows — or `fallback` when the option has
+ * none (null lets the app card show its own label). A photo that fails to load
+ * falls back the same way, or to `label` when there is no drawn fallback.
+ */
+function characterArtOr(family: CharacterArtFamily, id: string, fallback: ReactNode, label?: string): ReactNode {
+  if (!characterArtUrl(family, id)) return fallback
+  const onError =
+    fallback ??
+    (label ? (
+      <span className="flex size-full items-center justify-center px-1 text-center text-[10px] leading-tight text-muted-foreground/80">{label}</span>
+    ) : null)
+  return <CharacterArt family={family} id={id} className="size-full rounded-[inherit]" position="50% 25%" fallback={onError} />
+}
 import { MoodEmoji } from "./previews/mood-emoji"
 import { PoseIcon } from "./previews/pose-icon"
 import { CameraMotionPreview } from "./previews/camera-motion-preview"
@@ -131,7 +171,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     defaultValue: "clear",
     catalogId: "atmosphere",
     entries: mapCat(ATMOSPHERES),
-    renderIcon: (id) => <AtmospherePreview atmosphereId={id} className="size-full" />,
+    renderIcon: (id) => <LookArt pickerKey="atmosphere" id={id} className="size-full" width={160} fallback={<AtmospherePreview atmosphereId={id} className="size-full" />} />,
   },
   {
     kind: "single",
@@ -141,7 +181,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     defaultValue: "cinematic",
     catalogId: "style",
     entries: mapCat(STYLES),
-    renderIcon: (id) => <StylePreview styleId={id} className="size-full" />,
+    renderIcon: (id) => <LookArt pickerKey="style" id={id} className="size-full" width={160} fallback={<StylePreview styleId={id} className="size-full" />} />,
   },
   {
     kind: "single",
@@ -153,7 +193,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     entries: mapCat(COLOR_LOOKS, "category"),
     groupOrder: COLOR_LOOK_CATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: COLOR_LOOK_CATEGORY_LABELS as Record<string, string>,
-    renderIcon: (id) => <ColorLookPreview colorLookId={id} className="size-full" />,
+    renderIcon: (id) => <LookArt pickerKey="color-look" id={id} className="size-full" width={160} fallback={<ColorLookPreview colorLookId={id} className="size-full" />} />,
   },
   {
     kind: "single",
@@ -165,7 +205,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     entries: mapCat(MOODS, "category"),
     groupOrder: MOOD_CATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: MOOD_CATEGORY_LABELS,
-    renderIcon: (id) => <MoodEmoji moodId={id} className="size-full" />,
+    renderIcon: (id) => <LookArt pickerKey="mood" id={id} className="size-full" width={160} fallback={<MoodEmoji moodId={id} className="size-full" />} />,
   },
   {
     kind: "single",
@@ -197,6 +237,8 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     defaultValue: "1990s-mall",
     catalogId: "era",
     entries: mapCat(ERAS, "category"),
+    // No drawn preview for eras: without a registered render the card keeps its text.
+    renderIcon: (id) => renderArtOrNull("era", id, getEraLabel(id)),
     groupOrder: ERA_CATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: ERA_CATEGORY_LABELS,
   },
@@ -240,6 +282,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     defaultValue: "none",
     catalogId: "composition-effects",
     entries: mapCat(COMPOSITION_EFFECTS),
+    renderIcon: (id) => renderArtOrNull("composition-effects", id, getCompositionEffectLabel(id)),
   },
   {
     kind: "single",
@@ -284,7 +327,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     entries: mapCat(CAMERA_MOTIONS, "category"),
     groupOrder: CAMERA_MOTION_CATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: CAMERA_MOTION_CATEGORY_LABELS,
-    renderIcon: (id) => <CameraMotionPreview motionId={id} className="size-full" />,
+    renderIcon: (id) => <LookArt pickerKey="camera-motion" id={id} className="size-full" width={160} fallback={<CameraMotionPreview motionId={id} className="size-full" />} />,
   },
   {
     kind: "single",
@@ -294,7 +337,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     defaultValue: "normal-50mm",
     catalogId: "lens",
     entries: mapCat(LENSES),
-    renderIcon: (id) => <LensPreview lensId={id} className="size-full" />,
+    renderIcon: (id) => <LookArt pickerKey="lens" id={id} className="size-full" width={160} fallback={<LensPreview lensId={id} className="size-full" />} />,
   },
   {
     kind: "single",
@@ -304,7 +347,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     defaultValue: "35mm-film",
     catalogId: "camera-format",
     entries: mapCat(CAMERA_FORMATS),
-    renderIcon: (id) => <CameraFormatPreview cameraFormatId={id} className="size-full" />,
+    renderIcon: (id) => <LookArt pickerKey="camera-format" id={id} className="size-full" width={160} fallback={<CameraFormatPreview cameraFormatId={id} className="size-full" />} />,
   },
 
   {
@@ -367,7 +410,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     entries: mapCat(MATERIALS, "category"),
     groupOrder: MATERIAL_CATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: MATERIAL_CATEGORY_LABELS,
-    renderIcon: (id) => <MaterialPreview materialId={id} className="size-full" />,
+    renderIcon: (id) => characterArtOr("materials", id, <MaterialPreview materialId={id} className="size-full" />),
   },
   {
     kind: "single",
@@ -379,7 +422,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     entries: mapCat(ANIMALS, "subcategory"),
     groupOrder: ANIMAL_SUBCATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: ANIMAL_SUBCATEGORY_LABELS,
-    renderIcon: (id) => <span className="text-2xl">{ANIMAL_ICON_FOR(id)}</span>,
+    renderIcon: (id) => characterArtOr("animals", id, <span className="text-2xl">{ANIMAL_ICON_FOR(id)}</span>),
   },
   {
     kind: "single",
@@ -426,6 +469,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     entries: mapCat(HELD_PROPS, "category"),
     groupOrder: HELD_PROP_CATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: HELD_PROP_CATEGORY_LABELS,
+    renderIcon: (id) => characterArtOr("held-prop", id, null, getHeldPropLabel(id)),
   },
 ]
 

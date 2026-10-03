@@ -8,6 +8,7 @@ import { getAuthHeaders } from "@/lib/api"
 import { CONNECT_START_NETWORK_MESSAGE, interpretConnectStart } from "@/lib/cloud-connect-start"
 import { useProviderKeyEditor } from "@/lib/use-provider-key-editor"
 import { NodaroScopeDialog } from "@/components/integrations/nodaro-scope-dialog"
+import { useT } from "@/lib/i18n"
 
 /**
  * "Connect a provider to generate" — what a run on an install with no provider
@@ -44,6 +45,7 @@ export function ConnectProviderDialog({
   onOpenChange,
   onRetry,
 }: ConnectProviderDialogProps) {
+  const t = useT()
   const [connectPending, setConnectPending] = useState(false)
   const [connectError, setConnectError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -95,19 +97,20 @@ export function ConnectProviderDialog({
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-              Run stopped &middot; {nodeLabel}
+              {t("connect.providerRunStopped", { nodeLabel })}
             </span>
-            <DialogTitle className="text-lg font-semibold">Connect a provider to generate</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">{t("connect.providerTitle")}</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              This node needs a model provider, and this install has none configured yet.
-              Nothing was consumed and your workflow is unchanged.
+              {t("connect.providerBody")}
             </DialogDescription>
             {alsoBlockedCount > 0 && (
               <p className="text-sm text-muted-foreground">
                 {/* States what stopped, not what connecting repairs: the count is
                     every failed node in the run and one may have failed for its
                     own reason, so claiming coverage would overreach. */}
-                {alsoBlockedCount} other {alsoBlockedCount === 1 ? "node" : "nodes"} in this run also stopped.
+                {alsoBlockedCount === 1
+                  ? t("connect.providerOtherNodeStopped", { n: alsoBlockedCount })
+                  : t("connect.providerOtherNodesStopped", { n: alsoBlockedCount })}
               </p>
             )}
           </div>
@@ -117,15 +120,15 @@ export function ConnectProviderDialog({
               <Cloud className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium">nodaro.ai</span>
             </div>
-            <p className="text-xs text-muted-foreground">1,500 free credits, no credit card.</p>
+            <p className="text-xs text-muted-foreground">{t("connect.providerFreeCredits")}</p>
             <Button size="sm" onClick={() => void startConnect()} disabled={connectPending}>
-              {connectPending ? "Opening…" : "Connect"}
+              {connectPending ? t("connect.providerOpening") : t("integ.connect")}
             </Button>
             {connectError && <p className="text-xs text-destructive">{connectError}</p>}
           </div>
 
           <div className="flex flex-col gap-2">
-            <span className="text-xs text-muted-foreground">or use your own key</span>
+            <span className="text-xs text-muted-foreground">{t("connect.providerUseOwnKey")}</span>
             <div className="flex gap-2">
               <Input
                 value={keyEditor.value}
@@ -144,13 +147,13 @@ export function ConnectProviderDialog({
                 onClick={() => void keyEditor.save()}
                 disabled={keyEditor.busy || keyEditor.value.trim().length === 0}
               >
-                {keyEditor.phase === "saving" ? "Saving…" : "Save"}
+                {keyEditor.phase === "saving" ? t("common.saving") : t("common.save")}
               </Button>
             </div>
             {keyEditor.error && <p className="text-xs text-destructive">{keyEditor.error}</p>}
             {saved && (
               <p className="text-xs text-muted-foreground">
-                Key saved. It takes effect immediately — no restart needed.
+                {t("connect.providerKeySaved")}
               </p>
             )}
           </div>
@@ -161,11 +164,11 @@ export function ConnectProviderDialog({
               className="text-xs text-muted-foreground underline underline-offset-2"
               onClick={() => onOpenChange(false)}
             >
-              All integrations
+              {t("connect.providerAllIntegrations")}
             </Link>
             <div className="flex gap-2">
               <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
-                Not now
+                {t("connect.providerNotNow")}
               </Button>
               {onRetry && saved && (
                 <Button
@@ -175,7 +178,7 @@ export function ConnectProviderDialog({
                     onRetry()
                   }}
                 >
-                  Retry
+                  {t("common.retry")}
                 </Button>
               )}
             </div>

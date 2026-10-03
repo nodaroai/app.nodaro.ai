@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight, Maximize2, ZoomIn } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
 import { filterMentions } from "@/ee/lib/copilot/mentions"
 import {
   MENTION_KINDS,
@@ -24,26 +24,45 @@ import {
   type CopilotMentionVariant,
   type MentionKind,
 } from "@/ee/lib/copilot/types"
+import { useT, type MessageKey } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { MentionPreview, type MentionPreviewContent } from "./copilot-mention-preview"
 
 /** The composer's `aria-controls` target. */
 export const MENTION_LIST_ID = "copilot-mention-list"
 
+/**
+ * A tab's IDENTITY — what the tab state, the counts and `onExpand` carry. It is
+ * never shown as-is (`SECTION_LABEL_KEY` is), so it stays the same in every
+ * language and an open tab survives a language switch.
+ */
+export type MentionSection = "Characters" | "Objects" | "Animals" | "Locations" | "Files"
+
 /** Everything that differs per kind, one row each. Round for living things. */
-export const KIND_UI: Record<MentionKind, { section: string; chip: string; round: boolean }> = {
-  character: { section: S.sectionCharacters, chip: S.kindCharacter, round: true },
-  object: { section: S.sectionObjects, chip: S.kindObject, round: false },
-  creature: { section: S.sectionCreatures, chip: S.kindCreature, round: true },
-  location: { section: S.sectionLocations, chip: S.kindLocation, round: false },
-  image: { section: S.sectionFiles, chip: S.kindImage, round: false },
-  video: { section: S.sectionFiles, chip: S.kindVideo, round: false },
-  audio: { section: S.sectionFiles, chip: S.kindAudio, round: false },
+export const KIND_UI: Record<MentionKind, { section: MentionSection; chipKey: MessageKey; round: boolean }> = {
+  character: { section: "Characters", chipKey: K.kindCharacter, round: true },
+  object: { section: "Objects", chipKey: K.kindObject, round: false },
+  creature: { section: "Animals", chipKey: K.kindCreature, round: true },
+  location: { section: "Locations", chipKey: K.kindLocation, round: false },
+  image: { section: "Files", chipKey: K.kindImage, round: false },
+  video: { section: "Files", chipKey: K.kindVideo, round: false },
+  audio: { section: "Files", chipKey: K.kindAudio, round: false },
+}
+
+/** What each tab is CALLED — resolved with `t()` at render. */
+export const SECTION_LABEL_KEY: Record<MentionSection, MessageKey> = {
+  Characters: K.sectionCharacters,
+  Objects: K.sectionObjects,
+  Animals: K.sectionCreatures,
+  Locations: K.sectionLocations,
+  Files: K.sectionFiles,
 }
 
 /** Tab order = kind order; the three file kinds share one tab. */
-export const SECTION_TABS: string[] = [...new Set(MENTION_KINDS.map((kind) => KIND_UI[kind].section))]
+export const SECTION_TABS: MentionSection[] = [...new Set(MENTION_KINDS.map((kind) => KIND_UI[kind].section))]
 
-export function sectionOf(mention: CopilotMention): string {
+export function sectionOf(mention: CopilotMention): MentionSection {
   return KIND_UI[mention.kind].section
 }
 
@@ -95,12 +114,14 @@ export function CopilotMentionPicker({
   onActiveChange,
   onClose,
   onExpand,
-  insetClassName = "left-3.5 right-3.5",
+  insetClassName = "start-3.5 end-3.5",
   loading = false,
   fileTotal = null,
   hasMoreFiles = false,
   onLoadMoreFiles,
 }: CopilotMentionPickerProps) {
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const counts = useMemo(() => {
     const map = new Map<string, number>(SECTION_TABS.map((tab) => [tab, 0]))
     for (const mention of mentions) map.set(sectionOf(mention), (map.get(sectionOf(mention)) ?? 0) + 1)
@@ -147,7 +168,7 @@ export function CopilotMentionPicker({
       if (section === tab) continue
       byTab.set(section, (byTab.get(section) ?? 0) + 1)
     }
-    return SECTION_TABS.filter((t) => byTab.has(t)).map((t) => ({ tab: t, count: byTab.get(t)! }))
+    return SECTION_TABS.filter((section) => byTab.has(section)).map((section) => ({ tab: section, count: byTab.get(section)! }))
   }, [mentions, tab, query])
 
   const drillRows: DrillRow[] = useMemo(() => {
@@ -242,19 +263,19 @@ export function CopilotMentionPicker({
   return (
     <div
       role="listbox"
-      aria-label={S.mention}
+      aria-label={t(K.mention)}
       id={MENTION_LIST_ID}
       className={`absolute ${insetClassName} bottom-full mb-2 bg-[var(--copilot-card)] border border-[var(--copilot-strong)] rounded-xl shadow-[0_16px_40px_rgba(0,0,0,0.45)] overflow-hidden flex flex-col z-20`}
     >
       <div className="px-3 py-2 border-b border-border flex items-center gap-2">
         <span className="font-mono text-[11.5px] text-[var(--copilot-mention)]">@{query}</span>
-        <span className="ml-auto text-[10.5px] text-[var(--copilot-dim)]">{S.pickerHintInsert}</span>
+        <span className="ms-auto text-[10.5px] text-[var(--copilot-dim)]">{t(K.pickerHintInsert)}</span>
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onExpand(tab)}
-          aria-label={S.pickerExpand}
-          title={S.pickerExpand}
+          aria-label={t(K.pickerExpand)}
+          title={t(K.pickerExpand)}
           className="w-[22px] h-[22px] rounded-md border border-border text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center"
         >
           <Maximize2 className="w-3 h-3" strokeWidth={2.2} />
@@ -262,13 +283,13 @@ export function CopilotMentionPicker({
       </div>
 
       {!drill && !nothingAtAll && (
-        <div className="px-2 pt-1.5 flex flex-wrap gap-1" role="tablist" aria-label={S.mention}>
+        <div className="px-2 pt-1.5 flex flex-wrap gap-1" role="tablist" aria-label={t(K.mention)}>
           {SECTION_TABS.map((section) => {
             // Files are paged, so what arrived is not what the user has. The
             // server's exact count is the honest number; without it the tab
             // read "Files 40" to someone with five hundred, which is the same
             // lie the entity lists used to tell at 100.
-            const count = section === S.sectionFiles && fileTotal !== null ? fileTotal : counts.get(section) ?? 0
+            const count = section === "Files" && fileTotal !== null ? fileTotal : counts.get(section) ?? 0
             const isActive = section === tab
             return (
               <button
@@ -284,7 +305,7 @@ export function CopilotMentionPicker({
                     : "border-transparent text-[var(--copilot-muted)] hover:text-foreground"
                 }`}
               >
-                {section} <span className="text-[var(--copilot-dim)]">{count}</span>
+                {t(SECTION_LABEL_KEY[section])} <span className="text-[var(--copilot-dim)]">{count}</span>
               </button>
             )
           })}
@@ -293,9 +314,9 @@ export function CopilotMentionPicker({
 
       {drill && (
         <div className="px-3 py-1.5 flex items-center gap-2 text-[12px] text-foreground">
-          <ChevronLeft className="w-3 h-3 text-[var(--copilot-dim)]" strokeWidth={2.2} aria-hidden />
+          <ChevronLeft className={cn("w-3 h-3 text-[var(--copilot-dim)]", isRtl && "rotate-180")} strokeWidth={2.2} aria-hidden />
           <span className="font-medium truncate">{drill.name}</span>
-          <span className="ml-auto text-[10.5px] text-[var(--copilot-dim)]">{S.pickerVariantsHint}</span>
+          <span className="ms-auto text-[10.5px] text-[var(--copilot-dim)]">{t(K.pickerVariantsHint)}</span>
         </div>
       )}
 
@@ -304,7 +325,7 @@ export function CopilotMentionPicker({
         // Only the Files tab pages: every other kind is fully in memory, and
         // asking for "more" there would be a request for nothing.
         onScroll={
-          tab === S.sectionFiles && hasMoreFiles
+          tab === "Files" && hasMoreFiles
             ? (e) => {
                 if (scrolledNearBottom(e.currentTarget)) onLoadMoreFiles?.()
               }
@@ -313,23 +334,23 @@ export function CopilotMentionPicker({
         className="pt-1 pb-1.5 max-h-[280px] overflow-y-auto overflow-x-hidden"
       >
         {nothingAtAll && loading ? (
-          <div className="px-3.5 py-[18px] text-center text-xs text-[var(--copilot-muted)]">{S.pickerLoading}</div>
+          <div className="px-3.5 py-[18px] text-center text-xs text-[var(--copilot-muted)]">{t(K.pickerLoading)}</div>
         ) : nothingAtAll ? (
           <div className="px-3.5 py-4 text-center">
-            <div className="text-xs text-foreground">{S.pickerEmptyTitle}</div>
-            <div className="mt-1 text-[11.5px] text-[var(--copilot-muted)]">{S.pickerEmptyBlurb}</div>
+            <div className="text-xs text-foreground">{t(K.pickerEmptyTitle)}</div>
+            <div className="mt-1 text-[11.5px] text-[var(--copilot-muted)]">{t(K.pickerEmptyBlurb)}</div>
           </div>
         ) : drill ? (
           drillRows.map((row, index) => {
             const isActive = index === active
             // `group`: hovering anywhere on the row reveals the thumb's
             // magnifier, not only the 26px circle itself.
-            const base = `group flex items-center gap-2.5 w-[calc(100%-10px)] mx-[5px] px-[11px] py-[7px] rounded-lg text-left ${isActive ? "bg-[var(--copilot-surface)]" : ""}`
+            const base = `group flex items-center gap-2.5 w-[calc(100%-10px)] mx-[5px] px-[11px] py-[7px] rounded-lg text-start ${isActive ? "bg-[var(--copilot-surface)]" : ""}`
             if (row.kind === "back") {
               return (
                 <button key="back" id={optionId(`drill-${index}`)} type="button" role="option" aria-selected={isActive} onMouseDown={(e) => e.preventDefault()} onClick={() => setDrill(null)} className={base}>
-                  <ChevronLeft className="w-3.5 h-3.5 text-[var(--copilot-dim)]" strokeWidth={2.2} aria-hidden />
-                  <span className="text-[12px] text-[var(--copilot-muted)]">{S.pickerBack}</span>
+                  <ChevronLeft className={cn("w-3.5 h-3.5 text-[var(--copilot-dim)]", isRtl && "rotate-180")} strokeWidth={2.2} aria-hidden />
+                  <span className="text-[12px] text-[var(--copilot-muted)]">{t(K.pickerBack)}</span>
                 </button>
               )
             }
@@ -340,11 +361,11 @@ export function CopilotMentionPicker({
                     label={drill.name}
                     round={KIND_UI[drill.kind].round}
                     highlighted={isActive}
-                    onPreview={previewOf(safeThumbUrl(drill.imageUrl), drill.name, KIND_UI[drill.kind].chip, () => onPick(drill))}
+                    onPreview={previewOf(safeThumbUrl(drill.imageUrl), drill.name, t(KIND_UI[drill.kind].chipKey), () => onPick(drill))}
                   >
                     <MentionThumb mention={drill} size={26} />
                   </PreviewableThumb>
-                  <span className="text-[12.5px] text-foreground truncate flex-1 min-w-0">{S.pickerVariantDefault}</span>
+                  <span className="text-[12.5px] text-foreground truncate flex-1 min-w-0">{t(K.pickerVariantDefault)}</span>
                 </button>
               )
             }
@@ -360,12 +381,12 @@ export function CopilotMentionPicker({
                   <VariantThumb variant={variant} size={26} />
                 </PreviewableThumb>
                 <span className="text-[12.5px] text-foreground truncate flex-1 min-w-0">{variant.name}</span>
-                <span className="ml-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap capitalize">{variant.bucketNoun}</span>
+                <span className="ms-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap capitalize">{variant.bucketNoun}</span>
               </button>
             )
           })
         ) : tabItems.length === 0 && otherTabMatches.length === 0 ? (
-          <div className="px-3.5 py-[18px] text-center text-xs text-[var(--copilot-muted)]">{S.pickerNoMatch(query)}</div>
+          <div className="px-3.5 py-[18px] text-center text-xs text-[var(--copilot-muted)]">{t(K.pickerNoMatch, { query })}</div>
         ) : (
           <>
             {tabItems.map((item, index) => {
@@ -380,7 +401,7 @@ export function CopilotMentionPicker({
                   aria-selected={isActive}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => onPick(item)}
-                  className={`group flex items-center gap-2.5 w-[calc(100%-10px)] mx-[5px] px-[11px] py-[7px] rounded-lg text-left ${
+                  className={`group flex items-center gap-2.5 w-[calc(100%-10px)] mx-[5px] px-[11px] py-[7px] rounded-lg text-start ${
                     isActive ? "bg-[var(--copilot-surface)]" : ""
                   }`}
                 >
@@ -388,17 +409,17 @@ export function CopilotMentionPicker({
                     label={item.name}
                     round={KIND_UI[item.kind].round}
                     highlighted={isActive}
-                    onPreview={previewOf(safeThumbUrl(item.imageUrl), item.name, KIND_UI[item.kind].chip, () => onPick(item))}
+                    onPreview={previewOf(safeThumbUrl(item.imageUrl), item.name, t(KIND_UI[item.kind].chipKey), () => onPick(item))}
                   >
                     <MentionThumb mention={item} size={22} />
                   </PreviewableThumb>
                   <span className="text-[12.5px] text-foreground truncate flex-1 min-w-0">{item.name}</span>
-                  <span className="ml-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap">{KIND_UI[item.kind].chip}</span>
+                  <span className="ms-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap">{t(KIND_UI[item.kind].chipKey)}</span>
                   {hasVariants && (
                     <span
                       role="button"
                       tabIndex={-1}
-                      aria-label={S.pickerVariantsOf(item.name)}
+                      aria-label={t(K.pickerVariantsOf, { name: item.name })}
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={(e) => {
                         e.stopPropagation()
@@ -406,7 +427,7 @@ export function CopilotMentionPicker({
                       }}
                       className="w-[20px] h-[20px] rounded-md border border-border text-[var(--copilot-dim)] hover:text-foreground flex items-center justify-center"
                     >
-                      <ChevronRight className="w-3 h-3" strokeWidth={2.2} aria-hidden />
+                      <ChevronRight className={cn("w-3 h-3", isRtl && "rotate-180")} strokeWidth={2.2} aria-hidden />
                     </span>
                   )}
                 </button>
@@ -414,7 +435,7 @@ export function CopilotMentionPicker({
             })}
             {otherTabMatches.length > 0 && (
               <div className="px-[11px] pt-1.5 pb-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-[var(--copilot-dim)]">
-                <span>{S.pickerOtherTabs}</span>
+                <span>{t(K.pickerOtherTabs)}</span>
                 {otherTabMatches.map(({ tab: otherTab, count }) => (
                   <button
                     key={otherTab}
@@ -423,7 +444,7 @@ export function CopilotMentionPicker({
                     onClick={() => setTab(otherTab)}
                     className="px-1.5 py-[2px] rounded-md border border-border text-[var(--copilot-muted)] hover:text-foreground"
                   >
-                    {otherTab} {count}
+                    {t(SECTION_LABEL_KEY[otherTab])} {count}
                   </button>
                 ))}
               </div>
@@ -481,13 +502,14 @@ export function PreviewableThumb({
   onPreview?: () => void
   children: React.ReactNode
 }) {
+  const t = useT()
   if (!onPreview) return <>{children}</>
   return (
     <span
       role="button"
       tabIndex={-1}
-      aria-label={S.pickerPreviewOf(label)}
-      title={S.pickerPreviewOf(label)}
+      aria-label={t(K.pickerPreviewOf, { name: label })}
+      title={t(K.pickerPreviewOf, { name: label })}
       // Focus must stay in the composer: its blur closes the picker, so a
       // thumbnail that stole focus would close the list it sits in.
       onMouseDown={(e) => e.preventDefault()}

@@ -9,6 +9,7 @@ import { queryKeys } from "@/lib/query-keys"
 import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
+import { tx, useT } from "@/lib/i18n"
 
 /**
  * The activation path for an account whose free signup grant was withheld.
@@ -28,6 +29,7 @@ import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 const PARAM = "activate_grant"
 
 export function FreeGrantWithheldBanner() {
+  const t = useT()
   const { user } = useAuth()
   const { data: balance } = useUserCredits(user?.id)
   const queryClient = useQueryClient()
@@ -48,14 +50,14 @@ export function FreeGrantWithheldBanner() {
     completeFreeGrantActivation(sessionId)
       .then((res) => {
         if (res.activated || res.state === "granted") {
-          toast.success(`Your ${creditUnits(FREE_TIER_CREDITS)} free ${creditUnitLabel()} are active`)
+          toast.success(tx("credits.freeGrantActive", { n: creditUnits(FREE_TIER_CREDITS), u: creditUnitLabel(tx("credits.unitShort")) }))
         } else {
-          toast.error("Free credits could not be activated yet")
+          toast.error(tx("credits.freeGrantNotYet"))
         }
         return queryClient.invalidateQueries({ queryKey: queryKeys.credits.balance(user.id) })
       })
       .catch((err: unknown) => {
-        toast.error(err instanceof Error ? err.message : "Failed to activate free credits")
+        toast.error(err instanceof Error ? err.message : tx("credits.freeGrantActivateFailed"))
       })
       .finally(() => {
         setCompleting(false)
@@ -76,7 +78,7 @@ export function FreeGrantWithheldBanner() {
       const { data } = await startFreeGrantActivation()
       window.location.assign(data.url)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to start activation")
+      toast.error(err instanceof Error ? err.message : tx("credits.freeGrantStartFailed"))
       setStarting(false)
     }
   }
@@ -93,10 +95,10 @@ export function FreeGrantWithheldBanner() {
       <Sparkles className="h-4 w-4 shrink-0" style={{ color: "#ff0073" }} />
       <span className="flex-1 min-w-[16rem]">
         <span className="font-medium">
-          Activate your {creditUnits(FREE_TIER_CREDITS)} free {creditUnitLabel()}.
+          {t("credits.activateFreeGrant", { n: creditUnits(FREE_TIER_CREDITS), u: creditUnitLabel(t("credits.unitShort")) })}
         </span>{" "}
         <span style={{ color: "var(--blg-t2-dim)" }}>
-          Add a payment method to unlock them — nothing is charged.
+          {t("credits.addPaymentToUnlock")}
         </span>
       </span>
       <button
@@ -107,7 +109,7 @@ export function FreeGrantWithheldBanner() {
         style={{ background: "#ff0073" }}
       >
         {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
-        {completing ? "Activating…" : "Add payment method"}
+        {completing ? t("credits.activating") : t("credits.addPaymentMethod")}
       </button>
     </div>
   )

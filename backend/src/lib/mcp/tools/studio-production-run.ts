@@ -206,8 +206,8 @@ export function registerStudioProductionRunTools({
     {
       title: "Generate Studio Clip",
       description:
-        "Generate a scene's MOTION (the document's `clip`) from its saved inputs. Omit mode for automatic lane selection; " +
-        "start uses its start frame, references uses reference media. Spends credits; " +
+        "Generate a scene's MOTION (the document's `clip`) from its saved inputs. Omit mode for the scene's saved lane; " +
+        "start sends only its start frame, start-end its start AND end frames, references reference media. Spends credits; " +
         "dry_run quotes without submitting. Returns a job ID and a pending marker; the " +
         "finished take reaches the scene only on your next `get_studio_production` " +
         "(`get_job` / `wait_for_job` land nothing). Frame and motion jobs may run concurrently.",
@@ -215,9 +215,9 @@ export function registerStudioProductionRunTools({
         production_id: productionId,
         shot_id: shotId,
         mode: z
-          .enum(["start", "references"])
+          .enum(["start", "start-end", "references"])
           .optional()
-          .describe("Force the directing lane. Omit to let the inputs decide."),
+          .describe("Force the directing lane. Omit to let the scene's saved input decide (`start` drops an end frame)."),
         expected_input_hash: z.string().regex(/^[a-f0-9]{64}$/).optional().describe("The reviewed linked-clip quote hash; required for a retake submission."),
         retake_result_key: z.string().min(1).optional().describe("Native or copied linked take to retake exactly. Omit mode/overrides. Quote with dry_run; submit with expected_input_hash and client_request_id."),
         overrides,

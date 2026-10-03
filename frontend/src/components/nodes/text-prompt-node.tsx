@@ -1,6 +1,7 @@
 "use client"
 
 import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
 import { Position, type NodeProps, NodeResizeControl, NodeToolbar, useUpdateNodeInternals } from "@xyflow/react"
 import { isDataProducer } from "@/lib/data-handles"
@@ -38,6 +39,7 @@ const ACCEPTS_IN = (t: string) => isDataProducer(t, isVisualPickerType)
 
 function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const nodeData = data as TextPromptData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
@@ -319,7 +321,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
       if (!node) continue
 
       if (EXECUTABLE_TYPES.has(node.type ?? "")) {
-        totalCredits += estimateNodeCredits(node as { id?: string; type?: string; data?: Record<string, unknown> }, edges)
+        totalCredits += estimateNodeCredits(node as { id?: string; type?: string; data?: Record<string, unknown> }, edges, nodes)
       }
 
       for (const edge of edgesBySource.get(current) ?? []) {
@@ -712,7 +714,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
           {/* Accessible title for Radix Dialog — visually replaced by the
               editable header below. */}
           <VisuallyHidden>
-            <DialogTitle>{nodeData.label ?? "Text"}</DialogTitle>
+            <DialogTitle>{localizeNode(nodeData.label ?? "Text")}</DialogTitle>
           </VisuallyHidden>
           {/* Header: icon + editable title, top-left. */}
           <div className="absolute top-2 left-3 flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 dark:text-white/70">
@@ -742,7 +744,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
                 onClick={() => setTitleEditing(true)}
                 title={t("node.clickToRename")}
               >
-                {nodeData.label ?? "Text"}
+                {localizeNode(nodeData.label ?? "Text")}
               </span>
             )}
           </div>

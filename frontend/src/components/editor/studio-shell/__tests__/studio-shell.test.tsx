@@ -7,12 +7,12 @@ import type { StudioNavConfig } from "../types"
 function makeConfig(): StudioNavConfig<{ n: number }> {
   return {
     groups: [
-      { label: "Group A", pages: [
-        { key: "p1", label: "Page One", icon: "1", Component: () => <div>page-one-body</div>, badge: (s) => ({ kind: "count", value: s.n }) },
+      { label: "studioNav.resources", pages: [
+        { key: "p1", label: "studioNav.references", icon: "1", Component: () => <div>page-one-body</div>, badge: (s) => ({ kind: "count", value: s.n }) },
       ] },
-      { label: "Group B", pages: [
-        { key: "p2", label: "Page Two", icon: "2", Component: () => <div>page-two-body</div> },
-        { key: "secret", label: "Secret", icon: "x", Component: () => <div>secret-body</div>, visible: (c) => c.hasCredits },
+      { label: "studioNav.identity", pages: [
+        { key: "p2", label: "studioNav.profile", icon: "2", Component: () => <div>page-two-body</div> },
+        { key: "secret", label: "studioNav.lora", icon: "x", Component: () => <div>secret-body</div>, visible: (c) => c.hasCredits },
       ] },
     ],
   }
@@ -21,24 +21,24 @@ function makeConfig(): StudioNavConfig<{ n: number }> {
 describe("StudioShell", () => {
   it("renders group labels, the first page by default, and switches pages on click", () => {
     render(<StudioShell config={makeConfig()} state={{ n: 3 }} jobs={{}} hasCredits={false} />)
-    expect(screen.getByText("Group A")).toBeTruthy()
+    expect(screen.getByText("Resources")).toBeTruthy()
     expect(screen.getByText("page-one-body")).toBeTruthy()       // first page active
     expect(screen.getByText("3")).toBeTruthy()                    // count badge
-    expect(screen.queryByText("Secret")).toBeNull()               // hidden when !hasCredits
-    fireEvent.click(screen.getByText("Page Two"))
+    expect(screen.queryByText("LoRA")).toBeNull()               // hidden when !hasCredits
+    fireEvent.click(screen.getByText("Profile"))
     expect(screen.getByText("page-two-body")).toBeTruthy()
   })
 
   it("shows hasCredits-gated pages when hasCredits is true", () => {
     render(<StudioShell config={makeConfig()} state={{ n: 0 }} jobs={{}} hasCredits />)
-    expect(screen.getByText("Secret")).toBeTruthy()
+    expect(screen.getByText("LoRA")).toBeTruthy()
   })
 
   it("renders a check-kind badge as ✓", () => {
     const config: StudioNavConfig<Record<string, never>> = {
       groups: [
-        { label: "G", pages: [
-          { key: "p1", label: "Voice", icon: "v", Component: () => <div>voice-body</div>, badge: () => ({ kind: "check" }) },
+        { label: "studioNav.character", pages: [
+          { key: "p1", label: "studioNav.voice", icon: "v", Component: () => <div>voice-body</div>, badge: () => ({ kind: "check" }) },
         ] },
       ],
     }
@@ -57,10 +57,10 @@ describe("StudioShell", () => {
   it("lets a page navigate via StudioNavContext", () => {
     const config: StudioNavConfig<Record<string, never>> = {
       groups: [
-        { label: "G", pages: [
+        { label: "studioNav.identity", pages: [
           {
             key: "p1",
-            label: "Page One",
+            label: "studioNav.references",
             icon: "1",
             Component: () => {
               const navigate = useContext(StudioNavContext)
@@ -71,7 +71,7 @@ describe("StudioShell", () => {
               )
             },
           },
-          { key: "p2", label: "Page Two", icon: "2", Component: () => <div>page-two-body</div> },
+          { key: "p2", label: "studioNav.profile", icon: "2", Component: () => <div>page-two-body</div> },
         ] },
       ],
     }

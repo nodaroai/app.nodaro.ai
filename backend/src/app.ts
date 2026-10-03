@@ -86,6 +86,7 @@ import { audioFxRoutes } from "./routes/audio-fx.js"
 import { speedRampRoutes } from "./routes/speed-ramp.js"
 import { loopVideoRoutes } from "./routes/loop-video.js"
 import { fadeVideoRoutes } from "./routes/fade-video.js"
+import { videoOverlayRoutes } from "./routes/video-overlay.js"
 import { stillToVideoRoutes } from "./routes/still-to-video.js"
 import { gifToVideoRoutes } from "./routes/gif-to-video.js"
 import { slideshowRoutes } from "./routes/slideshow.js"
@@ -96,6 +97,7 @@ import { combineAudioRoutes } from "./routes/combine-audio.js"
 import { splitMediaRoutes } from "./routes/split-media.js"
 import { extractAudioRoutes } from "./routes/extract-audio.js"
 import { silenceDetectRoutes } from "./routes/silence-detect.js"
+import { audioSyncRoutes } from "./routes/audio-sync.js"
 import { removeAudioRoutes } from "./routes/remove-audio.js"
 import { generateMusicRoutes } from "./routes/generate-music.js"
 import { uploadRoutes } from "./routes/upload.js"
@@ -132,6 +134,7 @@ import { generateCreatureAssetRoutes } from "./routes/generate-creature-asset.js
 import { generateCreatureMotionRoutes } from "./routes/generate-creature-motion.js"
 import { locationRoutes } from "./routes/locations.js"
 import { nodePresetRoutes } from "./routes/node-presets.js"
+import { savedPostRoutes } from "./routes/saved-posts.js"
 import { nodePresetGroupRoutes } from "./routes/node-preset-groups.js"
 import { promptSnippetRoutes } from "./routes/prompt-snippets.js"
 import { locationRestoreRoutes } from "./routes/location-restore.js"
@@ -280,6 +283,7 @@ import { nodesRoutes } from "./routes/nodes.js"
 import { pickerCatalogsRoutes } from "./routes/picker-catalogs.js"
 import { catalogsRoutes } from "./routes/catalogs.js"
 import { oauthRoutes } from "./routes/oauth.js"
+import { connectedAppsRoutes } from "./routes/connected-apps.js"
 import { registerOauthRegister } from "./routes/oauth-register.js"
 import { oauthPluginConnectRoutes, POLL_KEY_HEADER } from "./routes/oauth-plugin-connect.js"
 import { ssoRoutes } from "./routes/sso.js"
@@ -298,6 +302,7 @@ import { nodaroExclusiveRoutes } from "./routes/nodaro-exclusive.js"
 import { providerKeysRoutes } from "./routes/provider-keys.js"
 import { openapiRoutes } from "./routes/openapi.js"
 import { registerAuthHook } from "./middleware/auth.js"
+import { registerPluginRouteScopeHook } from "./lib/plugin-route-scopes.js"
 import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-guard.js"
 import { registerOrgsContextHook } from "./lib/orgs-context.js"
 import { registerBillingContextHook } from "./lib/billing-context.js"
@@ -477,6 +482,8 @@ export async function buildApp() {
   })
 
   registerAuthHook(app)
+  // App-token scopes for routes a private plugin serves (it cannot see the grant).
+  registerPluginRouteScopeHook(app)
   registerSequenceExecutionGuard(app)
 
   // Workspace context — AFTER the auth hook, which is what resolves the
@@ -522,6 +529,7 @@ export async function buildApp() {
   await app.register(speedRampRoutes)
   await app.register(loopVideoRoutes)
   await app.register(fadeVideoRoutes)
+  await app.register(videoOverlayRoutes)
   await app.register(stillToVideoRoutes)
   await app.register(gifToVideoRoutes)
   await app.register(slideshowRoutes)
@@ -532,6 +540,7 @@ export async function buildApp() {
   await app.register(splitMediaRoutes)
   await app.register(extractAudioRoutes)
   await app.register(silenceDetectRoutes)
+  await app.register(audioSyncRoutes)
   await app.register(removeAudioRoutes)
   await app.register(generateMusicRoutes)
   await app.register(uploadRoutes)
@@ -568,6 +577,7 @@ export async function buildApp() {
   await app.register(generateCreatureMotionRoutes)
   await app.register(locationRoutes)
   await app.register(nodePresetRoutes)
+  await app.register(savedPostRoutes)
   await app.register(nodePresetGroupRoutes)
   await app.register(promptSnippetRoutes)
   await app.register(locationRestoreRoutes)
@@ -741,6 +751,8 @@ export async function buildApp() {
   await app.register(pickerCatalogsRoutes)
   await app.register(catalogsRoutes)
   await app.register(oauthRoutes)
+  // The grants a user gave through OAuth, and the button that takes one back.
+  await app.register(connectedAppsRoutes)
   await registerOauthRegister(app)
   await app.register(oauthPluginConnectRoutes)
   await app.register(ssoRoutes)

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { queryKeys } from "@/lib/query-keys"
 import { hydrateWorkspaces } from "@/lib/workspace-context"
+import { tx, useT, type MessageKey } from "@/lib/i18n"
 import { OrgApiError, createOrganization, type OrganizationView } from "@/ee/lib/orgs-api"
 
 /**
@@ -31,35 +32,36 @@ type Kind = "school" | "team"
 
 const KINDS: Array<{
   value: Kind
-  title: string
-  blurb: string
-  points: string[]
+  titleKey: MessageKey
+  blurbKey: MessageKey
+  pointKeys: MessageKey[]
 }> = [
   {
     value: "school",
-    title: "School",
-    blurb: "Classes of students, with teachers who can see and steer their work.",
-    points: [
-      "Work starts private; students share it deliberately",
-      "Teachers can open and edit a student's work",
-      "Students work inside a class rather than starting projects",
-      "Per-student spending limits are available",
+    titleKey: "org.kindSchool",
+    blurbKey: "org.kindSchoolBlurb",
+    pointKeys: [
+      "org.kindSchoolPoint1",
+      "org.kindSchoolPoint2",
+      "org.kindSchoolPoint3",
+      "org.kindSchoolPoint4",
     ],
   },
   {
     value: "team",
-    title: "Team",
-    blurb: "Colleagues working in the open, on shared briefs.",
-    points: [
-      "Work is visible to the team by default",
-      "Members can edit each other's shared work",
-      "Anyone can start a project",
-      "No per-member limits unless you turn them on",
+    titleKey: "org.kindTeam",
+    blurbKey: "org.kindTeamBlurb",
+    pointKeys: [
+      "org.kindTeamPoint1",
+      "org.kindTeamPoint2",
+      "org.kindTeamPoint3",
+      "org.kindTeamPoint4",
     ],
   },
 ]
 
 export default function NewOrgPage() {
+  const t = useT()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
@@ -109,14 +111,12 @@ export default function NewOrgPage() {
     return (
       <div className="mx-auto max-w-xl p-6">
         <Card className="space-y-4 p-8">
-          <h1 className="text-xl font-semibold">{created.name} is waiting for approval</h1>
+          <h1 className="text-xl font-semibold">{t("org.waitingForApproval", { name: created.name })}</h1>
           <p className="text-sm text-muted-foreground">
-            New organizations are reviewed before they open. You will be able to add people and create{" "}
-            {created.kind === "school" ? "classes" : "teams"} as soon as it is approved — nothing else is needed from
-            you.
+            {t("org.pendingReviewBody", { things: created.kind === "school" ? t("org.classesLower") : t("org.teamsLower") })}
           </p>
           <Button asChild variant="outline">
-            <Link to="/">Back to your work</Link>
+            <Link to="/">{t("org.backToYourWork")}</Link>
           </Button>
         </Card>
       </div>
@@ -128,15 +128,14 @@ export default function NewOrgPage() {
       <Card className="p-8">
         <form onSubmit={submit} className="space-y-6">
           <div className="space-y-1">
-            <h1 className="text-xl font-semibold">Create an organization</h1>
+            <h1 className="text-xl font-semibold">{t("org.createAnOrgTitle")}</h1>
             <p className="text-sm text-muted-foreground">
-              Somewhere for a group to work together. You can change the name and the settings later; the kind is
-              fixed once it exists.
+              {t("org.createOrgIntro")}
             </p>
           </div>
 
           <fieldset className="space-y-3">
-            <legend className="text-sm font-medium">What kind of group is this?</legend>
+            <legend className="text-sm font-medium">{t("org.whatKindOfGroup")}</legend>
             <div className="grid gap-3 sm:grid-cols-2">
               {KINDS.map((option) => (
                 <button
@@ -146,16 +145,16 @@ export default function NewOrgPage() {
                   aria-checked={kind === option.value}
                   onClick={() => setKind(option.value)}
                   className={cn(
-                    "rounded-lg border p-4 text-left transition-colors",
+                    "rounded-lg border p-4 text-start transition-colors",
                     kind === option.value ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
                   )}
                 >
-                  <span className="block font-medium">{option.title}</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">{option.blurb}</span>
+                  <span className="block font-medium">{t(option.titleKey)}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{t(option.blurbKey)}</span>
                   <ul className="mt-3 space-y-1">
-                    {option.points.map((point) => (
-                      <li key={point} className="text-xs text-muted-foreground">
-                        · {point}
+                    {option.pointKeys.map((pointKey) => (
+                      <li key={pointKey} className="text-xs text-muted-foreground">
+                        · {t(pointKey)}
                       </li>
                     ))}
                   </ul>
@@ -165,12 +164,12 @@ export default function NewOrgPage() {
           </fieldset>
 
           <div className="space-y-2">
-            <Label htmlFor="org-name">Name</Label>
+            <Label htmlFor="org-name">{t("common.name")}</Label>
             <Input
               id="org-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={kind === "school" ? "Sunrise School" : "Acme Design"}
+              placeholder={kind === "school" ? t("org.schoolNamePlaceholder") : t("org.teamNamePlaceholder")}
               maxLength={120}
               autoFocus
               disabled={busy}
@@ -178,7 +177,7 @@ export default function NewOrgPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="org-slug">Address</Label>
+            <Label htmlFor="org-slug">{t("org.address")}</Label>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">/org/</span>
               <Input
@@ -195,8 +194,8 @@ export default function NewOrgPage() {
             </div>
             <p className="text-xs text-muted-foreground">
               {slugTouched
-                ? "Lower-case letters, digits and hyphens."
-                : "Taken from the name. Edit it if you would rather choose."}
+                ? t("org.slugRules")
+                : t("org.slugFromName")}
             </p>
           </div>
 
@@ -206,10 +205,10 @@ export default function NewOrgPage() {
                 checked={acceptTerms}
                 onCheckedChange={(v) => setAcceptTerms(v === true)}
                 disabled={busy}
-                aria-label="Accept the organization terms"
+                aria-label={t("org.acceptOrgTermsAria")}
               />
               <span className="text-muted-foreground">
-                I have the authority to enrol students in this school and accept the organization terms on its behalf.
+                {t("org.schoolAttestation")}
               </span>
             </label>
           )}
@@ -221,7 +220,7 @@ export default function NewOrgPage() {
             disabled={busy || name.trim().length === 0 || (kind === "school" && !acceptTerms)}
             className="w-full"
           >
-            {busy ? "Creating…" : "Create organization"}
+            {busy ? t("dash.creating") : t("org.createOrganization")}
           </Button>
         </form>
       </Card>
@@ -246,14 +245,14 @@ export function slugify(value: string): string {
 function failureMessage(code: string, err: unknown): string {
   switch (code) {
     case "name_taken":
-      return "That address is already taken. Choose another."
+      return tx("org.addressTaken")
     case "terms_required":
-      return "A school needs the attestation above before it can be created."
+      return tx("org.schoolTermsRequired")
     case "rate_limit_exceeded":
-      return "You have created several organizations recently. Try again later."
+      return tx("org.createRateLimited")
     case "validation_error":
-      return err instanceof OrgApiError && err.message ? err.message : "Check the name and address and try again."
+      return err instanceof OrgApiError && err.message ? err.message : tx("org.checkNameAddress")
     default:
-      return "Something went wrong creating the organization. Try again in a moment."
+      return tx("org.createFailedGeneric")
   }
 }

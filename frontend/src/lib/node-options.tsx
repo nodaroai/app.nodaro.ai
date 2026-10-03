@@ -61,6 +61,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   Lightbulb,
+  ChefHat,
   Linkedin,
   List,
   ListFilter,
@@ -209,6 +210,16 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "automate-triggers",
   },
   {
+    type: "telegram-account-trigger",
+    label: "Telegram Account Trigger",
+    icon: <Send className="h-4 w-4" />,
+    category: "Triggers",
+    group: "automate-triggers",
+    // Preview: the connected-account feature is admin-only until GA.
+    adminOnly: true,
+    keywords: ["telegram", "account", "channel", "group", "message", "listen", "userbot"],
+  },
+  {
     type: "telegram-channel-feed",
     label: "Telegram Channel Feed",
     icon: <Rss className="h-4 w-4" />,
@@ -244,6 +255,17 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Instagram className="h-4 w-4" />,
     category: "Data",
     group: "automate-get-content",
+  },
+  {
+    type: "social-search",
+    label: "Social Search",
+    icon: <ScanSearch className="h-4 w-4" />,
+    category: "Data",
+    group: "automate-get-content",
+    // Preview: admin-only until its price is set and the search provider's
+    // production plan is in place (the backend gate is Admin → Availability).
+    adminOnly: true,
+    keywords: ["tiktok", "instagram", "youtube", "x", "twitter", "reddit", "linkedin", "meta ads", "ad library", "research", "trends", "competitor", "posts", "viral", "inspiration"],
   },
   // Hidden — uncomment to restore in the Add Node UI:
   // {
@@ -666,6 +688,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "video-story-script",
   },
   {
+    type: "content-ideas",
+    label: "Content Ideas",
+    icon: <Lightbulb className="h-4 w-4" />,
+    category: "AI",
+    group: "video-story-script",
+    keywords: ["post ideas", "content ideas", "brainstorm", "hooks", "brand", "steal the format", "ideation", "social media"],
+  },
+  {
     type: "llm-chat",
     label: "Prompt",
     icon: <MessageSquare className="h-4 w-4" />,
@@ -905,7 +935,15 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     label: "Silence Detect",
     icon: <VolumeX className="h-4 w-4" />,
     category: "AI",
-    group: "audio-clean-separate",
+    group: "audio-analyze",
+  },
+  {
+    type: "audio-sync",
+    label: "Audio Sync",
+    icon: <AudioWaveform className="h-4 w-4" />,
+    category: "AI",
+    group: "audio-analyze",
+    keywords: ["sync", "multicam", "align recordings", "clock offset", "line up cameras", "podcast", "drift"],
   },
   {
     type: "text-to-dialogue",
@@ -1110,6 +1148,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "image-edit-retouch",
     keywords: ["overlay", "logo", "watermark", "badge", "sticker", "composite", "layer", "place image", "banner", "thumbnail"],
   },
+  {
+    type: "video-overlay",
+    label: "Video Overlay",
+    icon: <Layers className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-titles-graphics",
+    keywords: ["overlay", "logo", "watermark", "product shot", "screenshot", "card", "b-roll", "picture-in-picture", "ugc", "badge"],
+  },
   // Processing — Video
   {
     type: "combine-videos",
@@ -1199,6 +1245,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Processing",
     group: "video-analyze",
     keywords: ["analyze video", "scene breakdown", "shot list", "understand video", "describe video", "storyboard from video"],
+  },
+  {
+    type: "content-recipe",
+    label: "Content Recipe",
+    icon: <ChefHat className="h-4 w-4" />,
+    category: "AI",
+    group: "video-analyze",
+    keywords: ["why it works", "hook", "format", "viral", "competitor post", "steal the format", "content recipe", "beats", "tiktok", "reels"],
   },
   {
     type: "video-audit",

@@ -95,7 +95,7 @@ export default function DeletedAppsPage() {
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{app.name}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  {t("apps.deleted.deletedAt", { time: formatRelative(app.deletedAt!) })} · /app/{app.slug}
+                  {t("apps.deleted.deletedAt", { time: formatRelative(app.deletedAt!) })} · {t("apps.appUrlPrefix")}{app.slug}
                 </div>
               </div>
               <Button
@@ -105,7 +105,7 @@ export default function DeletedAppsPage() {
                 onClick={() => restoreMutation.mutate({ appId: app.id })}
                 disabled={restoreMutation.isPending}
               >
-                <RotateCcw className="h-4 w-4 mr-1" />
+                <RotateCcw className="h-4 w-4 me-1" />
                 {t("apps.deleted.restore")}
               </Button>
             </li>

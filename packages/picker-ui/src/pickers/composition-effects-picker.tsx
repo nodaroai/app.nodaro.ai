@@ -8,6 +8,7 @@ import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { useCuratedEntries } from "../curated.js"
+import { LookArt } from "../look-previews/look-art"
 
 interface CompositionEffectsPickerProps {
   readonly value: string
@@ -70,11 +71,12 @@ export const CompositionEffectsPicker = memo(function CompositionEffectsPicker({
                   : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
               )}
             >
+              <LookArt pickerKey="composition-effects" id={entry.id} className="w-full aspect-[16/9] rounded-md mb-1" width={320} fallback={null} />
               <FitText
                 text={label}
                 className={cn(
                   "text-[11.5px] font-semibold leading-tight w-full",
-                  selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
+                  selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               />
               <span className="text-[10px] leading-snug text-muted-foreground line-clamp-2">

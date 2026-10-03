@@ -668,6 +668,14 @@ describe("the tools that spend", () => {
       mode: "references",
     })
     expect(seen.body).toMatchObject({ kind: "clip", shotId: "s1", mode: "references" })
+
+    // F8: `start` drops a pinned end frame, so a start+end run must be sayable.
+    await callTool(server, "generate_studio_clip", {
+      production_id: PRODUCTION,
+      shot_id: "s1",
+      mode: "start-end",
+    })
+    expect(seen.body).toMatchObject({ kind: "clip", shotId: "s1", mode: "start-end" })
     // A lane is chosen from the inputs unless one was forced, so an absent
     // `mode` must not become a default here.
     expect(seen.body).not.toHaveProperty("dryRun")

@@ -4,6 +4,7 @@ import { uploadFile } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { OVERLAY_HANDLE_IDS, OVERLAY_MAX_LAYERS, visibleOverlayLayerCount, type ImageOverlayData } from "@/types/nodes"
+import { tx } from "@/lib/i18n"
 
 /**
  * "Upload an image as a layer" from inside the compositor. A layer is a WIRE
@@ -24,7 +25,7 @@ export function useImageOverlayAddLayer(nodeId: string): { addFromFile: (file: F
       const wired = new Set(store.edges.filter((e) => e.target === nodeId).map((e) => e.targetHandle ?? "image"))
       const free = (OVERLAY_HANDLE_IDS as readonly string[]).findIndex((h) => !wired.has(h))
       if (free < 0) {
-        toast.error(`Image Overlay supports at most ${OVERLAY_MAX_LAYERS} layers`)
+        toast.error(tx("toastMsg.imageOverlaySupportsAtMost", { max: OVERLAY_MAX_LAYERS }))
         return
       }
       setIsUploading(true)
@@ -65,7 +66,7 @@ export function useImageOverlayAddLayer(nodeId: string): { addFromFile: (file: F
         const shown = visibleOverlayLayerCount(data.layerCount, Array.isArray(data.layers) ? data.layers.length : 0, 0)
         if (free + 1 > shown) store.updateNodeData(nodeId, { layerCount: free + 1 })
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Upload failed")
+        toast.error(err instanceof Error ? err.message : tx("pipe.uploadFailed"))
       } finally {
         setIsUploading(false)
       }

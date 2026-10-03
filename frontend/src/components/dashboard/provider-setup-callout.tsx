@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 import { Cloud, KeyRound, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { isCloud } from "@/lib/edition"
+import { useT } from "@/lib/i18n"
 
 /**
  * "This install can't generate yet" — the dashboard callout a self-hoster sees
@@ -32,6 +33,7 @@ interface ProvidersSlice {
 export function ProviderSetupCallout({ userId }: { readonly userId: string | undefined }) {
   const [keyless, setKeyless] = useState<boolean | null>(null)
   const [dismissed, setDismissed] = useState<boolean>(false)
+  const t = useT()
   const storageKey = userId ? `${STORAGE_PREFIX}${userId}` : null
 
   const refresh = useCallback(async () => {
@@ -69,29 +71,28 @@ export function ProviderSetupCallout({ userId }: { readonly userId: string | und
       className="mb-4 sm:mb-6 rounded-xl border border-[#ff0073]/40 bg-[#ff0073]/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3"
     >
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-foreground">This install can&rsquo;t generate yet.</p>
+        <p className="text-sm font-semibold text-foreground">{t("dash.calloutCantGenerate")}</p>
         <p className="text-sm text-muted-foreground">
-          Nodes need a model provider. Connect nodaro.ai in one click (no key, 1,500 free credits) — or paste your own
-          provider key. Local keys always win.
+          {t("dash.calloutNeedProvider")}
         </p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <Button asChild size="sm" className="bg-[#ff0073] hover:bg-[#e6006a] text-white gap-1.5">
           <Link to="/setup">
             <Cloud className="h-4 w-4" />
-            Connect nodaro.ai
+            {t("dash.connectNodaro")}
           </Link>
         </Button>
         <Button asChild size="sm" variant="outline" className="gap-1.5">
           <Link to="/integrations">
             <KeyRound className="h-4 w-4" />
-            Paste a key
+            {t("dash.pasteAKey")}
           </Link>
         </Button>
         <Button
           size="sm"
           variant="ghost"
-          aria-label="Dismiss"
+          aria-label={t("dash.dismiss")}
           className="h-8 w-8 p-0 text-muted-foreground"
           onClick={dismiss}
         >

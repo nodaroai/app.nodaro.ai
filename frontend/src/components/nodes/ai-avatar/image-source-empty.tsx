@@ -48,7 +48,7 @@ export function ImageSourceEmpty({ onUploaded, onOpenSettings, onUseCatalog }: I
         <span className={KICKER}>{t("node.startWithAnImage")}</span>
         <span className="flex-1 h-px bg-border/60" />
         <button type="button" className={PINK_LINK} onClick={(e) => { stop(e); onOpenSettings() }}>
-          Paste a URL ›
+          {t("node.pasteAUrl")}
         </button>
       </div>
 
@@ -67,10 +67,10 @@ export function ImageSourceEmpty({ onUploaded, onOpenSettings, onUseCatalog }: I
           <Upload className="size-6 text-muted-foreground/60" />
         )}
         <span className="text-[12px] text-foreground/85">
-          {isUploading ? "Uploading…" : "Upload a portrait"}
+          {isUploading ? t("pipe.uploading") : t("node.uploadAPortrait")}
         </span>
         <span className="text-[10.5px] text-muted-foreground/70 leading-snug">
-          or wire an image into the node&apos;s Image input
+          {t("node.orWireImageIntoInput")}
         </span>
         {uploadError && (
           <span className="text-[10.5px] text-red-500 leading-snug" role="alert">{uploadError}</span>

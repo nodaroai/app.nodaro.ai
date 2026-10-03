@@ -195,7 +195,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
             {provider.label}
           </span>
           <span className="text-xs leading-[1.45] text-pretty" style={{ color: "var(--integ-muted)" }}>
-            {describeProvider(provider)}
+            {describeProvider(provider, t)}
           </span>
         </div>
         <span

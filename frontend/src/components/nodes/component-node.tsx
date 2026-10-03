@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, type TFunction } from "@/lib/i18n"
 import { memo, useMemo, useEffect, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Puzzle, ImageIcon, Video, AudioLines, FileText, Expand, Download, Link, Scissors, Copy, Loader2 } from "lucide-react"
@@ -36,6 +36,7 @@ const BTN_CLASS = "w-7 h-7 flex items-center justify-center bg-black/40 backdrop
 function buildHandles(
   inputs: ReadonlyArray<ComponentHandle>,
   outputs: ReadonlyArray<ComponentHandle>,
+  t: TFunction,
 ) {
   // --- Output handles: top-right, 20px per slot downward ---
   const sources = outputs.map((h, i) => {
@@ -71,8 +72,8 @@ function buildHandles(
   // Fallback handles if no metadata
   if (targets.length === 0 && sources.length === 0) {
     return [
-      { id: "in", type: "target" as const, position: Position.Left, top: "calc(100% - 24px)", hideHandle: true, customStyle: { top: "calc(100% - 24px)", left: "-29px" }, handleType: "text" as const, handleName: "In" },
-      { id: "out", type: "source" as const, position: Position.Right, top: "24px", hideHandle: true, customStyle: { top: "24px", right: "-29px" }, handleType: "text" as const, handleName: "Out" },
+      { id: "in", type: "target" as const, position: Position.Left, top: "calc(100% - 24px)", hideHandle: true, customStyle: { top: "calc(100% - 24px)", left: "-29px" }, handleType: "text" as const, handleName: t("node.portIn") },
+      { id: "out", type: "source" as const, position: Position.Right, top: "24px", hideHandle: true, customStyle: { top: "24px", right: "-29px" }, handleType: "text" as const, handleName: t("node.portOut") },
     ]
   }
 
@@ -101,7 +102,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
   }, [metadata.outputs])
   const handleKey = [...inputHandles, ...outputHandles].map((h) => h.id).join(",")
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const handles = useMemo(() => buildHandles(inputHandles, outputHandles), [handleKey])
+  const handles = useMemo(() => buildHandles(inputHandles, outputHandles, t), [handleKey, t])
 
   const maxPorts = Math.max(inputHandles.length, outputHandles.length, 1)
   const nodeMinHeight = Math.max(150, maxPorts * 28 + 60)

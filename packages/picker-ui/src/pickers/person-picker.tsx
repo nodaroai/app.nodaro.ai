@@ -50,7 +50,7 @@ function ModeToggle({
             className={cn(
               "flex items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer",
               selected
-                ? "border-[#ff0073] bg-[#ff0073]/10 text-white"
+                ? "border-[#ff0073] bg-[#ff0073]/10 text-[#c8105f] dark:text-white"
                 : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] text-gray-600 dark:text-[#94A3B8] hover:border-gray-300 dark:hover:border-[#3D3D3D] hover:text-gray-800 dark:hover:text-[#E2E8F0]",
             )}
           >

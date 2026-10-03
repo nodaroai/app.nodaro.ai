@@ -108,7 +108,7 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
                 </div>
                 <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{t("node.extended")}</div>
                 {results.length > 0 && (
-                  <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
+                  <button type="button" aria-label={t("common.remove")} className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
                 )}
               </div>
             )}
@@ -172,7 +172,7 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
                     )}
                     <button
                       type="button"
-                      aria-label="Remove"
+                      aria-label={t("common.remove")}
                       className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -187,7 +187,7 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             <div className="flex justify-center text-muted-foreground text-xs">
-              <span>{nodeData.provider === "runway-extend" ? "Runway" : "VEO"} Extend</span>
+              <span>{t("node.extendWithProvider", { provider: nodeData.provider === "runway-extend" ? "Runway" : "VEO" })}</span>
             </div>
           </div>
         )}

@@ -22,7 +22,11 @@
  * Never mutates its inputs.
  */
 
-/** The measured separator between the user's prompt and each folded hint. */
+/** The measured separator between the user's prompt and each folded hint.
+ *  Pieces that already end a sentence are followed by a single space instead
+ *  (`joinSentences`), so this is the longest separator a join can add. */
+import { joinSentences } from "./hint-join.js"
+
 export const PROMPT_HINT_SEPARATOR = ". "
 
 /**
@@ -35,5 +39,7 @@ export const PROMPT_HINT_SEPARATOR = ". "
  */
 export function joinPromptHints(userPrompt: string, hints: readonly string[]): string {
   if (hints.length === 0) return userPrompt
-  return [userPrompt.trim(), ...hints].filter((p) => p.length > 0).join(PROMPT_HINT_SEPARATOR)
+  // Sentence-aware: a prompt or hint that already ends a sentence is followed
+  // by a space, not by PROMPT_HINT_SEPARATOR (which made "watermark.. hint").
+  return joinSentences([userPrompt.trim(), ...hints])
 }

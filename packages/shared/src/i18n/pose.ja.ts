@@ -11,16 +11,16 @@ const map: LocaleCatalogMap = {
   "contrapposto": { label: "コントラポスト", description: "腰を傾け、片脚に体重を乗せる" },
   "leaning-against-wall": { label: "壁にもたれる", description: "壁にカジュアルにもたれる" },
   "hands-behind-head": { label: "頭の後ろで手", description: "両手を頭の後ろで組む" },
-  "hands-behind-back": { label: "背中で手", description: "両手を背中で組む" },
+  "hands-behind-back": { label: "後ろ手", description: "両手を背中で組む" },
 
   // Seated
   "sitting": { label: "座る", description: "自然に座る" },
   "cross-legged": { label: "あぐら", description: "床にあぐらをかいて座る" },
-  "kneeling": { label: "膝立ち", description: "膝をついて座る" },
+  "kneeling": { label: "膝立ち", description: "地面に膝をつく" },
   "crouching": { label: "しゃがむ", description: "低くしゃがむ" },
-  "lounging": { label: "ラウンジング", description: "リラックスして寄りかかる座り方" },
+  "lounging": { label: "くつろぐ", description: "リラックスして寄りかかる座り方" },
   "sitting-edge-of-bed": { label: "ベッドの端に座る", description: "ベッドの端に腰掛ける" },
-  "chair-arm-drape": { label: "椅子の肘掛けに脚を投げ出す", description: "椅子の肘掛けに脚を投げかける" },
+  "chair-arm-drape": { label: "椅子の肘掛けに脚を投げ出す", description: "椅子の肘掛けに脚をだらりとかける" },
   "elbow-propped": { label: "肘で頬を支える", description: "肘で頬を支える" },
   "lying-on-stomach-reading": { label: "うつ伏せで読書", description: "うつ伏せで肘をつき読書" },
 
@@ -29,7 +29,7 @@ const map: LocaleCatalogMap = {
   "running": { label: "走る", description: "走っている途中、動きの中で" },
   "jumping": { label: "ジャンプ", description: "宙に浮いた、ジャンプの途中" },
   "dancing": { label: "踊る", description: "踊っている途中" },
-  "climbing": { label: "登る", description: "登っている、上方を掴む" },
+  "climbing": { label: "登る", description: "上へ手を伸ばしてつかみながら登る" },
   "mid-fall": { label: "落下中", description: "宙を落下する途中" },
   "mid-spin": { label: "回転中", description: "くるくる回転する途中" },
   "stretching": { label: "ストレッチ", description: "全身を伸ばすストレッチ、両腕を頭上に" },
@@ -44,8 +44,8 @@ const map: LocaleCatalogMap = {
   "throwing": { label: "投げる", description: "投げる動作の途中" },
   "leaping": { label: "跳ぶ", description: "ダイナミックに前へ跳ぶ" },
   "dramatic-action": { label: "劇的なアクション", description: "誇張されたアクションポーズ" },
-  "biting-lip": { label: "唇を噛む", description: "わずかに遊び心ある唇噛み" },
-  "mid-laugh": { label: "笑いの途中", description: "頭を後ろに笑っている途中" },
+  "biting-lip": { label: "唇を噛む", description: "遊び心のある仕草で唇を軽く噛む" },
+  "mid-laugh": { label: "笑いの途中", description: "頭をのけぞらせて笑っている瞬間" },
   "pointing-at-camera": { label: "カメラを指差す", description: "カメラに向かって指差す" },
   "tongue-out": { label: "舌を出す", description: "遊び心ある舌出し表情" },
   "thinking": { label: "考える", description: "顎に手、思案中" },
@@ -54,11 +54,11 @@ const map: LocaleCatalogMap = {
   "lying-down": { label: "横たわる", description: "平らに横たわる" },
   "sleeping": { label: "眠る", description: "目を閉じて眠る" },
   "hugging": { label: "ハグ", description: "他の人を抱きしめる" },
-  "looking-away": { label: "視線をそらす", description: "頭を向け、視線をそらす" },
+  "looking-away": { label: "視線をそらす", description: "顔を横に向け、視線をそらす" },
   "looking-up": { label: "上を見る", description: "空を見上げる" },
   "looking-down": { label: "下を見る", description: "目を伏せる" },
   "head-over-shoulder": { label: "肩越しに振り返る", description: "肩越しに振り返って見る" },
-  "wading-in-water": { label: "水中を歩く", description: "太もも中ほどまで水に浸かって歩く" },
+  "wading-in-water": { label: "水の中を歩く", description: "太もも中ほどまで水に浸かって歩く" },
 
   // Hand position
   "hands-in-pockets": { label: "ポケットに手", description: "両手をポケットに入れる" },
@@ -68,7 +68,7 @@ const map: LocaleCatalogMap = {
   "hand-on-collarbone": { label: "鎖骨に手", description: "鎖骨に手を添える" },
   "hand-brushing-hair": { label: "髪に手を通す", description: "髪に手を通す" },
   "finger-to-lip": { label: "指を唇に", description: "指先を下唇に押し当てる" },
-  "arms-wrapped-around-self": { label: "自分を抱きしめる", description: "腕を胴体に巻き付ける自己ハグ" },
+  "arms-wrapped-around-self": { label: "自分を抱きしめる", description: "自分の体に腕を回して抱きしめる" },
   "hands-clasped": { label: "手を組む", description: "両手を前で組む" },
 
   // Body lean
@@ -81,9 +81,9 @@ const map: LocaleCatalogMap = {
   // Head tilt
   "tilted-up": { label: "上向き", description: "頭をわずかに上に傾ける" },
   "tilted-down": { label: "下向き", description: "頭をわずかに下に傾ける" },
-  "tilted-side": { label: "横傾け", description: "頭を片方の肩に傾ける" },
-  "tilted-back": { label: "後ろ向き", description: "頭を完全に後ろへ、喉を露わに" },
-  "chin-up": { label: "顎を上げる", description: "顎を上げ、鼻先を見下ろす" },
+  "tilted-side": { label: "首をかしげる", description: "頭を片方の肩に傾ける" },
+  "tilted-back": { label: "後ろに反らす", description: "頭を大きく後ろに反らし、喉をあらわにする" },
+  "chin-up": { label: "顎を上げる", description: "顎を上げ、見下ろすような視線" },
   "chin-tucked": { label: "顎を引く", description: "顎を胸へ引く" },
 
   // Activity
@@ -91,7 +91,7 @@ const map: LocaleCatalogMap = {
   "activity-drinking": { label: "飲む", description: "グラスやカップから飲む" },
   "activity-eating": { label: "食べる", description: "一口食べる途中" },
   "activity-talking-on-phone": { label: "電話で話す", description: "耳に当てた電話で話す" },
-  "activity-texting": { label: "テキストを打つ", description: "下を見て電話、親指でタイピング" },
+  "activity-texting": { label: "メッセージを打つ", description: "スマホを見下ろし、親指で入力" },
   "activity-typing-laptop": { label: "ノートPCで打つ", description: "キーボードに手、画面に集中" },
   "activity-reading": { label: "読書", description: "本や雑誌を開いて持つ" },
   "activity-writing": { label: "書く", description: "ノートにペンで書く" },

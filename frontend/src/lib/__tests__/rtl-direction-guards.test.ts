@@ -26,6 +26,16 @@ describe("RTL direction guards", () => {
     expect(css).toMatch(/\.react-flow\s*\{[^}]*direction:\s*ltr/)
   })
 
+  it("globals.css pins code (pre, code, kbd, samp) left to right unless the element sets dir", () => {
+    const css = readFileSync(join(SRC, "globals.css"), "utf8")
+    // JSON, jq, cURL and keys lose their braces and leading dots to the other
+    // side under <html dir="rtl">. `:not([dir])` is the opt-out: a <pre> that
+    // shows prose (a node's text output, a final prompt) sets dir="auto".
+    expect(css).toMatch(
+      /:where\(pre, code, kbd, samp\):not\(\[dir\]\)\s*\{[^}]*direction:\s*ltr;[^}]*unicode-bidi:\s*isolate/,
+    )
+  })
+
   it("no rtl:/ltr: Tailwind variants anywhere in frontend/src", () => {
     // Tailwind v4 compiles `rtl:` to `&:where(:dir(rtl), [dir="rtl"],
     // [dir="rtl"] *)`. The `[dir="rtl"] *` alternative matches every

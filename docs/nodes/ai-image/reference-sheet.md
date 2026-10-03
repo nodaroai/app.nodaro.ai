@@ -6,11 +6,11 @@
 
 Reference Sheet assembles a single, presentation-ready model sheet for an entity (a Character, Object, or Location). A sheet can include a turnaround (multiple angles), an expression or variation board, detail close-ups, a wardrobe row, a color palette extracted from the main image, and a notes block — laid out on one canvas in one of four visual **skins**.
 
-On Run, the node first **generates any panels the chosen type needs but the entity is missing** (extra angles, expressions, details, …) off the entity's main image, reuses the ones it already has, extracts a palette from the main image, and composites everything into one image plus a clean panel set. Because generating panels costs credits, the node tells you how many it will generate and asks you to **confirm** before it starts. To control cost (or pre-build exactly the panels you want), you can also generate them ahead of time in the entity's **Studio** — the sheet then reuses them for free.
+On Run, the node first **generates any panels the chosen type needs but the entity is missing** (extra angles, expressions, details, …) off the entity's main image, reuses the ones it already has, extracts a palette from the main image, and composites everything into one image plus a clean panel set. Because generating panels costs credits, the node tells you how many it will generate and what that comes to, and asks you to **confirm** before it starts. To control cost (or pre-build exactly the panels you want), you can also generate them ahead of time in the entity's **Studio** — the sheet then reuses them for free.
 
 You can also generate sheets directly from the **Sheet** tab inside an entity's Studio — the node is the canvas-wired equivalent so a sheet can be produced as part of a workflow.
 
-> **Note — auto-generation: workflow vs single-node runs.** Both generate the missing panels off the main image, then compose. The only difference is the **cost confirmation**: clicking **Run** directly on the node shows a confirm dialog with the panel count before it generates; an **automated workflow or app run can't prompt**, so it generates the missing panels **without** a confirm (each charged at the per-panel rate). To control cost in automated runs, pre-build the panels in the entity's Studio first — existing panels are reused for free. (If the entity has no main image, the run fails `main_image_required`; if generation can't produce any panels, the compose fails `no_panels` and refunds the assembly fee rather than charging for an empty sheet.)
+> **Note — auto-generation: workflow vs single-node runs.** Both generate the missing panels off the main image, then compose. The only difference is the **cost confirmation**: clicking **Run** directly on the node shows a confirm dialog with the panel count and the estimated credits before it generates; an **automated workflow or app run can't prompt**, so it generates the missing panels **without** a confirm (each charged at the same per-panel price). To control cost in automated runs, pre-build the panels in the entity's Studio first — existing panels are reused for free. (If the entity has no main image, the run fails `main_image_required`; if generation can't produce any panels, the compose fails `no_panels` and refunds the assembly fee rather than charging for an empty sheet.)
 
 ## How to use
 
@@ -22,7 +22,7 @@ You can also generate sheets directly from the **Sheet** tab inside an entity's 
    - **Full Reference** — the complete stack (header + turnaround + board + detail + palette + notes).
 3. Pick a **Skin** — **Studio** (clean neutral), **Cinematic** (dark, accent rules under each heading), **Blueprint** (drafting grid + corner ticks, monospace), or **Illustrated** (warm storybook plate, serif).
 4. Adjust the **flavour** knobs as needed: show/hide text, show/hide panel labels, aspect (landscape / square / story), and background.
-5. **Run.** If the entity is missing any panels the type needs, the node tells you how many it will generate (each is charged) and asks you to confirm; it then generates them, reuses any that already exist, and composites the sheet.
+5. **Run.** If the entity is missing any panels the type needs, the node tells you how many it will generate and the estimated credits, and asks you to confirm; it then generates them, reuses any that already exist, and composites the sheet.
 
 > Tip: the node generates whatever panels the chosen type needs that the entity is missing. To keep a Run cheap, generate (or trim) the panels you want in the entity's **Studio** first — the sheet reuses existing panels for free and only generates what's absent.
 
@@ -50,8 +50,8 @@ You can also generate sheets directly from the **Sheet** tab inside an entity's 
 
 | Handle | Color | Type | Description |
 |--------|-------|------|-------------|
-| `sheet` | cyan | image | The composited reference sheet as a single image. Download it, display it, or wire it anywhere an image is accepted — but note it is a **poster** (it carries text/labels), so it is not meant to be used as a generation reference. |
-| `panels` | rose | reference | The clean panel set (the individual panel images, no poster chrome). Wire this into an image or video generator's reference input for multi-image consistency. |
+| `sheet` | pink | image | The composited reference sheet as a single image. Download it, display it, or wire it anywhere an image is accepted — but note it is a **poster** (it carries text/labels), so it is not meant to be used as a generation reference. |
+| `panels` | violet | reference | The clean panel set (the individual panel images, no poster chrome). Wire this into an image or video generator's reference input for multi-image consistency. |
 
 **Use the right output:** for a deliverable you show a human, use `sheet`. To drive consistency in downstream generation, use `panels` — the text poster is never used as a generation reference.
 
@@ -65,15 +65,15 @@ You can also generate sheets directly from the **Sheet** tab inside an entity's 
 
 ## Pricing
 
-Cost = **(newly-generated panels at the entity provider's rate)** + a flat **40-credit** assembly fee. Panels that already exist in the entity's Studio are **reused for free** — you only pay to generate the panels that don't exist yet, plus the one-time assembly fee.
+Cost = **(newly-generated panels × 10 credits)** + a flat **40-credit** assembly fee. The sheet generates every missing panel with **Nano Banana** (10 credits a panel), whether it runs from the node, from an automated workflow, or from the Sheet tab in the entity's Studio. Panels that already exist in the entity's Studio are **reused for free**, whichever model made them — you only pay to generate the panels that don't exist yet, plus the one-time assembly fee. A panel you generate yourself in the Studio is charged there, at the price of the model you pick.
 
 | Scenario | Math | Credits |
 |----------|------|---------|
 | Turnaround reusing 4 angles the entity already has | `0 + 40` | **40** |
-| 4 new angles generated with Nano Banana (10 cr each) | `4×10 + 40` | **80** |
-| Full reference with 4 new angles generated with Flux 2 Pro (23 cr each at its 2 MP default) | `4×23 + 40` | **132** |
+| Turnaround missing 1 angle (the rest reused) | `1×10 + 40` | **50** |
+| 4 new angles generated | `4×10 + 40` | **80** |
 
-The flat assembly fee covers layout, palette extraction, and compositing. The node's Run button shows the assembly fee; when panels need generating, the node first asks you to confirm how many it will generate (each charged at the entity provider's rate) before it starts.
+The flat assembly fee covers layout, palette extraction, and compositing. The node's Run button shows the assembly fee; when panels need generating, the node first shows how many it will generate and the estimated total (panels plus the assembly fee) and asks you to confirm before it starts. On an edition without credits it shows the panel count only.
 
 ## Motion / video sheets
 

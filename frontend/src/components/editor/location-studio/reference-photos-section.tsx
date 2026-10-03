@@ -1,7 +1,9 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import { LOCATION_REFERENCE_PHOTO_KINDS, LOCATION_REFERENCE_PHOTO_KIND_LABELS } from "@nodaro/shared"
+import { tx, useT } from "@/lib/i18n"
 import type { LocationReferencePhoto, LocationReferencePhotoKind } from "@/types/nodes"
+import { formatDate } from "@/lib/i18n/format"
 
 /**
  * Reference Photos grid — mood-board style. PR-1 ships add-by-URL only; PR-2
@@ -30,6 +32,7 @@ interface ReferencePhotosSectionProps {
 }
 
 export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConsent }: ReferencePhotosSectionProps) {
+  const t = useT()
   const [pendingUrl, setPendingUrl] = useState("")
   const [pendingKind, setPendingKind] = useState<LocationReferencePhotoKind>("moodBoard")
   // PII consent (Phase 2 #7). The checkbox shows only when the location has
@@ -63,11 +66,11 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
     const trimmed = pendingUrl.trim()
     if (!trimmed) return
     if (photos.some((p) => p.url === trimmed)) {
-      toast.info("Photo already added")
+      toast.info(tx("studio.photoAlreadyAdded"))
       return
     }
     if (photos.length >= MAX_PHOTOS) {
-      toast.error(`Max ${MAX_PHOTOS} reference photos`)
+      toast.error(tx("studio.maxReferencePhotos", { n: MAX_PHOTOS }))
       return
     }
     // PII consent gate (Phase 2 #7). If the location has never received
@@ -76,7 +79,7 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
     // gate is gone for this location.
     if (showConsentGate) {
       if (!consentChecked) {
-        toast.error("Please confirm you have rights and consent")
+        toast.error(tx("studio.confirmRightsConsent"))
         return
       }
       onConsent?.(new Date().toISOString())
@@ -92,7 +95,7 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
   return (
     <div data-testid="reference-photos-section">
       <h3 className="text-[12px] font-medium text-slate-300 mb-2">
-        Reference photos <span className="text-slate-500">({photos.length}/{MAX_PHOTOS})</span>
+        {t("studio.referencePhotosHeading")} <span className="text-slate-500">({photos.length}/{MAX_PHOTOS})</span>
       </h3>
       {showSearch && (
         <div className="flex items-center gap-2 mb-2">
@@ -100,8 +103,8 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search reference photos…"
-            aria-label="Search reference photos"
+            placeholder={t("studio.searchReferencePhotosPh")}
+            aria-label={t("studio.searchReferencePhotos")}
             className="flex-1 px-3 py-1.5 text-[11px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600"
           />
           {q && (
@@ -110,7 +113,7 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
               onClick={() => setSearchQuery("")}
               className="text-[11px] text-slate-400 hover:text-slate-200"
             >
-              Clear
+              {t("common.clear")}
             </button>
           )}
         </div>
@@ -129,14 +132,14 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
                   loading="lazy"
                   className="w-full aspect-square object-cover rounded border border-[#1e293b]"
                 />
-                <span className="absolute top-1 left-1 bg-black/70 text-[9px] text-white px-1 rounded">
+                <span className="absolute top-1 start-1 bg-black/70 text-[9px] text-white px-1 rounded">
                   {p.kind}
                 </span>
                 <button
                   type="button"
                   onClick={() => remove(originalIdx)}
-                  aria-label={`Remove ${p.kind}`}
-                  className="absolute top-1 right-1 bg-black/70 hover:bg-red-500 text-white text-[10px] w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label={t("cfgshared.removeModel", { name: p.kind })}
+                  className="absolute top-1 end-1 bg-black/70 hover:bg-red-500 text-white text-[10px] w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   ✕
                 </button>
@@ -147,13 +150,13 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
       )}
       {zeroResults && (
         <div className="text-center text-[11px] text-slate-500 py-6 border border-dashed border-[#1e293b] rounded mb-2">
-          No matches for &quot;{searchQuery.trim()}&quot;.{" "}
+          {t("studio.noMatchesFor", { q: searchQuery.trim() })}{" "}
           <button
             type="button"
             onClick={() => setSearchQuery("")}
             className="text-pink-400 hover:underline"
           >
-            Clear
+            {t("common.clear")}
           </button>
         </div>
       )}
@@ -163,25 +166,24 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
             type="checkbox"
             checked={consentChecked}
             onChange={(e) => setConsentChecked(e.target.checked)}
-            aria-label="Confirm rights and consent for reference photos"
+            aria-label={t("studio.consentCheckboxAria")}
             className="mt-[2px] accent-[#22d3ee] cursor-pointer"
           />
           <span>
-            I confirm I have the rights to upload these photos and that any people
-            depicted have consented to their use as AI generation references.
+            {t("studio.consentStatement")}
           </span>
         </label>
       )}
       {!showConsentGate && piiConsentAt && (
         <p className="text-[9px] text-slate-500 mb-2">
-          Consent recorded {new Date(piiConsentAt).toLocaleDateString()}
+          {t("studio.consentRecorded", { date: formatDate(piiConsentAt) })}
         </p>
       )}
       <div className="flex gap-2 items-center">
         <select
           value={pendingKind}
           onChange={(e) => setPendingKind(e.target.value as LocationReferencePhotoKind)}
-          aria-label="Reference kind"
+          aria-label={t("studio.referenceKind")}
           className="text-[11px] bg-[#1a1d27] border border-[#1e293b] rounded px-2 py-1.5 text-slate-300"
         >
           {KINDS.map((k) => (
@@ -194,7 +196,7 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
           onChange={(e) => setPendingUrl(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add() } }}
           placeholder="https://…"
-          aria-label="Reference photo URL"
+          aria-label={t("studio.referencePhotoUrl")}
           className="flex-1 text-[11px] bg-[#1a1d27] border border-[#1e293b] rounded px-2 py-1.5 text-slate-300 placeholder:text-slate-600"
         />
         <button
@@ -203,7 +205,7 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
           disabled={!pendingUrl.trim() || photos.length >= MAX_PHOTOS || (showConsentGate && !consentChecked)}
           className="text-[11px] px-3 py-1.5 rounded bg-[#22d3ee] hover:bg-[#22d3ee]/90 disabled:opacity-40 disabled:cursor-not-allowed text-slate-900 font-medium"
         >
-          Add
+          {t("common.add")}
         </button>
       </div>
     </div>

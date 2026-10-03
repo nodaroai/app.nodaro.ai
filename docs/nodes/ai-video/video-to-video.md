@@ -92,8 +92,8 @@ avoided into the instruction itself.
 | Provider | Credits | Notes |
 |----------|---------|-------|
 | **Seedance 2.5 Edit** (`seedance-2-5`) | dynamic — see below | Whole-clip prompt-driven edit; keeps source length + ratio; 30 image / 10 audio references; native audio |
-| **Wan 2.6** (`wan`) | 18 cr | General-purpose V2V, reliable results |
-| **Wan 2.6 Flash** (`wan-flash`) | 13 cr | Fast V2V with optional audio & multi-shot |
+| **Wan 2.6** (`wan`) | 175 cr | General-purpose V2V, reliable results |
+| **Wan 2.6 Flash** (`wan-flash`) | 100 cr | Fast V2V with optional audio & multi-shot |
 | **Wan 2.7 VideoEdit** (`wan-videoedit`) | 320 cr | Guided editing with reference image, audio control, prompt extend |
 | **Luma Modify** (`luma-modify`) | 320 cr | Strong at style transfer and artistic modifications |
 | **Runway Aleph** (`runway-aleph`) | 350 cr | High-quality transformations, flexible aspect ratio |

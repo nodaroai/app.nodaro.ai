@@ -1,5 +1,6 @@
 import { OBJECT_ANGLE_PRESETS } from "@nodaro/prompts"
 import { ObjectAssetTab } from "./object-asset-tab"
+import { useT } from "@/lib/i18n"
 import type { ObjectStudioState } from "./use-object-studio"
 
 /**
@@ -16,12 +17,13 @@ interface AnglesTabProps {
 }
 
 export function AnglesTab({ studio }: AnglesTabProps) {
+  const t = useT()
   return (
     <ObjectAssetTab
       studio={studio}
       tabKind="angles"
       presets={OBJECT_ANGLE_PRESETS}
-      iconLabel="📐 Angles"
+      iconLabel={t("studio.objectAnglesTabTitle")}
     />
   )
 }

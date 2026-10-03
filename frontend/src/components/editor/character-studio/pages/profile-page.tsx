@@ -5,6 +5,7 @@ import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { copyToClipboard } from "@/lib/utils"
 import { optimizedImageUrl } from "@/lib/image"
+import { useT } from "@/lib/i18n"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import type { StudioPageProps } from "../../studio-shell/types"
 import type { CharacterStudioState } from "../use-character-studio"
@@ -30,6 +31,7 @@ import { PortraitCandidatesContext } from "../portrait-candidates-context"
  * `state` directly.
  */
 export function ProfilePage({ state }: StudioPageProps<CharacterStudioState, CharacterStudioJobs>) {
+  const t = useT()
   const portrait = useContext(PortraitCandidatesContext)
   if (!portrait) {
     throw new Error("ProfilePage must render within a PortraitCandidatesContext provider")
@@ -42,7 +44,7 @@ export function ProfilePage({ state }: StudioPageProps<CharacterStudioState, Cha
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-5">
       <div className="space-y-2.5">
-        <div className="text-[9px] uppercase tracking-wide text-slate-500">Portrait</div>
+        <div className="text-[9px] uppercase tracking-wide text-slate-500">{t("studio.portrait")}</div>
         {s.sourceImageUrl ? (
           <ApprovedPortrait
             url={s.sourceImageUrl}
@@ -50,7 +52,7 @@ export function ProfilePage({ state }: StudioPageProps<CharacterStudioState, Cha
           />
         ) : (
           <div className="w-40 h-52 rounded-md border border-dashed border-[#334155] flex items-center justify-center text-[10px] text-slate-500">
-            generate a portrait below
+            {t("studio.generatePortraitBelow")}
           </div>
         )}
 
@@ -84,7 +86,7 @@ export function ProfilePage({ state }: StudioPageProps<CharacterStudioState, Cha
         <textarea
           value={s.description}
           onChange={(e) => state.patch({ description: e.target.value })}
-          placeholder="Appearance description"
+          placeholder={t("studio.appearanceDescriptionPh")}
           rows={3}
           className="block w-full max-w-sm text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
         />
@@ -94,41 +96,41 @@ export function ProfilePage({ state }: StudioPageProps<CharacterStudioState, Cha
             onChange={(e) => state.patch({ gender: e.target.value as typeof s.gender })}
             className="text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
           >
-            <option value="male">male</option>
-            <option value="female">female</option>
-            <option value="other">other</option>
+            <option value="male">{t("studio.genderMale")}</option>
+            <option value="female">{t("studio.genderFemale")}</option>
+            <option value="other">{t("studio.otherLower")}</option>
           </select>
           <select
             value={s.style}
             onChange={(e) => state.patch({ style: e.target.value as typeof s.style })}
             className="text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
           >
-            <option value="realistic">realistic</option>
-            <option value="anime">anime</option>
-            <option value="3d-pixar">3d-pixar</option>
-            <option value="illustration">illustration</option>
+            <option value="realistic">{t("studio.styleRealistic")}</option>
+            <option value="anime">{t("studio.styleAnime")}</option>
+            <option value="3d-pixar">{t("studio.style3dPixar")}</option>
+            <option value="illustration">{t("studio.styleIllustration")}</option>
           </select>
         </div>
         <input
           value={s.baseOutfit}
           onChange={(e) => state.patch({ baseOutfit: e.target.value })}
-          placeholder="Base outfit"
+          placeholder={t("studio.baseOutfitPh")}
           className="block w-full max-w-sm text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
         />
         <select
           value={s.identityLock ?? DEFAULT_IDENTITY_LOCK}
           onChange={(e) => state.patch({ identityLock: e.target.value as "off" | "soft" | "strict" })}
-          title="How strongly to preserve this character's face when generating Studio assets"
+          title={t("studio.identityLockTitle")}
           className="block w-full max-w-sm text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
         >
-          <option value="off">Identity lock: Off — may reinterpret the face</option>
-          <option value="soft">Identity lock: Soft — preserve overall likeness</option>
-          <option value="strict">Identity lock: Strict — clamp to the reference (default)</option>
+          <option value="off">{t("studio.identityLockOff")}</option>
+          <option value="soft">{t("studio.identityLockSoft")}</option>
+          <option value="strict">{t("studio.identityLockStrict")}</option>
         </select>
         <input
           value={s.sourceImageUrl}
           onChange={(e) => state.patch({ sourceImageUrl: e.target.value })}
-          placeholder="Reference image URL (optional)"
+          placeholder={t("studio.referenceImageUrlPh")}
           className="block w-full max-w-sm text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
         />
         <select
@@ -158,7 +160,7 @@ export function ProfilePage({ state }: StudioPageProps<CharacterStudioState, Cha
       {/* Portrait lightbox — single-image set. Angles and Lighting (now on the
           Appearance page) render their own lightboxes via ImageAssetTab. */}
       <MultiImageLightbox
-        items={s.sourceImageUrl ? [{ url: s.sourceImageUrl, alt: "Portrait" }] : []}
+        items={s.sourceImageUrl ? [{ url: s.sourceImageUrl, alt: t("studio.portrait") }] : []}
         startIndex={portraitLightboxOpen && s.sourceImageUrl ? 0 : null}
         onClose={() => setPortraitLightboxOpen(false)}
       />
@@ -172,18 +174,19 @@ export function ProfilePage({ state }: StudioPageProps<CharacterStudioState, Cha
  * candidate grid + previous-candidates strip below.
  */
 function ApprovedPortrait({ url, onEnlarge }: { url: string; onEnlarge: () => void }) {
+  const t = useT()
   return (
     <div className="relative w-40 h-52 group">
       <img
         src={optimizedImageUrl(url, { width: 800 })}
-        alt="portrait"
+        alt={t("studio.portraitAltLower")}
         className="w-full h-full object-cover rounded-md border border-[#334155]"
       />
-      <div className="absolute top-1 left-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="absolute top-1 start-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           type="button"
-          aria-label="Enlarge"
-          title="Enlarge"
+          aria-label={t("common.enlarge")}
+          title={t("common.enlarge")}
           className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
           onClick={onEnlarge}
         >
@@ -191,10 +194,10 @@ function ApprovedPortrait({ url, onEnlarge }: { url: string; onEnlarge: () => vo
         </button>
         <button
           type="button"
-          aria-label="Copy URL"
-          title="Copy URL"
+          aria-label={t("cfgshared.copyUrl")}
+          title={t("cfgshared.copyUrl")}
           className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-          onClick={() => copyToClipboard(url, "URL copied")}
+          onClick={() => copyToClipboard(url, t("node.urlCopied"))}
         >
           <LinkIcon className="w-3 h-3" />
         </button>
@@ -213,19 +216,20 @@ function ApprovedPortrait({ url, onEnlarge }: { url: string; onEnlarge: () => vo
  * to the DB and prompts).
  */
 function NameInput({ name, onChange }: { name: string; onChange: (v: string) => void }) {
+  const t = useT()
   const isPlaceholder = name === PLACEHOLDER_CHARACTER_NAME
   return (
     <div className="space-y-1 max-w-sm">
       <input
         value={isPlaceholder ? "" : name}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={isPlaceholder ? `${PLACEHOLDER_CHARACTER_NAME} — click to rename` : "Character name"}
+        placeholder={isPlaceholder ? t("studio.placeholderNameClickRename", { name: PLACEHOLDER_CHARACTER_NAME }) : t("studio.characterNamePh")}
         className={`block w-full text-[11px] bg-[#13161f] border rounded px-2 py-1 text-slate-200 ${
           isPlaceholder ? "border-[#3b82f644] placeholder:text-[#3b82f699]" : "border-[#334155]"
         }`}
       />
       {isPlaceholder && (
-        <div className="text-[9px] text-[#3b82f699]">↻ Give your character a name — it'll also clean up the gallery.</div>
+        <div className="text-[9px] text-[#3b82f699]">↻ {t("studio.giveCharacterName")}</div>
       )}
     </div>
   )

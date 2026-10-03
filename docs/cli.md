@@ -153,15 +153,34 @@ nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--fa
 #   table shows id, kind, family, modes, credit tiers, featured ★ and the doctrine ✓ flag; --json for the full sheets
 
 # Pickers — valid values for parameter-picker nodes (setting, mood, person, …)
-nodaro pickers list [--json]                            # all picker node types + option counts
+nodaro pickers list [--json]                            # all picker node types + option counts + how many options have a picture
 nodaro pickers get <nodeType> [--full] [--category <c>] [--field <f>] [--json]
-#   default (compact) carries id, label, category, term, icon — `term` is the short
-#   professional phrase compact hint mode injects ("" for a no-op auto/none option)
+#   default (compact) carries id, label, category, term, icon, imageUrl — `term` is the short
+#   professional phrase compact hint mode injects ("" for a no-op auto/none option);
+#   `imageUrl` is the option's picture (absolute, absent when it has none), and
+#   person / styling add `sections` — their topics, each with its round picture
 #   --full adds each option's description + the prompt fragment it injects
 #   --category filters a single-dim picker; --field picks one dimension of a multi-dim picker (person/styling/framing)
 nodaro pickers analyze "<text>" [--target <types>] [--instructions <text>] [--model <id>] [--effort <level>] [--json]
 #   AI Fill: choose picker values from a free-text description (credit-billed LLM call);
 #   --target limits to a comma-separated list of picker node types (default: all analyzable)
+
+# Saved posts — the inspiration wall (posts saved from Social Search, with notes and tags)
+nodaro saved-posts list [--platform <p>] [--tag <t>] [--q <words>] [--limit <n>] [--cursor <c>] [--json]
+nodaro saved-posts save --file <post.json|-> [--index <n>] [--note <text>] [--tag <t>]... [--json]
+#   --file holds one post, or a Social Search output list (--index picks one, default 0)
+nodaro saved-posts update <id> [--note <text>] [--tag <t>]... [--clear-tags] [--json]
+nodaro saved-posts delete <id>                         # also removes the copied still
+
+# Competitors — tracked brands, their scans and action cards (Nodaro Cloud)
+nodaro competitors list [--json]
+nodaro competitors add [--brand <name>] [--website <url>] [--tiktok <h>] [--instagram <h>] [--youtube <c>] [--x <h>] [--linkedin <page>] [--meta-ads <name>] [--about <platforms>] [--schedule off|weekly|daily] [--own] [--json]
+#   --website with no account flags finds the accounts from the site first (guesses are named)
+nodaro competitors discover <website> [--json]              # free
+nodaro competitors scan <id> [--watch] [--json]             # one Social Search page per search
+nodaro competitors cards [--json]                           # what to do now
+nodaro competitors show <id> | update <id> [flags] [--clear <platforms>] | remove <id>
+#   update changes only the accounts named (the others are kept); --clear tiktok,x removes accounts
 
 # Catalog — maintain a deployment's VENDORED catalog packs (offline, file-based; no auth/client)
 nodaro catalog snapshot --in <file>                     # echo a detail=full /v1/catalogs projection + sidecars JSON
@@ -185,10 +204,10 @@ nodaro recast validate --file script.json [--json]      # free validation; exit 
 nodaro recast import --file script.json --rights-attested [--json]
 #   imports a VALIDATED authored script as a completed analysis (free); --rights-attested asserts
 #   the script is your own work — authored recasts render Faithful, exactly as written
-nodaro recast estimate --analysis-job <id> [--fidelity faithful] [--resolution <r>] [--segment-sec <n>] [--json]
-nodaro recast create --workflow <id> --analysis-job <id> [--rights-attested] [--fidelity faithful] [--resolution <r>] [--segment-sec <n>] [--json]
+nodaro recast estimate --analysis-job <id> [--fidelity faithful] [--resolution <r>] [--segment-pack scenes-max|scenes|max] [--json]
+nodaro recast create --workflow <id> --analysis-job <id> [--rights-attested] [--fidelity faithful] [--resolution <r>] [--segment-pack scenes-max|scenes|max] [--json]
 #   BUYS THE PLAN (credits) — run `estimate` first; returns the run id
-nodaro recast start <recastId> [--segment-sec <n>] [--json]   # render a planned run (idempotent)
+nodaro recast start <recastId> [--segment-pack scenes-max|scenes|max] [--json]   # render a planned run (idempotent)
 nodaro recast status <recastId> [--json]                # poll status + any pending interactive step
 
 # Prompt — AI wizard that turns a rough idea into an optimized prompt
@@ -276,7 +295,7 @@ nodaro voice dub --audio <url> --target-language <code> [--source-language <code
 nodaro voice clones list [--json]                        # clones made before cloning was retired
 nodaro voice clones delete <id> [--json]
 
-# Media — ingestion + compositing: social-video import, trim, caption burn-in, still-to-video, slideshow, image collage, image overlay, save-to-storage, metadata probe
+# Media — ingestion + compositing: social-video import, trim, caption burn-in, still-to-video, slideshow, image collage, image overlay, video overlay, save-to-storage, metadata probe
 nodaro media download <url> [--max-height <px>] [--section <a-b>] [--watch] [--json]
                                                          # YouTube / TikTok / Instagram / X / Facebook → your storage. --section fetches only
                                                          # that time range (seconds). --watch streams live progress (no job to poll later).
@@ -330,6 +349,12 @@ nodaro media overlay <imageUrl> [layerUrls...] [--layers-file <path>] [--anchor 
 nodaro media overlay-placement <imageUrl> [--intent <text>] [--aspect <ratio>] [--safe-area <x,y,w,h>] [--json]
                                                          # asks a vision model WHERE one layer should go and answers in the same percent units —
                                                          # anchor, x, y, width + a one-line reason. Synchronous (no job to poll); one image-to-text call.
+nodaro media video-overlay <videoUrl> [layerUrls...] [--at <start[-end]>...] [--preset card|corner-badge|full-frame] [--corner top-left|top-right|bottom-left|bottom-right] [--layers-file <path>] [--aspect 16:9|9:16|1:1|4:5] [--base-fit cover|contain] [--background-color <hex>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # 1-20 timed image layers over a video in one local FFmpeg render (no AI), 20 credits; the base
+                                                         # audio is kept untouched. One --at per positional layer URL, in order ("3" = from 3 s to the end,
+                                                         # "1.2-2.6"); --preset/--corner apply to every positional layer. --layers-file takes the full API
+                                                         # layers array instead (per-layer boxes, opacity, animate, zIndex). --base-fit and --background-color
+                                                         # need --aspect. See docs/nodes/processing-video/video-overlay.md.
 nodaro media save <url> [--filename <name>] [--type image|video|audio] [--watch] [--poll-interval <ms>] [--json]
 
 # Audio — the primitives Voice Changer Pro composes, standalone, plus speech-to-text
@@ -352,8 +377,16 @@ nodaro audio transcribe --audio <url> [--provider elevenlabs-stt|incredibly-fast
 
 # Edit — editorial primitives for podcast / long-form video
 nodaro edit silence-detect <audioUrl> [--threshold-db=-35] [--min-silence-ms <ms>] [--pad-ms <ms>] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit audio-sync (--source <[id=]url> ... | --sources-file <file.json>) [--reference <id>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # 2-6 recordings (audio or video); ids default to source-1, source-2, …
+                                                         # output_data.json = { reference, offsets: [{ sourceId, offsetMs, confidence,
+                                                         # driftMsPerHour }], notes } with referenceMs = sourceMs + offsetMs.
 nodaro edit apply-edl --edl <file.json> [--transcript <file.json>] [--source <url> ...] [--output video|audio] [--quality proxy|final] [--crossfade-ms <ms>] [--watch] [--poll-interval <ms>] [--json]
-nodaro edit plan --mode tighten|clips|chapters --plan-tier economy|standard|premium --transcript <file.json> (--source <url[@audio|@video]> ... | --sources-file <file.json>) [--silence <file.json>] [--instructions <text>] [--style-guide <text>] [--count <n>] [--target-duration-sec <n>] [--target-aspect 16:9|9:16|1:1|4:5] [--platform <name>] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit plan --mode tighten|clips|chapters --plan-tier economy|standard|premium --transcript <file.json> (--source <[id=]url[@audio|@video]> ... | --sources-file <file.json>) [--silence <file.json>] [--offsets <file.json>] [--transcript-source <id>] [--instructions <text>] [--style-guide <text>] [--count <n>] [--target-duration-sec <n>] [--target-aspect 16:9|9:16|1:1|4:5] [--platform <name>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # multicam: --offsets = an audio-sync job's output_data.json over the SAME
+                                                         # source ids (both commands default to source-1, source-2, …); each source's
+                                                         # offset is applied before the request — refused if one was not measured or
+                                                         # matched weakly (set its offsetMs in --sources-file).
 
 # Organizations — only on instances that have them
 nodaro org list [--json]
@@ -493,6 +526,24 @@ nodaro nodes run meta-ads-scrape --params-file body.json
 ```
 
 Needs `APIFY_API_TOKEN` on the server, or a connected nodaro.ai account (the scrape is relayed and billed there).
+
+Social Search (`social-search`, Nodaro Cloud) searches one platform — TikTok, Instagram, YouTube, X, Reddit, LinkedIn or Meta ads — by keyword or account. It answers with a job id; add `--watch` to wait for the posts (every post found is on the job's `output_data.json`):
+
+```bash
+# The 40 most popular TikTok videos about a topic this week
+nodaro nodes run social-search   --param platform=tiktok --param query="ai video ad" --param count=40   --param period=week --param sort=popular --watch
+
+# An advertiser's running ads on Meta
+nodaro nodes run social-search   --param platform=meta_ads --param mode=account --param query="Brand Name" --watch
+```
+
+Keep the posts worth coming back to on your inspiration wall: save one from the run's output with a note and tags.
+
+```bash
+nodaro jobs get <jobId> --json | jq '.output_data.json' > posts.json
+nodaro saved-posts save --file posts.json --index 2 --note "strong opener" --tag hooks
+nodaro saved-posts list --tag hooks
+```
 
 ## Output formatting
 

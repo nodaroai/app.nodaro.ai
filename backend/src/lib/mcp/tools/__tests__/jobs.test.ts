@@ -369,6 +369,27 @@ describe("get_job — the one job envelope", () => {
     // The text envelope is unchanged for existing clients.
     expect(result.content[0]?.text).toContain('"data"')
   })
+
+  it("carries the allowlisted input so a server-side prompt fold can be verified (F12)", async () => {
+    mockGetJob({
+      id: JOB, user_id: "u1", status: "completed", job_type: "generate-video", progress: 100,
+      output_data: { videoUrl: "https://r2/x.mp4" }, credits: 40,
+      input_data: {
+        prompt: "a woman turns, match cut", userPrompt: "a woman turns", direction: { transition: "match-cut" },
+        endFrameUrl: "https://r2/b.png", workflowId: "wf-internal", nodeId: "n-internal",
+      },
+    })
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    const sc = result.structuredContent as Record<string, unknown>
+    expect(sc.input).toEqual({
+      prompt: "a woman turns, match cut",
+      userPrompt: "a woman turns",
+      direction: { transition: "match-cut" },
+      endFrameUrl: "https://r2/b.png",
+    })
+  })
 })
 
 describe("wait_for_job tool", () => {

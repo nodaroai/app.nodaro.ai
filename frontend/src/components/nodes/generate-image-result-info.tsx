@@ -1,6 +1,7 @@
 "use client"
 
 import { toast } from "sonner"
+import { useT } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import {
   useResultGenerationSettings,
@@ -34,6 +35,7 @@ export function GenerateImageResultInfo({
   result,
   data,
 }: GenerateImageResultInfoProps) {
+  const t = useT()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const jobId = result?.jobId && result.jobId.length > 0 ? result.jobId : undefined
   const { data: settings, isLoading } = useResultGenerationSettings(jobId)
@@ -47,9 +49,9 @@ export function GenerateImageResultInfo({
   const model = modelLabelFor(provider)
   const summary = [model, aspect, resolution].filter(Boolean).join(" · ")
 
-  const rows: ResultSummaryRow[] = [{ label: "Model", value: model }]
-  if (aspect) rows.push({ label: "Aspect", value: aspect })
-  if (resolution) rows.push({ label: "Resolution", value: resolution })
+  const rows: ResultSummaryRow[] = [{ label: t("field.model"), value: model }]
+  if (aspect) rows.push({ label: t("node.aspect"), value: aspect })
+  if (resolution) rows.push({ label: t("field.resolution"), value: resolution })
 
   return (
     <ResultSettingsInfo
@@ -61,7 +63,7 @@ export function GenerateImageResultInfo({
       onApply={(includePrompt) => {
         if (!settings) return
         updateNodeData(nodeId, buildAppliedConfigPatch(settings, { includePrompt }))
-        toast.success(includePrompt ? "Applied settings + prompt" : "Applied settings")
+        toast.success(includePrompt ? t("node.appliedSettingsAndPrompt") : t("node.appliedSettings"))
       }}
     />
   )

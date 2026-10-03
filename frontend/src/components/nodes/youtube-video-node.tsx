@@ -196,7 +196,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                 >
                   <CachedImage
                     src={displayThumbnail}
-                    alt={nodeData.title || "Video"}
+                    alt={nodeData.title || t("common.video")}
                     className="w-full h-full object-cover"
                     thumbnail={!useFull}
                     thumbnailWidth={320}
@@ -234,7 +234,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                   <div className="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center shrink-0">
                     <PlatformIcon platform={platform} className="w-4 h-4 text-muted-foreground" />
                   </div>
-                  <p className="min-w-0 text-xs font-medium truncate">{nodeData.title || "Video"}</p>
+                  <p className="min-w-0 text-xs font-medium truncate">{nodeData.title || t("common.video")}</p>
                 </div>
                 {clearButton}
               </div>

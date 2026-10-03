@@ -7,19 +7,40 @@
 // composed at runtime is the shot count, which is the one figure that could
 // silently drift from the template.
 
-export const HEADLINE = "One frame in. Ten angles of the same moment out."
+import { tx, type MessageKey, type TFunction } from "@/lib/i18n"
 
-export const SUBLINE =
-  "Character, wardrobe, location and light never change. Only the camera does. You see the shot list before you spend anything, and you can rewrite any line of it."
+// Copy is held as dictionary keys; the few sentences that carry a count are
+// functions that take the caller's `t`, so they re-translate on a language switch.
+
+export const HEADLINE: MessageKey = "tut.ccvHeadline"
+
+export const SUBLINE: MessageKey = "tut.ccvSubline"
 
 /** Headline chips after the derived "N shots" one. */
-export const FACTS = ["6 nodes, not 25", "cuttable as a sequence"] as const
+export const FACTS: readonly MessageKey[] = ["tut.ccvChipNodes", "tut.ccvChipCuttable"]
 
 /** "ten", so a sentence can say "ten runs" the way the design does, without
- *  hardcoding a figure the template may one day contradict. Past twelve, digits. */
-const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"]
-export function countWord(n: number): string {
-  return WORDS[n] ?? String(n)
+ *  hardcoding a figure the template may one day contradict. Past twelve, digits.
+ *  Each locale spells the number in its own dictionary — Hebrew keeps digits,
+ *  because its number words agree in gender with the noun they count. */
+const COUNT_WORDS: readonly MessageKey[] = [
+  "tut.countZero",
+  "tut.countOne",
+  "tut.countTwo",
+  "tut.countThree",
+  "tut.countFour",
+  "tut.countFive",
+  "tut.countSix",
+  "tut.countSeven",
+  "tut.countEight",
+  "tut.countNine",
+  "tut.countTen",
+  "tut.countEleven",
+  "tut.countTwelve",
+]
+export function countWord(n: number, t: TFunction): string {
+  const key = COUNT_WORDS[n]
+  return key ? t(key) : String(n)
 }
 function capital(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
@@ -27,12 +48,12 @@ function capital(s: string): string {
 
 // --- column 1: the reference frame ------------------------------------------
 
-export const IN_COLUMN = {
-  title: "The reference frame",
-  sub: "One image. This is the scene.",
-} as const
+export const IN_COLUMN: { title: MessageKey; sub: MessageKey } = {
+  title: "tut.ccvInTitle",
+  sub: "tut.ccvInSub",
+}
 
-export const REFERENCE_PROMPT_EYEBROW = "Reference prompt"
+export const REFERENCE_PROMPT_EYEBROW: MessageKey = "tut.ccvRefPromptEyebrow"
 
 /**
  * The brief, condensed. The full brief on the canvas is nine rules; these are
@@ -40,28 +61,28 @@ export const REFERENCE_PROMPT_EYEBROW = "Reference prompt"
  * an output — hence teal, the same colour role the Image Critic has in the
  * image-editing tutorial.
  */
-export const BRIEF = {
-  eyebrow: "The coverage brief · edit this to change the plan",
+export const BRIEF: { eyebrow: MessageKey; rules: readonly MessageKey[] } = {
+  eyebrow: "tut.ccvBriefEyebrow",
   rules: [
-    "Real coverage order: wide, two mediums, two close-ups, over-the-shoulder, reverse, insert, dynamic angle, profile.",
-    "One camera angle per line. Never stack two angle terms.",
-    "Camera position, not movement. Motion is added later.",
-    "Screen direction stays consistent, so the cuts do not jump.",
-    "Leave breathing room. Every frame must work as a start frame for animation.",
+    "tut.ccvBriefRule1",
+    "tut.ccvBriefRule2",
+    "tut.ccvBriefRule3",
+    "tut.ccvBriefRule4",
+    "tut.ccvBriefRule5",
   ],
-} as const
+}
 
 // --- column 2: the shot list ------------------------------------------------
 
 export const LIST_COLUMN = {
-  title: "The shot list",
-  sub: (count: number) => `${capital(countWord(count))} lines, editable before you spend`,
-  meta: "Click a line",
+  title: "tut.ccvListTitle" as MessageKey,
+  sub: (count: number, t: TFunction) => t("tut.ccvListSub", { count: capital(countWord(count, t)) }),
+  meta: "tut.ccvListMeta" as MessageKey,
 } as const
 
 export const LEVER = {
-  eyebrow: "The lever",
-  body: (count: number) => `This list is what turns one image node into ${countWord(count)} runs.`,
+  eyebrow: "tut.ccvLeverEyebrow" as MessageKey,
+  body: (count: number, t: TFunction) => t("tut.ccvLeverBody", { count: countWord(count, t) }),
 } as const
 
 /**
@@ -73,43 +94,50 @@ export const LEVER = {
  * label against the line it names, so a re-published run that changes the
  * order fails there rather than mislabelling shots in the tutorial.
  */
-export const SHOT_KINDS: readonly string[] = [
-  "Wide establishing",
-  "Medium, waist-up",
-  "Medium, three-quarter",
-  "Close-up, profile",
-  "Tight close-up",
-  "Over-the-shoulder",
-  "Reverse angle",
-  "Insert detail",
-  "Low angle",
-  "Clean profile",
+export const SHOT_KINDS: readonly MessageKey[] = [
+  "tut.ccvKindWide",
+  "tut.ccvKindMediumWaist",
+  "tut.ccvKindMediumThreeQ",
+  "tut.ccvKindCloseProfile",
+  "tut.ccvKindTightClose",
+  "tut.ccvKindOverShoulder",
+  "tut.ccvKindReverse",
+  "tut.ccvKindInsert",
+  "tut.ccvKindLowAngle",
+  "tut.ccvKindCleanProfile",
 ]
 
-/** The kind for a 1-based shot position; a plain fallback past the authored ten. */
-export function kindFor(index: number): string {
-  return SHOT_KINDS[index - 1] ?? `Shot ${index}`
+/** The kind for a 1-based shot position; a plain fallback past the authored ten.
+ *  `t` defaults to the live locale for non-render callers. */
+export function kindFor(index: number, t: TFunction = tx): string {
+  const key = SHOT_KINDS[index - 1]
+  return key ? t(key) : t("tut.shotN", { n: index })
 }
 
 // --- column 3: the contact sheet --------------------------------------------
 
 export const OUT_COLUMN = {
-  title: "The contact sheet",
-  sub: (count: number) => `${capital(countWord(count))} shots of the same moment, one node`,
+  title: "tut.ccvOutTitle" as MessageKey,
+  sub: (count: number, t: TFunction) => t("tut.ccvOutSub", { count: capital(countWord(count, t)) }),
 } as const
 
-export const statusLine = (generated: number, count: number) => `${generated} of ${count} generated`
+export const statusLine = (generated: number, count: number, t: TFunction) =>
+  t("tut.ccvStatusLine", { generated, count })
 
-export const shotTag = (index: number, count: number) => `Shot ${String(index).padStart(2, "0")} of ${count}`
+export const shotTag = (index: number, count: number, t: TFunction) =>
+  t("tut.ccvShotTag", { n: String(index).padStart(2, "0"), count })
 
-export const SHEET_EYEBROW = (count: number) => `All ${countWord(count)}, in cutting order`
+export const SHEET_EYEBROW = (count: number, t: TFunction) => t("tut.ccvSheetEyebrow", { count: countWord(count, t) })
 
 /** The three spec rows under the selected shot. ANCHOR is the point of the whole
  *  tutorial: every one of the runs is fed the same reference frame. */
 export const SPECS = {
-  anchor: { key: "Anchor", value: "the reference frame" },
-  prompt: { key: "Prompt", value: (index: number) => `row ${index} of the list` },
-  node: { key: "Node", value: (label: string, index: number) => `${label}, run ${index}` },
+  anchor: { key: "tut.ccvSpecAnchor" as MessageKey, value: "tut.ccvSpecAnchorValue" as MessageKey },
+  prompt: { key: "node.prompt" as MessageKey, value: (index: number, t: TFunction) => t("tut.ccvSpecPromptValue", { n: index }) },
+  node: {
+    key: "tut.nodeEyebrow" as MessageKey,
+    value: (label: string, index: number, t: TFunction) => t("tut.ccvSpecNodeValue", { label, n: index }),
+  },
 } as const
 
-export const NOT_RUN = "not run yet"
+export const NOT_RUN: MessageKey = "tut.ccvNotRun"

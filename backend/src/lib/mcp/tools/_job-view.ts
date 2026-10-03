@@ -9,6 +9,7 @@
  * envelopes stay what they were for existing clients.
  */
 import { z } from "zod"
+import { DIRECTION_KEYS, getRegisteredSubjectKeys } from "@nodaro/prompts"
 import { redactPrivateJobData } from "../../public-job-data.js"
 import { failureGuidance } from "./_job-error.js"
 
@@ -37,6 +38,74 @@ export const HELD_JOB_GUIDANCE =
   "charged again. Poll `get_job` later: the output appears when the review approves " +
   "it, or the job becomes `failed` with a policy reason if it is rejected."
 
+/**
+ * The job-input keys the envelope echoes back (F12): enough to verify what the
+ * model was actually sent — `prompt` is the RENDERED prompt after any
+ * server-side fold, `userPrompt` the caller's own words — and nothing else.
+ * An ALLOWLIST, never a denylist: `input_data` is the whole request body, and
+ * it carries internal ids (workflow / node / idempotency / attach-to-entity)
+ * that are not the agent's business. Add a key only when it is the caller's
+ * own creative input or a public media url.
+ */
+export const JOB_INPUT_VIEW_KEYS = [
+  "type",
+  "prompt",
+  "userPrompt",
+  "negativePrompt",
+  "direction",
+  "subject",
+  "provider",
+  "model",
+  "duration",
+  "resolution",
+  "aspectRatio",
+  "imageUrl",
+  "endFrameUrl",
+  "referenceImageUrls",
+  "referenceVideoUrls",
+  "referenceAudioUrls",
+] as const
+
+/**
+ * The allowlist holds ONE LEVEL DOWN too. `direction` and `subject` are records,
+ * and the routes' own schemas keep them to catalog ids — but `input_data` is also
+ * written by the orchestrator, plugins and apps, which can store any key there.
+ * So each is re-read against its catalog's key set (`DIRECTION_KEYS`; the
+ * pack-aware `getRegisteredSubjectKeys()`), and only id-shaped values survive:
+ * a string, an array of strings, or — `subject.customAge` — a number.
+ */
+function catalogRecord(value: unknown, keys: ReadonlyArray<string>): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const src = value as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const key of keys) {
+    const v = src[key]
+    if (
+      typeof v === "string" ||
+      typeof v === "number" ||
+      (Array.isArray(v) && v.every((x) => typeof x === "string"))
+    ) {
+      out[key] = v
+    }
+  }
+  return Object.keys(out).length > 0 ? out : null
+}
+
+/** The allowlisted subset of a job's `input_data`; null when there is none to show. */
+export function jobInputView(input: unknown): Record<string, unknown> | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null
+  const src = redactPrivateJobData(input as Record<string, unknown>)
+  const view: Record<string, unknown> = {}
+  for (const key of JOB_INPUT_VIEW_KEYS) {
+    const value =
+      key === "direction" ? catalogRecord(src[key], DIRECTION_KEYS)
+      : key === "subject" ? catalogRecord(src[key], getRegisteredSubjectKeys())
+      : src[key]
+    if (value !== undefined && value !== null) view[key] = value
+  }
+  return Object.keys(view).length > 0 ? view : null
+}
+
 export const JOB_VIEW_SCHEMA = {
   jobId: z.string(),
   /** pending | processing | completed | failed | cancelled | pending_review — plus `timeout` / `aborted` from wait_for_job. */
@@ -46,6 +115,8 @@ export const JOB_VIEW_SCHEMA = {
   assetKind: z.string().nullable().optional(),
   outputUrl: z.string().nullable().optional(),
   outputData: z.record(z.string(), z.unknown()).nullable().optional(),
+  /** Safe subset of the job's input: prompt (rendered), userPrompt (source), direction, frames, provider, duration… */
+  input: z.record(z.string(), z.unknown()).nullable().optional(),
   errorMessage: z.string().nullable().optional(),
   /** On failed/cancelled/pending_review: false means the same request will fail (or be held) again — change the input, do not re-run. */
   retryable: z.boolean().optional(),
@@ -65,6 +136,7 @@ export interface JobRowLike {
   progress?: number | null
   job_type?: string | null
   output_data?: Record<string, unknown> | null
+  input_data?: Record<string, unknown> | null
   error_message?: string | null
   error_hint?: unknown
   credits?: number | null
@@ -85,6 +157,7 @@ export function jobView(row: JobRowLike): JobView {
     assetKind: assetKindOf(out),
     outputUrl: resolveOutputUrl(out),
     outputData: out,
+    input: jobInputView(row.input_data),
     errorMessage: row.error_message ?? null,
     credits: row.credits ?? null,
     createdAt: row.created_at ?? null,

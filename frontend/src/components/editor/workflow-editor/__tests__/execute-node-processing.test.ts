@@ -46,6 +46,7 @@ const mockTranscodeVideoApi = vi.fn()
 const mockSpeedRampApi = vi.fn()
 const mockLoopVideoApi = vi.fn()
 const mockFadeVideoApi = vi.fn()
+const mockVideoOverlayApi = vi.fn()
 const mockResizeVideoApi = vi.fn()
 const mockAdjustVolumeApi = vi.fn()
 const mockAddCaptionsApi = vi.fn()
@@ -132,6 +133,7 @@ vi.mock("@/lib/api", () => ({
   speedRampApi: (...args: unknown[]) => mockSpeedRampApi(...args),
   loopVideoApi: (...args: unknown[]) => mockLoopVideoApi(...args),
   fadeVideoApi: (...args: unknown[]) => mockFadeVideoApi(...args),
+  videoOverlayApi: (...args: unknown[]) => mockVideoOverlayApi(...args),
   resizeVideoApi: (...args: unknown[]) => mockResizeVideoApi(...args),
   adjustVolumeApi: (...args: unknown[]) => mockAdjustVolumeApi(...args),
   addCaptionsApi: (...args: unknown[]) => mockAddCaptionsApi(...args),
@@ -256,6 +258,7 @@ vi.mock("../types", () => ({
 // ---------------------------------------------------------------------------
 
 import { executeNode } from "../execute-node"
+import { DEFAULT_VIDEO_OVERLAY_LAYER, VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH, expandVideoOverlayLayer, videoOverlayCompositionKey, videoOverlaySlotSources } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1807,5 +1810,107 @@ describe("image-collage", () => {
     expect(absent.badgePosition).toBeUndefined()
     const [, junk] = await runCollage({ numbered: true, badgePosition: "bottom-left" })
     expect(junk.badgePosition).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// video-overlay — the single-node run (spec §7 "Validator + engine parity"):
+// the shared assembly, the shared validator's refusal in the user's words, and
+// the extra fields the run writes on the node and its result.
+// ---------------------------------------------------------------------------
+
+describe("video-overlay", () => {
+  const V = "http://vid.mp4"
+
+  it("no base video → a toast, a reject, no API call", async () => {
+    mockResolveNodeInputs.mockReturnValue({ overlayImageUrls: ["http://a.png"] })
+    const promise = executeNode(makeNode("video-overlay", { layers: [] }), makeCtx())
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("Video Overlay needs a base video")
+    expect(mockToastError).toHaveBeenCalledWith('Node "video-overlay": no base video connected (video handle)')
+    expect(mockPollJobWithNodeUpdate).not.toHaveBeenCalled()
+    expect(mockVideoOverlayApi).not.toHaveBeenCalled()
+  })
+
+  it("end ≤ start → the validator's English in the reject, the user's words in the toast, no API call", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: V, overlayImageUrls: ["http://a.png", "http://b.png"] })
+    const promise = executeNode(makeNode("video-overlay", { layers: [null, { start: 5, end: 4 }] }), makeCtx())
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("Layer 2: end (4 s) must be after start (5 s)")
+    // tx() in the UI language (English here): proccfg.videoOverlay.layerPrefix + err.end_before_start.
+    expect(mockToastError).toHaveBeenCalledWith('Node "video-overlay": Layer 2: End must be after start')
+    expect(mockPollJobWithNodeUpdate).not.toHaveBeenCalled()
+    expect(mockVideoOverlayApi).not.toHaveBeenCalled()
+  })
+
+  it("a wired slot with no settings runs as DEFAULT_VIDEO_OVERLAY_LAYER; an empty unwired slot is dropped; every layer carries its slot", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: V, overlayImageUrls: ["http://a.png"] })
+    mockVideoOverlayApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    const node = makeNode("video-overlay", { layers: [null, null, { imageUrl: "http://own.png", start: 1 }] })
+    await executeNode(node, makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith("n1", expect.any(Function), "generatedVideoUrl", "Video Overlay", expect.anything(), expect.any(Function))
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockVideoOverlayApi).toHaveBeenCalledWith({
+      videoUrl: V,
+      layers: [
+        { ...DEFAULT_VIDEO_OVERLAY_LAYER, imageUrl: "http://a.png", slot: 1 },
+        { ...expandVideoOverlayLayer({ imageUrl: "http://own.png", start: 1 }), slot: 3 },
+      ],
+      userId: "u1",
+      // The canvas key rides on the request: the worker echoes it into the
+      // job's output_data, so a result that lands after a page reload
+      // (restore / reconcile read the REST job) reads fresh too.
+      resultCompositionKey: videoOverlayCompositionKey({ baseUrl: V, sources: videoOverlaySlotSources(node.data.layers, ["http://a.png"]), data: node.data }),
+    })
+  })
+
+  it("a key past the route's bound is not sent (the run still starts; only a reload would read it old)", async () => {
+    const long = `http://${"x".repeat(VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH)}.png`
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: V, overlayImageUrls: [long] })
+    mockVideoOverlayApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("video-overlay", { layers: [] }), makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockVideoOverlayApi.mock.calls[0][0]).not.toHaveProperty("resultCompositionKey")
+  })
+
+  it("a list row fanned into a layer handle never replaces the base video (the override is ignored; engine parity)", async () => {
+    const wired = ["http://row-img.png"]
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: V, overlayImageUrls: wired })
+    mockVideoOverlayApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    const node = makeNode("video-overlay", { layers: [] })
+    await executeNode(node, makeCtx(), undefined, "http://row-img.png", 0)
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockVideoOverlayApi).toHaveBeenCalledWith(expect.objectContaining({ videoUrl: V }))
+    expect(mockVideoOverlayApi.mock.calls[0][0].layers).toEqual([
+      { ...DEFAULT_VIDEO_OVERLAY_LAYER, imageUrl: "http://row-img.png", slot: 1 },
+    ])
+    // The composition key is built from the real base too.
+    const extra = mockPollJobWithNodeUpdate.mock.calls[0][5] as (od: Record<string, unknown>) => Record<string, unknown>
+    expect(extra({}).resultCompositionKey).toBe(
+      videoOverlayCompositionKey({ baseUrl: V, sources: videoOverlaySlotSources(node.data.layers, wired), data: node.data }),
+    )
+  })
+
+  it("the extra-fields callback writes the warnings, the output size and length, and the composition key the node computes", async () => {
+    const wired = ["http://a.png"]
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: V, overlayImageUrls: wired })
+    mockVideoOverlayApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    const node = makeNode("video-overlay", { layers: [{ start: 2, preset: "card" }], outputAspect: "9:16" })
+    await executeNode(node, makeCtx())
+    const extra = mockPollJobWithNodeUpdate.mock.calls[0][5] as (od: Record<string, unknown>) => Record<string, unknown>
+    const warnings = [{ layer: 0, slot: 1, code: "clipped", detail: "ends at 9 s, clipped to the video end (5.00 s)" }]
+    expect(extra({ warnings, width: 1080, height: 1920, durationSec: 5 })).toEqual({
+      warnings,
+      width: 1080,
+      height: 1920,
+      durationSec: 5,
+      resultCompositionKey: videoOverlayCompositionKey({ baseUrl: V, sources: videoOverlaySlotSources(node.data.layers, wired), data: node.data }),
+    })
+    // A run with no warnings still replaces the last run's line.
+    expect(extra({})).toMatchObject({ warnings: [] })
   })
 })

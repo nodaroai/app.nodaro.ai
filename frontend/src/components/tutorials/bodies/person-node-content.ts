@@ -3,52 +3,66 @@
 // The picks themselves are NOT here: they are read off the person/backdrop/
 // framing/mood nodes and resolved to labels through the same catalogs the
 // pickers use, so editing the template updates the tutorial.
+//
+// Copy is held as dictionary keys and translated at render.
+
+import type { MessageKey } from "@/lib/i18n"
 
 /** Each lesson is one run: its input nodes and the image they produced. */
 export const LESSONS = [
   {
     n: 1,
-    title: "Meet the Person node",
-    sub: "Picks become a written prompt",
+    title: "tut.pnLesson1Title",
+    sub: "tut.pnLesson1Sub",
     inputs: ["node_2"],
     result: "node_1",
-    body: "Pick attributes and the node writes the character prompt for you. Open Final Prompt on Generate Image to see exactly what is sent to the model.",
-    callout:
-      "Try it: change one attribute and watch the prompt update. Anything you type in the Prompt field is combined with it.",
+    body: "tut.pnLesson1Body",
+    callout: "tut.pnLesson1Callout",
   },
   {
     n: 2,
-    title: "Same node, different character",
-    sub: "Change the picks, change everything",
+    title: "tut.pnLesson2Title",
+    sub: "tut.pnLesson2Sub",
     inputs: ["node_3"],
     result: "node_4",
-    body: "Same Person node, different attributes, completely different result. Step 1 gave editorial street style; the same node here gives an intimate indoor portrait.",
+    body: "tut.pnLesson2Body",
   },
   {
     n: 3,
-    title: "Stack nodes for full scene control",
-    sub: "Scene, framing, mood, character",
+    title: "tut.pnLesson3Title",
+    sub: "tut.pnLesson3Sub",
     inputs: ["node_9", "node_6", "node_7", "node_8"],
     result: "node_5",
-    body: "The same Person, now with Backdrop, Framing and Mood layered in. Each node adds its own description to the Final Prompt.",
-    closing: "Same model, totally different shot. Swap one block and rerun.",
+    body: "tut.pnLesson3Body",
+    closing: "tut.pnLesson3Closing",
     /** How the parts of the prompt stack up, in the order they read. */
-    order: ["scene", "framing", "mood", "character"],
+    order: ["tut.pnOrderScene", "tut.pnOrderFraming", "tut.pnOrderMood", "tut.pnOrderCharacter"],
   },
-] as const
+] as const satisfies ReadonlyArray<{
+  n: number
+  inputs: readonly string[]
+  result: string
+  title: MessageKey
+  sub: MessageKey
+  body: MessageKey
+  callout?: MessageKey
+  closing?: MessageKey
+  order?: readonly MessageKey[]
+}>
 
-export const RAIL_STEPS = [
-  { n: 1, title: "Meet the Person node", sub: "Seven picks become a written prompt" },
-  { n: 2, title: "Same node, different character", sub: "Change the picks, change everything" },
-  { n: 3, title: "Stack nodes for scene control", sub: "Backdrop, Framing and Mood on top" },
+export const RAIL_STEPS: ReadonlyArray<{ n: number; title: MessageKey; sub: MessageKey }> = [
+  { n: 1, title: "tut.pnLesson1Title", sub: "tut.pnRailStep1Sub" },
+  { n: 2, title: "tut.pnLesson2Title", sub: "tut.pnLesson2Sub" },
+  { n: 3, title: "tut.pnRailStep3Title", sub: "tut.pnRailStep3Sub" },
 ]
 
-export const RAIL_NOTE = {
-  eyebrow: "The pattern",
-  body: "Compose images from modular blocks. Swap any node to iterate fast.",
+export const RAIL_NOTE: { eyebrow: MessageKey; body: MessageKey } = {
+  eyebrow: "tut.pnNoteEyebrow",
+  body: "tut.pnNoteBody",
 }
 
-/** Node type → the label shown above a stacked input card in lesson 3. */
+/** Node type → the node's canvas label shown above a stacked input card in
+ *  lesson 3. Node labels are localized at render through `lib/i18n/labels.ts`. */
 export const KIND_LABELS: Record<string, string> = {
   person: "Person",
   backdrop: "Backdrop",

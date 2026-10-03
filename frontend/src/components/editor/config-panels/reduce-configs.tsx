@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { REDUCE_STRATEGIES, buildLlmCreditIdentifier } from "@nodaro/shared"
 import type { ReduceNodeData } from "@/types/nodes"
 import { useT } from "@/lib/i18n"
+import { REDUCE_STRATEGY_COPY } from "@/lib/reduce-strategy-copy"
 import type { ConfigProps } from "./types"
 import { ReduceStrategyForms } from "./reduce-strategy-forms"
 import { ModelSelectOption } from "./model-select-option"
@@ -78,8 +79,8 @@ export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
                 <ModelSelectOption
                   key={s.id}
                   value={s.id}
-                  label={s.label}
-                  desc={s.description}
+                  label={t(REDUCE_STRATEGY_COPY[s.id].label)}
+                  desc={t(REDUCE_STRATEGY_COPY[s.id].description)}
                   creditId={
                     s.id === "pick-best-llm"
                       ? buildLlmCreditIdentifier(s.creditCostKey, judgeModel)
@@ -90,7 +91,7 @@ export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
             </SelectContent>
           </Select>
           {strategy?.description && (
-            <p className="text-[10px] text-muted-foreground">{strategy.description}</p>
+            <p className="text-[10px] text-muted-foreground">{t(REDUCE_STRATEGY_COPY[strategy.id].description)}</p>
           )}
         </div>
 

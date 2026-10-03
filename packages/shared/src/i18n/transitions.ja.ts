@@ -7,7 +7,7 @@ const map: LocaleCatalogMap = {
   "cross-dissolve": { label: "クロスディゾルブ", description: "ショット間の緩やかなブレンド" },
   "fade-to-black": { label: "暗転", description: "暗転後、次のシーンが浮かび上がる" },
   "fade-to-white": { label: "ホワイトアウト", description: "白飛び後、次のシーンが現れる" },
-  "snap-to-black": { label: "黒への瞬間カット", description: "一瞬で真っ黒になり、間を置いて次のショットへ" },
+  "snap-to-black": { label: "瞬間暗転", description: "一瞬で真っ黒になり、間を置いて次のショットへ" },
   "match-cut": { label: "マッチカット", description: "形や動きを合わせたカット" },
   "smash-cut": { label: "スマッシュカット", description: "対照的なシーン間の衝撃的な急転" },
   "iris": { label: "アイリス", description: "円形のアイリスが閉じ、次のシーンで開く" },
@@ -18,8 +18,8 @@ const map: LocaleCatalogMap = {
   "jump-cut": { label: "ジャンプカット", description: "同じ画角のまま時間が前に飛ぶ" },
 
   // ── Time ──
-  "fast-forward-day-night": { label: "日中→夜 早送り", description: "同じ場面の昼から夜へのタイムラプス" },
-  "fast-forward-night-day": { label: "夜→夜明け 早送り", description: "同じ場面の夜から夜明けへのタイムラプス" },
+  "fast-forward-day-night": { label: "日中→夜の早送り", description: "同じ場面の昼から夜へのタイムラプス" },
+  "fast-forward-night-day": { label: "夜→夜明けの早送り", description: "同じ場面の夜から夜明けへのタイムラプス" },
   "seasonal-shift": { label: "季節の変遷", description: "同じ場面で四季が移り変わる" },
   "aging": { label: "エイジング", description: "被写体が目に見えて老いる" },
   "rewind": { label: "巻き戻し", description: "時間が逆行し、動きが逆再生される" },
@@ -29,7 +29,7 @@ const map: LocaleCatalogMap = {
 
   // ── Element ──
   "dissolve-to-mist": { label: "霧に溶ける", description: "被写体が霧に変わり漂い、再形成される" },
-  "water-splash": { label: "水しぶき", description: "被写体が水に変わりはね、再形成される" },
+  "water-splash": { label: "水しぶき", description: "被写体が水に変わって飛び散り、再形成される" },
   "sand-scatter": { label: "砂の散乱", description: "被写体が砂に変わり吹き飛び、再形成される" },
   "fire-burnup": { label: "燃え尽き", description: "被写体が燃えて炭になり、再形成される" },
   "smoke-puff": { label: "煙幕消滅", description: "被写体が煙で消えて再び現れる" },
@@ -61,7 +61,7 @@ const map: LocaleCatalogMap = {
   "zoom-into-book": { label: "本へのズーム", description: "本のイラストへ接近し、中に入る" },
   "walk-through-door": { label: "扉をくぐる", description: "扉を通って新しいシーンへ" },
   "fall-into-hole": { label: "穴への落下", description: "開口部を通ってカメラが落下" },
-  "pull-out-reveal": { label: "引き戻しリビール", description: "シーンが大きな文脈の中の絵だったと判明" },
+  "pull-out-reveal": { label: "引きで種明かし", description: "カメラが引くと、それまでの場面がより大きな場面の中の絵だったと判明" },
   "zoom-into-mouth": { label: "口へのズーム", description: "開いた口へ接近し、内側に新しい世界が" },
   "push-through-glass": { label: "ガラスをすり抜ける", description: "ガラス面をカメラが屈折しながら通り抜ける" },
   "soul-jump": { label: "魂の跳躍", description: "半透明の魂が体を出て新しい体へ入る" },
@@ -76,28 +76,28 @@ const map: LocaleCatalogMap = {
   "gravity-flip": { label: "重力反転", description: "重力が反転し、カメラが180°回転" },
   "building-explosion": { label: "建物爆発", description: "建造物が爆発し、煙の中でシーン転換" },
   "vehicle-explosion": { label: "車両爆発", description: "前景の車両が爆発し、煙が晴れると新シーン" },
-  "jump-match": { label: "ジャンプマッチ", description: "被写体が跳び、着地が新しいシーンに合致" },
+  "jump-match": { label: "ジャンプマッチ", description: "被写体が跳び、新しい場面に着地してつながる" },
   "hand-swipe": { label: "手のスワイプ", description: "手がレンズを横切り、遮蔽中にシーン転換" },
   "action-relay": { label: "アクションつなぎ", description: "動作の途中でフレームから出て、新しい場面で同じ動きを続ける" },
 
   // ── Light ──
-  "white-flash": { label: "ホワイトフラッシュ", description: "フレームが純白に膨らむ" },
+  "white-flash": { label: "ホワイトフラッシュ", description: "画面が真っ白な光に包まれる" },
   "lens-flare-swipe": { label: "フレアスワイプ", description: "アナモルフィックフレアがフレームを横断" },
-  "light-streak": { label: "光の閃光", description: "光の筋がフレームを走り抜ける" },
+  "light-streak": { label: "光の筋", description: "光の筋がフレームを走り抜ける" },
   "color-invert": { label: "色反転フラッシュ", description: "一瞬、色が反転する" },
   "sun-glare": { label: "太陽のグレア", description: "強烈な日差しがフレームを白飛びさせる" },
   "lens-crack": { label: "レンズクラック", description: "レンズにひびが入り、割れたガラス越しに新シーン" },
-  "dirty-lens-wipe": { label: "汚れたレンズ拭き", description: "レンズの汚れが拭われ、シーンが変わる" },
+  "dirty-lens-wipe": { label: "レンズの汚れ拭き", description: "レンズの汚れが拭われ、シーンが変わる" },
   "eye-light-burst": { label: "眼光", description: "被写体の瞳から白光が放たれ、フレームが白飛び" },
 
   // ── Glitch ──
-  "digital-glitch": { label: "デジタルグリッチ", description: "RGB分離+スキャンライン+データモッシュ" },
+  "digital-glitch": { label: "デジタルグリッチ", description: "RGB分離・スキャンライン・データモッシュのグリッチ" },
   "vhs-rewind": { label: "VHSリワインド", description: "VHSテープ巻き戻し風のトラッキング歪み" },
   "datamosh": { label: "データモッシュ", description: "モーションベクターがシーンをにじませる" },
-  "channel-flip": { label: "チャンネル切替", description: "TV静電気ノイズとともにチャンネルが変わる" },
+  "channel-flip": { label: "チャンネル切替", description: "砂嵐ノイズとともにテレビのチャンネルが変わる" },
   "hologram-flicker": { label: "ホログラムちらつき", description: "ホログラム風のちらつきで新シーンが出現" },
   "display-wipe": { label: "ディスプレイワイプ", description: "シーンが画面に圧縮され、展開して新シーンへ" },
-  "double-exposure": { label: "多重露光", description: "二つのシーンが重なり、前景が徐々に消える" },
+  "double-exposure": { label: "多重露光", description: "二つのシーンが半透明に重なり、先のシーンが徐々に消える" },
 }
 
 export default map

@@ -1,6 +1,7 @@
 "use client"
 
 import { memo } from "react"
+import { useT } from "@/lib/i18n"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Rss, Type, ImageIcon } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -16,6 +17,7 @@ const HANDLES = [
 ] as const
 
 function RSSFeedNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as RSSFeedData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
 
@@ -39,7 +41,7 @@ function RSSFeedNodeComponent({ id, data, selected }: NodeProps) {
       >
         <div className="p-3">
           <p className="text-muted-foreground truncate max-w-[180px]">
-            {nodeData.feedUrl || "Enter feed URL..."}
+            {nodeData.feedUrl || t("node.enterFeedUrl")}
           </p>
         </div>
       </BaseNode>

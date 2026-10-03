@@ -17,7 +17,7 @@ import { runFfmpeg } from "../ffmpeg-utils.js"
  * cached directory across runs is safe because the generators are
  * deterministic for a given ffmpeg binary.
  */
-export const FIXTURE_SPEC_VERSION = 1
+export const FIXTURE_SPEC_VERSION = 2
 
 export interface FixtureSet {
   readonly dir: string
@@ -55,6 +55,20 @@ export interface FixtureSet {
   /** testsrc2 [1.0, 3.0) s @30, silent — the NEXT clip of the continuation
    *  pair (starts 0.3 s before clipHeadMp4 ends). */
   readonly clipTailMp4: string
+  /** A 5 s AAC master-audio track (m4a, 48 kHz mono): a tone that steps
+   *  every second (300, 400, … 700 Hz) and PULSES 250 ms on / 250 ms off, so
+   *  the bands fingerprint which master seconds were read and the envelope
+   *  pins WHERE each read starts (a constant-level tone would hide a shift). */
+  readonly masterStepsM4a: string
+  /** A TIME-CODED camera, 640×360@30, 4 s: every frame's luma is its own
+   *  index (24 + 8·(N mod 26)), so a picture read one frame early or late
+   *  moves the per-frame luma fingerprint past tolerance (testsrc2's mean luma
+   *  barely changes frame to frame and would hide it). 440 Hz tone pulsing
+   *  125 ms on / 125 ms off. */
+  readonly rampAMp4: string
+  /** A second time-coded camera, 480×270@30 (a smaller 16:9 — scaled up on a
+   *  640×360 canvas), 4 s: luma 230 − 9·(N mod 23); 880 Hz pulsing ~167 ms. */
+  readonly rampBMp4: string
 }
 
 /** One ffmpeg invocation per fixture, ordered to match FixtureSet fields. */
@@ -147,6 +161,31 @@ const GENERATORS: ReadonlyArray<{ file: string; args: (out: string) => string[] 
       "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", out,
     ],
   },
+  {
+    file: "master-steps.m4a",
+    args: (out) => [
+      "-y", "-f", "lavfi", "-i", "aevalsrc='0.5*sin(2*PI*(300+100*floor(t))*t)*mod(floor(t*4),2)':s=48000:d=5",
+      "-c:a", "aac", out,
+    ],
+  },
+  {
+    file: "ramp-a.mp4",
+    args: (out) => [
+      "-y",
+      "-f", "lavfi", "-i", "color=c=black:s=640x360:r=30:d=4,format=yuv420p,geq=lum='24+8*mod(N,26)':cb=128:cr=128",
+      "-f", "lavfi", "-i", "aevalsrc='0.5*sin(2*PI*440*t)*mod(floor(t*8),2)':s=48000:d=4",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", out,
+    ],
+  },
+  {
+    file: "ramp-b.mp4",
+    args: (out) => [
+      "-y",
+      "-f", "lavfi", "-i", "color=c=black:s=480x270:r=30:d=4,format=yuv420p,geq=lum='230-9*mod(N,23)':cb=128:cr=128",
+      "-f", "lavfi", "-i", "aevalsrc='0.5*sin(2*PI*880*t)*mod(floor(t*6),2)':s=48000:d=4",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", out,
+    ],
+  },
 ]
 
 /**
@@ -177,6 +216,9 @@ export async function ensureFixtures(): Promise<FixtureSet> {
     framePng: join(dir, "frame.png"),
     clipHeadMp4: join(dir, "clip-head.mp4"),
     clipTailMp4: join(dir, "clip-tail.mp4"),
+    masterStepsM4a: join(dir, "master-steps.m4a"),
+    rampAMp4: join(dir, "ramp-a.mp4"),
+    rampBMp4: join(dir, "ramp-b.mp4"),
   }
 }
 

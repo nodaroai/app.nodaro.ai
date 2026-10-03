@@ -1,6 +1,0 @@
----
-"@nodaro/shared": minor
-"@nodaro/sdk": minor
----
-
-Video URL node + social-video import: `@nodaro/shared` gains `video-link.ts` — the social-video host allowlist (`SOCIAL_VIDEO_HOSTS`, `YOUTUBE_HOSTS`, `INSTAGRAM_HOSTS`, `hostnameMatchesAllowlist`, `isSocialVideoUrl`, `detectVideoLinkPlatform`; exact-host matching, one list for the server's download gate and the editor), `hasUrlParserHazard` (a link carrying a backslash or a control character is one that URL parsers read differently, and is refused as a video link), the node's output rule (`resolveVideoLinkOutput`, `videoLinkDownloadedFile`, `videoLinkNeedsDownload` — a downloaded file is emitted only when it belongs to the node's current link) and `VIDEO_LINK_TOLERANT_CONSUMER_TYPES` (the node types that read a Video URL node without its file). `downloadPercent` / `downloadPhase` join `TRANSIENT_RUNTIME_KEYS`, so a download's progress ticks no longer dirty or reach a saved workflow. `@nodaro/sdk`: `media.downloadVideo()` accepts `requireAudio?: boolean` — a result with no audio stream fails by default; `false` accepts a clip that really has no sound. The route also answers `429 too_many_downloads` past 4 running downloads per account.

@@ -3,12 +3,12 @@ import type { LocaleCatalogMap } from "./types.js"
 const map: LocaleCatalogMap = {
   "smartphone": { label: "סמארטפון", description: "טלפון מודרני ביד" },
   "smartphone-raised": { label: "טלפון מורם", description: "טלפון מורם באמצע צילום" },
-  "polaroid-camera": { label: "מצלמת Polaroid", description: "מצלמת מיידי וינטג'" },
+  "polaroid-camera": { label: "מצלמת Polaroid", description: "מצלמה מיידית וינטג'" },
   "vintage-camera": { label: "מצלמה וינטג'", description: "מצלמת פילם ישנה עם רצועה" },
-  "dslr-camera": { label: "מצלמת DSLR", description: "מצלמת DSLR / mirrorless מודרנית" },
+  "dslr-camera": { label: "מצלמת DSLR", description: "מצלמת DSLR / ללא מראה מודרנית" },
   "video-camera": { label: "מצלמת וידאו", description: "מצלמת וידאו מורכבת על הכתף" },
-  "microphone": { label: "מיקרופון", description: "מיקרופון יד וקאלי" },
-  "megaphone": { label: "מגאפון", description: "Bullhorn / מגאפון" },
+  "microphone": { label: "מיקרופון", description: "מיקרופון יד לשירה" },
+  "megaphone": { label: "מגאפון", description: "מגאפון" },
   "smartwatch": { label: "שעון חכם", description: "שורש כף יד מורם לבדיקת השעון" },
 
   "coffee-cup": { label: "כוס קפה", description: "כוס קפה קרמית" },
@@ -27,7 +27,7 @@ const map: LocaleCatalogMap = {
 
   "book": { label: "ספר", description: "ספר כריכה קשה פתוח" },
   "magazine": { label: "מגזין", description: "מגזין מבריק מקופל" },
-  "newspaper": { label: "עיתון", description: "עיתון broadsheet מקופל" },
+  "newspaper": { label: "עיתון", description: "עיתון בפורמט רחב מקופל" },
   "notebook": { label: "מחברת", description: "מחברת שורות פתוחה" },
   "pen": { label: "עט", description: "עט מוכן באמצע כתיבה" },
   "marker": { label: "טוש", description: "טוש עבה באמצע משיכה" },
@@ -36,7 +36,7 @@ const map: LocaleCatalogMap = {
 
   "handbag": { label: "תיק יד", description: "תיק יד מעצבים" },
   "tote-bag": { label: "תיק Tote", description: "תיק Tote קנבס רך" },
-  "briefcase": { label: "מזוודה", description: "מזוודה קשה" },
+  "briefcase": { label: "תיק מסמכים", description: "תיק מסמכים קשיח" },
   "umbrella": { label: "מטריה", description: "מטריה שחורה פתוחה" },
   "fan-folding": { label: "מניפה מתקפלת", description: "מניפה פתוחה צבועה ביד" },
 
@@ -53,20 +53,20 @@ const map: LocaleCatalogMap = {
   "sheet-music": { label: "תווים", description: "תווים מקופלים" },
 
   "small-dog": { label: "כלב קטן", description: "כלב קטן מוחזק בידיים" },
-  "cat": { label: "חתול", description: "חתול תלוי על הזרוע" },
+  "cat": { label: "חתול", description: "חתול שרוע על הזרוע" },
   "plush-toy": { label: "צעצוע פלוש", description: "צעצוע פלוש רך מחובק" },
 
   "katana": { label: "Katana", description: "חרב יפנית בעלת להב יחיד" },
   "pointer-stick": { label: "מקל מצביע", description: "מקל מצביע טלסקופי" },
   "gavel": { label: "פטיש שופט", description: "פטיש שופט מעץ" },
-  "wine-bottle": { label: "בקבוק יין", description: "בקבוק מלא עם חותם foil" },
+  "wine-bottle": { label: "בקבוק יין", description: "בקבוק מלא עם חותם פויל" },
   "parasol": { label: "שמשייה", description: "שמשייה דקורטיבית מגנה מהשמש" },
   "locket": { label: "תליון מדליון", description: "תליון מדליון וינטג' פתוח באצבעות" },
   "lighter": { label: "מצית", description: "מצית כרום עם אגודל על הלהבה" },
-  "lantern": { label: "פנס יד", description: "פנס יד וינטג' עם זוהר ענבר חמים" },
+  "lantern": { label: "עששית", description: "עששית וינטג' עם זוהר ענבר חמים" },
   "flashlight": { label: "פנס", description: "אלומת פנס מודרני, חקירה / מסתורין" },
   "compass": { label: "מצפן", description: "מצפן ימי מוחזק ביד, חקירה" },
-  "bow-and-arrow": { label: "קשת וחץ", description: "קשת קשתות דרוכה עם חץ על המיתר" },
+  "bow-and-arrow": { label: "קשת וחץ", description: "קשת דרוכה עם חץ על המיתר" },
   "shield": { label: "מגן", description: "מגן מוחזק ביד, ימי הביניים / פנטזיה" },
 
   // --- picker-gaps 2026-09-01 ---

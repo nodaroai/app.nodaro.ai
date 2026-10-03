@@ -17,8 +17,8 @@ const map: LocaleCatalogMap = {
   "underwater":       { label: "אור תת-ימי" },
   "embers":           { label: "גחלים מרחפות" },
   // Abstract / VJ
-  "tunnel":           { label: "מנהרה — מרהיב" },
-  "tunnel-clean":     { label: "מנהרה — נקי" },
+  "tunnel":           { label: "מנהרה — מסעירה" },
+  "tunnel-clean":     { label: "מנהרה — נקייה" },
   "kaleidoscope":     { label: "קליידוסקופ" },
   "plasma":           { label: "שדה פלזמה" },
   "particle-swirl":   { label: "מערבולת חלקיקים" },
@@ -30,8 +30,8 @@ const map: LocaleCatalogMap = {
   "liquid-chrome":    { label: "כרום נוזלי" },
   "hologram":         { label: "רדיד הולוגרפי" },
   "vortex":           { label: "מערבולת" },
-  "honeycomb":        { label: "כוורת" },
-  "glitch":           { label: "גליץ' רעש" },
+  "honeycomb":        { label: "חלת דבש" },
+  "glitch":           { label: "רעש גליץ'" },
   "black-hole":       { label: "חור שחור" },
   "geometric-morph":  { label: "מורפינג גיאומטרי" },
 }

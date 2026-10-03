@@ -82,3 +82,6 @@ graphify-out/
 # the output of paid runs and belong beside those documents, not here.
 tools/scene3d-acceptance/fixtures/
 scene3d-receipts/
+
+# tools/picker-art/build.mts builds here before publishing into frontend/public/picker-art/.
+tools/picker-art/.work/

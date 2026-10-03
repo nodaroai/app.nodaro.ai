@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Film, Type, Music, RefreshCw } from "lucide-rea
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 interface MediaSegment {
   id: string
@@ -42,22 +43,22 @@ interface SceneGraphPreviewProps {
   isGenerating?: boolean
 }
 
-const TRANSITION_OPTIONS = [
-  { value: "fade", label: "Fade" },
-  { value: "slide-left", label: "Slide Left" },
-  { value: "slide-right", label: "Slide Right" },
-  { value: "slide-up", label: "Slide Up" },
-  { value: "slide-down", label: "Slide Down" },
-  { value: "dissolve", label: "Dissolve" },
-  { value: "zoom-in", label: "Zoom In" },
-  { value: "zoom-out", label: "Zoom Out" },
-  { value: "none", label: "None" },
+const TRANSITION_OPTIONS: ReadonlyArray<{ value: string; labelKey: MessageKey }> = [
+  { value: "fade", labelKey: "scene.transitionFade" },
+  { value: "slide-left", labelKey: "scene.transitionSlideLeft" },
+  { value: "slide-right", labelKey: "scene.transitionSlideRight" },
+  { value: "slide-up", labelKey: "scene.transitionSlideUp" },
+  { value: "slide-down", labelKey: "scene.transitionSlideDown" },
+  { value: "dissolve", labelKey: "scene.transitionDissolve" },
+  { value: "zoom-in", labelKey: "canvas.zoomIn" },
+  { value: "zoom-out", labelKey: "canvas.zoomOut" },
+  { value: "none", labelKey: "common.none" },
 ]
 
-const MEDIA_TYPE_LABEL: Record<string, string> = {
-  video: "Video",
-  gif: "GIF",
-  image: "Image",
+const MEDIA_TYPE_LABEL_KEY: Record<string, MessageKey> = {
+  video: "common.video",
+  gif: "scene.gifLabel",
+  image: "common.image",
 }
 
 const MEDIA_TYPE_COLOR: Record<string, string> = {
@@ -81,6 +82,7 @@ function SegmentEditor({
   trackType: "media" | "text"
   onChange: (updated: MediaSegment | TextSegment) => void
 }) {
+  const t = useT()
   const [expanded, setExpanded] = useState(false)
   const durationSeconds = Number(framesToSeconds(segment.durationInFrames, fps))
   const isMedia = trackType === "media"
@@ -90,17 +92,17 @@ function SegmentEditor({
     <div className="border border-[var(--border-color)] rounded">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full p-2 rounded hover:bg-[var(--card-bg)] text-left text-xs"
+        className="flex items-center gap-2 w-full p-2 rounded hover:bg-[var(--card-bg)] text-start text-xs"
       >
         <span className="flex-1 truncate font-medium">
           {isMedia ? (
             <>
-              <Film className="inline w-3 h-3 mr-1" />
-              {MEDIA_TYPE_LABEL[mediaSeg?.mediaType ?? "image"] ?? "Image"} — {framesToSeconds(segment.startFrame, fps)}s
+              <Film className="inline w-3 h-3 me-1" />
+              {t(MEDIA_TYPE_LABEL_KEY[mediaSeg?.mediaType ?? "image"] ?? "common.image")} — {framesToSeconds(segment.startFrame, fps)}s
             </>
           ) : (
             <>
-              <Type className="inline w-3 h-3 mr-1" />
+              <Type className="inline w-3 h-3 me-1" />
               {(segment as TextSegment).text.slice(0, 30)}
             </>
           )}
@@ -110,10 +112,10 @@ function SegmentEditor({
       </button>
 
       {expanded && (
-        <div className="pl-4 pr-2 pb-2 space-y-2">
+        <div className="ps-4 pe-2 pb-2 space-y-2">
           {/* Duration input */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-[var(--text-secondary)] w-16">Duration</span>
+            <span className="text-xs text-[var(--text-secondary)] w-16">{t("field.duration")}</span>
             <Input
               type="number"
               min={0.5}
@@ -132,7 +134,7 @@ function SegmentEditor({
           {/* Font label for text segments */}
           {!isMedia && (segment as TextSegment).fontFamily && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-[var(--text-secondary)] w-16">Font</span>
+              <span className="text-xs text-[var(--text-secondary)] w-16">{t("proccfg.font")}</span>
               <span className="text-xs">{(segment as TextSegment).fontFamily}</span>
             </div>
           )}
@@ -141,7 +143,7 @@ function SegmentEditor({
           {isMedia && mediaSeg && (
             <>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-[var(--text-secondary)] w-16">Trans In</span>
+                <span className="text-xs text-[var(--text-secondary)] w-16">{t("scene.transIn")}</span>
                 <Select
                   value={mediaSeg.transitionIn?.type ?? "none"}
                   onValueChange={(type) => {
@@ -156,15 +158,15 @@ function SegmentEditor({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TRANSITION_OPTIONS.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    {TRANSITION_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{t(opt.labelKey)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs text-[var(--text-secondary)] w-16">Trans Out</span>
+                <span className="text-xs text-[var(--text-secondary)] w-16">{t("scene.transOut")}</span>
                 <Select
                   value={mediaSeg.transitionOut?.type ?? "none"}
                   onValueChange={(type) => {
@@ -179,8 +181,8 @@ function SegmentEditor({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TRANSITION_OPTIONS.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    {TRANSITION_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{t(opt.labelKey)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -199,7 +201,7 @@ function SegmentEditor({
                   }}
                   className="accent-[#ff0073]"
                 />
-                Ken Burns effect
+                {t("scene.kenBurnsEffect")}
               </label>
             </>
           )}
@@ -216,6 +218,7 @@ export function SceneGraphPreview({
   onRegenerate,
   isGenerating,
 }: SceneGraphPreviewProps) {
+  const t = useT()
   const tracks = (sceneGraph.tracks ?? []) as Track[]
   const totalDuration = (sceneGraph.durationInFrames as number) ?? 0
 
@@ -275,21 +278,21 @@ export function SceneGraphPreview({
       <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">
         <span className="flex items-center gap-1">
           <Film className="w-3 h-3" />
-          {summary.mediaSegments} segments
+          {t("scene.segmentsCount", { n: summary.mediaSegments })}
         </span>
         {summary.textSegments > 0 && (
           <span className="flex items-center gap-1">
             <Type className="w-3 h-3" />
-            {summary.textSegments} text
+            {t("scene.textCount", { n: summary.textSegments })}
           </span>
         )}
         {summary.audioTracks > 0 && (
           <span className="flex items-center gap-1">
             <Music className="w-3 h-3" />
-            {summary.audioTracks} audio
+            {t("scene.audioCount", { n: summary.audioTracks })}
           </span>
         )}
-        <span className="ml-auto tabular-nums">{framesToSeconds(totalDuration, fps)}s</span>
+        <span className="ms-auto tabular-nums">{framesToSeconds(totalDuration, fps)}s</span>
       </div>
 
       {/* Timeline bar */}
@@ -301,7 +304,7 @@ export function SceneGraphPreview({
                 key={track.id}
                 className="absolute left-0 right-0 bottom-0 h-2 rounded-sm"
                 style={{ backgroundColor: "#22c55e", opacity: 0.5 }}
-                title={`Audio — vol ${track.volume ?? 1}`}
+                title={t("scene.audioVolumeTitle", { vol: track.volume ?? 1 })}
               />
             )
           }
@@ -332,11 +335,11 @@ export function SceneGraphPreview({
       {tracks.map((track, trackIndex) => {
         if (track.type === "audio") {
           const audioSrc = track.src ?? ""
-          const filename = audioSrc.split("/").pop()?.split("?")[0] ?? "Audio"
+          const filename = audioSrc.split("/").pop()?.split("?")[0] ?? t("field.audio")
           return (
             <div key={track.id} className="space-y-1">
               <div className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide">
-                Audio Track
+                {t("scene.audioTrack")}
               </div>
               <div className="border border-[var(--border-color)] rounded p-2 space-y-2">
                 <div className="flex items-center gap-2 text-xs">
@@ -344,7 +347,7 @@ export function SceneGraphPreview({
                   <span className="truncate flex-1" title={audioSrc}>{filename}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-[var(--text-secondary)] w-16">Volume</span>
+                  <span className="text-xs text-[var(--text-secondary)] w-16">{t("field.volume")}</span>
                   <Input
                     type="number"
                     min={0}
@@ -370,7 +373,7 @@ export function SceneGraphPreview({
         return (
           <div key={track.id} className="space-y-1">
             <div className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide">
-              {track.type === "media" ? "Media" : "Text"} Track
+              {track.type === "media" ? t("scene.mediaTrack") : t("scene.textTrack")}
             </div>
             {track.segments.map((seg, segIndex) => (
               <SegmentEditor
@@ -394,8 +397,8 @@ export function SceneGraphPreview({
           disabled={isGenerating}
           className="w-full text-xs"
         >
-          <RefreshCw className={`w-3 h-3 mr-1 ${isGenerating ? "animate-spin" : ""}`} />
-          Regenerate Composition
+          <RefreshCw className={`w-3 h-3 me-1 ${isGenerating ? "animate-spin" : ""}`} />
+          {t("scene.regenerateComposition")}
         </Button>
       )}
     </div>

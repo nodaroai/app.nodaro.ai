@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, type MessageKey } from "@/lib/i18n"
 import { useState, type ReactNode } from "react"
 import { Copy, Sparkles } from "lucide-react"
 import {
@@ -14,6 +14,15 @@ import {
 import { Button } from "@/components/ui/button"
 import { copyToClipboard } from "@/lib/utils"
 import type { ResultGenerationSettings } from "@/hooks/use-result-generation-settings"
+
+/** Which media produced the result — picks the apply dialog's sentence (a
+ *  whole sentence per media, so each language can inflect the noun). */
+export type ResultMediaNoun = "image" | "video" | "collage"
+const OVERRIDE_SENTENCE: Readonly<Record<ResultMediaNoun, MessageKey>> = {
+  image: "node.overrideWithImageSettings",
+  video: "node.overrideWithVideoSettings",
+  collage: "node.overrideWithCollageSettings",
+}
 
 export interface ResultSummaryRow {
   readonly label: string
@@ -30,8 +39,8 @@ interface ResultSettingsInfoProps {
   /** The job's recorded settings — gates the apply buttons + final-prompt block. */
   readonly settings: ResultGenerationSettings | undefined
   readonly isLoading: boolean
-  /** Media noun for the dialog copy ("image" / "video"). */
-  readonly mediaNoun: string
+  /** Which media produced the result — selects the dialog copy. */
+  readonly mediaNoun: ResultMediaNoun
   /** Apply handler — the caller writes the node-data patch + toasts. */
   readonly onApply: (includePrompt: boolean) => void
   /** Hide the "Configuration + Prompt" apply button and show a single "Apply
@@ -95,7 +104,7 @@ export function ResultSettingsInfo({
               {isLoading
                 ? t("node.loadingOutputSettings")
                 : settings
-                  ? t("node.overrideWithOutputSettings", { media: mediaNoun })
+                  ? t(OVERRIDE_SENTENCE[mediaNoun])
                   : t("node.outputSettingsUnavailable")}
             </DialogDescription>
           </DialogHeader>

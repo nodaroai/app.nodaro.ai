@@ -156,7 +156,7 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
                   ))}
                   {buckets.text.length > 3 && (
                     <div className="px-1 text-[9px] text-muted-foreground">
-                      +{buckets.text.length - 3} more
+                      {t("node.plusNMore", { n: buckets.text.length - 3 })}
                     </div>
                   )}
                 </div>
@@ -164,17 +164,17 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
               {buckets.video.length > 0 && (
                 <div className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
                   <Film className="w-3 h-3" />
-                  {buckets.video.length} video{buckets.video.length === 1 ? "" : "s"}
+                  {buckets.video.length === 1 ? t("node.videoCountOne", { n: buckets.video.length }) : t("node.videoCountMany", { n: buckets.video.length })}
                 </div>
               )}
               {buckets.audio.length > 0 && (
                 <div className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
                   <Music className="w-3 h-3" />
-                  {buckets.audio.length} audio
+                  {t("node.audioCount", { n: buckets.audio.length })}
                 </div>
               )}
               <div className="px-1 text-[9px] text-muted-foreground/60">
-                {incomingCount} connection{incomingCount === 1 ? "" : "s"}
+                {incomingCount === 1 ? t("node.connectionCountOne", { n: incomingCount }) : t("node.connectionCountMany", { n: incomingCount })}
               </div>
             </>
           )}

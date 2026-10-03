@@ -1,10 +1,11 @@
 "use client"
 
-import { memo, useId } from "react"
+import { memo, useId, type ReactNode } from "react"
 import { Switch } from "../ui/switch"
-import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
+import { getSoundArt, type SoundArtRef } from "../icons/sound-art"
 import { MultiPickBadge } from "./multi-pick-ui"
+import { SoundArtTile } from "./sound-art-tile"
 
 export interface SoundDimensionEntry {
   readonly id: string
@@ -15,6 +16,8 @@ export interface SoundDimensionEntry {
 export interface SoundDimensionSectionProps {
   /** Section heading shown next to the toggle switch. */
   readonly label: string
+  /** Which catalog dimension these tiles belong to — resolves each tile's picture. */
+  readonly art: SoundArtRef
   /** Tiles to render in the grid. */
   readonly entries: ReadonlyArray<SoundDimensionEntry>
   /** Currently selected ids — length 0 (none), 1 (single), or up to maxSelected. */
@@ -31,23 +34,72 @@ export interface SoundDimensionSectionProps {
   readonly onPick: (id: string) => void
   readonly onActivateMulti?: (id: string) => void
   readonly onDemoteToSingle?: (id: string) => void
-  /** Optional emoji / icon string rendered above the label. */
-  readonly renderIcon?: (id: string) => React.ReactNode
+  /** Shown instead of the grid when there is nothing to pick yet (switch disabled). */
+  readonly emptyState?: ReactNode
 }
 
+/** Header shared by the flat and the tabbed sound sections. */
+export function SoundSectionHeader({
+  label,
+  switchId,
+  maxSelected,
+  checked,
+  switchDisabled,
+  onToggle,
+}: {
+  readonly label: string
+  readonly switchId: string
+  readonly maxSelected: number
+  readonly checked: boolean
+  readonly switchDisabled?: boolean
+  readonly onToggle: (next: boolean) => void
+}) {
+  return (
+    <div className="flex items-center gap-2.5 px-0.5">
+      <label
+        htmlFor={switchId}
+        className={cn(
+          "select-none text-[15px] font-bold uppercase tracking-[.02em] text-[#ff0073] @min-[520px]:text-[17px]",
+          switchDisabled ? "cursor-default" : "cursor-pointer",
+        )}
+      >
+        {label}
+      </label>
+      {maxSelected > 1 && (
+        <span className="text-[10px] text-[#6b6b75] dark:text-[#9a9aa6]">pick up to {maxSelected}</span>
+      )}
+      <div className="flex-1" />
+      <Switch
+        id={switchId}
+        checked={checked}
+        disabled={switchDisabled}
+        onCheckedChange={(next) => onToggle(next)}
+        aria-label={`Enable ${label}`}
+        className="data-[state=checked]:bg-[#ff0073]"
+      />
+    </div>
+  )
+}
+
+/** The tile grid — auto-fill 80px columns, 128px once the picker is ≥ 520px wide. */
+export const SOUND_GRID_CLASS =
+  "grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] gap-1.5 @min-[520px]:grid-cols-[repeat(auto-fill,minmax(128px,1fr))] @min-[520px]:gap-2"
+
+/** Divider + spacing between the topics of a sound picker. */
+export const SOUND_SECTION_CLASS = "flex flex-col gap-3 border-t border-[#ececf1] pt-4 dark:border-white/[.07]"
+
 /**
- * Reusable per-dimension section for sound-pickers (Music Genre, Music Mood,
- * Instrumentation, Voice Character, Voice Delivery). Mirrors the visual
- * language of PersonPicker / StylingPicker: large branded headline + Switch
- * toggle + 3-column tile grid + brand-pink (#ff0073) for selected, with a
- * border-t divider between sections.
+ * Reusable per-dimension section for the sound pickers (Music Genre, Music
+ * Mood, Instrumentation, Voice Character, Voice Delivery): pink headline +
+ * Switch toggle over a grid of picture tiles (see SoundArtTile).
  *
- * Multi-pick mode (maxSelected > 1) reuses MultiPickBadge so the user can
+ * Multi-pick mode (maxSelected > 1) keeps the MultiPickBadge so the user can
  * promote a single pick to multi by tapping the `+` badge on the selected
  * tile, mirroring StylingPicker.
  */
 export const SoundDimensionSection = memo(function SoundDimensionSection({
   label,
+  art,
   entries,
   selectedIds,
   maxSelected = 1,
@@ -59,89 +111,62 @@ export const SoundDimensionSection = memo(function SoundDimensionSection({
   onPick,
   onActivateMulti,
   onDemoteToSingle,
-  renderIcon,
+  emptyState,
 }: SoundDimensionSectionProps) {
   const id = useId()
   const multi = maxSelected > 1
   const switchId = `${id}-toggle`
   return (
-    <div className="flex flex-col gap-2 border-t-[3px] border-border/40">
-      <div className="flex items-center justify-between gap-2 px-0.5 mt-5">
-        <label
-          htmlFor={switchId}
-          className={cn(
-            "text-[18px] font-semibold uppercase tracking-wide select-none cursor-pointer transition-colors",
-            checked ? "text-[#ff0073]" : "text-muted-foreground/60",
-          )}
+    <div className={SOUND_SECTION_CLASS}>
+      <SoundSectionHeader
+        label={label}
+        switchId={switchId}
+        maxSelected={maxSelected}
+        checked={checked}
+        switchDisabled={emptyState !== undefined}
+        onToggle={onToggle}
+      />
+      {emptyState !== undefined ? (
+        <div className="rounded-xl border-[1.5px] border-dashed border-[#e1e1e8] p-[18px] text-center text-[13px] text-[#6b6b75] dark:border-white/[.11] dark:text-[#9a9aa6]">
+          {emptyState}
+        </div>
+      ) : (
+        <div
+          role={multi ? "group" : "radiogroup"}
+          aria-label={label}
+          className={cn(SOUND_GRID_CLASS, "transition-opacity", !checked && "opacity-40")}
         >
-          {label}
-          {multi && checked && (
-            <span className="ml-2 text-[10px] font-normal normal-case tracking-normal text-muted-foreground">
-              pick up to {maxSelected}
-            </span>
-          )}
-        </label>
-        <Switch
-          id={switchId}
-          checked={checked}
-          onCheckedChange={(next) => onToggle(next)}
-          aria-label={`Enable ${label}`}
-        />
-      </div>
-      <div
-        role={multi ? "group" : "radiogroup"}
-        aria-label={label}
-        className={cn(
-          "grid grid-cols-3 gap-1.5 transition-opacity",
-          !checked && "opacity-40",
-        )}
-      >
-        {entries.map((entry) => {
-          const selectedIdx = selectedIds.indexOf(entry.id)
-          const selected = checked && selectedIdx >= 0
-          const entryLabel = resolveLabel(entry.id, entry.label)
-          const entryDescription = resolveDescription(entry.id, entry.description)
-          return (
-            <div key={entry.id} className="relative">
-              <button
-                type="button"
-                role={multi ? "checkbox" : "radio"}
-                aria-checked={selected}
-                title={
-                  checked
-                    ? entryDescription
-                    : `${entryDescription} (toggle on ${label} to pick)`
+          {entries.map((entry) => {
+            const selectedIdx = selectedIds.indexOf(entry.id)
+            const selected = checked && selectedIdx >= 0
+            return (
+              <SoundArtTile
+                key={entry.id}
+                label={resolveLabel(entry.id, entry.label)}
+                description={resolveDescription(entry.id, entry.description)}
+                art={getSoundArt(art, entry.id)}
+                selected={selected}
+                checked={checked}
+                sectionLabel={label}
+                multi={multi}
+                onPick={() => onPick(entry.id)}
+                badge={
+                  multi && selected && onActivateMulti && onDemoteToSingle ? (
+                    <MultiPickBadge
+                      mode={isMultiData ? "multi" : "single"}
+                      index={selectedIdx}
+                      maxSelected={maxSelected}
+                      onActivate={() => onActivateMulti(entry.id)}
+                      onDemote={() => onDemoteToSingle(entry.id)}
+                      className="top-1.5 right-1.5"
+                    />
+                  ) : undefined
                 }
-                onClick={() => onPick(entry.id)}
-                className={cn(
-                  "w-full flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer",
-                  selected
-                    ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
-                    : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
-                )}
-              >
-                {renderIcon?.(entry.id)}
-                <FitText
-                  text={entryLabel}
-                  className={cn(
-                    "text-[11px] font-medium leading-tight max-w-full",
-                    selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
-                  )}
-                />
-              </button>
-              {multi && selected && onActivateMulti && onDemoteToSingle && (
-                <MultiPickBadge
-                  mode={isMultiData ? "multi" : "single"}
-                  index={selectedIdx}
-                  maxSelected={maxSelected}
-                  onActivate={() => onActivateMulti(entry.id)}
-                  onDemote={() => onDemoteToSingle(entry.id)}
-                />
-              )}
-            </div>
-          )
-        })}
-      </div>
+              />
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 })

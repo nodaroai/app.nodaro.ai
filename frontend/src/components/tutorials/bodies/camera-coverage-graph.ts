@@ -12,6 +12,7 @@
 
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { nodeMedia, nodeOutputText, nodeText } from "../derive-tutorial-data"
+import { tx, type TFunction } from "@/lib/i18n"
 
 type NodeData = Record<string, unknown>
 
@@ -75,7 +76,7 @@ function listLines(list: WorkflowNode | undefined, nodes: WorkflowNode[], edges:
   return nodeOutputText(src).split("\n").map((s) => s.trim()).filter(Boolean)
 }
 
-export function deriveCoverageGraph(nodes: WorkflowNode[], edges: WorkflowEdge[]): CoverageGraph {
+export function deriveCoverageGraph(nodes: WorkflowNode[], edges: WorkflowEdge[], t: TFunction = tx): CoverageGraph {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const imageNodes = nodes.filter((n) => n.type === "generate-image")
   const lists = nodes.filter((n) => n.type === "list")
@@ -139,7 +140,7 @@ export function deriveCoverageGraph(nodes: WorkflowNode[], edges: WorkflowEdge[]
     planner: planner ? { nodeId: planner.id, model: model(planner) } : null,
     shots,
     fanOut: fanOut
-      ? { nodeId: fanOut.id, label: str(((fanOut.data ?? {}) as NodeData).label) ?? "Coverage Shot", model: model(fanOut), count }
+      ? { nodeId: fanOut.id, label: str(((fanOut.data ?? {}) as NodeData).label) ?? t("tut.coverageShot"), model: model(fanOut), count }
       : null,
   }
 }

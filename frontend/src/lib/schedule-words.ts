@@ -57,7 +57,7 @@ export function describeScheduleRule(rule: ScheduleRule, t: TFunction, locale: s
     case "days":
       return n === 1 ? t("sched.everyDayAt", { time }) : t("sched.everyNDaysAt", { n, time })
     case "weeks": {
-      const days = (rule.weekdays ?? []).map((d) => weekdayShort(d, locale)).join(", ")
+      const days = (rule.weekdays ?? []).map((d) => weekdayShort(d, locale)).join(t("common.listComma"))
       return n === 1 ? t("sched.everyWeekOn", { days, time }) : t("sched.everyNWeeksOn", { n, days, time })
     }
     case "months": {

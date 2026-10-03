@@ -73,7 +73,7 @@ function Row({
       <button
         type="button"
         aria-expanded={open}
-        className="flex items-baseline gap-1 w-full text-left hover:bg-muted/50 rounded-sm py-px"
+        className="flex items-baseline gap-1 w-full text-start hover:bg-muted/50 rounded-sm py-px"
         style={{ paddingLeft: depth * 10 }}
         onClick={(e) => { e.stopPropagation(); onToggle(path, !open) }}
       >

@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { TagTextarea } from "./tag-textarea"
 import { getLanguagesForModel, ALL_LANGUAGES, isV3Model } from "@/lib/audio-tags"
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
-import { SUNO_SLIDER_META, type SunoSliderMeta } from "@/lib/suno-sliders"
+import { SUNO_SLIDER_META, SUNO_SLIDER_LABEL_KEYS, SUNO_SLIDER_DESC_KEYS } from "@/lib/suno-sliders"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
@@ -37,6 +37,7 @@ import type {
   SunoSeparateData,
   AudioSeparationData,
   SilenceDetectNodeData,
+  AudioSyncNodeData,
   AudioFxData,
   SunoMusicVideoData,
   SunoMashupData,
@@ -62,6 +63,7 @@ import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AU
 import type { AudioFxPreset } from "@nodaro/shared"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import { MappableField } from "./mappable-field"
+import { CompareModelsLink } from "@/components/editor/node-docs/compare-models-link"
 import { SunoField, isSunoFieldWired } from "./suno-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
@@ -84,10 +86,14 @@ import { WaveformAudioPlayer } from "@/components/audio-player"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
 import { buildConnectedRefsFromSources } from "./connected-refs-builder"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
-import { useLocalizeModelDescription, useLocalizeOptionLabel } from "@/lib/i18n/labels"
+import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { hasCredits } from "@/lib/edition"
+import { useLocalizeModelDescription, useLocalizeNodeLabel, useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowEdge } from "@/types/nodes"
 import type { ConfigProps } from "./types"
+import { ConnectedMediaList, applyMediaOrder } from "./connected-media-list"
+import { AUDIO_SYNC_SOURCES_HANDLE } from "@/lib/audio-sync"
 
 // Hoisted to avoid creating a fresh empty array on every render — preserves
 // referential equality so memoised children don't re-run.
@@ -119,17 +125,6 @@ const AUDIO_FX_PRESET_LABEL_KEYS: Record<AudioFxPreset, MessageKey> = {
   custom: "cfgshared.custom",
 }
 
-const SUNO_SLIDER_LABEL_KEYS: Record<SunoSliderMeta["key"], MessageKey> = {
-  styleWeight: "audiocfg.sliderStyleWeight",
-  weirdnessConstraint: "audiocfg.sliderWeirdness",
-  audioWeight: "audiocfg.sliderAudioWeight",
-}
-
-const SUNO_SLIDER_DESC_KEYS: Record<SunoSliderMeta["key"], MessageKey> = {
-  styleWeight: "audiocfg.sliderStyleWeightDesc",
-  weirdnessConstraint: "audiocfg.sliderWeirdnessDesc",
-  audioWeight: "audiocfg.sliderAudioWeightDesc",
-}
 
 const SUNO_FIELD_LABEL_KEYS: Record<SunoEditField, MessageKey> = {
   title: "audiocfg.titleOptional",
@@ -409,6 +404,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
 // and links back to the modal via the node card.
 export function SunoVoiceConfig({ data }: ConfigProps<SunoVoiceData>) {
   const t = useT()
+  const voiceCreateCredits = useModelCredits("suno-voice-create", 200)
   const ready = Boolean(data.voiceId) && data.status === "success"
   return (
     <div className="flex flex-col gap-3">
@@ -433,6 +429,8 @@ export function SunoVoiceConfig({ data }: ConfigProps<SunoVoiceData>) {
         {!ready && (
           <div className="text-[11px] text-muted-foreground mt-2">
             {t("audiocfg.svClickPre")}<span className="font-medium">{t("audiocfg.configureVoiceBtn")}</span>{t("audiocfg.svClickPost")}
+            {/* The live price (the charge is the "suno-voice-create" row), only where there is billing. */}
+            {hasCredits() && <>{t("common.fragmentGap")}{t("audiocfg.svCost", { n: voiceCreateCredits })}</>}
           </div>
         )}
       </div>
@@ -535,7 +533,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           />
           <p className="text-[10px] text-muted-foreground">
             {t("audiocfg.hintV6Duration")}
-            {getEffectiveSunoCustomMode(data) ? "." : t("audiocfg.hintV6DurationInactive")}
+            {getEffectiveSunoCustomMode(data) ? t("common.sentenceEnd") : t("audiocfg.hintV6DurationInactive")}
           </p>
         </div>
       )}
@@ -810,7 +808,9 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
       </MappableField>
       <div className="flex items-center gap-2">
         <input type="checkbox" id="suno-extend-customParams" checked={data.defaultParamFlag ?? true} onChange={(e) => onUpdate({ defaultParamFlag: e.target.checked })} className="accent-[#ff0073]" />
-        <label htmlFor="suno-extend-customParams" className="text-xs font-medium text-muted-foreground">{t("audiocfg.useDefaultParamsUncheck")}</label>
+        {/* Checked sends defaultParamFlag: true, which the provider reads as CUSTOM
+            mode (your style, title and continue-from), despite the flag's name. */}
+        <label htmlFor="suno-extend-customParams" className="text-xs font-medium text-muted-foreground">{t("audiocfg.extendUseMySettings")}</label>
       </div>
     </div>
   )
@@ -927,7 +927,7 @@ export function SunoInheritedHint({ what, manual, inherited, sourceLabel }: {
   return (
     <p id={sunoInheritedHintId(what)} className="text-[10px] text-muted-foreground" data-testid={`suno-inherited-${what}`}>
       {manual?.trim()
-        ? <>{t("audiocfg.inheritedPrecedencePre", { what })} <span className="font-mono text-foreground/80">{inherited}</span> {t("audiocfg.inheritedPrecedencePost")}</>
+        ? <>{t(what === "task" ? "audiocfg.inheritedPrecedencePreTask" : "audiocfg.inheritedPrecedencePreTrack")} <span className="font-mono text-foreground/80">{inherited}</span> {t("audiocfg.inheritedPrecedencePost")}</>
         : <>{t("audiocfg.inheritedFromPre", { from })} <span className="font-mono text-foreground/80">{inherited}</span> {t("audiocfg.inheritedFromPost")}</>}
     </p>
   )
@@ -996,7 +996,7 @@ export function AudioFxConfig({ data, onUpdate }: { readonly data: AudioFxData; 
       </div>
       {isReverb && (
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.wetDryMix")}: {data.mix ?? "auto"}</label>
+          <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.wetDryMix")}{t("common.labelColon")}{data.mix ?? t("vidcfg.phAutoLower")}</label>
           <Slider min={0} max={100} step={1} value={[data.mix ?? 30]} onValueChange={(vals) => onUpdate({ mix: vals[0] })} />
           <p className="text-[10px] text-muted-foreground">{t("audiocfg.hintHigherRoom")}</p>
         </div>
@@ -1004,11 +1004,11 @@ export function AudioFxConfig({ data, onUpdate }: { readonly data: AudioFxData; 
       {(isCustom || data.preset === "echo") && (
         <>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.delayMs")}: {data.delayMs ?? 250}</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.delayMs")}{t("common.labelColon")}{data.delayMs ?? 250}</label>
             <Slider min={20} max={2000} step={10} value={[data.delayMs ?? 250]} onValueChange={(vals) => onUpdate({ delayMs: vals[0] })} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.decay")}: {data.decay ?? 0.4}</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.decay")}{t("common.labelColon")}{data.decay ?? 0.4}</label>
             <Slider min={0.1} max={0.9} step={0.05} value={[data.decay ?? 0.4]} onValueChange={(vals) => onUpdate({ decay: vals[0] })} />
           </div>
         </>
@@ -1016,11 +1016,11 @@ export function AudioFxConfig({ data, onUpdate }: { readonly data: AudioFxData; 
       {isCustom && (
         <>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.eqLow")}: {data.eqLow ?? 0}</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.eqLow")}{t("common.labelColon")}{data.eqLow ?? 0}</label>
             <Slider min={-20} max={20} step={1} value={[data.eqLow ?? 0]} onValueChange={(vals) => onUpdate({ eqLow: vals[0] })} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.eqHigh")}: {data.eqHigh ?? 0}</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.eqHigh")}{t("common.labelColon")}{data.eqHigh ?? 0}</label>
             <Slider min={-20} max={20} step={1} value={[data.eqHigh ?? 0]} onValueChange={(vals) => onUpdate({ eqHigh: vals[0] })} />
           </div>
         </>
@@ -1037,19 +1037,83 @@ export function SilenceDetectConfig({ data, onUpdate }: { readonly data: Silence
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silenceThreshold")}: {thresholdDb}</label>
+        <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silenceThreshold")}{t("common.labelColon")}{thresholdDb}</label>
         <Slider min={-60} max={-10} step={1} value={[thresholdDb]} onValueChange={(vals) => onUpdate({ thresholdDb: vals[0] })} />
         <p className="text-[10px] text-muted-foreground">{t("audiocfg.silenceThresholdHint")}</p>
       </div>
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silenceMinSilence")}: {minSilenceMs}</label>
+        <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silenceMinSilence")}{t("common.labelColon")}{minSilenceMs}</label>
         <Slider min={100} max={3000} step={50} value={[minSilenceMs]} onValueChange={(vals) => onUpdate({ minSilenceMs: vals[0] })} />
         <p className="text-[10px] text-muted-foreground">{t("audiocfg.silenceMinSilenceHint")}</p>
       </div>
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silencePadding")}: {padMs}</label>
+        <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silencePadding")}{t("common.labelColon")}{padMs}</label>
         <Slider min={0} max={1000} step={10} value={[padMs]} onValueChange={(vals) => onUpdate({ padMs: vals[0] })} />
         <p className="text-[10px] text-muted-foreground">{t("audiocfg.silencePaddingHint")}</p>
+      </div>
+    </div>
+  )
+}
+
+/** The reference Select's value for "no explicit reference" (the first source). */
+const AUDIO_SYNC_FIRST_SOURCE = "__first__"
+
+export function AudioSyncConfig({ data, onUpdate, sources }: ConfigProps<AudioSyncNodeData>) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
+  // Only the recordings wired into `sources` belong here, one row per upstream
+  // node (the node id IS the recording's id in the result).
+  const recordings = useMemo(() => {
+    const seen = new Set<string>()
+    return sources.filter((s) => s.targetHandle === AUDIO_SYNC_SOURCES_HANDLE && !seen.has(s.id) && (seen.add(s.id), true))
+  }, [sources])
+  const ordered = applyMediaOrder(recordings, data.sourceOrder ?? [])
+  const reference = data.reference && recordings.some((r) => r.id === data.reference) ? data.reference : undefined
+  const recordingIds = recordings.map((r) => r.id).join("\u0000")
+
+  // Fail-safe: a reference whose recording was unwired is cleared, so the panel
+  // shows what a run will do (measure against the first source) — the runtime
+  // makes the same call itself (payload-builder / execute-node), so this is the
+  // display half, not the invariant.
+  useEffect(() => {
+    if (data.reference && recordings.length > 0 && !recordings.some((r) => r.id === data.reference)) {
+      onUpdate({ reference: undefined })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingIds, data.reference])
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[11px] text-muted-foreground">{t("audiocfg.audioSyncHint")}</p>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>{t("audiocfg.audioSyncSources")}</Label>
+        <ConnectedMediaList
+          sources={recordings}
+          mediaOrder={data.sourceOrder ?? []}
+          onUpdateOrder={(order) => onUpdate({ sourceOrder: order })}
+          mediaType="any"
+          primaryLabel={reference ? undefined : t("audiocfg.audioSyncReference")}
+          emptyMessage={t("audiocfg.audioSyncSourcesEmpty")}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>{t("audiocfg.audioSyncReference")}</Label>
+        <Select
+          value={reference ?? AUDIO_SYNC_FIRST_SOURCE}
+          onValueChange={(v) => onUpdate({ reference: v === AUDIO_SYNC_FIRST_SOURCE ? undefined : v })}
+          disabled={recordings.length === 0}
+        >
+          <SelectTrigger aria-label={t("audiocfg.audioSyncReferenceAria")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={AUDIO_SYNC_FIRST_SOURCE}>{t("audiocfg.audioSyncReferenceFirst")}</SelectItem>
+            {ordered.map((r) => (
+              <SelectItem key={r.id} value={r.id}>{localizeNode(r.label)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground">{t("audiocfg.audioSyncReferenceHint")}</p>
       </div>
     </div>
   )
@@ -1395,7 +1459,8 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
       </MappableField>
       <div className="flex items-center gap-2">
         <Checkbox id="upload-extend-default" checked={data.defaultParamFlag} onCheckedChange={(v) => onUpdate({ defaultParamFlag: !!v })} />
-        <Label htmlFor="upload-extend-default" className="text-xs">{t("audiocfg.useDefaultParams")}</Label>
+        {/* Checked = defaultParamFlag: true = the provider's custom mode (see Suno Extend). */}
+        <Label htmlFor="upload-extend-default" className="text-xs">{t("audiocfg.uploadExtendUseMySettings")}</Label>
       </div>
       <MappableField field="title" label={t("audiocfg.titleOptional")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input value={data.title ?? ""} maxLength={SUNO_TITLE_MAX} onChange={(e) => onUpdate({ title: e.target.value })} placeholder={t("audiocfg.phSongTitle")} />
@@ -2189,7 +2254,10 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
         />
       </div>
       <div>
-        <Label htmlFor="vc-model">{t("field.model")}</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="vc-model">{t("field.model")}</Label>
+          <CompareModelsLink />
+        </div>
         <Select
           value={data.model || DEFAULT_VOICE_CHANGER_MODEL}
           onValueChange={(v) => onUpdate({ model: v as VoiceChangerData["model"] })}
@@ -2418,7 +2486,10 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
         )}
       </MappableField>
       <div>
-        <Label>{t("field.model")}</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label>{t("field.model")}</Label>
+          <CompareModelsLink />
+        </div>
         <Select value={data.model || "eleven_ttv_v3"} onValueChange={(v) => onUpdate({ model: v })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -2429,7 +2500,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
       </div>
       <ProviderAudioTagWarning provider={ttsProvider} fieldValues={[data.text]} />
       <div>
-        <Label>{t("audiocfg.loudness")}: {data.loudness?.toFixed(1) ?? "0.0"}</Label>
+        <Label>{t("audiocfg.loudness")}{t("common.labelColon")}{data.loudness?.toFixed(1) ?? "0.0"}</Label>
         <Input
           type="range"
           min={-1}
@@ -2445,7 +2516,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
         </div>
       </div>
       <div>
-        <Label>{t("field.guidanceScale")}: {data.guidanceScale ?? 5}</Label>
+        <Label>{t("field.guidanceScale")}{t("common.labelColon")}{data.guidanceScale ?? 5}</Label>
         <Input
           type="range"
           min={0}
@@ -2587,8 +2658,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">
-        {t("audiocfg.descRecast1")}
-        {t("audiocfg.descRecast2")}
+        {t("audiocfg.descRecast")}
       </p>
       <div>
         <Label>{t("audiocfg.addVoice")}</Label>
@@ -2639,7 +2709,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
                   onClick={() => keepAt(i)}
                   className="text-[10px] px-1 text-muted-foreground hover:text-foreground"
                 >
-                  {t("audiocfg.mergeKeepBadge")}
+                  {t("audiocfg.keepOriginalButton")}
                 </button>
               )}
               <button aria-label={t("audiocfg.moveUp")} onClick={() => move(i, -1)} className="text-xs px-1">↑</button>
@@ -2776,7 +2846,10 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
         ))}
       </div>
       <div>
-        <Label>{t("field.model")}</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label>{t("field.model")}</Label>
+          <CompareModelsLink />
+        </div>
         <Select
           value={data.model ?? DEFAULT_VOICE_CHANGER_MODEL}
           onValueChange={(v) => onUpdate({ model: v as VoiceChangerProData["model"] })}
@@ -2854,18 +2927,18 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
         </Select>
         {data.voiceFx && AUDIO_FX_REVERB_PRESETS.has(data.voiceFx.preset) && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="voice-fx-mix">{t("audiocfg.wetDryMix")}: {data.voiceFx.wetDryMix ?? "auto"}</Label>
+            <Label htmlFor="voice-fx-mix">{t("audiocfg.wetDryMix")}{t("common.labelColon")}{data.voiceFx.wetDryMix ?? t("vidcfg.phAutoLower")}</Label>
             <Slider id="voice-fx-mix" min={0} max={100} step={1} value={[data.voiceFx.wetDryMix ?? 30]} onValueChange={(vals) => onUpdate({ voiceFx: { ...data.voiceFx!, wetDryMix: vals[0] } })} />
           </div>
         )}
         {data.voiceFx && (data.voiceFx.preset === "echo" || data.voiceFx.preset === "custom") && (
           <>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="voice-fx-delay">{t("audiocfg.delayMs")}: {data.voiceFx.delayMs ?? 250}</Label>
+              <Label htmlFor="voice-fx-delay">{t("audiocfg.delayMs")}{t("common.labelColon")}{data.voiceFx.delayMs ?? 250}</Label>
               <Slider id="voice-fx-delay" min={20} max={2000} step={10} value={[data.voiceFx.delayMs ?? 250]} onValueChange={(vals) => onUpdate({ voiceFx: { ...data.voiceFx!, delayMs: vals[0] } })} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="voice-fx-decay">{t("audiocfg.decay")}: {data.voiceFx.decay ?? 0.4}</Label>
+              <Label htmlFor="voice-fx-decay">{t("audiocfg.decay")}{t("common.labelColon")}{data.voiceFx.decay ?? 0.4}</Label>
               <Slider id="voice-fx-decay" min={0} max={1} step={0.05} value={[data.voiceFx.decay ?? 0.4]} onValueChange={(vals) => onUpdate({ voiceFx: { ...data.voiceFx!, decay: vals[0] } })} />
             </div>
           </>

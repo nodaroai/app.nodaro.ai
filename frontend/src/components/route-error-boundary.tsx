@@ -2,6 +2,9 @@ import { useRouteError, isRouteErrorResponse, Link } from "react-router-dom"
 import { AlertTriangle, ArrowLeft, Home, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import NotFound from "@/components/not-found"
+import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 
 function isChunkError(error: unknown): boolean {
   if (!(error instanceof Error)) return false
@@ -17,6 +20,8 @@ function isChunkError(error: unknown): boolean {
 
 export default function RouteErrorBoundary() {
   const error = useRouteError()
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
 
   // 404 responses get the dedicated not-found page
   if (isRouteErrorResponse(error) && error.status === 404) {
@@ -34,7 +39,7 @@ export default function RouteErrorBoundary() {
     ? `${error.status} — ${error.statusText}`
     : error instanceof Error
       ? error.message
-      : "An unexpected error occurred"
+      : t("misc.unexpectedError")
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -43,24 +48,24 @@ export default function RouteErrorBoundary() {
           <AlertTriangle className="h-10 w-10 text-destructive" />
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Something went wrong
+          {t("common.somethingWentWrong")}
         </h1>
         <p className="mt-3 text-muted-foreground">
           {message}
         </p>
         <div className="mt-8 flex items-center justify-center gap-3">
           <Button variant="outline" onClick={() => window.history.back()}>
-            <ArrowLeft className="size-4" />
-            Go back
+            <ArrowLeft className={cn("size-4", isRtl && "rotate-180")} />
+            {t("misc.goBack")}
           </Button>
           <Button variant="outline" onClick={() => window.location.reload()}>
             <RotateCcw className="size-4" />
-            Reload
+            {t("misc.reload")}
           </Button>
           <Button asChild>
             <Link to="/projects">
               <Home className="size-4" />
-              Home
+              {t("misc.home")}
             </Link>
           </Button>
         </div>

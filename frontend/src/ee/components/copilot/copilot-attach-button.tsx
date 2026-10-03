@@ -12,9 +12,10 @@
  */
 import { useRef, useState } from "react"
 import { Loader2, Paperclip } from "lucide-react"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { MEDIA_MENTION_KINDS, type CopilotMention } from "@/ee/lib/copilot/types"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 /** What the upload route accepts, as a file-input filter. */
 const ACCEPT = "image/*,video/*,audio/*"
@@ -25,9 +26,11 @@ interface CopilotAttachButtonProps {
 }
 
 export function CopilotAttachButton({ onAttached, disabled }: CopilotAttachButtonProps) {
+  const t = useT()
   const inputRef = useRef<HTMLInputElement>(null)
   const { upload, isUploading } = useFileUpload()
-  const [error, setError] = useState<string | null>(null)
+  // The KEY, resolved at render — a language switch re-words a standing error.
+  const [error, setError] = useState<MessageKey | null>(null)
 
   async function handleFile(file: File): Promise<void> {
     setError(null)
@@ -37,7 +40,7 @@ export function CopilotAttachButton({ onAttached, disabled }: CopilotAttachButto
     } catch {
       // The hook has already recorded the reason; a composer is the wrong place
       // to explain a storage quota, and the library page says it properly.
-      setError(S.attachFailed)
+      setError(K.attachFailed)
       return
     }
     // No id, no mention. The model can only use a file it can NAME to the
@@ -45,12 +48,12 @@ export function CopilotAttachButton({ onAttached, disabled }: CopilotAttachButto
     // upload that produced no asset row is an attachment that cannot be used,
     // and saying so beats a chip that silently does nothing.
     if (!result.assetId) {
-      setError(S.attachNoId)
+      setError(K.attachNoId)
       return
     }
     const kind = MEDIA_MENTION_KINDS.find((k) => k === result.category)
     if (!kind) {
-      setError(S.attachWrongKind)
+      setError(K.attachWrongKind)
       return
     }
     onAttached({
@@ -80,8 +83,8 @@ export function CopilotAttachButton({ onAttached, disabled }: CopilotAttachButto
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={disabled || isUploading}
-        aria-label={S.attach}
-        title={error ?? S.attach}
+        aria-label={t(K.attach)}
+        title={t(error ?? K.attach)}
         className={`w-6 h-6 rounded-md border flex items-center justify-center transition-colors disabled:opacity-50 ${
           error
             ? "border-[var(--copilot-strong)] text-[var(--copilot-fail)]"

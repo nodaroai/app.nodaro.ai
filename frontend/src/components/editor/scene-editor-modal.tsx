@@ -15,14 +15,17 @@ import { ExtractReferencesModal } from "./extract-references-modal"
 import type { SceneNodeDataType, ExtractedReference, GenerateScriptData } from "@/types/nodes"
 import { mapScriptSceneToNodeData } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useT, type MessageKey } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 
 type WizardStep = 1 | 2 | 3 | 4
 
-const STEPS: readonly { readonly step: WizardStep; readonly label: string; readonly icon: React.ElementType }[] = [
-  { step: 1, label: "Story", icon: BookOpen },
-  { step: 2, label: "Image", icon: Palette },
-  { step: 3, label: "Audio", icon: Mic },
-  { step: 4, label: "Video", icon: Clapperboard },
+const STEPS: readonly { readonly step: WizardStep; readonly labelKey: MessageKey; readonly icon: React.ElementType }[] = [
+  { step: 1, labelKey: "scene.stepStory", icon: BookOpen },
+  { step: 2, labelKey: "common.image", icon: Palette },
+  { step: 3, labelKey: "field.audio", icon: Mic },
+  { step: 4, labelKey: "common.video", icon: Clapperboard },
 ]
 
 interface SceneEditorModalProps {
@@ -33,6 +36,8 @@ interface SceneEditorModalProps {
 
 export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalProps) {
   const { user } = useAuth()
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const nodes = useWorkflowStore((s) => s.nodes)
   const allAssets = useWorkflowStore((s) => s.characterDefinitions)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -206,7 +211,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
             } else if (job.status === "failed") {
               clearInterval(poll)
               updateNodeData(nodeId, { videoExecutionStatus: "failed" })
-              reject(new Error(job.error_message ?? "Video generation failed"))
+              reject(new Error(job.error_message ?? t("scene.videoGenerationFailed")))
             }
           } catch (err) {
             clearInterval(poll)
@@ -216,7 +221,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
         }, 2000)
       })
     } catch (err) {
-      setVideoError(err instanceof Error ? err.message : "Video generation failed")
+      setVideoError(err instanceof Error ? err.message : t("scene.videoGenerationFailed"))
       updateNodeData(nodeId, { videoExecutionStatus: "failed" })
     } finally {
       setGeneratingVideo(false)
@@ -258,14 +263,14 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shrink-0">
           <div className="flex items-center gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-700 dark:text-[#ff0073]">
-              {data.sceneName ? `Scene: ${data.sceneName}` : "Scene Editor"}
+              {data.sceneName ? t("scene.titleWithName", { name: data.sceneName }) : t("scene.editorTitle")}
             </h2>
             {linkedActiveScript && data.sourceSceneIndex >= 0 && (
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-muted-foreground dark:text-[#64748B] bg-muted dark:bg-[#2D2D2D] px-2 py-0.5 rounded-full">
-                  Linked: {linkedActiveScript?.title ?? linkedScriptData?.label ?? "Script"} / {linkedSceneName ? `${data.sourceSceneIndex + 1}. ${linkedSceneName}` : `Scene ${data.sourceSceneIndex + 1}`}
+                  {t("scene.linkedTo", { script: linkedActiveScript?.title ?? linkedScriptData?.label ?? t("scene.scriptFallback"), scene: linkedSceneName ? `${data.sourceSceneIndex + 1}. ${linkedSceneName}` : t("cfgext.sceneNumbered", { index: data.sourceSceneIndex + 1 }) })}
                 </span>
-                <button type="button" onClick={handleSyncFromScript} className="text-[10px] text-[#ff0073] hover:text-[#ff0073]/80 transition-colors">Sync</button>
+                <button type="button" onClick={handleSyncFromScript} className="text-[10px] text-[#ff0073] hover:text-[#ff0073]/80 transition-colors">{t("scene.sync")}</button>
               </div>
             )}
           </div>
@@ -281,7 +286,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
         {/* Body - side by side */}
         <div className="flex flex-1 overflow-hidden">
           {/* Left: Image/Video + Prompt Preview */}
-          <div className="w-1/2 flex flex-col border-r border-gray-200 dark:border-[#2D2D2D] overflow-y-auto bg-white dark:bg-[#1E1E1E]">
+          <div className="w-1/2 flex flex-col border-e border-gray-200 dark:border-[#2D2D2D] overflow-y-auto bg-white dark:bg-[#1E1E1E]">
             {/* Tab toggle when videos exist */}
             {videoResults.length > 0 && (
               <div className="px-4 pt-4 pb-0 shrink-0">
@@ -295,7 +300,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                         : "text-gray-500 dark:text-[#94A3B8] hover:text-foreground dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#2D2D2D]"
                     }`}
                   >
-                    <Palette className="w-3.5 h-3.5" /> Image
+                    <Palette className="w-3.5 h-3.5" /> {t("common.image")}
                   </button>
                   <button
                     type="button"
@@ -306,7 +311,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                         : "text-gray-500 dark:text-[#94A3B8] hover:text-foreground dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#2D2D2D]"
                     }`}
                   >
-                    <Video className="w-3.5 h-3.5" /> Video
+                    <Video className="w-3.5 h-3.5" /> {t("common.video")}
                   </button>
                 </div>
               </div>
@@ -326,18 +331,18 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                     <div className="relative group">
                       <CachedImage
                         src={activeUrl}
-                        alt="Scene"
+                        alt={t("cfgshared.badgeScene")}
                         className="w-full rounded-xl object-contain max-h-[50vh] cursor-pointer hover:opacity-90 transition-opacity bg-[#F8FAFC] dark:bg-[#121212] border border-gray-200 dark:border-[#2D2D2D]"
                         onClick={() => setPreviewOpen(true)}
                         thumbnail
                         thumbnailWidth={800}
                       />
-                      <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute top-3 end-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           type="button"
                           className="p-2 bg-black/70 hover:bg-black/90 text-white rounded-lg backdrop-blur-sm transition-colors"
                           onClick={() => setPreviewOpen(true)}
-                          title="Full preview"
+                          title={t("scene.fullPreview")}
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -345,7 +350,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                           type="button"
                           className="p-2 bg-[#ff0073]/80 hover:bg-[#ff0073] text-white rounded-lg backdrop-blur-sm transition-colors"
                           onClick={() => setExtractOpen(true)}
-                          title="Extract references"
+                          title={t("node.extractReferences")}
                         >
                           <Scissors className="w-4 h-4" />
                         </button>
@@ -353,7 +358,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                           type="button"
                           className="p-2 bg-red-500/80 hover:bg-red-500 text-white rounded-lg backdrop-blur-sm transition-colors"
                           onClick={() => setDeleteConfirm(activeIndex)}
-                          title="Delete this result"
+                          title={t("node.deleteThisResult")}
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -364,13 +369,13 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   {status === "failed" && !activeUrl && (
                     <div className="flex items-center justify-center gap-2 h-48 rounded-lg bg-red-500/5 text-red-500">
                       <AlertCircle className="w-6 h-6" />
-                      <span className="text-sm">Generation failed</span>
+                      <span className="text-sm">{t("cfgext.phdGenerationFailed")}</span>
                     </div>
                   )}
 
                   {status !== "running" && !activeUrl && status !== "failed" && (
                     <div className="flex items-center justify-center h-48 rounded-xl border-2 border-dashed border-gray-300 dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#121212] text-gray-400 dark:text-[#64748B]">
-                      <span className="text-sm font-mono">No image generated yet</span>
+                      <span className="text-sm font-mono">{t("scene.noImageYet")}</span>
                     </div>
                   )}
 
@@ -381,7 +386,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                         <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
                           <CachedImage
                             src={r.url}
-                            alt={`Result ${i + 1}`}
+                            alt={t("node.resultN", { n: i + 1 })}
                             className={`w-14 h-14 object-cover rounded-md cursor-pointer transition-opacity ${
                               i === activeIndex
                                 ? "opacity-100 ring-2 ring-primary"
@@ -393,7 +398,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                           />
                           <button
                             type="button"
-                            aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                            aria-label={t("common.remove")} className="absolute -top-1 -end-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                             onClick={() => setDeleteConfirm(i)}
                           >
                             <X className="w-2.5 h-2.5" />
@@ -411,7 +416,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                     <div className="flex items-center justify-center h-64 rounded-xl bg-[#F8FAFC] dark:bg-[#121212] border border-gray-200 dark:border-[#2D2D2D]">
                       <div className="flex flex-col items-center gap-2">
                         <Loader2 className="w-8 h-8 animate-spin text-[#ff0073]" />
-                        <span className="text-xs text-gray-500 dark:text-[#94A3B8] font-mono">Generating video...</span>
+                        <span className="text-xs text-gray-500 dark:text-[#94A3B8] font-mono">{t("kling3.generatingVideo")}</span>
                       </div>
                     </div>
                   )}
@@ -429,7 +434,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
 
                   {!generatingVideo && !activeVideoUrl && (
                     <div className="flex items-center justify-center h-48 rounded-xl border-2 border-dashed border-gray-300 dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#121212] text-gray-400 dark:text-[#64748B]">
-                      <span className="text-sm font-mono">No video generated yet</span>
+                      <span className="text-sm font-mono">{t("kling3.noVideoYet")}</span>
                     </div>
                   )}
 
@@ -447,11 +452,11 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                             onClick={() => updateNodeData(nodeId, { activeVideoResultIndex: i, generatedVideoUrl: r.url })}
                           >
                             <Video className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-[9px] text-muted-foreground ml-0.5">{i + 1}</span>
+                            <span className="text-[9px] text-muted-foreground ms-0.5">{i + 1}</span>
                           </div>
                           <button
                             type="button"
-                            aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                            aria-label={t("common.remove")} className="absolute -top-1 -end-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                             onClick={() => handleDeleteVideoResult(i)}
                           >
                             <X className="w-2.5 h-2.5" />
@@ -470,7 +475,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                 <AccordionItem value="prompt" className="border border-gray-200 dark:border-[#2D2D2D] rounded-xl bg-[#F8FAFC] dark:bg-[#121212] overflow-hidden">
                   <AccordionTrigger className="px-4 py-3 text-xs hover:no-underline hover:bg-gray-100 dark:hover:bg-[#1E1E1E] transition-colors">
                     <span className="flex items-center gap-2">
-                      <span className="font-semibold text-[11px] uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Generated Prompt</span>
+                      <span className="font-semibold text-[11px] uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("cfgext.phdGeneratedPrompt")}</span>
                       <span className={`text-[10px] font-mono ${
                         generatedPrompt.length > PROMPT_MAX_LENGTH
                           ? "text-red-500 font-medium"
@@ -484,7 +489,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   </AccordionTrigger>
                   <AccordionContent className="px-4 pb-4 pt-0">
                     <p className="text-xs leading-relaxed whitespace-pre-wrap break-words text-gray-700 dark:text-[#E2E8F0] font-mono">
-                      {displayPrompt || "Configure scene settings to generate a prompt..."}
+                      {displayPrompt || t("scene.configurePromptHint")}
                     </p>
                   </AccordionContent>
                 </AccordionItem>
@@ -519,7 +524,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                         ) : (
                           <Icon className="w-3.5 h-3.5" />
                         )}
-                        <span className="hidden sm:inline">{s.label}</span>
+                        <span className="hidden sm:inline">{t(s.labelKey)}</span>
                       </button>
                       {idx < STEPS.length - 1 && (
                         <div className="flex-1 h-px bg-gray-200 dark:bg-[#2D2D2D] mx-2" />
@@ -546,11 +551,11 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   onClick={() => runSingleNode?.(nodeId)}
                 >
                   {status === "running" ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> {t("cfgext.entGenerating")}</>
                   ) : activeUrl ? (
-                    <><Play className="w-4 h-4" /> Regenerate Image</>
+                    <><Play className="w-4 h-4" /> {t("scene.regenerateImage")}</>
                   ) : (
-                    <><Play className="w-4 h-4" /> Generate Scene Image</>
+                    <><Play className="w-4 h-4" /> {t("scene.generateSceneImage")}</>
                   )}
                 </button>
               )}
@@ -562,9 +567,9 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   className="w-full flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-[#ff0073] hover:bg-[#e00066] disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
                 >
                   {generatingAllAudio ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Generating {audioProgress.current}/{audioProgress.total}...</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> {t("scene.generatingProgress", { current: audioProgress.current, total: audioProgress.total })}</>
                   ) : (
-                    <><Mic className="w-4 h-4" /> Generate All Audio</>
+                    <><Mic className="w-4 h-4" /> {t("scene.generateAllAudio")}</>
                   )}
                 </button>
               )}
@@ -575,14 +580,14 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                     disabled={!activeUrl || generatingVideo}
                     className="w-full flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-[#ff0073] hover:bg-[#e00066] disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
                     onClick={handleGenerateVideo}
-                    title={activeUrl ? "Generate video from scene image" : "Generate an image first (Step 2)"}
+                    title={activeUrl ? t("scene.generateVideoFromImage") : t("scene.generateImageFirst")}
                   >
                     {generatingVideo ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Generating Video...</>
+                      <><Loader2 className="w-4 h-4 animate-spin" /> {t("scene.generatingVideoCap")}</>
                     ) : activeVideoUrl ? (
-                      <><Video className="w-4 h-4" /> Regenerate Video</>
+                      <><Video className="w-4 h-4" /> {t("scene.regenerateVideo")}</>
                     ) : (
-                      <><Video className="w-4 h-4" /> Generate Video</>
+                      <><Video className="w-4 h-4" /> {t("scene.generateVideo")}</>
                     )}
                   </button>
                   {videoError && (
@@ -599,10 +604,10 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   onClick={() => setCurrentStep((currentStep - 1) as WizardStep)}
                   className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white disabled:opacity-30 disabled:cursor-default transition-colors"
                 >
-                  <ChevronLeft className="w-4 h-4" /> Back
+                  <ChevronLeft className={cn("w-4 h-4", isRtl && "rotate-180")} /> {t("common.back")}
                 </button>
                 <span className="text-sm text-gray-400 dark:text-[#64748B]">
-                  Step {currentStep} of {STEPS.length}
+                  {t("scene.stepOf", { current: currentStep, total: STEPS.length })}
                 </span>
                 {currentStep < 4 ? (
                   <button
@@ -610,7 +615,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                     onClick={() => setCurrentStep((currentStep + 1) as WizardStep)}
                     className="flex items-center gap-1.5 px-6 py-2 text-sm font-medium rounded-lg bg-[#ff0073] text-white hover:bg-[#e00066] transition-all shadow-md hover:shadow-lg"
                   >
-                    Next <ChevronRight className="w-4 h-4" />
+                    {t("common.next")} <ChevronRight className={cn("w-4 h-4", isRtl && "rotate-180")} />
                   </button>
                 ) : (
                   <button
@@ -618,7 +623,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                     onClick={onClose}
                     className="flex items-center gap-1.5 px-6 py-2 text-sm font-medium rounded-lg bg-[#ff0073] text-white hover:bg-[#e00066] transition-all shadow-md hover:shadow-lg"
                   >
-                    Done <Check className="w-4 h-4" />
+                    {t("common.done")} <Check className="w-4 h-4" />
                   </button>
                 )}
               </div>

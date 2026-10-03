@@ -21,6 +21,8 @@
  */
 
 import { useT, tx } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { useMemo, useRef, useState } from "react"
 import { Plus, X, Loader2, Upload, UserCircle, ChevronDown, ChevronRight } from "lucide-react"
@@ -170,6 +172,7 @@ export function ExtraRefsSection({
   edges,
 }: ExtraRefsSectionProps) {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const localizeNode = useLocalizeNodeLabel()
   const refs: readonly ExtraRef[] = extraRefs ?? []
   // Start collapsed when there are no extras; expanded once the user has
@@ -249,7 +252,7 @@ export function ExtraRefsSection({
           className="flex items-center gap-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:text-foreground"
           onClick={() => setExpanded((v) => !v)}
         >
-          {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+          {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className={cn("w-3 h-3", isRtl && "rotate-180")} />}
           {t("cfgshared.extraRefsTitle")}
           {refs.length > 0 && (
             <span className="ms-1 text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary normal-case tracking-normal">
@@ -306,7 +309,7 @@ export function ExtraRefsSection({
                       <div className="font-medium">{t("cfgshared.extraRefsPickCharacter")}</div>
                       <div className="text-[10px] text-muted-foreground">{t("cfgshared.extraRefsWiredMany", { count: groupedOptions.length })}</div>
                     </div>
-                    <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                    <ChevronRight className={cn("w-3 h-3 text-muted-foreground", isRtl && "rotate-180")} />
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-72 p-1" side="left" align="start">

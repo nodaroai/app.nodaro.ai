@@ -8,6 +8,7 @@ import { readPublicVideoFrame } from "../public-video-frame.js"
 import { isStorageConfigured } from "../storage.js"
 import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
 import { completeStructuredMetered } from "./llm-metered.js"
+import { createSSEStream } from "../sse.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
 import { createScene3DPlaybackToolkit } from "./scene3d-playback-toolkit.js"
@@ -31,6 +32,7 @@ import {
   remuxToMp4,
 } from "../../providers/video/ffmpeg-utils.js"
 import { downloadYouTubeVideo, ytMetadataProbe, YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
+import { downloadSocialPostVideo, probeSocialPostVideo, socialPostOf } from "../../providers/video/social-post-video.js"
 import { trimVideo as trimVideoCore } from "../../providers/video/trim-video.js"
 import { mixAudio } from "../../providers/video/mix-audio.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
@@ -71,6 +73,16 @@ import { IN_FLIGHT_JOB_STATUSES } from "../job-status.js"
 import { redactProviderDetail } from "../provider-error-detail.js"
 import { config } from "../config.js"
 import { redis } from "../queue.js"
+import { acquireLease, LEASE_KEY_PREFIX, releaseLease, renewLease } from "../redis-lease.js"
+import {
+  deleteAccountSecret,
+  getAccountSecret,
+  listAccountSecrets,
+  openAccountSecret,
+  updateAccountSecret,
+  upsertAccountSecret,
+} from "../plugin-account-secrets.js"
+import { requestPluginDaemon } from "../plugin-daemons/client.js"
 import { checkIsAdmin } from "../admin-check.js"
 import { videoQueue } from "../queue.js"
 import { creditGuard, reserveCreditsForJob, reserveCreditsForJobOnce } from "../../middleware/credit-guard.js"
@@ -83,6 +95,7 @@ import { buildJobInputData } from "../job-input-data.js"
 import { formatZodError } from "../zod-error.js"
 import { insertWithIdempotencyKey } from "../idempotent-insert.js"
 import { billingPairColumns } from "../insert-job.js"
+import { firePluginTrigger, listActivePluginTriggers } from "../plugin-triggers.js"
 import { jobSourceColumns } from "../job-source.js"
 import { throwIfJobCancelled } from "../job-cancellation.js"
 import { hasCredits, hasOrganizations } from "../config.js"
@@ -1138,7 +1151,21 @@ function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOption
   }))
 }
 
-export function buildToolkit(): PluginToolkit {
+function assertNotLeaseKey(key: string): void {
+  if (key.startsWith(LEASE_KEY_PREFIX)) throw new Error(`keys under "${LEASE_KEY_PREFIX}" belong to tk.redis.lease`)
+}
+
+export interface BuildToolkitOptions {
+  /**
+   * `"daemon"` — the toolkit the plugin daemon host (`plugin-daemons.ts`)
+   * hands its daemons: the only one whose `accountSecrets` can encrypt and
+   * decrypt. Every other process builds the default, which cannot. A guard
+   * test pins the daemon host as the only caller.
+   */
+  role?: "daemon"
+}
+
+export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
   const sceneArtifacts = createScene3DArtifactToolkit()
   // Queue and asset authorization modules join the graph only when this lane runs.
   // Loading them during plugin boot creates an access-check/plugin-loader cycle.
@@ -1208,11 +1235,15 @@ export function buildToolkit(): PluginToolkit {
       },
       getVideoTaskStatus,
       // The contract narrows `downloadYouTubeVideo`'s opts to {url,outPath,
-      // maxFilesizeBytes?}; the core fn's extra params are all optional, so the
-      // narrower shape is a valid subset and the reference assigns directly.
-      downloadYouTubeVideo,
+      // maxFilesizeBytes?}. Its `hardening` (raw yt-dlp arguments among them)
+      // stays internal: a plugin reaches the hardened lane only through
+      // `downloadSocialPostVideo`, whatever it passes here.
+      downloadYouTubeVideo: ({ hardening: _internal, ...opts }: Parameters<typeof downloadYouTubeVideo>[0]) => downloadYouTubeVideo(opts),
       ytMetadataProbe,
       YtUrlNotAllowedError,
+      socialPostVideoUrl: (url: string) => socialPostOf(url)?.url ?? null,
+      probeSocialPostVideo,
+      downloadSocialPostVideo,
     },
     ffmpeg: {
       runFfmpeg,
@@ -1519,18 +1550,43 @@ export function buildToolkit(): PluginToolkit {
     deployment: { publicUrl: appBaseUrl() },
     redis: {
       url: config.REDIS_URL,
+      // Keys under the lease namespace are writable only through `lease` below —
+      // a kv write there could forge or wipe another holder's lease.
       kv: {
         get: (key) => redis.get(key),
         set: async (key, value, ttlSeconds) => {
+          assertNotLeaseKey(key)
           if (ttlSeconds === undefined) await redis.set(key, value)
           else await redis.set(key, value, "EX", ttlSeconds)
         },
-        del: (...keys) => redis.del(...keys),
-        incr: (key) => redis.incr(key),
-        expire: (key, seconds) => redis.expire(key, seconds),
+        del: async (...keys) => {
+          keys.forEach(assertNotLeaseKey)
+          return redis.del(...keys)
+        },
+        incr: async (key) => {
+          assertNotLeaseKey(key)
+          return redis.incr(key)
+        },
+        expire: async (key, seconds) => {
+          assertNotLeaseKey(key)
+          return redis.expire(key, seconds)
+        },
         ttl: (key) => redis.ttl(key),
       },
+      lease: { acquire: acquireLease, renew: renewLease, release: releaseLease },
     },
+    accountSecrets: {
+      list: listAccountSecrets,
+      get: getAccountSecret,
+      update: updateAccountSecret,
+      delete: deleteAccountSecret,
+      // The store's only encrypt/decrypt sites — the daemon host's toolkit only.
+      ...(opts.role === "daemon" ? { upsert: upsertAccountSecret, open: openAccountSecret } : {}),
+    },
+    daemons: { request: (input) => requestPluginDaemon(input) },
+    // Starting runs for any owner's trigger rows is the daemon host's alone.
+    ...(opts.role === "daemon" ? { triggers: { listActive: listActivePluginTriggers, fire: firePluginTrigger } } : {}),
+    sse: { create: (req, reply) => createSSEStream(req, reply) },
     db: supabase,
     workflows: {
       writeCompatible,

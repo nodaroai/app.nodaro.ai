@@ -20,7 +20,8 @@ import { buildTranscriptFromOutput } from "../../providers/audio/transcript-norm
 import type { Caption } from "@remotion/captions"
 import { extractYouTubeAudio, extractYouTubeAudioWithMeta } from "../../providers/audio/youtube-extractor.js"
 import { voiceChangerFromUrl, directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
-import { extractAudioTrack } from "../../providers/video/extract-audio-track.js"
+import { extractAudioTrack, NoAudioTrackError } from "../../providers/video/extract-audio-track.js"
+import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import { classifyMediaSource, isVideoMode } from "../../providers/video/media-source.js"
@@ -28,7 +29,8 @@ import { startDubbing, waitForDubbing, pollDubbingStatus, downloadDubbedMedia, D
 import { deliverDubbedMedia } from "../../lib/dubbing-delivery.js"
 import { remixVoice } from "../../providers/elevenlabs/voice-remix.js"
 import { designVoice } from "../../providers/elevenlabs/voice-design.js"
-import { forcedAlignment } from "../../providers/elevenlabs/forced-alignment.js"
+import { forcedAlignment, forcedAlignmentFromBuffer } from "../../providers/elevenlabs/forced-alignment.js"
+import { getElevenLabsHeaders } from "../../providers/elevenlabs/client.js"
 import {
   commitJobCredits,
   shouldSaveJobResult,
@@ -792,8 +794,45 @@ const handleVoiceDesign: HandlerFn = async function handleVoiceDesign(job, ctx) 
 const handleForcedAlignment: HandlerFn = async function handleForcedAlignment(job, ctx) {
   const { audioUrl, transcript } = job.data as { jobId: string; audioUrl: string; transcript: string }
   console.log(`[worker] forced-alignment ${ctx.jobId}`)
-  await markProviderCallStart(ctx.jobId, "elevenlabs-sync")
-  const result = await forcedAlignment(audioUrl, transcript)
+  // Key first: a keyless install must fail on the missing key BEFORE the probe,
+  // the download and (for a video) the demux — the provider would refuse the
+  // same way afterwards, after all that work. Same accessor the provider uses.
+  getElevenLabsHeaders()
+  // A video in the audio slot (a combined talking-head clip) is a request for
+  // its speech: demux first. The media decides, never the slot (media-source.ts).
+  const source = await classifyMediaSource(audioUrl, "audio")
+  let result: Awaited<ReturnType<typeof forcedAlignment>>
+  if (source.hasVideo) {
+    // A silent clip fails the same way on every attempt: an alignment-worded
+    // DeterministicJobError (failed + refunded now, no BullMQ retries) — the
+    // extractor's own NoAudioTrackError message speaks of revoicing.
+    let extracted: Awaited<ReturnType<typeof extractAudioTrack>>
+    try {
+      extracted = await extractAudioTrack(audioUrl)
+    } catch (err) {
+      if (err instanceof NoAudioTrackError) {
+        throw new DeterministicJobError(
+          "This video has no audio track to align. Use a clip with speech, or pass the audio directly.",
+          { cause: err },
+        )
+      }
+      throw err
+    }
+    const { audioPath, workDir } = extracted
+    try {
+      const audio = await fs.readFile(audioPath)
+      // Stamped only once the download + demux are done: the stamp moves the
+      // row off the heartbeat-refreshed pre-task sentinel onto the sync kind's
+      // short stale threshold, which must time the provider call alone.
+      await markProviderCallStart(ctx.jobId, "elevenlabs-sync")
+      result = await forcedAlignmentFromBuffer(audio, transcript)
+    } finally {
+      await cleanupWorkDir(workDir)
+    }
+  } else {
+    await markProviderCallStart(ctx.jobId, "elevenlabs-sync")
+    result = await forcedAlignment(audioUrl, transcript)
+  }
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {

@@ -8,6 +8,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 // MediaSlot is a sub-component without a node ID, so it uses zoom directly
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useT } from "@/lib/i18n"
 
 export const PLATFORM_COLORS: Record<SocialMediaPlatform, string> = {
   instagram: "#E1306C",
@@ -179,6 +180,7 @@ function MediaSlot({
 }: {
   mediaUrl?: string; isVideo?: boolean; className: string
 }) {
+  const t = useT()
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const { zoom } = useCanvasZoom()
   const useFull = zoom >= 0.8
@@ -208,7 +210,7 @@ function MediaSlot({
   return (
     <CachedImage
       src={mediaUrl}
-      alt="Preview"
+      alt={t("common.preview")}
       className={className}
       thumbnail={!useFull}
       thumbnailWidth={320}

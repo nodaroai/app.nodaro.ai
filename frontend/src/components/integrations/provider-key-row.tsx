@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import type { ProviderTile } from "@/lib/provider-tiles"
 import { NodaroScopeDialog } from "./nodaro-scope-dialog"
 import { useProviderKeyEditor } from "@/lib/use-provider-key-editor"
+import { useT } from "@/lib/i18n"
 
 /**
  * One provider row on Integrations → Model providers: name, what the key
@@ -23,6 +24,7 @@ interface Props {
 export function ProviderKeyRow({ tile, onChanged }: Props) {
   const editor = useProviderKeyEditor(tile.id, onChanged)
   const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
+  const t = useT()
   const { phase, value, error, busy } = editor
   const inputId = `integrations-provider-key-${tile.id}`
   const editing = phase === "editing" || phase === "saving"
@@ -45,7 +47,7 @@ export function ProviderKeyRow({ tile, onChanged }: Props) {
 
       {ownKeyNeeded && (
         <p className="text-[11px] text-amber-700 dark:text-amber-400">
-          Own key needed — connecting nodaro.ai does not cover this.
+          {t("integ.ownKeyNeeded")}
         </p>
       )}
 
@@ -66,30 +68,30 @@ export function ProviderKeyRow({ tile, onChanged }: Props) {
             <label htmlFor={inputId} className="sr-only">
               {tile.env}
             </label>
-            <Input
+            <Input dir="ltr"
               id={inputId}
               type="password"
               autoComplete="off"
               spellCheck={false}
-              placeholder={`Paste your ${tile.name} key`}
+              placeholder={t("integ.pasteYourKey", { name: tile.name })}
               value={value}
               onChange={(e) => editor.setValue(e.target.value)}
               disabled={busy}
               className="h-8 flex-1 min-w-[200px] font-mono text-xs"
             />
             <Button type="submit" size="sm" disabled={busy} className="h-8 bg-[#ff0073] hover:bg-[#e0005f] text-white">
-              {phase === "saving" && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              {phase === "saving" ? "Saving…" : "Save"}
+              {phase === "saving" && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
+              {phase === "saving" ? t("common.saving") : t("common.save")}
             </Button>
             <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={editor.cancel} className="h-8">
-              Cancel
+              {t("common.cancel")}
             </Button>
           </form>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
             {(tile.editable || tile.canReplaceEnv) && (
               <Button type="button" size="sm" variant="outline" onClick={editor.startEditing} className="h-7 text-xs">
-                {tile.canReplaceEnv ? "Replace .env key" : tile.present ? "Change key" : "Paste key"}
+                {tile.canReplaceEnv ? t("integ.replaceEnvKey") : tile.present ? t("integ.changeKey") : t("integ.pasteKey")}
               </Button>
             )}
             {tile.canDisable && (
@@ -101,7 +103,7 @@ export function ProviderKeyRow({ tile, onChanged }: Props) {
                 onClick={() => void editor.setDisabled(!tile.disabled)}
                 className={tile.disabled ? "h-7 text-xs text-emerald-600 hover:text-emerald-700" : "h-7 text-xs text-gray-500"}
               >
-                {phase === "toggling" ? "…" : tile.disabled ? "Enable" : "Disable"}
+                {phase === "toggling" ? "…" : tile.disabled ? t("common.enable") : t("common.disable")}
               </Button>
             )}
             {tile.present && tile.source === "app" && (
@@ -113,20 +115,20 @@ export function ProviderKeyRow({ tile, onChanged }: Props) {
                 onClick={() => void editor.remove()}
                 className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
               >
-                {phase === "removing" ? "Removing…" : "Remove"}
+                {phase === "removing" ? t("integ.removing") : t("common.remove")}
               </Button>
             )}
             {tile.whereToGet && !tile.present && (
-              <span className="text-[11px] text-gray-400 dark:text-gray-500">get one at {tile.whereToGet}</span>
+              <span className="text-[11px] text-gray-400 dark:text-gray-500">{t("integ.getOneAt", { url: tile.whereToGet })}</span>
             )}
           </div>
         )
       ) : tile.source === "env" ? (
         <p className="text-[11px] text-gray-500 dark:text-gray-400">
-          Set by the environment — remove <span className="font-mono">{tile.env}</span> from .env (or use Replace) to manage it here.
+          {t("integ.setByEnvPre")} <span className="font-mono">{tile.env}</span> {t("integ.setByEnvPost")}
         </p>
       ) : tile.id === "nodaro" && tile.source === "oauth" ? (
-        <p className="text-[11px] text-gray-500 dark:text-gray-400">Connected above — disconnect there to use a personal API key instead.</p>
+        <p className="text-[11px] text-gray-500 dark:text-gray-400">{t("integ.connectedAboveHint")}</p>
       ) : null}
 
       {error && (
@@ -142,11 +144,12 @@ export function ProviderKeyRow({ tile, onChanged }: Props) {
 }
 
 function StateBadge({ tile }: { readonly tile: ProviderTile }) {
+  const t = useT()
   if (tile.disabled && tile.present) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
         <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-        disabled
+        {t("integ.stateDisabled")}
       </span>
     )
   }
@@ -160,7 +163,7 @@ function StateBadge({ tile }: { readonly tile: ProviderTile }) {
   }
   return (
     <span className="inline-flex items-center rounded-full border border-dashed border-gray-300 dark:border-gray-600 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
-      missing
+      {t("integ.stateMissing")}
     </span>
   )
 }

@@ -65,11 +65,11 @@ The bridge always renders at the largest resolution tier the selected provider s
 ## Credit pricing
 
 ```
-credits = 10 + ceil(refRate(resolution) × (bridgeSeconds + referenceSeconds))
+credits = 100 + ceil(refRate(resolution) × (bridgeSeconds + referenceSeconds))
 ```
 
-- **10** — flat fee covering the probe/bridge/stitch overhead, charged once per run.
-- **refRate(resolution)** — the per-second reference rate for the source-derived resolution tier (the same "-ref" rate [Generate Video Pro](./generate-video-pro.md#credit-pricing)'s continuation segments use). At 720p this is **6.25** credits/sec; see Generate Video Pro's pricing section for the 480p / 1080p / 4K rates.
+- **100** — flat fee covering the probe/bridge/stitch overhead, charged once per run.
+- **refRate(resolution)** — the per-second reference rate for the source-derived resolution tier (the same "-ref" rate [Generate Video Pro](./generate-video-pro.md#credit-pricing)'s continuation segments use). At 720p this is **62.5** credits/sec; see Generate Video Pro's pricing section for the 480p / 1080p / 4K rates.
 - **bridgeSeconds** — the actual generated length: the replace span, plus 0.3 seconds per kept edge (head and/or tail) to cover the stitch overlap, rounded to whole seconds via the same segment-split rule Generate Video Pro uses (single generation call up to 15s; longer bridges split into multiple chained segments).
 - **referenceSeconds** — 2 seconds per bracketing reference clip actually used (head and/or tail, per [How replace mode works](#how-replace-mode-works)) plus 2 seconds per internal chain join, for bridges that split into multiple segments. (Two seconds is the minimum reference length the Seedance 2 family accepts.)
 
@@ -79,13 +79,13 @@ The resolution tier is derived from the **source** video, never requested direct
 
 | Scenario | Span | Source length | Bridge length | Segments | Reserved credits |
 |---|---:|---:|---:|---:|---:|
-| Minimum span, mid-video | 4s | 20s | 5s | 1 | 67 |
-| Mid-video span | 10s | 20s | 11s | 1 | 104 |
-| Span starting at 0:00 | 10s | 20s | 10s | 1 | 85 |
-| Span ending at the video's end | 10s | 20s | 10s | 1 | 85 |
-| Longer mid-video span | 20s | 40s | 22s | 2 | 185 |
+| Minimum span, mid-video | 4s | 20s | 5s | 1 | 663 |
+| Mid-video span | 10s | 20s | 11s | 1 | 1038 |
+| Span starting at 0:00 | 10s | 20s | 10s | 1 | 850 |
+| Span ending at the video's end | 10s | 20s | 10s | 1 | 850 |
+| Longer mid-video span | 20s | 40s | 22s | 2 | 1850 |
 
-The two 10-second spans on the same 20-second source land on different totals depending on position: a mid-video span keeps both a head and a tail reference (**104** credits), while a span flush against either end of the source loses one of those two references and reserves less (**85** credits either way — starting at `0:00` or ending at the source's own end cost the same). The 20-second span is long enough that its bridge, plus the stitch buffer, exceeds a single generation call's cap, so it chains across 2 segments — the extra chain-join seconds are part of why it isn't simply double the 10-second mid-video row.
+The two 10-second spans on the same 20-second source land on different totals depending on position: a mid-video span keeps both a head and a tail reference (**1038** credits), while a span flush against either end of the source loses one of those two references and reserves less (**850** credits either way — starting at `0:00` or ending at the source's own end cost the same). The 20-second span is long enough that its bridge, plus the stitch buffer, exceeds a single generation call's cap, so it chains across 2 segments — the extra chain-join seconds are part of why it isn't simply double the 10-second mid-video row.
 
 ## Honesty
 

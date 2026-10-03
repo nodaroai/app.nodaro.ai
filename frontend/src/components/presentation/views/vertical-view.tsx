@@ -1,4 +1,5 @@
 import { NodeSection } from "../node-section"
+import { useT } from "@/lib/i18n"
 import type { EditableViewProps } from "./types"
 
 export function VerticalView({
@@ -22,11 +23,12 @@ export function VerticalView({
   renderOutputItem,
   addGroup,
 }: EditableViewProps) {
+  const t = useT()
   return (
     <div className="flex-1 overflow-auto px-3 pt-3 sm:px-6 sm:pt-5 pb-20 md:pb-5">
       <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8">
         <NodeSection
-          label="Inputs"
+          label={t("preview.inputs")}
           nodes={orderedInputNodes}
           isEditing={isEditing}
           sensors={sensors}
@@ -48,7 +50,7 @@ export function VerticalView({
         <div className="border-t border-border" />
 
         <NodeSection
-          label="Outputs"
+          label={t("preview.outputs")}
           nodes={orderedOutputNodes}
           isEditing={isEditing}
           sensors={sensors}

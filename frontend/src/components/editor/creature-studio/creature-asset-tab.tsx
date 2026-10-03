@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 import { POSES as BASE_POSES, POSE_CATEGORY_LABELS, POSE_CATEGORY_ORDER, getPoseLabel, getPosePromptHint, type PoseCategory } from "@nodaro/prompts"
 import { resolveEntityAspect, aspectRatioToNumber } from "@nodaro/shared"
 import { generateCreatureAsset, removeCreatureAsset } from "@/lib/api"
@@ -48,10 +49,10 @@ const BUCKET_TO_COLUMN: Record<CreatureAssetBucket, "angles" | "poses" | "variat
   variations: "variations",
 }
 
-const BUCKET_LABEL: Record<CreatureAssetBucket, string> = {
-  angles: "angles",
-  poses: "poses",
-  variations: "variations",
+const BUCKET_LABEL_KEY: Record<CreatureAssetBucket, MessageKey> = {
+  angles: "creature.bucketAngles",
+  poses: "creature.bucketPoses",
+  variations: "creature.bucketVariations",
 }
 
 interface CreatureAssetTabProps {
@@ -67,6 +68,7 @@ export function CreatureAssetTab({
   presets,
   iconLabel,
 }: CreatureAssetTabProps) {
+  const t = useT()
   const data = studio.stagedData
   const [customPrompt, setCustomPrompt] = useState("")
   // Fullscreen viewer: click an asset to open; ←/→ navigate, Esc closes.
@@ -75,7 +77,7 @@ export function CreatureAssetTab({
 
   useEffect(() => {
     jobs.onFailed((jobId) => {
-      toast.error(`Generation ${jobId.slice(0, 8)}… failed`)
+      toast.error(tx("creature.generationFailed", { id: jobId.slice(0, 8) }))
     })
   }, [jobs.onFailed])
 
@@ -142,11 +144,11 @@ export function CreatureAssetTab({
     const existingNames = new Set(items.map((i) => i.name.toLowerCase()))
     const missing = presets.filter((p) => !existingNames.has(p.toLowerCase()))
     if (missing.length === 0) {
-      toast.info("All presets already generated")
+      toast.info(tx("creature.allPresetsGenerated"))
       return
     }
     if (missing.length >= 4) {
-      if (!window.confirm(`This will queue ${missing.length} generation jobs.`)) return
+      if (!window.confirm(tx("creature.confirmQueueJobs", { n: missing.length }))) return
     }
     for (const variant of missing) {
       // eslint-disable-next-line no-await-in-loop -- intentional sequential
@@ -159,7 +161,7 @@ export function CreatureAssetTab({
     const trimmed = customPrompt.trim()
     if (!trimmed) return
     if (trimmed.length > 2000) {
-      toast.error("Custom prompt is too long (max 2000 chars)")
+      toast.error(tx("creature.customPromptTooLong"))
       return
     }
     await fireGen(trimmed, true)
@@ -178,7 +180,7 @@ export function CreatureAssetTab({
       try {
         await removeCreatureAsset(id, { column: BUCKET_TO_COLUMN[tabKind], url: target.url })
       } catch {
-        toast.error("Failed to delete asset — refresh to restore")
+        toast.error(tx("creature.deleteAssetFailed"))
       }
     }
   }
@@ -208,7 +210,7 @@ export function CreatureAssetTab({
           disabled={disabled}
           className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Generate All
+          {t("creature.generateAll")}
         </button>
       </div>
 
@@ -235,10 +237,10 @@ export function CreatureAssetTab({
                 e.stopPropagation()
                 void handleRemove(idx)
               }}
-              aria-label={`Remove ${item.name}`}
-              className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
+              aria-label={t("creature.removeNameAria", { name: item.name })}
+              className="absolute top-1 end-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
             >
-              Remove
+              {t("common.remove")}
             </button>
           </div>
         ))}
@@ -248,12 +250,12 @@ export function CreatureAssetTab({
             className="aspect-square border border-[#1e293b] rounded bg-[#0e1117] flex flex-col items-center justify-center gap-2 text-[11px] text-slate-400"
           >
             <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
-            <span className="truncate max-w-full px-2">Generating {j.name}…</span>
+            <span className="truncate max-w-full px-2">{t("creature.generatingName", { name: j.name })}</span>
           </div>
         ))}
         {items.length === 0 && trackedForBucket.length === 0 && (
           <div className="col-span-full text-center text-[11px] text-slate-500 py-8 border border-dashed border-[#1e293b] rounded">
-            No {BUCKET_LABEL[tabKind]} variants yet — pick a preset below or enter a custom prompt.
+            {t("creature.noVariantsYet", { bucket: t(BUCKET_LABEL_KEY[tabKind]) })}
           </div>
         )}
       </div>
@@ -273,7 +275,7 @@ export function CreatureAssetTab({
           type="text"
           value={customPrompt}
           onChange={(e) => setCustomPrompt(e.target.value)}
-          placeholder="Custom prompt (free-form)"
+          placeholder={t("creature.customPromptPlaceholder")}
           disabled={disabled}
           className="flex-1 px-3 py-2 text-[12px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600 disabled:opacity-40"
           onKeyDown={(e) => {
@@ -291,7 +293,7 @@ export function CreatureAssetTab({
           disabled={customDisabled}
           className="px-4 py-2 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
         >
-          Generate
+          {t("common.generate")}
         </button>
       </div>
 
@@ -322,6 +324,7 @@ interface PoseCatalogBrowserProps {
 }
 
 export function PoseCatalogBrowser({ disabled, onPick }: PoseCatalogBrowserProps) {
+  const t = useT()
   // The catalog as THIS deployment offers it — a pack may have removed or
   // reworded entries, and a pick here becomes a generation prompt directly.
   const POSES = useCuratedEntries("pose", BASE_POSES)
@@ -343,11 +346,10 @@ export function PoseCatalogBrowser({ disabled, onPick }: PoseCatalogBrowserProps
       className="space-y-3 mt-2 pt-3 border-t border-[#1e293b]"
     >
       <h3 className="text-[11px] font-medium text-slate-300">
-        Browse Pose catalog
+        {t("creature.browsePoseCatalog")}
       </h3>
       <p className="text-[10px] text-slate-500">
-        Pick a pose to generate a variant. Each pick fires a custom-prompt
-        generation seeded with the catalog's prompt hint.
+        {t("creature.poseCatalogHint")}
       </p>
       {POSE_CATEGORY_ORDER.map((category) => {
         const entries = byCategory.get(category) ?? []

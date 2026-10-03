@@ -15,9 +15,10 @@ import {
   type BillingCycle,
 } from "@/lib/pricing-data"
 import { toast } from "sonner"
-import { useT } from "@/lib/i18n"
+import { interpolateNodes, useT } from "@/lib/i18n"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
+import { formatNumber } from "@/lib/i18n/format"
 
 interface GetCreditsModalProps {
   open: boolean
@@ -37,6 +38,10 @@ export function GetCreditsModal({
   const t = useT()
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual")
   const [loadingId, setLoadingId] = useState<string | null>(null)
+
+  const unit = creditUnitLabel(t("credits.unit.other"))
+  const balanceFigure = <strong>{creditUnits(balance)}</strong>
+  const runsLeft = required > 0 ? Math.floor(balance / required) : null
 
   const isFree = tier === "free"
   // Subscribe/upgrade and the packs sell the platform's credits — withheld on
@@ -68,18 +73,20 @@ export function GetCreditsModal({
             <Sparkles className="w-5 h-5 text-[#ff0073]" />
             {t("credits.getMoreCreditsTitle")}
           </DialogTitle>
+          {/* Each sentence is ONE key with its bold figures filled in, so a
+              language places a number and the words around it itself (Korean
+              attaches the counter: 4회). The gap between the two sentences
+              comes from the dictionary, which leaves it empty in Japanese.
+              With nothing to divide by, the balance sentence has its own key. */}
           <p className="text-sm text-muted-foreground">
-            {t("credits.appCostPrefix")} <strong>{creditUnits(required)}</strong> {t("credits.appCostSuffix")}
-            {" "}{t("credits.youHavePrefix")} <strong>{creditUnits(balance)}</strong> {creditUnitLabel(t("credits.unit.other"))}
-            {required > 0 ? (
-              <>
-                {" "}{t("credits.enoughForPrefix")} <strong>{Math.floor(balance / required)}</strong>{" "}
-                {[
-                  t("credits.more"),
-                  Math.floor(balance / required) === 1 ? t("credits.runUnit.one") : t("credits.runUnit.other"),
-                ].filter(Boolean).join(" ")}
-              </>
-            ) : ""}.
+            {interpolateNodes(t("credits.appCostSentence"), { amount: <strong>{creditUnits(required)}</strong>, unit })}
+            {t("common.fragmentGap")}
+            {runsLeft === null
+              ? interpolateNodes(t("credits.balanceOnly"), { balance: balanceFigure, unit })
+              : interpolateNodes(
+                  t(runsLeft === 1 ? "credits.balanceEnoughFor.one" : "credits.balanceEnoughFor.other"),
+                  { balance: balanceFigure, unit, n: <strong>{runsLeft}</strong> },
+                )}
           </p>
         </DialogHeader>
 
@@ -142,7 +149,7 @@ export function GetCreditsModal({
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {t("pricing.creditsPerMoShort", { n: creditUnits(upTier.credits).toLocaleString() })}
+                          {t("pricing.creditsPerMoShort", { n: formatNumber(creditUnits(upTier.credits)) })}
                         </p>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
@@ -185,7 +192,7 @@ export function GetCreditsModal({
                     } ${loadingId === pkg.priceId ? "opacity-60 pointer-events-none" : ""}`}
                   >
                     {pkg.popular && (
-                      <span className="absolute -top-2 right-2 rounded-full bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white">
+                      <span className="absolute -top-2 end-2 rounded-full bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white">
                         {t("pricing.popular")}
                       </span>
                     )}

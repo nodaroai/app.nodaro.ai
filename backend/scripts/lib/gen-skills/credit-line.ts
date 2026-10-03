@@ -9,12 +9,13 @@
  * generator at all — it is not carried on `NodeDef` any more — so the header
  * cannot drift back onto it.
  *
- * What it prints instead is exactly what `GET /v1/nodes` serves on a credited
- * deployment: the `NODE_REGISTRY` figure a node declares, or the price table's
- * base for the node type when it declares none (the same fallback
- * `getEnrichedRegistry()` applies). Plus, always, the pointer to the live
- * price — even a declared figure is a static summary of `model_pricing`, which
- * an admin edits at runtime, and most nodes price per model and settings.
+ * What it prints instead is the node's LIST price: the `NODE_REGISTRY` figure
+ * a node declares, or the price table's base for the node type when it
+ * declares none (the same fallback `getEnrichedRegistry()` applies). Plus,
+ * always, where the CHARGED price is: `model_pricing` is edited by an admin at
+ * runtime and a price can sit above its base, so `GET /v1/nodes` and
+ * `/v1/credits/model-cost` serve what a run is charged — a figure no
+ * generated file can know.
  *
  * `NODE_REGISTRY` + `STATIC_CREDIT_COSTS` deliberately, never
  * `getEnrichedRegistry()` itself: the enriched one reads `hasCredits()`, which
@@ -35,7 +36,7 @@ const NODE_CREDIT_COSTS: ReadonlyMap<string, number | string> = new Map(
 )
 
 const LIVE_PRICE =
-  "the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`)"
+  "the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`)"
 
 export function renderCreditCostLine(nodeType: string): string {
   const cost = NODE_CREDIT_COSTS.get(nodeType)
@@ -44,5 +45,5 @@ export function renderCreditCostLine(nodeType: string): string {
     // else that lands here is priced by whatever registers it at runtime.
     return `**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise ${LIVE_PRICE}.`
   }
-  return `**Credit cost:** \`${cost}\` per \`GET /v1/nodes\` — ${LIVE_PRICE}.`
+  return `**Credit cost:** \`${cost}\` at list price — ${LIVE_PRICE}; \`GET /v1/nodes\` gives this node's charged figure.`
 }

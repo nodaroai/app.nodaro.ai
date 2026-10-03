@@ -101,6 +101,7 @@ All gated behind `hasCredits()`:
 - `InsufficientCreditsModal` — balance vs required, with Upgrade/Buy CTAs
 - `RunNodeButton` — hover button under each node "Run (N CR)"
 - `useModelCredits(modelId)` hook — fetches from `/v1/credits/model-cost` with cache
+- `useModelCreditRange(modelId)` (`hooks/use-model-credit-range.ts`) — the "min-max CR" a model picker quotes for a variable-priced model, at the CHARGED price of each variant (batched `/v1/credits/model-costs`). Never derive a price or range from `MODEL_CATALOG` `pricing` — those are base prices, below what a run is charged.
 
 ---
 
@@ -251,6 +252,7 @@ Calls `POST /v1/ai-writer/generate-stream` via SSE (bypasses proxy). Returns `{ 
 | `executeNode()` | `execute-node.ts` | Main dispatch for all ~40+ node types |
 | `resolveNodeInputs()` | `node-input-resolver.ts` | Wire upstream outputs into node inputs |
 | `pollJobToCompletion()` | `poll-job.ts` | Generic job polling with status updates |
+| `shouldStopPolling()` | `poll-connection.ts` | The ONLY give-up rule for job poll loops. A failed status check never fails the node: past the threshold the node shows "Reconnecting…" (`jobConnectionLost`, rendered once by BaseNode) and keeps polling. Only a job the server says is gone (403/404/410) ends the watch, and the node then carries a message. `poll-connection-guard.test.ts` fails the build on any other comparison against `MAX_CONSECUTIVE_POLL_FAILURES`. |
 
 ### Skip Node
 - Right-click or multi-select to skip/unskip. Visual: opacity-40 + dashed border + orange SKIP badge.
@@ -288,6 +290,102 @@ Calls `POST /v1/ai-writer/generate-stream` via SSE (bypasses proxy). Returns `{ 
 ---
 
 *Last updated: 2026-05-05 (ee/ migration Phase 4)*
+
+---
+
+## i18n — app chrome
+
+- **Dictionaries:** `lib/i18n/en.ts` is the canonical flat key set, `he.ts`, `ja.ts`, `ko.ts` and `pt-br.ts` the complete Hebrew, Japanese, Korean and Brazilian Portuguese ones; the other seven locales are stubs that fall back to English. `dicts.ts` is the ONE registry; `offered-locales.ts` derives from it which languages the sidebar switcher, the config-panel `LocalePicker` and browser auto-detection offer (chrome coverage ≥ `CHROME_COMPLETE_RATIO`, 98%). Finishing a translation puts the language in the menu — there is no list to edit. A saved not-offered choice stays valid and visible (`languageMenuRows`); the operator's `DEFAULT_LOCALE` keeps lenient matching.
+- **Every user-visible string goes through the dictionary** — `const t = useT()` in components, `tx()` at imperative sites (toasts, handlers, plain modules; never at module top level). `lib/i18n/__tests__/no-hardcoded-copy.test.ts` parses every user-facing source (`.tsx` AND `.ts` under `components/`, `app/`, `routes/`, `hooks/` and the non-admin `ee/` surfaces) with the TypeScript AST and fails on a bare literal in JSX text, the copy attributes (`title`, `placeholder`, `aria-label`, `alt`, `label`, `description`, …) or a `toast.*()` message, `description` or action label. Unit/format-only strings ("24 fps") and `<code>/<pre>/<kbd>` text are exempt; brand, model and provider names go in its `ALLOWED_LITERALS`, which a second test keeps honest.
+- **`common.*`** holds ~90 generic buttons and states (`common.loading`, `common.retry`, `common.remove`, …) — reuse before adding a per-feature duplicate. The `he.ts`, `ja.ts`, `ko.ts` AND `pt-br.ts` value for every `en.ts` key is mandatory (`i18n.test.ts`, `ja-dictionary.test.ts`, `ko-dictionary.test.ts`, `pt-br-dictionary.test.ts`), and config-panel namespaces must contain Hebrew letters.
+- **A sentence with a styled part** (a bold figure, a link) is ONE key with a placeholder, rendered by `interpolateNodes(t(key), { n: <strong>{n}</strong> })` (`lib/i18n/interpolate-nodes.ts`). Never build it from fragments around the element: the spaces between fragments end up fixed in code for every language, and Korean cannot attach a counter to its number (4회). Reference: `ee/components/credits/GetCreditsModal.tsx`.
+- **Counts and ids in a sentence.** A count that can be 1 gets a `…One` key, and the code picks it (`n === 1 ? "…One" : "…"`). A sentence with two counts takes each count as a whole phrase key ("1 node" / "3 nodes") placed into a template, so no language has to agree with a number (`editor.addedNodesAndAssets`). A stored id shown to a person (a mode, a role, an animation type) goes through `labelOf(table, id, t)` (`lib/i18n`). Type the table as `Record<TheUnion, MessageKey>`, so a new id without a label fails tsc, and an unknown id shows as written.
+- **Hebrew conventions:** buttons/actions are nouns (שמירה, ביטול, הצגת גרסאות); instructions are plural imperative (חברו, בחרו, הזינו), never masculine singular (צור, לחץ); descriptions neutral (יש ל…, ניתן ל…). Glossary guarded by `config-panel-glossary.test.ts` / `i18n.test.ts`: node=רכיב, reference=ייחוס, review=בדיקה, optional=(אופציונלי); by convention also workflow=תהליך, canvas=קנבס, prompt=פרומפט, run=הרצה, credits=קרדיטים. Model, provider and brand names stay in Latin letters.
+- **Japanese conventions** (`ja-dictionary.test.ts` enforces completeness, placeholders, Japanese script and punctuation):
+  - Register: sentences in polite です／ます; instructions 〜してください; buttons and labels as nouns or dictionary-form verbs (保存, 削除, 閉じる).
+  - Punctuation: full-width 、。「」（）？！： inside Japanese text; the ellipsis is "…".
+  - Spacing: one half-width space around Latin words, numbers and number placeholders ({n} 件); none when a placeholder renders Japanese ({time}に更新).
+  - Grammar: no plurals, so `…One` / `…Many` keys share the text and use counters (件 個 枚 本 回 人 秒).
+  - Names: brands and models stay Latin; a node or connector named in a sentence matches `labels.ja.ts` exactly.
+  - Glossary: ノード, ワークフロー, キャンバス, プロンプト, 実行, クレジット, リファレンス, コネクタ, 入力／出力.
+  - Joins: never hard-code punctuation or spaces between dictionary fragments. Use `common.sentenceEnd`, `common.labelColon`, `common.questionEnd`, `common.listComma`, `common.fragmentGap` and `common.dashJoin` (a term and its explanation, " — "), which Japanese defines as 。 ： ？ 、 "" and ：; a parenthetical goes through `common.qualified` ("{token} ({qualifier})", Japanese （）). Build a plural or a verb-plus-noun label as whole keys, never by joining words in code.
+  - Placeholders: never fill one with a raw id or an English data string (a stage id, an op, a slot kind, a registry label). Map it to its label first — a typed `Record<Id, MessageKey>` or the matching label table — and let an unknown id pass through.
+- **Korean conventions** (`ko-dictionary.test.ts` enforces completeness, placeholders, Hangul, punctuation, paired particles and counters):
+  - Register: sentences in formal polite -습니다; instructions -하세요; buttons and labels as nouns or the -기 form (저장, 취소, 닫기, 스튜디오 열기); never 당신 — use 내 ~ ("Your files" → 내 파일).
+  - Punctuation: Western `. , ? ! : ( )` — never the Japanese full-width forms; quotes are “ ”; the ellipsis is "…"; a parenthesis attaches to the word before it (이름(선택 사항)).
+  - Spacing: standard 띄어쓰기. A particle or a counter attaches to its word or number: Suno로, {n}개, 10초.
+  - Placeholders: the word a `{placeholder}` renders is unknown, so a particle after it is the paired form: {name}을(를), 이(가), 은(는), 와(과), (으)로. Invariant particles (에, 의, 도, 만) attach as they are.
+  - Grammar: no plurals, so `…One` / `…Many` keys share the text; the noun comes first and the counter follows the number (이미지 {n}장, 노드 {n}개, 실행 {n}회). A number and its unit belong in ONE key ({n} nodes → 노드 {n}개): code that joins `{n} {unit}` with a space cannot be translated naturally.
+  - Joins: a fragment that follows a space the code inserts cannot start with a particle. The joiner keys are Western: `common.sentenceEnd` ".", `common.labelColon` ": ", `common.listComma` ", ", `common.qualified` "{token}({qualifier})".
+  - Names: brands and models stay Latin; a node named in a sentence matches `labels.ko.ts` and is quoted (“이미지 생성” 노드).
+  - Glossary: 노드, 워크플로, 캔버스, 프롬프트, 실행, 크레딧, 레퍼런스, 커넥터, 입력/출력, 장소 (location), 동영상 (video), 미리 보기 / 미리 듣기, 연동 (integrations), SNS (social), 레이블 (label), 중단 (stop a run — 실행 취소 means undo).
+  - Font: `:root:lang(ko)` names the Korean system faces and sets `word-break: keep-all` with `overflow-wrap: break-word`, so words don't break between syllables.
+- **Brazilian Portuguese conventions** (`pt-br-dictionary.test.ts` enforces completeness, placeholders, Brazilian spelling, typography and the gender rule before a placeholder):
+  - Brazilian only, never European Portuguese: arquivo, tela, salvar, usuário, baixar, configurações, compartilhar (not ficheiro, ecrã, guardar, utilizador, descarregar, definições, partilhar).
+  - Register: você is implicit (seu/sua for "your"). Instructions use the você imperative (Conecte, Selecione, Digite), buttons the infinitive (Salvar, Abrir estúdio), labels a noun, progress the gerund (Salvando…). A failure reads "Não foi possível …".
+  - Sentence case everywhere: the English Title Case means nothing ("Get More Credits" → Obter mais créditos).
+  - Punctuation: Western, with no space before `? ! : ;`. Quotes are “ ” and the ellipsis is "…". A literal quantity uses a decimal comma and a thousands point (1.500 créditos, 1,5×); versions keep their dots (Kling 2.1). The joiner keys are the English values.
+  - Gender against a placeholder: the word a `{placeholder}` renders has an unknown gender. Fix it with a noun before the placeholder (o nó “{label}”), use a bare preposition right before it (de, em, para, never do/da/no/na), and never write "(a)" endings. The organization's workspace word is feminine (equipe, turma) and lowercase inside a sentence; `workspaceSentence` (`ee/lib/org-vocabulary.ts`) capitalizes a sentence that opens with it.
+  - Plurals: `…One` is the singular and `…Many` the plural. English "{n} corrected" doesn't inflect but Portuguese does, so a count key with no singular sibling reads "Corrigidos: {n}". A count that can be 1 gets a `…One` key (`time.moAgoOne`, `tgtrig.cardListeningOne`).
+  - Length: Portuguese runs about 25% longer than English. Node names, pips, options and buttons take the shortest natural form.
+  - Names: brands and models stay Latin. A node named in a sentence matches `labels.pt-br.ts` and is quoted (o nó “Gerar imagem”).
+  - Glossary:
+    - nó, workflow, canvas, prompt, executar/execução, créditos, conector, entrada/saída
+    - template (never modelo, which is the AI model); predefinição (preset); mídia (a media asset); recurso (a feature)
+    - tomada (a shot in a sequence; plano is a pricing or planning plan). Shot sizes follow the Framing catalog's scale: plano geral, plano médio, primeiro plano, …
+    - local (location), seletor (picker), prévia (preview), personalizado (custom), interromper (stop a run)
+- **String-keyed maps, not keys:** node labels, handle pips, node-family headers, preset groups + preset copy, model descriptions and option labels are localized at render by English-string tables: one `labels.<locale>.ts` and one `preset-content.<locale>.ts` per locale (he, ja, ko, pt-br), registered in `LABEL_TABLES` / `PRESET_CONTENT_MAPS` (`labels.ts`). The coverage tests (`node-labels-coverage`, `handle-labels-coverage`, `model-descriptions-coverage`, `preset-content`) iterate those registries, so a registered locale must be complete. Do not extract these strings into `en.ts`.
+- **The guards that keep it that way** (all in `lib/i18n/__tests__/` unless noted): `no-hardcoded-copy` (bare literals; brand/model/code tokens go in its reviewed `ALLOWED_LITERALS`), `node-labels-coverage` (node definitions, their persisted `defaultData.label` AND every `NODE_OPTIONS` menu label), `handle-labels-coverage` (every `<HandleWithPopover label>` literal, `lib/*handles.ts` label and parameter-picker registry label must be in every locale's `handle` table), `ui-locale-formatting` (dates), `components/editor/studio-shell/__tests__/preset-labels` (studio preset chips), `lib/__tests__/logical-direction-coverage` (RTL, below).
+- **Dates, times, numbers:** format through `lib/i18n/format.ts` (`formatDate` / `formatTime` / `formatDateTime` / `formatNumber`, or pass `uiLocale()` as the locale). `uiLocale()` is `undefined` for English (browser default, unchanged) and the locale id otherwise. Never a module-level `Intl.DateTimeFormat` — it freezes the language at import.
+- **Error messages:**
+  - API calls: `apiJson`'s `label`, `apiRequest`'s message and `throwApiError`'s fallback are `MessageKey`s (the action's headline, `apiErr.*`), so a new call cannot pass English.
+  - `lib/api-error-copy.ts` builds what the user reads. English keeps the server's `error.message` exactly. Other languages show the headline plus a reason: a translated one for a fixed-meaning code (`REASON_KEY_BY_CODE`), or the server's detail for a case-by-case code such as `validation_error`.
+  - A new fixed-meaning backend code gets its reason there.
+  - Node executors report a pre-run problem through `nodeRunError(label, key)` / `nodeRunText(label, text)` (`workflow-editor/node-run-message.ts`), never a `Node "${label}": …` template.
+- **Data that looks like copy:** a value that is persisted or sent to a model/API (studio preset ids, reduce strategy ids, default workflow names) stays English; render a caption keyed by it (`studio-shell/preset-labels.ts` — the English caption IS the id; `lib/reduce-strategy-copy.ts` — keyed by the registry's id union, so a new id without copy fails tsc).
+- **RTL:** outside the canvas use logical Tailwind classes only (`ms-/me-/ps-/pe-/start-/end-/text-start/text-end/border-s/border-e/rounded-s-/rounded-e-`) — `logical-direction-coverage` scans every user-facing component (canvas `components/nodes/` and admin excluded; a few media-geometry files keep physical offsets, listed there with the reason). Directional icons flip with `const isRtl = useAppDir() === "rtl"` + `cn(..., isRtl && "rotate-180")` (a disclosure chevron flips only when closed); never a Tailwind `rtl:` variant (`rtl-direction-guards` forbids it — it pierces the canvas's LTR pin). Something that points at canvas geometry (focus-mode neighbour arrows) stays physical.
+- **Text marks in Hebrew values:** the bidi algorithm does not mirror arrow glyphs.
+  - Arrows: a "leads to" arrow inside Hebrew text is ← and a back link is →. Only an arrow between two Latin words stays →. When both sides can be Latin at run time (`{field} → {value}`), put RLM marks around the arrow.
+  - Leading punctuation: a Latin or numeric token that starts with `@ . + / -` after a space gets an LRM in front of it (`‎@name`, `‎-1`, `‎+{n}`).
+  - `lib/i18n/__tests__/rtl-text-marks.test.ts` enforces both rules. Strings rendered inside the LTR-pinned canvas are exempted there, each with its reason.
+- **Code reads left to right:** `globals.css` pins `pre`, `code`, `kbd` and `samp` LTR (`:where(…):not([dir])`, guarded by `rtl-direction-guards`).
+  - A `<pre>` that shows prose (a node's text output, a final prompt) sets `dir="auto"`.
+  - A text input for code, a URL or a key sets `dir="ltr"`.
+- **Organization words:** an organization's vocabulary arrives from the server in English. Render it through `useOrgVocabulary` / `localizeVocabulary` (`ee/lib/org-vocabulary.ts`). It translates the kinds' default words (`orgVocab.*`) and keeps any word an organization set itself exactly as typed. Pass the organization's raw `settings.vocabulary_overrides` too.
+  - **Gender of the workspace word.** A sentence with the workspace word agrees with its gender in Hebrew and Portuguese. The localized vocabulary carries `workspace_gender`, resolved in this order: a translated default declares it in the dictionary (`orgVocab.*.workspaceGender`); an organization's own word takes its `workspace_gender` override; the generic fallback word uses `org.workspaceWordGender`.
+  - **Rendering a gendered sentence.** A sentence whose wording depends on the gender has a `…Masc` variant listed in `WORKSPACE_SENTENCE_MASCULINE`. Render it with `genderedWorkspaceKey(key, workspaceGender(vocabulary, t))` or `workspaceSentence(…)`. The base is written for a feminine word, because every default is feminine in both languages.
+  - **The word's placeholder.** The word enters a sentence only as `{workspace}` (`{things}` / `{plural}` for the plural), never under another name.
+  - **Guard.** `org-workspace-gender.test.ts` fails when:
+    - a new sentence with the word has no variant and is not declared neutral
+    - an organization sentence has a placeholder name nobody has classified
+    - a call site bypasses the gender
+    - a page localizes the vocabulary without the organization's overrides
+- **Copilot:** its copy is `copilot.*` keys indexed by `ee/lib/copilot/strings.ts` (`COPILOT_KEYS`); each turn sends the interface `locale`, and the backend appends a reply-language line to the per-turn context (`backend/src/ee/copilot/reply-language.ts`; English adds nothing).
+
+---
+
+## Node docs links
+
+Every node links to its page in the public docs (nodaro.ai/docs).
+
+- **One helper.** `docsUrlForNode(type, { section, lang })` (`lib/node-docs/node-docs.ts`); components use `useNodeDocsUrl()`, which binds the interface language.
+  - It builds `https://nodaro.ai/docs/node/{type}?lang=…&ref=app#section`.
+  - `/docs/node/{type}` is a redirect on the docs site, so a page can move without breaking the app, and an unknown type lands on the Node Reference.
+  - Never link to a page URL. A test fails on any `nodaro.ai/docs/node` string outside `lib/node-docs/`.
+- **Four placements, all in shared components:**
+  - the "?" in the node header toolbar (`NodeTopToolbar`), shown on hover or while the node is selected
+  - "Learn about this node" in the ••• menu (`NodeContextMenu`)
+  - the "Docs" pill in the settings panel header, which opens `#settings`; hovering shows the summary, a chip per section and "Open full docs"
+  - "Compare models" beside the model picker's heading, to `#models`
+- **Which sections a page has** comes from the docs site's snapshot, `lib/node-docs/node-docs-links.json`. A deep link shows only when the page has that section.
+  - The docs site rebuilds the snapshot on every deploy and serves it at `https://nodaro.ai/docs/node-links.json`. `npm -w frontend run gen:node-docs -- --live` fetches it, writes it as 2-space JSON (so the diff shows only what changed) and regenerates. A file path or another URL works too.
+  - The app ships what is generated from it: `node-docs-map.generated.ts` (type → sections) and `summaries/<lang>.generated.ts`, one chunk per language the docs translate, loaded when a popover opens.
+  - The popover shows the summary in the interface language when the page is translated into it (the map's `summaries.<lang>`), and in English otherwise. Only the interface language's chunk and English's are loaded.
+- **White-label.** Docs links are platform links. Every component that renders one checks `nodeDocsLinksShown()` (`surfacePlatformLinks()`), so a deployment that hides platform links shows none; the node-docs test enforces the check.
+- **Compare models.** `<MappableField field="provider">` shows it by itself. A panel that builds its own model heading renders `<CompareModelsLink />` beside it. It reads the node type from `NodeDocsTypeContext`, which only the editor's settings panel provides.
+- **Guards:**
+  - `lib/node-docs/__tests__/node-docs.test.ts` fails when a picker node has no page. Admin-only previews are skipped. A node without a published page (for example one the deployment's availability settings still hide from users) goes in `AWAITING_DOCS_PAGE` with its reason. It also fails when the generated maps drift from the snapshot.
+  - `components/editor/node-docs/__tests__/compare-models-coverage.test.ts` fails when a node whose page has a Models section shows no "Compare models". Nodes with no model picker go in `NO_MODEL_PICKER`.
 
 ---
 

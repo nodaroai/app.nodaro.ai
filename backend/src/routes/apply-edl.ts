@@ -24,6 +24,32 @@ function parseEdlMaybe(v: unknown): unknown {
   }
 }
 
+/** The 400 every refused EDL gets. The issues ride BOTH the `issues` array and
+ *  the message: the SDK and the CLI surface only `code` + `message` (a
+ *  `NodaroError`), so an issue left out of the message — the 3-hour cap, a
+ *  missing source — would reach them as a bare "EDL failed validation". */
+function invalidEdlBody(issues: readonly string[]) {
+  const shown = issues.slice(0, 3)
+  const more = issues.length - shown.length
+  return {
+    error: {
+      code: "invalid_edl",
+      message: `EDL failed validation: ${shown.join("; ")}${more > 0 ? ` (+${more} more)` : ""}`,
+      issues,
+    },
+  }
+}
+
+/** The EDL the request describes, read off the RAW body exactly as the credit
+ *  guard's `computeCredits` reads it (before Zod). */
+function effectiveEdlOfRawBody(body: unknown) {
+  const b = (body ?? {}) as Record<string, unknown>
+  return buildEffectiveEdl(parseEdlMaybe(b.edl), {
+    crossfadeMs: typeof b.crossfadeMs === "number" ? b.crossfadeMs : 0,
+    sourceOverrides: Array.isArray(b.sources) ? (b.sources as string[]) : undefined,
+  })
+}
+
 const applyEdlBody = z.object({
   /** The edit decision list. Wired (json handle) or hand-written; coerced by
    *  `normalizeEdl` then structurally validated. Media resolves from each
@@ -53,28 +79,37 @@ export async function applyEdlRoutes(app: FastifyInstance) {
     // episode transcript isn't 413'd. The DAG path carries the transcript in the
     // job payload, not the HTTP body, so this only guards the direct REST POST.
     bodyLimit: 24 * 1024 * 1024,
-    preHandler: creditGuard(() => "apply-edl", {
-      // Probe-at-reserve on the RENDERED duration: build the same effective EDL
-      // the handler renders, reserve `perMinute × ceil(edlDurationMs/60000)`.
-      // Base (pre-markup) — creditGuard applies the markup so check and reserve
-      // agree. Read the per-minute RATE from model_pricing via
-      // getModelCreditBaseCost (mirroring dubbing) so an admin retune — the path
-      // the 3-hour staging probe uses to set the final number — tunes BOTH the
-      // single-node route AND the DAG (which reserves the same via
-      // applyEdlCreditOverride). Without this the route stayed pinned to the
-      // provisional constant while DAG runs moved to the DB rate. ee import is
-      // dynamic (shim pattern; computeCredits only runs under hasCredits()).
-      computeCredits: async (body) => {
-        const b = body as Record<string, unknown>
-        const eff = buildEffectiveEdl(parseEdlMaybe(b.edl), {
-          crossfadeMs: typeof b.crossfadeMs === "number" ? b.crossfadeMs : 0,
-          sourceOverrides: Array.isArray(b.sources) ? (b.sources as string[]) : undefined,
-        })
-        const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
-        const { creditCost } = await getModelCreditBaseCost("apply-edl")
-        return creditCost * applyEdlReserveMinutes(eff)
+    preHandler: [
+      // Ingress validation FIRST, ahead of the credit guard: an EDL the
+      // executor would refuse (over the 3-hour output cap, an unresolvable
+      // source, …) is a 400 naming the problem — never a 402 "insufficient
+      // credits" for a render that could not run at any balance. Nothing is
+      // reserved either way (the reservation is in the handler, after its own
+      // validation of the Zod-parsed body, kept as defense in depth).
+      async (req, reply) => {
+        const b = (req.body ?? {}) as Record<string, unknown>
+        const validation = validateEffectiveEdl(effectiveEdlOfRawBody(b), b.output === "audio" ? "audio" : "video")
+        if (!validation.ok) return reply.status(400).send(invalidEdlBody(validation.issues))
       },
-    }),
+      creditGuard(() => "apply-edl", {
+        // Probe-at-reserve on the RENDERED duration: build the same effective EDL
+        // the handler renders, reserve `perMinute × ceil(edlDurationMs/60000)`.
+        // Base (pre-markup) — creditGuard applies the markup so check and reserve
+        // agree. Read the per-minute RATE from model_pricing via
+        // getModelCreditBaseCost (mirroring dubbing) so an admin retune — the path
+        // the 3-hour staging probe uses to set the final number — tunes BOTH the
+        // single-node route AND the DAG (which reserves the same via
+        // applyEdlCreditOverride). Without this the route stayed pinned to the
+        // provisional constant while DAG runs moved to the DB rate. ee import is
+        // dynamic (shim pattern; computeCredits only runs under hasCredits()).
+        computeCredits: async (body) => {
+          const eff = effectiveEdlOfRawBody(body)
+          const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
+          const { creditCost } = await getModelCreditBaseCost("apply-edl")
+          return creditCost * applyEdlReserveMinutes(eff)
+        },
+      }),
+    ],
   }, async (req, reply) => {
     const parsed = applyEdlBody.safeParse(req.body)
     if (!parsed.success) {
@@ -96,9 +131,7 @@ export async function applyEdlRoutes(app: FastifyInstance) {
     const effectiveEdl = buildEffectiveEdl(parseEdlMaybe(edl), { crossfadeMs, sourceOverrides: sources })
     const validation = validateEffectiveEdl(effectiveEdl, output)
     if (!validation.ok) {
-      return reply.status(400).send({
-        error: { code: "invalid_edl", message: "EDL failed validation", issues: validation.issues },
-      })
+      return reply.status(400).send(invalidEdlBody(validation.issues))
     }
 
     const mcpClient = extractMcpClient(req.body)

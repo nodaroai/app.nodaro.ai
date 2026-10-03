@@ -2,10 +2,10 @@
 
 import { hasCredits } from "@/lib/edition"
 
-import { useT } from "@/lib/i18n"
+import { useT, tx } from "@/lib/i18n"
 import { memo, useState, useMemo, useEffect } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, AlertTriangle, Type, Image as ImageIcon, Images, Film, Minus, Volume2, Music, Users, Aperture, Sparkles, Copy, ListChecks } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, AlertTriangle, Type, Image as ImageIcon, Images, Film, Minus, Volume2, Music, Users, Aperture, Sparkles, Copy, ListChecks, SlidersHorizontal } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { GvpContinueControl } from "./gvp-continue-control"
@@ -23,7 +23,9 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { isValidGenerateVideoProConnection } from "@/lib/generate-video-pro-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
-import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { buildVideoCreditModelIdentifier, SETTINGS_INPUT_HANDLE } from "@nodaro/shared"
+import { useWiredSettings } from "@/hooks/use-wired-settings"
+import { SettingsChips, SettingsPriceNote } from "./settings-chips"
 import { estimateGenerateVideoProCredits } from "@/components/editor/workflow-editor/types"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { GenerateVideoProNodeData, GeneratedResult, ContentPolicyRewriteEntry } from "@/types/nodes"
@@ -43,13 +45,15 @@ const ACCEPTS_AUDIO_REFS  = (t: string) => isValidGenerateVideoProConnection("au
 const ACCEPTS_ASSETS      = (t: string) => isValidGenerateVideoProConnection("assets", t, isPickerType)
 const ACCEPTS_LOOK        = (t: string) => isValidGenerateVideoProConnection("look", t, isPickerType)
 const ACCEPTS_ELEMENTS    = (t: string) => isValidGenerateVideoProConnection("elements", t, isPickerType)
+const ACCEPTS_SETTINGS    = (t: string) => isValidGenerateVideoProConnection(SETTINGS_INPUT_HANDLE, t, isPickerType)
 
-// FULL 11-pip stack — generate-video's EXACT cluster layout (28px within a
+// FULL 12-pip stack — generate-video's EXACT cluster layout (28px within a
 // cluster, 40px between clusters), measured up from the PREVIEW's bottom edge:
 //   Text:    prompt(24) → negative(52)
 //   Image:   start(92) → end(120) → imgRefs(148) → vidRefs(176)
 //   Audio:   audio(216) → audioRefs(244)
 //   Pickers: assets(284) → elements(312) → look(340)
+//   Settings: settings(380)
 // In inline-prompt mode the editor sits BELOW the preview as card chrome, so
 // every pip additionally lifts by the measured chrome height (see `handleTop`
 // in the component) — exactly like generate-video — instead of spreading down
@@ -66,6 +70,7 @@ const HANDLE_OFFSET = {
   assets: 284,
   elements: 312,
   look: 340,
+  settings: 380,
 } as const
 
 function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
@@ -119,10 +124,15 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
     []
   const contentPolicyNotice =
     contentPolicyRewrites.length > 0
-      ? `Segment ${contentPolicyRewrites.map((r) => r.segment).join(", ")} prompt${contentPolicyRewrites.length > 1 ? "s were" : " was"} adjusted to pass the provider's content screen.`
+      ? t(contentPolicyRewrites.length > 1 ? "node.segmentPromptAdjustedMany" : "node.segmentPromptAdjustedOne", { segments: contentPolicyRewrites.map((r) => r.segment).join(", ") })
       : undefined
 
-  const provider = nodeData.provider ?? "seedance-2"
+  // What the node runs with once its Settings input is read (the wired Aspect
+  // Ratio / Duration / Provider) — its chips, strip and price all read it, the
+  // same resolution the run engines apply.
+  const settings = useWiredSettings(id, "generate-video-pro", nodeData as Record<string, unknown>)
+  const runData = settings.data as GenerateVideoProNodeData
+  const provider = runData.provider ?? "seedance-2"
 
   // PLAN-ONLY result — the engine's full per-segment configuration (no video).
   const plan = nodeData.generatedPlan as
@@ -168,7 +178,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
         } else if (job.status === "failed") {
           updateNodeData(id, {
             executionStatus: "failed",
-            errorMessage: job.error_message ?? "Planning failed",
+            errorMessage: job.error_message ?? tx("node.planningFailed"),
             currentJobId: undefined,
             currentJobProgress: undefined,
           })
@@ -192,23 +202,23 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
   // return values are intentionally unused. Previously the strip showed the
   // single-segment 8s composite regardless of duration, so a 60s run
   // displayed ~1/6th of the real reservation (user bug report).
-  const resolution = nodeData.resolution || "720p"
+  const resolution = runData.resolution || "720p"
   const creditIdentifier = buildVideoCreditModelIdentifier(
     provider,
-    nodeData.duration,
+    runData.duration,
     false,
     "text-to-video",
     undefined,
-    nodeData.resolution,
+    runData.resolution,
     false,
   )
   useModelCredits(creditIdentifier, 82)
   useModelCredits(`${provider}:8s:${resolution}`, 82)
   useModelCredits(`${provider}:8s:${resolution}-ref`, 50)
   useModelCredits("generate-video-pro", 10)
-  const liveEstimate = useVideoProCredits(nodeData)
-  const needsQuote = hasCredits() && nodeData.segmentMode !== undefined
-  const credits = needsQuote ? liveEstimate.data?.credits : estimateGenerateVideoProCredits(nodeData)
+  const liveEstimate = useVideoProCredits(runData)
+  const needsQuote = hasCredits() && runData.segmentMode !== undefined
+  const credits = needsQuote ? liveEstimate.data?.credits : estimateGenerateVideoProCredits(runData)
 
   // Result-aspect-ratio for the BaseNode minHeight calc + video-element sizing.
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
@@ -234,6 +244,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
       { id: "assets",          type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.assets),          left: "-29px" }, external: true },
       { id: "elements",        type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.elements),        left: "-29px" }, external: true },
       { id: "look",            type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.look),            left: "-29px" }, external: true },
+      { id: SETTINGS_INPUT_HANDLE, type: "target" as const, position: Position.Left, customStyle: { top: handleTop(HANDLE_OFFSET.settings), left: "-29px" }, external: true },
       { id: "video",           type: "source" as const, position: Position.Right, customStyle: { top: "24px",                     right: "-29px" }, external: true },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -286,7 +297,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
   ) : null
 
   return (
-    <div className="relative" style={{ width: "100%", height: "100%" }}>
+    <div className="relative group/gvp" style={{ width: "100%", height: "100%" }}>
       <EditableNodeLabel
         label={(nodeData.label as string) ?? "Generate Video Pro"}
         icon={<Clapperboard className="w-3.5 h-3.5" />}
@@ -314,6 +325,8 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
         // Standard quick strip (never rawToolbarContent) — never gated behind
         // !isRunning so Stop/Discard stays visible mid-run. The Continue control
         // self-hides unless the last run was a stopped/partial delivery.
+        // The approved note under Run while a Settings input is wired.
+        runStripFootnote={settings.wired.length > 0 ? <SettingsPriceNote /> : undefined}
         topToolbarContent={
           <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"}
             disabled={needsQuote && !liveEstimate.data}
@@ -364,7 +377,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="flex items-center gap-1.5 px-1 pb-1 text-[10px] font-medium text-muted-foreground">
                   <ListChecks className="w-3 h-3 shrink-0" />
                   <span>
-                    Plan — {planSegments.length || plan.segmentCount || 0} segment{(planSegments.length || plan.segmentCount) === 1 ? "" : "s"}
+                    {t((planSegments.length || plan.segmentCount) === 1 ? "node.planSegmentsOne" : "node.planSegmentsMany", { n: planSegments.length || plan.segmentCount || 0 })}
                     {plan.totalDurationSec ? ` · ${plan.totalDurationSec}s` : ""}
                   </span>
                 </div>
@@ -380,7 +393,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                   ))}
                   {planSegments.length === 0 && (
-                    <div className="px-2 py-1 text-muted-foreground/60">Plan ready — copy JSON for details</div>
+                    <div className="px-2 py-1 text-muted-foreground/60">{t("node.planReadyCopyJson")}</div>
                   )}
                 </div>
                 <button
@@ -409,8 +422,14 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
           node. (Inline mode renders both inside the preview box above.) */}
       {!showInline && resultOverlay}
       {!showInline && policyNotice}
+      {/* The wired settings, always visible; over a result they give way to
+          its hover controls. */}
+      <SettingsChips
+        view={settings}
+        className={`absolute top-2 left-2 z-10 max-w-[calc(100%-16px)] transition-opacity ${hasVideoResult ? "group-hover/gvp:opacity-0 group-hover/gvp:pointer-events-none" : ""}`}
+      />
 
-      {/* FULL 11 typed input pips + 1 output pip — generate-video's exact
+      {/* FULL 12 typed input pips + 1 output pip — generate-video's exact
           set, order, colors, and icons (parity by construction; see
           generate-video-pro-handles.ts). The one semantic delta:
           videoReferences here is the EXTEND SOURCE (limit 1). */}
@@ -425,6 +444,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="assets"          type="target" position={Position.Left}  label="Assets"        color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top={handleTop(HANDLE_OFFSET.assets)}          orderMatters accepts={ACCEPTS_ASSETS} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="elements"        type="target" position={Position.Left}  label="Elements"      color={HANDLE_COLORS.look}     icon={<Sparkles />}  side="left"  top={handleTop(HANDLE_OFFSET.elements)}        accepts={ACCEPTS_ELEMENTS} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="look"            type="target" position={Position.Left}  label="Look"          color={HANDLE_COLORS.look}     icon={<Aperture />}  side="left"  top={handleTop(HANDLE_OFFSET.look)}            accepts={ACCEPTS_LOOK} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId={SETTINGS_INPUT_HANDLE}   type="target" position={Position.Left}  label="Settings"      color={HANDLE_COLORS.look}     icon={<SlidersHorizontal />} side="left" top={handleTop(HANDLE_OFFSET.settings)} accepts={ACCEPTS_SETTINGS} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="video"           type="source" position={Position.Right} label="Video"         color={HANDLE_COLORS.video}    icon={<Film />}      side="right" top="24px" />
 
       {activeUrl && (

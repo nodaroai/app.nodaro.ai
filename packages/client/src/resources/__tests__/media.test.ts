@@ -121,6 +121,27 @@ describe("media resource", () => {
     expect(out.jobId).toBe("j5")
   })
 
+  it("videoOverlay() POSTs /v1/video-overlay with the base + timed layers and returns { jobId }", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-vo" }))
+    const c = make(fetchMock)
+    const body = {
+      videoUrl: "https://x/base.mp4",
+      layers: [
+        { imageUrl: "https://x/card.png", start: 1.2, end: 2.6, preset: "card" as const },
+        { imageUrl: "https://x/logo.png", start: 0, anchor: "top-left" as const, x: 4, y: 4, width: 12, zIndex: 3 },
+      ],
+      outputAspect: "9:16" as const,
+      baseFit: "contain" as const,
+      backgroundColor: "#000000",
+    }
+    const out = await c.media.videoOverlay(body)
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/video-overlay")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual(body)
+    expect(out.jobId).toBe("j-vo")
+  })
+
   it("suggestOverlayPlacement() POSTs /v1/image-overlay/suggest-placement and returns the placement synchronously", async () => {
     const placement = { anchor: "bottom-right" as const, x: -4, y: -6, width: 12, reason: "The corner is calm sky, clear of the rider." }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-place", placement }))

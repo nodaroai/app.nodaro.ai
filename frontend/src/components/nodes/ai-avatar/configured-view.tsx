@@ -13,7 +13,7 @@ import { tx, useT } from "@/lib/i18n"
 import type { AiAvatarData } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFileUpload } from "@/hooks/use-file-upload"
-import { useHeygenAvatars, avatarSupportsV, voiceSelectionPatch } from "@/components/heygen/heygen-catalog"
+import { useHeygenAvatars, avatarSupportsV, voiceSelectionPatch, genderLabel, normalizeGender } from "@/components/heygen/heygen-catalog"
 import { AI_AVATAR_ENGINE_OPTIONS } from "@/components/editor/config-panels/model-options"
 import { VoiceRow } from "./voice-row"
 import { formatScriptMeta } from "./catalog-helpers"
@@ -46,10 +46,6 @@ function fileNameOf(url: string): string {
   }
 }
 
-function capitalize(s: string): string {
-  return s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s
-}
-
 export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: ConfiguredViewProps) {
   const t = useT()
   const source = data.avatarSource ?? "avatar"
@@ -78,7 +74,7 @@ export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: Confi
   const subtitle = isImage
     ? (imageWired ? t("node.arrivesAtRunTime") : t("node.uploadedPortrait"))
     : [
-        catalogLook?.gender ? capitalize(catalogLook.gender) : "",
+        catalogLook?.gender ? genderLabel(normalizeGender(catalogLook.gender), t) : "",
         supportsV === true ? t("node.avatarVReady") : supportsV === false ? "Avatar IV" : "",
       ].filter(Boolean).join(" · ")
 

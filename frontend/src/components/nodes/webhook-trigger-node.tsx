@@ -8,6 +8,8 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WebhookTriggerData, WebhookParam } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
+import { useWebhookTriggerUrl } from "@/hooks/use-webhook-trigger-url"
 
 
 function buildHandles(params: ReadonlyArray<WebhookParam>) {
@@ -37,12 +39,18 @@ function buildHandles(params: ReadonlyArray<WebhookParam>) {
 }
 
 function WebhookTriggerNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as WebhookTriggerData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNodeInternals = useUpdateNodeInternals()
 
   const params = nodeData.params ?? []
   const handles = useMemo(() => buildHandles(params), [params])
+  // The card names the URL without its token: the token is the endpoint's only
+  // credential, and a canvas ends up in screenshots. The full URL is copied
+  // from the settings panel.
+  const { url, token } = useWebhookTriggerUrl(id)
+  const maskedUrl = url && token ? url.replace(token, `${token.slice(0, 8)}••••`) : null
 
   useEffect(() => {
     updateNodeInternals(id)
@@ -68,11 +76,11 @@ function WebhookTriggerNodeComponent({ id, data, selected }: NodeProps) {
       >
         <div className="p-3" style={{ minHeight: params.length > 1 ? `${params.length * 22 + 8}px` : undefined }}>
           <p className="text-sm text-muted-foreground line-clamp-2 break-all">
-            {nodeData.webhookUrl || "Configure webhook..."}
+            {maskedUrl ?? t("node.webhookSaveToCreateUrl")}
           </p>
           {params.length > 0 && (
             <p className="text-[10px] text-muted-foreground mt-1">
-              {params.length} param{params.length !== 1 ? "s" : ""}
+              {params.length === 1 ? t("node.paramCountOne", { n: params.length }) : t("node.paramCountMany", { n: params.length })}
             </p>
           )}
         </div>

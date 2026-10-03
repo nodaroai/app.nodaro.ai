@@ -18,18 +18,25 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const {
   mockFrom, mockRpc, mockAutoRecharge, mockEnforce, mockPayerActive, mockInvalidate,
-  tableResponses, updateCalls, insertCalls,
+  tableResponses, profileResponses, updateCalls, insertCalls,
 } = vi.hoisted(() => {
   const tableResponses = new Map<string, { data: unknown; error: unknown }>()
+  const profileResponses = new Map<string, { data: unknown; error: unknown }>()
   const updateCalls: Array<{ table: string; values: unknown; eq: unknown[] }> = []
   const insertCalls: Array<{ table: string; values: unknown }> = []
 
   function createChain(table: string, response: { data: unknown; error: unknown } | null) {
     const fallback = response ?? { data: null, error: { code: "PGRST116" } }
+    let profileId: string | undefined
     const chain = {
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockImplementation(() => Promise.resolve(fallback)),
+      eq: vi.fn().mockImplementation((column: string, value: string) => {
+        if (table === "profiles" && column === "id") profileId = value
+        return chain
+      }),
+      single: vi.fn().mockImplementation(() => Promise.resolve(
+        profileId !== undefined && profileResponses.has(profileId) ? profileResponses.get(profileId) : fallback,
+      )),
       maybeSingle: vi.fn().mockImplementation(() => Promise.resolve(fallback)),
       insert: vi.fn().mockImplementation((values: unknown) => {
         insertCalls.push({ table, values })
@@ -58,7 +65,7 @@ const {
 
   return {
     mockFrom, mockRpc, mockAutoRecharge, mockEnforce, mockPayerActive, mockInvalidate,
-    tableResponses, updateCalls, insertCalls,
+    tableResponses, profileResponses, updateCalls, insertCalls,
   }
 })
 
@@ -109,6 +116,7 @@ function mockTable(table: string, data: unknown, error: unknown = null): void {
 
 beforeEach(() => {
   tableResponses.clear()
+  profileResponses.clear()
   updateCalls.length = 0
   insertCalls.length = 0
   mockFrom.mockClear()
@@ -125,6 +133,50 @@ beforeEach(() => {
   // watermark a personal call but must not watermark a deployment one.
   mockTable("profiles", { tier: "free", subscription_tier: null, lifetime_topup_credits: 0, subscription_credits: 100, topup_credits: 0 })
   mockTable("usage_logs", { id: "log-1", metadata: { from_sub: 5, from_topup: 0 } })
+})
+
+describe("checkCredits under a deployment payer", () => {
+  function balances(requester: number, payer: number) {
+    for (const [id, balance] of [[REQUESTER, requester], [PAYER, payer]] as const) {
+      profileResponses.set(id, { data: {
+        tier: "basic", subscription_tier: "basic", lifetime_topup_credits: 0,
+        subscription_credits: balance, topup_credits: 0,
+        daily_spent_credits: 0, last_daily_reset: new Date().toISOString(), app_credits_allowance: 0,
+      }, error: null })
+    }
+    mockTable("model_pricing", { credit_cost: 75, is_enabled: true, tier_restriction: null })
+  }
+
+  it("allows a workflow video preflight when the requester has zero local credits and the payer has funds", async () => {
+    balances(0, 100)
+    const result = await CreditsService.checkCredits(REQUESTER, "veo3_lite", false, undefined, { billingContext: DEP_CTX })
+    expect(result).toMatchObject({ allowed: true, balance: 100, watermark: false })
+  })
+
+  it("refuses an unfunded deployment payer even when the requester has local credits", async () => {
+    balances(100, 0)
+    const result = await CreditsService.checkCredits(REQUESTER, "veo3_lite", false, undefined, { billingContext: DEP_CTX })
+    expect(result).toMatchObject({ allowed: false, balance: 0, required: 75 })
+  })
+
+  it("checks a dynamic workflow price against the payer's pool", async () => {
+    balances(1000, 100)
+    const result = await CreditsService.checkCredits(REQUESTER, "veo3_lite", false, 125, { billingContext: DEP_CTX })
+    expect(result).toMatchObject({ allowed: false, balance: 100, required: 125 })
+  })
+
+  it("fails closed if the payer profile cannot be loaded", async () => {
+    balances(100, 100)
+    profileResponses.set(PAYER, { data: null, error: { code: "PGRST116" } })
+    const result = await CreditsService.checkCredits(REQUESTER, "veo3_lite", false, undefined, { billingContext: DEP_CTX })
+    expect(result).toMatchObject({ allowed: false, error: "User profile not found" })
+  })
+
+  it("still checks the requester's pool without a deployment context", async () => {
+    balances(0, 100)
+    const result = await CreditsService.checkCredits(REQUESTER, "veo3_lite")
+    expect(result).toMatchObject({ allowed: false, balance: 0, required: 75 })
+  })
 })
 
 describe("reserveCredits under a deployment payer", () => {

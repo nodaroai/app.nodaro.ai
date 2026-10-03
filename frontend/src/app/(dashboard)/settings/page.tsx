@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import {
   Loader2, Globe, Lock, RotateCcw, FileText, Save, Info,
   Pencil, X, Download, Upload, Key, ChevronRight, LayoutList,
-  Plus, Trash2, Sparkles, Braces, KeyRound,
+  Plus, Trash2, Sparkles, Braces, KeyRound, Plug,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -25,6 +25,9 @@ import {
   TEMPLATE_GROUPS,
   WRAPPER_TEMPLATE_KEY,
 } from "@/lib/prompt-templates"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
+import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
+import type { SceneNodeType } from "@/types/nodes"
 import { useUserSettings, useUpdatePublicOutputsMutation, useSaveTemplatesMutation, useUpdateNodeMenuPrefsMutation, useUpdateVariableDisplayModeMutation } from "@/hooks/queries/use-user-settings-queries"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
@@ -48,8 +51,10 @@ const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
 const VALID_TEMPLATE_KEYS = new Set(Object.keys(SYSTEM_PROMPT_TEMPLATES))
 
 import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 export default function SettingsPage() {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const { user, loading: authLoading } = useAuth()
   // "One designated account pays for this instance" — the only thing the
   // browser is told about the deployment payer (its identity is redacted from
@@ -392,9 +397,27 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          <ChevronRight className={cn("h-5 w-5 text-muted-foreground", isRtl && "rotate-180")} />
         </Link>
       )}
+
+      {/* Connected apps — every edition: OAuth apps and AI assistants (MCP)
+          reach an account on community installs too. */}
+      <Link
+        to="/settings/connected-apps"
+        className="mt-6 flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-6 hover:bg-muted/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <Plug className="h-5 w-5 text-muted-foreground" />
+          <div>
+            <h2 className="text-base font-semibold">{t("settings.connectedApps")}</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {t("settings.connectedAppsDesc")}
+            </p>
+          </div>
+        </div>
+        <ChevronRight className={cn("h-5 w-5 text-muted-foreground", isRtl && "rotate-180")} />
+      </Link>
 
       {/* Provider keys — self-hosted editions manage them under Integrations
           (next to the nodaro.ai connection); this is the pointer for anyone
@@ -413,7 +436,7 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          <ChevronRight className={cn("h-5 w-5 text-muted-foreground", isRtl && "rotate-180")} />
         </Link>
       )}
 
@@ -513,10 +536,11 @@ export default function SettingsPage() {
             </SelectTrigger>
             <SelectContent>
               {/* Each label shows the mode applied to itself, so the list is its
-                  own preview — no need to open the editor to see the difference. */}
-              <SelectItem value="raw">{"{Subject}"}</SelectItem>
-              <SelectItem value="annotated">{"{Subject: a red fox}"}</SelectItem>
-              <SelectItem value="resolved">a red fox</SelectItem>
+                  own preview — no need to open the editor to see the difference.
+                  The braces are the variable syntax; the name and value are words. */}
+              <SelectItem value="raw">{`{${t("dash.varSampleName")}}`}</SelectItem>
+              <SelectItem value="annotated">{`{${t("dash.varSampleName")}: ${t("dash.varSampleValue")}}`}</SelectItem>
+              <SelectItem value="resolved">{t("dash.varSampleValue")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -578,7 +602,8 @@ export default function SettingsPage() {
           {TEMPLATE_GROUPS.map((group) => (
             <TemplateGroupCard
               key={group.name}
-              name={group.name}
+              name={t(group.labelKey)}
+              nodeType={group.nodeType}
               descriptionKey={group.descriptionKey}
               generationKey={group.generationKey}
               templates={localTemplates}
@@ -825,6 +850,7 @@ type TemplateTab = "description" | "generation"
 
 function TemplateGroupCard({
   name,
+  nodeType,
   descriptionKey,
   generationKey,
   templates,
@@ -834,7 +860,10 @@ function TemplateGroupCard({
   onChange,
   onReset,
 }: {
+  /** The group's name in the interface language. */
   readonly name: string
+  /** The asset node whose Run generates this group's image. */
+  readonly nodeType: SceneNodeType
   readonly descriptionKey: string
   readonly generationKey: string
   readonly templates: Record<string, string>
@@ -845,6 +874,7 @@ function TemplateGroupCard({
   readonly onReset: (key: string) => void
 }) {
   const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const [tab, setTab] = useState<TemplateTab>("description")
 
   const activeKey = tab === "description" ? descriptionKey : generationKey
@@ -869,8 +899,8 @@ function TemplateGroupCard({
               </button>
             </TooltipTrigger>
             <TooltipContent side="right" className="max-w-xs text-xs leading-relaxed">
-              <p><strong>{t("settings.descriptionTab")}</strong> {t("settings.tooltipDescText")}</p>
-              <p className="mt-1"><strong>{t("settings.generationTab")}</strong> {t("settings.tooltipGenText", { name })}</p>
+              <p><strong>{t("settings.descriptionTab")}</strong>{t("common.dashJoin")}{t("settings.tooltipDescBody")}</p>
+              <p className="mt-1"><strong>{t("settings.generationTab")}</strong>{t("common.dashJoin")}{t("settings.tooltipGenBody", { name: localizeNode(nodeTypeDefaultLabel(nodeType)) })}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -1023,14 +1053,14 @@ function TemplateCard({
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h4 className="text-sm font-semibold">{info.label}</h4>
+            <h4 className="text-sm font-semibold">{t(info.labelKey)}</h4>
             {hasOverride && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
                 {t("settings.custom")}
               </span>
             )}
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">{info.description}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t(info.descriptionKey)}</p>
         </div>
 
         <div className="flex items-center gap-1">

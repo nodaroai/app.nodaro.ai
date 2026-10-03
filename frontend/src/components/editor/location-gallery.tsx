@@ -9,10 +9,12 @@ import { type DbLocation } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { useLocations } from "@/hooks/queries/use-assets-queries"
 import type { LocationNodeData } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
 
 export function LocationGalleryButton() {
   const [open, setOpen] = useState(false)
   const { user } = useAuth()
+  const t = useT()
 
   const nodes = useWorkflowStore((s) => s.nodes)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -136,9 +138,9 @@ export function LocationGalleryButton() {
         onClick={() => setOpen(true)}
       >
         <MapPin className="h-4 w-4" />
-        Locations
+        {t("entity.btnLocations")}
         {locCount > 0 && (
-          <span className="ml-auto text-[10px] bg-cyan-500/10 text-cyan-600 px-1.5 py-0.5 rounded-full">
+          <span className="ms-auto text-[10px] bg-cyan-500/10 text-cyan-600 px-1.5 py-0.5 rounded-full">
             {locCount}
           </span>
         )}
@@ -150,8 +152,8 @@ export function LocationGalleryButton() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card border rounded-xl shadow-2xl w-[420px] max-w-[90vw] max-h-[70vh] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b">
-              <h3 className="text-sm font-semibold">Location Library</h3>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setOpen(false)} aria-label="Close">
+              <h3 className="text-sm font-semibold">{t("entity.locationLibrary")}</h3>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setOpen(false)} aria-label={t("common.close")}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -161,21 +163,21 @@ export function LocationGalleryButton() {
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                   <Loader2 className="w-8 h-8 animate-spin mb-2" />
-                  <p className="text-sm">Loading locations...</p>
+                  <p className="text-sm">{t("entity.loadingLocations")}</p>
                 </div>
               ) : error ? (
                 <div className="flex flex-col items-center justify-center py-8 text-destructive">
                   <AlertCircle className="w-8 h-8 mb-2" />
-                  <p className="text-sm">{error instanceof Error ? error.message : "Failed to load locations"}</p>
+                  <p className="text-sm">{error instanceof Error ? error.message : t("entity.loadLocationsFailed")}</p>
                   <Button variant="outline" size="sm" className="mt-2" onClick={() => refetch()}>
-                    Retry
+                    {t("common.retry")}
                   </Button>
                 </div>
               ) : locCount === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                   <MapPin className="w-10 h-10 mb-2 opacity-40" />
-                  <p className="text-sm">No saved locations</p>
-                  <p className="text-xs mt-1">Generate a location image to save it here</p>
+                  <p className="text-sm">{t("entity.noSavedLocations")}</p>
+                  <p className="text-xs mt-1">{t("entity.noSavedLocationsHint")}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
@@ -185,9 +187,9 @@ export function LocationGalleryButton() {
                       <div key={loc.id} className="relative group">
                         <button
                           type="button"
-                          className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-transparent hover:border-border hover:bg-muted/30 transition-colors cursor-pointer text-left w-full"
+                          className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-transparent hover:border-border hover:bg-muted/30 transition-colors cursor-pointer text-start w-full"
                           onClick={() => handleLocationClick(loc)}
-                          title={`View ${loc.name}`}
+                          title={t("assetlib.viewAsset", { name: loc.name })}
                         >
                           {loc.sourceImageUrl ? (
                             <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted/30">
@@ -206,15 +208,15 @@ export function LocationGalleryButton() {
                           )}
                           <span className="text-xs truncate w-full text-center">{loc.name}</span>
                           {isOnCanvas && (
-                            <span className="text-[9px] text-muted-foreground">On canvas</span>
+                            <span className="text-[9px] text-muted-foreground">{t("assetlib.onCanvas")}</span>
                           )}
                         </button>
                         {/* Add to canvas button - always visible */}
                         <button
                           type="button"
-                          className="absolute bottom-1 right-1 w-6 h-6 flex items-center justify-center bg-cyan-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-cyan-600"
+                          className="absolute bottom-1 end-1 w-6 h-6 flex items-center justify-center bg-cyan-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-cyan-600"
                           onClick={(e) => handleAddToCanvas(e, loc)}
-                          title={`Add ${loc.name} to canvas`}
+                          title={t("assetlib.addToCanvas", { name: loc.name })}
                         >
                           <Plus className="w-4 h-4" />
                         </button>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { composeCameraMotionHintFromConnections } from "../camera-motions.js"
+import { CAMERA_MOTIONS, composeCameraMotionHintFromConnections } from "../camera-motions.js"
 
 describe("composeCameraMotionHintFromConnections", () => {
   it("returns empty string for unknown motion", () => {
@@ -64,7 +64,8 @@ describe("composeCameraMotionHintFromConnections", () => {
       ["wide shot"],
       ["close-up"],
     )
-    expect(out).toContain("static")
+    // The static hint itself, whatever its approved wording.
+    expect(out).toContain(CAMERA_MOTIONS.find((motion) => motion.id === "static")!.promptHint)
     expect(out).toContain("beginning with wide shot")
     expect(out).toContain("ending with close-up")
   })

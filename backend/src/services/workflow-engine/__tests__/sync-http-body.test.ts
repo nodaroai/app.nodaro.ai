@@ -388,3 +388,19 @@ describe("buildSyncHttpBody — field shape matches route Zod schemas", () => {
     })
   })
 })
+
+describe("buildSyncHttpBody — a scraper run features its FIRST result", () => {
+  // The saved featuredIndex points into the PREVIOUS run's results, and the
+  // editor resets the node to item 0 on every completion. Sending it made a
+  // server run feature (and copy the video of) another item than the node
+  // then shows; the route's own default is the first result.
+  it("meta-ads-scrape sends no featuredIndex, whatever the node saved", () => {
+    const body = buildSyncHttpBody(node("meta-ads-scrape", { mode: "search", query: "nike", featuredIndex: 3 }), {}, CTX)
+    expect(body).not.toHaveProperty("featuredIndex")
+  })
+
+  it("instagram-scrape sends no featuredIndex, whatever the node saved", () => {
+    const body = buildSyncHttpBody(node("instagram-scrape", { mode: "profile", targets: "nike", featuredIndex: 3 }), {}, CTX)
+    expect(body).not.toHaveProperty("featuredIndex")
+  })
+})

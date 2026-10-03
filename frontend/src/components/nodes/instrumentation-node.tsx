@@ -6,12 +6,14 @@ import { Piano } from "lucide-react"
 import { getInstrument, getProductionStyle, getVocalPresence, getSingingStyle, buildInstrumentationHints } from "@nodaro/prompts"
 import { pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { InstrumentationData } from "@/types/nodes"
 
 function InstrumentationNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as InstrumentationData
+  const localizeNode = useLocalizeNodeLabel()
   const inst = (nodeData.instruments ?? []).map((id) => getInstrument(id)?.label).filter(Boolean) as string[]
-  const summary = inst.length > 0 ? inst.slice(0, 3).join(", ") + (inst.length > 3 ? ` +${inst.length - 3}` : "") : "Instrumentation"
+  const summary = inst.length > 0 ? inst.slice(0, 3).join(", ") + (inst.length > 3 ? ` +${inst.length - 3}` : "") : localizeNode("Instrumentation")
   const composed = buildInstrumentationHints(nodeData)
 
   // Vocal presence + singing style are multi-pick; show all (or "+N more").

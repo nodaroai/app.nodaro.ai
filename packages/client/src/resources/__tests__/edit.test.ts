@@ -57,6 +57,43 @@ describe("edit.silenceDetect", () => {
   })
 })
 
+describe("edit.audioSync", () => {
+  it("POSTs to /v1/audio-sync with the sources and the reference", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-as" }))
+    const sources = [
+      { id: "mic", url: "https://r2/mic.m4a" },
+      { id: "camA", url: "https://r2/camA.mp4" },
+    ]
+    const result = await client(fetchMock).edit.audioSync({ sources, reference: "mic", workflowId: "wf-1" })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/audio-sync")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ sources, reference: "mic", workflowId: "wf-1" })
+    expect(result.jobId).toBe("job-as")
+  })
+
+  it("omits the reference when none is given (the server measures against the first source)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j" }))
+    await client(fetchMock).edit.audioSync({
+      sources: [{ id: "a", url: "https://r2/a.wav" }, { id: "b", url: "https://r2/b.wav" }],
+    })
+    const sent = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as Record<string, unknown>
+    expect(sent).toEqual({ sources: [{ id: "a", url: "https://r2/a.wav" }, { id: "b", url: "https://r2/b.wav" }] })
+  })
+
+  it("surfaces a 400 as a typed NodaroError", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(400, { error: { code: "validation_error", message: 'reference: reference "x" is not one of the sources\' ids' } }),
+    )
+    await expect(
+      client(fetchMock).edit.audioSync({
+        sources: [{ id: "a", url: "https://r2/a.wav" }, { id: "b", url: "https://r2/b.wav" }],
+        reference: "x",
+      }),
+    ).rejects.toBeInstanceOf(NodaroError)
+  })
+})
+
 describe("edit.applyEdl", () => {
   const edl: Edl = {
     version: 1,
@@ -167,6 +204,43 @@ describe("edit.editPlan", () => {
     })
     const sent = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as Record<string, unknown>
     expect(sent.silence).toEqual(silence)
+  })
+
+  // B4 (decided 2026-09-25): an audio-sync result is applied client-side —
+  // the server never sees `offsets`, only the sources' offsetMs.
+  const mic = { id: "mic", url: "https://r2/mic.m4a", kind: "audio" as const, role: "master-audio" as const }
+  const cam = { id: "cam", url: "https://r2/cam.mp4", kind: "video" as const }
+  const sync = (confidence: number) => ({
+    version: 1 as const,
+    reference: "mic",
+    offsets: [
+      { sourceId: "mic", offsetMs: 0, confidence: 1, driftMsPerHour: 0 },
+      { sourceId: "cam", offsetMs: 2_000, confidence, driftMsPerHour: null },
+    ],
+    notes: [],
+  })
+
+  it("writes an audio-sync result's offsets onto the sources, and never sends `offsets` itself", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j" }))
+    await client(fetchMock).edit.editPlan({
+      mode: "tighten", planTier: "standard", transcript, sources: [mic, cam], offsets: sync(0.9), transcriptSourceId: "mic",
+    })
+    const sent = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as Record<string, unknown>
+    expect(sent.sources).toEqual([mic, { ...cam, offsetMs: 2_000 }])
+    expect(sent).not.toHaveProperty("offsets")
+    expect(sent).not.toHaveProperty("transcriptSourceId")
+    expect((sent.transcript as { sourceId?: string }).sourceId).toBe("mic")
+  })
+
+  it("rejects a weak match with a NodaroError before any request (nothing is charged)", async () => {
+    const fetchMock = vi.fn()
+    const err = await client(fetchMock).edit.editPlan({
+      mode: "tighten", planTier: "standard", transcript, sources: [mic, cam], offsets: sync(0.3),
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect((err as NodaroError).code).toBe("edit_plan_sources")
+    expect((err as NodaroError).message).toMatch(/audio-sync's match for "cam" is too weak to trust \(confidence 0.3; 0.5 needed\)/)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 

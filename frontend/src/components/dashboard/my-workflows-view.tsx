@@ -19,6 +19,7 @@ import { useProjectsStore } from "@/hooks/use-projects-store"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { toast } from "sonner"
+import { formatDate } from "@/lib/i18n/format"
 
 interface MyWorkflowsViewProps {
   readonly onCreateWorkflow: () => void
@@ -169,7 +170,7 @@ export function MyWorkflowsView({
                     )}
                     <span className="truncate">{projectDisplayName({ name: wf.projectName, isDefault: wf.projectIsDefault })}</span>
                     <span aria-hidden>·</span>
-                    <span className="flex-shrink-0">{new Date(wf.updatedAt).toLocaleDateString()}</span>
+                    <span className="flex-shrink-0">{formatDate(wf.updatedAt)}</span>
                   </p>
                 </div>
               </Link>

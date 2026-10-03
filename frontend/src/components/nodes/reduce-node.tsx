@@ -1,7 +1,8 @@
 "use client"
 
-import { useT, tx } from "@/lib/i18n"
+import { useT, type TFunction } from "@/lib/i18n"
 import { useLocalizeModelDescription } from "@/lib/i18n/labels"
+import { REDUCE_STRATEGY_COPY } from "@/lib/reduce-strategy-copy"
 import { memo, useMemo, type CSSProperties } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Trophy, FileText, Braces } from "lucide-react"
@@ -70,34 +71,34 @@ type HeadlineSetting =
   | { kind: "toggle"; label: string; field: string; value: boolean; onLabel: string; offLabel: string }
   | { kind: "select"; label: string; field: string; value: string; options: ReadonlyArray<{ value: string; label: string }> }
 
-function headlineSetting(strategyId: string, cfg: Record<string, unknown>): HeadlineSetting | null {
+function headlineSetting(strategyId: string, cfg: Record<string, unknown>, t: TFunction): HeadlineSetting | null {
   switch (strategyId) {
     case "pick-best-llm":
       return {
-        kind: "text", label: tx("cfgext.reduceFormJudgeBy"), field: "criteria", multiline: true,
+        kind: "text", label: t("cfgext.reduceFormJudgeBy"), field: "criteria", multiline: true,
         value: String(cfg.criteria ?? ""),
-        placeholder: "Describe what a winner looks like — e.g. the most eye-catching cover, one clear focal point, readable as a thumbnail.",
+        placeholder: t("node.phDescribeWinner"),
       }
     case "concat":
       return {
-        kind: "text", label: "Separator", field: "separator", multiline: false,
+        kind: "text", label: t("utilcfg.separator"), field: "separator", multiline: false,
         value: String(cfg.separator ?? "\n\n"),
-        placeholder: tx("node.textPlacedBetweenEachCandidate"),
+        placeholder: t("node.textPlacedBetweenEachCandidate"),
       }
     case "vote":
       return {
-        kind: "toggle", label: tx("node.caseSensitivity"), field: "caseSensitive",
+        kind: "toggle", label: t("node.caseSensitivity"), field: "caseSensitive",
         value: Boolean(cfg.caseSensitive),
-        onLabel: "Different letter case counts as different answers",
-        offLabel: "Different letter case counts as the same answer",
+        onLabel: t("node.caseSensitiveOn"),
+        offLabel: t("node.caseSensitiveOff"),
       }
     case "merge-json":
       return {
-        kind: "select", label: tx("cfgext.reduceFormHowToMerge"), field: "strategy",
+        kind: "select", label: t("cfgext.reduceFormHowToMerge"), field: "strategy",
         value: cfg.strategy === "shallow" ? "shallow" : "deep",
         options: [
-          { value: "deep", label: tx("cfgext.reduceFormDeep") },
-          { value: "shallow", label: tx("cfgext.reduceFormShallow") },
+          { value: "deep", label: t("cfgext.reduceFormDeep") },
+          { value: "shallow", label: t("cfgext.reduceFormShallow") },
         ],
       }
     default:
@@ -126,7 +127,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
     [nodeData.strategyConfig],
   )
   const strategy = REDUCE_STRATEGIES.find((s) => s.id === strategyId)
-  const strategyLabel = strategy?.label ?? "Choose Best"
+  const strategyLabel = strategy ? t(REDUCE_STRATEGY_COPY[strategy.id].label) : t("node.chooseBest")
   const isAI = strategyId === "pick-best-llm"
   const inputKind = String(strategyConfig.inputKind ?? "text")
 
@@ -143,7 +144,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
   const result = nodeData.result ?? ""
   const selectedIndex = typeof nodeData.lastMeta?.selectedIndex === "number" ? nodeData.lastMeta.selectedIndex : undefined
   const reasoning = nodeData.lastMeta?.reasoning
-  const setting = useMemo(() => headlineSetting(strategyId, strategyConfig), [strategyId, strategyConfig])
+  const setting = useMemo(() => headlineSetting(strategyId, strategyConfig, t), [strategyId, strategyConfig, t])
 
   const setStrategy = (nextId: string) => {
     const next = REDUCE_STRATEGIES.find((s) => s.id === nextId)
@@ -162,10 +163,10 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
 
   // The kind is now its own chip (AI mode) — the count no longer repeats it.
   const countLabel = arrived
-    ? isAI ? `${arrived} arrived` : `${arrived} arrived · ${reduceInputKindLabel(inputKind)}`
+    ? isAI ? t("node.nArrived", { n: arrived }) : `${t("node.nArrived", { n: arrived })} · ${reduceInputKindLabel(inputKind)}`
     : null
   const chosenLabel =
-    selectedIndex !== undefined && arrived ? `Chose #${selectedIndex + 1} of ${arrived}` : null
+    selectedIndex !== undefined && arrived ? t("node.choseOf", { n: selectedIndex + 1, total: arrived }) : null
 
   return (
     <div className="relative" style={{ maxWidth: "460px" }}>
@@ -204,8 +205,8 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                 {REDUCE_STRATEGIES.map((s) => (
                   <SelectItem key={s.id} value={s.id} className="text-xs">
                     <span className="flex flex-col gap-0.5">
-                      <span>{s.label}</span>
-                      <span className="text-[10px] leading-tight text-muted-foreground/70">{s.description}</span>
+                      <span>{t(REDUCE_STRATEGY_COPY[s.id].label)}</span>
+                      <span className="text-[10px] leading-tight text-muted-foreground/70">{t(REDUCE_STRATEGY_COPY[s.id].description)}</span>
                     </span>
                   </SelectItem>
                 ))}
@@ -328,8 +329,8 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                 <span className={kickerClass}>{t("cfgext.reduceTabCandidates")}</span>
                 <span className="text-[10px] text-muted-foreground/70">
                   {candidates.length === 0
-                    ? (upstreamCount ? "run to see them" : "connect candidates")
-                    : isAI ? "winner marked below" : strategyLabel.toLowerCase()}
+                    ? (upstreamCount ? t("node.runToSeeThem") : t("node.connectCandidates"))
+                    : isAI ? t("node.winnerMarkedBelow") : strategyLabel.toLowerCase()}
                 </span>
               </div>
               {candidates.length === 0 ? (
@@ -354,7 +355,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                           <span className="text-[9px] font-mono text-muted-foreground/70">#{i + 1}</span>
                           {win && (
                             <span className="text-[8px] font-mono tracking-[0.1em] px-1.5 py-0.5 rounded bg-[#ff0073]/15 text-[#ff0073]">
-                              WINNER
+                              {t("node.winner")}
                             </span>
                           )}
                         </div>
@@ -379,7 +380,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                 {isImageUrl(result) ? (
                   <div className="flex items-center gap-2 min-w-0">
                     <CachedImage src={result} alt="" className="w-10 h-10 object-cover rounded-md shrink-0" />
-                    <span className="text-[12px] text-foreground truncate">{chosenLabel ?? "The winning image"}</span>
+                    <span className="text-[12px] text-foreground truncate">{chosenLabel ?? t("node.theWinningImage")}</span>
                   </div>
                 ) : (
                   <span className="text-[12px] text-foreground" style={clamp(2)}>
@@ -394,7 +395,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
               </div>
             ) : (
               <span className="text-[11px] text-muted-foreground/60">
-                {status === "running" ? "Choosing…" : "Run to see the result"}
+                {status === "running" ? t("node.choosingEllipsis") : t("node.runToSeeTheResult")}
               </span>
             )}
           </div>

@@ -23,6 +23,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 import { useTutorialsGrouped } from "@/hooks/queries/use-tutorials"
 import { useProjects } from "@/hooks/queries/use-projects-queries"
 import {
@@ -125,11 +126,12 @@ function CompactVideoCard({
   onWatch: (v: VideoTutorialItem) => void
 }) {
   const thumb = videoThumbnailUrl(video)
+  const t = useT()
   return (
     <button
       type="button"
       onClick={() => onWatch(video)}
-      className="text-left group flex-shrink-0 w-48 rounded-lg overflow-hidden border border-border bg-card hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors cursor-pointer"
+      className="text-start group flex-shrink-0 w-48 rounded-lg overflow-hidden border border-border bg-card hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors cursor-pointer"
     >
       <div className="relative aspect-video bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
         {thumb ? (
@@ -147,7 +149,7 @@ function CompactVideoCard({
         {/* Play overlay */}
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
           <div className="h-9 w-9 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <Play className="h-4 w-4 text-white ml-0.5" fill="white" />
+            <Play className="h-4 w-4 text-white ms-0.5" fill="white" />
           </div>
         </div>
       </div>
@@ -155,7 +157,7 @@ function CompactVideoCard({
         <p className="text-xs font-medium text-foreground truncate">{video.title}</p>
         <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
           <Play className="h-2.5 w-2.5" fill="currentColor" />
-          Video
+          {t("home.tutorials.video")}
         </p>
       </div>
     </button>
@@ -175,12 +177,13 @@ function CompactFlowCard({
   onSelect: (f: FlowTutorialItem) => void
 }) {
   const complexity = COMPLEXITY_CONFIG[flow.complexity as Complexity]
+  const t = useT()
   return (
     <button
       type="button"
       onClick={() => onSelect(flow)}
       disabled={!flow.slug}
-      className="group text-left flex-shrink-0 w-48 rounded-lg overflow-hidden border border-amber-200/60 dark:border-amber-500/20 bg-gradient-to-b from-amber-50/40 to-card dark:from-amber-500/5 dark:to-card hover:border-amber-400 dark:hover:border-amber-500/50 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      className="group text-start flex-shrink-0 w-48 rounded-lg overflow-hidden border border-amber-200/60 dark:border-amber-500/20 bg-gradient-to-b from-amber-50/40 to-card dark:from-amber-500/5 dark:to-card hover:border-amber-400 dark:hover:border-amber-500/50 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
     >
       <div className="relative aspect-video bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
         {flow.previewMediaUrl ? (
@@ -209,7 +212,7 @@ function CompactFlowCard({
         {complexity && (
           <span
             className={cn(
-              "absolute top-1.5 right-1.5 text-[9px] px-1.5 py-0.5 rounded border font-medium",
+              "absolute top-1.5 end-1.5 text-[9px] px-1.5 py-0.5 rounded border font-medium",
               complexity.color,
             )}
           >
@@ -222,7 +225,7 @@ function CompactFlowCard({
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
           <span className="flex items-center gap-1">
             <Zap className="h-2.5 w-2.5" fill="currentColor" />
-            Tutorial
+            {t("home.tutorials.tutorial")}
           </span>
           {flow.estimatedCredits > 0 && (
             <span className="flex items-center gap-1">
@@ -339,6 +342,7 @@ interface TutorialsTabProps {
 
 export function TutorialsTab({ onSelectFlow }: TutorialsTabProps = {}) {
   const navigate = useNavigate()
+  const t = useT()
   const [filter, setFilter] = useState<FilterValue>("all")
   const [openVideo, setOpenVideo] = useState<VideoTutorialItem | null>(null)
   const [selectedFlow, setSelectedFlow] = useState<FlowTutorialItem | null>(null)
@@ -419,8 +423,8 @@ export function TutorialsTab({ onSelectFlow }: TutorialsTabProps = {}) {
     return (
       <div className="text-center py-16 text-muted-foreground">
         <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
-        <p className="text-sm font-medium">No tutorials yet</p>
-        <p className="text-xs mt-1 opacity-70">Check back soon for step-by-step tutorials.</p>
+        <p className="text-sm font-medium">{t("home.tutorials.empty")}</p>
+        <p className="text-xs mt-1 opacity-70">{t("dash.tutorialsCheckBack")}</p>
       </div>
     )
   }
@@ -436,21 +440,21 @@ export function TutorialsTab({ onSelectFlow }: TutorialsTabProps = {}) {
         <FilterPill
           active={filter === "all"}
           onClick={() => setFilter("all")}
-          label="All"
+          label={t("common.all")}
           count={totalVideos + totalFlows}
         />
         <FilterPill
           active={filter === "videos"}
           onClick={() => setFilter("videos")}
           icon={<Play className="h-3 w-3" fill="currentColor" />}
-          label="Video Courses"
+          label={t("dash.videoCourses")}
           count={totalVideos}
         />
         <FilterPill
           active={filter === "flows"}
           onClick={() => setFilter("flows")}
           icon={<Zap className="h-3 w-3" fill="currentColor" />}
-          label="Written Tutorials"
+          label={t("dash.writtenTutorials")}
           count={totalFlows}
         />
       </div>
@@ -460,7 +464,7 @@ export function TutorialsTab({ onSelectFlow }: TutorialsTabProps = {}) {
           {showStripHeaders && (
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
               <Play className="h-3.5 w-3.5" fill="currentColor" />
-              Video Courses
+              {t("dash.videoCourses")}
             </h3>
           )}
           {videoCategories.map((cat) => (
@@ -483,7 +487,7 @@ export function TutorialsTab({ onSelectFlow }: TutorialsTabProps = {}) {
           {showStripHeaders && (
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
               <Zap className="h-3.5 w-3.5" fill="currentColor" />
-              Written Tutorials
+              {t("dash.writtenTutorials")}
             </h3>
           )}
           {flowCategories.map((cat) => (
@@ -505,12 +509,12 @@ export function TutorialsTab({ onSelectFlow }: TutorialsTabProps = {}) {
           note rather than collapsing the page silently. */}
       {filter === "videos" && totalVideos === 0 && (
         <p className="text-xs text-muted-foreground text-center py-8">
-          No video courses available yet.
+          {t("dash.noVideoCourses")}
         </p>
       )}
       {filter === "flows" && totalFlows === 0 && (
         <p className="text-xs text-muted-foreground text-center py-8">
-          No written tutorials available yet.
+          {t("dash.noWrittenTutorials")}
         </p>
       )}
 

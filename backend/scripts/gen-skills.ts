@@ -16,6 +16,12 @@
  *   4. render-skill.ts produces the body of each auto-gen block.
  *   5. marker-blocks.ts surgically rewrites blocks while preserving any
  *      prose between them.
+ *   6. captureToolSurface() captures every MCP tool, its scope gate and its
+ *      input schema once per edition (a child process each, see
+ *      lib/gen-skills/tool-surface.ts); render-mcp-tools.ts writes the Scopes
+ *      table of docs/mcp/tools.md and all of docs/mcp/tool-parameters.md, and
+ *      fails the run when tools.md documents a tool that does not exist or
+ *      leaves one out.
  *
  * Phase A files (the 8-node whitelist) already exist with hand-written
  * prose between markers — gen-skills MUST keep that prose intact. The
@@ -32,6 +38,12 @@ import { MODEL_CATALOG, MODEL_RECOMMENDATIONS } from "@nodaro/shared"
 import { captureMcpToolSchemas, type CapturedSchema } from "./lib/gen-skills/capture-mcp-schemas.js"
 import { rewriteBlock } from "./lib/gen-skills/marker-blocks.js"
 import { renderNodeHandlesModule } from "./lib/gen-skills/render-node-handles.js"
+import { captureToolSurface } from "./lib/gen-skills/tool-surface.js"
+import {
+  renderScopesBlock,
+  renderToolParametersDoc,
+  toolsDocProblems,
+} from "./lib/gen-skills/render-mcp-tools.js"
 import {
   parseDataInterface,
   parseNodeDefinitions,
@@ -59,6 +71,8 @@ const SKILLS_DIR = join(REPO_ROOT, "backend", "skills")
 const NODES_DIR = join(SKILLS_DIR, "nodes")
 const WORKFLOW_EDITOR_FILE = join(SKILLS_DIR, "workflow-editor.md")
 const CHOOSING_MODELS_FILE = join(REPO_ROOT, "docs", "choosing-models.md")
+const MCP_TOOLS_DOC = join(REPO_ROOT, "docs", "mcp", "tools.md")
+const MCP_TOOL_PARAMETERS_DOC = join(REPO_ROOT, "docs", "mcp", "tool-parameters.md")
 // Backend-internal handle map (Copilot edge validation). Generated here so the
 // backend never hand-copies handle ids from the frontend NODE_DEFINITIONS.
 const NODE_HANDLES_FILE = join(REPO_ROOT, "backend", "src", "lib", "mcp", "generated", "node-handles.ts")
@@ -124,6 +138,7 @@ const NODE_TYPE_TO_TOOL: Record<string, string> = {
   "suno-convert-wav": "suno_convert_wav",
   "suno-upload-extend": "suno_upload_extend",
   "suno-separate": "suno_separate_stems",
+  "video-overlay": "overlay_images",
 }
 
 /**
@@ -302,6 +317,25 @@ async function main(): Promise<void> {
     writeFileSync(CHOOSING_MODELS_FILE, guide)
   }
 
+  // docs/mcp/ — the Scopes table and the parameter reference, from the tools
+  // each edition really registers (Nodaro Cloud as production runs it, and a
+  // self-hosted Community install for the "Cloud only" marks).
+  console.log("[gen-skills] capturing the MCP tool surface of each edition …")
+  const backendDir = join(REPO_ROOT, "backend")
+  const cloudSurface = await captureToolSurface("cloud", backendDir)
+  const communitySurface = await captureToolSurface("community", backendDir)
+  console.log(
+    `[gen-skills] ${Object.keys(cloudSurface.tools).length} tools on Nodaro Cloud, ${Object.keys(communitySurface.tools).length} self-hosted`,
+  )
+  const toolsDocSource = readFileSync(MCP_TOOLS_DOC, "utf-8")
+  const toolsDocProblemList = toolsDocProblems(toolsDocSource, cloudSurface)
+  if (toolsDocProblemList.length) throw new Error(toolsDocProblemList.join("\n"))
+  const toolsDoc = rewriteBlock(toolsDocSource, "mcp-scopes", renderScopesBlock(cloudSurface, communitySurface))
+  if (toolsDoc !== toolsDocSource) writeFileSync(MCP_TOOLS_DOC, toolsDoc)
+  const parametersDoc = renderToolParametersDoc(cloudSurface, communitySurface)
+  const existingParametersDoc = existsSync(MCP_TOOL_PARAMETERS_DOC) ? readFileSync(MCP_TOOL_PARAMETERS_DOC, "utf-8") : null
+  if (parametersDoc !== existingParametersDoc) writeFileSync(MCP_TOOL_PARAMETERS_DOC, parametersDoc)
+
   if (!existsSync(NODES_DIR)) mkdirSync(NODES_DIR, { recursive: true })
 
   // Per-node files.
@@ -376,7 +410,7 @@ async function main(): Promise<void> {
       // `git add`ed would read as "no drift" forever. Fail on those too.
       const untracked = execFileSync(
         "git",
-        ["ls-files", "--others", "--exclude-standard", "--", "backend/src/lib/mcp/generated/"],
+        ["ls-files", "--others", "--exclude-standard", "--", "backend/src/lib/mcp/generated/", "docs/mcp/tool-parameters.md"],
         { encoding: "utf-8", cwd: REPO_ROOT },
       ).trim()
       if (untracked) {
@@ -384,14 +418,22 @@ async function main(): Promise<void> {
       }
       execFileSync(
         "git",
-        ["diff", "--exit-code", "backend/skills/", "docs/choosing-models.md", "backend/src/lib/mcp/generated/"],
+        [
+          "diff",
+          "--exit-code",
+          "backend/skills/",
+          "docs/choosing-models.md",
+          "backend/src/lib/mcp/generated/",
+          "docs/mcp/tools.md",
+          "docs/mcp/tool-parameters.md",
+        ],
         {
           stdio: "inherit",
           cwd: REPO_ROOT,
         },
       )
       console.log(
-        "[gen-skills] no drift — backend/skills/, docs/choosing-models.md and backend/src/lib/mcp/generated/ are up to date",
+        "[gen-skills] no drift — backend/skills/, docs/choosing-models.md, docs/mcp/ and backend/src/lib/mcp/generated/ are up to date",
       )
     } catch {
       console.error(

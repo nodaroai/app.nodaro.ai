@@ -9,6 +9,7 @@ const map: LocaleCatalogMap = {
   "bedroom": { label: "Спальня", description: "Интимная спальня" },
   "living-room": { label: "Гостиная", description: "Уютная жилая гостиная" },
   "kitchen": { label: "Кухня", description: "Тёплая домашняя кухня с утренним светом" },
+  "bathroom": { label: "Ванная", description: "Светлая домашняя ванная" },
   "hotel-room": { label: "Гостиничный номер", description: "Элегантный гостиничный номер с видом на город" },
   "restaurant": { label: "Ресторан", description: "Интимный ресторан при свечах" },
   "nightclub": { label: "Ночной клуб", description: "Тёмный клуб с лазерами и дымом" },
@@ -20,6 +21,7 @@ const map: LocaleCatalogMap = {
   "warehouse": { label: "Промышленный склад", description: "Огромный склад с потолочными окнами" },
   "subway-car": { label: "Вагон метро", description: "Движущийся интерьер метро" },
   "taxi": { label: "Салон такси", description: "Заднее сиденье городского такси ночью" },
+  "car-interior": { label: "Салон автомобиля", description: "Переднее сиденье припаркованной машины" },
   "cathedral": { label: "Собор", description: "Интерьер готического собора" },
   "art-gallery": { label: "Художественная галерея", description: "Минималистичная галерея в стиле white-cube" },
 

@@ -67,7 +67,7 @@ import { getEraPromptHint, getEraTerm } from "./era.js"
 import { getBackdropPromptHint, getBackdropTerm } from "./backdrop.js"
 import { buildActionFxHints } from "./action-fx.js"
 import { getTemporalPromptHint, getTemporalTerm } from "./temporal.js"
-import { getTransitionPromptHint, getTransitionTerm } from "./transitions.js"
+import { renderTransitionBases } from "./transitions.js"
 import { getLoopSubjectPromptHint, getLoopSubjectTerm } from "./loop-subject.js"
 
 /** Which generation stages fold a dimension. */
@@ -251,7 +251,7 @@ export const DIRECTION_FIELDS = [
   { key: "temporalFreeze", surface: "video", family: "motion", maxPicks: 1, render: temporal },
   { key: "temporalDirection", surface: "video", family: "motion", maxPicks: 1, render: temporal },
   { key: "temporalShutter", surface: "video", family: "motion", maxPicks: 1, render: temporal },
-  { key: "transition", surface: "video", family: "motion", maxPicks: 2, render: perId(getTransitionPromptHint, getTransitionTerm) },
+  { key: "transition", surface: "video", family: "motion", maxPicks: 2, render: renderTransitionBases },
   { key: "loopSubject", surface: "video", family: "motion", maxPicks: 1, render: perId(getLoopSubjectPromptHint, getLoopSubjectTerm) },
 
   // ── LEGACY BLOCK — see the table doc above. Placed LAST, in today's exact

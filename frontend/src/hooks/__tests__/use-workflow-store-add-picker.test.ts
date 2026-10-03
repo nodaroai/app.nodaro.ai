@@ -17,6 +17,8 @@ vi.mock("@xyflow/react", async () => {
 vi.mock("@/lib/parameter-node-prefs", () => ({
   getStickyParameterDisplayMode: vi.fn(() => "picks"),
   setStickyParameterDisplayMode: vi.fn(),
+  getStickyLookPreviewStyle: vi.fn(() => undefined),
+  setStickyLookPreviewStyle: vi.fn(),
 }))
 
 vi.mock("@/components/editor/workflow-editor/auto-execute", () => ({

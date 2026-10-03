@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { getAuthHeaders } from "@/lib/api"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
 
 export interface NodaroProviderPrefs {
   readonly scope: "all" | "exclusives"
@@ -66,11 +67,11 @@ function RadioRow({
       role="radio"
       aria-checked={checked}
       onClick={onSelect}
-      className={`flex w-full items-start gap-2.5 rounded-lg border p-3 text-left transition-colors ${
+      className={`flex w-full items-start gap-2.5 rounded-lg border p-3 text-start transition-colors ${
         checked
           ? "border-[#ff0073]/60 bg-[#ff0073]/5"
           : "border-gray-200 dark:border-[#2D2D2D] hover:border-gray-300 dark:hover:border-[#3D3D3D]"
-      } ${indent ? "ml-6" : ""}`}
+      } ${indent ? "ms-6" : ""}`}
     >
       <span
         aria-hidden
@@ -101,6 +102,7 @@ export function NodaroScopeDialog({
   const [scope, setScope] = useState<NodaroProviderPrefs["scope"]>(DEFAULT_PREFS.scope)
   const [precedence, setPrecedence] = useState<NodaroProviderPrefs["precedence"]>(DEFAULT_PREFS.precedence)
   const [saving, setSaving] = useState(false)
+  const t = useT()
 
   useEffect(() => {
     if (open) {
@@ -114,7 +116,7 @@ export function NodaroScopeDialog({
     const ok = await saveNodaroPrefs(prefs)
     setSaving(false)
     if (!ok) {
-      toast.error("Could not save the nodaro.ai routing choice — try again from Integrations")
+      toast.error(tx("integ.scopeSaveFailed"))
       onClose(null)
       return
     }
@@ -134,43 +136,43 @@ export function NodaroScopeDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Cloud className="h-5 w-5 text-[#ff0073]" />
-            How should nodaro.ai be used?
+            {t("integ.scopeTitle")}
           </DialogTitle>
           <DialogDescription>
-            You can change this anytime from Integrations → nodaro.ai.
+            {t("integ.scopeChangeAnytime")}
           </DialogDescription>
         </DialogHeader>
 
-        <div role="radiogroup" aria-label="nodaro.ai scope" className="flex flex-col gap-2">
+        <div role="radiogroup" aria-label={t("integ.scopeAria")} className="flex flex-col gap-2">
           <RadioRow
             checked={scope === "all"}
             onSelect={() => setScope("all")}
-            title="nodaro for everything"
-            detail="All generation runs through nodaro.ai — billed to your nodaro.ai account."
+            title={t("integ.scopeAllTitle")}
+            detail={t("integ.scopeAllDetail")}
           />
           {scope === "all" && (
-            <div role="radiogroup" aria-label="who runs when you also have your own provider keys" className="flex flex-col gap-2">
+            <div role="radiogroup" aria-label={t("integ.scopePrecedenceAria")} className="flex flex-col gap-2">
               <RadioRow
                 indent
                 checked={precedence === "nodaro"}
                 onSelect={() => setPrecedence("nodaro")}
-                title="nodaro first"
-                detail="Ignore my other provider keys — everything is billed to my nodaro.ai account."
+                title={t("integ.scopeNodaroFirstTitle")}
+                detail={t("integ.scopeNodaroFirstDetail")}
               />
               <RadioRow
                 indent
                 checked={precedence === "local"}
                 onSelect={() => setPrecedence("local")}
-                title="My keys first"
-                detail="My own providers (KIE, Replicate…) run what they can; nodaro.ai fills the gaps."
+                title={t("integ.scopeMyKeysFirstTitle")}
+                detail={t("integ.scopeMyKeysFirstDetail")}
               />
             </div>
           )}
           <RadioRow
             checked={scope === "exclusives"}
             onSelect={() => setScope("exclusives")}
-            title="Only the Nodaro-exclusive nodes"
-            detail="Video Pro, Voice Changer Pro, Video Analysis… — everything else keeps using your own providers."
+            title={t("integ.scopeExclusivesTitle")}
+            detail={t("integ.scopeExclusivesDetail")}
           />
         </div>
 
@@ -180,8 +182,8 @@ export function NodaroScopeDialog({
             disabled={saving}
             className="bg-[#ff0073] hover:bg-[#e0005f] text-white"
           >
-            {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-            Save
+            {saving && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
+            {t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

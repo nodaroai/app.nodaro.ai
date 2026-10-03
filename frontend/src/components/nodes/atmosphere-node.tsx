@@ -6,7 +6,8 @@ import { CloudFog } from "lucide-react"
 import { getAtmosphere, getAtmosphereLabel } from "@nodaro/prompts"
 import { pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
-import { AtmospherePreview } from "@/lib/picker-ui"
+import { LookPreviewStyleSwitch } from "./look-preview-style"
+import { AtmospherePreview, LookArt } from "@/lib/picker-ui"
 import type { AtmosphereData } from "@/types/nodes"
 
 function AtmosphereNodeComponent({ id, data, selected }: NodeProps) {
@@ -18,16 +19,19 @@ function AtmosphereNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <ParameterNodeShell id={id} label={nodeData.label} icon={<CloudFog />} handleId="out" selected={selected} fluidWidth>
-      <p className="text-foreground text-sm font-medium">
-        {getAtmosphereLabel(primaryId)}
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-foreground text-sm font-medium min-w-0">
+          {getAtmosphereLabel(primaryId)}
+        </p>
+        <LookPreviewStyleSwitch pickerKey="atmosphere" />
+      </div>
       {extraIds.map((extraId) => (
         <p key={extraId} className="text-foreground/80 text-xs leading-tight">
           <span className="text-muted-foreground">+ </span>
           {getAtmosphereLabel(extraId)}
         </p>
       ))}
-      <AtmospherePreview atmosphereId={primaryId} className="w-full aspect-[16/9]" />
+      <LookArt pickerKey="atmosphere" id={primaryId} className="w-full aspect-[16/9]" width={640} fallback={<AtmospherePreview atmosphereId={primaryId} className="w-full aspect-[16/9]" />} />
       {description && extraIds.length === 0 && (
         <p className="text-muted-foreground text-[11px] leading-snug">
           {description}

@@ -1,6 +1,8 @@
 import { useState } from "react"
 import { ChevronDown, ChevronRight, Trash2, Plus, Eye, EyeOff, Square, RectangleHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 
 interface GroupCardProps {
   title: string
@@ -28,6 +30,8 @@ export function GroupCard({
   onAddRichtext,
 }: GroupCardProps) {
   const [collapsed, setCollapsed] = useState(false)
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
 
   // No title, no background → just render children directly
   if (!showTitle && !showBackground && !isEditing) {
@@ -82,10 +86,10 @@ export function GroupCard({
               setCollapsed((c) => !c)
             }}
             className="shrink-0 text-purple-400 hover:text-purple-300 transition-colors"
-            aria-label={collapsed ? "Expand group" : "Collapse group"}
+            aria-label={collapsed ? t("present.expandGroup") : t("present.collapseGroup")}
           >
             {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className={cn("h-4 w-4", isRtl && "rotate-180")} />
             ) : (
               <ChevronDown className="h-4 w-4" />
             )}
@@ -98,7 +102,7 @@ export function GroupCard({
               onChange={(e) => onTitleChange?.(e.target.value)}
               onClick={(e) => e.stopPropagation()}
               className="flex-1 min-w-0 bg-transparent border-none text-sm font-medium text-purple-300 placeholder:text-purple-400/40 focus:outline-none focus:ring-0"
-              placeholder="Group title..."
+              placeholder={t("present.groupTitlePlaceholder")}
             />
           ) : (
             <span className="flex-1 min-w-0 text-sm font-medium text-purple-300 truncate">
@@ -116,10 +120,10 @@ export function GroupCard({
                     onAddRichtext()
                   }}
                   className="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors"
-                  title="Add rich text block"
+                  title={t("present.addRichTextBlock")}
                 >
                   <Plus className="h-3 w-3" />
-                  Text
+                  {t("present.text")}
                 </button>
               )}
               {onDelete && (
@@ -130,7 +134,7 @@ export function GroupCard({
                     onDelete()
                   }}
                   className="flex items-center justify-center w-6 h-6 text-muted-foreground/50 hover:text-red-400 rounded-md hover:bg-red-500/10 transition-colors"
-                  title="Remove group"
+                  title={t("present.removeGroup")}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -143,15 +147,15 @@ export function GroupCard({
       {/* Edit controls for hidden title — show inline toggle bar */}
       {isEditing && !showTitle && (
         <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-muted-foreground border-b border-border/30">
-          <span className="text-purple-400 truncate flex-1">{title || "Untitled group"}</span>
+          <span className="text-purple-400 truncate flex-1">{title || t("present.untitledGroup")}</span>
           {onAddRichtext && (
             <button
               type="button"
               onClick={onAddRichtext}
               className="flex items-center gap-1 px-2 py-0.5 hover:text-foreground rounded hover:bg-muted transition-colors"
-              title="Add rich text"
+              title={t("present.addRichText")}
             >
-              <Plus className="h-3 w-3" />Text
+              <Plus className="h-3 w-3" />{t("present.text")}
             </button>
           )}
           {onDelete && (
@@ -159,7 +163,7 @@ export function GroupCard({
               type="button"
               onClick={onDelete}
               className="flex items-center justify-center w-5 h-5 hover:text-red-400 rounded hover:bg-red-500/10 transition-colors"
-              title="Remove group"
+              title={t("present.removeGroup")}
             >
               <Trash2 className="h-3 w-3" />
             </button>
@@ -177,10 +181,10 @@ export function GroupCard({
               "flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition-colors",
               showTitle ? "text-purple-400 bg-purple-500/10" : "text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted",
             )}
-            title={showTitle ? "Hide title" : "Show title"}
+            title={showTitle ? t("present.hideTitle") : t("present.showTitle")}
           >
             {showTitle ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-            Title
+            {t("present.title")}
           </button>
           <button
             type="button"
@@ -189,10 +193,10 @@ export function GroupCard({
               "flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition-colors",
               showBackground ? "text-purple-400 bg-purple-500/10" : "text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted",
             )}
-            title={showBackground ? "Hide background" : "Show background"}
+            title={showBackground ? t("present.hideBackground") : t("present.showBackground")}
           >
             {showBackground ? <RectangleHorizontal className="h-3 w-3" /> : <Square className="h-3 w-3" />}
-            Background
+            {t("present.background")}
           </button>
         </div>
       )}

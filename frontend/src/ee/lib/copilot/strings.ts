@@ -1,165 +1,224 @@
 /**
- * Every user-visible string in the Copilot panel, in one place.
+ * Every user-visible string in the Copilot panel, indexed in one place.
  *
- * The editor chrome is English regardless of the user's locale (same rule as
- * the rest of the workflow editor), and this file is the single source the
- * design review reads against. Copy is verbatim from the approved design —
- * including the curly quotes — so do not "fix" punctuation here.
+ * The copy itself lives in the chrome dictionaries, under `copilot.*` plus a
+ * few shared words (`common.*`, the product name): `lib/i18n/en.ts` holds the
+ * English verbatim from the approved design — including the curly quotes, so
+ * do not "fix" punctuation there — and `he.ts` the Hebrew. This index is what
+ * the design review reads against: one name per string, each typed as a real
+ * dictionary key, so a typo or a deleted key fails the type check.
+ *
+ * Nothing here is translated. Components resolve a key at render with
+ * `useT()`; the turn engine and the home-page handoff resolve it at the moment
+ * they write a notice, with `tx()`. Never resolve one at module load — that
+ * freezes whatever language the page happened to start in.
+ *
+ * Counted strings come in `…One` / `…Other` pairs with `{n}` in both forms.
+ * Credit figures are converted by the caller (`creditUnits`, and
+ * `creditUnitLabel(t("credits.unitShort"))` for the short unit) before they are
+ * interpolated, so this file carries no credit math.
  */
 
-import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
+import type { MessageKey } from "@/lib/i18n"
 
-export const COPILOT_STRINGS = {
-  title: "Copilot",
+export const COPILOT_KEYS = {
+  title: "editor.copilotName",
 
-  modeAsk: "Ask",
-  modeAuto: "Auto",
-  modeHintAsk: "asks before running",
-  modeHintAuto: "runs on its own",
-  ceilingPrefix: "up to",
-  ceilingSuffix: "cr",
-  ceilingLabel: "Auto-run credit limit",
-  tierLabel: "Model",
-  tierEconomy: "Fast",
-  tierStandard: "Smart",
-  tierPremium: "Max",
-  tierHintEconomy: "Cheapest and quickest — weaker at building; best for small edits",
-  tierHintStandard: "The default — builds well at a fair price",
-  tierHintPremium: "The strongest model — for complex builds; costs the most",
-  close: "Close Copilot",
-
-  homeTagline: "describe it, and it gets built on the canvas",
-  homePlaceholder: "Describe the workflow you want…",
-  homeBuild: "Build it",
-  homeCollapse: "Collapse Copilot",
-  homeExpand: "Open Copilot",
-  homeBuildFailed: "Could not start that — try again.",
-  homeTooLong: "That is too long to send — shorten it, or remove a mention.",
-  handoffSendFailed: "Could not send that automatically — press send to try again.",
-  handoffInterrupted: "You left before this could start — press send when you are ready.",
-  handoffFetchFailed: "Could not read what you asked for on the home page. Type it here and send.",
-
-  emptyGreeting: (name: string) => `Hey ${name}`,
-  emptyBlurb: "Describe the workflow you want. I build it on the canvas, then ask before spending anything.",
-
-  updatedTitle: "Workflow updated",
-  updatedShowOnCanvas: "Show on canvas",
-
-  proposeTitle: "Run this workflow?",
-  proposeRun: "Run",
-  proposeSkip: "Skip",
-  proposeEstimate: (credits: number) => `~${creditUnits(credits)} credits`,
-  estimatePending: "pricing…",
-  autoNotice: (credits: number, ceiling: number) => `Auto mode — running it now, ~${creditUnits(credits)} of your ${creditUnits(ceiling)} credit limit.`,
-  autoNoticePending: (ceiling: number) => `Auto mode — starting it now, within your ${creditUnits(ceiling)} credit limit.`,
-  autoOverLimit: (credits: number, ceiling: number) =>
-    `This run is ~${creditUnits(credits)} credits, over your ${creditUnits(ceiling)} credit auto limit — asking first.`,
-
-  running: "Running",
-  runStop: "Stop",
-  runSucceeded: "Run succeeded",
-  runFailed: "Run failed",
-  nodeRunStale: "The canvas changed since that was proposed — ask again and I'll re-check the step.",
-  nodeRunStarted: (label: string) => `Running ${label} — watch it on the canvas.`,
-  nodeRunFailed: "That step didn't start. Check the canvas.",
-  estimateStale: "Still pricing this run — try again in a moment.",
-  runVanished: "That run is no longer available — start it again if you still want it.",
-  runFailedAt: (step: number) => `Run failed at step ${step}`,
-  fixIt: "Fix it",
-  fixItMessage: "Fix it — the run failed.",
-  autoFixExhausted: "Auto-fix stopped after two attempts — press Fix it to keep going.",
-
-  composerPlaceholder: "Describe what you want to do — @ to mention",
-  composerHintAsk: "nothing runs without your OK",
-  turnCeiling: (credits: number) => `up to ~${creditUnits(credits)} ${creditUnitLabel()}`,
-  turnCeilingFull: (credits: number) =>
-    `This message costs at most ~${creditUnits(credits)} credits. You are billed for what the assistant actually uses, which is usually far less.`,
-  composerHintAuto: (ceiling: number) => `auto-runs up to ~${creditUnits(ceiling)} credits`,
-  send: "Send",
-  stop: "Stop",
-  mention: "Mention something of yours",
-  saving: "Saving…",
-
-  pickerHintInsert: "click to insert",
-  pickerExpand: "Browse everything",
-  pickerBack: "Back",
-  pickerVariantDefault: "Portrait (default)",
-  pickerVariantsHint: "pick a look",
-  pickerVariantsOf: (name: string) => `Looks of ${name}`,
-  pickerOtherTabs: "also matching:",
-  pickerPreviewOf: (name: string) => `Preview ${name}`,
-  previewInsert: "Insert",
-  previewClose: "Close preview",
-  pickerModalTitle: "Insert a reference",
-  pickerModalBlurb: "Search your characters, locations, objects, animals and files — picking one drops it into the prompt.",
-  pickerModalSearch: "Search by name…",
-  pickerNoMatch: (query: string) => `Nothing matches “${query}”`,
-  pickerLoading: "Looking…",
-  pickerEmptyTitle: "Nothing here yet",
-  pickerEmptyBlurb: "Characters, objects, animals and locations show up here once you have some.",
-  sectionCharacters: "Characters",
-  sectionObjects: "Objects",
-  sectionCreatures: "Animals",
-  sectionLocations: "Locations",
-  kindCharacter: "Character",
-  kindObject: "Object",
-  kindCreature: "Animal",
-  kindLocation: "Location",
-  allowPublishing: "Let it build posting steps",
+  modeAsk: "copilot.modeAsk",
+  modeAuto: "common.auto",
+  modeHintAsk: "copilot.modeHintAsk",
+  modeHintAuto: "copilot.modeHintAuto",
+  runModeLabel: "copilot.runModeLabel",
+  ceilingPrefix: "copilot.ceilingPrefix",
+  ceilingSuffix: "copilot.ceilingSuffix",
+  ceilingLabel: "copilot.ceilingLabel",
+  tierLabel: "copilot.tierLabel",
+  tierEconomy: "copilot.tierEconomy",
+  tierStandard: "copilot.tierStandard",
+  tierPremium: "copilot.tierPremium",
+  tierHintEconomy: "copilot.tierHintEconomy",
+  tierHintStandard: "copilot.tierHintStandard",
+  tierHintPremium: "copilot.tierHintPremium",
+  close: "copilot.close",
   // Both halves name Copilot as the subject and state the guarantee from the
   // USER's side ("you still choose…"). That reads as product, not as docs, and
   // the control the user keeps is what makes the toggle safe to turn on — which
   // is why the on-copy leads with what it does and closes with what stays
   // theirs.
-  allowPublishingOn: "Copilot can add posting steps, but you still choose the account, channel, and audience.",
-  allowPublishingOff: "Copilot won't add posting steps. You can add them yourself on the canvas.",
-  sectionFiles: "Files",
-  proposeUsingFiles: "Using your files",
-  attach: "Attach a file",
-  attachFailed: "That file could not be uploaded.",
-  attachNoId: "That file uploaded but cannot be attached — add it from your library instead.",
-  attachWrongKind: "Only images, videos and audio can be attached.",
-  kindImage: "Image",
-  kindVideo: "Video",
-  kindAudio: "Audio",
+  allowPublishing: "copilot.allowPublishing",
+  allowPublishingOn: "copilot.allowPublishingOn",
+  allowPublishingOff: "copilot.allowPublishingOff",
 
-  stepsCollapsed: (count: number) => `${count} ${count === 1 ? "step" : "steps"}`,
+  homeTagline: "copilot.homeTagline",
+  homePlaceholder: "copilot.homePlaceholder",
+  homeBuild: "copilot.homeBuild",
+  homeCollapse: "copilot.homeCollapse",
+  homeExpand: "copilot.homeExpand",
+  homeBuildFailed: "copilot.homeBuildFailed",
+  homeTooLong: "copilot.homeTooLong",
+  handoffSendFailed: "copilot.handoffSendFailed",
+  handoffInterrupted: "copilot.handoffInterrupted",
+  handoffFetchFailed: "copilot.handoffFetchFailed",
+  chipProductShot: "copilot.chipProductShot",
+  chipAdCreatives: "copilot.chipAdCreatives",
+  chipScriptVideo: "copilot.chipScriptVideo",
+  chipCharacterSet: "copilot.chipCharacterSet",
+
+  emptyGreeting: "copilot.emptyGreeting",
+  /** The greeting when no first name can be derived — its own sentence, not an English word in a slot. */
+  emptyGreetingAnon: "copilot.emptyGreetingAnon",
+  emptyBlurb: "copilot.emptyBlurb",
+  suggestProductShot: "copilot.suggestProductShot",
+  suggestAdCreatives: "copilot.suggestAdCreatives",
+  suggestScriptVideo: "copilot.suggestScriptVideo",
+  suggestCharacterSet: "copilot.suggestCharacterSet",
+
+  updatedTitle: "copilot.updatedTitle",
+  updatedShowOnCanvas: "copilot.updatedShowOnCanvas",
+  addedNodesOne: "copilot.addedNodesOne",
+  addedNodesOther: "copilot.addedNodesOther",
+  updatedNodes: "copilot.updatedNodes",
+  removedNodes: "copilot.removedNodes",
+  connectionsOne: "copilot.connectionsOne",
+  connectionsOther: "copilot.connectionsOther",
+
+  proposeTitle: "copilot.proposeTitle",
+  proposeRun: "common.run",
+  proposeSkip: "common.skip",
+  proposeEstimate: "copilot.proposeEstimate",
+  proposeBalance: "copilot.proposeBalance",
+  estimatePending: "copilot.estimatePending",
+  proposeUsingFiles: "copilot.proposeUsingFiles",
+  autoNotice: "copilot.autoNotice",
+  autoNoticePending: "copilot.autoNoticePending",
+  autoOverLimit: "copilot.autoOverLimit",
+
+  running: "copilot.running",
+  runProgress: "copilot.runProgress",
+  runStarting: "copilot.runStarting",
+  runStop: "common.stop",
+  runSucceeded: "copilot.runSucceeded",
+  runFailed: "copilot.runFailed",
+  runFailedAt: "copilot.runFailedAt",
+  creditsOne: "copilot.creditsOne",
+  creditsOther: "copilot.creditsOther",
+  nodeRunStale: "copilot.nodeRunStale",
+  nodeRunStarted: "copilot.nodeRunStarted",
+  nodeRunFailed: "copilot.nodeRunFailed",
+  estimateStale: "copilot.estimateStale",
+  runVanished: "copilot.runVanished",
+  fixIt: "copilot.fixIt",
+  /**
+   * Posted AS THE USER, in the user's language. It must never carry a link:
+   * the backend's URL-provenance harvest treats every user-role text block as
+   * user-authored (pinned in `turn-engine.test.ts`, for every locale).
+   */
+  fixItMessage: "copilot.fixItMessage",
+  autoFixExhausted: "copilot.autoFixExhausted",
+
+  composerPlaceholder: "copilot.composerPlaceholder",
+  composerHintAsk: "copilot.composerHintAsk",
+  composerHintAuto: "copilot.composerHintAuto",
+  turnCeiling: "copilot.turnCeiling",
+  /** The `{unit}` of `turnCeiling`: pass it through `creditUnitLabel()` so a configured display unit wins. */
+  unitShort: "credits.unitShort",
+  turnCeilingFull: "copilot.turnCeilingFull",
+  send: "copilot.send",
+  stop: "common.stop",
+  mention: "copilot.mention",
+  removeMention: "copilot.removeMention",
+  saving: "common.saving",
+
+  pickerHintInsert: "copilot.pickerHintInsert",
+  pickerExpand: "copilot.pickerExpand",
+  pickerBack: "common.back",
+  pickerVariantDefault: "copilot.pickerVariantDefault",
+  pickerVariantsHint: "copilot.pickerVariantsHint",
+  pickerVariantsOf: "copilot.pickerVariantsOf",
+  pickerOtherTabs: "copilot.pickerOtherTabs",
+  pickerPreviewOf: "copilot.pickerPreviewOf",
+  previewInsert: "common.insert",
+  previewClose: "copilot.previewClose",
+  pickerModalTitle: "copilot.pickerModalTitle",
+  pickerModalBlurb: "copilot.pickerModalBlurb",
+  pickerModalSearch: "copilot.pickerModalSearch",
+  pickerNoMatch: "copilot.pickerNoMatch",
+  pickerLoading: "copilot.pickerLoading",
+  pickerEmptyTitle: "copilot.pickerEmptyTitle",
+  pickerEmptyBlurb: "copilot.pickerEmptyBlurb",
+  sectionCharacters: "copilot.sectionCharacters",
+  sectionObjects: "copilot.sectionObjects",
+  sectionCreatures: "copilot.sectionCreatures",
+  sectionLocations: "copilot.sectionLocations",
+  sectionFiles: "copilot.sectionFiles",
+  kindCharacter: "copilot.kindCharacter",
+  kindObject: "copilot.kindObject",
+  kindCreature: "copilot.kindCreature",
+  kindLocation: "copilot.kindLocation",
+  kindImage: "common.image",
+  kindVideo: "common.video",
+  kindAudio: "copilot.kindAudio",
+
+  attach: "copilot.attach",
+  attachFailed: "copilot.attachFailed",
+  attachNoId: "copilot.attachNoId",
+  attachWrongKind: "copilot.attachWrongKind",
+
+  stepsOne: "copilot.stepsOne",
+  stepsOther: "copilot.stepsOther",
   /** What the live pill says before the first tool call names a real step. */
-  stepStarting: "Reading the workflow",
+  stepStarting: "copilot.stepStarting",
 
-  readOnlyTitle: "Read-only",
-  readOnlyBlurb: "Editing is off for this workflow",
-  otherTabTitle: "Copilot is working in another tab",
-  stillWorkingTitle: "Still working on your last message",
-  stillWorkingBlurb: "The connection dropped but the turn is still running. It will appear here when it lands.",
+  readOnlyTitle: "copilot.readOnlyTitle",
+  readOnlyBlurb: "copilot.readOnlyBlurb",
+  otherTabTitle: "copilot.otherTabTitle",
+  stillWorkingTitle: "copilot.stillWorkingTitle",
+  stillWorkingBlurb: "copilot.stillWorkingBlurb",
 
-  memoryRemembered: "Remembered",
-  memoryUndo: "Undo",
-  workflowCreated: "New workflow",
-  workflowCreatedOpen: "Open",
-  memoryUndoFailed: "Could not remove that — open “What the Copilot remembers” and delete it there.",
-  memoriesOpen: "What the Copilot remembers",
-  memoriesTitle: "What the Copilot remembers",
-  memoriesBlurb: "Standing preferences saved from your conversations. The Copilot reads these at the start of every message.",
-  memoriesEmpty: "Nothing saved yet — when you state a lasting preference (“always 9:16”), it is kept here.",
-  memoriesDelete: "Forget",
-  memoriesLoadFailed: "Could not load memories.",
+  memoryRemembered: "copilot.memoryRemembered",
+  memoryUndo: "copilot.memoryUndo",
+  memoryUndoFailed: "copilot.memoryUndoFailed",
+  memoriesOpen: "copilot.memoriesTitle",
+  memoriesTitle: "copilot.memoriesTitle",
+  memoriesBlurb: "copilot.memoriesBlurb",
+  memoriesEmpty: "copilot.memoriesEmpty",
+  memoriesDelete: "copilot.memoriesDelete",
+  memoriesLoadFailed: "copilot.memoriesLoadFailed",
+  workflowCreated: "copilot.workflowCreated",
+  workflowCreatedOpen: "common.open",
 
-  a11yWorking: "Copilot is working.",
-  a11yDone: "Copilot finished.",
-  errorRetry: "Try again",
-  cancelled: "Stopped",
-  capped: "Reached this turn's budget — send “continue” to keep going.",
-  usedCredits: (credits: number) => {
-    const n = creditUnits(credits)
-    return `${n} ${n === 1 ? "credit" : "credits"}`
-  },
-} as const
+  a11yWorking: "copilot.a11yWorking",
+  a11yDone: "copilot.a11yDone",
+  errorRetry: "common.tryAgain",
+  cancelled: "copilot.cancelled",
+  capped: "copilot.capped",
+  notEnoughCredits: "copilot.notEnoughCredits",
+  usedTotalOne: "copilot.usedTotalOne",
+  usedTotalOther: "copilot.usedTotalOther",
 
-/** Suggestion chips on the empty state. `icon` maps to a lucide component in the view. */
-export const COPILOT_SUGGESTIONS: ReadonlyArray<{ text: string; icon: "image" | "sparkles" | "video" | "user" }> = [
-  { text: "Create a product shot workflow", icon: "image" },
-  { text: "Generate ad creatives for my brand", icon: "sparkles" },
-  { text: "Turn a script into a narrated video", icon: "video" },
-  { text: "Build a character-consistent image set", icon: "user" },
+  openEditorToSave: "copilot.openEditorToSave",
+  saveFailed: "copilot.saveFailed",
+  changedWhileSaving: "copilot.changedWhileSaving",
+  saveFirst: "copilot.saveFirst",
+  saveRemoteConflict: "copilot.saveRemoteConflict",
+  saveNotWritable: "copilot.saveNotWritable",
+  saveEmptyWorkflow: "copilot.saveEmptyWorkflow",
+  saveNoProject: "copilot.saveNoProject",
+  canvasBehind: "copilot.canvasBehind",
+  turnStartFailed: "copilot.turnStartFailed",
+  connectionLost: "copilot.connectionLost",
+  threadStartFailed: "copilot.threadStartFailed",
+  requestFailed: "copilot.requestFailed",
+} as const satisfies Record<string, MessageKey>
+
+/**
+ * Suggestion chips on the empty state. `icon` maps to a lucide component in the
+ * view; the text is resolved at render, and what a click sends is that same
+ * resolved text.
+ */
+export const COPILOT_SUGGESTIONS: ReadonlyArray<{ textKey: MessageKey; icon: "image" | "sparkles" | "video" | "user" }> = [
+  { textKey: COPILOT_KEYS.suggestProductShot, icon: "image" },
+  { textKey: COPILOT_KEYS.suggestAdCreatives, icon: "sparkles" },
+  { textKey: COPILOT_KEYS.suggestScriptVideo, icon: "video" },
+  { textKey: COPILOT_KEYS.suggestCharacterSet, icon: "user" },
 ]

@@ -1,7 +1,7 @@
 ---
 node_type: video-to-video
-generated_at: 2026-09-21T19:12:09.291Z
-generated_from: 09788c987
+generated_at: 2026-09-27T12:51:23.319Z
+generated_from: c607aa02c
 ---
 
 # Video to Video
@@ -9,7 +9,7 @@ generated_from: 09788c987
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `video-to-video`
 **Category:** ai
-**Credit cost:** `250` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `250` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `video`, `cinematography`, `prompt`, `negative`, `imageReferences`, `audioReferences`
 **Outputs (source handles):** `video`
 

@@ -12,6 +12,7 @@ const baseProps = {
   onClose: vi.fn(),
   onGenerate: vi.fn(),
   assetType: "expressions" as const,
+  typeLabel: "head angles",
   characterId: "char-1",
   canonicalDescription: "young woman with warm smile",
 }
@@ -35,6 +36,12 @@ describe("AssetGenPanel", () => {
         description: "playful wink",
       }),
     )
+  })
+
+  it("titles the dialog with the type's label, not its id", () => {
+    render(<AssetGenPanel {...baseProps} />)
+    expect(screen.getByText("Custom head angles")).toBeInTheDocument()
+    expect(screen.queryByText(/expressions/)).not.toBeInTheDocument()
   })
 
   it("motion mode shows motionDescription field", () => {

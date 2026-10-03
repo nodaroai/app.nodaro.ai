@@ -25,6 +25,27 @@ describe("resolveInitialLocale — deployment default locale (A3)", () => {
     expect(resolveInitialLocale()).toBe("de")
   })
 
+  it("matches a DEFAULT_LOCALE regardless of letter case", () => {
+    window.__NODARO_RUNTIME__ = { defaultLocale: "pt-br" }
+    expect(resolveInitialLocale()).toBe("pt-BR")
+  })
+
+  it("maps a bare language to the one regional form we ship (pt → pt-BR)", () => {
+    window.__NODARO_RUNTIME__ = { defaultLocale: "pt" }
+    expect(resolveInitialLocale()).toBe("pt-BR")
+  })
+
+  it("maps another region of a language we ship in one form (pt-PT → pt-BR)", () => {
+    window.__NODARO_RUNTIME__ = { defaultLocale: "pt-PT" }
+    expect(resolveInitialLocale()).toBe("pt-BR")
+  })
+
+  it("does not remap a region we do not ship — zh-TW is not zh-CN", () => {
+    const detected = resolveInitialLocale()
+    window.__NODARO_RUNTIME__ = { defaultLocale: "zh-TW" }
+    expect(resolveInitialLocale()).toBe(detected)
+  })
+
   it("a stored choice (localStorage) beats DEFAULT_LOCALE — never drag back a deliberate choice", () => {
     window.localStorage.setItem(KEY, "de")
     window.__NODARO_RUNTIME__ = { defaultLocale: "he" }
@@ -41,5 +62,84 @@ describe("resolveInitialLocale — deployment default locale (A3)", () => {
     const detected = resolveInitialLocale()
     window.__NODARO_RUNTIME__ = { defaultLocale: "  " }
     expect(resolveInitialLocale()).toBe(detected)
+  })
+})
+
+/**
+ * Browser detection may land only on an OFFERED locale (chrome translation
+ * complete — `lib/i18n/offered-locales.ts`). A German browser must not drop a
+ * first-time visitor into a language the menu does not list.
+ */
+describe("resolveInitialLocale — browser detection lands only on offered locales", () => {
+  function withBrowserLanguages(tags: readonly string[], run: () => void) {
+    const original = Object.getOwnPropertyDescriptor(window.navigator, "languages")
+    Object.defineProperty(window.navigator, "languages", { value: tags, configurable: true })
+    try {
+      run()
+    } finally {
+      if (original) Object.defineProperty(window.navigator, "languages", original)
+      else delete (window.navigator as { languages?: unknown }).languages
+    }
+  }
+
+  it("a German browser lands on English while the German chrome dictionary is a stub", () => {
+    withBrowserLanguages(["de-DE", "de"], () => {
+      expect(resolveInitialLocale()).toBe("en")
+    })
+  })
+
+  it("a Hebrew browser lands on Hebrew (offered), region code stripped", () => {
+    withBrowserLanguages(["he-IL"], () => {
+      expect(resolveInitialLocale()).toBe("he")
+    })
+  })
+
+  it("a Japanese browser lands on Japanese (offered)", () => {
+    withBrowserLanguages(["ja-JP", "ja"], () => {
+      expect(resolveInitialLocale()).toBe("ja")
+    })
+  })
+
+  it("a Korean browser lands on Korean (offered)", () => {
+    withBrowserLanguages(["ko-KR", "ko"], () => {
+      expect(resolveInitialLocale()).toBe("ko")
+    })
+  })
+
+  it("a Brazilian browser lands on Brazilian Portuguese (offered)", () => {
+    withBrowserLanguages(["pt-BR", "pt"], () => {
+      expect(resolveInitialLocale()).toBe("pt-BR")
+    })
+  })
+
+  it("a Portuguese browser from another region lands on Brazilian Portuguese through its bare tag", () => {
+    withBrowserLanguages(["pt-PT", "pt"], () => {
+      expect(resolveInitialLocale()).toBe("pt-BR")
+    })
+  })
+
+  it("a browser that lists only pt-PT lands on Brazilian Portuguese", () => {
+    withBrowserLanguages(["pt-PT"], () => {
+      expect(resolveInitialLocale()).toBe("pt-BR")
+    })
+  })
+
+  it("a Traditional Chinese browser does not land on Simplified Chinese", () => {
+    withBrowserLanguages(["zh-TW"], () => {
+      expect(resolveInitialLocale()).toBe("en")
+    })
+  })
+
+  it("skips not-offered preferences and takes the first offered one", () => {
+    withBrowserLanguages(["fr-FR", "he", "en"], () => {
+      expect(resolveInitialLocale()).toBe("he")
+    })
+  })
+
+  it("a stored not-offered choice is still honoured — the gate never overrides a deliberate pick", () => {
+    window.localStorage.setItem(KEY, "de")
+    withBrowserLanguages(["en-US"], () => {
+      expect(resolveInitialLocale()).toBe("de")
+    })
   })
 })

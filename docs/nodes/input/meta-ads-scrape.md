@@ -107,7 +107,7 @@ The `analysis` object is present only when AI analysis was on and that ad was an
 
 ## Pricing
 
-**1 credit per requested ad**, rounded up to the next tier of the requested total (`Ads per source × number of sources`; a keyword search is one source).
+**1 credit per requested ad**, rounded up to the next tier of the requested total (`Ads per source × number of sources`; a keyword search is one source). These are list prices: the node's Run button, and `GET /v1/models` / the MCP `list_models` tool, show the price your instance charges.
 
 | Requested total | Credits |
 |-----------------|---------|

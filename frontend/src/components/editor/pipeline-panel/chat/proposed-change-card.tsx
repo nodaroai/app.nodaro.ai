@@ -2,6 +2,7 @@ import { useState } from "react"
 import type { ProposedChange } from "@nodaro/shared"
 import { Button } from "@/components/ui/button"
 import { DiffRenderer } from "./diff-renderer"
+import { useT } from "@/lib/i18n"
 
 interface Props {
   proposedChange: ProposedChange
@@ -40,6 +41,7 @@ export function ProposedChangeCard({
   isApplying = false,
   applyError,
 }: Props) {
+  const t = useT()
   const [showDiff, setShowDiff] = useState(false)
   const [skipped, setSkipped] = useState(false)
 
@@ -50,13 +52,13 @@ export function ProposedChangeCard({
         data-testid="proposed-change-card-suggest-branch"
       >
         <div className="font-medium text-amber-800 dark:text-amber-200 mb-1">
-          Suggested: branch from this stage
+          {t("pipe.suggestedBranch")}
         </div>
         <div className="text-amber-700 dark:text-amber-300 mb-2">
           {proposedChange.reason}
         </div>
         <div className="text-[11px] text-amber-700/80 dark:text-amber-300/80 italic">
-          Use the "Re-run from here" controls in the panel header to branch.
+          {t("pipe.useRerunControls")}
         </div>
       </div>
     )
@@ -73,7 +75,7 @@ export function ProposedChangeCard({
       data-testid="proposed-change-card-edit-artifact"
     >
       <div className="font-medium text-zinc-800 dark:text-zinc-100 mb-1">
-        Proposed change
+        {t("pipe.proposedChange")}
       </div>
       <div className="text-zinc-700 dark:text-zinc-200 mb-2">
         {proposedChange.summary}
@@ -84,7 +86,7 @@ export function ProposedChangeCard({
         onClick={() => setShowDiff((v) => !v)}
         data-testid="proposed-change-toggle-diff"
       >
-        {showDiff ? "Hide diff" : "View diff"}
+        {showDiff ? t("pipe.hideDiff") : t("pipe.viewDiff")}
       </button>
       {showDiff && (
         <div className="mt-2 rounded bg-zinc-50 dark:bg-[#121212] p-2 border border-zinc-200 dark:border-[#2D2D2D]">
@@ -96,7 +98,7 @@ export function ProposedChangeCard({
           className="mt-2 rounded border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950 p-2 text-red-700 dark:text-red-300"
           data-testid="proposed-change-apply-error"
         >
-          Apply failed: {errorMessage}
+          {t("pipe.applyFailed", { message: errorMessage })}
         </div>
       )}
       {applied && (
@@ -104,7 +106,7 @@ export function ProposedChangeCard({
           className="mt-2 text-green-700 dark:text-green-400 font-medium"
           data-testid="proposed-change-applied"
         >
-          Applied
+          {t("pipe.applied")}
         </div>
       )}
       {skipped && !applied && (
@@ -112,7 +114,7 @@ export function ProposedChangeCard({
           className="mt-2 text-zinc-500 dark:text-zinc-400 italic"
           data-testid="proposed-change-skipped"
         >
-          Skipped
+          {t("pipe.skipped")}
         </div>
       )}
       {showActions && (
@@ -123,7 +125,7 @@ export function ProposedChangeCard({
             onClick={() => onApply(turnId)}
             data-testid="proposed-change-apply-btn"
           >
-            {isApplying ? "Applying…" : "Apply"}
+            {isApplying ? t("pipe.applying") : t("common.apply")}
           </Button>
           <Button
             size="sm"
@@ -135,7 +137,7 @@ export function ProposedChangeCard({
             }}
             data-testid="proposed-change-skip-btn"
           >
-            Skip
+            {t("pipe.skip")}
           </Button>
         </div>
       )}

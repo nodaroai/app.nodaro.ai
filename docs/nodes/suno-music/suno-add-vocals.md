@@ -19,7 +19,7 @@ Suno Add Vocals takes an existing Suno audio track (typically an instrumental) a
 - **Outputs:** `audio` -- audio URL with added vocals
 ## Best Practices
 
-- Use this after generating an instrumental track (via Suno Generate with the Instrumental toggle on) to add vocals.
+- Use this after generating an instrumental track (via Suno Create Music with the Instrumental toggle on) to add vocals.
 - `V6` (the default) produces the most natural and expressive vocal performances; `V6_WILD` takes more creative liberties.
 - For best results, ensure the source instrumental has a clear melodic structure the AI can follow.
 - Combine with Suno Separate to swap vocals: extract instrumentals from one track, then add new vocals.
@@ -30,7 +30,7 @@ Suno Add Vocals takes an existing Suno audio track (typically an instrumental) a
 - Adding vocals to an instrumental-only Suno generation.
 - Re-vocaling a track after separating and discarding the original vocals.
 - Creating vocal versions of backing tracks or beats.
-- Building remix workflows: Suno Generate (instrumental) -> Suno Add Vocals.
+- Building remix workflows: Suno Create Music (instrumental) -> Suno Add Vocals.
 - Layering new vocal performances onto existing instrumental arrangements.
 
 ## Tips

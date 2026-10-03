@@ -1,18 +1,20 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { SHEET_PRESETS, ALA_CARTE_BOARDS, SHEET_SKINS, SHEET_ASPECTS, MAX_PANELS_PER_SHEET, estimateSheetCost, type ReferenceSheet, type SheetAspect, type SheetFlavour, type SheetPresetId, type SheetPreset, type SheetSection, type SheetSkin } from "@nodaro/shared"
+import { SHEET_PRESETS, ALA_CARTE_BOARDS, SHEET_SKINS, SHEET_ASPECTS, MAX_PANELS_PER_SHEET, estimateSheetCost, referenceSheetCreditId, type ReferenceSheet, type SheetAspect, type SheetFlavour, type SheetPresetId, type SheetPreset, type SheetSection, type SheetSkin } from "@nodaro/shared"
 import { generateReferenceSheet, getJobStatusLean } from "@/lib/api"
-import { tx } from "@/lib/i18n"
+import { useT, tx } from "@/lib/i18n"
 import { hasCredits } from "@/lib/edition"
-import type { SheetTabAdapter } from "./sheet-tab-adapter"
+import { creditUnits } from "@/lib/credit-units"
+import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { SHEET_PANEL_PROVIDER, type SheetTabAdapter } from "./sheet-tab-adapter"
 import { SheetGallery } from "./sheet-gallery"
 
 /**
  * Character-only Sheet panel: named, explained, live-costed presets
  * (Studio·Main / Studio·Extended) + optional à-la-carte boards, then a two-step
  * ① Prepare angles → ② Compose flow. Curated panel subsets ride the shared
- * `entries` field; cost is the existing per-angle + assembly price, gated behind
- * hasCredits(). Object/Location keep the classic chip UI (see reference-sheet-tab).
+ * `entries` field; cost is the live charged price of a panel and of composing,
+ * gated behind hasCredits(). Object/Location keep the classic chip UI (see reference-sheet-tab).
  */
 
 const SHEET_POLL_MS = 2000
@@ -31,6 +33,7 @@ interface Props {
 }
 
 export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
+  const t = useT()
   const staged = adapter.getStaged(studio)
   const hc = hasCredits()
 
@@ -71,18 +74,24 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
   }, [preset, boards])
 
   const flavour: SheetFlavour = { outputFormat: "still", withText, showLabels, aspect, background: "grey", presetId, sections }
-  const cost = estimateSheetCost("character", sections, flavour, mergedBuckets, name, adapter.perPanelCost, adapter.assemblyCost)
+  // Live charged prices of one panel and of composing (0 until loaded, and on
+  // builds without credits). The cost readouts show only once both are known,
+  // so a pending lookup never reads as a price of 0.
+  const panelPrice = useModelCredits(SHEET_PANEL_PROVIDER)
+  const composePrice = useModelCredits(referenceSheetCreditId(flavour))
+  const priced = hc && panelPrice > 0 && composePrice > 0
+  const cost = estimateSheetCost("character", sections, flavour, mergedBuckets, name, panelPrice, composePrice)
 
   /** Base cost of a preset (no boards) — shown on each card. */
   function baseCost(p: SheetPreset) {
-    return estimateSheetCost("character", p.baseSections, { ...flavour, sections: p.baseSections }, mergedBuckets, name, adapter.perPanelCost, adapter.assemblyCost)
+    return estimateSheetCost("character", p.baseSections, { ...flavour, sections: p.baseSections }, mergedBuckets, name, panelPrice, composePrice)
   }
 
   /** Would toggling board `id` ON push the plan past MAX_PANELS? */
   function wouldOverflow(id: string): boolean {
     if (boards.has(id)) return false
     const next = [...preset.baseSections, ...ALA_CARTE_BOARDS.filter((b) => boards.has(b.id) || b.id === id).map((b) => b.section)]
-    const e = estimateSheetCost("character", next.map((s) => ({ ...s })), flavour, mergedBuckets, name, adapter.perPanelCost, adapter.assemblyCost)
+    const e = estimateSheetCost("character", next.map((s) => ({ ...s })), flavour, mergedBuckets, name, panelPrice, composePrice)
     return e.overflow || e.present + e.missing.length > MAX_PANELS_PER_SHEET
   }
 
@@ -103,42 +112,42 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
       if (job.status === "completed") {
         const out = job.output_data as { imageUrl?: string; panelUrls?: string[] } | undefined
         if (out?.imageUrl) return { imageUrl: out.imageUrl, panelUrls: out.panelUrls ?? [] }
-        throw new Error("Sheet completed without an image URL")
+        throw new Error(tx("entity.sheetNoImageUrl"))
       }
       // A held job is parked on a human reviewer and will outlive this bound by
       // hours. Break out NOW with the truth instead of falling through to
       // "timed out" (a lie) or an empty panel that never fills.
       if (job.status === "pending_review") throw new Error(tx("sheet.panelAwaitingReview"))
       if (job.status === "failed" || job.status === "cancelled") {
-        throw new Error(job.error_message ?? `sheet ${job.status}`)
+        throw new Error(job.error_message ?? tx(job.status === "cancelled" ? "entity.sheetCancelledFallback" : "entity.sheetFailedFallback"))
       }
     }
-    throw new Error("sheet generation timed out")
+    throw new Error(tx("entity.sheetTimedOut"))
   }
 
   async function onPrepare(): Promise<void> {
-    if (!sourceImageUrl) { toast.error("Approve a main image first"); return }
-    setStatus("preparing"); setProgressLine("Preparing…")
+    if (!sourceImageUrl) { toast.error(tx("entity.approveMainImageFirst")); return }
+    setStatus("preparing"); setProgressLine(tx("entity.sheetPreparing"))
     try {
       const dbId = await adapter.ensureSaved(studio)
       const missing = cost.missing
       for (let i = 0; i < missing.length; i++) {
         const req = missing[i]
-        setProgressLine(`Preparing ${i + 1}/${missing.length} — ${req.variant}…`)
+        setProgressLine(tx("entity.sheetPreparingProgress", { i: i + 1, total: missing.length, variant: req.variant }))
         // Sequential: don't slam the credit guard; await each panel + record it so `missing` shrinks.
         const { jobId } = await adapter.generateAsset(dbId, { ...req, name: `${name} – ${req.variant}`, sourceImageUrl })
         const url = await adapter.awaitJob(jobs, jobId, req.assetType, req.variant)
         setPrepared((p) => ({ ...p, [req.attachToColumn]: [...(p[req.attachToColumn] ?? []), { name: req.attachName, url }] }))
       }
-      setStatus("idle"); setProgressLine(""); toast.success("Angles prepared")
+      setStatus("idle"); setProgressLine(""); toast.success(tx("entity.anglesPrepared"))
     } catch (e) {
-      setStatus("error"); setProgressLine(""); toast.error(e instanceof Error ? e.message : "Prepare failed")
+      setStatus("error"); setProgressLine(""); toast.error(e instanceof Error ? e.message : tx("entity.prepareFailed"))
     }
   }
 
   async function onCompose(): Promise<void> {
-    if (!sourceImageUrl) { toast.error("Approve a main image first"); return }
-    setStatus("composing"); setResultUrl(null); setProgressLine("Composing sheet…")
+    if (!sourceImageUrl) { toast.error(tx("entity.approveMainImageFirst")); return }
+    setStatus("composing"); setResultUrl(null); setProgressLine(tx("entity.sheetComposing"))
     try {
       const dbId = await adapter.ensureSaved(studio)
       const { jobId } = await generateReferenceSheet({ type: preset.type, skin, entityKind: "character", entityDbId: dbId, flavour })
@@ -148,15 +157,15 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
       // grid updates immediately and a later hydration dedupes by url.
       const newSheet = { name: preset.label, url, type: preset.type, skin, flavour, source: "node", panelUrls } as unknown as ReferenceSheet
       studio.patch({ sheets: [...(staged?.sheets ?? []), newSheet] })
-      setPrepared({}); setStatus("done"); setProgressLine(""); toast.success("Reference sheet generated")
+      setPrepared({}); setStatus("done"); setProgressLine(""); toast.success(tx("entity.sheetGenerated"))
     } catch (e) {
-      setStatus("error"); setProgressLine(""); toast.error(e instanceof Error ? e.message : "Compose failed")
+      setStatus("error"); setProgressLine(""); toast.error(e instanceof Error ? e.message : tx("entity.composeFailed"))
     }
   }
 
   function onSetThumbnail(url: string, label: string): void {
     adapter.setThumbnail(studio, url, label)
-    toast.success("Set as node thumbnail")
+    toast.success(tx("entity.setAsNodeThumbnail"))
   }
 
   const chip = (active: boolean, disabled = false) =>
@@ -171,25 +180,27 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
     <div className="space-y-5 max-w-4xl">
       {/* Preset cards */}
       <div className="space-y-1.5">
-        <div className="text-[9px] uppercase tracking-widest text-slate-600">Preset</div>
+        <div className="text-[9px] uppercase tracking-widest text-slate-600">{t("txtcfg.preset")}</div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {SHEET_PRESETS.map((p) => {
             const active = p.id === presetId
-            const bc = hc ? baseCost(p) : null
+            const bc = priced ? baseCost(p) : null
             return (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => setPresetId(p.id)}
                 disabled={busy}
-                className="text-left p-3 rounded border transition-colors disabled:opacity-60"
+                className="text-start p-3 rounded border transition-colors disabled:opacity-60"
                 style={{ borderColor: active ? accent : "#1e293b", backgroundColor: active ? `${accent}14` : "#0e1117" }}
               >
                 <div className="text-[12px] font-medium text-slate-200">{p.label}</div>
                 <div className="text-[11px] text-slate-400 mt-0.5">{p.description}</div>
                 {bc && (
                   <div className="text-[10px] text-slate-500 mt-1.5">
-                    {bc.present > 0 ? `reuses ${bc.present} · ` : ""}{bc.missing.length} to generate → ~{bc.total} cr
+                    {bc.present > 0
+                      ? t("entity.sheetCostWithReuse", { present: bc.present, missing: bc.missing.length, total: creditUnits(bc.total) })
+                      : t("entity.sheetCost", { missing: bc.missing.length, total: creditUnits(bc.total) })}
                   </div>
                 )}
               </button>
@@ -200,7 +211,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
 
       {/* À-la-carte boards */}
       <div className="space-y-1.5">
-        <div className="text-[9px] uppercase tracking-widest text-slate-600">Add boards</div>
+        <div className="text-[9px] uppercase tracking-widest text-slate-600">{t("entity.addBoards")}</div>
         <div className="flex flex-wrap gap-2">
           {ALA_CARTE_BOARDS.map((b) => {
             const active = boards.has(b.id)
@@ -212,7 +223,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
                 type="button"
                 onClick={() => toggleBoard(b.id)}
                 disabled={disabled}
-                title={overflow ? "Would exceed 24 panels — remove a board" : undefined}
+                title={overflow ? t("entity.wouldExceedPanels", { max: MAX_PANELS_PER_SHEET }) : undefined}
                 className={chip(active, disabled)}
                 style={chipStyle(active)}
               >
@@ -226,7 +237,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
       {/* Style row */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="space-y-1.5">
-          <div className="text-[9px] uppercase tracking-widest text-slate-600">Skin</div>
+          <div className="text-[9px] uppercase tracking-widest text-slate-600">{t("cfgext.refSheetSkinLabel")}</div>
           <div className="flex flex-wrap gap-2">
             {SHEET_SKINS.map((s) => (
               <button key={s} type="button" onClick={() => setSkin(s)} disabled={busy} className={chip(skin === s)} style={chipStyle(skin === s)}>{s}</button>
@@ -234,7 +245,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
           </div>
         </div>
         <div className="space-y-1.5">
-          <div className="text-[9px] uppercase tracking-widest text-slate-600">Aspect</div>
+          <div className="text-[9px] uppercase tracking-widest text-slate-600">{t("cfgext.refSheetAspectLabel")}</div>
           <div className="flex gap-2">
             {SHEET_ASPECTS.map((a) => (
               <button key={a} type="button" onClick={() => setAspect(a)} disabled={busy} className={chip(aspect === a)} style={chipStyle(aspect === a)}>{a}</button>
@@ -243,21 +254,21 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
         </div>
         <label className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
           <input type="checkbox" checked={withText} onChange={(e) => setWithText(e.target.checked)} disabled={busy} style={{ accentColor: accent }} />
-          Title / metadata
+          {t("entity.sheetTitleMetadata")}
         </label>
         <label className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
           <input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} disabled={busy} style={{ accentColor: accent }} />
-          Panel labels
+          {t("cfgext.refSheetPanelLabels")}
         </label>
       </div>
 
       {/* Cost + two-step actions */}
-      {!sourceImageUrl && <div className="text-[11px] text-amber-300">Approve a main image first</div>}
-      {hc && sourceImageUrl && (
+      {!sourceImageUrl && <div className="text-[11px] text-amber-300">{t("entity.approveMainImageFirst")}</div>}
+      {hc && sourceImageUrl && (cost.overflow || priced) && (
         <div className="text-[11px] text-slate-400">
           {cost.overflow
-            ? <span className="text-amber-300">Too many panels — remove a board.</span>
-            : <>Reuses {cost.present} existing · {cost.missing.length} missing → Prepare ~{cost.prepareCost} cr · Compose {cost.assemblyCost} cr</>}
+            ? <span className="text-amber-300">{t("entity.tooManyPanels")}</span>
+            : <>{t("entity.sheetCostBreakdown", { present: cost.present, missing: cost.missing.length, prepareCost: creditUnits(cost.prepareCost), assemblyCost: creditUnits(cost.assemblyCost) })}</>}
         </div>
       )}
       <div className="flex flex-wrap items-center gap-3">
@@ -268,7 +279,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
           className="px-4 py-2 text-[12px] rounded text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ backgroundColor: accent }}
         >
-          {status === "preparing" ? "Preparing…" : `① Prepare ${cost.missing.length} angle${cost.missing.length === 1 ? "" : "s"}`}
+          {status === "preparing" ? t("entity.sheetPreparing") : cost.missing.length === 1 ? t("entity.prepareAnglesOne") : t("entity.prepareAnglesMany", { n: cost.missing.length })}
         </button>
         <button
           type="button"
@@ -277,10 +288,10 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
           className="px-4 py-2 text-[12px] rounded font-medium border bg-transparent disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ borderColor: accent, color: accent }}
         >
-          {status === "composing" ? "Composing…" : "② Compose sheet"}
+          {status === "composing" ? t("entity.sheetComposingShort") : t("entity.composeSheet")}
         </button>
         {!busy && cost.missing.length > 0 && !cost.overflow && (
-          <span className="text-[11px] text-slate-500">Prepare {cost.missing.length} angle{cost.missing.length === 1 ? "" : "s"} first</span>
+          <span className="text-[11px] text-slate-500">{cost.missing.length === 1 ? t("entity.prepareFirstOne") : t("entity.prepareFirstMany", { n: cost.missing.length })}</span>
         )}
         {busy && progressLine && <span className="text-[11px] text-slate-400">{progressLine}</span>}
       </div>

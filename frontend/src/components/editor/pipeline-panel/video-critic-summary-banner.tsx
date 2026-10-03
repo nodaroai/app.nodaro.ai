@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { CriticBanner } from "./_critic-banner"
+import { useT } from "@/lib/i18n"
 
 /**
  * Phase 1D.2c-b-ii — VideoCriticSummaryBanner.
@@ -57,6 +58,7 @@ export function VideoCriticSummaryBanner({
   onJumpToShot,
   onDismiss,
 }: Props) {
+  const t = useT()
   if (failingShots.length === 0) return null
 
   return (
@@ -68,7 +70,7 @@ export function VideoCriticSummaryBanner({
       header={
         <>
           <div className="font-medium text-red-700 dark:text-red-300">
-            Video Critic
+            {t("pipe.videoCritic")}
           </div>
           <span
             className={cn(
@@ -77,8 +79,9 @@ export function VideoCriticSummaryBanner({
             )}
             data-testid="video-critic-summary-count"
           >
-            {failingShots.length} {failingShots.length === 1 ? "shot" : "shots"}{" "}
-            need review
+            {failingShots.length === 1
+              ? t("pipe.shotsNeedReviewOne", { n: failingShots.length })
+              : t("pipe.shotsNeedReview", { n: failingShots.length })}
           </span>
         </>
       }
@@ -95,15 +98,16 @@ export function VideoCriticSummaryBanner({
           >
             <div className="min-w-0 flex-1 space-y-0.5">
               <div className="font-medium text-red-700 dark:text-red-300">
-                Scene {s.sceneIndex}, Shot {s.shotIndex}
-                <span className="ml-2 text-zinc-500 dark:text-zinc-400 font-normal">
-                  ({s.findingCount}{" "}
-                  {s.findingCount === 1 ? "finding" : "findings"})
+                {t("pipe.sceneShotRef", { scene: s.sceneIndex, shot: s.shotIndex })}
+                <span className="ms-2 text-zinc-500 dark:text-zinc-400 font-normal">
+                  ({s.findingCount === 1
+                    ? t("pipe.findingOne", { n: s.findingCount })
+                    : t("pipe.findings", { n: s.findingCount })})
                 </span>
               </div>
               {s.identified_action && (
                 <div className="text-zinc-600 dark:text-zinc-400 truncate">
-                  Critic sees: {s.identified_action}
+                  {t("pipe.criticSees", { action: s.identified_action })}
                 </div>
               )}
             </div>
@@ -115,7 +119,7 @@ export function VideoCriticSummaryBanner({
                 onClick={() => onJumpToShot(s.sceneId, s.shotId)}
                 data-testid={`video-critic-summary-jump-${s.sceneId}-${s.shotId}`}
               >
-                Jump to shot
+                {t("pipe.jumpToShot")}
               </Button>
             )}
           </li>

@@ -134,6 +134,20 @@ export const SubGateNameSchema = z.enum([
 export type SubGateName = z.infer<typeof SubGateNameSchema>
 
 /**
+ * The sub-gates `POST /v1/pipelines/:id/sub-gates/:gate/{approve,reject}`
+ * resolves: Stage 7's (`animate_audio_edit`). `match_cut_break_pending` is not
+ * one of them — it clears per shot, one break at a time, through
+ * `POST /v1/pipelines/:id/entities/:sceneId/helpers/accept_match_cut_break`
+ * (`MATCH_CUT_BREAK_GATE`).
+ */
+export const ANIMATE_SUB_GATES = ["silent_cut_preview", "dialogue_recheck"] as const satisfies readonly SubGateName[]
+export const AnimateSubGateSchema = z.enum(ANIMATE_SUB_GATES)
+export type AnimateSubGate = (typeof ANIMATE_SUB_GATES)[number]
+
+/** Stage 6's sub-gate, cleared by accepting each flagged break (see {@link ANIMATE_SUB_GATES}). */
+export const MATCH_CUT_BREAK_GATE = "match_cut_break_pending" satisfies SubGateName
+
+/**
  * Phase 1C.2 — emitted when Stage 6 (scene_images) or Stage 7
  * (animate_audio_edit) pauses at a sub-gate. Carries an optional `payload`
  * (JSONB-shaped) for whatever the gate needs to render — e.g. the preview

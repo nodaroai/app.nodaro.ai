@@ -12,6 +12,7 @@
 
 import { useMemo, useState } from "react"
 import { optimizedImageUrl } from "@/lib/image"
+import { useT } from "@/lib/i18n"
 import type { TutorialBodyProps } from "../tutorial-registry"
 import { deriveCoverageGraph } from "./camera-coverage-graph"
 import {
@@ -55,7 +56,8 @@ function shotSrc(url: string): string {
 
 export default function CameraCoverageBody({ nodes, edges, focus }: TutorialBodyProps) {
   const { step, focusStep } = focus
-  const graph = useMemo(() => deriveCoverageGraph(nodes, edges), [nodes, edges])
+  const t = useT()
+  const graph = useMemo(() => deriveCoverageGraph(nodes, edges, t), [nodes, edges, t])
   const { shots } = graph
   const count = shots.length
 
@@ -80,18 +82,18 @@ export default function CameraCoverageBody({ nodes, edges, focus }: TutorialBody
   })
 
   if (!graph.anchor || !current) {
-    return <div className="nd-state">This tutorial&rsquo;s workflow could not be read.</div>
+    return <div className="nd-state">{t("tut.workflowUnreadable")}</div>
   }
 
   return (
     <div className="ccv">
       <header className="ccv-band">
         <div>
-          <h2 className="ccv-headline">{HEADLINE}</h2>
-          <p className="ccv-subline">{SUBLINE}</p>
+          <h2 className="ccv-headline">{t(HEADLINE)}</h2>
+          <p className="ccv-subline">{t(SUBLINE)}</p>
         </div>
         <div className="nd-chips">
-          {[`${count} shots`, ...FACTS].map((f) => (
+          {[t("tut.shotsCount", { n: count }), ...FACTS.map((f) => t(f))].map((f) => (
             <span key={f} className="nd-chip">
               {f}
             </span>
@@ -111,10 +113,10 @@ export default function CameraCoverageBody({ nodes, edges, focus }: TutorialBody
           onMouseEnter={() => focusStep(STEP.frame)}
         >
           <header className="ccv-head">
-            <span className="ccv-badge">IN</span>
+            <span className="ccv-badge">{t("tut.badgeIn")}</span>
             <div className="ccv-head-text">
-              <div className="ccv-title">{IN_COLUMN.title}</div>
-              <div className="ccv-sub">{IN_COLUMN.sub}</div>
+              <div className="ccv-title">{t(IN_COLUMN.title)}</div>
+              <div className="ccv-sub">{t(IN_COLUMN.sub)}</div>
             </div>
             {graph.anchor.aspectRatio && <span className="ccv-meta">{graph.anchor.aspectRatio}</span>}
           </header>
@@ -124,24 +126,24 @@ export default function CameraCoverageBody({ nodes, edges, focus }: TutorialBody
               <img
                 className="ccv-frame"
                 src={optimizedImageUrl(graph.anchor.imageUrl, { width: 900, quality: 82 })}
-                alt="The reference frame every shot reads"
+                alt={t("tut.ccvFrameAlt")}
               />
             ) : (
-              <div className="ccv-frame ccv-empty">{NOT_RUN}</div>
+              <div className="ccv-frame ccv-empty">{t(NOT_RUN)}</div>
             )}
 
             {graph.anchor.prompt && (
               <div className="ccv-inset">
-                <div className="ccv-eyebrow">{REFERENCE_PROMPT_EYEBROW}</div>
+                <div className="ccv-eyebrow">{t(REFERENCE_PROMPT_EYEBROW)}</div>
                 <div className="ccv-prompt">{graph.anchor.prompt}</div>
               </div>
             )}
 
             <div className="ccv-brief">
-              <div className="ccv-eyebrow ccv-eyebrow-teal">{BRIEF.eyebrow}</div>
+              <div className="ccv-eyebrow ccv-eyebrow-teal">{t(BRIEF.eyebrow)}</div>
               <ul className="ccv-rules">
                 {BRIEF.rules.map((rule) => (
-                  <li key={rule}>{rule}</li>
+                  <li key={rule}>{t(rule)}</li>
                 ))}
               </ul>
             </div>
@@ -157,10 +159,10 @@ export default function CameraCoverageBody({ nodes, edges, focus }: TutorialBody
           <header className="ccv-head">
             <span className="ccv-badge ccv-badge-tint">2</span>
             <div className="ccv-head-text">
-              <div className="ccv-title">{LIST_COLUMN.title}</div>
-              <div className="ccv-sub">{LIST_COLUMN.sub(count)}</div>
+              <div className="ccv-title">{t(LIST_COLUMN.title)}</div>
+              <div className="ccv-sub">{LIST_COLUMN.sub(count, t)}</div>
             </div>
-            <span className="ccv-meta ccv-meta-accent">{LIST_COLUMN.meta}</span>
+            <span className="ccv-meta ccv-meta-accent">{t(LIST_COLUMN.meta)}</span>
           </header>
 
           <div className="ccv-lines">
@@ -179,7 +181,7 @@ export default function CameraCoverageBody({ nodes, edges, focus }: TutorialBody
               >
                 <span className="ccv-line-num">{pad(s.index)}</span>
                 <span className="ccv-line-text">
-                  <span className="ccv-line-kind">{kindFor(s.index)}</span>
+                  <span className="ccv-line-kind">{kindFor(s.index, t)}</span>
                   <span className="ccv-line-body">{s.line || "—"}</span>
                 </span>
               </button>
@@ -187,8 +189,8 @@ export default function CameraCoverageBody({ nodes, edges, focus }: TutorialBody
           </div>
 
           <footer className="ccv-lever">
-            <span className="ccv-eyebrow">{LEVER.eyebrow}</span>
-            <span className="ccv-lever-body">{LEVER.body(count)}</span>
+            <span className="ccv-eyebrow">{t(LEVER.eyebrow)}</span>
+            <span className="ccv-lever-body">{LEVER.body(count, t)}</span>
           </footer>
         </section>
 
@@ -199,14 +201,14 @@ export default function CameraCoverageBody({ nodes, edges, focus }: TutorialBody
           onMouseEnter={() => focusStep(STEP.sheet)}
         >
           <header className="ccv-head">
-            <span className="ccv-badge ccv-badge-accent">OUT</span>
+            <span className="ccv-badge ccv-badge-accent">{t("tut.badgeOut")}</span>
             <div className="ccv-head-text">
-              <div className="ccv-title">{OUT_COLUMN.title}</div>
-              <div className="ccv-sub">{OUT_COLUMN.sub(count)}</div>
+              <div className="ccv-title">{t(OUT_COLUMN.title)}</div>
+              <div className="ccv-sub">{OUT_COLUMN.sub(count, t)}</div>
             </div>
             <span className="ccv-status" data-complete={generated === count}>
               <span className="ccv-status-dot" aria-hidden="true" />
-              {statusLine(generated, count)}
+              {statusLine(generated, count, t)}
             </span>
           </header>
 
@@ -218,29 +220,29 @@ export default function CameraCoverageBody({ nodes, edges, focus }: TutorialBody
                 {current.imageUrl ? (
                   <img
                     src={shotSrc(current.imageUrl)}
-                    alt={`Shot ${current.index}: ${kindFor(current.index)}`}
+                    alt={t("tut.shotAlt", { n: current.index, kind: kindFor(current.index, t) })}
                   />
                 ) : (
-                  <div className="ccv-empty">{NOT_RUN}</div>
+                  <div className="ccv-empty">{t(NOT_RUN)}</div>
                 )}
               </div>
               <div className="ccv-detail">
-                <div className="ccv-eyebrow ccv-eyebrow-accent">{shotTag(current.index, count)}</div>
-                <div className="ccv-kind">{kindFor(current.index)}</div>
+                <div className="ccv-eyebrow ccv-eyebrow-accent">{shotTag(current.index, count, t)}</div>
+                <div className="ccv-kind">{kindFor(current.index, t)}</div>
                 <div className="ccv-detail-line">{current.line}</div>
                 <dl className="ccv-specs">
                   <div>
-                    <dt>{SPECS.anchor.key}</dt>
-                    <dd>{SPECS.anchor.value}</dd>
+                    <dt>{t(SPECS.anchor.key)}</dt>
+                    <dd>{t(SPECS.anchor.value)}</dd>
                   </div>
                   <div>
-                    <dt>{SPECS.prompt.key}</dt>
-                    <dd>{SPECS.prompt.value(current.index)}</dd>
+                    <dt>{t(SPECS.prompt.key)}</dt>
+                    <dd>{SPECS.prompt.value(current.index, t)}</dd>
                   </div>
                   {graph.fanOut && (
                     <div>
-                      <dt>{SPECS.node.key}</dt>
-                      <dd>{SPECS.node.value(graph.fanOut.label, current.index)}</dd>
+                      <dt>{t(SPECS.node.key)}</dt>
+                      <dd>{SPECS.node.value(graph.fanOut.label, current.index, t)}</dd>
                     </div>
                   )}
                 </dl>
@@ -248,7 +250,7 @@ export default function CameraCoverageBody({ nodes, edges, focus }: TutorialBody
             </div>
 
             <div className="ccv-sheet">
-              <div className="ccv-eyebrow">{SHEET_EYEBROW(count)}</div>
+              <div className="ccv-eyebrow">{SHEET_EYEBROW(count, t)}</div>
               <div className="ccv-grid">
                 {shots.map((s) => (
                   <button
@@ -258,7 +260,7 @@ export default function CameraCoverageBody({ nodes, edges, focus }: TutorialBody
                     data-selected={s.index === selected}
                     aria-pressed={s.index === selected}
                     aria-controls={DETAIL_ID}
-                    aria-label={`Shot ${s.index}: ${kindFor(s.index)}`}
+                    aria-label={t("tut.shotAlt", { n: s.index, kind: kindFor(s.index, t) })}
                     onClick={() => setShot(s.index)}
                   >
                     {s.imageUrl ? (
@@ -268,7 +270,7 @@ export default function CameraCoverageBody({ nodes, edges, focus }: TutorialBody
                         loading="lazy"
                       />
                     ) : (
-                      <span className="ccv-tile-empty">{NOT_RUN}</span>
+                      <span className="ccv-tile-empty">{t(NOT_RUN)}</span>
                     )}
                     <span className="ccv-tile-label">{pad(s.index)}</span>
                   </button>

@@ -27,7 +27,8 @@ import { useEffect } from "react"
 import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
+import { useT } from "@/lib/i18n"
 
 export interface MentionPreviewContent {
   src: string
@@ -45,6 +46,7 @@ export function MentionPreview({
   onClose: () => void
   onInsert?: () => void
 }) {
+  const t = useT()
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return
@@ -60,7 +62,7 @@ export function MentionPreview({
     <div
       role="dialog"
       aria-modal
-      aria-label={S.pickerPreviewOf(content.label)}
+      aria-label={t(K.pickerPreviewOf, { name: content.label })}
       // One handler for the whole overlay: mousedown on the backdrop, the
       // image, Close or Insert all bubble here, and preventing the default
       // stops the focus shift that would close the picker underneath.
@@ -89,13 +91,13 @@ export function MentionPreview({
               onClick={onInsert}
               className="px-3 py-[5px] rounded-[8px] bg-primary text-primary-foreground text-[11.5px] font-semibold whitespace-nowrap"
             >
-              {S.previewInsert}
+              {t(K.previewInsert)}
             </button>
           )}
           <button
             type="button"
             onClick={onClose}
-            aria-label={S.previewClose}
+            aria-label={t(K.previewClose)}
             className="w-[24px] h-[24px] rounded-[7px] border border-border text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center"
           >
             <X className="w-3 h-3" strokeWidth={2.2} />

@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { WorkflowThumbnail } from "./workflow-thumbnail"
 import type { WorkflowMeta } from "@/hooks/use-projects-store"
+import { formatDate } from "@/lib/i18n/format"
 
 interface WorkflowCardProps {
   readonly workflow: WorkflowMeta
@@ -41,7 +42,7 @@ export function WorkflowCard({ workflow, onDuplicate, onDelete, readOnly }: Work
         <div className="px-3 py-2">
           <p className="text-sm font-medium truncate">{workflow.name}</p>
           <p className="text-[10px] text-muted-foreground">
-            {new Date(workflow.updatedAt).toLocaleDateString()}
+            {formatDate(workflow.updatedAt)}
           </p>
         </div>
       </Link>
@@ -60,18 +61,18 @@ export function WorkflowCard({ workflow, onDuplicate, onDelete, readOnly }: Work
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem disabled>
-                <Pencil className="h-3.5 w-3.5 mr-2" />
+                <Pencil className="h-3.5 w-3.5 me-2" />
                 {t("dash.workflowRename")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onDuplicate(workflow.id)}>
-                <Copy className="h-3.5 w-3.5 mr-2" />
+                <Copy className="h-3.5 w-3.5 me-2" />
                 {t("dash.workflowDuplicate")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive"
                 onClick={() => onDelete(workflow.id)}
               >
-                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                <Trash2 className="h-3.5 w-3.5 me-2" />
                 {t("dash.workflowDelete")}
               </DropdownMenuItem>
             </DropdownMenuContent>

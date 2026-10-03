@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-09-18T07:43:50.277Z
-generated_from: 98185a08e
+generated_at: 2026-10-01T22:35:14.386Z
+generated_from: 9efb4473c
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -88,6 +88,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `audio-fx` — Audio FX
 - `audio-isolation` — Voice Extractor
 - `audio-separation` — Audio Separation
+- `audio-sync` — Audio Sync
 - `backdrop` — Backdrop
 - `camera-format` — Camera / Film Stock
 - `camera-motion` — Camera Motion
@@ -103,6 +104,8 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `component` — Component
 - `composite` — Composite
 - `composition-effects` — Composition Effects
+- `content-ideas` — Content Ideas
+- `content-recipe` — Content Recipe
 - `creature` — Animal/Creature Asset
 - `deduplicate` — Remove Duplicates
 - `describe-to-picker` — Describe to Picker
@@ -200,6 +203,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `silence-detect` — Silence Detect
 - `slideshow` — Slideshow
 - `social-media-format` — Social Media Format
+- `social-search` — Social Search
 - `sort-list` — Sort List
 - `speech-to-video` — Speech to Video
 - `speed-ramp` — Adjust Speed
@@ -218,7 +222,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `suno-convert-wav` — Suno Convert WAV
 - `suno-cover` — Suno Cover
 - `suno-extend` — Suno Extend
-- `suno-generate` — Suno Generate
+- `suno-generate` — Suno Create Music
 - `suno-lyrics` — Suno Lyrics
 - `suno-mashup` — Suno Mashup
 - `suno-music-video` — Music Video
@@ -228,6 +232,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `suno-upload-extend` — Suno Upload Extend
 - `suno-voice` — Suno Voice
 - `switchx` — Relight & Switch
+- `telegram-account-trigger` — Telegram Account Trigger
 - `telegram-channel-feed` — Telegram Channel Feed
 - `telegram-post` — Telegram Post
 - `telegram-trigger` — Telegram Trigger
@@ -254,6 +259,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `video-analysis` — Video Analysis
 - `video-audit` — AI Audit
 - `video-composer` — Compose Video
+- `video-overlay` — Video Overlay
 - `video-retake` — Retake Video
 - `video-sfx` — Video SFX
 - `video-to-video` — Video to Video

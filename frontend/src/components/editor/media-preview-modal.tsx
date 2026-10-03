@@ -5,6 +5,9 @@ import { createPortal } from "react-dom"
 import { X, ChevronLeft, ChevronRight, Play, Pause, RotateCcw, Repeat, Square, Volume2, VolumeX } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { WaveformAudioPlayer } from "@/components/audio-player"
+import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 
 interface MediaPreviewModalProps {
   readonly isOpen: boolean
@@ -40,6 +43,8 @@ function formatTime(seconds: number): string {
 }
 
 export function MediaPreviewModal({ isOpen, onClose, type, url, results, initialIndex, onIndexChange, currentIndex, totalCount, onPrev, onNext, onVideoStateChange, initialVideoPlayState, initialPausedAtTime }: MediaPreviewModalProps) {
+  const t = useT()
+  const isRtl = useAppDir() === "rtl"
   // Internal navigation state when results array is provided
   const validResults = results?.filter((r) => r.url || r.text) ?? []
   const hasInternalNav = validResults.length > 1
@@ -237,8 +242,8 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
         {/* Close button */}
         <button
           type="button"
-          aria-label="Close preview"
-          className="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors z-20"
+          aria-label={t("templates.closePreview")}
+          className="absolute -top-10 end-0 text-white/70 hover:text-white transition-colors z-20"
           onClick={handleClose}
         >
           <X className="w-7 h-7" />
@@ -255,11 +260,11 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
         {effectivePrev && (
           <button
             type="button"
-            aria-label="Previous"
-            className="absolute left-0 md:-left-12 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 text-white/70 hover:text-white hover:bg-black/60 transition-colors"
+            aria-label={t("common.previous")}
+            className="absolute start-0 md:-start-12 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 text-white/70 hover:text-white hover:bg-black/60 transition-colors"
             onClick={(e) => { e.stopPropagation(); effectivePrev() }}
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className={cn("w-6 h-6", isRtl && "rotate-180")} />
           </button>
         )}
 
@@ -267,11 +272,11 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
         {effectiveNext && (
           <button
             type="button"
-            aria-label="Next"
-            className="absolute right-0 md:-right-12 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 text-white/70 hover:text-white hover:bg-black/60 transition-colors"
+            aria-label={t("common.next")}
+            className="absolute end-0 md:-end-12 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 text-white/70 hover:text-white hover:bg-black/60 transition-colors"
             onClick={(e) => { e.stopPropagation(); effectiveNext() }}
           >
-            <ChevronRight className="w-6 h-6" />
+            <ChevronRight className={cn("w-6 h-6", isRtl && "rotate-180")} />
           </button>
         )}
 
@@ -303,7 +308,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
 
             {/* Custom control bar */}
             <div
-              className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg px-4 pt-8 pb-3 transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+              className={`absolute bottom-0 start-0 end-0 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg px-4 pt-8 pb-3 transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
             >
               {/* Progress bar */}
               <div
@@ -315,7 +320,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
                   className="h-full bg-[#ff0073] rounded-full relative"
                   style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : "0%" }}
                 >
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-sm opacity-0 group-hover/progress:opacity-100 transition-opacity" />
+                  <div className="absolute end-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-sm opacity-0 group-hover/progress:opacity-100 transition-opacity" />
                 </div>
               </div>
 
@@ -324,15 +329,15 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    aria-label={isPlaying ? "Pause" : "Play"}
+                    aria-label={isPlaying ? t("common.pause") : t("common.play")}
                     className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors"
                     onClick={togglePlay}
                   >
-                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ms-0.5" />}
                   </button>
                   <button
                     type="button"
-                    aria-label="Restart"
+                    aria-label={t("assetlib.restart")}
                     className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors"
                     onClick={restart}
                   >
@@ -340,13 +345,13 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
                   </button>
                   <button
                     type="button"
-                    aria-label={isMuted ? "Unmute" : "Mute"}
+                    aria-label={isMuted ? t("assetlib.unmute") : t("assetlib.mute")}
                     className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors"
                     onClick={() => setIsMuted((m) => !m)}
                   >
                     {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                   </button>
-                  <span className="text-white/60 text-xs tabular-nums ml-1">
+                  <span className="text-white/60 text-xs tabular-nums ms-1">
                     {formatTime(currentTime)} / {formatTime(duration)}
                   </span>
                 </div>
@@ -356,8 +361,8 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      aria-label="Set node to loop"
-                      title="Loop on node"
+                      aria-label={t("assetlib.setNodeLoop")}
+                      title={t("assetlib.loopOnNode")}
                       className={`w-8 h-8 flex items-center justify-center rounded-full border border-dashed transition-colors ${
                         activeState === "loop"
                           ? "border-[#38BDF8] text-[#38BDF8]"
@@ -369,8 +374,8 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
                     </button>
                     <button
                       type="button"
-                      aria-label="Stop node (show first frame)"
-                      title="Stop — show first frame on node"
+                      aria-label={t("assetlib.stopNodeAria")}
+                      title={t("assetlib.stopNodeTitle")}
                       className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${
                         activeState === "stopped"
                           ? "border-[#38BDF8] bg-[#38BDF8]/20 text-[#38BDF8]"
@@ -391,7 +396,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
           </div>
         ) : (
           /* effectiveType === "image" — final else, no implicit fallback */
-          <CachedImage src={effectiveUrl} alt="Preview" className="max-w-full max-h-[90vh] rounded-lg object-contain" />
+          <CachedImage src={effectiveUrl} alt={t("common.preview")} className="max-w-full max-h-[90vh] rounded-lg object-contain" />
         )}
       </div>
     </div>,

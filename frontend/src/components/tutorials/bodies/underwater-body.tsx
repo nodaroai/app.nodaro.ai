@@ -15,28 +15,30 @@ import { nodeText, nodeMedia } from "../derive-tutorial-data"
 import { TutorialAudio } from "../tutorial-audio"
 import { TutorialVideo } from "../tutorial-video"
 import { TutorialLightbox, useLightbox } from "../tutorial-lightbox"
+import { useT, type MessageKey } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { TutorialBodyProps } from "../tutorial-registry"
 import type { WorkflowNode } from "@/types/nodes"
 import "./autopilot.css"
 import "./underwater.css"
 
-const HEADLINE = "Write eight scenes. Get a finished cinematic reel."
-const SUBLINE =
-  "Every scene becomes an image, every image becomes a five second shot, and the flow edits them together with music and posts the result."
-const CHIPS = ["8 scenes", "34 second reel", "9:16 vertical"]
+const HEADLINE = "tut.uwHeadline" satisfies MessageKey
+const SUBLINE = "tut.uwSubline" satisfies MessageKey
+const CHIPS = ["tut.uwChipScenes", "tut.uwChipReel", "tut.uwChipVertical"] as const satisfies readonly MessageKey[]
 
 /** Labels in this template carry stray double spaces ("Scene 7  Text Prompt"),
  *  so every lookup goes through the same normaliser rather than exact text. */
 const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase()
 
+/** `kind` / `title` / `line` are message keys, translated at render; `node` is the lookup label. */
 const STEPS = [
-  { n: 1, kind: "You edit", title: "The eight scenes", line: "One written scene each.", node: "Scene N Text Prompt" },
-  { n: 2, kind: "Draws", title: "Eight stills", line: "4K, 9:16, anchored to the last.", node: "Generate Image" },
-  { n: 3, kind: "Animates", title: "Eight shots", line: "Five seconds of motion each.", node: "Generate Video" },
-  { n: 4, kind: "Edits", title: "One continuous cut", line: "Eight clips, cross-faded.", node: "Combine Videos" },
-  { n: 5, kind: "Scores", title: "The music", line: "A track written for it.", node: "Suno Generate" },
-  { n: 6, kind: "Finishes", title: "Mix and trim", line: "Levels, length, format.", node: "Merge · Trim · Format" },
-  { n: 7, kind: "Posts", title: "Published as a reel", line: "Straight to the feed.", node: "Instagram Post" },
+  { n: 1, kind: "tut.kindYouEdit", title: "tut.uwStep1Title", line: "tut.uwStep1Line", node: "Scene N Text Prompt" },
+  { n: 2, kind: "tut.kindDraws", title: "tut.uwStep2Title", line: "tut.uwStep2Line", node: "Generate Image" },
+  { n: 3, kind: "tut.kindAnimates", title: "tut.uwStep3Title", line: "tut.uwStep3Line", node: "Generate Video" },
+  { n: 4, kind: "tut.kindEdits", title: "tut.uwStep4Title", line: "tut.uwStep4Line", node: "Combine Videos" },
+  { n: 5, kind: "tut.kindScores", title: "tut.uwStep5Title", line: "tut.uwStep5Line", node: "Suno Generate" },
+  { n: 6, kind: "tut.kindFinishes", title: "tut.uwStep6Title", line: "tut.uwStep6Line", node: "Merge · Trim · Format" },
+  { n: 7, kind: "tut.kindPosts", title: "tut.uwStep7Title", line: "tut.uwStep7Line", node: "Instagram Post" },
 ] as const
 
 const SCENE_COUNT = 8
@@ -44,6 +46,8 @@ const SCENE_COUNT = 8
 export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
   const [scene, setScene] = useState(1)
   const lightbox = useLightbox()
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
 
   const byLabel = useMemo(() => {
     const m = new Map<string, WorkflowNode>()
@@ -80,17 +84,17 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
                 style={{ backgroundImage: `url(${url})` }}
                 role="button"
                 tabIndex={0}
-                aria-label={`Open scene ${scene} still`}
-                onClick={() => lightbox.show(url, `Scene ${scene}`)}
+                aria-label={t("tut.openSceneStill", { n: scene })}
+                onClick={() => lightbox.show(url, t("tut.sceneN", { n: scene }))}
               />
             )}
             <span>
-              <span className="uw-scene-tag">Scene {String(scene).padStart(2, "0")}</span>
+              <span className="uw-scene-tag">{t("tut.sceneN", { n: String(scene).padStart(2, "0") })}</span>
               <span className="uw-ref">
                 {/* The insight the sticky notes never state but the graph does. */}
                 {scene === 1
-                  ? "The first image sets the look. Every later scene is anchored to it."
-                  : `Generated with scene ${scene - 1}'s image as reference.`}
+                  ? t("tut.uwFirstImageNote")
+                  : t("tut.uwRefNote", { n: scene - 1 })}
               </span>
             </span>
           </div>
@@ -110,13 +114,13 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
                   data-active={scene === i + 1}
                   style={url ? { backgroundImage: `url(${url})` } : undefined}
                   onClick={() => setScene(i + 1)}
-                  aria-label={`Trace scene ${i + 1}`}
+                  aria-label={t("tut.traceScene", { n: i + 1 })}
                   aria-pressed={scene === i + 1}
                 />
               ))}
             </div>
             <div className="uw-note">
-              clip {scene} of {SCENE_COUNT}, around {(scene - 1) * 5}s in · fade between clips
+              {t("tut.uwClipNote", { n: scene, total: SCENE_COUNT, s: (scene - 1) * 5 })}
             </div>
           </div>
         )
@@ -125,7 +129,7 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
           <div>
             <span className="uw-clamp uw-clamp--short">{nodeText(get("Suno Text Prompt"))}</span>
             <div style={{ marginTop: 8 }}>
-              <TutorialAudio src={music} label="the score" />
+              <TutorialAudio src={music} label={t("tut.theScore")} />
             </div>
           </div>
         ) : (
@@ -134,9 +138,9 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
       case "Merge · Trim · Format":
         return (
           <div className="uw-specs">
-            <span>MUSIC · under the shots</span>
-            <span>TRIM · 0:00 – 0:34</span>
-            <span>FORMAT · vertical, 9:16</span>
+            <span>{t("tut.uwSpecMusic")}</span>
+            <span>{t("tut.uwSpecTrim")}</span>
+            <span>{t("tut.uwSpecFormat")}</span>
           </div>
         )
       case "Instagram Post":
@@ -146,7 +150,7 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
               className="ap-post-mini-img"
               style={postThumb ? { backgroundImage: `url(${postThumb})` } : undefined}
             />
-            <span className="ap-live-text">live on instagram</span>
+            <span className="ap-live-text">{t("tut.liveOnInstagram")}</span>
           </div>
         )
       default:
@@ -158,13 +162,13 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
     <div className="ap">
       <header className="ap-headline">
         <div style={{ minWidth: 0 }}>
-          <h1>{HEADLINE}</h1>
-          <p className="ap-subline">{SUBLINE}</p>
+          <h1>{t(HEADLINE)}</h1>
+          <p className="ap-subline">{t(SUBLINE)}</p>
         </div>
         <div className="ap-headline-chips">
           {CHIPS.map((c) => (
             <span key={c} className="nd-chip">
-              {c}
+              {t(c)}
             </span>
           ))}
         </div>
@@ -173,17 +177,17 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
       <div className="ap-hero">
         <section className="ap-card">
           <header className="ap-card-head">
-            <span className="ap-io-badge">IN</span>
+            <span className="ap-io-badge">{t("tut.badgeIn")}</span>
             <div>
-              <div className="ap-card-title">What you write</div>
-              <div className="ap-card-sub">Eight scenes, in your own words</div>
+              <div className="ap-card-title">{t("tut.uwInTitle")}</div>
+              <div className="ap-card-sub">{t("tut.uwInSub")}</div>
             </div>
           </header>
           <div className="ap-card-body">
             <div className="ap-input">
               {/* The traced scene, so IN and the chain always agree. */}
               <div className="uw-scene-tag" style={{ marginBottom: 8 }}>
-                Scene {String(scene).padStart(2, "0")} of {SCENE_COUNT}
+                {t("tut.sceneOf", { n: String(scene).padStart(2, "0"), total: SCENE_COUNT })}
               </div>
               {scenePrompt(scene) || "—"}
             </div>
@@ -193,18 +197,18 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
         <div className="ap-connector">
           <span className="ap-connector-bar" />
           <span className="ap-connector-text">
-            7 STEPS
+            {t("tut.uwConnector1")}
             <br />
-            BELOW
+            {t("tut.uwConnector2")}
           </span>
         </div>
 
         <section className="ap-card ap-card--out">
           <header className="ap-card-head">
-            <span className="ap-io-badge ap-io-badge--out">OUT</span>
+            <span className="ap-io-badge ap-io-badge--out">{t("tut.badgeOut")}</span>
             <div style={{ minWidth: 0 }}>
-              <div className="ap-card-title">What you get back</div>
-              <div className="ap-card-sub">One 34-second reel, scored and posted</div>
+              <div className="ap-card-title">{t("tut.uwOutTitle")}</div>
+              <div className="ap-card-sub">{t("tut.uwOutSub")}</div>
             </div>
           </header>
           <div className="ap-out-body">
@@ -216,7 +220,7 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
               )}
             </div>
             <div className="ap-out-right">
-              <div className="nd-eyebrow">The eight shots</div>
+              <div className="nd-eyebrow">{t("tut.uwEightShots")}</div>
               <div className="uw-shots">
                 {stills.map((url, i) => (
                   <button
@@ -226,7 +230,7 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
                     data-active={scene === i + 1}
                     style={url ? { backgroundImage: `url(${url})` } : undefined}
                     onClick={() => setScene(i + 1)}
-                    aria-label={`Trace scene ${i + 1}`}
+                    aria-label={t("tut.traceScene", { n: i + 1 })}
                     aria-pressed={scene === i + 1}
                   />
                 ))}
@@ -234,7 +238,7 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
               {caption && (
                 <>
                   <div className="nd-eyebrow" style={{ marginTop: 6 }}>
-                    The caption
+                    {t("tut.theCaption")}
                   </div>
                   <p className="ap-hook">{caption.slice(0, 280)}</p>
                 </>
@@ -245,9 +249,9 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
       </div>
 
       <div className="ap-chain-head">
-        <h2>How it gets from one to the other</h2>
+        <h2>{t("tut.uwChainHeading")}</h2>
         <p className="ap-chain-note">
-          Following scene {String(scene).padStart(2, "0")} — click any shot above to follow a different one.
+          {t("tut.uwFollowingScene", { n: String(scene).padStart(2, "0") })}
         </p>
       </div>
 
@@ -258,12 +262,12 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
             <section className={`ap-step${i === STEPS.length - 1 ? " ap-step--last" : ""}`}>
               <div className="ap-step-top">
                 <span className="ap-step-badge">{step.n}</span>
-                <span className="ap-step-kind">{step.kind}</span>
+                <span className="ap-step-kind">{t(step.kind)}</span>
               </div>
-              <div className="ap-step-title">{step.title}</div>
-              <div className="ap-step-line">{step.line}</div>
+              <div className="ap-step-title">{t(step.title)}</div>
+              <div className="ap-step-line">{t(step.line)}</div>
               <div className="ap-preview">{preview(step.node)}</div>
-              <div className="ap-step-node">{step.node}</div>
+              <div className="ap-step-node">{localizeNode(step.node)}</div>
             </section>
           </span>
         ))}

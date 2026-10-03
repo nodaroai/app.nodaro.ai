@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { TRANSITIONS, TRANSITION_IDS, TRANSITION_CATEGORY_ORDER, TRANSITION_CATEGORY_LABELS, composeTransitionHintFromConnections, getTransition, getTransitionLabel, getTransitionPromptHint } from "../transitions.js"
+import { TRANSITIONS, TRANSITION_IDS, TRANSITION_CATEGORY_ORDER, TRANSITION_CATEGORY_LABELS, composeTransitionHintFromConnections, getTransition, getTransitionLabel, getTransitionPromptHint, renderTransitionBases } from "../transitions.js"
 
 describe("transitions catalog", () => {
   it("ships 82 unique entries", () => {
@@ -74,9 +74,9 @@ describe("getTransition / getTransitionLabel / getTransitionPromptHint", () => {
 })
 
 describe("composeTransitionHintFromConnections — single-pick", () => {
-  it("returns the bare hint when no connections + no timing", () => {
+  it("returns `term (hint)` when no connections + no timing", () => {
     const r = composeTransitionHintFromConnections("cross-dissolve", [], [])
-    expect(r).toBe(getTransitionPromptHint("cross-dissolve"))
+    expect(r).toBe(`cross-dissolve (${getTransitionPromptHint("cross-dissolve")})`)
   })
 
   it("returns empty when id is undefined / 'auto' / unknown", () => {
@@ -168,11 +168,12 @@ describe("composeTransitionHintFromConnections — multi-pick", () => {
     expect(scalar).toBe(array)
   })
 
-  it("joins two base hints with ', and '", () => {
+  it("joins two `term (hint)` fragments with ', and '", () => {
     const r = composeTransitionHintFromConnections(["smash-cut", "white-flash"], [], [])
-    const a = getTransitionPromptHint("smash-cut")
-    const b = getTransitionPromptHint("white-flash")
-    expect(r).toBe(`${a}, and ${b}`)
+    expect(r).toBe(
+      "smash cut (an abrupt jarring transition between two visually or tonally contrasting shots with no fade, on a beat)" +
+      ", and white flash (" + getTransitionPromptHint("white-flash") + ")",
+    )
   })
 
   it("dedupes duplicate ids", () => {
@@ -182,8 +183,7 @@ describe("composeTransitionHintFromConnections — multi-pick", () => {
   })
 
   it("caps at 2 ids — extra ids dropped", () => {
-    const a = getTransitionPromptHint("smash-cut")
-    const b = getTransitionPromptHint("white-flash")
+    const [a, b] = renderTransitionBases(["smash-cut", "white-flash"])
     const r = composeTransitionHintFromConnections(
       ["smash-cut", "white-flash", "fade-to-black", "wipe"],
       [],

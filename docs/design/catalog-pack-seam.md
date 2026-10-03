@@ -48,6 +48,17 @@ to curate; there is no in-place edit path.
   from the funnel's own imports, and the allowlist may only shrink: a new
   raw-array importer fails, and a repointed file must be removed from the list.
 
+**Transition rows — a leading heading is stripped.** A video prompt writes each
+transition as `<term> (<hint body>)` (`renderTransitionBases` in
+`packages/prompts/src/transitions.ts`). To avoid saying the term twice, any
+leading `"<Heading>: "` of at most five words with no `,;.()` in it is removed
+from the `promptHint` before it goes in the parentheses — whatever the heading
+says, and on rows a pack adds exactly as on base rows. A pack author who wants
+those words in the prompt writes them as part of the sentence, not as a
+`Heading:`. A comma-separated item that only restates the term is dropped too,
+and a pack row marked `instant` gets the shared anti-blend clause (see
+[Transition](../nodes/parameters/transition.md)).
+
 ## The composition funnel + deferred policy
 
 `getRegisteredPickerCatalogs()` = `composePickerCatalogs(base, registeredPacks)`,

@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react"
+import { formatDate, formatNumber } from "@/lib/i18n/format"
 
 /**
  * Shared style vocabulary for the billing page, ported 1:1 from the
@@ -85,12 +86,12 @@ export const monoInput: CSSProperties = {
 }
 
 export function formatCredits(value: number): string {
-  return value.toLocaleString("en-US")
+  return formatNumber(value)
 }
 
 /** Mock date style: "Aug 12". */
 export function formatShortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
+  return formatDate(iso, {
     month: "short",
     day: "numeric",
   })

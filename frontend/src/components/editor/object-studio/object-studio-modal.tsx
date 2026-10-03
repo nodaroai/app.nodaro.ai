@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits, isMultiUser } from "@/lib/edition"
+import { tx, useT } from "@/lib/i18n"
 import { STUDIO_MODAL_Z } from "../studio-shell/studio-modal-z"
 
 // Lazy dynamic import keeps this core file off the ee/ static-import graph
@@ -45,6 +46,7 @@ interface ObjectStudioModalProps {
 }
 
 export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
+  const t = useT()
   const studio = useObjectStudio(nodeId)
   // Modal-level jobs hook for the Sheet page's Stage-A panel tracking. The
   // image-asset pages each create their own; the sheet page consumes this one
@@ -67,7 +69,7 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
       if (e.key !== "Escape") return
       if (studio.isSaving || studio.isApprovingMainImage) return
       if (studio.isDirty) {
-        if (window.confirm("Discard unsaved changes?")) onClose()
+        if (window.confirm(tx("studio.discardUnsavedChanges"))) onClose()
       } else {
         onClose()
       }
@@ -81,10 +83,10 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Object/Props Studio"
+        aria-label={t("studio.objectStudioAria")}
         className={`fixed inset-0 ${STUDIO_MODAL_Z} bg-[#0d1017] flex items-center justify-center`}
       >
-        <div className="text-sm text-slate-400">Loading object…</div>
+        <div className="text-sm text-slate-400">{t("studio.loadingObject")}</div>
       </div>
     )
   }
@@ -113,11 +115,11 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
           )}
           <div>
             <h1 id="object-studio-title" className="text-[13px] font-semibold text-slate-200">
-              {data.objectName || "Unnamed object"}
+              {data.objectName || t("studio.unnamedObject")}
             </h1>
             <div className="text-[10px] text-slate-500">
               {data.category} · {data.style}
-              {data.styleLock && <span className="text-[#22d3ee]"> · Style locked</span>}
+              {data.styleLock && <span className="text-[#22d3ee]"> · {t("studio.styleLocked")}</span>}
             </div>
           </div>
         </div>
@@ -130,7 +132,7 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
               disabled={closeBlocked}
               className="accent-[#22d3ee]"
             />
-            Style Lock
+            {t("cfgext.entStyleLock")}
           </label>
           <button
             type="button"
@@ -142,7 +144,7 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
             disabled={!studio.isDirty || closeBlocked}
             className="text-[11px] px-3 py-1.5 rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white"
           >
-            {studio.isSaving ? "Saving…" : "Save"}
+            {studio.isSaving ? t("common.saving") : t("common.save")}
           </button>
           {isAdmin && isMultiUser() && (
             <TooltipProvider delayDuration={0}>
@@ -158,13 +160,13 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
                       onClick={() => setShowPublish(true)}
                     >
                       <Upload className="h-3.5 w-3.5" />
-                      Share to community
+                      {t("studio.shareToCommunity")}
                     </Button>
                   </span>
                 </TooltipTrigger>
                 {!data.objectDbId && (
                   <TooltipContent side="bottom">
-                    Generate an appearance to save the object first
+                    {t("studio.genAppearanceFirstObject")}
                   </TooltipContent>
                 )}
               </Tooltip>
@@ -174,14 +176,14 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
             type="button"
             onClick={() => {
               if (closeBlocked) return
-              if (studio.isDirty && !window.confirm("Discard unsaved changes?")) return
+              if (studio.isDirty && !window.confirm(tx("studio.discardUnsavedChanges"))) return
               onClose()
             }}
             disabled={closeBlocked}
             className="text-[10px] bg-[#1e293b] rounded px-3 py-1.5 text-slate-400 disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="Close"
+            aria-label={t("common.close")}
           >
-            ✕ Close
+            ✕ {t("common.close")}
           </button>
         </div>
       </div>

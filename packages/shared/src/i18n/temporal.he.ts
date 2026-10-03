@@ -2,9 +2,9 @@ import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
   // Speed
-  "real-time": { label: "זמן אמת", description: "מהירות נגינה רגילה" },
-  "slow-motion": { label: "Slow Motion", description: "צילום מואט באופן מתון" },
-  "super-slow-mo": { label: "Super Slow-mo", description: "צילום איטי במיוחד" },
+  "real-time": { label: "זמן אמת", description: "מהירות ניגון רגילה" },
+  "slow-motion": { label: "הילוך איטי", description: "צילום מואט באופן מתון" },
+  "super-slow-mo": { label: "הילוך איטי במיוחד", description: "צילום איטי במיוחד" },
   "time-lapse": { label: "Time-lapse", description: "זמן דחוס, מעבר מהיר" },
   "hyper-lapse": { label: "Hyper-lapse", description: "Time-lapse בתנועה" },
   "speed-ramp": { label: "Speed Ramp", description: "שינוי מהירות דינמי באמצע צילום" },
@@ -16,16 +16,16 @@ const map: LocaleCatalogMap = {
   "moving-subject": { label: "סובייקט נע", description: "סובייקט נע, עולם קפוא" },
 
   // Direction
-  "forward": { label: "קדימה", description: "נגינה קדימה רגילה" },
-  "reverse": { label: "Reverse / Rewind", description: "זמן מתנגן לאחור" },
-  "loop-boomerang": { label: "Loop / Boomerang", description: "קדימה ואז לאחור" },
+  "forward": { label: "קדימה", description: "ניגון קדימה רגיל" },
+  "reverse": { label: "הרצה לאחור", description: "הזמן רץ לאחור" },
+  "loop-boomerang": { label: "לופ / בומרנג", description: "קדימה ואז לאחור" },
 
   // Shutter
   "long-exposure": { label: "חשיפה ארוכה", description: "שבילי תנועה ופסים" },
   "crisp-shutter": { label: "Crisp Shutter", description: "תנועה חדה, ללא טשטוש" },
-  "motion-blur": { label: "Motion Blur", description: "טשטוש כיווני בולט" },
+  "motion-blur": { label: "טשטוש תנועה", description: "טשטוש כיווני בולט" },
   "stutter-strobe": { label: "Stutter / Strobe", description: "תנועה קופצנית בסגנון סטרובוסקופ" },
-  "stop-motion": { label: "Stop-motion", description: "תנועת פריים-אחר-פריים מדורגת" },
+  "stop-motion": { label: "סטופ-מושן", description: "תנועת פריים-אחר-פריים מדורגת" },
 }
 
 export default map

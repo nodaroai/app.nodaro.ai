@@ -148,6 +148,9 @@ export const RUN_RESULT_TYPE_KEYS: Readonly<Record<string, readonly string[]>> =
   "image-critic": ["score", "approved", "feedback", "details"],
   // The RESULT's pixel size (staleness check). The size a person sets lives in `canvas`.
   "image-overlay": ["width", "height"],
+  // The last run's warnings line, its output canvas + length, and the
+  // composition it was rendered from (the "Result (old)" check).
+  "video-overlay": ["resultCompositionKey", "warnings", "width", "height", "durationSec"],
 }
 
 /** Run STATE only — what a content card may lose. Never its content. */
@@ -197,7 +200,7 @@ const ZERO_IS_EMPTY: ReadonlySet<string> = new Set([
   "__restTotal",
   "__upstreamCount",
 ])
-const FALSE_IS_EMPTY: ReadonlySet<string> = new Set(["isStreaming", "jobAwaitingReview", "jobRecovering", "__listRunning"])
+const FALSE_IS_EMPTY: ReadonlySet<string> = new Set(["isStreaming", "jobAwaitingReview", "jobConnectionLost", "jobRecovering", "__listRunning"])
 const IDLE_IS_EMPTY: ReadonlySet<string> = new Set(["executionStatus", "videoExecutionStatus"])
 
 export type ClearScope = "results" | "run-state" | "none"

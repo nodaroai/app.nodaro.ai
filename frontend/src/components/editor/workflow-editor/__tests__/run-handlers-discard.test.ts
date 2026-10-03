@@ -106,7 +106,7 @@ vi.mock("../list-execution", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { streamBackendExecution, teardownActiveWorkflowStream } from "../run-handlers"
+import { attachToRunningExecution, detachActiveWorkflowStream, handleRun, handleRunFromHere, handleRunSelected, hasActiveWorkflowStream, isStreaming, streamBackendExecution, teardownActiveWorkflowStream } from "../run-handlers"
 import type { ExecutionContext } from "../types"
 
 // Pull the SSE callbacks object (2nd arg to streamWorkflowExecution) so a test
@@ -555,5 +555,282 @@ describe("streamBackendExecution — restore-path 404 race tolerance", () => {
     await vi.advanceTimersByTimeAsync(3000) // poll 2 → 404 → give up
 
     expect(mockToastError).toHaveBeenCalledWith("Backend execution no longer exists")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A followed trigger-started run (follow-triggered-run.ts): only the states its
+// `paintable` lets through reach the canvas, and `settle` runs before the end.
+// ---------------------------------------------------------------------------
+
+describe("streamBackendExecution — a followed Telegram run", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    mockEdges = []
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+  })
+
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  it("paints only the states the follow lets through, and settles it before the run's end", async () => {
+    mockNodes = [
+      { id: "trig", type: "telegram-account-trigger", data: { label: "t" } },
+      { id: "llm", type: "llm-chat", data: { label: "l", executionStatus: "pending" } },
+    ]
+    const order: string[] = []
+    const paintable = vi.fn((states: Record<string, unknown>) => ({ llm: states.llm }) as never)
+    const settle = vi.fn(() => void order.push("settle"))
+    mockGetWorkflowExecution.mockResolvedValue({ status: "completed", nodeStates: {} })
+
+    streamBackendExecution("exec-tg", makeCtx(), vi.fn(), () => void order.push("ended"), {
+      isRestore: true,
+      beginTriggered: () => ({ paintable, settle }),
+    })
+    const cb = lastSseCallbacks()
+    cb.onNodeStatesChanged?.({
+      trig: { status: "completed", startedAt: "2026-10-03T10:00:00Z", output: { text: "the message" } },
+      llm: { status: "completed", startedAt: "2026-10-03T10:00:01Z", output: { text: "the answer" } },
+    } as Record<string, unknown>)
+
+    expect(paintable).toHaveBeenCalled()
+    expect((mockNodes.find((n) => n.id === "llm")!.data as Record<string, unknown>).generatedText).toBe("the answer")
+    expect((mockNodes.find((n) => n.id === "trig")!.data as Record<string, unknown>).generatedText).toBeUndefined()
+
+    cb.onCompleted?.()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(order).toEqual(["settle", "ended"])
+  })
+})
+
+describe("streamBackendExecution — one stream per run (review round 1)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    mockNodes = []
+    mockEdges = []
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+  })
+
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  it("asked again for the run it already streams, keeps the first stream", () => {
+    const editor = vi.fn()
+    streamBackendExecution("exec-same", makeCtx(), editor, vi.fn())
+    streamBackendExecution("exec-same", makeCtx(), editor, vi.fn())
+    expect(mockStreamWorkflowExecution).toHaveBeenCalledTimes(1)
+    expect(isStreaming("exec-same")).toBe(true)
+  })
+
+  it("a different run takes the slot only after the old stream ended, naming its own run", () => {
+    const editor = vi.fn()
+    const oldEnded = vi.fn()
+    streamBackendExecution("exec-old-run", makeCtx(), editor, oldEnded)
+    streamBackendExecution("exec-new-run", makeCtx(), editor, vi.fn())
+    expect(oldEnded).toHaveBeenCalledWith("exec-old-run")
+    expect(isStreaming("exec-new-run")).toBe(true)
+    expect(isStreaming("exec-old-run")).toBe(false)
+  })
+
+  it("a bare end of a run that FAILED says it failed and settles its nodes", async () => {
+    mockNodes = [{ id: "never", type: "generate-image", data: { label: "n", executionStatus: "pending" } }]
+    mockGetWorkflowExecution.mockResolvedValue({ status: "failed", errorMessage: "boom", nodeStates: {} })
+    streamBackendExecution("exec-bare-end", makeCtx(), vi.fn(), vi.fn(), { isRestore: true })
+    lastSseCallbacks().onCompleted?.()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mockToastError).toHaveBeenCalled()
+    expect(mockToastSuccess).not.toHaveBeenCalled()
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("never", expect.objectContaining({ executionStatus: "idle" }))
+  })
+})
+
+describe("attachToRunningExecution — a Run answered 'already running' (review round 1)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    mockEdges = []
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+  })
+
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  it("the run already followed: keeps that stream and takes back the click's marks", async () => {
+    mockNodes = []
+    mockGetWorkflowExecution.mockResolvedValue({ status: "running", triggerType: "telegram_account", nodeStates: {} })
+    const editor = vi.fn()
+    streamBackendExecution("exec-tg-live", makeCtx(), editor, vi.fn())
+    const undo = vi.fn()
+    await attachToRunningExecution("exec-tg-live", makeCtx(), editor, vi.fn(), undo)
+    expect(undo).toHaveBeenCalled()
+    expect(mockStreamWorkflowExecution).toHaveBeenCalledTimes(1)
+  })
+
+  it("a Telegram run: followed through its paint rules — the trigger card never takes the message", async () => {
+    mockNodes = [
+      { id: "trig", type: "telegram-account-trigger", data: { label: "t" } },
+      { id: "llm", type: "llm-chat", data: { label: "l" } },
+    ]
+    const states = {
+      trig: { status: "completed", startedAt: "2026-10-03T10:00:00Z", output: { text: "the message" } },
+      llm: { status: "running", startedAt: "2026-10-03T10:00:01Z" },
+    }
+    mockGetWorkflowExecution.mockResolvedValue({ status: "running", triggerType: "telegram_account", nodeStates: states })
+    const undo = vi.fn()
+    await attachToRunningExecution("exec-tg", makeCtx(), vi.fn(), vi.fn(), undo)
+    expect(undo).toHaveBeenCalled()
+    lastSseCallbacks().onNodeStatesChanged?.({ ...states, llm: { status: "completed", startedAt: "2026-10-03T10:00:01Z", output: { text: "the answer" } } } as Record<string, unknown>)
+    expect((mockNodes.find((n) => n.id === "trig")!.data as Record<string, unknown>).generatedText).toBeUndefined()
+    expect((mockNodes.find((n) => n.id === "llm")!.data as Record<string, unknown>).generatedText).toBe("the answer")
+  })
+
+  it("any other run: streamed as before, the click's marks kept", async () => {
+    mockNodes = []
+    mockGetWorkflowExecution.mockResolvedValue({ status: "running", triggerType: "manual", nodeStates: {} })
+    const undo = vi.fn()
+    await attachToRunningExecution("exec-manual", makeCtx(), vi.fn(), vi.fn(), undo)
+    expect(undo).not.toHaveBeenCalled()
+    expect(isStreaming("exec-manual")).toBe(true)
+  })
+})
+
+describe("streamBackendExecution — a remounted editor (review round 2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    mockNodes = []
+    mockEdges = []
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+  })
+
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  it("restoring the same run from a NEW editor opens its own stream; the gone editor's stream is let go silently", () => {
+    const goneEnded = vi.fn()
+    streamBackendExecution("exec-long", makeCtx(), vi.fn(), goneEnded)
+    streamBackendExecution("exec-long", makeCtx(), vi.fn(), vi.fn(), { isRestore: true })
+    expect(mockStreamWorkflowExecution).toHaveBeenCalledTimes(2)
+    expect(goneEnded).not.toHaveBeenCalled()
+  })
+
+  it("a stream let go with its page frees the slot, so the next editor follows the run again", () => {
+    streamBackendExecution("exec-left", makeCtx(), vi.fn(), vi.fn())
+    detachActiveWorkflowStream()
+    expect(isStreaming("exec-left")).toBe(false)
+    expect(hasActiveWorkflowStream()).toBe(false)
+  })
+})
+
+describe("syncNodeStatesToStore — a trigger's message is never saved as a result (review round 2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    mockEdges = []
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+  })
+
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  it("a plain stream paints the answer but not the trigger card's message", () => {
+    mockNodes = [
+      { id: "trig", type: "telegram-account-trigger", data: { label: "t", executionStatus: "pending" } },
+      { id: "llm", type: "llm-chat", data: { label: "l", executionStatus: "pending" } },
+    ]
+    streamBackendExecution("exec-plain", makeCtx(), vi.fn(), vi.fn())
+    lastSseCallbacks().onNodeStatesChanged?.({
+      trig: { status: "completed", startedAt: "2026-10-03T10:00:00Z", output: { text: "the message" } },
+      llm: { status: "completed", startedAt: "2026-10-03T10:00:01Z", output: { text: "the answer" } },
+    } as Record<string, unknown>)
+    const trig = mockNodes.find((n) => n.id === "trig")!.data as Record<string, unknown>
+    expect(trig.generatedText).toBeUndefined()
+    expect(trig.generatedResults).toBeUndefined()
+    expect((mockNodes.find((n) => n.id === "llm")!.data as Record<string, unknown>).generatedText).toBe("the answer")
+  })
+})
+
+describe("Run while a run is followed (review round 2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    mockNodes = [{ id: "list", type: "list", data: { label: "l", __listResults: ["a", "b"] } }]
+    mockEdges = []
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+    streamBackendExecution("exec-followed", makeCtx(), vi.fn(), vi.fn())
+    mockUpdateNodeData.mockClear()
+    mockToastInfo.mockClear()
+  })
+
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  it.each([
+    ["Run", () => handleRun(makeCtx(), "p1", "wf-1", vi.fn(), vi.fn())],
+    ["Run from here", () => handleRunFromHere("list", makeCtx(), "p1", vi.fn(), vi.fn())],
+    ["Run selected", () => handleRunSelected(makeCtx(), "p1", vi.fn(), vi.fn())],
+  ])("%s starts nothing, resets nothing and says so", async (_label, run) => {
+    await run()
+    expect(mockToastInfo).toHaveBeenCalledTimes(1)
+    expect(mockUpdateNodeData).not.toHaveBeenCalled()
+    expect((mockNodes[0]!.data as Record<string, unknown>).__listResults).toEqual(["a", "b"])
+    expect(mockStreamWorkflowExecution).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("review round 3", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    mockEdges = []
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+  })
+
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  it("a trigger node takes no result at all — not a photo someone sent either, only its status", () => {
+    mockNodes = [{ id: "bot", type: "telegram-trigger", data: { label: "b", executionStatus: "pending" } }]
+    streamBackendExecution("exec-photo", makeCtx(), vi.fn(), vi.fn())
+    lastSseCallbacks().onNodeStatesChanged?.({
+      bot: { status: "completed", startedAt: "2026-10-03T10:00:00Z", output: { text: "look", imageUrl: "https://r2.example.com/tg/p.jpg" } },
+    } as Record<string, unknown>)
+    const bot = mockNodes[0]!.data as Record<string, unknown>
+    expect(bot.executionStatus).toBe("completed")
+    expect(bot.generatedImageUrl).toBeUndefined()
+    expect(bot.generatedResults).toBeUndefined()
+    expect(bot.generatedText).toBeUndefined()
+  })
+
+  it("a stream let go paints nothing more, not even a poll already on its way", () => {
+    mockNodes = [{ id: "llm", type: "llm-chat", data: { label: "l", executionStatus: "pending" } }]
+    streamBackendExecution("exec-left-behind", makeCtx(), vi.fn(), vi.fn())
+    const cb = lastSseCallbacks()
+    detachActiveWorkflowStream()
+    cb.onNodeStatesChanged?.({ llm: { status: "completed", startedAt: "2026-10-03T10:00:01Z", output: { text: "late" } } } as Record<string, unknown>)
+    expect((mockNodes[0]!.data as Record<string, unknown>).generatedText).toBeUndefined()
   })
 })

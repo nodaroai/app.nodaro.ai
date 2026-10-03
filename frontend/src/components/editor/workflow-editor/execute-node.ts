@@ -1,10 +1,15 @@
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
-import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource } from "@nodaro/shared";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
+import { contentRunResultPatch } from "@/lib/content-run-output";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
+import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
+import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
+import { videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output";
+import { VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH, assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources } from "@nodaro/shared";
 import {
   generateMusicApi,
   textToAudioApi,
@@ -60,12 +65,14 @@ import {
   mergeVideoAudioApi,
   imageCollageApi,
   imageOverlayApi,
+  videoOverlayApi,
   assembleNarratedVideo,
   trimAudioApi,
   splitMediaApi,
   extractAudioApi,
   removeAudioApi,
   silenceDetectApi,
+  audioSyncApi,
   trimVideoApi,
   extractFrameApi,
   transcodeVideoApi,
@@ -98,7 +105,10 @@ import {
   webScrape,
   metaAdsScrape,
   instagramScrape,
+  socialSearch,
   startVideoAnalysis,
+  startContentRecipe,
+  startContentIdeas,
   runVideoAudit,
   editPlan,
   executeReduce,
@@ -107,12 +117,14 @@ import { applyWebScrapeFailure, applyWebScrapeResult, webScrapeRunStartPatch } f
 import { scrapeResultPatch } from "@/components/nodes/scrape-result-recovery";
 import { applyMetaAdsScrapeFailure, applyMetaAdsScrapeResult, metaAdsScrapeRunStartPatch } from "@/components/nodes/meta-ads-scrape-run-state";
 import { applyInstagramScrapeFailure, applyInstagramScrapeResult, instagramScrapeRunStartPatch } from "@/components/nodes/instagram-scrape-run-state";
-import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets } from "@nodaro/shared";
+import { applySocialSearchFailure, applySocialSearchResult, socialSearchRunStartPatch } from "@/components/nodes/social-search-run-state";
+import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets, socialSearchRequestFromNode } from "@nodaro/shared";
+import { clampContentIdeasCount, CONTENT_IDEAS_MAX_RECIPE_INPUTS } from "@nodaro/shared";
 import { tx } from "@/lib/i18n";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
   readPromptAffixes, unwrapEditPlanOutput, clampEditPlanClipCount, asEditPlanMode, asEditPlanTier, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, uiResolutionFill, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN, DEFAULT_TRANSCRIBE_NODE_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, normalizeCaptionNumericLevers } from "@nodaro/shared"
-import { applyPromptAffixes, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
+import { applyPromptAffixes, appendPromptHints, ownMotionHint, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
@@ -120,7 +132,8 @@ import {
 } from "@/lib/scene3d/reference-scoping"
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext, Transcript } from "@nodaro/shared"
 import { scene3DAdvancedEngines } from "@/lib/scene3d-pro-availability"
-import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
+import { analyzablePickerHint } from "@/lib/picker-labels";
+import { useLocaleStore } from "@/lib/locale-store";
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
@@ -188,12 +201,14 @@ import type {
   AssembleNarratedVideoData,
   ImageCollageData,
   ImageOverlayData,
+  VideoOverlayData,
   MergeVideoAudioData,
   TrimAudioData,
   SplitMediaData,
   ExtractAudioData,
   RemoveAudioData,
   SilenceDetectNodeData,
+  AudioSyncNodeData,
   TrimVideoData,
   ExtractFrameData,
   TranscodeVideoData,
@@ -226,6 +241,8 @@ import type {
   VoiceDesignData,
   ForcedAlignmentData,
   VideoAnalysisNodeData,
+  ContentRecipeNodeData,
+  ContentIdeasNodeData,
   VideoAuditNodeData,
   SubWorkflowData,
   SocialMediaFormatData,
@@ -237,6 +254,7 @@ import type {
   WebScrapeNodeData,
   MetaAdsScrapeNodeData,
   InstagramScrapeNodeData,
+  SocialSearchNodeData,
   TelegramChannelFeedData,
   ExtractFieldNodeData,
   JsonProcessNodeData,
@@ -256,12 +274,12 @@ import type {
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
-  MAX_CONSECUTIVE_POLL_FAILURES,
   checkStorageError,
   updateProgressIfChanged,
   videoAuditAnalysisWired,
   type ExecutionContext,
 } from "./types";
+import { jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { iterationIdempotencyKey } from "@/lib/idempotency-key";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES, VIDEO_URL_RE } from "./execution-graph";
@@ -323,6 +341,7 @@ import {
   getUpstreamDuration,
   getCombineUpstreamDurations,
 } from "@/lib/upstream-duration";
+import { editPlanIssueText, nodeRunError, nodeRunText } from "@/components/editor/workflow-editor/node-run-message";
 
 // ---------------------------------------------------------------------------
 // Manual-edit pending promise bridge
@@ -437,7 +456,9 @@ export function buildMetaAdsScrapeParams(
     countryCode: data.countryCode,
     platforms: Array.isArray(data.platforms) ? data.platforms : undefined,
     formats: Array.isArray(data.formats) ? data.formats : undefined,
-    featuredIndex: typeof data.featuredIndex === "number" ? data.featuredIndex : undefined,
+    // No featuredIndex: a run features its FIRST result, and the node resets
+    // its featured item to 0 on completion. Sending the saved index made the
+    // route feature (and copy the video of) another item than the node shows.
     // The creative video is the expensive bytes — copied into the library
     // only when something downstream will actually consume it.
     ingestVideo: opts.videoWired === true,
@@ -973,7 +994,7 @@ function assertNoUnresolvedRefs(
   if (missing.length === 0) return;
   const tokens = missing.map((m) => `{${m}}`).join(", ");
   toast.error(
-    `Node "${nodeLabel}": unresolved reference ${tokens} — connect the source node, or add a default with {name || fallback}.`,
+    nodeRunError(nodeLabel, "nodeRun.unresolvedReferenceConnectTheSource", { tokens }),
   );
   const err = new Error(`Unresolved reference: ${tokens}`) as Error & { code?: string };
   // Same stable, non-retryable code the DAG engine throws, so a report from
@@ -1239,27 +1260,36 @@ function executeNodeCore(
     node = { ...node, data: resolvedData } as WorkflowNode
   }
 
+  // The Settings input — the same step as the orchestrator's (node-executor):
+  // snap a wired Duration to the model, refuse a wired Provider this node
+  // cannot run, before any request is sent.
+  if (SETTINGS_INPUT_CONSUMERS[node.type ?? ""]) {
+    const settings = applySettingsInput(node.type ?? "", node.id, node.data as Record<string, unknown>, edges, (id) => nodes.find((n) => n.id === id)?.type)
+    if (settings.problem) {
+      const source = nodes.find((n) => n.id === settings.problem!.sourceId)
+      const sourceLabel = ((source?.data as { label?: string } | undefined)?.label) || "Provider"
+      toast.error(nodeRunError(nodeLabel, "nodeRun.settingsProviderNotAccepted", { source: sourceLabel, value: settings.problem.value }));
+      return Promise.reject(new Error("Settings provider not accepted"));
+    }
+    node = { ...node, data: settings.data } as WorkflowNode
+  }
+
   if (node.type === "generate-script") {
-    const prompt = applyPromptAffixes(overridePrompt ?? inputs.prompt, readPromptAffixes(node.data as Record<string, unknown>), refMap) ?? "";
-    if (!prompt) {
-      toast.error(
-        `Node "${(node.data as GenerateScriptData).label}": no prompt found`,
-      );
+    // The topic and the settings go through the server's own readers, so a
+    // wired Text node and a mapped Tone or Scene Count read the same on a
+    // single-node run as on a workflow run.
+    const scriptData = node.data as GenerateScriptData;
+    const prompt = computeScriptTopic(scriptData, { override: overridePrompt, wired: inputs.prompt, refMap });
+    if (!prompt.trim()) {
+      toast.error(nodeRunError(scriptData.label, "nodeRun.noPromptFound"));
       return Promise.reject(new Error("No prompt"));
     }
-    const scriptData = node.data as GenerateScriptData;
     setUserPromptTemplate(undefined);
-    return runScriptGeneration(
-      node.id,
-      prompt,
-      ctx,
-      scriptData.sceneCount,
-      scriptData.tone || undefined,
-      scriptData.targetLength || undefined,
-      scriptData.provider || undefined,
-      scriptData.llmModel || undefined,
-      scriptData.reasoningEffort || undefined,
-    );
+    return runScriptGeneration(node.id, prompt, ctx, readScriptSettings(scriptData, refMap), {
+      provider: scriptData.provider || undefined,
+      llmModel: scriptData.llmModel || undefined,
+      reasoningEffort: scriptData.reasoningEffort || undefined,
+    });
   }
 
   if (node.type === "generate-image") {
@@ -1571,8 +1601,7 @@ function executeNodeCore(
       // identity bullet (above), so exclude them here to avoid a tail dup.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -1657,7 +1686,7 @@ function executeNodeCore(
     // (not `throwOnEmpty`) to preserve this branch's toast + Promise.reject
     // control flow and its exact message.
     if (!result.prompt.trim()) {
-      toast.error(`Node "${imgData.label}": no prompt — type one, mention a character, or connect a cinematography source`);
+      toast.error(nodeRunError(imgData.label, "nodeRun.noPromptTypeOneMention"));
       return Promise.reject(new Error("No prompt"));
     }
 
@@ -1725,7 +1754,7 @@ function executeNodeCore(
     const prompt = promptOf("generate-image") || boardData.prompt?.trim() || undefined;
 
     if (!prompt && !boardData.boardTemplate) {
-      toast.error(`Node "${boardData.label}": no prompt and no board template selected`);
+      toast.error(nodeRunError(boardData.label, "nodeRun.noPromptAndNoBoard"));
       return Promise.reject(new Error("No prompt or template"));
     }
 
@@ -1779,7 +1808,7 @@ function executeNodeCore(
       overrideMediaUrl ?? orderedImageUrls[0] ?? inputs.imageUrl;
     if (!imageUrl) {
       toast.error(
-        `Node "${(node.data as EditImageData).label}": no input image found`,
+        nodeRunError((node.data as EditImageData).label, "nodeRun.noInputImageFound"),
       );
       return Promise.reject(new Error("No input image"));
     }
@@ -1802,8 +1831,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -1876,7 +1904,7 @@ function executeNodeCore(
       overrideMediaUrl ?? orderedImageUrls[0] ?? inputs.imageUrl;
     if (!imageUrl) {
       toast.error(
-        `Node "${(node.data as ImageToImageData).label}": no input image found`,
+        nodeRunError((node.data as ImageToImageData).label, "nodeRun.noInputImageFound"),
       );
       return Promise.reject(new Error("No input image"));
     }
@@ -1891,8 +1919,7 @@ function executeNodeCore(
       // Bullet consumer (stamps character elements onto the ref) → exclude here.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
+        rawPrompt = appendPromptHints(rawPrompt, cinematographyHints);
       }
     }
     {
@@ -1952,7 +1979,7 @@ function executeNodeCore(
     // (after mention resolution, identity directives, style, etc.) is empty.
     if (!result.prompt.trim()) {
       toast.error(
-        `Node "${i2iData.label}": no prompt — type one, mention a character, or connect a cinematography source`,
+        nodeRunError(i2iData.label, "nodeRun.noPromptTypeOneMention"),
       );
       return Promise.reject(new Error("Transformation prompt is required"));
     }
@@ -2029,7 +2056,7 @@ function executeNodeCore(
       overrideMediaUrl ?? orderedImageUrls[0] ?? inputs.imageUrl;
     if (!imageUrl) {
       toast.error(
-        `Node "${modData.label}": no input image found`,
+        nodeRunError(modData.label, "nodeRun.noInputImageFound"),
       );
       return Promise.reject(new Error("No input image"));
     }
@@ -2044,8 +2071,7 @@ function executeNodeCore(
       // Bullet consumer (stamps character elements onto the ref) → exclude here.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
+        rawPrompt = appendPromptHints(rawPrompt, cinematographyHints);
       }
     }
     {
@@ -2103,7 +2129,7 @@ function executeNodeCore(
     // (after mention resolution, identity directives, style, etc.) is empty.
     if (!result.prompt.trim()) {
       toast.error(
-        `Node "${modData.label}": no prompt — type one, mention a character, or connect a cinematography source`,
+        nodeRunError(modData.label, "nodeRun.noPromptTypeOneMention"),
       );
       return Promise.reject(new Error("Transformation prompt is required"));
     }
@@ -2151,7 +2177,7 @@ function executeNodeCore(
     const imageUrl = overrideMediaUrl ?? inputs.imageUrl;
     if (!imageUrl) {
       toast.error(
-        `Node "${upData.label}": no input image found`,
+        nodeRunError(upData.label, "nodeRun.noInputImageFound"),
       );
       return Promise.reject(new Error("No input image"));
     }
@@ -2177,7 +2203,7 @@ function executeNodeCore(
     const imageUrl = overrideMediaUrl ?? inputs.imageUrl;
     if (!imageUrl) {
       toast.error(
-        `Node "${rbData.label}": no input image found`,
+        nodeRunError(rbData.label, "nodeRun.noInputImageFound"),
       );
       return Promise.reject(new Error("No input image"));
     }
@@ -2312,8 +2338,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -2331,7 +2356,7 @@ function executeNodeCore(
     });
     prompt = gvpMention.prompt ?? prompt;
     if (!prompt || !prompt.trim()) {
-      toast.error(`Node "${gvpData.label}": no prompt — type one, mention a character, or connect a cinematography source`);
+      toast.error(nodeRunError(gvpData.label, "nodeRun.noPromptTypeOneMention"));
       return Promise.reject(new Error("No prompt"));
     }
 
@@ -2444,7 +2469,7 @@ function executeNodeCore(
       return new Promise<string>((resolve, reject) => {
         generateVideoPro(gvpRequest)
           .then(({ jobId }) => {
-            guardedToast.info("Planning started", { description: `Job ID: ${jobId}` });
+            guardedToast.info(tx("nodeRun.planningStarted"), { description: tx("run.jobIdLine", { id: jobId }) });
             updateNodeData(node.id, { currentJobId: jobId });
 
             let pollFailures = 0;
@@ -2479,7 +2504,7 @@ function executeNodeCore(
                       currentJobId: undefined,
                       currentJobProgress: undefined,
                     });
-                    guardedToast.success("Plan ready — no video was generated");
+                    guardedToast.success(tx("nodeRun.planReadyNoVideoWas"));
                     resolve(plan === undefined ? "" : JSON.stringify(plan, null, 2));
                   } else if (job.status === "failed") {
                     ctx.untrackInterval(poll);
@@ -2490,12 +2515,12 @@ function executeNodeCore(
                       currentJobId: undefined,
                       currentJobProgress: undefined,
                     });
-                    guardedToast.error("Planning failed", { description: errMsg });
+                    guardedToast.error(tx("node.planningFailed"), { description: errMsg });
                     reject(new Error(errMsg));
                   }
                 } catch (err) {
                   pollFailures++;
-                  if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                  if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                     ctx.untrackInterval(poll);
                     if (shouldAbandonNode(node.id, jobId)) {
                       resolve("");
@@ -2503,10 +2528,12 @@ function executeNodeCore(
                     }
                     updateNodeData(node.id, {
                       executionStatus: "failed",
+                      errorMessage: jobGoneMessage(),
                       currentJobId: undefined,
                       currentJobProgress: undefined,
+                      jobConnectionLost: undefined,
                     });
-                    guardedToast.error("Failed to check planning status");
+                    guardedToast.error(tx("nodeRun.failedToCheckPlanningStatus"));
                     reject(err);
                   }
                 }
@@ -2520,7 +2547,7 @@ function executeNodeCore(
               currentJobProgress: undefined,
             });
             if (!checkStorageError(err, ctx)) {
-              guardedToast.error("Failed to start planning", {
+              guardedToast.error(tx("nodeRun.failedToStartPlanning"), {
                 description: err instanceof Error ? err.message : String(err),
               });
             }
@@ -2555,7 +2582,7 @@ function executeNodeCore(
     const evpData = node.data as EditVideoProNodeData;
     const videoUrl = inputs.videoUrl as string | undefined;
     if (!videoUrl) {
-      toast.error(`Node "${evpData.label}": Connect a video to edit`);
+      toast.error(nodeRunError(evpData.label, "nodeRun.connectAVideoToEdit"));
       return Promise.reject(new Error("edit-video-pro requires a video input"));
     }
 
@@ -2564,7 +2591,7 @@ function executeNodeCore(
     // run would.
     const prompt = promptOf("edit-video-pro", true);
     if (!prompt) {
-      toast.error(`Node "${evpData.label}": no prompt found`);
+      toast.error(nodeRunError(evpData.label, "nodeRun.noPromptFound"));
       return Promise.reject(new Error("No prompt"));
     }
 
@@ -2695,14 +2722,19 @@ function executeNodeCore(
     // them in; a provider with no reference support keeps the legacy strip.
     const i2vProviderSupportsRefs = !!nodeProvider && hasFeature(nodeProvider, "reference-image");
     if (!i2vProviderSupportsRefs) prompt = stripVideoImageTokens(prompt)
-    // Inject motion + cinematography hints into prompt
+    // Inject motion + cinematography hints into prompt. The node's own Motion
+    // setting follows its REAL type: a Generate Video node re-typed here (the
+    // `__appendWired` marker) applies it exactly as its text-to-video twin does.
     const motionHints: string[] = [];
-    if (i2vData.motionEnabled && i2vData.motion) motionHints.push(`${i2vData.motion} motion`);
+    const i2vOwnMotion = ownMotionHint(
+      (node.data as Record<string, unknown>).__appendWired === true ? "generate-video" : "image-to-video",
+      node.data as Record<string, unknown>,
+    );
+    if (i2vOwnMotion) motionHints.push(i2vOwnMotion);
     // Bullet consumer (stamps character elements onto the video ref) → exclude here.
     const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
     for (const h of cinematographyHints) motionHints.push(h);
-    if (motionHints.length > 0 && prompt) prompt = `${prompt}. ${motionHints.join(", ")}`;
-    else if (motionHints.length > 0) prompt = motionHints.join(", ");
+    if (motionHints.length > 0) prompt = appendPromptHints(prompt, motionHints);
     {
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
       if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
@@ -2812,7 +2844,7 @@ function executeNodeCore(
       (VIDEO_REF_LIMITS_BY_PROVIDER[nodeProvider ?? ""]?.images ?? 0) > 0 && (i2vMergedRefs?.length ?? 0) > 0
     if (!startFrameUrl && !isVeoRefMode && !isSeedance2RefOnly && !i2vRefsCarried) {
       const debugSources = edges.filter((e) => e.target === node.id).map((e) => `${e.sourceHandle ?? "?"}→${e.targetHandle ?? "?"}`).join(", ")
-      toast.error(`Node "${i2vData.label}": no start frame image found (inputs: startFrame=${inputs.startFrameUrl ?? "none"}, imageUrl=${inputs.imageUrl ?? "none"}, edges: ${debugSources || "none"})`);
+      toast.error(nodeRunError(i2vData.label, "nodeRun.noStartFrameImageFound", { startFrame: inputs.startFrameUrl ?? "none", imageUrl: inputs.imageUrl ?? "none", edges: debugSources || "none" }));
       return Promise.reject(new Error("No start frame image"));
     }
 
@@ -2916,7 +2948,7 @@ function executeNodeCore(
     const sourceVideoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!sourceVideoUrl) {
       toast.error(
-        `Node "${(node.data as VideoToVideoData).label}": no source video found`,
+        nodeRunError((node.data as VideoToVideoData).label, "nodeRun.noSourceVideoFound"),
       );
       return Promise.reject(new Error("No source video"));
     }
@@ -2934,8 +2966,7 @@ function executeNodeCore(
       // Bullet consumer (stamps character elements onto the video ref) → exclude here.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -3047,7 +3078,7 @@ function executeNodeCore(
   if (node.type === "switchx") {
     const sourceVideoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!sourceVideoUrl) {
-      toast.error(`Node "${(node.data as SwitchXData).label}": no source video found`);
+      toast.error(nodeRunError((node.data as SwitchXData).label, "nodeRun.noSourceVideoFound"));
       return Promise.reject(new Error("No source video"));
     }
     const sxData = node.data as SwitchXData;
@@ -3088,11 +3119,19 @@ function executeNodeCore(
     let prompt: string | undefined = promptOf("text-to-video", (node.data as Record<string, unknown>).__appendWired === true);
     if (!t2vProviderSupportsRefs) prompt = stripVideoImageTokens(prompt);
     {
+      // A Generate Video node re-typed here keeps its own Motion setting — the
+      // orchestrator applies it in both modes, and the control shows in both. A
+      // legacy text-to-video node has none (`ownMotionHint` answers undefined).
+      const hints: string[] = [];
+      const t2vOwnMotion = ownMotionHint(
+        (node.data as Record<string, unknown>).__appendWired === true ? "generate-video" : "text-to-video",
+        node.data as Record<string, unknown>,
+      );
+      if (t2vOwnMotion) hints.push(t2vOwnMotion);
       // Bullet consumer (stamps character elements onto the video ref) → exclude here.
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
-      if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+      for (const h of collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true })) hints.push(h);
+      if (hints.length > 0) {
+        prompt = appendPromptHints(prompt, hints);
       }
     }
     {
@@ -3140,7 +3179,7 @@ function executeNodeCore(
     // prompt — this frontend check provides a friendlier error message
     // before the request fires.
     if (!prompt || !prompt.trim()) {
-      toast.error(`Node "${t2vData.label}": no prompt — type one, mention a character, or connect a cinematography source`);
+      toast.error(nodeRunError(t2vData.label, "nodeRun.noPromptTypeOneMention"));
       return Promise.reject(new Error("No prompt"));
     }
     const t2vProvider = t2vData.provider || "seedance-2-fast";
@@ -3276,7 +3315,7 @@ function executeNodeCore(
     const ttsData = node.data as TextToSpeechData;
     const text = promptOf("text-to-speech");
     if (!text) {
-      toast.error(`Node "${ttsData.label}": no text found`);
+      toast.error(nodeRunError(ttsData.label, "nodeRun.noTextFound"));
       return Promise.reject(new Error("No text"));
     }
     const voice = ttsData.voiceId;
@@ -3317,7 +3356,7 @@ function executeNodeCore(
     // bug where music nodes refuse to run from parameter-only input.
     const audioStyle = collectAudioStyleHints(node, "generate-music", nodes, edges);
     if (!typedPrompt && !audioStyle.text) {
-      toast.error(`Node "${d.label}": no prompt found`);
+      toast.error(nodeRunError(d.label, "nodeRun.noPromptFound"));
       return Promise.reject(new Error("No prompt"));
     }
     const composedPrompt = typedPrompt
@@ -3333,8 +3372,10 @@ function executeNodeCore(
     // no reference song / voice / instrumental (E006), so say so here instead
     // of spending a round trip to be told. Same refusal the route and the DAG
     // payload-builder make; this one just arrives instantly.
-    if ((d.provider || "minimax") === "minimax" && !refUrl) {
-      toast.error(`Node "${d.label}": MiniMax needs a reference song, voice or instrumental`);
+    // The model the node runs — a saved model that is gone runs the default.
+    const musicProvider = resolveMusicProvider(d.provider);
+    if (musicProvider === "minimax" && !refUrl) {
+      toast.error(nodeRunError(d.label, "nodeRun.miniMaxNeedsAReferenceSong"));
       return Promise.reject(new Error("Reference audio required"));
     }
     setUserPromptTemplate(d.prompt?.trim() || undefined);
@@ -3343,7 +3384,7 @@ function executeNodeCore(
       () =>
         generateMusicApi(
           finalPrompt,
-          d.provider || undefined,
+          musicProvider,
           d.duration || undefined,
           finalGenre || undefined,
           finalMood || undefined,
@@ -3373,7 +3414,7 @@ function executeNodeCore(
     // prompt entirely.
     const audioStyle = collectAudioStyleHints(node, "text-to-audio", nodes, edges);
     if (!typedPrompt && !audioStyle.text) {
-      toast.error(`Node "${d.label}": no prompt found`);
+      toast.error(nodeRunError(d.label, "nodeRun.noPromptFound"));
       return Promise.reject(new Error("No prompt"));
     }
     const composedPrompt = typedPrompt
@@ -3403,7 +3444,7 @@ function executeNodeCore(
     const audioUrl = inputs.audioUrl;
     if (!audioUrl) {
       toast.error(
-        `Node "${(node.data as AudioIsolationData).label}": no audio input found`,
+        nodeRunError((node.data as AudioIsolationData).label, "nodeRun.noAudioInputFound"),
       );
       return Promise.reject(new Error("No audio input"));
     }
@@ -3423,7 +3464,7 @@ function executeNodeCore(
     // output is written via the extraOutputFields callback like suno-separate.
     const audioUrl = inputs.audioUrl;
     if (!audioUrl) {
-      toast.error(`Node "${d.label}": no audio input found`);
+      toast.error(nodeRunError(d.label, "nodeRun.noAudioInputFound"));
       return Promise.reject(new Error("No audio input"));
     }
     setUserPromptTemplate(undefined);
@@ -3466,7 +3507,7 @@ function executeNodeCore(
     }
 
     if (!dialogue || dialogue.length === 0) {
-      toast.error(`Node "${d.label}": no dialogue lines`);
+      toast.error(nodeRunError(d.label, "nodeRun.noDialogueLines"));
       return Promise.reject(new Error("No dialogue lines"));
     }
     const dialogueTemplate = (d.dialogue ?? [])
@@ -3497,11 +3538,11 @@ function executeNodeCore(
     const videoUrl = inputs.videoUrl;
     const audioUrl = inputs.audioUrl;
     if (!videoUrl && !audioUrl) {
-      toast.error(`Node "${d.label}": no audio or video input found`);
+      toast.error(nodeRunError(d.label, "nodeRun.noAudioOrVideoInput"));
       return Promise.reject(new Error("No input"));
     }
     if (!d.voiceId) {
-      toast.error(`Node "${d.label}": no voice selected`);
+      toast.error(nodeRunError(d.label, "nodeRun.noVoiceSelected"));
       return Promise.reject(new Error("No voice selected"));
     }
     setUserPromptTemplate(undefined);
@@ -3572,17 +3613,17 @@ function executeNodeCore(
     const videoUrl = inputs.videoUrl;
     const audioUrl = inputs.audioUrl;
     if (!audioUrl && !videoUrl) {
-      toast.error(`Node "${d.label}": no audio or video input`);
+      toast.error(nodeRunError(d.label, "nodeRun.noAudioOrVideoInput2"));
       return Promise.reject(new Error("No input"));
     }
     if (!d.orderedVoices?.length) {
-      toast.error(`Node "${d.label}": add at least one voice`);
+      toast.error(nodeRunError(d.label, "nodeRun.addAtLeastOneVoice"));
       return Promise.reject(new Error("No voices"));
     }
     // All-null = every speaker keeps their original voice — nothing to recast.
     // The route rejects this (≥1 non-null contract); fail fast client-side.
     if (d.orderedVoices.every((v) => v === null)) {
-      toast.error(`Node "${d.label}": at least one speaker needs a new voice`);
+      toast.error(nodeRunError(d.label, "nodeRun.atLeastOneSpeakerNeeds"));
       return Promise.reject(new Error("No recast voices"));
     }
     setUserPromptTemplate(undefined);
@@ -3676,11 +3717,11 @@ function executeNodeCore(
     const videoUrl = sourceUrl ? undefined : inputs.videoUrl;
     const audioUrl = sourceUrl || videoUrl ? undefined : inputs.audioUrl;
     if (!sourceUrl && !videoUrl && !audioUrl) {
-      toast.error(`Node "${d.label}": no audio or video input found (or set a source link)`);
+      toast.error(nodeRunError(d.label, "nodeRun.noAudioOrVideoInput3"));
       return Promise.reject(new Error("No input"));
     }
     if (!d.targetLanguage) {
-      toast.error(`Node "${d.label}": no target language selected`);
+      toast.error(nodeRunError(d.label, "nodeRun.noTargetLanguageSelected"));
       return Promise.reject(new Error("No target language"));
     }
     setUserPromptTemplate(undefined);
@@ -3748,7 +3789,7 @@ function executeNodeCore(
     const d = node.data as VoiceRemixData;
     const remixText = inputs.prompt || d.text;
     if (!remixText?.trim()) {
-      toast.error(`Node "${d.label}": no preview text provided`);
+      toast.error(nodeRunError(d.label, "nodeRun.noPreviewTextProvided"));
       return Promise.reject(new Error("No text"));
     }
     // Fold connected Voice Sound nodes (voice-character / voice-delivery)
@@ -3758,7 +3799,7 @@ function executeNodeCore(
     const audioStyle = collectAudioStyleHints(node, "voice-remix", nodes, edges);
     const userVoiceDesc = (applyPromptAffixes(d.voiceDescription, readPromptAffixes(d), refMap) ?? "").trim();
     if (!userVoiceDesc && !audioStyle.text) {
-      toast.error(`Node "${d.label}": no voice description provided`);
+      toast.error(nodeRunError(d.label, "nodeRun.noVoiceDescriptionProvided"));
       return Promise.reject(new Error("No voice description"));
     }
     const composedVoiceDesc = userVoiceDesc
@@ -3786,7 +3827,7 @@ function executeNodeCore(
     const d = node.data as VoiceDesignData;
     const designText = inputs.prompt || d.text;
     if (!designText?.trim()) {
-      toast.error(`Node "${d.label}": no preview text provided`);
+      toast.error(nodeRunError(d.label, "nodeRun.noPreviewTextProvided"));
       return Promise.reject(new Error("No text"));
     }
     // Fold connected Voice Sound nodes (voice-character / voice-delivery)
@@ -3796,7 +3837,7 @@ function executeNodeCore(
     const audioStyle = collectAudioStyleHints(node, "voice-design", nodes, edges);
     const userVoiceDesc = (applyPromptAffixes(d.voiceDescription, readPromptAffixes(d), refMap) ?? "").trim();
     if (!userVoiceDesc && !audioStyle.text) {
-      toast.error(`Node "${d.label}": no voice description provided`);
+      toast.error(nodeRunError(d.label, "nodeRun.noVoiceDescriptionProvided"));
       return Promise.reject(new Error("No voice description"));
     }
     const composedVoiceDesc = userVoiceDesc
@@ -3835,12 +3876,12 @@ function executeNodeCore(
     const d = node.data as ForcedAlignmentData;
     const audioUrl = inputs.audioUrl;
     if (!audioUrl) {
-      toast.error(`Node "${d.label}": no audio input found`);
+      toast.error(nodeRunError(d.label, "nodeRun.noAudioInputFound"));
       return Promise.reject(new Error("No audio input"));
     }
     const alignTranscript = applyPromptAffixes(inputs.prompt || d.transcript, readPromptAffixes(d), refMap);
     if (!alignTranscript?.trim()) {
-      toast.error(`Node "${d.label}": no transcript provided`);
+      toast.error(nodeRunError(d.label, "nodeRun.noTranscriptProvided"));
       return Promise.reject(new Error("No transcript"));
     }
     const { updateNodeData } = useWorkflowStore.getState();
@@ -3853,7 +3894,7 @@ function executeNodeCore(
     return new Promise<string>((resolve, reject) => {
       forcedAlignmentApi(audioUrl, alignTranscript, ctx.userId)
         .then(({ jobId }) => {
-          guardedToast.info("Forced alignment started", { description: `Job ID: ${jobId}` });
+          guardedToast.info(tx("nodeRun.forcedAlignmentStarted"), { description: tx("run.jobIdLine", { id: jobId }) });
           updateNodeData(node.id, { currentJobId: jobId });
 
           let pollFailures = 0;
@@ -3890,7 +3931,7 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.success("Forced alignment complete");
+                  guardedToast.success(tx("nodeRun.forcedAlignmentComplete"));
                   resolve(JSON.stringify(alignment ?? []));
                 } else if (job.status === "failed") {
                   ctx.untrackInterval(poll);
@@ -3901,12 +3942,12 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.error("Forced alignment failed", { description: errMsg });
+                  guardedToast.error(tx("nodeRun.forcedAlignmentFailed"), { description: errMsg });
                   reject(new Error(errMsg));
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -3915,10 +3956,12 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
-                  guardedToast.error("Failed to check alignment status");
+                  guardedToast.error(tx("nodeRun.failedToCheckAlignmentStatus"));
                   reject(err);
                 }
               }
@@ -3932,8 +3975,8 @@ function executeNodeCore(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            guardedToast.error("Failed to start forced alignment", {
-              description: err instanceof Error ? err.message : "Unknown error",
+            guardedToast.error(tx("apiErr.startForcedAlignment"), {
+              description: err instanceof Error ? err.message : tx("lib.unknownError"),
             });
           }
           reject(err);
@@ -3943,12 +3986,13 @@ function executeNodeCore(
 
   if (node.type === "video-analysis") {
     const d = node.data as VideoAnalysisNodeData;
-    // Source precedence mirrors the backend: a wired video wins; else the
-    // YouTube URL from node data. At least one must be present.
+    // Source precedence mirrors the backend: a wired video wins; else a post's
+    // link wired into the `video` handle; else the link in node data. At
+    // least one must be present.
     const videoUrl = inputs.videoUrl;
-    const youtubeUrl = d.youtubeUrl?.trim() || undefined;
+    const youtubeUrl = inputs.videoPageUrl ?? (d.youtubeUrl?.trim() || undefined);
     if (!videoUrl && !youtubeUrl) {
-      toast.error(`Node "${d.label}": connect a video or set a YouTube URL`);
+      toast.error(nodeRunError(d.label, "nodeRun.connectAVideoOrSet"));
       return Promise.reject(new Error("No video source"));
     }
     const { updateNodeData } = useWorkflowStore.getState();
@@ -3979,7 +4023,7 @@ function executeNodeCore(
         userId: ctx.userId,
       })
         .then(({ jobId }) => {
-          guardedToast.info("Video analysis started", { description: `Job ID: ${jobId}` });
+          guardedToast.info(tx("nodeRun.videoAnalysisStarted"), { description: tx("run.jobIdLine", { id: jobId }) });
           updateNodeData(node.id, { currentJobId: jobId });
 
           let pollFailures = 0;
@@ -4016,7 +4060,7 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.success("Video analysis complete");
+                  guardedToast.success(tx("nodeRun.videoAnalysisComplete"));
                   resolve(json === undefined ? "" : JSON.stringify(json));
                 } else if (job.status === "failed") {
                   ctx.untrackInterval(poll);
@@ -4027,12 +4071,12 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.error("Video analysis failed", { description: errMsg });
+                  guardedToast.error(tx("nodeRun.videoAnalysisFailed"), { description: errMsg });
                   reject(new Error(errMsg));
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -4041,10 +4085,12 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
-                  guardedToast.error("Failed to check video analysis status");
+                  guardedToast.error(tx("nodeRun.failedToCheckVideoAnalysis"));
                   reject(err);
                 }
               }
@@ -4058,13 +4104,135 @@ function executeNodeCore(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            guardedToast.error("Failed to start video analysis", {
-              description: err instanceof Error ? err.message : "Unknown error",
+            guardedToast.error(tx("apiErr.startVideoAnalysis"), {
+              description: err instanceof Error ? err.message : tx("lib.unknownError"),
             });
           }
           reject(err);
         });
     });
+  }
+
+  if (node.type === "content-recipe") {
+    const d = node.data as ContentRecipeNodeData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    // The material is the text on the `in` wire — or, under a fan-out, this
+    // iteration's item (one scraped post). Mirror of payload-builder.
+    const source = (overridePrompt ?? inputs.prompt ?? "").trim();
+    if (!source) {
+      toast.error(nodeRunError(d.label, "nodeRun.contentRecipeNeedsMaterial"));
+      return Promise.reject(new Error("No material"));
+    }
+    updateNodeData(node.id, {
+      ...RUN_START_RESET,
+      generatedJson: undefined,
+      generatedText: undefined,
+      runWarnings: undefined,
+      currentJobProgress: undefined,
+    });
+    setUserPromptTemplate(undefined);
+    let recipeJobId = "";
+    return startContentRecipe({
+      source,
+      // The `link` wire (a Video URL node's page link) wins over the typed link.
+      sourceUrl: inputs.sourceLink ?? (d.sourceUrl?.trim() || undefined),
+      focus: d.focus?.trim() || undefined,
+      llmModel: d.llmModel,
+      reasoningEffort: d.reasoningEffort,
+      userId: ctx.userId,
+    })
+      .then(({ jobId }) => {
+        recipeJobId = jobId;
+        updateNodeData(node.id, { currentJobId: jobId });
+        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal, budgetMs: 10 * 60_000 });
+      })
+      .then((output) => {
+        // Run discarded/replaced — the job still lands in the library, but its
+        // result must not overwrite the node.
+        if (shouldAbandonNode(node.id, recipeJobId)) return "";
+        // One mapping with the reload recovery (lib/content-run-output.ts).
+        const patch = contentRunResultPatch("content-recipe", output);
+        if (!patch) throw new Error(tx("nodeRun.contentRecipeFailed"));
+        updateNodeData(node.id, { ...patch, currentJobId: undefined, currentJobProgress: undefined });
+        guardedToast.success(tx("nodeRun.contentRecipeComplete"));
+        return patch.generatedText as string;
+      })
+      .catch((err: Error) => {
+        // Stop → the poll was aborted; the central Stop handler already restored
+        // the node, so don't overwrite it with a failure (mirrors the scrapers).
+        if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
+        if (recipeJobId && shouldAbandonNode(node.id, recipeJobId)) return "";
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err?.message || tx("nodeRun.contentRecipeFailed"),
+          currentJobId: undefined,
+          currentJobProgress: undefined,
+        });
+        if (!checkStorageError(err, ctx)) {
+          guardedToast.error(tx("nodeRun.contentRecipeFailed"), { description: err?.message });
+        }
+        throw err;
+      });
+  }
+
+  if (node.type === "content-ideas") {
+    const d = node.data as ContentIdeasNodeData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    // Every recipe wired into `recipes` arrives folded on inputs.inputs (the
+    // fan-in branch of the resolver); brand / language were resolved into data.
+    const recipes = (inputs.inputs ?? []).filter((r): r is string => typeof r === "string" && r.trim() !== "");
+    if (recipes.length === 0) {
+      toast.error(nodeRunError(d.label, "nodeRun.contentIdeasNeedsRecipe"));
+      return Promise.reject(new Error("No recipe"));
+    }
+    updateNodeData(node.id, {
+      ...RUN_START_RESET,
+      generatedJson: undefined,
+      ideaBriefs: undefined,
+      generatedText: undefined,
+      runWarnings: undefined,
+      currentJobProgress: undefined,
+    });
+    setUserPromptTemplate(undefined);
+    let ideasJobId = "";
+    return startContentIdeas({
+      recipes: recipes.slice(0, CONTENT_IDEAS_MAX_RECIPE_INPUTS),
+      brand: d.brand?.trim() || undefined,
+      count: clampContentIdeasCount(d.count),
+      language: d.language?.trim() || undefined,
+      llmModel: d.llmModel,
+      reasoningEffort: d.reasoningEffort,
+      userId: ctx.userId,
+    })
+      .then(({ jobId }) => {
+        ideasJobId = jobId;
+        updateNodeData(node.id, { currentJobId: jobId });
+        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal, budgetMs: 15 * 60_000 });
+      })
+      .then((output) => {
+        if (shouldAbandonNode(node.id, ideasJobId)) return "";
+        // One brief per idea on ideaBriefs — the list the next node runs on.
+        // Same mapping as the reload recovery (lib/content-run-output.ts).
+        const patch = contentRunResultPatch("content-ideas", output);
+        if (!patch) throw new Error(tx("nodeRun.contentIdeasFailed"));
+        updateNodeData(node.id, { ...patch, currentJobId: undefined, currentJobProgress: undefined });
+        guardedToast.success(tx("nodeRun.contentIdeasComplete", { count: (patch.ideaBriefs as string[]).length }));
+        return patch.generatedText as string;
+      })
+      .catch((err: Error) => {
+        if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
+        if (ideasJobId && shouldAbandonNode(node.id, ideasJobId)) return "";
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err?.message || tx("nodeRun.contentIdeasFailed"),
+          currentJobId: undefined,
+          currentJobProgress: undefined,
+        });
+        if (!checkStorageError(err, ctx)) {
+          guardedToast.error(tx("nodeRun.contentIdeasFailed"), { description: err?.message });
+        }
+        throw err;
+      });
   }
 
   if (node.type === "video-audit") {
@@ -4073,7 +4241,7 @@ function executeNodeCore(
     // YouTube alternative on this node (unlike video-analysis).
     const videoUrl = inputs.videoUrl ?? (d.videoUrl?.trim() || undefined);
     if (!videoUrl) {
-      toast.error(`Node "${d.label}": connect a video to audit`);
+      toast.error(nodeRunError(d.label, "nodeRun.connectAVideoToAudit"));
       return Promise.reject(new Error("No video source"));
     }
     // The upstream analysis, when one is wired into the `analysis` handle
@@ -4088,7 +4256,7 @@ function executeNodeCore(
     // dialog all quoted from that same wired edge.
     if (analysis === undefined && videoAuditAnalysisWired(node.id, edges)) {
       toast.error(
-        `Node "${d.label}": the connected analysis has no result yet — run it first, or disconnect it to let this node analyse the clip itself`,
+        nodeRunError(d.label, "nodeRun.theConnectedAnalysisHasNo"),
       );
       return Promise.reject(new Error("Wired analysis has no result"));
     }
@@ -4107,7 +4275,7 @@ function executeNodeCore(
     return new Promise<string>((resolve, reject) => {
       runVideoAudit({ videoUrl, analysis, userId: ctx.userId })
         .then(({ jobId }) => {
-          guardedToast.info("AI audit started", { description: `Job ID: ${jobId}` });
+          guardedToast.info(tx("nodeRun.aiAuditStarted"), { description: tx("run.jobIdLine", { id: jobId }) });
           updateNodeData(node.id, { currentJobId: jobId });
 
           let pollFailures = 0;
@@ -4150,7 +4318,7 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.success("AI audit complete");
+                  guardedToast.success(tx("nodeRun.aiAuditComplete"));
                   // Same stringified shape video-analysis resolves with — every
                   // downstream consumer reads an audited analysis identically.
                   resolve(json === undefined ? "" : JSON.stringify(json));
@@ -4163,12 +4331,12 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.error("AI audit failed", { description: errMsg });
+                  guardedToast.error(tx("nodeRun.aiAuditFailed"), { description: errMsg });
                   reject(new Error(errMsg));
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -4177,10 +4345,12 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
-                  guardedToast.error("Failed to check AI audit status");
+                  guardedToast.error(tx("nodeRun.failedToCheckAIAudit"));
                   reject(err);
                 }
               }
@@ -4194,8 +4364,8 @@ function executeNodeCore(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            guardedToast.error("Failed to start AI audit", {
-              description: err instanceof Error ? err.message : "Unknown error",
+            guardedToast.error(tx("apiErr.startAIAudit"), {
+              description: err instanceof Error ? err.message : tx("lib.unknownError"),
             });
           }
           reject(err);
@@ -4224,7 +4394,7 @@ function executeNodeCore(
         throwOnEmpty: true,
       });
     } catch {
-      toast.error(`Node "${d.label}": no prompt found`);
+      toast.error(nodeRunError(d.label, "nodeRun.noPromptFound"));
       return Promise.reject(new Error("No prompt"));
     }
     setUserPromptTemplate(d.prompt?.trim() || undefined);
@@ -4232,7 +4402,7 @@ function executeNodeCore(
       node.id,
       () => sunoGenerateApi({ ...result, userId: ctx.userId }),
       "generatedAudioUrl",
-      "Suno Generate",
+      "Suno Create Music",
       ctx,
       extractSunoOutputFields,
     );
@@ -4242,13 +4412,13 @@ function executeNodeCore(
     const d = node.data as SunoCoverData;
     const prompt = applyPromptAffixes(inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap), readPromptAffixes(d), refMap);
     if (!prompt) {
-      toast.error(`Node "${d.label}": no prompt found`);
+      toast.error(nodeRunError(d.label, "nodeRun.noPromptFound"));
       return Promise.reject(new Error("No prompt"));
     }
     const uploadUrl =
       inputs.uploadUrl ?? inputs.audioUrl ?? d.uploadUrl?.trim();
     if (!uploadUrl) {
-      toast.error(`Node "${d.label}": no source audio URL found`);
+      toast.error(nodeRunError(d.label, "nodeRun.noSourceAudioURLFound"));
       return Promise.reject(new Error("No upload URL"));
     }
     const hasCoverCustomFields = !!(d.style || d.title || d.lyrics);
@@ -4282,7 +4452,7 @@ function executeNodeCore(
     const audioId = inputs.sunoTrackId ?? d.audioId?.trim();
     if (!audioId) {
       toast.error(
-        `Node "${d.label}": no audio ID found (connect a Suno Generate/Cover node or enter manually)`,
+        nodeRunError(d.label, "nodeRun.noAudioIDFoundConnect"),
       );
       return Promise.reject(new Error("No audio ID"));
     }
@@ -4317,7 +4487,7 @@ function executeNodeCore(
     const d = node.data as SunoLyricsData;
     const prompt = applyPromptAffixes(inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap), readPromptAffixes(d), refMap);
     if (!prompt) {
-      toast.error(`Node "${d.label}": no prompt found`);
+      toast.error(nodeRunError(d.label, "nodeRun.noPromptFound"));
       return Promise.reject(new Error("No prompt"));
     }
     const { updateNodeData } = useWorkflowStore.getState();
@@ -4331,8 +4501,8 @@ function executeNodeCore(
     return new Promise<string>((resolve, reject) => {
       sunoLyricsApi({ prompt, userId: ctx.userId })
         .then(({ jobId }) => {
-          guardedToast.info("Lyrics generation started", {
-            description: `Job ID: ${jobId}`,
+          guardedToast.info(tx("nodeRun.lyricsGenerationStarted"), {
+            description: tx("run.jobIdLine", { id: jobId }),
           });
           updateNodeData(node.id, { currentJobId: jobId });
 
@@ -4381,7 +4551,7 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.success("Lyrics generation complete");
+                  guardedToast.success(tx("nodeRun.lyricsGenerationComplete"));
                   resolve(first?.text ?? "");
                 } else if (job.status === "failed") {
                   ctx.untrackInterval(poll);
@@ -4393,14 +4563,14 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.error("Lyrics generation failed", {
+                  guardedToast.error(tx("nodeRun.lyricsGenerationFailed"), {
                     description: errMsg,
                   });
                   reject(new Error(errMsg));
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -4409,10 +4579,12 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
-                  guardedToast.error("Failed to check lyrics status");
+                  guardedToast.error(tx("nodeRun.failedToCheckLyricsStatus"));
                   reject(err);
                 }
               }
@@ -4426,9 +4598,9 @@ function executeNodeCore(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            guardedToast.error("Failed to start lyrics generation", {
+            guardedToast.error(tx("nodeRun.failedToStartLyricsGeneration"), {
               description:
-                err instanceof Error ? err.message : "Unknown error",
+                err instanceof Error ? err.message : tx("lib.unknownError"),
             });
           }
           reject(err);
@@ -4451,7 +4623,7 @@ function executeNodeCore(
     }
     if (!taskId) {
       toast.error(
-        `Node "${d.label}": no task ID found (connect a Suno Generate/Cover/Extend node or enter manually)`,
+        nodeRunError(d.label, "nodeRun.noTaskIDFoundConnect"),
       );
       return Promise.reject(new Error("No task ID"));
     }
@@ -4484,7 +4656,7 @@ function executeNodeCore(
     const audioId = inputs.sunoTrackId ?? d.audioId?.trim();
     if (!taskId || !audioId) {
       toast.error(
-        `Node "${d.label}": missing taskId or audioId. Connect to a Suno node.`,
+        nodeRunError(d.label, "nodeRun.missingTaskIdOrAudioIdConnect"),
       );
       return Promise.reject(new Error("Missing taskId/audioId"));
     }
@@ -4509,7 +4681,7 @@ function executeNodeCore(
     const audioUrl1 = inputs.audioUrl ?? (inputs.audioUrls ?? [])[0];
     const audioUrl2 = inputs.audioUrl2 ?? (inputs.audioUrls ?? [])[1];
     if (!audioUrl1 || !audioUrl2) {
-      toast.error(`Node "${d.label}": connect two audio sources for mashup`);
+      toast.error(nodeRunError(d.label, "nodeRun.connectTwoAudioSourcesFor"));
       return Promise.reject(new Error("Need two audio inputs"));
     }
     setUserPromptTemplate(undefined);
@@ -4538,7 +4710,7 @@ function executeNodeCore(
     const ids = resolveSunoIds(inputs, d as Record<string, unknown>);
     if (!ids) {
       toast.error(
-        `Node "${d.label}": missing taskId or audioId. Connect to a Suno node or enter manually.`,
+        nodeRunError(d.label, "nodeRun.missingTaskIdOrAudioIdConnect2"),
       );
       return Promise.reject(new Error("Missing taskId/audioId"));
     }
@@ -4576,7 +4748,7 @@ function executeNodeCore(
     // Resolve {Label} refs in the typed content (parity with the Final view + every other prompt node).
     const content = applyPromptAffixes(inputs.prompt ?? resolveTextRefs(d.content?.trim(), refMap), readPromptAffixes(d), refMap);
     if (!content) {
-      toast.error(`Node "${d.label}": no content provided`);
+      toast.error(nodeRunError(d.label, "nodeRun.noContentProvided"));
       return Promise.reject(new Error("No content"));
     }
     const { updateNodeData } = useWorkflowStore.getState();
@@ -4593,7 +4765,7 @@ function executeNodeCore(
           generatedResults: [{ url: "", timestamp: new Date().toISOString(), jobId: "" }],
           activeResultIndex: 0,
         });
-        guardedToast.success("Style Boost completed");
+        guardedToast.success(tx("nodeRun.styleBoostCompleted"));
         return result.text ?? "";
       })
       .catch((err) => {
@@ -4610,7 +4782,7 @@ function executeNodeCore(
     const ids = resolveSunoIds(inputs, d as Record<string, unknown>);
     if (!ids) {
       toast.error(
-        `Node "${d.label}": missing taskId or audioId. Connect to a Suno node or enter manually.`,
+        nodeRunError(d.label, "nodeRun.missingTaskIdOrAudioIdConnect2"),
       );
       return Promise.reject(new Error("Missing taskId/audioId"));
     }
@@ -4636,7 +4808,7 @@ function executeNodeCore(
     const ids = resolveSunoIds(inputs, d as Record<string, unknown>);
     if (!ids) {
       toast.error(
-        `Node "${d.label}": missing taskId or audioId. Connect to a Suno node or enter manually.`,
+        nodeRunError(d.label, "nodeRun.missingTaskIdOrAudioIdConnect2"),
       );
       return Promise.reject(new Error("Missing taskId/audioId"));
     }
@@ -4662,7 +4834,7 @@ function executeNodeCore(
     const ids = resolveSunoIds(inputs, d as Record<string, unknown>);
     if (!ids) {
       toast.error(
-        `Node "${d.label}": missing taskId or audioId. Connect to a Suno node or enter manually.`,
+        nodeRunError(d.label, "nodeRun.missingTaskIdOrAudioIdConnect2"),
       );
       return Promise.reject(new Error("Missing taskId/audioId"));
     }
@@ -4686,7 +4858,7 @@ function executeNodeCore(
     const d = node.data as SunoUploadExtendData;
     const audioUrl = inputs.audioUrl;
     if (!audioUrl) {
-      toast.error(`Node "${d.label}": no audio input found`);
+      toast.error(nodeRunError(d.label, "nodeRun.noAudioInputFound"));
       return Promise.reject(new Error("No audio input"));
     }
     setUserPromptTemplate(d.prompt?.trim() || undefined);
@@ -4718,7 +4890,7 @@ function executeNodeCore(
     let audioUrl = inputs.audioUrl ?? inputs.videoUrl;
     if (!audioUrl) {
       toast.error(
-        `Node "${(node.data as TranscribeData).label}": no audio/video input found`,
+        nodeRunError((node.data as TranscribeData).label, "nodeRun.noAudioVideoInputFound"),
       );
       return Promise.reject(new Error("No audio input"));
     }
@@ -4735,7 +4907,7 @@ function executeNodeCore(
         ? transcribeWordTimestampsRefusal(d.provider)
         : null;
       if (refusal) {
-        toast.error(`Node "${d.label}": ${refusal}`);
+        toast.error(nodeRunText(d.label, refusal));
         return Promise.reject(new Error("Word timings unavailable"));
       }
     }
@@ -4752,7 +4924,7 @@ function executeNodeCore(
 
     const getTranscribeAudioUrl = async (): Promise<string> => {
       if (!isVideoUrl) return audioUrl as string;
-      guardedToast.info("Extracting audio from video...");
+      guardedToast.info(tx("nodeRun.extractingAudioFromVideo"));
       const result = await downloadYouTubeAudio(audioUrl as string);
 
       if (result.thumbnailUrl) {
@@ -4813,8 +4985,8 @@ function executeNodeCore(
           );
         })
         .then(({ jobId }) => {
-          guardedToast.info("Transcription started", {
-            description: `Job ID: ${jobId}`,
+          guardedToast.info(tx("nodeRun.transcriptionStarted"), {
+            description: tx("run.jobIdLine", { id: jobId }),
           });
           updateNodeData(node.id, { currentJobId: jobId });
 
@@ -4855,7 +5027,7 @@ function executeNodeCore(
                       currentJobId: undefined,
                       currentJobProgress: undefined,
                     });
-                    guardedToast.error("Transcription failed", {
+                    guardedToast.error(tx("nodeRun.transcriptionFailed"), {
                       description: errMsg,
                     });
                     reject(new Error(errMsg));
@@ -4899,7 +5071,7 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.success("Transcription complete");
+                  guardedToast.success(tx("nodeRun.transcriptionComplete"));
                   resolve(text);
                 } else if (job.status === "failed") {
                   ctx.untrackInterval(poll);
@@ -4910,14 +5082,14 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.error("Transcription failed", {
+                  guardedToast.error(tx("nodeRun.transcriptionFailed"), {
                     description: errMsg,
                   });
                   reject(new Error(errMsg));
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -4926,10 +5098,12 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
-                  guardedToast.error("Failed to check transcription status");
+                  guardedToast.error(tx("nodeRun.failedToCheckTranscriptionStatus"));
                   reject(err);
                 }
               }
@@ -4945,7 +5119,7 @@ function executeNodeCore(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            guardedToast.error("Transcription failed", { description: errMsg });
+            guardedToast.error(tx("nodeRun.transcriptionFailed"), { description: errMsg });
           }
           reject(err);
         });
@@ -4956,7 +5130,7 @@ function executeNodeCore(
     const imageUrl = inputs.imageUrl;
     if (!imageUrl) {
       toast.error(
-        `Node "${(node.data as ImageToTextData).label}": no image input found`,
+        nodeRunError((node.data as ImageToTextData).label, "nodeRun.noImageInputFound"),
       );
       return Promise.reject(new Error("No image input"));
     }
@@ -4995,7 +5169,7 @@ function executeNodeCore(
           activeResultIndex: newResults.length - 1,
           errorMessage: undefined,
         });
-        guardedToast.success("Image described successfully");
+        guardedToast.success(tx("nodeRun.imageDescribedSuccessfully"));
         return result.generatedText ?? "";
       })
       .catch((err) => {
@@ -5004,7 +5178,7 @@ function executeNodeCore(
           executionStatus: "failed",
           errorMessage: errMsg,
         });
-        guardedToast.error("Image description failed", { description: errMsg });
+        guardedToast.error(tx("nodeRun.imageDescriptionFailed"), { description: errMsg });
         throw err;
       });
   }
@@ -5012,13 +5186,13 @@ function executeNodeCore(
   if (node.type === "describe-to-picker") {
     const imageUrl = inputs.imageUrl;
     if (!imageUrl) {
-      toast.error(`Node "${(node.data as DescribeToPickerData).label}": no image input found`);
+      toast.error(nodeRunError((node.data as DescribeToPickerData).label, "nodeRun.noImageInputFound"));
       return Promise.reject(new Error("No image input"));
     }
     const targetPickers = pickerFanoutTargets(node.id, edges, nodes);
     if (targetPickers.length === 0) {
       toast.error(
-        `Node "${(node.data as DescribeToPickerData).label}": connect a picker node (${ANALYZABLE_PICKER_HINT}) to its output`,
+        nodeRunError((node.data as DescribeToPickerData).label, "nodeRun.connectAPickerNodeTo", { pickers: analyzablePickerHint(useLocaleStore.getState().locale) }),
       );
       return Promise.reject(new Error("No picker connected"));
     }
@@ -5033,13 +5207,13 @@ function executeNodeCore(
           generatedGaps: result.gaps,
           errorMessage: undefined,
         });
-        guardedToast.success("Image analyzed");
+        guardedToast.success(tx("nodeRun.imageAnalyzed"));
         return JSON.stringify(result.pickerJson);
       })
       .catch((err) => {
         const errMsg = err instanceof Error ? err.message : "Unknown error";
         updateNodeData(node.id, { executionStatus: "failed", errorMessage: errMsg });
-        guardedToast.error("Image analysis failed", { description: errMsg });
+        guardedToast.error(tx("nodeRun.imageAnalysisFailed"), { description: errMsg });
         throw err;
       });
   }
@@ -5075,7 +5249,7 @@ function executeNodeCore(
       });
       if (!hasImageSource) {
         toast.error(
-          `Node "${chatData.label}": connect a reference image (Generate Image, Upload Image, etc.) before running with a template`,
+          nodeRunError(chatData.label, "nodeRun.connectAReferenceImageGenerate"),
         );
         return Promise.reject(new Error("No reference image connected"));
       }
@@ -5100,7 +5274,7 @@ function executeNodeCore(
     const listValue = overridePrompt || (typeof inputs.prompt === "string" && inputs.prompt.trim() ? inputs.prompt : undefined);
 
     if (!userInput?.trim()) {
-      toast.error(`Node "${chatData.label}": no user prompt provided`);
+      toast.error(nodeRunError(chatData.label, "nodeRun.noUserPromptProvided"));
       return Promise.reject(new Error("No user prompt"));
     }
 
@@ -5168,7 +5342,7 @@ function executeNodeCore(
           lastSystemPrompt: systemPrompt || "",
           lastUserPrompt: userInput,
         });
-        guardedToast.success("Prompt completed");
+        guardedToast.success(tx("nodeRun.promptCompleted"));
         return result.generatedText ?? "";
       })
       .catch((err: Error) => {
@@ -5193,7 +5367,7 @@ function executeNodeCore(
           generatedText: lastGood?.text ?? "",
           ...(lastGood ? { activeResultIndex: 0 } : {}),
         });
-        guardedToast.error(`Prompt failed: ${err.message}`);
+        guardedToast.error(tx("nodeRun.promptFailed", { message: err.message }));
         throw err;
       });
   }
@@ -5218,12 +5392,12 @@ function executeNodeCore(
             // Advance the cursor so the next run only emits newer posts.
             lastSeenId: res.latestId,
           });
-          guardedToast.success(res.count > 0 ? `Read ${res.count} new post(s)` : "No new posts");
+          guardedToast.success(res.count > 0 ? tx("nodeRun.readNewPostS", { count: res.count }) : tx("nodeRun.noNewPosts"));
           return res.text ?? "";
         })
         .catch((err: Error) => {
           updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || "Failed to read channel" });
-          guardedToast.error(err.message || "Failed to read channel");
+          guardedToast.error(err.message || tx("nodeRun.failedToReadChannel"));
           throw err;
         }),
     );
@@ -5250,7 +5424,9 @@ function executeNodeCore(
       count: d.count,
       period: d.period,
       formats: Array.isArray(d.formats) ? d.formats : undefined,
-      featuredIndex: typeof d.featuredIndex === "number" ? d.featuredIndex : undefined,
+      // No featuredIndex: a run features its FIRST result, and the node resets
+      // its featured item to 0 on completion. Sending the saved index made the
+      // route feature (and copy the video of) another item than the node shows.
       ingestVideo: videoWired,
       ingestAllVideos: d.ingestAllVideos === true ? true : undefined,
       analyze: d.analyze === true ? true : undefined,
@@ -5270,7 +5446,7 @@ function executeNodeCore(
         // is already on the node, and re-applying it resets the featured post.
         const patch = scrapeResultPatch("instagram-scrape", json, instagramJobId) ?? applyInstagramScrapeResult(json);
         updateNodeData(node.id, patch);
-        guardedToast.success(patch.lastRunOutcome === "empty" ? "Instagram completed — 0 posts" : "Instagram completed");
+        guardedToast.success(patch.lastRunOutcome === "empty" ? tx("nodeRun.instagramCompleted0Posts") : tx("nodeRun.instagramCompleted"));
         return json === undefined ? "" : JSON.stringify(json);
       })
       .catch((err: Error) => {
@@ -5278,7 +5454,52 @@ function executeNodeCore(
         // the node, so don't overwrite it with a failure (mirrors llm-chat).
         if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
         updateNodeData(node.id, applyInstagramScrapeFailure(err.message || "Scrape failed"));
-        guardedToast.error(`Instagram failed: ${err.message}`);
+        guardedToast.error(tx("nodeRun.instagramFailed", { message: err.message }));
+        throw err;
+      });
+  }
+
+  if (node.type === "social-search") {
+    const d = node.data as SocialSearchNodeData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    // ONE request builder with the workflow orchestrator: the wired text (a
+    // Text node, a List item) is the query when there is one.
+    const request = socialSearchRequestFromNode(d, inputs.prompt);
+    if (!request.query) {
+      const message = tx("social.queryNeeded");
+      updateNodeData(node.id, applySocialSearchFailure(message));
+      guardedToast.error(message);
+      throw new Error(message);
+    }
+    updateNodeData(node.id, socialSearchRunStartPatch(d));
+    setUserPromptTemplate(undefined);
+    let searchJobId = "";
+    return socialSearch(request)
+      // The search runs in a worker (an X search can take two minutes), so the
+      // route answers with a job id; poll it to completion here.
+      .then(({ jobId }) => {
+        searchJobId = jobId;
+        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal });
+      })
+      .then((output) => {
+        // The LIVE data: "how many to pass on" may have changed while it ran.
+        const live = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data as Record<string, unknown> | undefined;
+        const patch = scrapeResultPatch("social-search", output.json, searchJobId, live ?? d) ?? applySocialSearchResult(output.json, d);
+        const warnings = Array.isArray(output.warnings) ? (output.warnings as unknown[]).filter((w): w is string => typeof w === "string") : [];
+        updateNodeData(node.id, { ...patch, searchWarnings: warnings.length ? warnings : undefined });
+        const found = typeof patch.lastRunCount === "number" ? patch.lastRunCount : 0;
+        guardedToast.success(
+          found === 0 ? tx("nodeRun.socialSearchCompleted0") : found === 1 ? tx("nodeRun.socialSearchCompletedOne") : tx("nodeRun.socialSearchCompleted", { count: found }),
+        );
+        const chosen = Array.isArray(patch.generatedJson) ? patch.generatedJson : (d.generatedJson ?? []);
+        return JSON.stringify(chosen);
+      })
+      .catch((err: Error) => {
+        // Stop → the poll was aborted; the central Stop handler already restored
+        // the node, so don't overwrite it with a failure (mirrors instagram-scrape).
+        if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
+        updateNodeData(node.id, applySocialSearchFailure(err.message || tx("node.scrapeFailed")));
+        guardedToast.error(tx("nodeRun.socialSearchFailed", { message: err.message }));
         throw err;
       });
   }
@@ -5322,7 +5543,7 @@ function executeNodeCore(
         const patch = scrapeResultPatch("meta-ads-scrape", json, metaAdsJobId) ?? applyMetaAdsScrapeResult(json);
         updateNodeData(node.id, patch);
         guardedToast.success(
-          patch.lastRunOutcome === "empty" ? "Meta Ads completed — 0 ads" : "Meta Ads completed",
+          patch.lastRunOutcome === "empty" ? tx("nodeRun.metaAdsCompleted0Ads") : tx("nodeRun.metaAdsCompleted"),
         );
         return json === undefined ? "" : JSON.stringify(json);
       })
@@ -5331,7 +5552,7 @@ function executeNodeCore(
         // the node, so don't overwrite it with a failure (mirrors instagram-scrape).
         if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
         updateNodeData(node.id, applyMetaAdsScrapeFailure(err.message || "Scrape failed"));
-        guardedToast.error(`Meta Ads failed: ${err.message}`);
+        guardedToast.error(tx("nodeRun.metaAdsFailed", { message: err.message }));
         throw err;
       });
   }
@@ -5363,7 +5584,7 @@ function executeNodeCore(
         const patch = scrapeResultPatch("web-scrape", json, scrapeJobId) ?? applyWebScrapeResult(json);
         updateNodeData(node.id, patch);
         guardedToast.success(
-          patch.lastRunOutcome === "empty" ? "Web Scrape completed — 0 results" : "Web Scrape completed",
+          patch.lastRunOutcome === "empty" ? tx("nodeRun.webScrapeCompleted0Results") : tx("nodeRun.webScrapeCompleted"),
         );
         // Return stringified JSON for callers that expect a string — same coercion
         // getPrimaryOutput uses on the backend.
@@ -5375,7 +5596,7 @@ function executeNodeCore(
         if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
         // Failed runs record the outcome but never touch generatedJson.
         updateNodeData(node.id, applyWebScrapeFailure(err.message || "Scrape failed"));
-        guardedToast.error(`Web Scrape failed: ${err.message}`);
+        guardedToast.error(tx("nodeRun.webScrapeFailed", { message: err.message }));
         throw err;
       });
   }
@@ -5432,19 +5653,19 @@ function executeNodeCore(
     const faceUrl = videoUrl || imageUrl;
 
     if (needsVideo && !videoUrl) {
-      toast.error(`Node "${lsData.label}": ${lsProvider} requires a video input`);
+      toast.error(nodeRunError(lsData.label, "nodeRun.requiresAVideoInput", { provider: lsProvider }));
       return Promise.reject(new Error("No video input"));
     }
     if (needsImage && !imageUrl) {
-      toast.error(`Node "${lsData.label}": no portrait image found`);
+      toast.error(nodeRunError(lsData.label, "nodeRun.noPortraitImageFound"));
       return Promise.reject(new Error("No portrait image"));
     }
     if (!faceUrl) {
-      toast.error(`Node "${lsData.label}": no image or video input found`);
+      toast.error(nodeRunError(lsData.label, "nodeRun.noImageOrVideoInput"));
       return Promise.reject(new Error("No face input"));
     }
     if (!audioUrl) {
-      toast.error(`Node "${lsData.label}": no audio track found`);
+      toast.error(nodeRunError(lsData.label, "nodeRun.noAudioTrackFound"));
       return Promise.reject(new Error("No audio track"));
     }
 
@@ -5543,22 +5764,21 @@ function executeNodeCore(
     let prompt: string = promptOf("speech-to-video");
 
     if (!imageUrl) {
-      toast.error(`Node "${s2vData.label}": no image input found`);
+      toast.error(nodeRunError(s2vData.label, "nodeRun.noImageInputFound"));
       return Promise.reject(new Error("No image input"));
     }
     if (!audioUrl) {
-      toast.error(`Node "${s2vData.label}": no audio track found`);
+      toast.error(nodeRunError(s2vData.label, "nodeRun.noAudioTrackFound"));
       return Promise.reject(new Error("No audio track"));
     }
     if (!prompt) {
-      toast.error(`Node "${s2vData.label}": no prompt provided`);
+      toast.error(nodeRunError(s2vData.label, "nodeRun.noPromptProvided"));
       return Promise.reject(new Error("No prompt"));
     }
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -5619,16 +5839,16 @@ function executeNodeCore(
     const speechMode = aaData.speechMode ?? "text";
     if (speechMode === "text") {
       if (!script) {
-        toast.error(`Node "${aaData.label}": script is required in Text mode`);
+        toast.error(nodeRunError(aaData.label, "nodeRun.scriptIsRequiredInText"));
         return Promise.reject(new Error("No script"));
       }
       if (!aaData.voiceId) {
-        toast.error(`Node "${aaData.label}": a voice must be selected in Text mode`);
+        toast.error(nodeRunError(aaData.label, "nodeRun.aVoiceMustBeSelected"));
         return Promise.reject(new Error("No voice"));
       }
     } else {
       if (!audioUrl) {
-        toast.error(`Node "${aaData.label}": no audio found. Wire an audio node into the Audio handle.`);
+        toast.error(nodeRunError(aaData.label, "nodeRun.noAudioFoundWireAn"));
         return Promise.reject(new Error("No audio"));
       }
     }
@@ -5637,11 +5857,11 @@ function executeNodeCore(
     // needs a source image (wired or uploaded).
     if (avatarSource === "image") {
       if (!imageUrl) {
-        toast.error(`Node "${aaData.label}": no source image found. Wire an image node into the Image handle or upload one.`);
+        toast.error(nodeRunError(aaData.label, "nodeRun.noSourceImageFoundWire"));
         return Promise.reject(new Error("No image"));
       }
     } else if (!aaData.avatarId) {
-      toast.error(`Node "${aaData.label}": an avatar must be selected`);
+      toast.error(nodeRunError(aaData.label, "nodeRun.anAvatarMustBeSelected"));
       return Promise.reject(new Error("No avatar"));
     }
 
@@ -5707,8 +5927,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -5717,13 +5936,13 @@ function executeNodeCore(
     }
 
     if (!prompt) {
-      toast.error(`Node "${caData.label}": no prompt provided`);
+      toast.error(nodeRunError(caData.label, "nodeRun.noPromptProvided"));
       return Promise.reject(new Error("No prompt"));
     }
 
     const avatarLooks = caData.avatarLooks ?? [];
     if (avatarLooks.length < 1 || avatarLooks.length > 3) {
-      toast.error(`Node "${caData.label}": select 1–3 avatar looks`);
+      toast.error(nodeRunError(caData.label, "nodeRun.select13AvatarLooks"));
       return Promise.reject(new Error("Invalid avatar looks"));
     }
 
@@ -5772,13 +5991,13 @@ function executeNodeCore(
 
     if (!imageUrl) {
       toast.error(
-        `Node "${mtData.label}": no character image found. Connect an image node (Generate Image, Upload Image, Character, etc.)`,
+        nodeRunError(mtData.label, "nodeRun.noCharacterImageFoundConnect"),
       );
       return Promise.reject(new Error("No character image"));
     }
     if (!videoUrl) {
       toast.error(
-        `Node "${mtData.label}": no motion video found. Connect a video node (Image to Video, Upload Video, etc.)`,
+        nodeRunError(mtData.label, "nodeRun.noMotionVideoFoundConnect"),
       );
       return Promise.reject(new Error("No motion video"));
     }
@@ -5814,7 +6033,7 @@ function executeNodeCore(
       if (!kieTaskId) {
         // VEO upscale re-renders KIE's own VEO task — a URL (uploaded or any other
         // video) cannot feed it. Say what to do, not what is missing (2026-09-09).
-        toast.error(`Node "${vuData.label}": VEO upscale only works on a video generated by VEO in this workflow. Connect a VEO video node, or switch the provider to Topaz for an uploaded or other video.`);
+        toast.error(nodeRunError(vuData.label, "nodeRun.veoUpscaleOnlyWorksOn"));
         return Promise.reject(new Error("No kieTaskId"));
       }
 
@@ -5831,7 +6050,7 @@ function executeNodeCore(
     // Topaz provider - requires videoUrl
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!videoUrl) {
-      toast.error(`Node "${vuData.label}": no video input found`);
+      toast.error(nodeRunError(vuData.label, "nodeRun.noVideoInputFound"));
       return Promise.reject(new Error("No video input"));
     }
 
@@ -5859,7 +6078,7 @@ function executeNodeCore(
     if (isLtx) {
       const videoUrl = inputs.videoUrl as string | undefined;
       if (!videoUrl) {
-        toast.error(`Node "${evData.label}": no upstream video. Wire a video into the left handle.`);
+        toast.error(nodeRunError(evData.label, "nodeRun.noUpstreamVideoWireA"));
         return Promise.reject(new Error("No videoUrl for LTX extend"));
       }
       return runProcessingNode(
@@ -5886,15 +6105,14 @@ function executeNodeCore(
     if (isSeedanceExtend) {
       const videoUrl = inputs.videoUrl as string | undefined;
       if (!videoUrl) {
-        toast.error(`Node "${evData.label}": no upstream video. Wire a video into the left handle.`);
+        toast.error(nodeRunError(evData.label, "nodeRun.noUpstreamVideoWireA"));
         return Promise.reject(new Error("No videoUrl for Seedance extend"));
       }
       let seedancePrompt: string | undefined = promptOf("extend-video");
       {
         const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
         if (cinematographyHints.length > 0) {
-          const joined = cinematographyHints.join(", ");
-          seedancePrompt = seedancePrompt ? `${seedancePrompt}. ${joined}` : joined;
+          seedancePrompt = appendPromptHints(seedancePrompt, cinematographyHints);
         }
       }
       {
@@ -5902,7 +6120,7 @@ function executeNodeCore(
         if (identityClause) seedancePrompt = seedancePrompt ? `${seedancePrompt} ${identityClause}` : identityClause;
       }
       if (!seedancePrompt?.trim()) {
-        toast.error(`Node "${evData.label}": describe what happens next in the prompt.`);
+        toast.error(nodeRunError(evData.label, "nodeRun.describeWhatHappensNextIn"));
         return Promise.reject(new Error("No prompt for Seedance extend"));
       }
       setUserPromptTemplate(evData.prompt?.trim() || undefined);
@@ -5932,15 +6150,14 @@ function executeNodeCore(
     const kieTaskId = resolveUpstreamKieTaskId(node.id, evData as unknown as Record<string, unknown>);
 
     if (!kieTaskId) {
-      toast.error(`Node "${evData.label}": no upstream kieTaskId found. Connect a VEO or Runway video node.`);
+      toast.error(nodeRunError(evData.label, "nodeRun.noUpstreamKieTaskIdFoundConnect"));
       return Promise.reject(new Error("No kieTaskId"));
     }
 
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -5972,7 +6189,7 @@ function executeNodeCore(
     const vrData = node.data as unknown as VideoRetakeData;
     const videoUrl = inputs.videoUrl as string | undefined;
     if (!videoUrl) {
-      toast.error(`Node "${vrData.label}": no upstream video. Wire a video into the left handle.`);
+      toast.error(nodeRunError(vrData.label, "nodeRun.noUpstreamVideoWireA"));
       return Promise.reject(new Error("video-retake requires a video input"));
     }
     // Manual prompt wins (mirror extend-video); fall back to text-ref resolution
@@ -5986,8 +6203,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -6031,7 +6247,7 @@ function executeNodeCore(
         currentJobId: undefined,
         currentJobProgress: undefined,
       });
-      toast.error(`Node "${sheetData.label}": ${errMsg}`);
+      toast.error(nodeRunText(sheetData.label, errMsg));
       return Promise.reject(new Error(errMsg));
     }
     setUserPromptTemplate(undefined);
@@ -6050,7 +6266,6 @@ function executeNodeCore(
           ctx,
           nodeId: node.id,
           label: sheetData.label ?? "Reference Sheet",
-          assemblyFee: sheetData.flavour?.outputFormat === "motion" ? 6 : 4,
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Stage A failed";
@@ -6076,7 +6291,7 @@ function executeNodeCore(
             currentJobId: undefined,
             currentJobProgress: undefined,
           });
-          toast.error(`Node "${sheetData.label}": ${msg}`);
+          toast.error(nodeRunText(sheetData.label, msg));
           throw e;
         }
         // Any other Stage-A error (e.g. one panel failed) — fall through and
@@ -6112,7 +6327,7 @@ function executeNodeCore(
     // for in-progress JSON migrations.
     const videoUrl = (inputs.videoUrl as string | undefined) ?? sfxData.videoUrl;
     if (!videoUrl) {
-      toast.error(`Node "${sfxData.label}": no video connected. Use the purple video handle.`);
+      toast.error(nodeRunError(sfxData.label, "nodeRun.noVideoConnectedUseThe"));
       return Promise.reject(new Error("No video"));
     }
     // Prompt + negative resolution: upstream-wired handles win; otherwise fall
@@ -6161,21 +6376,21 @@ function executeNodeCore(
               currentJobId: undefined,
               currentJobProgress: undefined,
             });
-            guardedToast.error("Failed to start Video SFX", { description: errMsg });
+            guardedToast.error(tx("nodeRun.failedToStartVideoSFX"), { description: errMsg });
             reject(new Error(errMsg));
             return;
           }
 
           if (res.deduped) {
-            guardedToast.info("Video SFX attached to in-flight job", {
-              description: `Job ID: ${jobIds[0]}`,
+            guardedToast.info(tx("nodeRun.videoSFXAttachedToIn"), {
+              description: tx("run.jobIdLine", { id: jobIds[0] }),
             });
           } else {
             guardedToast.info(
               jobIds.length > 1
-                ? `Video SFX started (${jobIds.length} takes)`
-                : "Video SFX started",
-              { description: `Job ID: ${jobIds[0]}` },
+                ? tx("nodeRun.videoSFXStartedTakes", { count: jobIds.length })
+                : tx("nodeRun.videoSFXStarted"),
+              { description: tx("run.jobIdLine", { id: jobIds[0] }) },
             );
           }
           // currentJobId tracks the FIRST job so the UI's progress badge has
@@ -6222,7 +6437,7 @@ function executeNodeCore(
                     }
                   } catch (err) {
                     pollFailures++;
-                    if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                    if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                       ctx.untrackInterval(interval);
                       // Final verification: completion may have raced the
                       // network blip — re-fetch once before giving up.
@@ -6277,7 +6492,7 @@ function executeNodeCore(
                 currentJobProgress: undefined,
               });
               guardedToast.success(
-                results.length > 1 ? `Video SFX complete (${results.length} takes)` : "Video SFX complete",
+                results.length > 1 ? tx("nodeRun.videoSFXCompleteTakes", { count: results.length }) : tx("nodeRun.videoSFXComplete"),
               );
               resolve(primary.url);
             })
@@ -6294,7 +6509,7 @@ function executeNodeCore(
                 currentJobId: undefined,
                 currentJobProgress: undefined,
               });
-              guardedToast.error("Video SFX failed", { description: errMsg });
+              guardedToast.error(tx("nodeRun.videoSFXFailed"), { description: errMsg });
               reject(err instanceof Error ? err : new Error(errMsg));
             });
         })
@@ -6305,8 +6520,8 @@ function executeNodeCore(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            guardedToast.error("Failed to start Video SFX", {
-              description: err instanceof Error ? err.message : "Unknown error",
+            guardedToast.error(tx("nodeRun.failedToStartVideoSFX"), {
+              description: err instanceof Error ? err.message : tx("lib.unknownError"),
             });
           }
           reject(err);
@@ -6319,11 +6534,11 @@ function executeNodeCore(
     const faceImageUrl = (inputs.faceImageUrl as string | undefined) ?? (inputs.imageUrl as string | undefined);
     const videoUrl = inputs.videoUrl as string | undefined;
     if (!faceImageUrl) {
-      toast.error(`Node "${fsData.label}": no face image connected. Use the orange handle.`);
+      toast.error(nodeRunError(fsData.label, "nodeRun.noFaceImageConnectedUse"));
       return Promise.reject(new Error("No face image"));
     }
     if (!videoUrl) {
-      toast.error(`Node "${fsData.label}": no video connected. Use the pink handle.`);
+      toast.error(nodeRunError(fsData.label, "nodeRun.noVideoConnectedUseThe2"));
       return Promise.reject(new Error("No video"));
     }
     return runProcessingNode(
@@ -6340,11 +6555,11 @@ function executeNodeCore(
     const imageUrl = inputs.imageUrl as string | undefined;
     const prompt = (applyPromptAffixes(maskData.prompt, readPromptAffixes(maskData), refMap) ?? "").trim();
     if (!imageUrl) {
-      toast.error(`Node "${maskData.label}": no image connected. Wire an image into the left handle.`);
+      toast.error(nodeRunError(maskData.label, "nodeRun.noImageConnectedWireAn"));
       return Promise.reject(new Error("No image"));
     }
     if (!prompt) {
-      toast.error(`Node "${maskData.label}": prompt is required.`);
+      toast.error(nodeRunError(maskData.label, "nodeRun.promptIsRequired"));
       return Promise.reject(new Error("No prompt"));
     }
     const { updateNodeData } = useWorkflowStore.getState();
@@ -6360,7 +6575,7 @@ function executeNodeCore(
     return new Promise<string>((resolve, reject) => {
       generateMask({ imageUrl, prompt, threshold: maskData.threshold })
         .then(({ jobId }) => {
-          guardedToast.info("Generate Mask started", { description: `Job ID: ${jobId}` });
+          guardedToast.info(tx("nodeRun.generateMaskStarted"), { description: tx("run.jobIdLine", { id: jobId }) });
           updateNodeData(node.id, { currentJobId: jobId });
           let pollFailures = 0;
           const poll = ctx.trackInterval(
@@ -6398,7 +6613,7 @@ function executeNodeCore(
                       currentJobId: undefined,
                       currentJobProgress: undefined,
                     });
-                    guardedToast.error("Generate Mask failed", { description: errMsg });
+                    guardedToast.error(tx("nodeRun.generateMaskFailed"), { description: errMsg });
                     reject(new Error(errMsg));
                     return;
                   }
@@ -6420,7 +6635,7 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.success("Generate Mask complete");
+                  guardedToast.success(tx("nodeRun.generateMaskComplete"));
                   resolve(outMaskUrl);
                 } else if (job.status === "failed") {
                   ctx.untrackInterval(poll);
@@ -6431,12 +6646,12 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.error("Generate Mask failed", { description: errMsg });
+                  guardedToast.error(tx("nodeRun.generateMaskFailed"), { description: errMsg });
                   reject(new Error(errMsg));
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write result/failure to canvas.
@@ -6465,7 +6680,7 @@ function executeNodeCore(
                           currentJobProgress: undefined,
                           errorMessage: undefined,
                         });
-                        guardedToast.success("Generate Mask complete");
+                        guardedToast.success(tx("nodeRun.generateMaskComplete"));
                         resolve(outMaskUrl);
                         return;
                       }
@@ -6475,11 +6690,12 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
-                    errorMessage: "Failed to check status — network error",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
-                  guardedToast.error("Failed to check Generate Mask status");
+                  guardedToast.error(tx("nodeRun.failedToCheckGenerateMask"));
                   reject(err);
                 }
               }
@@ -6493,8 +6709,8 @@ function executeNodeCore(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            guardedToast.error("Failed to start Generate Mask", {
-              description: err instanceof Error ? err.message : "Unknown error",
+            guardedToast.error(tx("nodeRun.failedToStartGenerateMask"), {
+              description: err instanceof Error ? err.message : tx("lib.unknownError"),
             });
           }
           reject(err);
@@ -6506,7 +6722,7 @@ function executeNodeCore(
     const overlayData = node.data as ImageOverlayData;
     const baseUrl = inputs.imageUrl;
     if (!baseUrl) {
-      toast.error(`Node "${overlayData.label}": no base image connected (image handle)`);
+      toast.error(nodeRunError(overlayData.label, "nodeRun.noBaseImageConnectedImage"));
       return Promise.reject(new Error("Image Overlay needs a base image"));
     }
     // Wire URLs are keyed by HANDLE index (overlay → 0 … overlay12 → 11) and the
@@ -6525,14 +6741,14 @@ function executeNodeCore(
       return url ? [{ ...DEFAULT_OVERLAY_LAYER, ...(cfg ?? {}), kind: "image" as const, imageUrl: url }] : [];
     });
     if (layers.length === 0) {
-      toast.error(`Node "${overlayData.label}": no overlay image connected (overlay handles)`);
+      toast.error(nodeRunError(overlayData.label, "nodeRun.noOverlayImageConnectedOverlay"));
       return Promise.reject(new Error("Image Overlay needs at least one overlay image"));
     }
     // Mirrors backend payload-builder.ts: a QR layer that reads its link from
     // the QR link handle needs something wired there.
     const qrText = (inputs.overlayQrText ?? "").trim();
     if (layers.some((l) => l.kind === "qr" && l.qr?.fromInput) && !qrText) {
-      toast.error(`Node "${overlayData.label}": a QR layer reads its link from the QR link handle, but nothing is connected there`);
+      toast.error(nodeRunError(overlayData.label, "nodeRun.aQRLayerReadsIts"));
       return Promise.reject(new Error("Image Overlay: QR link handle not connected"));
     }
     const wiredVariantIds = useWorkflowStore
@@ -6573,11 +6789,59 @@ function executeNodeCore(
     );
   }
 
+  if (node.type === "video-overlay") {
+    const d = node.data as VideoOverlayData;
+    // The base is ONLY the resolved `video` handle — never overrideMediaUrl.
+    // list-execution passes every row's URL as the override whichever handle
+    // the list is wired to, so a List of images fanned into a layer handle
+    // would replace the base video (the backend DAG has no override: engine
+    // parity, spec §7). A List wired to `video` still fans out: the resolver
+    // already puts that row's video into inputs.videoUrl. Same as Image Overlay.
+    const baseUrl = inputs.videoUrl;
+    if (!baseUrl) {
+      toast.error(nodeRunError(d.label, "nodeRun.noBaseVideoConnectedVideo"));
+      return Promise.reject(new Error("Video Overlay needs a base video"));
+    }
+    // The ONE assembly both engines run (@nodaro/shared): per slot the wired
+    // image, else the layer's own imageUrl; a wired slot with no settings is
+    // the default corner badge (D2); empty slots dropped; `slot` stamped;
+    // presets expanded. Mirrors backend payload-builder.ts case "video-overlay".
+    const wired = inputs.overlayImageUrls ?? [];
+    const request = assembleVideoOverlayRequest({ videoUrl: baseUrl, data: d, wiredImageUrls: wired });
+    const verdict = validateVideoOverlayRequest(request);
+
+    if (!verdict.ok) {
+      toast.error(nodeRunText(d.label, videoOverlayIssueText(verdict, tx)));
+      return Promise.reject(new Error(formatVideoOverlayError(verdict)));
+    }
+    // Stamped on the result: a later change to the base, a slot's image or any
+    // setting marks it "Result (old)" — the node computes the same key, and a
+    // backend DAG run stamps it too (payload-builder, one shared function).
+    // It also rides on the request (within the route's bound): the worker
+    // echoes it into output_data, so a run that lands after a page reload
+    // (restore / reconcile read the REST job) reads fresh as well.
+    const resultCompositionKey = videoOverlayCompositionKey({ baseUrl, sources: videoOverlaySlotSources(d.layers ?? [], wired), data: d });
+    const sentKey = resultCompositionKey.length <= VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH ? { resultCompositionKey } : {};
+    setUserPromptTemplate(undefined);
+    return runProcessingNode(
+      node.id,
+      () => videoOverlayApi({ ...request, userId: ctx.userId, ...sentKey }),
+      "generatedVideoUrl",
+      "Video Overlay",
+      ctx,
+      // The worker's warnings, output canvas and length ride on the node and the result.
+      // ONE mapping with every backend / restore lane (lib/video-overlay-run-output).
+      // The canvas key goes AFTER the spread: the job echoes the same key, or
+      // none when it was past the route's bound.
+      (od) => ({ ...videoOverlayRunOutputFields(od), resultCompositionKey }),
+    );
+  }
+
   if (node.type === "image-collage") {
     const collageData = node.data as ImageCollageData;
     let imageUrls = inputs.imageUrls ?? [];
     if (imageUrls.length < 2) {
-      toast.error(`Node "${collageData.label}": need at least 2 image inputs`);
+      toast.error(nodeRunError(collageData.label, "nodeRun.needAtLeast2Image"));
       return Promise.reject(new Error("Need at least 2 images"));
     }
     let withSourceIds = inputs.imageUrlsWithSourceIds;
@@ -6672,7 +6936,7 @@ function executeNodeCore(
 
     if (videoUrls.length < 2) {
       toast.error(
-        `Node "${combineData.label}": need at least 2 video inputs`,
+        nodeRunError(combineData.label, "nodeRun.needAtLeast2Video"),
       );
       return Promise.reject(new Error("Need at least 2 videos"));
     }
@@ -6703,7 +6967,7 @@ function executeNodeCore(
     // EDL from the wired `edl` handle (a json string) or an inline node config.
     const edlRaw = inputs.edl ?? aeData.edl;
     if (edlRaw === undefined || edlRaw === null || edlRaw === "") {
-      toast.error(`Node "${aeData.label}": connect an EDL to the "EDL" input`);
+      toast.error(nodeRunError(aeData.label, "nodeRun.connectAnEDLToThe"));
       return Promise.reject(new Error("apply-edl requires an EDL"));
     }
     const parseMaybe = (v: unknown): unknown => {
@@ -6737,7 +7001,7 @@ function executeNodeCore(
     // the `transcript` handle (or an inline object), never send a raw string.
     const transcript = inputs.transcript !== undefined ? parseMaybe(inputs.transcript) : epData.transcript;
     if (transcript === undefined || transcript === null) {
-      toast.error(`Node "${epData.label}": connect a transcript to the "Transcript" input`);
+      toast.error(nodeRunError(epData.label, "nodeRun.connectATranscriptToThe"));
       return Promise.reject(new Error("edit-plan requires a transcript"));
     }
     const silence = inputs.silence !== undefined ? parseMaybe(inputs.silence) : epData.silence;
@@ -6761,9 +7025,26 @@ function executeNodeCore(
       return s;
     });
     if (sources.length === 0) {
-      toast.error(`Node "${epData.label}": connect the recording's media to the "Sources" input`);
+      toast.error(nodeRunError(epData.label, "nodeRun.connectTheRecordingSMedia"));
       return Promise.reject(new Error("edit-plan requires at least one source"));
     }
+    // B4: audio-sync's offsets (when wired), the master's own offset and the
+    // transcript's clock — checked before the POST, so a plan that would
+    // render out of sync fails before charging. The backend payload builder
+    // runs the same rule (resolveEditPlanSources).
+    const planned = resolveEditPlanSources(sources as Array<AudioSyncOffsetSource & Record<string, unknown>>, {
+      offsets: inputs.editPlanOffsets,
+      transcriptSourceId: inputs.editPlanTranscriptOrigin,
+    });
+    if (!planned.ok) {
+      const labelOf = (id: string) => orderedWired.find((w) => w.nodeId === id)?.label ?? id;
+      toast.error(nodeRunText(epData.label, planned.issues.map((i) => editPlanIssueText(i, labelOf)).join("; ")));
+      return Promise.reject(new Error(`edit-plan: ${planned.issues.map((i) => describeAudioSyncOffsetIssue(i, labelOf)).join("; ")}`));
+    }
+    // Stamp the transcript's recording so the plugin's own clock guard sees it.
+    const plannedTranscript = planned.transcriptSourceId && typeof transcript === "object"
+      ? { ...(transcript as Record<string, unknown>), sourceId: planned.transcriptSourceId }
+      : transcript;
     const mode = asEditPlanMode(epData.mode);
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, { ...RUN_START_RESET, generatedJson: undefined, currentJobProgress: undefined });
@@ -6772,9 +7053,9 @@ function executeNodeCore(
       editPlan({
         mode,
         planTier: asEditPlanTier(epData.planTier),
-        transcript,
+        transcript: plannedTranscript,
         silence,
-        sources,
+        sources: planned.sources,
         instructions: applyPromptAffixes(epData.instructions, readPromptAffixes(epData), refMap),
         styleGuide: epData.styleGuide?.trim() || undefined,
         count: mode === "clips" ? clampEditPlanClipCount(epData.count) : undefined,
@@ -6784,7 +7065,7 @@ function executeNodeCore(
         userId: ctx.userId,
       })
         .then(({ jobId }) => {
-          guardedToast.info("Edit plan started", { description: `Job ID: ${jobId}` });
+          guardedToast.info(tx("nodeRun.editPlanStarted"), { description: tx("run.jobIdLine", { id: jobId }) });
           updateNodeData(node.id, { currentJobId: jobId });
           let pollFailures = 0;
           const poll = ctx.trackInterval(
@@ -6819,7 +7100,7 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.success("Edit plan complete");
+                  guardedToast.success(tx("nodeRun.editPlanComplete"));
                   resolve(plan === undefined ? "" : JSON.stringify(plan));
                 } else if (job.status === "failed") {
                   ctx.untrackInterval(poll);
@@ -6830,12 +7111,12 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.error("Edit plan failed", { description: errMsg });
+                  guardedToast.error(tx("nodeRun.editPlanFailed"), { description: errMsg });
                   reject(new Error(errMsg));
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     resolve("");
@@ -6843,10 +7124,12 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
-                  guardedToast.error("Failed to check edit plan status");
+                  guardedToast.error(tx("nodeRun.failedToCheckEditPlan"));
                   reject(err);
                 }
               }
@@ -6860,8 +7143,8 @@ function executeNodeCore(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            guardedToast.error("Failed to start edit plan", {
-              description: err instanceof Error ? err.message : "Unknown error",
+            guardedToast.error(tx("apiErr.startEditPlan"), {
+              description: err instanceof Error ? err.message : tx("lib.unknownError"),
             });
           }
           reject(err);
@@ -6875,7 +7158,7 @@ function executeNodeCore(
     const audioUrls = inputs.audioUrls ?? [];
 
     if (videoUrls.length === 0) {
-      toast.error(`Node "${assembleData.label}": need at least 1 video input`);
+      toast.error(nodeRunError(assembleData.label, "nodeRun.needAtLeast1Video"));
       return Promise.reject(new Error("Need at least 1 video"));
     }
     // Pairing semantics: block i = video[i] + audio[i] (index-paired, per the
@@ -6885,7 +7168,7 @@ function executeNodeCore(
     // the API instead of silently dropping the extra voice clips.
     if (audioUrls.length > videoUrls.length) {
       toast.error(
-        `Node "${assembleData.label}": ${audioUrls.length} voice clips but only ${videoUrls.length} video clips — connect at most one voice clip per video clip`,
+        nodeRunError(assembleData.label, "nodeRun.voiceClipsButOnlyVideo", { voiceCount: audioUrls.length, videoCount: videoUrls.length }),
       );
       return Promise.reject(new Error("More audio clips than video clips"));
     }
@@ -6919,13 +7202,13 @@ function executeNodeCore(
     const audioSources = inputs.audioSources ?? [];
     if (!videoUrl) {
       toast.error(
-        `Node "${(node.data as MergeVideoAudioData).label}": no video input`,
+        nodeRunError((node.data as MergeVideoAudioData).label, "nodeRun.noVideoInput"),
       );
       return Promise.reject(new Error("No video"));
     }
     if (audioSources.length === 0) {
       toast.error(
-        `Node "${(node.data as MergeVideoAudioData).label}": no audio input`,
+        nodeRunError((node.data as MergeVideoAudioData).label, "nodeRun.noAudioInput"),
       );
       return Promise.reject(new Error("No audio"));
     }
@@ -6966,7 +7249,7 @@ function executeNodeCore(
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl ?? inputs.audioUrl;
     if (!videoUrl) {
       toast.error(
-        `Node "${(node.data as TrimAudioData).label}": no video input`,
+        nodeRunError((node.data as TrimAudioData).label, "nodeRun.noVideoInput"),
       );
       return Promise.reject(new Error("No video"));
     }
@@ -6991,7 +7274,7 @@ function executeNodeCore(
   if (node.type === "extract-audio") {
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!videoUrl) {
-      toast.error(`Node "${(node.data as ExtractAudioData).label}": no video input`);
+      toast.error(nodeRunError((node.data as ExtractAudioData).label, "nodeRun.noVideoInput"));
       return Promise.reject(new Error("No video"));
     }
     setUserPromptTemplate(undefined);
@@ -7007,7 +7290,7 @@ function executeNodeCore(
   if (node.type === "remove-audio") {
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!videoUrl) {
-      toast.error(`Node "${(node.data as RemoveAudioData).label}": no video input`);
+      toast.error(nodeRunError((node.data as RemoveAudioData).label, "nodeRun.noVideoInput"));
       return Promise.reject(new Error("No video"));
     }
     setUserPromptTemplate(undefined);
@@ -7026,7 +7309,7 @@ function executeNodeCore(
     // proxy either way).
     const sourceUrl = overrideMediaUrl ?? inputs.audioUrl ?? inputs.videoUrl;
     if (!sourceUrl) {
-      toast.error(`Node "${d.label}": connect an audio or video source`);
+      toast.error(nodeRunError(d.label, "nodeRun.connectAnAudioOrVideo"));
       return Promise.reject(new Error("No audio/video source"));
     }
     const { updateNodeData } = useWorkflowStore.getState();
@@ -7043,7 +7326,7 @@ function executeNodeCore(
         userId: ctx.userId,
       })
         .then(({ jobId }) => {
-          guardedToast.info("Silence detect started", { description: `Job ID: ${jobId}` });
+          guardedToast.info(tx("nodeRun.silenceDetectStarted"), { description: tx("run.jobIdLine", { id: jobId }) });
           updateNodeData(node.id, { currentJobId: jobId });
 
           let pollFailures = 0;
@@ -7076,7 +7359,7 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.success("Silence detect complete");
+                  guardedToast.success(tx("nodeRun.silenceDetectComplete"));
                   resolve(json === undefined ? "" : JSON.stringify(json));
                 } else if (job.status === "failed") {
                   ctx.untrackInterval(poll);
@@ -7087,12 +7370,12 @@ function executeNodeCore(
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
-                  guardedToast.error("Silence detect failed", { description: errMsg });
+                  guardedToast.error(tx("nodeRun.silenceDetectFailed"), { description: errMsg });
                   reject(new Error(errMsg));
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     resolve("");
@@ -7100,10 +7383,12 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
-                  guardedToast.error("Failed to check silence detect status");
+                  guardedToast.error(tx("nodeRun.failedToCheckSilenceDetect"));
                   reject(err);
                 }
               }
@@ -7117,8 +7402,117 @@ function executeNodeCore(
             currentJobProgress: undefined,
           });
           if (!checkStorageError(err, ctx)) {
-            guardedToast.error("Failed to start silence detect", {
-              description: err instanceof Error ? err.message : "Unknown error",
+            guardedToast.error(tx("nodeRun.failedToStartSilenceDetect"), {
+              description: err instanceof Error ? err.message : tx("lib.unknownError"),
+            });
+          }
+          reject(err);
+        });
+    });
+  }
+
+  if (node.type === "audio-sync") {
+    const d = node.data as AudioSyncNodeData;
+    // One row per upstream recording, ordered by the config-panel sourceOrder
+    // (listed first, then wire order) — the SAME order the backend payload
+    // builder applies. The source NODE id is each recording's id.
+    const sources = orderAudioSyncSources(inputs.audioSyncSources ?? [], d.sourceOrder)
+      .map((row) => ({ id: row.nodeId, url: row.url }));
+    if (sources.length < AUDIO_SYNC_MIN_SOURCES) {
+      toast.error(nodeRunError(d.label, "nodeRun.connectAtLeastRecordingsTo", { min: AUDIO_SYNC_MIN_SOURCES }));
+      return Promise.reject(new Error("audio-sync requires at least two sources"));
+    }
+    if (sources.length > AUDIO_SYNC_MAX_SOURCES) {
+      toast.error(nodeRunError(d.label, "nodeRun.atMostRecordingsCanBe", { max: AUDIO_SYNC_MAX_SOURCES, count: sources.length }));
+      return Promise.reject(new Error("audio-sync takes at most six sources"));
+    }
+    // A reference whose recording was unwired falls back to the first source,
+    // exactly as the backend does for a workflow run.
+    const reference = effectiveAudioSyncReference(d.reference, sources.map((s) => s.id));
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(node.id, { ...RUN_START_RESET, generatedJson: undefined, currentJobProgress: undefined });
+    setUserPromptTemplate(undefined);
+    return new Promise<string>((resolve, reject) => {
+      audioSyncApi({ sources, reference, userId: ctx.userId })
+        .then(({ jobId }) => {
+          guardedToast.info(tx("nodeRun.audioSyncStarted"), { description: tx("run.jobIdLine", { id: jobId }) });
+          updateNodeData(node.id, { currentJobId: jobId });
+
+          let pollFailures = 0;
+          const poll = ctx.trackInterval(
+            setInterval(async () => {
+              if (ctx.isWorkflowStale()) {
+                ctx.untrackInterval(poll);
+                reject(new WorkflowStaleError());
+                return;
+              }
+              try {
+                const job = await getJobStatusLeanForNode(jobId, node.id);
+                pollFailures = 0;
+                if (job.status === "processing" && job.progress != null) {
+                  updateProgressIfChanged(node.id, job.progress, updateNodeData);
+                }
+                if (job.status === "completed" || job.status === "failed") {
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    ctx.untrackInterval(poll);
+                    resolve("");
+                    return;
+                  }
+                }
+                if (job.status === "completed") {
+                  ctx.untrackInterval(poll);
+                  const json = (job.output_data as Record<string, unknown> | undefined)?.json;
+                  updateNodeData(node.id, {
+                    executionStatus: "completed",
+                    generatedJson: json,
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  guardedToast.success(tx("nodeRun.audioSyncComplete"));
+                  resolve(json === undefined ? "" : JSON.stringify(json));
+                } else if (job.status === "failed") {
+                  ctx.untrackInterval(poll);
+                  const errMsg = job.error_message ?? "Audio sync failed";
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    errorMessage: errMsg,
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  guardedToast.error(tx("nodeRun.audioSyncFailed"), { description: errMsg });
+                  reject(new Error(errMsg));
+                }
+              } catch (err) {
+                pollFailures++;
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
+                  ctx.untrackInterval(poll);
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    resolve("");
+                    return;
+                  }
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
+                  });
+                  guardedToast.error(tx("nodeRun.failedToCheckAudioSync"));
+                  reject(err);
+                }
+              }
+            }, 2000),
+          );
+        })
+        .catch((err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            currentJobId: undefined,
+            currentJobProgress: undefined,
+          });
+          if (!checkStorageError(err, ctx)) {
+            guardedToast.error(tx("nodeRun.failedToStartAudioSync"), {
+              description: err instanceof Error ? err.message : tx("lib.unknownError"),
             });
           }
           reject(err);
@@ -7131,7 +7525,7 @@ function executeNodeCore(
     const videoUrl = inputs.videoUrl;
     const audioUrl = inputs.audioUrl;
     if (!videoUrl && !audioUrl) {
-      toast.error(`Node "${d.label}": no video or audio input found`);
+      toast.error(nodeRunError(d.label, "nodeRun.noVideoOrAudioInput"));
       return Promise.reject(new Error("No input"));
     }
     const { updateNodeData } = useWorkflowStore.getState();
@@ -7145,7 +7539,7 @@ function executeNodeCore(
         audioFormat: d.audioFormat || "mp3",
         userId: ctx.userId,
       }).then(({ jobId }) => {
-        toast.info("Split into Chunks started", { description: `Job ID: ${jobId}` });
+        toast.info(tx("nodeRun.splitIntoChunksStarted"), { description: tx("run.jobIdLine", { id: jobId }) });
         updateNodeData(node.id, { currentJobId: jobId });
         const poll = setInterval(async () => {
           try {
@@ -7203,12 +7597,12 @@ function executeNodeCore(
                 );
               });
 
-              toast.success(`Split into Chunks complete: ${od.chunkCount} chunks`);
+              toast.success(tx("nodeRun.splitIntoChunksCompleteChunks", { count: String(od.chunkCount) }));
               resolve((audioUrls?.[0] ?? videoUrls?.[0]) as string);
             } else if (job.status === "failed") {
               clearInterval(poll);
               updateNodeData(node.id, { executionStatus: "failed", errorMessage: job.error_message ?? "Failed", currentJobId: undefined });
-              toast.error(`Split into Chunks failed: ${job.error_message}`);
+              toast.error(tx("nodeRun.splitIntoChunksFailed", { error: job.error_message ?? tx("run.unknownError") }));
               reject(new Error(job.error_message ?? "Failed"));
             }
           } catch {
@@ -7234,7 +7628,7 @@ function executeNodeCore(
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!videoUrl) {
       toast.error(
-        `Node "${(node.data as TrimVideoData).label}": no video input`,
+        nodeRunError((node.data as TrimVideoData).label, "nodeRun.noVideoInput"),
       );
       return Promise.reject(new Error("No video"));
     }
@@ -7279,7 +7673,7 @@ function executeNodeCore(
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!videoUrl) {
       toast.error(
-        `Node "${(node.data as ExtractFrameData).label}": no video input`,
+        nodeRunError((node.data as ExtractFrameData).label, "nodeRun.noVideoInput"),
       );
       return Promise.reject(new Error("No video"));
     }
@@ -7301,7 +7695,7 @@ function executeNodeCore(
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!videoUrl) {
       toast.error(
-        `Node "${(node.data as TranscodeVideoData).label}": no video input`,
+        nodeRunError((node.data as TranscodeVideoData).label, "nodeRun.noVideoInput"),
       );
       return Promise.reject(new Error("No video"));
     }
@@ -7343,7 +7737,7 @@ function executeNodeCore(
     if (mode === "bypass") {
       const outputUrl = videoUrl ?? inputAssets.find(a => a.type === "video")?.url ?? inputAssets[0]?.url;
       if (!outputUrl) {
-        toast.error(`Node "${meData.label}": no input assets connected`);
+        toast.error(nodeRunError(meData.label, "nodeRun.noInputAssetsConnected"));
         return Promise.reject(new Error("No input"));
       }
       setNodeData(node.id, { executionStatus: "completed", generatedVideoUrl: outputUrl });
@@ -7352,14 +7746,14 @@ function executeNodeCore(
 
     // Wait mode
     if (!videoUrl && inputAssets.length === 0) {
-      toast.error(`Node "${meData.label}": no input assets connected`);
+      toast.error(nodeRunError(meData.label, "nodeRun.noInputAssetsConnected"));
       return Promise.reject(new Error("No input"));
     }
     setNodeData(node.id, {
       executionStatus: "awaiting-user",
       errorMessage: undefined,
     });
-    guardedToast.info("Manual edit required — click 'Open Editor' on the node");
+    guardedToast.info(tx("nodeRun.manualEditRequiredClickOpen"));
     return new Promise<string>((resolve, reject) => {
       pendingManualEdits.set(node.id, { resolve: () => resolve(""), reject });
     });
@@ -7369,7 +7763,7 @@ function executeNodeCore(
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!videoUrl) {
       toast.error(
-        `Node "${(node.data as SpeedRampData).label}": no video input`,
+        nodeRunError((node.data as SpeedRampData).label, "nodeRun.noVideoInput"),
       );
       return Promise.reject(new Error("No video"));
     }
@@ -7392,7 +7786,7 @@ function executeNodeCore(
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!videoUrl) {
       toast.error(
-        `Node "${(node.data as LoopVideoData).label}": no video input`,
+        nodeRunError((node.data as LoopVideoData).label, "nodeRun.noVideoInput"),
       );
       return Promise.reject(new Error("No video"));
     }
@@ -7426,7 +7820,7 @@ function executeNodeCore(
     // own upload dropzone (data.gifUrl).
     const gifUrl = overrideMediaUrl ?? inputs.imageUrl ?? d.gifUrl;
     if (!gifUrl) {
-      toast.error(`Node "${d.label}": no GIF — wire an image or upload one`);
+      toast.error(nodeRunError(d.label, "nodeRun.noGIFWireAnImage"));
       return Promise.reject(new Error("No GIF"));
     }
     return runProcessingNode(
@@ -7452,7 +7846,7 @@ function executeNodeCore(
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!videoUrl) {
       toast.error(
-        `Node "${(node.data as FadeVideoData).label}": no video input`,
+        nodeRunError((node.data as FadeVideoData).label, "nodeRun.noVideoInput"),
       );
       return Promise.reject(new Error("No video"));
     }
@@ -7480,11 +7874,11 @@ function executeNodeCore(
     const imageUrl = overrideMediaUrl ?? inputs.imageUrl;
     const audioUrl = inputs.audioUrl;
     if (!imageUrl) {
-      toast.error(`Node "${d.label}": no image input`);
+      toast.error(nodeRunError(d.label, "nodeRun.noImageInput"));
       return Promise.reject(new Error("No image"));
     }
     if (!audioUrl) {
-      toast.error(`Node "${d.label}": no audio input — the audio sets the output length`);
+      toast.error(nodeRunError(d.label, "nodeRun.noAudioInputTheAudio"));
       return Promise.reject(new Error("No audio"));
     }
     return runProcessingNode(
@@ -7514,13 +7908,13 @@ function executeNodeCore(
     if (imageUrls.length < 2) {
       toast.error(
         imageUrls.length === 1
-          ? `Node "${d.label}": slideshow needs at least 2 images — for a single still, use Still to Video`
-          : `Node "${d.label}": no images wired — feed a List (Bundle edge) or connect 2–100 image nodes`,
+          ? nodeRunError(d.label, "nodeRun.slideshowNeedsAtLeast2")
+          : nodeRunError(d.label, "nodeRun.noImagesWiredFeedA"),
       );
       return Promise.reject(new Error("Not enough images"));
     }
     if (imageUrls.length > 100) {
-      toast.error(`Node "${d.label}": ${imageUrls.length} images — the cap is 100. Trim the set upstream.`);
+      toast.error(nodeRunError(d.label, "nodeRun.imagesTheCapIs100", { count: imageUrls.length }));
       return Promise.reject(new Error("Too many images"));
     }
     return runProcessingNode(
@@ -7558,7 +7952,7 @@ function executeNodeCore(
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!videoUrl) {
       toast.error(
-        `Node "${(node.data as ResizeVideoData).label}": no video input`,
+        nodeRunError((node.data as ResizeVideoData).label, "nodeRun.noVideoInput"),
       );
       return Promise.reject(new Error("No video"));
     }
@@ -7583,14 +7977,14 @@ function executeNodeCore(
     const mediaUrl = overrideMediaUrl ?? inputs.videoUrl ?? inputs.imageUrl;
     if (!mediaUrl) {
       toast.error(
-        `Node "${(node.data as SocialMediaFormatData).label}": no media input`,
+        nodeRunError((node.data as SocialMediaFormatData).label, "nodeRun.noMediaInput"),
       );
       return Promise.reject(new Error("No media"));
     }
     const d = node.data as SocialMediaFormatData;
     const spec = PLATFORM_SPECS[d.specKey];
     if (!spec) {
-      toast.error(`Node "${d.label}": invalid spec key "${d.specKey}"`);
+      toast.error(nodeRunError(d.label, "nodeRun.invalidSpecKey", { key: d.specKey }));
       return Promise.reject(new Error("Invalid spec key"));
     }
     const mediaType: "image" | "video" = inputs.videoUrl ? "video" : "image";
@@ -7617,7 +8011,7 @@ function executeNodeCore(
     const d = node.data as AudioFxData;
     const audioUrl = overrideMediaUrl ?? inputs.audioUrl;
     if (!audioUrl) {
-      toast.error(`Node "${d.label}": no audio input`);
+      toast.error(nodeRunError(d.label, "nodeRun.noAudioInput"));
       return Promise.reject(new Error("No audio input"));
     }
     return runProcessingNode(
@@ -7645,7 +8039,7 @@ function executeNodeCore(
     const inputUrl = overrideMediaUrl ?? videoUrl ?? audioUrl;
     if (!inputUrl) {
       toast.error(
-        `Node "${(node.data as AdjustVolumeData).label}": no audio or video input`,
+        nodeRunError((node.data as AdjustVolumeData).label, "nodeRun.noAudioOrVideoInput2"),
       );
       return Promise.reject(new Error("No input"));
     }
@@ -7677,7 +8071,7 @@ function executeNodeCore(
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!videoUrl) {
       toast.error(
-        `Node "${(node.data as AddCaptionsData).label}": no video input`,
+        nodeRunError((node.data as AddCaptionsData).label, "nodeRun.noVideoInput"),
       );
       return Promise.reject(new Error("No video"));
     }
@@ -7766,7 +8160,7 @@ function executeNodeCore(
     const audioUrls = sourceEntries.map((e) => e.url);
     if (audioUrls.length < 2) {
       toast.error(
-        `Node "${mixData.label}": need at least 2 audio inputs`,
+        nodeRunError(mixData.label, "nodeRun.needAtLeast2Audio"),
       );
       return Promise.reject(new Error("Need at least 2 audio tracks"));
     }
@@ -7804,7 +8198,7 @@ function executeNodeCore(
     });
     if (segments.length === 0) {
       toast.error(
-        `Node "${combineData.label}": need at least 1 audio input`,
+        nodeRunError(combineData.label, "nodeRun.needAtLeast1Audio"),
       );
       return Promise.reject(new Error("Need at least 1 audio segment"));
     }
@@ -7821,16 +8215,16 @@ function executeNodeCore(
     const d = node.data as VideoComposerData;
     const composerPrompt = inputs.prompt || d.compositionPrompt;
     if (!composerPrompt?.trim()) {
-      toast.error(`Node "${d.label}": no composition prompt set`);
+      toast.error(nodeRunError(d.label, "nodeRun.noCompositionPromptSet"));
       return Promise.reject(new Error("No composition prompt"));
     }
     if (!ctx.userId) {
-      toast.error("Not authenticated");
+      toast.error(tx("nodeRun.notAuthenticated"));
       return Promise.reject(new Error("Not authenticated"));
     }
     const assets = collectMediaAssets(node, edges, nodes);
     if (assets.length === 0) {
-      toast.error(`Node "${d.label}": no media assets connected`);
+      toast.error(nodeRunError(d.label, "nodeRun.noMediaAssetsConnected"));
       return Promise.reject(new Error("No media assets"));
     }
     const { updateNodeData } = useWorkflowStore.getState();
@@ -7854,7 +8248,7 @@ function executeNodeCore(
           executionStatus: "completed",
           sceneGraph: result.sceneGraph,
         });
-        guardedToast.success("Composition generated");
+        guardedToast.success(tx("nodeRun.compositionGenerated"));
         return "plan-ready";
       })
       .catch((err) => {
@@ -7870,17 +8264,17 @@ function executeNodeCore(
     const d = node.data as AfterEffectsData;
     const aePrompt = inputs.prompt || d.effectPrompt;
     if (!aePrompt?.trim()) {
-      toast.error(`Node "${d.label}": no effect prompt set`);
+      toast.error(nodeRunError(d.label, "nodeRun.noEffectPromptSet"));
       return Promise.reject(new Error("No effect prompt"));
     }
     if (!ctx.userId) {
-      toast.error("Not authenticated");
+      toast.error(tx("nodeRun.notAuthenticated"));
       return Promise.reject(new Error("Not authenticated"));
     }
     // Use resolved inputs from resolveNodeInputs (matches backend routing)
     const inputVideoUrl = inputs.videoUrl || d.inputVideoUrl;
     if (!inputVideoUrl) {
-      toast.error(`Node "${d.label}": no video input connected`);
+      toast.error(nodeRunError(d.label, "nodeRun.noVideoInputConnected"));
       return Promise.reject(new Error("No video input"));
     }
     const { updateNodeData } = useWorkflowStore.getState();
@@ -7908,7 +8302,7 @@ function executeNodeCore(
           executionStatus: "completed",
           effectPlan: result.effectPlan,
         });
-        guardedToast.success("After effects plan generated");
+        guardedToast.success(tx("nodeRun.afterEffectsPlanGenerated"));
         return "plan-ready";
       })
       .catch((err) => {
@@ -7927,11 +8321,11 @@ function executeNodeCore(
     // already resolved by the generic pass above.
     const loPrompt = inputs.prompt || resolveTextRefs(d.overlayPrompt, refMap);
     if (!loPrompt?.trim()) {
-      toast.error(`Node "${d.label}": no overlay prompt set`);
+      toast.error(nodeRunError(d.label, "nodeRun.noOverlayPromptSet"));
       return Promise.reject(new Error("No overlay prompt"));
     }
     if (!ctx.userId) {
-      toast.error("Not authenticated");
+      toast.error(tx("nodeRun.notAuthenticated"));
       return Promise.reject(new Error("Not authenticated"));
     }
     // Use resolved inputs for video URL (matches backend routing)
@@ -7956,7 +8350,7 @@ function executeNodeCore(
       }
     }
     if (!inputVideoUrl) {
-      toast.error(`Node "${d.label}": no video input connected`);
+      toast.error(nodeRunError(d.label, "nodeRun.noVideoInputConnected"));
       return Promise.reject(new Error("No video input"));
     }
     const { updateNodeData } = useWorkflowStore.getState();
@@ -7983,7 +8377,7 @@ function executeNodeCore(
           executionStatus: "completed",
           overlayPlan: result.overlayPlan,
         });
-        guardedToast.success("Lottie overlay plan generated");
+        guardedToast.success(tx("nodeRun.lottieOverlayPlanGenerated"));
         return "plan-ready";
       })
       .catch((err) => {
@@ -7999,11 +8393,11 @@ function executeNodeCore(
     const d = node.data as ThreeDTitleData;
     const tdPrompt = applyPromptAffixes(inputs.prompt || d.titlePrompt, readPromptAffixes(d), refMap);
     if (!tdPrompt?.trim()) {
-      toast.error(`Node "${d.label}": no title prompt set`);
+      toast.error(nodeRunError(d.label, "nodeRun.noTitlePromptSet"));
       return Promise.reject(new Error("No title prompt"));
     }
     if (!ctx.userId) {
-      toast.error("Not authenticated");
+      toast.error(tx("nodeRun.notAuthenticated"));
       return Promise.reject(new Error("Not authenticated"));
     }
     const tdIncomingEdges = edges.filter((e) => e.target === node.id);
@@ -8046,7 +8440,7 @@ function executeNodeCore(
           executionStatus: "completed",
           titlePlan: result.titlePlan,
         });
-        guardedToast.success("3D title plan generated");
+        guardedToast.success(tx("nodeRun.3dTitlePlanGenerated"));
         return "plan-ready";
       })
       .catch((err) => {
@@ -8067,7 +8461,7 @@ function executeNodeCore(
     const g3d = node.data as Generate3DSceneData;
     const g3dPrompt = applyPromptAffixes(inputs.prompt || g3d.scenePrompt, readPromptAffixes(g3d), refMap);
     if (!g3dPrompt?.trim()) {
-      toast.error(`Node "${g3d.label}": no scene prompt set`);
+      toast.error(nodeRunError(g3d.label, "nodeRun.noScenePromptSet"));
       return Promise.reject(new Error("No scene prompt"));
     }
     const g3dRefs = resolveScene3DReferences({
@@ -8088,7 +8482,7 @@ function executeNodeCore(
     // silently ignored half the references is worse than not starting.
     const g3dLimit = checkScene3DReferenceLimit(g3dRefs);
     if (!g3dLimit.ok) {
-      toast.error(`Node "${g3d.label}": ${g3dLimit.message}`);
+      toast.error(nodeRunText(g3d.label, g3dLimit.message));
       return Promise.reject(new Error(g3dLimit.message));
     }
     // WHICH lane, from the SHARED resolver — the same call the orchestrator's
@@ -8100,7 +8494,7 @@ function executeNodeCore(
       availableEngines: scene3DAdvancedEngines(),
     });
     if (!g3dEngine.ok) {
-      toast.error(`Node "${g3d.label}": ${g3dEngine.message}`);
+      toast.error(nodeRunText(g3d.label, g3dEngine.message));
       return Promise.reject(new Error(g3dEngine.message));
     }
     const g3dAssets = scene3DInputAssetsForEngine(g3d.inputAssets, g3dEngine.engine);
@@ -8164,13 +8558,13 @@ function executeNodeCore(
       editPrompt: pro.editPrompt,
     });
     if (!proSource.ok) {
-      toast.error(`Node "${pro.label}": ${proSource.message}`);
+      toast.error(nodeRunText(pro.label, proSource.message));
       return Promise.reject(new Error(proSource.message));
     }
     if (proSource.source.kind === "prompt") {
       const proLimit = checkScene3DReferenceLimit(proRefs);
       if (!proLimit.ok) {
-        toast.error(`Node "${pro.label}": ${proLimit.message}`);
+        toast.error(nodeRunText(pro.label, proLimit.message));
         return Promise.reject(new Error(proLimit.message));
       }
     }
@@ -8220,12 +8614,12 @@ function executeNodeCore(
     // revision already held on the node (a node re-run after a manual edit).
     const e3dPlan = scene3DEditInput(node.id, e3d.scenePlan as Record<string, unknown> | undefined, nodes, edges);
     if (!e3dPlan) {
-      toast.error(`Node "${e3d.label}": no scene connected`);
+      toast.error(nodeRunError(e3d.label, "nodeRun.noSceneConnected"));
       return Promise.reject(new Error("No scene to edit"));
     }
     const e3dRevision = planRevisionId(e3dPlan);
     if (!e3dRevision) {
-      toast.error(`Node "${e3d.label}": the connected scene has no revision id`);
+      toast.error(nodeRunError(e3d.label, "nodeRun.theConnectedSceneHasNo"));
       return Promise.reject(new Error("Scene has no revision id"));
     }
     // The PLAN decides as much as the node does. A v2 scene — everything the
@@ -8238,12 +8632,12 @@ function executeNodeCore(
       availableEngines: scene3DAdvancedEngines(),
     });
     if (!e3dEngine.ok) {
-      toast.error(`Node "${e3d.label}": ${e3dEngine.message}`);
+      toast.error(nodeRunText(e3d.label, e3dEngine.message));
       return Promise.reject(new Error(e3dEngine.message));
     }
     const e3dPrompt = applyPromptAffixes(inputs.prompt || e3d.editPrompt, readPromptAffixes(e3d), refMap);
     if (!e3dPrompt?.trim()) {
-      toast.error(`Node "${e3d.label}": no edit instruction set`);
+      toast.error(nodeRunError(e3d.label, "nodeRun.noEditInstructionSet"));
       return Promise.reject(new Error("No edit instruction"));
     }
     const e3dRefs = resolveScene3DReferences({
@@ -8262,7 +8656,7 @@ function executeNodeCore(
     });
     const e3dLimit = checkScene3DReferenceLimit(e3dRefs);
     if (!e3dLimit.ok) {
-      toast.error(`Node "${e3d.label}": ${e3dLimit.message}`);
+      toast.error(nodeRunText(e3d.label, e3dLimit.message));
       return Promise.reject(new Error(e3dLimit.message));
     }
     // Adopt the scene being edited locally FIRST: the panel must show what is
@@ -8281,8 +8675,8 @@ function executeNodeCore(
       e3dLocalRevision !== e3dRevision &&
       !descendsFrom(e3d.scenePlan as Record<string, unknown> | undefined, e3dRevision, e3d.sceneHistory)
     ) {
-      guardedToast.info(`Node "${e3d.label}": editing the connected scene`, {
-        description: "Your previous revision is kept in this node's history.",
+      guardedToast.info(nodeRunError(e3d.label, "nodeRun.editingTheConnectedScene"), {
+        description: tx("nodeRun.yourPreviousRevisionIsKept"),
       });
     }
     useWorkflowStore.getState().updateNodeData(node.id, {
@@ -8366,7 +8760,7 @@ function executeNodeCore(
           executionStatus: "completed",
           motionPlan: result.motionPlan,
         });
-        guardedToast.success("Motion graphics plan generated");
+        guardedToast.success(tx("nodeRun.motionGraphicsPlanGenerated"));
         return "plan-ready";
       })
       .catch((err) => {
@@ -8471,7 +8865,7 @@ function executeNodeCore(
         executionStatus: "completed",
         compositePlan,
       });
-      guardedToast.success("Composite plan built");
+      guardedToast.success(tx("nodeRun.compositePlanBuilt"));
       return Promise.resolve("");
     } catch (err) {
       updateNodeData(node.id, {
@@ -8533,7 +8927,7 @@ function executeNodeCore(
 
     const mediaAssets = collectMediaAssets(node, edges, nodes);
     if (mediaAssets.length === 0) {
-      toast.error(`Node "${d.label}": no media assets connected`);
+      toast.error(nodeRunError(d.label, "nodeRun.noMediaAssetsConnected"));
       return Promise.reject(new Error("No media assets"));
     }
     const autoSceneGraph = buildAutoComposition(
@@ -8558,7 +8952,7 @@ function executeNodeCore(
   if (node.type === "character") {
     const charData = node.data as CharacterNodeData;
     if (!charData.characterName) {
-      toast.error(`Node "${charData.label}": no character name set`);
+      toast.error(nodeRunError(charData.label, "nodeRun.noCharacterNameSet"));
       return Promise.reject(new Error("No character name"));
     }
     return runCharacterGeneration(node.id, charData, ctx);
@@ -8567,12 +8961,12 @@ function executeNodeCore(
   if (node.type === "face") {
     const faceData = node.data as FaceNodeData;
     if (!faceData.faceName) {
-      toast.error(`Node "${faceData.label}": no face name set`);
+      toast.error(nodeRunError(faceData.label, "nodeRun.noFaceNameSet"));
       return Promise.reject(new Error("No face name"));
     }
     const sourceImageUrl = faceData.sourceImageUrl || inputs.imageUrl;
     if (!sourceImageUrl) {
-      toast.error(`Node "${faceData.label}": no reference photo uploaded`);
+      toast.error(nodeRunError(faceData.label, "nodeRun.noReferencePhotoUploaded"));
       return Promise.reject(new Error("No reference photo"));
     }
     return runFaceGeneration(node.id, { ...faceData, sourceImageUrl }, ctx);
@@ -8581,7 +8975,7 @@ function executeNodeCore(
   if (node.type === "object") {
     const objData = node.data as ObjectNodeData;
     if (!objData.objectName) {
-      toast.error(`Node "${objData.label}": no object name set`);
+      toast.error(nodeRunError(objData.label, "nodeRun.noObjectNameSet"));
       return Promise.reject(new Error("No object name"));
     }
     // Phase E3/3 — Object Studio auto-attach + seed-prompt context:
@@ -8621,7 +9015,7 @@ function executeNodeCore(
   if (node.type === "creature") {
     const creatureData = node.data as CreatureNodeData;
     if (!creatureData.creatureName) {
-      toast.error(`Node "${creatureData.label}": no creature name set`);
+      toast.error(nodeRunError(creatureData.label, "nodeRun.noCreatureNameSet"));
       return Promise.reject(new Error("No creature name"));
     }
     const seedPromptHint = resolveSeedPromptHint(node, edges, nodes, "creature");
@@ -8637,7 +9031,7 @@ function executeNodeCore(
   if (node.type === "location") {
     const locData = node.data as LocationNodeData;
     if (!locData.locationName) {
-      toast.error(`Node "${locData.label}": no location name set`);
+      toast.error(nodeRunError(locData.label, "nodeRun.noLocationNameSet"));
       return Promise.reject(new Error("No location name"));
     }
     const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, {
@@ -8646,9 +9040,7 @@ function executeNodeCore(
     const augmentedData = cinematographyHints.length > 0
       ? {
           ...locData,
-          description: locData.description
-            ? `${locData.description}. ${cinematographyHints.join(", ")}`
-            : cinematographyHints.join(", "),
+          description: appendPromptHints(locData.description, cinematographyHints),
         }
       : locData;
     return runLocationGeneration(node.id, augmentedData, ctx);
@@ -9169,7 +9561,7 @@ function executeNodeCore(
           executionStatus: "failed",
           errorMessage: err.message || "Reduce failed",
         });
-        guardedToast.error(`Reduce failed: ${err.message}`);
+        guardedToast.error(tx("nodeRun.reduceFailed", { message: err.message }));
         throw err;
       });
   }

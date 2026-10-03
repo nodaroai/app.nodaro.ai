@@ -28,6 +28,7 @@ import { GlassCard } from "../output-cards/shared"
 import { AvatarPicker } from "@/components/heygen/avatar-picker"
 import { VoicePicker } from "@/components/heygen/voice-picker"
 import type { HeygenAvatar, HeygenVoice } from "@/lib/api"
+import { useT } from "@/lib/i18n"
 import { INPUT_CLS } from "./shared"
 
 // ---------------------------------------------------------------------------
@@ -86,6 +87,7 @@ export function AiAvatarInputCard({
   readOnly,
 }: InputCardProps) {
   const data = node.data as Record<string, unknown>
+  const t = useT()
 
   // Determine which sub-controls the app author wants to expose.
   const fields = (data.appInputFields ?? {}) as AppInputFields
@@ -191,7 +193,7 @@ export function AiAvatarInputCard({
       <GlassCard>
         <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
           <User className="size-4 shrink-0" />
-          <span>AI Avatar (no editable fields)</span>
+          <span>{t("present.aiAvatarNoFields")}</span>
         </div>
       </GlassCard>
     )
@@ -204,19 +206,19 @@ export function AiAvatarInputCard({
         {/* ---- Source: avatar picker OR image upload/URL ---- */}
         {showAvatar && (isImageSource ? (
           <div>
-            <SectionLabel>Image</SectionLabel>
+            <SectionLabel>{t("common.image")}</SectionLabel>
             {imageUrl ? (
               <div className="relative w-full overflow-hidden rounded-lg border border-border">
                 <img
                   src={optimizedImageUrl(imageUrl)}
-                  alt="Source"
+                  alt={t("inputcfg.source")}
                   className="w-full max-h-40 object-contain bg-black/20"
                 />
                 {!readOnly && (
                   <button
                     type="button"
-                    aria-label="Remove image"
-                    className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
+                    aria-label={t("present.removeImage")}
+                    className="absolute top-1.5 end-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
                     onClick={handleImageRemove}
                   >
                     <X className="h-3.5 w-3.5" />
@@ -227,11 +229,11 @@ export function AiAvatarInputCard({
               <label className="flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/30 py-3 text-xs text-muted-foreground hover:border-muted-foreground/60 hover:text-foreground transition-colors">
                 {isUploading ? (
                   <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("pipe.uploading")}
                   </>
                 ) : (
                   <>
-                    <Upload className="h-3.5 w-3.5" /> Upload image
+                    <Upload className="h-3.5 w-3.5" /> {t("present.uploadImage")}
                   </>
                 )}
                 <input
@@ -248,14 +250,14 @@ export function AiAvatarInputCard({
               type="text"
               value={imageUrl}
               onChange={handleImageUrlChange}
-              placeholder="https://…"
+              placeholder={t("apps.previewMediaPlaceholder")}
               className={cn(INPUT_CLS, "mt-2")}
-              aria-label="Source image URL"
+              aria-label={t("present.sourceImageUrl")}
             />
           </div>
         ) : (
           <div>
-            <SectionLabel>Avatar</SectionLabel>
+            <SectionLabel>{t("present.avatar")}</SectionLabel>
             <AvatarPicker
               value={avatarId || undefined}
               onSelect={handleAvatarSelect}
@@ -269,7 +271,7 @@ export function AiAvatarInputCard({
         {/* ---- Voice picker (text mode only) ---- */}
         {isTextMode && showVoice && (
           <div>
-            <SectionLabel>Voice</SectionLabel>
+            <SectionLabel>{t("present.voice")}</SectionLabel>
             <VoicePicker
               value={voiceId || undefined}
               onSelect={handleVoiceSelect}
@@ -281,20 +283,20 @@ export function AiAvatarInputCard({
         {/* ---- Script textarea (text mode only) ---- */}
         {isTextMode && showScript && (
           <div>
-            <SectionLabel>Script</SectionLabel>
+            <SectionLabel>{t("present.script")}</SectionLabel>
             <textarea
               value={script}
               onChange={handleScriptChange}
-              placeholder="Enter the script for the avatar to speak…"
+              placeholder={t("present.avatarScriptPlaceholder")}
               rows={4}
               maxLength={5000}
               className={cn(
                 INPUT_CLS,
                 "resize-none max-h-[40vh] overflow-y-auto",
               )}
-              aria-label="Avatar script"
+              aria-label={t("present.avatarScript")}
             />
-            <p className="mt-1 text-right text-[10px] text-muted-foreground">
+            <p className="mt-1 text-end text-[10px] text-muted-foreground">
               {script.length}/5000
             </p>
           </div>

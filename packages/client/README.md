@@ -6,7 +6,7 @@ Typed REST client for the [Nodaro](https://app.nodaro.ai) AI video workflow plat
 npm install @nodaro/sdk
 ```
 
-Docs: [Documentation](https://nodaroai.github.io/app.nodaro.ai/) · [SDK Quickstart](https://nodaroai.github.io/app.nodaro.ai/sdk-quickstart.md) · [SDK Reference](https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md) · [llms.txt](https://nodaroai.github.io/app.nodaro.ai/llms.txt)
+Docs: [Documentation](https://nodaro.ai/docs) · [SDK Quickstart](https://nodaro.ai/docs/developers/sdk#install) · [SDK Reference](https://nodaro.ai/docs/developers/sdk/client) · [llms.txt](https://nodaro.ai/llms.txt)
 
 ## Getting credentials
 
@@ -21,7 +21,7 @@ app.nodaro.ai — third parties use a personal token or the OAuth flow.
 
 **Not using TypeScript?** Everything here is plain REST — generate a Go /
 Rust / Python client from the live [OpenAPI spec](https://app.nodaro.ai/v1/openapi.json)
-([how-to](https://nodaroai.github.io/app.nodaro.ai/api-integration.html)).
+([how-to](https://nodaro.ai/docs/developers/api/openapi)).
 
 ## Quick start (server-side, personal API token)
 
@@ -45,19 +45,20 @@ const exec = await client.workflows.run(workflowId, {
 Building with Claude, Cursor, or another coding agent? Two pieces:
 **the primer** (reusable context for *any* Nodaro project) and an
 **example project brief** (a concrete first app). Paste the primer, then a
-brief — yours or ours.
+brief — yours or ours. How both work, plus ready-made agent skills:
+[Agent skills](https://nodaro.ai/docs/developers/agent-skills#paste-the-sdk-agent-primer).
 
 Primer straight to your clipboard
-([raw file](https://nodaroai.github.io/app.nodaro.ai/sdk-agent-primer.txt)):
+([raw file](https://raw.githubusercontent.com/nodaroai/app.nodaro.ai/main/docs/sdk-agent-primer.txt)):
 
 ```bash
-curl -s https://nodaroai.github.io/app.nodaro.ai/sdk-agent-primer.txt | pbcopy      # macOS
-curl -s https://nodaroai.github.io/app.nodaro.ai/sdk-agent-primer.txt | xclip -sel clip  # Linux
+curl -s https://raw.githubusercontent.com/nodaroai/app.nodaro.ai/main/docs/sdk-agent-primer.txt | pbcopy      # macOS
+curl -s https://raw.githubusercontent.com/nodaroai/app.nodaro.ai/main/docs/sdk-agent-primer.txt | xclip -sel clip  # Linux
 ```
 
 ### The primer — paste into any project
 
-<!-- Keep in sync with docs/sdk-agent-primer.txt (canonical raw copy). -->
+<!-- Must match docs/sdk-agent-primer.txt (the raw copy above) line for line: src/__tests__/developer-docs.test.ts fails otherwise. -->
 
 ````text
 You are building against @nodaro/sdk (npm), the typed client for the Nodaro
@@ -84,8 +85,8 @@ Core pattern (all generation is async; runAndWait submits + polls + resolves):
   // outputs: .imageUrl / .videoUrl / .audioUrl on the resolved object
 
 Models available (full lists with credit costs, as raw markdown):
-  image: https://nodaroai.github.io/app.nodaro.ai/nodes/ai-image/generate-image.md
-  video: https://nodaroai.github.io/app.nodaro.ai/nodes/ai-video/generate-video.md
+  image: https://nodaro.ai/docs/nodes/image/generate-image.md
+  video: https://nodaro.ai/docs/nodes/video/generate-video.md
   (or at runtime: client.nodes.get(type) → data.providers + credits.modelCosts)
 
 Model choice:
@@ -106,15 +107,28 @@ UX rules (generation takes seconds-to-minutes — never block silently):
     For manual loops use client.jobs.getStatus(jobId) (id/status/progress).
   - Let the user cancel: pass { signal } (AbortSignal) in the same options.
 
+Voice / audio surface (client.voices, client.media, client.audio):
+  - Multi-speaker recast (Voice Changer Pro, Cloud-hosted instances):
+      await client.voices.recast({ videoUrl, orderedVoices: ["Rachel", null, "Aria"] })
+    null = that speaker keeps their original voice (positional mapping).
+  - Interactive flow: voices.analyze (detect speakers first) →
+    voices.recast({ output: "stems", analysis }) → voices.exportMix(tracks) —
+    inspect speakers before paying, mix stems before rendering.
+  - Also: voices.change (single-voice), design / remix / dub;
+    client.media.downloadVideo (+downloadVideoProgress SSE) / trimVideo /
+    trimAudio / videoMetadata; client.audio.separate / isolate / applyFx / mix.
+
 Rules:
   - Generations cost credits; catch InsufficientCreditsError (has .required /
     .available). All errors are typed classes exported from @nodaro/sdk.
   - Prefer client.nodes.runAndWait over hand-rolled polling; for manual loops
     use client.jobs.getStatus(id) (lean poll endpoint).
-  - 22 resources on the client (workflows, characters, voices, pipelines, …):
-    full reference https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md
+  - One resource per area on the client (workflows, characters, voices,
+    media, audio, pipelines, …), each listed at
+    https://nodaro.ai/docs/developers/sdk/client.md
+    full reference https://nodaro.ai/docs/developers/sdk.md
   - Node catalog + per-node params:
-    https://nodaroai.github.io/app.nodaro.ai/nodes/ (all pages exist as .md)
+    https://nodaro.ai/docs/nodes.md (every docs page has a .md twin)
 ````
 
 ### Example project brief — "animated postcard"
@@ -142,11 +156,15 @@ server exposes generation, workflow, and app tools:
 https://mcp.nodaro.ai/mcp
 ```
 
-[![Claude.ai](https://img.shields.io/badge/Claude.ai-connect-D97757?logo=claude&logoColor=white)](https://nodaroai.github.io/app.nodaro.ai/mcp/connecting-claude.html)
-[![Cursor](https://img.shields.io/badge/Cursor-connect-111111)](https://nodaroai.github.io/app.nodaro.ai/mcp/connecting-cursor.html)
-[![Cline](https://img.shields.io/badge/Cline-connect-7C3AED)](https://nodaroai.github.io/app.nodaro.ai/mcp/connecting-cline.html)
-[![Continue](https://img.shields.io/badge/Continue-connect-0B7285)](https://nodaroai.github.io/app.nodaro.ai/mcp/connecting-continue.html)
-[![Goose](https://img.shields.io/badge/Goose-connect-1F6FEB)](https://nodaroai.github.io/app.nodaro.ai/mcp/connecting-goose.html)
+[![Claude.ai](https://img.shields.io/badge/Claude.ai-connect-D97757?logo=claude&logoColor=white)](https://nodaro.ai/docs/mcp/connect/claude)
+[![ChatGPT](https://img.shields.io/badge/ChatGPT-connect-10A37F)](https://nodaro.ai/docs/mcp/connect/chatgpt)
+[![Cursor](https://img.shields.io/badge/Cursor-connect-111111)](https://nodaro.ai/docs/mcp/connect/cursor)
+[![VS Code](https://img.shields.io/badge/VS_Code-connect-007ACC)](https://nodaro.ai/docs/mcp/connect/vs-code)
+[![Cline](https://img.shields.io/badge/Cline-connect-7C3AED)](https://nodaro.ai/docs/mcp/connect/cline)
+[![Continue](https://img.shields.io/badge/Continue-connect-0B7285)](https://nodaro.ai/docs/mcp/connect/continue)
+[![Goose](https://img.shields.io/badge/Goose-connect-1F6FEB)](https://nodaro.ai/docs/mcp/connect/goose)
+
+Any other client: [connect your own](https://nodaro.ai/docs/mcp/connect/custom-client).
 
 Claude Code, one line:
 
@@ -154,11 +172,11 @@ Claude Code, one line:
 claude mcp add --transport http nodaro https://mcp.nodaro.ai/mcp
 ```
 
-MCP also ships **[Skills](https://nodaroai.github.io/app.nodaro.ai/mcp/index.html#skills)** —
+MCP also ships **[Skills](https://nodaro.ai/docs/mcp#what-an-assistant-can-do)** —
 zero-install agent playbooks that come with the connection:
-[Film Director](https://nodaroai.github.io/app.nodaro.ai/mcp/film-director.html)
+[Film Director](https://nodaro.ai/docs/mcp/film-director)
 (10-stage script → final-cut workflow, assembled live on your canvas) and
-[Video Director](https://nodaroai.github.io/app.nodaro.ai/mcp/video-director.html)
+[Video Director](https://nodaro.ai/docs/mcp/video-director)
 (one-shot narrated motion-graphics videos).
 
 ## Run AI nodes directly
@@ -226,7 +244,7 @@ const userClient = createClient({
 })
 ```
 
-Full walkthrough: [OAuth flow](https://nodaroai.github.io/app.nodaro.ai/oauth-flow.md).
+Full walkthrough: [OAuth apps](https://nodaro.ai/docs/developers/oauth).
 
 ## Errors
 

@@ -6,6 +6,7 @@
 // graph (step titles, per-token explanations) lives in a tutorial's content.ts.
 
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
+import { tx, type TFunction } from "@/lib/i18n"
 
 /** One reference image feeding a multi-reference node, in `{image:N}` order. */
 export interface TutorialReference {
@@ -54,6 +55,7 @@ export function deriveReferences(
   edges: WorkflowEdge[],
   consumerId: string,
   handleId = "references",
+  t: TFunction = tx,
 ): TutorialReference[] {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const refs: TutorialReference[] = []
@@ -66,7 +68,7 @@ export function deriveReferences(
     refs.push({
       position: refs.length + 1,
       nodeId: node.id,
-      name: str(data.label) ?? `Reference ${refs.length + 1}`,
+      name: str(data.label) ?? t("tut.referenceN", { n: refs.length + 1 }),
       imageUrl: nodeImageUrl(data),
     })
   }
@@ -104,6 +106,7 @@ export function deriveTutorialGraph(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
   consumerType = "generate-image",
+  t: TFunction = tx,
 ): TutorialGraph {
   const consumer = nodes.find((n) => n.type === consumerType)
   if (!consumer) {
@@ -111,7 +114,7 @@ export function deriveTutorialGraph(
   }
   const data = (consumer.data ?? {}) as NodeData
   return {
-    references: deriveReferences(nodes, edges, consumer.id),
+    references: deriveReferences(nodes, edges, consumer.id, undefined, t),
     prompt: str(data.prompt) ?? "",
     resultImageUrl: nodeImageUrl(data),
     modelChips: modelChips(data),

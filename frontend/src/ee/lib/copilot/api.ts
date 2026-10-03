@@ -6,6 +6,8 @@
  * buffers streamed responses.
  */
 import { getAuthHeaders } from "@/lib/api"
+import { tx } from "@/lib/i18n"
+import { COPILOT_KEYS as K } from "./strings"
 import type { CopilotRunMode, CopilotThread, DisplayMessage, CopilotModelTier } from "./types"
 
 /** A non-2xx REST reply, carrying the backend's error code so callers can branch. */
@@ -39,7 +41,7 @@ async function request<T>(path: string, init: { method?: string; body?: Record<s
   }
   if (!res.ok) {
     const err = json.error ?? {}
-    throw new CopilotApiError(res.status, err.code ?? "request_failed", err.message ?? `Request failed (${res.status})`, err)
+    throw new CopilotApiError(res.status, err.code ?? "request_failed", err.message ?? tx(K.requestFailed, { status: res.status }), err)
   }
   return json.data as T
 }

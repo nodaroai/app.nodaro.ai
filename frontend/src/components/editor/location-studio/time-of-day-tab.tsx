@@ -1,4 +1,5 @@
 import { EnvironmentalAssetTab } from "./environmental-asset-tab"
+import { useT } from "@/lib/i18n"
 import type { LocationStudioState } from "./use-location-studio"
 
 /**
@@ -27,12 +28,13 @@ interface TimeOfDayTabProps {
 }
 
 export function TimeOfDayTab({ studio }: TimeOfDayTabProps) {
+  const t = useT()
   return (
     <EnvironmentalAssetTab
       studio={studio}
       bucketName="timeOfDay"
       presets={TIME_OF_DAY_PRESETS}
-      iconLabel="🌅 Time of Day"
+      iconLabel={t("studio.timeOfDayTabTitle")}
     />
   )
 }

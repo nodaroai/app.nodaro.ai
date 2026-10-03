@@ -23,13 +23,13 @@ const ACCEPTS_AUDIO = (t: string) => isValidAudioSeparationConnection("audio", t
 /** 7 fixed output stems — handle id, the node-data field it surfaces, label,
  *  and the vertical offset of its right-side handle. */
 const STEMS = [
-  { id: "vocals", field: "vocalUrl", label: "Vocals", top: "24px" },
-  { id: "instrumental", field: "instrumentalUrl", label: "Instrumental", top: "52px" },
-  { id: "drums", field: "drumsUrl", label: "Drums", top: "80px" },
-  { id: "bass", field: "bassUrl", label: "Bass", top: "108px" },
-  { id: "other", field: "otherUrl", label: "Other", top: "136px" },
-  { id: "guitar", field: "guitarUrl", label: "Guitar", top: "164px" },
-  { id: "piano", field: "pianoUrl", label: "Piano", top: "192px" },
+  { id: "vocals", field: "vocalUrl", label: "Vocals", labelKey: "audiocfg.vocals", top: "24px" },
+  { id: "instrumental", field: "instrumentalUrl", label: "Instrumental", labelKey: "audiocfg.instrumental", top: "52px" },
+  { id: "drums", field: "drumsUrl", label: "Drums", labelKey: "node.stemDrums", top: "80px" },
+  { id: "bass", field: "bassUrl", label: "Bass", labelKey: "node.stemBass", top: "108px" },
+  { id: "other", field: "otherUrl", label: "Other", labelKey: "cat.other", top: "136px" },
+  { id: "guitar", field: "guitarUrl", label: "Guitar", labelKey: "node.stemGuitar", top: "164px" },
+  { id: "piano", field: "pianoUrl", label: "Piano", labelKey: "node.stemPiano", top: "192px" },
 ] as const
 
 /** Which stems a (mode, quality) pair produces — drives handle muting.
@@ -130,7 +130,7 @@ function AudioSeparationNodeComponent({ id, data, selected }: NodeProps) {
 
         {presentStems.map(({ stem, url }) => (
           <div key={stem.id} className="flex flex-col gap-1 px-1">
-            <span className="text-[10px] text-muted-foreground font-medium">{stem.label}</span>
+            <span className="text-[10px] text-muted-foreground font-medium">{t(stem.labelKey)}</span>
             <AudioResultOverlay
               url={url as string}
               label={stem.label}
@@ -162,7 +162,7 @@ function AudioSeparationNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <span className="text-xs text-muted-foreground">
-          Separate · {mode === "stems" ? "Full Stems" : "Vocal/Inst"}
+          {t("node.separate")} · {mode === "stems" ? t("node.fullStems") : t("node.vocalInst")}
         </span>
       </div>
     </BaseNode>

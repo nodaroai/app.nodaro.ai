@@ -3,13 +3,13 @@ import type { LocaleCatalogMap } from "./types.js"
 const map: LocaleCatalogMap = {
   // Mainstream microtrends — most -core / -kei / Y2K stay in English
   "y2k": {
-    description: "Tecnopop do fim dos anos 90 e início dos anos 2000",
+    description: "Tecnologia pop do fim dos anos 90 e início dos anos 2000",
   },
   "cottagecore": {
     description: "Campo pastoral feito à mão",
   },
   "dark-academia": {
-    description: "Estudo erudito do velho mundo e tweed",
+    description: "Erudição do velho mundo e tweed",
   },
   "light-academia": {
     description: "Erudição da Ivy League iluminada pelo sol",
@@ -56,7 +56,7 @@ const map: LocaleCatalogMap = {
     description: "Feminilidade adulta confiante e despretensiosa",
   },
   "angelcore": {
-    description: "Suavidade querubim entre rendas e plumas",
+    description: "Suavidade de querubim entre rendas e plumas",
   },
   "hikecore": {
     description: "Estilo alpinista de dia de trilha",
@@ -101,44 +101,44 @@ const map: LocaleCatalogMap = {
 
   // Mood bundles
   "main-character-energy": {
-    label: "Energia de Personagem Principal",
+    label: "Energia de protagonista",
     description: "Confiança cinematográfica imperturbável",
   },
   "soft-easygoing": {
-    label: "Suave / Despojado",
+    label: "Suave / despojado",
     description: "Calma quente, suave e sem esforço",
   },
   "casual-lived-in": {
-    label: "Casual / Vivido",
+    label: "Casual / vivido",
     description: "Cotidiano gasto e despretensioso",
   },
   "effortless-cool": {
-    label: "Estilo Despretensioso",
+    label: "Estilo despretensioso",
     description: "Charme natural à francesa, sem esforço",
   },
   "retro-90s": {
-    label: "Retrô Anos 90",
+    label: "Retrô anos 90",
     description: "Anos 90 entre grunge e shopping",
   },
 
   // Additional microtrends — names kept as English jargon
   "weirdcore": {
-    description: "Ansiedade surreal de espaço liminar, glitch e nostalgia",
+    description: "Inquietação surreal de espaço liminar",
   },
   "dreamcore": {
-    description: "Surrealismo onírico em soft focus, pastel candy",
+    description: "Serenidade onírica, suave e surreal",
   },
   "traumacore": {
-    description: "Infância nostálgica distorcida, edições melancólicas",
+    description: "Colagem distorcida e nostálgica da infância",
   },
   "baddie": {
-    description: "Estética confiante e na moda, sobrancelhas marcadas e argolas",
+    description: "Estética confiante, produzida e antenada nas tendências",
   },
   "alt-girl": {
-    description: "Mistura alt-subcultura, cabelo tingido, correntes e maquiagem borrada",
+    description: "Alt da internet entre o grunge e o emo",
   },
   "blokecore": {
-    description: "Camisa de futebol + Adidas + casual masculino dadcore",
+    description: "Moda masculina dadcore com camisa de futebol",
   },
   "y2k-rave": {
     description: "Decora japonês club-kid, neon-rave fluorescente",

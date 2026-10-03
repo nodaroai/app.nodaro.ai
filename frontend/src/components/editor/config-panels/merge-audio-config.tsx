@@ -23,7 +23,7 @@ function TRACK_ROLE_OPTIONS() {
   return [
   { value: "dialogue", label: tx("audiocfg.mergeRoleDialogue"), icon: Mic, color: "text-pink-400 bg-pink-500/15" },
   { value: "narration", label: tx("audiocfg.mergeRoleNarration"), icon: Mic, color: "text-purple-400 bg-purple-500/15" },
-  { value: "background", label: tx("audiocfg.mergeRoleBackground"), icon: Music, color: "text-blue-400 bg-blue-500/15" },
+  { value: "background", label: tx("audiocfg.mergeRoleBackgroundAudio"), icon: Music, color: "text-blue-400 bg-blue-500/15" },
   { value: "effect", label: tx("field.effect"), icon: AudioWaveform, color: "text-amber-400 bg-amber-500/15" },
 ] as const
 }
@@ -190,7 +190,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="background">{t("audiocfg.mergeRoleBackground")}</SelectItem>
+                        <SelectItem value="background">{t("audiocfg.mergeRoleBackgroundAudio")}</SelectItem>
                         <SelectItem value="narration">{t("audiocfg.mergeRoleNarration")}</SelectItem>
                         <SelectItem value="effect">{t("field.effect")}</SelectItem>
                       </SelectContent>

@@ -53,12 +53,12 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | qwen-edit | Qwen Edit | Targeted image editing | Targeted edits |
 | seedream-edit | Seedream Edit | Photorealistic image editing | Quality options (basic/high) |
 | seedream-5-lite-i2i | Seedream 5 Lite | Latest Seedream image-to-image | Quality options (basic/high) |
-| seedream-5-pro-i2i | Seedream 5 Pro | Flagship Seedream image-to-image, multi-reference instruction edits. **3 credits** at basic (1K) / **6 credits** at high (2K). | Quality options (basic/high) |
+| seedream-5-pro-i2i | Seedream 5 Pro | Flagship Seedream image-to-image, multi-reference instruction edits. **19 credits** at basic (1K) / **60 credits** at high (2K). | Quality options (basic/high) |
 | flux-kontext | Flux Kontext | Context-aware editing via Kontext | Context-aware transforms |
 | flux-kontext-max | Flux Kontext Max | Highest quality Kontext editing | Premium context-aware transforms |
 | kontext-multi | Kontext Multi (Open) | Multi-image Flux Kontext Pro via Replicate — no safety filter | Up to 2 reference images. 30 credits |
-| flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — `safety_tolerance` pinned to 5 | Up to 4 reference images. Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP); per-MP pricing — ~4 credits at 2 MP with the primary image. |
-| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images | Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP). **Per-megapixel pricing**: ~10 credits at 2 MP with the primary image (1 ref), scaling with resolution and extra references. |
+| flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — `safety_tolerance` pinned to 5 | Up to 4 reference images. Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP); per-MP pricing — ~38 credits at 2 MP with the primary image. |
+| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images | Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP). **Per-megapixel pricing**: ~100 credits at 2 MP with the primary image (1 ref), scaling with resolution and extra references. |
 
 ## Best Practices
 

@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Play, Pause } from "lucide-react"
+import { useT } from "@/lib/i18n"
 import "./tutorial-audio.css"
 
 /** m:ss, or null while the browser has not read the metadata yet. */
@@ -17,6 +18,7 @@ function clock(seconds: number | null): string | null {
 }
 
 export function TutorialAudio({ src, label }: { src: string; label?: string }) {
+  const t = useT()
   const audioRef = useRef<HTMLAudioElement>(null)
   const [playing, setPlaying] = useState(false)
   const [duration, setDuration] = useState<number | null>(null)
@@ -57,7 +59,7 @@ export function TutorialAudio({ src, label }: { src: string; label?: string }) {
         type="button"
         className="ta-button"
         onClick={toggle}
-        aria-label={playing ? `Pause ${label ?? "audio"}` : `Play ${label ?? "audio"}`}
+        aria-label={t(playing ? "tut.pauseLabel" : "tut.playLabel", { label: label ?? t("tut.audioNoun") })}
       >
         {playing ? <Pause className="ta-icon" /> : <Play className="ta-icon" />}
       </button>

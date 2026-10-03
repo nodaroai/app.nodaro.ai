@@ -1,5 +1,180 @@
 # @nodaro/prompts
 
+## 1.27.1
+
+### Patch Changes
+
+- 18e57da: Sharper character picker photos. Every Person and Styling picture that was narrower than 250px is now twice its size (upscaled). A caption baked into the picture is cropped away, and the original transparency (rounded corners, soft edges) is kept. They stay sharp on picker cards and when enlarged.
+- Updated dependencies [ed74c76]
+- Updated dependencies [b06881d]
+  - @nodaro/shared@3.14.1
+
+## 1.27.0
+
+### Minor Changes
+
+- 029f594: Picker options now come with their pictures. Every option that has a picture carries an absolute `imageUrl` in `GET /v1/picker-catalogs/:nodeType`, `GET /v1/catalogs` and the MCP `get_picker_catalog` tool: the photos of the Person, Styling, Held Prop, Material and Animal pickers and the art of the music and voice pickers, served by the installation itself on its public address, plus — on Nodaro Cloud only — a still of each look picker's rendered preview from the Nodaro CDN. An option without a picture has no `imageUrl`. Person and Styling also return `sections`: the topics their settings are grouped under, in order, each with its round picture. The directory (`GET /v1/picker-catalogs`) adds `imageCount` per picker.
+
+  - `@nodaro/shared`: `ProjectedCatalogOption.imageUrl`, `ProjectedCatalog.sections`, `ProjectedCatalogSection`.
+  - `@nodaro/prompts`: the picture maps move here (`CHARACTER_ART_FILES`, `SOUND_ART`, `SOUND_ART_FILES`, `LOOK_PREVIEW_SETS`) with their path helpers, `STYLING_DIMENSION_SECTIONS`, and an `images` option on `projectPickerCatalog`, `projectAllCatalogs` and `summarizePickerCatalogs` (`imageCount` on `PickerCatalogSummary`).
+  - `@nodaro/sdk`: `PickerOption.imageUrl`, `PickerCatalog.sections` (`PickerCatalogSection`), `PickerCatalogSummary.imageCount`; the same on the `catalogs` types. `client.catalogs.list()` now returns `CatalogsListResponse` — `{ curated, packs, version, data? }` — which is what the server has always sent: `data` is absent when the deployment registered no catalog packs.
+  - `@nodaro/cli`: `nodaro pickers list` shows how many options of each picker have a picture.
+
+### Patch Changes
+
+- fe35884: Transitions `sun-glare`, `lens-crack` and `lightning-flash` get new descriptions. The glare floods the lens from one corner until the picture washes out, then clears to the second shot; the crack spreads into a web of fracture lines on the lens while everything behind it stays whole; the lightning bolt's flash turns the whole picture white and the second shot appears as the white fades. The camera and framing stay put in all three. No other row changes.
+- 6bfd179: Transitions `building-explosion` and `vehicle-explosion` get new descriptions. The largest structure in the frame (or a vehicle in it) explodes, and its dust (or flame, then smoke) fills the whole picture while the camera and framing stay put; the second shot appears only as it clears. No other row changes.
+- 9f90e8c: Transitions `zoom-into-book`, `pull-out-reveal`, `zoom-into-mouth`, `walk-through-door` and `mask-transition` get new descriptions. Each names one steady camera path (no turning, tilting or rolling), says where the shot ends (inside or in the second shot, fully resolved, with nothing of the portal left) and pins the mechanism: the camera heads for the book's page from the start; the whole first shot shrinks into a framed picture inside the second; the mouth's interior stays a plain darkness; the change of place happens at the doorway itself; a dark foreground shape passes close to the lens and is gone once the second shot appears. No other row changes.
+- 79609a9: Transition `shockwave` gets a new description: a flash at the centre of the frame bursts into a sharp, bright ring that races past every edge in a moment, trailing motion blur and warping the picture as it goes, with the second shot only inside the ring and the first only outside it. The camera and framing stay put. No other row changes.
+- Updated dependencies [029f594]
+  - @nodaro/shared@3.14.0
+
+## 1.26.1
+
+### Patch Changes
+
+- 545293b: Transitions `sand-storm`, `paint-splash`, `aurora-sweep` and `vortex-swirl` get new descriptions. The three element rows cover the whole picture from the front with the material (sand, paint, aurora light) while the camera and framing stay put, then clear to reveal the second shot, ending with none of the material left. In `vortex-swirl` only the first subject twists into a narrow column at its place in the frame, and the column unwinds into the second subject while the frame stays level. No other row changes.
+
+## 1.26.0
+
+### Minor Changes
+
+- e379928: Picker catalogs: add Bare Face makeup, At-Home Casual outfit, Bathroom and Car Interior settings, and Natural skin texture.
+
+### Patch Changes
+
+- 0e7624c: Transitions `dissolve-to-mist`, `water-splash`, `pixelate-reform` and `polygon-shatter` get new descriptions: the first subject itself becomes the material (mist, water, square blocks, flat-shaded chunks) at its place in the frame, the camera and framing stay put, and the material reforms into the second subject at the same place as the second shot appears behind it. The old bodies let the effect happen around the subject or turned the change of setting into a crossfade. No other row changes.
+- Updated dependencies [161a68a]
+- Updated dependencies [02a08ae]
+- Updated dependencies [e379928]
+- Updated dependencies [7872bd7]
+  - @nodaro/shared@3.13.0
+
+## 1.25.1
+
+### Patch Changes
+
+- 9858cb8: Transition `rewind` gets a new description: reverse motion: the actions just seen are undone exactly as they happened, in reverse order and at the same pace, the subject retracing each step to where it began, ending on the end frame. The old text's water, debris and VHS imagery leaked into takes as invented props. It stays a timed transition (not a cut).
+- Updated dependencies [e9fe83a]
+  - @nodaro/shared@3.12.1
+
+## 1.25.0
+
+### Minor Changes
+
+- 6caa3f2: Camera Motion picker: every option now sends its lab-approved wording.
+
+  The remaining 19 `camera-motions` options take the injections approved in the
+  Camera Motion Lab — each tested on Seedance 2.5 from a base frame built for its
+  family: static, handheld, steadicam, handheld vlog, gentle drift, parallax,
+  dutch angle, full 360 spin, Ronin glide, serpentine track, POV walk, aerial,
+  helicopter, fly over, POV, rack focus, screen tap, phone flip and over the
+  shoulder. The texture moves (handheld, steadicam, vlog, drift) carry an
+  explicit hold-position clause, the transitions describe only what the frame
+  does, and POV holds a walking pace. All 64 buildable options now send approved
+  wording; `auto`, `boom-up` and `boom-down` are unchanged (never built).
+
+  The compact terms of `screen-tap` and `phone-flip` no longer name a physical
+  trigger ("finger-tap", "phone"): the model drew one into the scene.
+
+- e3bd84c: Transition wording round 2.
+
+  - `aging` and `zoom-into-mouth` have new descriptions. Aging now reads `the subject visibly ages forward - fine lines deepen into wrinkles, hair greys to silver, posture settles - while the framing stays unchanged`; zoom into mouth no longer mentions the throat (`… and the camera passes through into the new scene …`).
+  - A cut (every picked transition `instant`) with position `full` no longer adds "the transition spans the entire clip" — a single-frame cut spans nothing. `start` / `middle` / `end` on a cut, and every position on a non-cut, are unchanged.
+  - `composeTransitionHintFromConnections` takes an optional sixth argument, `{ scope: "shot" }`, for a hint folded into one shot's time window of a multi-shot prompt: the position clause then says "of this shot" instead of "of the clip" (`the transition occurs in the middle of this shot`). Without it the wording is unchanged. New exported types `TransitionHintScope` and `TransitionHintOptions`.
+
+### Patch Changes
+
+- ae2594b: Transition `freeze-frame-jump` gets a new description: all motion stops mid-action and the picture holds still for a beat; only then does it jump to the same view hours or days later, everything in new positions, and motion resumes. It stays a timed transition (not a cut), so its duration and intensity levers are unchanged.
+- 91bf43d: Transition timing wording.
+
+  - Intensity `natural` on a transition now reads `with natural timing` (was `with natural unhurried timing`). Character FX keeps its own `with natural unhurried timing`. A cut still drops the intensity clause.
+  - With `{ scope: "shot" }`, position `full` on a transition that is not a cut reads `the transition spans this entire shot` instead of `the transition spans the entire clip`. Without the option the wording is unchanged, and a cut with `full` still adds no position clause.
+
+## 1.24.0
+
+### Minor Changes
+
+- d0b5ee5: Transitions in a video prompt now carry their full description. Every picked transition renders as `<term> (<hint body>)` — e.g. `whip pan (the camera whips sideways at high speed, …)` — in both hint modes and on both paths: `composeTransitionHintFromConnections` (the canvas Transition node, Studio's transition clauses) and the direction registry's `transition` fold used by `composeVideoPromptText` (via the new exported `renderTransitionBases`). The term alone was not enough for video models to perform the transition. A leading `"<label>:"` heading in the hint is dropped so the term is not said twice, and a comma-separated item that only restates the term is removed (`none` no longer says "hard cut" three times). Position, duration and intensity still follow the parentheses.
+
+  Cuts now read as true hard cuts. When every picked transition is instant (`none`, `snap-to-black`, `match-cut`, `smash-cut`, `seamless-match`, `jump-cut`, `jump-match`, `action-relay`), the first parentheses end with the new `INSTANT_CUT_CLAUSE` ("an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend"), once. The intensity clause is now dropped for an all-instant pick, like duration: it describes a transition's timing, and "with natural unhurried timing" on a match cut made video models render a dissolve. A mixed pick (a cut plus a non-cut) gets no anti-blend clause and keeps its levers.
+
+## 1.23.0
+
+### Minor Changes
+
+- 0ea567d: Transitions: instant (cut) rows take no duration.
+
+  `Transition` gains an optional `instant?: boolean`, set on the eight rows whose mechanism is a cut — `none` (hard cut), `snap-to-black`, `match-cut`, `smash-cut`, `seamless-match` (invisible cut), `jump-cut`, `jump-match` (match cut on a jump) and `action-relay` (match cut on action). New export `isInstantTransition(id | ids)` — true when the id (or, for a multi-pick, EVERY picked id) is instant; unknown / `auto` / empty are false.
+
+  `composeTransitionHintFromConnections` now drops the duration clause ("lasting approximately 1 second", including `instant`'s "occurring instantaneously") when every picked transition is instant: a duration on a cut made video models render a dissolve. Position and intensity clauses still apply. A mixed pick (a cut plus a non-cut) keeps its duration. Consumers (the canvas transition picker, Studio) can read `isInstantTransition` to hide the duration lever for these rows.
+
+  `PickerOption` gains `instant?: true`, carried on the transition picker catalog's cut rows (`getPickerCatalog("transition").options`), so a client that reads only the wire catalog (`/v1/picker-catalogs/transition`) can hide the Duration lever for cuts. The field is absent on every other row and catalog; a row a catalog pack adds carries it only when the pack's own option does.
+
+## 1.22.0
+
+### Minor Changes
+
+- a48b462: `edit-plan` (podcast editing) registers in `NODE_PROMPT_FIELDS` with its
+  `instructions` field as the affix-capable prompt, so `promptPrefix` /
+  `promptSuffix` wrap the editing instructions across every prompt surface.
+  Additive.
+- d4b3145: New Generate Video factory preset `generate-video/edit-video` (group "Video Editing"): Seedance 2.5 with Aspect ratio `adaptive` and Auto duration (`-1`) — the shape the provider requires to edit a wired reference clip — shipping only pre & post text (`edit {video:1} as follows:` + a keep-everything-else-unchanged tail), so the user's own sentence is the whole prompt.
+- 6ad3d61: Instagram scraper node: shared vocabulary (`instagram-scrape.ts` — modes, tiered credit ids reusing the analysis multiples, featured text/image/video outputs, target splitter, `instagramScrapeCreditIdFromNode`), the shared scraper handle-typing branch now covers `instagram-scrape`, and `@nodaro/prompts` adds `POST_CONTENT_ANALYSIS_SYSTEM_PROMPT` (the organic-content twin of the ad-analyst prompt, same output shape) so scraper nodes can run a content-analyst pass.
+- 74e4373: Seedance video EDIT contract for the Video to Video node. Seedance has no video-to-video endpoint — it edits a video handed to it as a _reference_ when the prompt reads as an edit instruction — so every surface dispatches that lane as a text-to-video request in edit shape, with the source clip as reference video 1.
+
+  `@nodaro/shared` adds:
+
+  - `SEEDANCE_VIDEO_EDIT_PROVIDERS` + `isSeedanceVideoEditProvider(provider)` — the models that behave this way (`seedance-2-5` today), and the type `SeedanceVideoEditProvider`.
+  - `VIDEO_TO_VIDEO_NODE_PROVIDERS` + `VideoToVideoNodeProvider` — every model the Video to Video NODE offers, i.e. `VIDEO_TO_VIDEO_PROVIDERS` plus the edit providers. `VIDEO_TO_VIDEO_PROVIDERS` (the `/v1/video-to-video` route enum) is deliberately UNCHANGED: that endpoint cannot serve these models, so a client must keep validating route requests against it.
+  - `SEEDANCE_VIDEO_EDIT_SHAPE` — the `{ aspectRatio: "adaptive", duration: -1 }` pair the edit request sends up front, so the output keeps the source clip's own ratio and length.
+  - `seedanceVideoEditCreditId(provider, resolution?)` — the credit identifier that lane reserves under (the reference-video ladder at the model's longest clip, settled down to the delivered length). One builder, so a quote can never disagree with the reservation.
+
+  `@nodaro/prompts` adds:
+
+  - `SEEDANCE_VIDEO_EDIT_PREFIX` — the `edit {video:1} as follows:\n` instruction, written with the editor reference token so it resolves through the normal reference resolver.
+  - `buildSeedanceVideoEditPrompt(prompt)` — frames a prompt as an edit of the source clip. Idempotent: a prompt that already opens with the instruction (either token spelling) is returned unchanged.
+
+  All additive — no existing export changes shape or behaviour.
+
+### Patch Changes
+
+- d1c71f3: Apply catalog exclusions to auxiliary dimensions and keep curated defaults within the offered choices.
+- Updated dependencies [e37fe27]
+- Updated dependencies [81be5f2]
+- Updated dependencies [a3e000a]
+- Updated dependencies [65b4cdd]
+- Updated dependencies [f75ebfe]
+- Updated dependencies [00ac720]
+- Updated dependencies [2263cf6]
+- Updated dependencies [a48b462]
+- Updated dependencies [dcaaa20]
+- Updated dependencies [a7774fc]
+- Updated dependencies [2b32c90]
+- Updated dependencies [f86ad38]
+- Updated dependencies [a49c7c6]
+- Updated dependencies [6ad3d61]
+- Updated dependencies [1a89eff]
+- Updated dependencies [6a69e7d]
+- Updated dependencies [368e95a]
+- Updated dependencies [c79489e]
+- Updated dependencies [a976e32]
+- Updated dependencies [1126801]
+- Updated dependencies [7f5159d]
+- Updated dependencies [9e25b67]
+- Updated dependencies [ccb8a93]
+- Updated dependencies [5b9f5ed]
+- Updated dependencies [a436fab]
+- Updated dependencies [8efa462]
+- Updated dependencies [5c672cb]
+- Updated dependencies [a610640]
+- Updated dependencies [8e97188]
+- Updated dependencies [ccb8a93]
+- Updated dependencies [74e4373]
+- Updated dependencies [d4b3145]
+- Updated dependencies [1c8b7de]
+  - @nodaro/shared@3.12.0
+
 ## 1.21.0
 
 ### Minor Changes

@@ -5,14 +5,16 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { ListTree, FileText, Braces, Variable } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { TextItemsPreview, textItems } from "./text-items-preview"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import { VARIABLES_HANDLE_ID } from "@nodaro/shared"
 import type { SelectorNodeData } from "@/types/nodes"
 import { isValidSelectorConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { isVisualPickerType } from "@/lib/parameter-picker-types"
+import { useT } from "@/lib/i18n"
 
 /** Selector's `in` mirrors the list-consumer contract used by sort/filter/
  *  deduplicate — only list/json producers are accepted. `variables` mirrors
@@ -22,6 +24,7 @@ const ACCEPTS_IN        = (t: string) => isValidSelectorConnection("in",        
 const ACCEPTS_VARIABLES = (t: string) => isValidSelectorConnection("variables", t, isVisualPickerType)
 
 function SelectorNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SelectorNodeData
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -35,6 +38,8 @@ function SelectorNodeComponent({ id, data, selected }: NodeProps) {
   const hasResult =
     status === "completed" &&
     (nodeData.pickedResults !== undefined || nodeData.restResults !== undefined)
+  // The picked channel, read the way every downstream extractor reads it.
+  const picked = textItems(nodeData.__pickedResults ?? nodeData.pickedResults)
 
   return (
     <div className="relative" style={{ maxWidth: "220px" }}>
@@ -65,19 +70,21 @@ function SelectorNodeComponent({ id, data, selected }: NodeProps) {
         ]}
       >
         <div className="flex flex-col gap-1">
-          {hasResult ? (
+          {picked.length > 0 ? (
+            <TextItemsPreview items={picked} summary={`${pickedTotal} picked · ${restTotal} rest · Mode: ${mode}`} />
+          ) : hasResult ? (
             <div className="w-full rounded-md bg-muted/30 p-2">
               <p className="text-xs text-foreground/80">
-                {pickedTotal} picked · {restTotal} rest
+                {t("cfgext.selPickedRest", { picked: pickedTotal, rest: restTotal })}
               </p>
               <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                Mode: {mode}
+                {t("node.modeValue", { mode })}
               </span>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
               <FileText className="w-5 h-5" />
-              <span className="text-[10px] mt-0.5">Mode: {mode}</span>
+              <span className="text-[10px] mt-0.5">{t("node.modeValue", { mode })}</span>
             </div>
           )}
         </div>

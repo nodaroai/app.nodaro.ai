@@ -5,6 +5,7 @@ import { useState } from "react"
 import { ArrowUp, Check, X } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { UpdateInfo } from "@/hooks/use-update-check"
+import { useT } from "@/lib/i18n"
 
 /**
  * The release dialog behind the sidebar's version indicator — founder design
@@ -107,6 +108,7 @@ export function UpdateDialog({
   readonly mode?: "upgrade" | "whats-new" | "current"
 }) {
   const [backedUp, setBackedUp] = useState(false)
+  const t = useT()
   if (!surfacePlatformLinks() || !info.latest) return null
   const latest = info.latest
   const upgrade = mode === "upgrade"
@@ -130,29 +132,29 @@ export function UpdateDialog({
           <div className="min-w-0 flex-1">
             <DialogTitle className="text-xl font-bold tracking-tight">
               {upgrade
-                ? `Upgrade to ${latest.version}`
+                ? t("nav.upgradeTo", { version: latest.version })
                 : mode === "current"
-                  ? `What's in ${latest.version}`
-                  : `What's new in ${latest.version}`}
+                  ? t("nav.whatsIn", { version: latest.version })
+                  : t("nav.whatsNewIn", { version: latest.version })}
             </DialogTitle>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {upgrade
-                ? `You are running v${V(info.current)} · two steps, about five minutes.`
+                ? t("nav.runningTwoSteps", { current: V(info.current) })
                 : mode === "current"
                   ? V(info.current) === V(latest.version)
-                    ? "You are on the latest release — nothing to do."
-                    : `You are running v${V(info.current)} · newest release is ${latest.version}.`
-                  : "Just shipped to nodaro.ai — already live for you."}
+                    ? t("nav.onLatestRelease")
+                    : t("nav.runningNewestIs", { current: V(info.current), latest: latest.version })
+                  : t("nav.justShipped")}
               {isMajor && (
                 <span className="mt-1 block font-medium text-red-500">
-                  This is a major release — read the notes before upgrading.
+                  {t("nav.majorRelease")}
                 </span>
               )}
             </p>
           </div>
           <button
             type="button"
-            aria-label="Close"
+            aria-label={t("common.close")}
             onClick={() => onOpenChange(false)}
             className="flex-none text-muted-foreground transition-colors hover:text-foreground"
           >
@@ -162,11 +164,11 @@ export function UpdateDialog({
 
         <div className={upgrade ? "grid sm:grid-cols-[1fr_1.2fr]" : ""}>
           {/* Changes */}
-          <div className={upgrade ? "border-b px-7 py-5 sm:border-b-0 sm:border-r" : "px-7 py-5"}>
+          <div className={upgrade ? "border-b px-7 py-5 sm:border-b-0 sm:border-e" : "px-7 py-5"}>
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Changes
+              {t("nav.changes")}
             </p>
-            <div className="mt-1 max-h-72 overflow-y-auto pr-1">
+            <div className="mt-1 max-h-72 overflow-y-auto pe-1">
               <NotesLines text={latest.highlights} />
             </div>
             <div className="mt-5 grid gap-2 border-t pt-4 text-sm">
@@ -176,7 +178,7 @@ export function UpdateDialog({
                 rel="noreferrer"
                 className="text-[#ff0073] hover:underline"
               >
-                Release {latest.version} on GitHub ↗
+                {t("nav.releaseOnGithub", { version: latest.version })}
               </a>
               {compareUrl && (
                 <a
@@ -185,7 +187,7 @@ export function UpdateDialog({
                   rel="noreferrer"
                   className="text-[#ff0073] hover:underline"
                 >
-                  Compare v{V(info.current)} → v{V(latest.version)} ↗
+                  {t("nav.compareVersions", { current: V(info.current), latest: V(latest.version) })}
                 </a>
               )}
             </div>
@@ -194,10 +196,9 @@ export function UpdateDialog({
           {/* Steps — upgrade mode only */}
           {upgrade && (
             <div className="grid content-start gap-3 bg-muted/30 px-6 py-5">
-              <StepCard n={1} title="Back up your data" accent done={backedUp}>
+              <StepCard n={1} title={t("nav.backUpYourData")} accent done={backedUp}>
                 <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                  Migrations are forward-only — that backup is your only way
-                  back to v{V(info.current)}.
+                  {t("nav.migrationsForwardOnly", { current: V(info.current) })}
                 </p>
                 <a
                   href={GUIDE_URL}
@@ -205,24 +206,24 @@ export function UpdateDialog({
                   rel="noreferrer"
                   className="mt-2 inline-block text-sm text-[#ff0073] hover:underline"
                 >
-                  Backup &amp; restore guide →
+                  {t("nav.backupGuide")}
                 </a>
               </StepCard>
 
-              <StepCard n={2} title="Pull and restart">
+              <StepCard n={2} title={t("nav.pullAndRestart")}>
                 <pre className="mt-2.5 overflow-x-auto rounded-lg border bg-muted p-3 font-mono text-[12px] leading-relaxed">
                   {"docker compose -f docker-compose.community.yml pull nodaro\ndocker compose -f docker-compose.community.yml up -d nodaro"}
                 </pre>
               </StepCard>
 
-              <label className="flex cursor-pointer items-center gap-2.5 pl-1 text-sm text-muted-foreground">
+              <label className="flex cursor-pointer items-center gap-2.5 ps-1 text-sm text-muted-foreground">
                 <input
                   type="checkbox"
                   checked={backedUp}
                   onChange={(e) => setBackedUp(e.target.checked)}
                   className="h-4 w-4 accent-[#ff0073]"
                 />
-                I have a backup from today
+                {t("nav.haveBackupToday")}
               </label>
             </div>
           )}
@@ -235,14 +236,14 @@ export function UpdateDialog({
             onClick={() => onOpenChange(false)}
             className="text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
           >
-            {upgrade ? "Later" : "Close"}
+            {upgrade ? t("nav.later") : t("common.close")}
           </button>
           <button
             type="button"
             onClick={() => window.open(latest.url, "_blank", "noopener")}
             className="rounded-full bg-[#ff0073] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#e0005f]"
           >
-            Full release notes
+            {t("nav.fullReleaseNotes")}
           </button>
         </div>
       </DialogContent>

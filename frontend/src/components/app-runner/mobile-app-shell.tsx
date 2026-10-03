@@ -27,6 +27,7 @@ import {
 import { createClient } from "@/lib/supabase"
 import { getActiveWorkspaceId } from "@/lib/workspace-context"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
 import { isVideoUrl } from "@/lib/media-type"
 import { optimizedImageUrl } from "@/lib/image"
 import type { WorkflowNode, PresentationDisplay } from "@/types/nodes"
@@ -60,6 +61,7 @@ import {
   CompareView,
   ChatView,
 } from "@/components/presentation/views"
+import { formatDate } from "@/lib/i18n/format"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -93,6 +95,7 @@ export function MobileAppShell({
   const { signOut } = useAuth()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const t = useT()
 
   // ---- Stores ----
   const presNodes = usePresentationStore((s) => s.nodes)
@@ -560,7 +563,7 @@ export function MobileAppShell({
           .insert({ user_id: user.id, name: REMIX_PROJECT_NAME, workspace_id: getActiveWorkspaceId() })
           .select("id")
           .single()
-        if (projErr || !newProject) throw new Error("Failed to create project")
+        if (projErr || !newProject) throw new Error(tx("runner.failedCreateProject"))
         projectId = newProject.id
       }
 
@@ -599,10 +602,10 @@ export function MobileAppShell({
         .select("id")
         .single()
 
-      if (wfErr || !wf) throw new Error("Failed to create workflow")
+      if (wfErr || !wf) throw new Error(tx("runner.failedCreateWorkflow"))
       window.open(`/projects/${projectId}/workflows/${wf.id}`, "_blank")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to remix app")
+      toast.error(err instanceof Error ? err.message : tx("runner.failedRemixApp"))
     } finally {
       setIsRemixing(false)
     }
@@ -726,7 +729,7 @@ export function MobileAppShell({
           key={node.id}
           type="button"
           onClick={() => setConfigNode(node)}
-          className="w-full text-left rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer overflow-hidden"
+          className="w-full text-start rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer overflow-hidden"
         >
           {resultData.url && mediaType === "image" && (
             <img src={optimizedImageUrl(resultData.url)} alt={label} className="w-full h-32 object-cover" />
@@ -736,7 +739,7 @@ export function MobileAppShell({
           )}
           <div className="p-3">
             <p className="text-sm font-medium text-foreground">{label}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Click to edit settings</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{t("present.clickToEditSettings")}</p>
           </div>
         </button>
       )
@@ -814,7 +817,7 @@ export function MobileAppShell({
         fieldBadges={fieldBadges}
       />
     )
-  }, [getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia, combinedProgress, settings.cardMeta, fieldBadgesByNode, settings.outputDisplayModes, getListResults])
+  }, [getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia, combinedProgress, settings.cardMeta, fieldBadgesByNode, settings.outputDisplayModes, getListResults, t])
 
   // ---- Item-based output renderer (mirrors PresentationView renderOutputItem) ----
   const renderOutputItem = useCallback(
@@ -946,7 +949,7 @@ export function MobileAppShell({
         {runSlots.isLoadingRun ? (
           <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
             <Loader2 className="h-8 w-8 animate-spin opacity-40" />
-            <p className="mt-3 text-sm">Loading run...</p>
+            <p className="mt-3 text-sm">{t("runner.loadingRun")}</p>
           </div>
         ) : isViewOverride ? (
           // View mode override: render the full view component
@@ -980,7 +983,7 @@ export function MobileAppShell({
             {orderedInputNodes.length === 0 && !useItemsRendering ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Play className="h-8 w-8 mb-3 opacity-40" />
-                <p className="text-sm">This app runs automatically</p>
+                <p className="text-sm">{t("runner.runsAutomatically")}</p>
               </div>
             ) : useItemsRendering ? (
               inputItems!.map((item) => {
@@ -1015,7 +1018,7 @@ export function MobileAppShell({
                 onClick={cancel}
               >
                 <Square className="h-3.5 w-3.5 fill-current" />
-                Stop
+                {t("common.stop")}
               </button>
             )}
             {presExecutionStatus === "idle" && !isRunning ? (
@@ -1023,26 +1026,26 @@ export function MobileAppShell({
                 {allInputsFilled ? (
                   <>
                     <Play className="h-8 w-8 mb-3 opacity-40" />
-                    <p className="text-sm">Inputs are ready</p>
+                    <p className="text-sm">{t("runner.inputsReady")}</p>
                     <button
                       type="button"
                       className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                       onClick={handleRunClick}
                     >
                       <Play className="h-3.5 w-3.5" />
-                      Run{costLabel}
+                      {t("present.run")}{costLabel}
                     </button>
                   </>
                 ) : (
                   <>
                     <PenLine className="h-8 w-8 mb-3 opacity-40" />
-                    <p className="text-sm">Fill in the inputs first</p>
+                    <p className="text-sm">{t("runner.fillInputsFirst")}</p>
                     <button
                       type="button"
                       className="mt-3 text-xs text-primary hover:underline"
                       onClick={() => setActiveTab("inputs")}
                     >
-                      Go to Inputs
+                      {t("runner.goToInputs")}
                     </button>
                   </>
                 )}
@@ -1069,12 +1072,12 @@ export function MobileAppShell({
                   onChange={(e) => runSlots.setSelectedVersion(e.target.value ? Number(e.target.value) : null)}
                   className="w-full h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
                 >
-                  <option value="">v{runSlots.latestVersion} (latest)</option>
+                  <option value="">{t("runner.versionLatest", { n: runSlots.latestVersion })}</option>
                   {versions
                     .filter((v) => v.version !== runSlots.latestVersion)
                     .map((v) => (
                       <option key={v.id} value={v.version}>
-                        v{v.version} - {new Date(v.createdAt).toLocaleDateString()}
+                        v{v.version} - {formatDate(v.createdAt)}
                       </option>
                     ))}
                 </select>
@@ -1114,7 +1117,7 @@ export function MobileAppShell({
           onRun={handleRunClick}
           onCancel={cancel}
           onNewRun={user ? () => { runSlots.handleHeaderAction(); setActiveTab("inputs") } : undefined}
-          newRunLabel={runSlots.newRunLabel}
+          newRunAction={runSlots.newRunAction}
           onGetCredits={() => setShowGetCreditsModal(true)}
           inputsReadOnly={inputsReadOnly}
           hidden={activeTab !== "inputs"}

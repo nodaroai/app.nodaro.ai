@@ -62,7 +62,7 @@ const VIDEO_CRITIC_PER_SHOT_USD: Record<VideoCriticFrameMode, number> = {
   five_evenly: 0.08,
 }
 
-const VIDEO_CRITIC_PER_SHOT_CREDITS: Record<VideoCriticFrameMode, number> = {
+export const VIDEO_CRITIC_PER_SHOT_CREDITS: Record<VideoCriticFrameMode, number> = {
   first_last: usdToCredits(VIDEO_CRITIC_PER_SHOT_USD.first_last),
   first_middle_last: usdToCredits(VIDEO_CRITIC_PER_SHOT_USD.first_middle_last),
   five_evenly: usdToCredits(VIDEO_CRITIC_PER_SHOT_USD.five_evenly),

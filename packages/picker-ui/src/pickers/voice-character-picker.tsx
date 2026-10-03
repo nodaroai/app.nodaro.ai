@@ -98,7 +98,7 @@ export const VoiceCharacterPicker = memo(function VoiceCharacterPicker({
     filteredLanguages.length > 0
 
   return (
-    <div className={cn("flex flex-col gap-3", className)}>
+    <div className={cn("@container flex flex-col gap-3", className)}>
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
@@ -106,7 +106,7 @@ export const VoiceCharacterPicker = memo(function VoiceCharacterPicker({
           placeholder="Search age, gender, language, accent, timbre"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="pl-8 h-8 text-xs"
+          className="pl-8 h-9 text-[13px]"
         />
       </div>
 
@@ -121,6 +121,7 @@ export const VoiceCharacterPicker = memo(function VoiceCharacterPicker({
           {idx === LANGUAGE_INSERT_AT && languageVisible && (
             <SoundDimensionSection
               label="Language"
+              art={{ catalogId: "voice-character", field: "language" }}
               entries={filteredLanguages}
               selectedIds={languageIds}
               maxSelected={MAX_LANGUAGES}
@@ -147,6 +148,7 @@ export const VoiceCharacterPicker = memo(function VoiceCharacterPicker({
           {(!query || section.entries.length > 0) && (
             <SoundDimensionSection
               label={section.label}
+              art={{ catalogId: "voice-character", field: section.key }}
               entries={section.entries}
               selectedIds={value[section.key] ? [value[section.key]!] : []}
               checked={!!value[section.key]}

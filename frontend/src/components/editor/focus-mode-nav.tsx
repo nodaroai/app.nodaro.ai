@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react"
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from "lucide-react"
 import { useReactFlow } from "@xyflow/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useT } from "@/lib/i18n"
 import type { WorkflowNode } from "@/types/nodes"
 
 type Direction = "left" | "right" | "up" | "down"
@@ -57,6 +58,7 @@ interface FocusModeNavProps {
 }
 
 export function FocusModeNav({ selectedNodeId, onNavigate }: FocusModeNavProps) {
+  const t = useT()
   const nodes = useWorkflowStore((s) => s.nodes)
 
   const neighbors = useMemo(() => ({
@@ -76,7 +78,7 @@ export function FocusModeNav({ selectedNodeId, onNavigate }: FocusModeNavProps) 
           type="button"
           onClick={() => onNavigate(neighbors.left!.id)}
           className="absolute left-3 top-1/2 -translate-y-1/2 z-40 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 dark:bg-white/15 backdrop-blur-sm text-white active:bg-black/50 dark:active:bg-white/30 transition-colors touch-manipulation"
-          aria-label={`Navigate left to ${neighbors.left.label}`}
+          aria-label={t("canvas.navLeftTo", { name: neighbors.left.label })}
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -86,7 +88,7 @@ export function FocusModeNav({ selectedNodeId, onNavigate }: FocusModeNavProps) 
           type="button"
           onClick={() => onNavigate(neighbors.right!.id)}
           className="absolute right-3 top-1/2 -translate-y-1/2 z-40 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 dark:bg-white/15 backdrop-blur-sm text-white active:bg-black/50 dark:active:bg-white/30 transition-colors touch-manipulation"
-          aria-label={`Navigate right to ${neighbors.right.label}`}
+          aria-label={t("canvas.navRightTo", { name: neighbors.right.label })}
         >
           <ChevronRight className="w-5 h-5" />
         </button>
@@ -96,7 +98,7 @@ export function FocusModeNav({ selectedNodeId, onNavigate }: FocusModeNavProps) 
           type="button"
           onClick={() => onNavigate(neighbors.up!.id)}
           className="absolute top-[28%] left-1/2 -translate-x-1/2 z-40 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 dark:bg-white/15 backdrop-blur-sm text-white active:bg-black/50 dark:active:bg-white/30 transition-colors touch-manipulation"
-          aria-label={`Navigate up to ${neighbors.up.label}`}
+          aria-label={t("canvas.navUpTo", { name: neighbors.up.label })}
         >
           <ChevronUp className="w-5 h-5" />
         </button>
@@ -106,7 +108,7 @@ export function FocusModeNav({ selectedNodeId, onNavigate }: FocusModeNavProps) 
           type="button"
           onClick={() => onNavigate(neighbors.down!.id)}
           className="absolute bottom-[calc(15vh+12px)] left-1/2 -translate-x-1/2 z-40 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 dark:bg-white/15 backdrop-blur-sm text-white active:bg-black/50 dark:active:bg-white/30 transition-colors touch-manipulation"
-          aria-label={`Navigate down to ${neighbors.down.label}`}
+          aria-label={t("canvas.navDownTo", { name: neighbors.down.label })}
         >
           <ChevronDown className="w-5 h-5" />
         </button>

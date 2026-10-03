@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useImageAspect } from "@/hooks/use-image-aspect"
+import { useT } from "@/lib/i18n"
 
 interface ImageLightboxProps {
   readonly src: string | null
@@ -27,6 +28,7 @@ export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
   }, [src, handleKeyDown])
 
   const aspect = useImageAspect(src)
+  const t = useT()
 
   if (!src) return null
 
@@ -41,12 +43,12 @@ export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
     >
       <button
         type="button"
-        className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors cursor-pointer"
+        className="absolute top-4 end-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors cursor-pointer"
         onClick={(e) => {
           e.stopPropagation()
           onClose()
         }}
-        aria-label="Close"
+        aria-label={t("common.close")}
       >
         <X className="w-6 h-6" />
       </button>
@@ -61,7 +63,7 @@ export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
         >
           <CachedImage
             src={src}
-            alt={alt ?? "Preview"}
+            alt={alt ?? t("common.preview")}
             className="w-full h-full object-contain"
             noPlaceholder
           />

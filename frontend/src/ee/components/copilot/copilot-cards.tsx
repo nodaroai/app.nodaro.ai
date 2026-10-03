@@ -7,10 +7,19 @@
  * that dialog would have said: the estimate, what it will run, and a way out.
  */
 import { Check, Paperclip } from "lucide-react"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
 import type { CopilotWiredAsset, CopilotWorkflowUpdate } from "@/ee/lib/copilot/types"
+import { creditUnits } from "@/lib/credit-units"
+import { useT, type TFunction } from "@/lib/i18n"
+import { formatNumber } from "@/lib/i18n/format"
 
 const CARD = "p-3 bg-[var(--copilot-card)] border border-border rounded-[11px] flex flex-col gap-2.5"
+
+/** "12 credits" — the figure converted to the display unit, then counted. */
+function usedCredits(t: TFunction, credits: number): string {
+  const n = creditUnits(credits)
+  return t(n === 1 ? K.creditsOne : K.creditsOther, { n })
+}
 
 export function WorkflowUpdatedCard({
   update,
@@ -19,26 +28,27 @@ export function WorkflowUpdatedCard({
   update: CopilotWorkflowUpdate
   onShowOnCanvas: () => void
 }) {
+  const t = useT()
   const added = update.addedNodeIds.length
   const updated = update.updatedNodeIds.length
   const removed = update.removedNodeIds.length
   const parts = [
-    added > 0 ? `Added ${added} ${added === 1 ? "node" : "nodes"}` : null,
-    updated > 0 ? `updated ${updated}` : null,
-    removed > 0 ? `removed ${removed}` : null,
-    `${update.edgeCount} ${update.edgeCount === 1 ? "connection" : "connections"}`,
+    added > 0 ? t(added === 1 ? K.addedNodesOne : K.addedNodesOther, { n: added }) : null,
+    updated > 0 ? t(K.updatedNodes, { n: updated }) : null,
+    removed > 0 ? t(K.removedNodes, { n: removed }) : null,
+    t(update.edgeCount === 1 ? K.connectionsOne : K.connectionsOther, { n: update.edgeCount }),
   ].filter(Boolean)
 
   return (
     <div className={CARD}>
       <div className="flex items-center gap-2">
         <span className="w-[7px] h-[7px] rounded-[2px] bg-[var(--copilot-ok)]" aria-hidden />
-        <span className="text-[12.5px] font-semibold text-foreground">{S.updatedTitle}</span>
-        <span className="ml-auto text-[11px] text-[var(--copilot-dim)] font-mono">v{update.version}</span>
+        <span className="text-[12.5px] font-semibold text-foreground">{t(K.updatedTitle)}</span>
+        <span className="ms-auto text-[11px] text-[var(--copilot-dim)] font-mono">v{update.version}</span>
       </div>
       <div className="text-xs text-[var(--copilot-muted)]">{parts.join(" · ")}</div>
       {update.adjustments.length > 0 && (
-        <ul className="text-[11px] text-[var(--copilot-dim)] list-disc pl-4 space-y-0.5">
+        <ul className="text-[11px] text-[var(--copilot-dim)] list-disc ps-4 space-y-0.5">
           {update.adjustments.slice(0, 3).map((note, i) => (
             // Index-keyed on purpose: these come from the server and repeat.
             <li key={`${i}:${note}`}>{note}</li>
@@ -51,7 +61,7 @@ export function WorkflowUpdatedCard({
           onClick={onShowOnCanvas}
           className="self-start px-3 py-1.5 bg-[var(--copilot-surface)] border border-[var(--copilot-strong)] rounded-lg text-xs font-medium text-foreground transition-colors hover:border-primary hover:text-primary"
         >
-          {S.updatedShowOnCanvas}
+          {t(K.updatedShowOnCanvas)}
         </button>
       )}
     </div>
@@ -90,9 +100,10 @@ export function RunProposalCard({
   onSkip: () => void
   disabled?: boolean
 }) {
+  const t = useT()
   const detail = [
-    nodeLabel ?? `${nodeCount} ${nodeCount === 1 ? "step" : "steps"}`,
-    balance !== null ? `balance ${balance.toLocaleString()}` : null,
+    nodeLabel ?? t(nodeCount === 1 ? K.stepsOne : K.stepsOther, { n: nodeCount }),
+    balance !== null ? t(K.proposeBalance, { n: formatNumber(balance) }) : null,
   ]
     .filter(Boolean)
     .join(" · ")
@@ -100,16 +111,16 @@ export function RunProposalCard({
   return (
     <div className={`${CARD} gap-[11px]`}>
       <div className="flex items-baseline gap-2">
-        <span className="text-[12.5px] font-semibold text-foreground whitespace-nowrap">{S.proposeTitle}</span>
-        <span className="ml-auto text-xs text-primary font-semibold tabular-nums">
-          {estimateStale ? S.estimatePending : S.proposeEstimate(estimate)}
+        <span className="text-[12.5px] font-semibold text-foreground whitespace-nowrap">{t(K.proposeTitle)}</span>
+        <span className="ms-auto text-xs text-primary font-semibold tabular-nums">
+          {estimateStale ? t(K.estimatePending) : t(K.proposeEstimate, { credits: creditUnits(estimate) })}
         </span>
       </div>
       <div className="text-[11.5px] text-[var(--copilot-dim)]">{detail}</div>
       {wiredAssets.length > 0 && (
         <div className="flex flex-col gap-1">
           <div className="text-[10.5px] tracking-[0.1em] uppercase text-[var(--copilot-dim)] font-semibold">
-            {S.proposeUsingFiles}
+            {t(K.proposeUsingFiles)}
           </div>
           <ul className="flex flex-col gap-0.5">
             {wiredAssets.map((asset) => (
@@ -121,7 +132,11 @@ export function RunProposalCard({
           </ul>
         </div>
       )}
-      {overLimit && <div className="text-[11.5px] text-[var(--copilot-muted)]">{S.autoOverLimit(estimate, ceiling)}</div>}
+      {overLimit && (
+        <div className="text-[11.5px] text-[var(--copilot-muted)]">
+          {t(K.autoOverLimit, { credits: creditUnits(estimate), ceiling: creditUnits(ceiling) })}
+        </div>
+      )}
       <div className="flex gap-2">
         <button
           type="button"
@@ -129,14 +144,14 @@ export function RunProposalCard({
           disabled={disabled}
           className="px-4 py-[7px] bg-primary rounded-lg text-[12.5px] font-semibold text-primary-foreground disabled:opacity-50"
         >
-          {S.proposeRun}
+          {t(K.proposeRun)}
         </button>
         <button
           type="button"
           onClick={onSkip}
           className="px-3.5 py-[7px] border border-border rounded-lg text-[12.5px] text-[var(--copilot-muted)] transition-colors hover:text-foreground"
         >
-          {S.proposeSkip}
+          {t(K.proposeSkip)}
         </button>
       </div>
     </div>
@@ -144,9 +159,12 @@ export function RunProposalCard({
 }
 
 export function AutoRunNotice({ estimate, ceiling, stale }: { estimate: number; ceiling: number; stale?: boolean }) {
+  const t = useT()
   return (
     <div className="px-3 py-2.5 rounded-[11px] text-xs text-foreground bg-primary/[0.07] border border-primary/30">
-      {stale ? S.autoNoticePending(ceiling) : S.autoNotice(estimate, ceiling)}
+      {stale
+        ? t(K.autoNoticePending, { ceiling: creditUnits(ceiling) })
+        : t(K.autoNotice, { credits: creditUnits(estimate), ceiling: creditUnits(ceiling) })}
     </div>
   )
 }
@@ -162,14 +180,15 @@ export function RunningCard({
   credits: number
   onStop: () => void
 }) {
+  const t = useT()
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0
   return (
     <div className={CARD}>
       <div className="flex items-center gap-2">
         <span className="w-3 h-3 rounded-full border-2 border-primary/25 border-t-primary animate-spin" aria-hidden />
-        <span className="text-[12.5px] font-semibold text-foreground">{S.running}</span>
-        <span className="ml-auto text-xs text-[var(--copilot-muted)] tabular-nums">
-          {total > 0 ? `${Math.min(completed + 1, total)} of ${total}` : "starting"}
+        <span className="text-[12.5px] font-semibold text-foreground">{t(K.running)}</span>
+        <span className="ms-auto text-xs text-[var(--copilot-muted)] tabular-nums">
+          {total > 0 ? t(K.runProgress, { n: Math.min(completed + 1, total), total }) : t(K.runStarting)}
         </span>
       </div>
       <div className="h-[3px] bg-border rounded-sm overflow-hidden">
@@ -177,14 +196,14 @@ export function RunningCard({
       </div>
       <div className="flex items-center gap-2">
         <span className="text-[11.5px] text-[var(--copilot-dim)] tabular-nums">
-          {credits > 0 ? S.usedCredits(credits) : ""}
+          {credits > 0 ? usedCredits(t, credits) : ""}
         </span>
         <button
           type="button"
           onClick={onStop}
-          className="ml-auto px-3 py-[5px] border border-border rounded-md text-xs text-[var(--copilot-muted)] transition-colors hover:text-foreground"
+          className="ms-auto px-3 py-[5px] border border-border rounded-md text-xs text-[var(--copilot-muted)] transition-colors hover:text-foreground"
         >
-          {S.runStop}
+          {t(K.runStop)}
         </button>
       </div>
     </div>
@@ -192,12 +211,13 @@ export function RunningCard({
 }
 
 export function RunSucceededCard({ credits }: { credits: number }) {
+  const t = useT()
   return (
     <div className={CARD}>
       <div className="flex items-center gap-2">
         <Check className="w-3.5 h-3.5 text-[var(--copilot-ok)]" strokeWidth={2.6} />
-        <span className="text-[12.5px] font-semibold text-foreground">{S.runSucceeded}</span>
-        <span className="ml-auto text-xs text-[var(--copilot-muted)] tabular-nums">{S.usedCredits(credits)}</span>
+        <span className="text-[12.5px] font-semibold text-foreground">{t(K.runSucceeded)}</span>
+        <span className="ms-auto text-xs text-[var(--copilot-muted)] tabular-nums">{usedCredits(t, credits)}</span>
       </div>
     </div>
   )
@@ -216,14 +236,15 @@ export function RunFailedCard({
   onFix: () => void
   disabled?: boolean
 }) {
+  const t = useT()
   return (
     <div className="p-3 bg-[var(--copilot-card)] border border-[var(--copilot-fail)]/35 rounded-[11px] flex flex-col gap-[9px]">
       <div className="flex items-center gap-2">
         <span className="w-[7px] h-[7px] rounded-full bg-[var(--copilot-fail)]" aria-hidden />
         <span className="text-[12.5px] font-semibold text-foreground">
-          {failedStep === null ? S.runFailed : S.runFailedAt(failedStep)}
+          {failedStep === null ? t(K.runFailed) : t(K.runFailedAt, { step: failedStep })}
         </span>
-        <span className="ml-auto text-xs text-[var(--copilot-muted)] tabular-nums">{S.usedCredits(credits)}</span>
+        <span className="ms-auto text-xs text-[var(--copilot-muted)] tabular-nums">{usedCredits(t, credits)}</span>
       </div>
       {message && <div className="text-xs leading-[1.5] text-[var(--copilot-muted)] break-words">{message}</div>}
       <div className="flex gap-2">
@@ -233,7 +254,7 @@ export function RunFailedCard({
           disabled={disabled}
           className="px-4 py-[7px] bg-primary rounded-lg text-[12.5px] font-semibold text-primary-foreground disabled:opacity-50"
         >
-          {S.fixIt}
+          {t(K.fixIt)}
         </button>
       </div>
     </div>

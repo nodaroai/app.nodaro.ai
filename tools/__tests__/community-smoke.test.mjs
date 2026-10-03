@@ -14,10 +14,10 @@
  * it, a Pro run served by another lane, a capabilities document that claims an
  * engine) and assert the matching contract goes FAIL.
  *
- * Scope on purpose: this file asserts the Scene3D contracts only. The stub is
- * faithful enough for the probe to reach them, not a second implementation of
- * the platform — the other contracts are asserted against the real image by
- * `.github/workflows/community-e2e.yml`.
+ * Scope on purpose: this file asserts the Scene3D and Video Overlay contracts
+ * only. The stub is faithful enough for the probe to reach them, not a second
+ * implementation of the platform — the other contracts are asserted against
+ * the real image by `.github/workflows/community-e2e.yml`.
  */
 import { test } from "node:test"
 import assert from "node:assert/strict"
@@ -33,6 +33,11 @@ const DISCOVERY = "discovery omits 3D Render Pro where no engine can run it"
 const BASIC = "the Basic 3D scene nodes stay available on community"
 const REFUSAL = "a 3D Render Pro run is refused 503 SCENE_CAPABILITY_UNAVAILABLE, never a Basic fallback"
 const CAPABILITIES = "the 3D capabilities document reports Pro unavailable and no authoring engine"
+
+/** The three Video Overlay contract names, spelled exactly as the probe records them. */
+const OVERLAY_RENDER = "Video Overlay renders on a keyless install — no key, no credits"
+const OVERLAY_REFUSAL = "Video Overlay refuses end ≤ start with a renderable 400"
+const OVERLAY_UNREACHABLE = "a Video Overlay job whose image cannot be fetched fails with a renderable message"
 
 /** What a keyless community install answers. Each test overrides one slice. */
 function communityShape() {
@@ -66,6 +71,26 @@ function communityShape() {
     proQuote: {
       status: 503,
       body: { error: { code: "SCENE_CAPABILITY_UNAVAILABLE", message: "3D Render Pro is unavailable on this instance." } },
+    },
+    // Video Overlay — the local ffmpeg lane. The stub routes a POST by its
+    // body: end <= start → `refusal`, an image on `.invalid` → `unreachable`,
+    // anything else → `accept`. Job ids key `jobs`; a relative result URL is
+    // served by the stub itself.
+    overlay: {
+      accept: { status: 200, body: { jobId: "job_overlay" } },
+      unreachable: { status: 200, body: { jobId: "job_overlay_unreachable" } },
+      refusal: {
+        status: 400,
+        body: { error: { code: "validation_error", message: "layers[0]: end (2 s) must be after start (3 s)" } },
+      },
+      jobs: {
+        job_overlay: {
+          status: "completed",
+          output_data: { videoUrl: "/media/overlay.mp4", width: 1280, height: 720, durationSec: 5.08, warnings: [] },
+        },
+        job_overlay_unreachable: { status: "failed", error_message: "layers[0]: image could not be fetched" },
+      },
+      media: { status: 200, type: "video/mp4", bytes: 4096 },
     },
   }
 }
@@ -101,8 +126,10 @@ function stubServer(shape) {
       },
     })
 
-    // Drain the body; the stub never needs to read one.
-    req.resume()
+    // Collect the body — only the Video Overlay route reads it.
+    let raw = ""
+    req.setEncoding("latin1")
+    req.on("data", (chunk) => { raw += chunk })
     req.on("end", () => {
       if (path === "/v1/setup/status") return send(200, setupStatus())
       if (path === "/config.js") return send(200, 'window.__NODARO_RUNTIME__ = {"apiUrl":"http://127.0.0.1"};\n', "text/javascript")
@@ -114,6 +141,13 @@ function stubServer(shape) {
       if (path === "/v1/generate-image") return send(200, { jobId: "job_image" })
       if (path === "/v1/text-to-dialogue") return send(200, { jobId: "job_dialogue" })
       if (/^\/v1\/jobs\/[^/]+\/status$/.test(path)) {
+        const jobId = decodeURIComponent(path.split("/")[3])
+        const overlayJob = shape.overlay.jobs[jobId]
+        if (overlayJob) {
+          const out = overlayJob.output_data
+          const videoUrl = out?.videoUrl ? new URL(out.videoUrl, `http://${req.headers.host}`).href : undefined
+          return send(200, { data: { ...overlayJob, ...(out ? { output_data: { ...out, videoUrl } } : {}) } })
+        }
         return send(200, { data: { status: "failed", error_message: keylessMessage } })
       }
       if (path === "/v1/voices") {
@@ -145,7 +179,28 @@ function stubServer(shape) {
       }
       if (path === "/v1/billing/surface") return send(200, { data: { providerId: "none", mountCostTab: false } })
 
-      // ── the slice under test ──────────────────────────────────────────────
+      // ── Video Overlay ─────────────────────────────────────────────────────
+      if (path === "/v1/upload" && req.method === "POST") {
+        const kind = raw.includes("video/mp4") ? "videos/base.mp4" : "images/card.jpg"
+        return send(200, { data: { url: `http://${req.headers.host}/storage/uploads/${kind}`, assetId: "a_1" } })
+      }
+      if (path === "/v1/video-overlay" && req.method === "POST") {
+        let body = {}
+        try { body = JSON.parse(raw) } catch { /* not JSON — answered as accept */ }
+        const layers = Array.isArray(body.layers) ? body.layers : []
+        const pick = layers.some((l) => typeof l.end === "number" && l.end <= l.start)
+          ? shape.overlay.refusal
+          : layers.some((l) => String(l.imageUrl ?? "").includes(".invalid/"))
+            ? shape.overlay.unreachable
+            : shape.overlay.accept
+        return send(pick.status, pick.body)
+      }
+      if (path === "/media/overlay.mp4") {
+        res.writeHead(shape.overlay.media.status, { "content-type": shape.overlay.media.type })
+        return res.end(Buffer.alloc(shape.overlay.media.bytes))
+      }
+
+      // ── the Scene3D slice ─────────────────────────────────────────────────
       if (path === "/v1/nodes") return send(200, { data: shape.nodes })
       if (path.startsWith("/v1/nodes/")) {
         const type = decodeURIComponent(path.slice("/v1/nodes/".length))
@@ -297,4 +352,51 @@ test("offering blender-local without SCENE3D_LOCAL_ENABLED fails the capabilitie
     shape.capabilities.pro.engines = ["blender-cloud", "blender-local"]
   })
   assertContract(out, CAPABILITIES, "FAIL")
+})
+
+test("the keyless community shape passes the three Video Overlay contracts", async () => {
+  const { out } = await probeWith()
+  assertContract(out, OVERLAY_RENDER, "PASS")
+  assertContract(out, OVERLAY_REFUSAL, "PASS")
+  assertContract(out, OVERLAY_UNREACHABLE, "PASS")
+})
+
+test("a render that fails on a keyless install fails the render contract", async () => {
+  // The local lane needs no key — a failed job here is a broken install, not
+  // an honest keyless refusal.
+  const { out } = await probeWith((shape) => {
+    shape.overlay.jobs.job_overlay = { status: "failed", error_message: "Video Overlay render failed" }
+  })
+  assertContract(out, OVERLAY_RENDER, "FAIL")
+})
+
+test("a completed render whose file is not a video fails the render contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.overlay.media = { status: 200, type: "text/html", bytes: 4096 }
+  })
+  assertContract(out, OVERLAY_RENDER, "FAIL")
+})
+
+test("end <= start accepted as a job fails the refusal contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.overlay.refusal = { status: 200, body: { jobId: "job_overlay" } }
+  })
+  assertContract(out, OVERLAY_REFUSAL, "FAIL")
+})
+
+test("a raw fetch error in the failed job fails the unreachable-image contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.overlay.jobs.job_overlay_unreachable = {
+      status: "failed",
+      error_message: "fetch failed: getaddrinfo ENOTFOUND overlay-smoke.invalid",
+    }
+  })
+  assertContract(out, OVERLAY_UNREACHABLE, "FAIL")
+})
+
+test("an unfetchable image rendered anyway fails the unreachable-image contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.overlay.jobs.job_overlay_unreachable = { status: "completed", output_data: { videoUrl: "/media/overlay.mp4" } }
+  })
+  assertContract(out, OVERLAY_UNREACHABLE, "FAIL")
 })

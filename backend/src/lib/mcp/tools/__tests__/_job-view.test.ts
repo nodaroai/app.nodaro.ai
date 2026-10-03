@@ -43,6 +43,7 @@ describe("jobView — the one job envelope", () => {
       assetKind: "image",
       outputUrl: "https://r2/x.png",
       outputData: { imageUrl: "https://r2/x.png", prompt: "a cat" },
+      input: null,
       errorMessage: null,
       credits: 12,
       createdAt: base.created_at,
@@ -81,5 +82,86 @@ describe("jobView — the one job envelope", () => {
     })
     expect(v.outputData).toEqual({ videoUrl: "https://public/final.mp4", pro: { audio: { revision: "a2" } } })
     expect(v.outputUrl).toBe("https://public/final.mp4")
+  })
+})
+
+// F12 (transition QA): a server-side prompt fold could not be verified over
+// MCP, because the envelope carried no input. It now carries an ALLOWLISTED
+// subset of `input_data` — never the whole request body.
+describe("jobView — the job's input, allowlisted", () => {
+  const row = {
+    id: "22222222-2222-4222-8222-222222222222",
+    status: "completed",
+    job_type: "generate-video",
+    output_data: { videoUrl: "https://r2/x.mp4" },
+    input_data: {
+      type: "generate-video",
+      prompt: "a woman turns, match cut, the transition occurs in the middle of the clip",
+      userPrompt: "a woman turns",
+      direction: { transition: "match-cut" },
+      provider: "kling-3",
+      duration: 5,
+      resolution: "1080p",
+      imageUrl: "https://r2/a.png",
+      endFrameUrl: "https://r2/b.png",
+      workflowId: "wf-internal",
+      nodeId: "node-internal",
+      clientRequestId: "req-1",
+      attachToCharacterId: "char-1",
+      unscoredUrl: "https://private/remux",
+      apiKey: "sk-secret",
+    },
+  }
+
+  it("echoes the rendered prompt, the source prompt, direction, frames and render settings", () => {
+    expect(jobView(row).input).toEqual({
+      type: "generate-video",
+      prompt: row.input_data.prompt,
+      userPrompt: "a woman turns",
+      direction: { transition: "match-cut" },
+      provider: "kling-3",
+      duration: 5,
+      resolution: "1080p",
+      imageUrl: "https://r2/a.png",
+      endFrameUrl: "https://r2/b.png",
+    })
+  })
+
+  it("never carries internal ids, private urls or anything off the allowlist", () => {
+    const input = jobView(row).input as Record<string, unknown>
+    for (const key of ["workflowId", "nodeId", "clientRequestId", "attachToCharacterId", "unscoredUrl", "apiKey"]) {
+      expect(input).not.toHaveProperty(key)
+    }
+  })
+
+  it("filters direction and subject to their catalogs' keys and id-shaped values", () => {
+    const input = jobView({
+      ...row,
+      input_data: {
+        direction: {
+          transition: ["match-cut"],
+          cameraMotion: "dolly-in",
+          internalToken: "tok-1",
+          shotSize: { nested: "object" },
+        },
+        subject: { age: "age-custom", customAge: 42, secretNote: "x", heldProp: ["cup", 3] },
+      },
+    }).input as Record<string, unknown>
+    expect(input.direction).toEqual({ transition: ["match-cut"], cameraMotion: "dolly-in" })
+    expect(input.subject).toEqual({ age: "age-custom", customAge: 42 })
+  })
+
+  it("drops a direction or subject that holds nothing from its catalog", () => {
+    const input = jobView({
+      ...row,
+      input_data: { prompt: "p", direction: { foreign: "x" }, subject: "not-a-record" },
+    }).input as Record<string, unknown>
+    expect(input).toEqual({ prompt: "p" })
+  })
+
+  it("is null when the row has no input, or none of it is allowlisted", () => {
+    expect(jobView({ ...row, input_data: null }).input).toBeNull()
+    expect(jobView({ ...row, input_data: undefined }).input).toBeNull()
+    expect(jobView({ ...row, input_data: { workflowId: "wf" } }).input).toBeNull()
   })
 })

@@ -8,3 +8,13 @@
 export function isMissingColumnError(error: { code?: string | null } | null | undefined): boolean {
   return error?.code === "PGRST204" || error?.code === "42703"
 }
+
+/**
+ * "No such table" — Postgres `42P01` once the statement runs, or PostgREST's
+ * schema-cache `PGRST205` before it does. A table that arrives with a
+ * migration reaches the shared database only when `main` deploys, so a route
+ * for a newer feature reads it as "nothing yet", never as a server error.
+ */
+export function isMissingTableError(error: { code?: string | null } | null | undefined): boolean {
+  return error?.code === "42P01" || error?.code === "PGRST205"
+}

@@ -5,6 +5,7 @@ import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
+import type { ExpandedVideoOverlayRequest } from "@nodaro/shared"
 import type { Pro3DRenderQuote, Pro3DRenderSource, ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
 import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
 export type { CommunityCard } from "@nodaro/shared"
@@ -13,7 +14,8 @@ import type { BillingSurface, BillingAccount } from "./billing-surface"
 import type { CreditAllowance } from "./spendable-credits"
 import { withIdempotencyHeader } from "@/lib/idempotency-key"
 import { runtimeApiUrl } from "@/lib/runtime-config"
-import { tx } from "@/lib/i18n"
+import { tx, type MessageKey } from "@/lib/i18n"
+import { apiErrorMessage, refusalMessage } from "@/lib/api-error-copy"
 import { dispatchConsentRequired } from "@/lib/consent-required-event"
 
 export const API_BASE_URL = ''
@@ -223,8 +225,13 @@ export class CredentialUnboundError extends Error {
  * Throws InsufficientCreditsError for credit-related 402 errors.
  * Otherwise throws a plain Error with the message (or the given fallback).
  */
-function throwApiError(errJson: Record<string, unknown> | null, fallback: string): never {
+function throwApiError(errJson: Record<string, unknown> | null, fallback: MessageKey): never {
   const errObj = errJson?.error as Record<string, unknown> | undefined
+  const code = typeof errObj?.code === "string" ? errObj.code : undefined
+  const serverMessage = errObj?.message as string | undefined
+  // The message every typed error below carries: the server's words in
+  // English, the headline plus a translated reason elsewhere.
+  const message = apiErrorMessage({ code, serverMessage, fallbackKey: fallback })
   // The server refused the workspace this browser had selected — the caller
   // was removed, suspended, or the organization stopped being active. The
   // selection is a preference, so the remedy is to drop it: the next call
@@ -235,7 +242,7 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
   }
   if (errObj?.code === "storage_limit_exceeded") {
     throw new StorageExceededError(
-      (errObj.message as string) ?? fallback,
+      message,
       (errObj.usedBytes as number) ?? 0,
       (errObj.quotaBytes as number) ?? 0,
       (errObj.remainingBytes as number) ?? 0,
@@ -243,7 +250,7 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
     )
   }
   if (errObj?.code === "subscription_required") {
-    throw new SubscriptionRequiredError((errObj.message as string) ?? fallback)
+    throw new SubscriptionRequiredError(message)
   }
   // Track A (D10). `required` and `remaining` sit BESIDE `error` in the body,
   // not inside it — the same place the existing `required` has always been.
@@ -255,44 +262,37 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
   }
   if (errObj?.code === "insufficient_app_credits" || errObj?.code === "insufficient_credits") {
     throw new InsufficientCreditsError(
-      (errObj.message as string) ?? fallback,
+      message,
       errObj.code as string,
       (errObj.appCreditsAllowance as number) ?? 0,
     )
   }
   if (errObj?.code === "name_taken") {
     throw new CharacterNameTakenError(
-      (errObj.message as string) ?? "Name already in use.",
+      refusalMessage(serverMessage, "apiErr.nameTaken"),
       errObj.existingId as string | undefined,
     )
   }
   if (errObj?.code === "portrait_required") {
-    throw new PortraitRequiredError(
-      (errObj.message as string) ?? "Generate a portrait first — open the Appearance tab",
-    )
+    throw new PortraitRequiredError(refusalMessage(serverMessage, "apiErr.portraitRequired"))
   }
   if (errObj?.code === "category_in_use") {
     throw new TutorialCategoryInUseError(
-      (errObj.message as string) ?? fallback,
+      message,
       (errObj.videoCount as number) ?? 0,
       (errObj.flowCount as number) ?? 0,
     )
   }
   if (errObj?.code === "nodaro_connection_required") {
-    throw new NodaroConnectionRequiredError(
-      (errObj.message as string) ??
-        "This node runs on nodaro.ai — connect your install from Integrations.",
-    )
+    throw new NodaroConnectionRequiredError(refusalMessage(serverMessage, "apiErr.nodaroConnectionRequired"))
   }
   if (errObj?.code === "consent_required") {
     dispatchConsentRequired()
-    throw new ConsentRequiredError(
-      (errObj.message as string) ?? "Say yes to product updates by email to keep creating.",
-    )
+    throw new ConsentRequiredError(refusalMessage(serverMessage, "apiErr.consentRequired"))
   }
   if (errObj?.code === "concurrent_modification") {
     throw new ConcurrentModificationError(
-      (errObj.message as string) ?? fallback,
+      message,
       (errObj.updatedAt as string) ?? "",
     )
   }
@@ -302,19 +302,24 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
     // canonical job will be found on the next attempt. Surfaced as a
     // typed Error so the call-site auto-retry wrapper can detect it.
     throw new DedupRaceRetryableError(
-      (errObj.message as string) ?? fallback,
+      message,
       (errObj.retryAfterSeconds as number) ?? 2,
     )
   }
   if (errObj?.code === "credential_unbound") {
     throw new CredentialUnboundError(
-      (errObj.message as string) ?? fallback,
+      message,
       Array.isArray(errObj.details) ? (errObj.details as UnboundCredentialUse[]) : [],
     )
   }
   // Generic error: attach the machine-readable `code` so callers can branch on
-  // it (e.g. classify input-fit codes as user-fixable warnings, not red errors).
-  throw Object.assign(new Error((errObj?.message as string) ?? fallback), errObj?.code ? { code: errObj.code } : {})
+  // it (e.g. classify input-fit codes as user-fixable warnings, not red errors),
+  // and the server's own words, which a translated message no longer shows.
+  throw Object.assign(
+    new Error(message),
+    errObj?.code ? { code: errObj.code } : {},
+    serverMessage !== undefined ? { serverMessage } : {},
+  )
 }
 
 /**
@@ -466,7 +471,7 @@ async function apiJson<T>(
   opts: {
     method?: string
     body?: Record<string, unknown>
-    label: string
+    label: MessageKey
     workflowId?: boolean
     idempotencyKey?: string
   },
@@ -498,7 +503,7 @@ async function apiJson<T>(
   try {
     return (await res.json()) as T
   } catch {
-    throw new Error(`${label ?? "Request failed"} — the server returned an unexpected response. Please try again.`)
+    throw new Error(tx("apiErr.unexpectedResponse", { context: tx(label) }))
   }
 }
 
@@ -622,7 +627,7 @@ export async function generateImage(
     body,
     workflowId: true,
     idempotencyKey,
-    label: "Failed to start image generation",
+    label: "apiErr.startImageGeneration",
   })
 }
 
@@ -647,7 +652,7 @@ export async function createReferenceBoard(body: {
     body: rest,
     workflowId: true,
     idempotencyKey,
-    label: "Failed to start reference board generation",
+    label: "apiErr.startReferenceBoardGeneration",
   })
 }
 
@@ -706,7 +711,7 @@ export async function editImage(
   return apiJson("/v1/edit-image", {
     body,
     workflowId: true,
-    label: "Failed to start image editing",
+    label: "apiErr.startImageEditing",
   })
 }
 
@@ -723,7 +728,7 @@ export async function grokSegmentMap(taskId: string, imageUrl?: string): Promise
   return apiJson("/v1/edit-image", {
     body: { provider: "grok-2-segment", taskId, ...(imageUrl ? { imageUrl } : {}) },
     workflowId: true,
-    label: "Failed to start region detection",
+    label: "apiErr.startRegionDetection",
   })
 }
 
@@ -742,7 +747,7 @@ export async function grokRegionEdit(
       ...(maskIndexes?.length ? { maskIndexes: [...maskIndexes] } : {}),
     },
     workflowId: true,
-    label: "Failed to start region edit",
+    label: "apiErr.startRegionEdit",
   })
 }
 
@@ -800,7 +805,7 @@ export async function imageToImage(
   return apiJson("/v1/image-to-image", {
     body,
     workflowId: true,
-    label: "Failed to start image transformation",
+    label: "apiErr.startImageTransformation",
   })
 }
 
@@ -918,7 +923,7 @@ export async function generateCharacter(data: {
   return apiJson("/v1/generate-character", {
     body: data,
     workflowId: true,
-    label: "Failed to start character generation",
+    label: "apiErr.startCharacterGeneration",
   })
 }
 
@@ -964,7 +969,7 @@ export async function generateCharacterAsset(data: {
   return apiJson("/v1/generate-character-asset", {
     body: data,
     workflowId: true,
-    label: "Failed to start character asset generation",
+    label: "apiErr.startCharacterAssetGeneration",
   })
 }
 
@@ -988,7 +993,7 @@ export async function generateReferenceSheet(data: {
   return apiJson("/v1/reference-sheet", {
     body: data,
     workflowId: true,
-    label: "Failed to start reference sheet generation",
+    label: "apiErr.startReferenceSheetGeneration",
   })
 }
 
@@ -1023,7 +1028,7 @@ export async function generateCharacterMotion(params: {
   return apiJson("/v1/generate-character-motion", {
     body: params,
     workflowId: true,
-    label: "Failed to generate character motion",
+    label: "apiErr.generateCharacterMotion",
   })
 }
 
@@ -1060,7 +1065,7 @@ export async function saveCharacter(data: {
   return apiJson("/v1/characters", {
     body: data,
     workflowId: true,
-    label: "Failed to save character",
+    label: "apiErr.saveCharacter",
   })
 }
 
@@ -1125,7 +1130,7 @@ export async function getCharacter(id: string): Promise<{
 }> {
   return apiJson(`/v1/characters/${encodeURIComponent(id)}`, {
     method: "GET",
-    label: "Failed to load character",
+    label: "apiErr.loadCharacter",
   })
 }
 
@@ -1166,7 +1171,7 @@ export async function llmSuggestDescription(body: {
 }): Promise<{ readonly text: string }> {
   return apiJson("/v1/llm-suggest-description", {
     body,
-    label: "Failed to suggest description",
+    label: "apiErr.suggestDescription",
   })
 }
 
@@ -1182,7 +1187,7 @@ export async function approvePortrait(
 ): Promise<{ readonly portraitUrl: string; readonly canonicalDescription: string | null }> {
   return apiJson(
     `/v1/characters/${encodeURIComponent(characterId)}/approve-portrait`,
-    { body: { candidateJobId }, label: "Failed to approve portrait" },
+    { body: { candidateJobId }, label: "apiErr.approvePortrait" },
   )
 }
 
@@ -1196,7 +1201,7 @@ export async function llmCaptionPortrait(
 ): Promise<{ readonly canonicalDescription: string }> {
   return apiJson(
     `/v1/characters/${encodeURIComponent(characterId)}/llm-caption`,
-    { label: "Failed to caption portrait" },
+    { label: "apiErr.captionPortrait" },
   )
 }
 
@@ -1233,7 +1238,7 @@ export async function startCharacterTraining(
       : {}
   return apiJson(
     `/v1/characters/${encodeURIComponent(characterId)}/train`,
-    { body, label: "Failed to start character training" },
+    { body, label: "apiErr.startCharacterTraining" },
   )
 }
 
@@ -1242,7 +1247,7 @@ export async function getCharacterTraining(
 ): Promise<TrainingStatus> {
   return apiJson(
     `/v1/characters/${encodeURIComponent(characterId)}/training`,
-    { method: "GET", label: "Failed to fetch training status" },
+    { method: "GET", label: "apiErr.fetchTrainingStatus" },
   )
 }
 
@@ -1255,7 +1260,7 @@ export async function deleteCharacterLora(
 ): Promise<{ readonly ok: true }> {
   return apiJson(
     `/v1/characters/${encodeURIComponent(characterId)}/lora`,
-    { method: "DELETE", label: "Failed to remove trained model" },
+    { method: "DELETE", label: "apiErr.removeTrainedModel" },
   )
 }
 
@@ -1275,7 +1280,7 @@ export async function saveFace(data: {
   return apiJson("/v1/faces", {
     body: data,
     workflowId: true,
-    label: "Failed to save face",
+    label: "apiErr.saveFace",
   })
 }
 
@@ -1297,13 +1302,13 @@ export async function getFaces(projectId?: string, userId?: string): Promise<{ f
   const params = new URLSearchParams()
   if (projectId) params.set("projectId", projectId)
   if (userId) params.set("userId", userId)
-  return drainEntityPages("/v1/faces", "faces", params, "Failed to fetch faces")
+  return drainEntityPages("/v1/faces", "faces", params, "apiErr.fetchFaces")
 }
 
 export async function deleteFace(faceId: string): Promise<{ success: boolean }> {
   return apiJson(`/v1/faces/${encodeURIComponent(faceId)}`, {
     method: "DELETE",
-    label: "Failed to delete face",
+    label: "apiErr.deleteFace",
   })
 }
 
@@ -1319,7 +1324,7 @@ export async function generateFace(data: {
   return apiJson("/v1/generate-face", {
     body: data,
     workflowId: true,
-    label: "Failed to start face headshot generation",
+    label: "apiErr.startFaceHeadshotGeneration",
   })
 }
 
@@ -1331,13 +1336,13 @@ export async function generateFace(data: {
 export async function deleteCharacter(characterId: string): Promise<{ success: boolean; archived?: boolean }> {
   return apiJson(`/v1/characters/${encodeURIComponent(characterId)}`, {
     method: "DELETE",
-    label: "Failed to archive character",
+    label: "apiErr.archiveCharacter",
   })
 }
 
 export async function restoreCharacter(characterId: string): Promise<{ id: string; name: string }> {
   return apiJson(`/v1/characters/${encodeURIComponent(characterId)}/restore`, {
-    label: "Failed to restore character",
+    label: "apiErr.restoreCharacter",
   })
 }
 
@@ -1352,7 +1357,7 @@ export async function duplicateCharacter(
 ): Promise<{ id: string; name: string }> {
   return apiJson(`/v1/characters/${encodeURIComponent(characterId)}/duplicate`, {
     body: opts,
-    label: "Failed to duplicate character",
+    label: "apiErr.duplicateCharacter",
   })
 }
 
@@ -1361,7 +1366,7 @@ export async function getCharacterUsage(
 ): Promise<{ workflowCount: number; workflows: { id: string; name: string }[] }> {
   return apiJson(`/v1/characters/${encodeURIComponent(characterId)}/usage`, {
     method: "GET",
-    label: "Failed to load character usage",
+    label: "apiErr.loadCharacterUsage",
   })
 }
 
@@ -1371,7 +1376,7 @@ export async function listArchivedCharacters(projectId?: string): Promise<{ char
   if (projectId) params.set("projectId", projectId)
   // Drained like the active list: the archive of a long-lived account is
   // BIGGER than its live library, not smaller.
-  return drainEntityPages("/v1/characters", "characters", params, "Failed to load archived characters")
+  return drainEntityPages("/v1/characters", "characters", params, "entity.loadArchivedFailed")
 }
 
 /**
@@ -1471,7 +1476,7 @@ async function drainEntityPages<K extends string, T>(
   path: string,
   key: K,
   baseParams: URLSearchParams,
-  label: string,
+  label: MessageKey,
 ): Promise<Record<K, T[]>> {
   const all: T[] = []
   let cursor: string | null = null
@@ -1495,7 +1500,7 @@ export async function getCharacters(projectId?: string, userId?: string): Promis
   const params = new URLSearchParams()
   if (projectId) params.set("projectId", projectId)
   if (userId) params.set("userId", userId)
-  return drainEntityPages("/v1/characters", "characters", params, "Failed to fetch characters")
+  return drainEntityPages("/v1/characters", "characters", params, "apiErr.fetchCharacters")
 }
 
 export async function getCharacterById(characterId: string): Promise<DbCharacter | null> {
@@ -1508,7 +1513,7 @@ export async function getCharacterById(characterId: string): Promise<DbCharacter
   }
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to fetch character")
+    throwApiError(err, "apiErr.fetchCharacter")
   }
   return res.json()
 }
@@ -1548,7 +1553,7 @@ export async function listNodePresets(nodeType?: string): Promise<NodePreset[]> 
   const qs = nodeType ? `?nodeType=${encodeURIComponent(nodeType)}` : ""
   const res = await apiJson<{ data: NodePreset[] }>(`/v1/node-presets${qs}`, {
     method: "GET",
-    label: "Failed to load presets",
+    label: "apiErr.loadPresets",
   })
   return res.data
 }
@@ -1560,7 +1565,7 @@ export async function listNodePresets(nodeType?: string): Promise<NodePreset[]> 
 export async function listNodePresetFavorites(nodeType: string): Promise<string[]> {
   const res = await apiJson<{ data: string[] }>(
     `/v1/node-presets/favorites?nodeType=${encodeURIComponent(nodeType)}`,
-    { method: "GET", label: "Failed to load favorites" },
+    { method: "GET", label: "apiErr.loadFavorites" },
   )
   return res.data
 }
@@ -1569,14 +1574,14 @@ export async function addNodePresetFavorite(nodeType: string, presetId: string):
   await apiJson(`/v1/node-presets/favorites`, {
     method: "POST",
     body: { nodeType, presetId },
-    label: "Failed to favorite preset",
+    label: "apiErr.favoritePreset",
   })
 }
 
 export async function removeNodePresetFavorite(nodeType: string, presetId: string): Promise<void> {
   await apiJson(
     `/v1/node-presets/favorites?nodeType=${encodeURIComponent(nodeType)}&presetId=${encodeURIComponent(presetId)}`,
-    { method: "DELETE", label: "Failed to unfavorite preset" },
+    { method: "DELETE", label: "apiErr.unfavoritePreset" },
   )
 }
 
@@ -1597,7 +1602,7 @@ export async function createNodePreset(input: {
   if (res.status === 409) throw new NodePresetNameTakenError()
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to save preset")
+    throwApiError(err, "apiErr.savePreset")
   }
   return (await res.json()).data
 }
@@ -1621,7 +1626,7 @@ export async function updateNodePreset(
   if (res.status === 409) throw new NodePresetNameTakenError()
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to update preset")
+    throwApiError(err, "apiErr.updatePreset")
   }
   return (await res.json()).data
 }
@@ -1633,7 +1638,7 @@ export async function deleteNodePreset(id: string): Promise<void> {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to delete preset")
+    throwApiError(err, "apiErr.deletePreset")
   }
 }
 
@@ -1643,7 +1648,7 @@ export async function importNodePresets(
   const res = await apiJson<{ data: { imported: number } }>("/v1/node-presets/import", {
     method: "POST",
     body: { presets },
-    label: "Failed to import presets",
+    label: "apiErr.importPresets",
   })
   return res.data.imported
 }
@@ -1656,7 +1661,7 @@ export async function reorderNodePresets(input: {
   await apiJson<{ data: { ok: boolean } }>("/v1/node-presets/reorder", {
     method: "POST",
     body: input,
-    label: "Failed to reorder presets",
+    label: "apiErr.reorderPresets",
   })
 }
 
@@ -1666,7 +1671,7 @@ export async function listNodePresetGroups(nodeType?: string): Promise<NodePrese
   const qs = nodeType ? `?nodeType=${encodeURIComponent(nodeType)}` : ""
   const res = await apiJson<{ data: NodePresetGroup[] }>(`/v1/node-preset-groups${qs}`, {
     method: "GET",
-    label: "Failed to load preset folders",
+    label: "apiErr.loadPresetFolders",
   })
   return res.data
 }
@@ -1680,7 +1685,7 @@ export async function createNodePresetGroup(input: {
   const res = await apiJson<{ data: NodePresetGroup }>("/v1/node-preset-groups", {
     method: "POST",
     body: input,
-    label: "Failed to create folder",
+    label: "apiErr.createFolder",
   })
   return res.data
 }
@@ -1692,7 +1697,7 @@ export async function updateNodePresetGroup(
   const res = await apiJson<{ data: NodePresetGroup }>(`/v1/node-preset-groups/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: patch,
-    label: "Failed to update folder",
+    label: "apiErr.updateFolder",
   })
   return res.data
 }
@@ -1700,7 +1705,7 @@ export async function updateNodePresetGroup(
 export async function deleteNodePresetGroup(id: string): Promise<void> {
   await apiJson<{ data: { success: boolean } }>(`/v1/node-preset-groups/${encodeURIComponent(id)}`, {
     method: "DELETE",
-    label: "Failed to delete folder",
+    label: "apiErr.deleteFolder",
   })
 }
 
@@ -1730,7 +1735,7 @@ export class PromptSnippetNameTakenError extends Error {
 export async function listPromptSnippets(): Promise<PromptSnippet[]> {
   const res = await apiJson<{ data: PromptSnippet[] }>(`/v1/prompt-snippets`, {
     method: "GET",
-    label: "Failed to load snippets",
+    label: "apiErr.loadSnippets",
   })
   return res.data
 }
@@ -1752,7 +1757,7 @@ export async function createPromptSnippet(input: {
   if (res.status === 409) throw new PromptSnippetNameTakenError()
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to save snippet")
+    throwApiError(err, "apiErr.saveSnippet")
   }
   return (await res.json()).data
 }
@@ -1777,7 +1782,7 @@ export async function updatePromptSnippet(
   if (res.status === 409) throw new PromptSnippetNameTakenError()
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to update snippet")
+    throwApiError(err, "apiErr.updateSnippet")
   }
   return (await res.json()).data
 }
@@ -1789,7 +1794,7 @@ export async function deletePromptSnippet(id: string): Promise<void> {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to delete snippet")
+    throwApiError(err, "apiErr.deleteSnippet")
   }
 }
 
@@ -1814,7 +1819,7 @@ export async function generateObject(data: {
   return apiJson("/v1/generate-object", {
     body: data,
     workflowId: true,
-    label: "Failed to start object generation",
+    label: "apiErr.startObjectGeneration",
   })
 }
 
@@ -1853,7 +1858,7 @@ export async function generateObjectAsset(data: {
   return apiJson("/v1/generate-object-asset", {
     body: data,
     workflowId: true,
-    label: "Failed to start object asset generation",
+    label: "apiErr.startObjectAssetGeneration",
   })
 }
 
@@ -1887,7 +1892,7 @@ export async function generateObjectMotion(data: {
   return apiJson("/v1/generate-object-motion", {
     body: data,
     workflowId: true,
-    label: "Failed to start object motion generation",
+    label: "apiErr.startObjectMotionGeneration",
   })
 }
 
@@ -1925,7 +1930,7 @@ export async function saveObject(data: {
   return apiJson("/v1/objects", {
     body: data,
     workflowId: true,
-    label: "Failed to save object",
+    label: "apiErr.saveObject",
   })
 }
 
@@ -1954,7 +1959,7 @@ export async function approveObjectMainImage(
   if (expectedUpdatedAt) body.expectedUpdatedAt = expectedUpdatedAt
   return apiJson(
     `/v1/objects/${encodeURIComponent(objectId)}/approve-main-image`,
-    { body, label: "Failed to approve object main image" },
+    { body, label: "apiErr.approveObjectMainImage" },
   )
 }
 
@@ -1973,7 +1978,7 @@ export async function recaptionObject(
 ): Promise<{ readonly canonicalDescription: string }> {
   return apiJson(
     `/v1/objects/${encodeURIComponent(objectId)}/llm-caption`,
-    { label: "Failed to caption object" },
+    { label: "apiErr.captionObject" },
   )
 }
 
@@ -1990,7 +1995,7 @@ export async function removeObjectAsset(
 ): Promise<void> {
   await apiJson(
     `/v1/objects/${encodeURIComponent(objectId)}/remove-asset`,
-    { body, label: "Failed to remove object asset" },
+    { body, label: "apiErr.removeObjectAsset" },
   )
 }
 
@@ -2014,7 +2019,7 @@ export async function deleteObject(
     : `/v1/objects/${encodeURIComponent(objectId)}`
   return apiJson(path, {
     method: "DELETE",
-    label: opts?.permanent ? "Failed to permanently delete object" : "Failed to archive object",
+    label: opts?.permanent ? "apiErr.permanentlyDeleteObject" : "apiErr.archiveObject",
   })
 }
 
@@ -2032,7 +2037,7 @@ export async function deleteObject(
 export async function restoreObject(objectId: string): Promise<{ id: string; name: string }> {
   return apiJson(
     `/v1/objects/${encodeURIComponent(objectId)}/restore`,
-    { label: "Failed to restore object" },
+    { label: "apiErr.restoreObject" },
   )
 }
 
@@ -2103,7 +2108,7 @@ export async function getObjects(
   if (projectId) params.set("projectId", projectId)
   if (userId) params.set("userId", userId)
   if (opts?.archived) params.set("archived", "true")
-  return drainEntityPages("/v1/objects", "objects", params, "Failed to fetch objects")
+  return drainEntityPages("/v1/objects", "objects", params, "apiErr.fetchObjects")
 }
 
 /**
@@ -2128,7 +2133,7 @@ export async function getObjectById(objectId: string): Promise<DbObject | null> 
   }
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to fetch object")
+    throwApiError(err, "apiErr.fetchObject")
   }
   return res.json()
 }
@@ -2169,7 +2174,7 @@ export async function generateCreature(data: {
   return apiJson("/v1/generate-creature", {
     body: data,
     workflowId: true,
-    label: "Failed to start creature generation",
+    label: "apiErr.startCreatureGeneration",
   })
 }
 
@@ -2215,7 +2220,7 @@ export async function generateCreatureAsset(data: {
   return apiJson("/v1/generate-creature-asset", {
     body: data,
     workflowId: true,
-    label: "Failed to start creature asset generation",
+    label: "apiErr.startCreatureAssetGeneration",
   })
 }
 
@@ -2249,7 +2254,7 @@ export async function generateCreatureMotion(data: {
   return apiJson("/v1/generate-creature-motion", {
     body: data,
     workflowId: true,
-    label: "Failed to start creature motion generation",
+    label: "apiErr.startCreatureMotionGeneration",
   })
 }
 
@@ -2292,7 +2297,7 @@ export async function saveCreature(data: {
   return apiJson("/v1/creatures", {
     body: data,
     workflowId: true,
-    label: "Failed to save creature",
+    label: "apiErr.saveCreature",
   })
 }
 
@@ -2312,7 +2317,7 @@ export async function approveCreatureMainImage(
   if (expectedUpdatedAt) body.expectedUpdatedAt = expectedUpdatedAt
   return apiJson(
     `/v1/creatures/${encodeURIComponent(creatureId)}/approve-main-image`,
-    { body, label: "Failed to approve creature main image" },
+    { body, label: "apiErr.approveCreatureMainImage" },
   )
 }
 
@@ -2325,7 +2330,7 @@ export async function recaptionCreature(
 ): Promise<{ readonly canonicalDescription: string }> {
   return apiJson(
     `/v1/creatures/${encodeURIComponent(creatureId)}/llm-caption`,
-    { label: "Failed to caption creature" },
+    { label: "apiErr.captionCreature" },
   )
 }
 
@@ -2341,7 +2346,7 @@ export async function removeCreatureAsset(
 ): Promise<void> {
   await apiJson(
     `/v1/creatures/${encodeURIComponent(creatureId)}/remove-asset`,
-    { body, label: "Failed to remove creature asset" },
+    { body, label: "apiErr.removeCreatureAsset" },
   )
 }
 
@@ -2359,7 +2364,7 @@ export async function deleteCreature(
     : `/v1/creatures/${encodeURIComponent(creatureId)}`
   return apiJson(path, {
     method: "DELETE",
-    label: opts?.permanent ? "Failed to permanently delete creature" : "Failed to archive creature",
+    label: opts?.permanent ? "apiErr.permanentlyDeleteCreature" : "apiErr.archiveCreature",
   })
 }
 
@@ -2371,7 +2376,7 @@ export async function deleteCreature(
 export async function restoreCreature(creatureId: string): Promise<{ id: string; name: string }> {
   return apiJson(
     `/v1/creatures/${encodeURIComponent(creatureId)}/restore`,
-    { label: "Failed to restore creature" },
+    { label: "apiErr.restoreCreature" },
   )
 }
 
@@ -2435,7 +2440,7 @@ export async function getCreatures(
   if (projectId) params.set("projectId", projectId)
   if (userId) params.set("userId", userId)
   if (opts?.archived) params.set("archived", "true")
-  return drainEntityPages("/v1/creatures", "creatures", params, "Failed to fetch creatures")
+  return drainEntityPages("/v1/creatures", "creatures", params, "apiErr.fetchCreatures")
 }
 
 /**
@@ -2459,7 +2464,7 @@ export async function getCreatureById(creatureId: string): Promise<DbCreature | 
   }
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to fetch creature")
+    throwApiError(err, "apiErr.fetchCreature")
   }
   return res.json()
 }
@@ -2486,7 +2491,7 @@ export async function generateLocation(data: {
   return apiJson("/v1/generate-location", {
     body: data,
     workflowId: true,
-    label: "Failed to start location generation",
+    label: "apiErr.startLocationGeneration",
   })
 }
 
@@ -2515,7 +2520,7 @@ export async function generateLocationAsset(data: {
   return apiJson("/v1/generate-location-asset", {
     body: data,
     workflowId: true,
-    label: "Failed to start location asset generation",
+    label: "apiErr.startLocationAssetGeneration",
   })
 }
 
@@ -2547,7 +2552,7 @@ export async function generateLocationMotion(data: {
   return apiJson("/v1/generate-location-motion", {
     body: data,
     workflowId: true,
-    label: "Failed to start location motion generation",
+    label: "apiErr.startLocationMotionGeneration",
   })
 }
 
@@ -2589,7 +2594,7 @@ export async function saveLocation(data: {
   return apiJson("/v1/locations", {
     body: data,
     workflowId: true,
-    label: "Failed to save location",
+    label: "apiErr.saveLocation",
   })
 }
 
@@ -2614,7 +2619,7 @@ export async function approveLocationMainImage(
   if (expectedUpdatedAt) body.expectedUpdatedAt = expectedUpdatedAt
   return apiJson(
     `/v1/locations/${encodeURIComponent(locationId)}/approve-main-image`,
-    { body, label: "Failed to approve location main image" },
+    { body, label: "apiErr.approveLocationMainImage" },
   )
 }
 
@@ -2630,7 +2635,7 @@ export async function recaptionLocation(
 ): Promise<{ readonly canonicalDescription: string }> {
   return apiJson(
     `/v1/locations/${encodeURIComponent(locationId)}/llm-caption`,
-    { label: "Failed to caption location" },
+    { label: "apiErr.captionLocation" },
   )
 }
 
@@ -2646,7 +2651,7 @@ export async function removeLocationAsset(
 ): Promise<void> {
   await apiJson(
     `/v1/locations/${encodeURIComponent(locationId)}/remove-asset`,
-    { body, label: "Failed to remove location asset" },
+    { body, label: "apiErr.removeLocationAsset" },
   )
 }
 
@@ -2660,7 +2665,7 @@ export async function restoreLocation(
 ): Promise<{ id: string; name: string }> {
   return apiJson(
     `/v1/locations/${encodeURIComponent(locationId)}/restore`,
-    { label: "Failed to restore location" },
+    { label: "apiErr.restoreLocation" },
   )
 }
 
@@ -2682,14 +2687,14 @@ export async function getJobStatusBatch(
   const ids = encodeURIComponent(jobIds.join(","))
   return apiJson(`/v1/jobs/status?ids=${ids}`, {
     method: "GET",
-    label: "Failed to fetch batch job status",
+    label: "apiErr.fetchBatchJobStatus",
   })
 }
 
 export async function deleteLocation(locationId: string): Promise<{ success: boolean; archived?: boolean }> {
   return apiJson(`/v1/locations/${encodeURIComponent(locationId)}`, {
     method: "DELETE",
-    label: "Failed to archive location",
+    label: "apiErr.archiveLocation",
   })
 }
 
@@ -2708,7 +2713,7 @@ export async function permanentDeleteLocation(
 ): Promise<{ success: boolean; permanent: boolean }> {
   return apiJson(
     `/v1/locations/${encodeURIComponent(locationId)}?permanent=true`,
-    { method: "DELETE", label: "Failed to permanently delete location" },
+    { method: "DELETE", label: "apiErr.permanentlyDeleteLocation" },
   )
 }
 
@@ -2721,7 +2726,7 @@ export async function listArchivedLocations(
 ): Promise<{ locations: DbLocation[] }> {
   const params = new URLSearchParams({ archived: "true" })
   if (projectId) params.set("projectId", projectId)
-  return drainEntityPages("/v1/locations", "locations", params, "Failed to load archived locations")
+  return drainEntityPages("/v1/locations", "locations", params, "lib.loadArchivedFailed")
 }
 
 export interface DbLocation {
@@ -2775,7 +2780,7 @@ export async function getLocations(projectId?: string, userId?: string): Promise
   const params = new URLSearchParams()
   if (projectId) params.set("projectId", projectId)
   if (userId) params.set("userId", userId)
-  return drainEntityPages("/v1/locations", "locations", params, "Failed to fetch locations")
+  return drainEntityPages("/v1/locations", "locations", params, "apiErr.fetchLocations")
 }
 
 export async function getLocationById(locationId: string): Promise<DbLocation | null> {
@@ -2788,7 +2793,7 @@ export async function getLocationById(locationId: string): Promise<DbLocation | 
   }
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to fetch location")
+    throwApiError(err, "apiErr.fetchLocation")
   }
   return res.json()
 }
@@ -2802,7 +2807,7 @@ export async function splitImage(data: {
   return apiJson("/v1/split-image", {
     body: data,
     workflowId: true,
-    label: "Failed to split image",
+    label: "apiErr.splitImage",
   })
 }
 
@@ -2950,7 +2955,7 @@ export async function generateVideo(
     body,
     workflowId: true,
     idempotencyKey,
-    label: "Failed to start video generation",
+    label: "apiErr.startVideoGeneration",
   })
 }
 
@@ -3034,7 +3039,7 @@ export async function generateVideoPro(body: {
     body: rest,
     workflowId: true,
     idempotencyKey,
-    label: "Failed to start video generation",
+    label: "apiErr.startVideoGeneration",
   })
 }
 
@@ -3053,7 +3058,7 @@ export async function stopGenerateVideoPro(jobId: string): Promise<{
 }> {
   return apiJson(`/v1/generate-video-pro/${encodeURIComponent(jobId)}/stop`, {
     method: "POST",
-    label: "Failed to stop video generation",
+    label: "apiErr.stopVideoGeneration",
   })
 }
 
@@ -3071,7 +3076,7 @@ export async function continueGenerateVideoPro(
   return apiJson("/v1/generate-video-pro/continue", {
     body: { fromJobId, ...(fromSegment !== undefined ? { fromSegment } : {}) },
     workflowId: true,
-    label: "Failed to continue video generation",
+    label: "apiErr.continueVideoGeneration",
   })
 }
 
@@ -3096,7 +3101,7 @@ export async function runEditVideoPro(params: {
   return apiJson("/v1/edit-video-pro", {
     body: { mode: "replace", ...params },
     workflowId: true,
-    label: "Failed to start video edit",
+    label: "apiErr.startVideoEdit",
   })
 }
 
@@ -3119,7 +3124,7 @@ export async function videoToVideo(videoUrl: string, prompt?: string, provider?:
   return apiJson("/v1/video-to-video", {
     body,
     workflowId: true,
-    label: "Failed to start video-to-video generation",
+    label: "apiErr.startVideoToVideoGeneration",
   })
 }
 
@@ -3142,7 +3147,7 @@ export async function switchXApi(
   return apiJson("/v1/switchx", {
     body,
     workflowId: true,
-    label: "Failed to start Relight & Switch generation",
+    label: "apiErr.startRelightSwitchGeneration",
   })
 }
 
@@ -3183,7 +3188,7 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
     body,
     workflowId: true,
     idempotencyKey,
-    label: "Failed to start text-to-video generation",
+    label: "apiErr.startTextToVideoGeneration",
   })
 }
 
@@ -3212,7 +3217,7 @@ export async function textToSpeech(
   return apiJson("/v1/text-to-speech", {
     body,
     workflowId: true,
-    label: "Failed to start text-to-speech generation",
+    label: "apiErr.startTextToSpeechGeneration",
   })
 }
 
@@ -3221,6 +3226,7 @@ export async function generateScriptApi(params: {
   sceneCount?: number
   tone?: string
   targetDuration?: number
+  styleGuide?: string
   provider?: string
   llmModel?: string
   reasoningEffort?: string
@@ -3236,7 +3242,7 @@ export async function generateScriptApi(params: {
   return apiJson("/v1/generate-script", {
     body: params,
     workflowId: true,
-    label: "Failed to start script generation",
+    label: "apiErr.startScriptGeneration",
   })
 }
 
@@ -3285,7 +3291,7 @@ export async function combineVideos(
   return apiJson("/v1/combine-videos", {
     body,
     workflowId: true,
-    label: "Failed to start video combination",
+    label: "apiErr.startVideoCombination",
   })
 }
 
@@ -3315,7 +3321,7 @@ export async function applyEdl(params: {
   return apiJson("/v1/apply-edl", {
     body,
     workflowId: true,
-    label: "Failed to start EDL render",
+    label: "apiErr.startEDLRender",
   })
 }
 
@@ -3356,7 +3362,7 @@ export async function editPlan(params: {
   return apiJson("/v1/edit-plan", {
     body,
     workflowId: true,
-    label: "Failed to start edit plan",
+    label: "apiErr.startEditPlan",
   })
 }
 
@@ -3390,7 +3396,28 @@ export async function imageOverlayApi(params: {
   return apiJson("/v1/image-overlay", {
     body,
     workflowId: true,
-    label: "Failed to start image overlay",
+    label: "apiErr.startImageOverlay",
+  })
+}
+
+/**
+ * Video Overlay: a base video + 1–20 timed image layers → one MP4 (local
+ * FFmpeg). The body is the shared wire contract — the canvas builds it with
+ * `assembleVideoOverlayRequest` (@nodaro/shared), the same assembly the DAG
+ * engine runs — so `slot` rides on every layer and worker messages name it.
+ */
+export async function videoOverlayApi(
+  params: ExpandedVideoOverlayRequest & {
+    userId?: string
+    /** The canvas's freshness key — echoed into the job's output_data (a result restored after a reload reads fresh). */
+    resultCompositionKey?: string
+  },
+): Promise<{ jobId: string }> {
+  const { userId, ...request } = params
+  return apiJson("/v1/video-overlay", {
+    body: { ...request, ...(userId ? { userId } : {}) },
+    workflowId: true,
+    label: "apiErr.startVideoOverlay",
   })
 }
 
@@ -3404,7 +3431,7 @@ export async function suggestOverlayPlacement(params: {
   return apiJson("/v1/image-overlay/suggest-placement", {
     body: params,
     workflowId: true,
-    label: "Could not suggest a placement",
+    label: "overlayAi.suggestFailed",
   })
 }
 
@@ -3451,7 +3478,7 @@ export async function imageCollageApi(
   return apiJson("/v1/image-collage", {
     body,
     workflowId: true,
-    label: "Failed to start image collage",
+    label: "apiErr.startImageCollage",
   })
 }
 
@@ -3474,7 +3501,7 @@ export async function assembleNarratedVideo(params: {
   return apiJson("/v1/assemble-narrated-video", {
     body: params,
     workflowId: true,
-    label: "Failed to start narrated video assembly",
+    label: "apiErr.startNarratedVideoAssembly",
   })
 }
 
@@ -3492,7 +3519,7 @@ export async function mergeVideoAudioApi(
   return apiJson("/v1/merge-video-audio", {
     body,
     workflowId: true,
-    label: "Failed to start merge-video-audio",
+    label: "apiErr.startMergeVideoAudio",
   })
 }
 
@@ -3504,7 +3531,7 @@ export async function trimAudioApi(videoUrl: string, audioFormat?: string, userI
   return apiJson("/v1/trim-audio", {
     body,
     workflowId: true,
-    label: "Failed to start trim-audio",
+    label: "apiErr.startTrimAudio",
   })
 }
 
@@ -3517,7 +3544,7 @@ export async function splitMediaApi(opts: { videoUrl?: string; audioUrl?: string
   return apiJson("/v1/split-media", {
     body,
     workflowId: true,
-    label: "Failed to start split-media",
+    label: "apiErr.startSplitMedia",
   })
 }
 
@@ -3529,7 +3556,7 @@ export async function extractAudioApi(videoUrl: string, userId?: string): Promis
   return apiJson("/v1/extract-audio", {
     body,
     workflowId: true,
-    label: "Failed to start extract-audio",
+    label: "apiErr.startExtractAudio",
   })
 }
 
@@ -3541,7 +3568,7 @@ export async function removeAudioApi(videoUrl: string, userId?: string): Promise
   return apiJson("/v1/remove-audio", {
     body,
     workflowId: true,
-    label: "Failed to start remove-audio",
+    label: "apiErr.startRemoveAudio",
   })
 }
 
@@ -3557,7 +3584,24 @@ export async function silenceDetectApi(
   return apiJson("/v1/silence-detect", {
     body,
     workflowId: true,
-    label: "Failed to start silence-detect",
+    label: "apiErr.startSilenceDetect",
+  })
+}
+
+/** POST /v1/audio-sync — measure 2–6 recordings' clock offsets against
+ *  `reference` (default: the first source). Each source's `id` comes back as
+ *  its offset's `sourceId`; on the canvas it is the upstream node id. */
+export async function audioSyncApi(
+  params: { sources: ReadonlyArray<{ id: string; url: string }>; reference?: string; userId?: string },
+): Promise<{ jobId: string }> {
+  const { sources, reference, userId } = params
+  const body: Record<string, unknown> = { sources: sources.map((s) => ({ id: s.id, url: s.url })) }
+  if (reference !== undefined) body.reference = reference
+  if (userId) body.userId = userId
+  return apiJson("/v1/audio-sync", {
+    body,
+    workflowId: true,
+    label: "apiErr.startAudioSync",
   })
 }
 
@@ -3609,7 +3653,7 @@ export async function trimVideoApi(
   return apiJson("/v1/trim-video", {
     body,
     workflowId: true,
-    label: "Failed to start trim-video",
+    label: "apiErr.startTrimVideo",
   })
 }
 
@@ -3631,7 +3675,7 @@ export async function extractFrameApi(
   return apiJson("/v1/extract-frame", {
     body,
     workflowId: true,
-    label: "Failed to extract frame",
+    label: "apiErr.extractFrame",
   })
 }
 
@@ -3643,7 +3687,7 @@ export async function transcodeVideoApi(videoUrl: string, codec?: string, crf?: 
   return apiJson("/v1/transcode-video", {
     body,
     workflowId: true,
-    label: "Failed to start transcode-video",
+    label: "apiErr.startTranscodeVideo",
   })
 }
 
@@ -3669,7 +3713,7 @@ export async function speedRampApi(
   return apiJson("/v1/speed-ramp", {
     body,
     workflowId: true,
-    label: "Failed to start speed-ramp",
+    label: "apiErr.startSpeedRamp",
   })
 }
 
@@ -3700,7 +3744,7 @@ export async function loopVideoApi(
   return apiJson("/v1/loop-video", {
     body,
     workflowId: true,
-    label: "Failed to start loop-video",
+    label: "apiErr.startLoopVideo",
   })
 }
 
@@ -3712,7 +3756,7 @@ export async function fadeVideoApi(videoUrl: string, fadeIn: boolean, fadeInDura
   return apiJson("/v1/fade-video", {
     body,
     workflowId: true,
-    label: "Failed to start fade-video",
+    label: "apiErr.startFadeVideo",
   })
 }
 
@@ -3737,7 +3781,7 @@ export async function gifToVideoApi(
   return apiJson("/v1/gif-to-video", {
     body,
     workflowId: true,
-    label: "Failed to start gif-to-video",
+    label: "apiErr.startGifToVideo",
   })
 }
 
@@ -3760,7 +3804,7 @@ export async function stillToVideoApi(
   return apiJson("/v1/still-to-video", {
     body,
     workflowId: true,
-    label: "Failed to start still-to-video",
+    label: "apiErr.startStillToVideo",
   })
 }
 
@@ -3789,7 +3833,7 @@ export async function slideshowApi(
   return apiJson("/v1/slideshow", {
     body,
     workflowId: true,
-    label: "Failed to start slideshow",
+    label: "apiErr.startSlideshow",
   })
 }
 
@@ -3801,7 +3845,7 @@ export async function resizeVideoApi(videoUrl: string, targetAspect: string, met
   return apiJson("/v1/resize-video", {
     body,
     workflowId: true,
-    label: "Failed to start resize-video",
+    label: "apiErr.startResizeVideo",
   })
 }
 
@@ -3822,7 +3866,7 @@ export async function socialMediaFormatApi(
   return apiJson("/v1/social-media-format", {
     body,
     workflowId: true,
-    label: "Failed to start social-media-format",
+    label: "apiErr.startSocialMediaFormat",
   })
 }
 
@@ -3839,7 +3883,7 @@ export async function adjustVolumeApi(inputUrl: string, inputType: "audio" | "vi
   return apiJson("/v1/adjust-volume", {
     body,
     workflowId: true,
-    label: "Failed to start adjust-volume",
+    label: "apiErr.startAdjustVolume",
   })
 }
 
@@ -3864,7 +3908,7 @@ export async function audioFxApi(params: {
   return apiJson("/v1/audio-fx", {
     body,
     workflowId: true,
-    label: "Failed to start audio FX",
+    label: "apiErr.startAudioFX",
   })
 }
 
@@ -3934,7 +3978,7 @@ export async function addCaptionsApi(videoUrl: string, text: string, style?: str
   return apiJson("/v1/add-captions", {
     body,
     workflowId: true,
-    label: "Failed to start add-captions",
+    label: "apiErr.startAddCaptions",
   })
 }
 
@@ -3949,7 +3993,7 @@ export async function mixAudioApi(audioUrls: string[], trackVolumes?: number[], 
   return apiJson("/v1/mix-audio", {
     body,
     workflowId: true,
-    label: "Failed to start mix-audio",
+    label: "apiErr.startMixAudio",
   })
 }
 
@@ -3964,7 +4008,7 @@ export async function combineAudioApi(params: {
   return apiJson("/v1/combine-audio", {
     body,
     workflowId: true,
-    label: "Failed to start combine audio",
+    label: "apiErr.startCombineAudio",
   })
 }
 
@@ -4031,15 +4075,14 @@ export async function uploadFile(
     const err = await res.json().catch(() => null)
     if (err?.error?.code === "storage_limit_exceeded") {
       throw new StorageExceededError(
-        err.error.message ?? "Storage limit exceeded",
+        refusalMessage(err.error.message, "apiErr.storageLimitExceeded"),
         err.error.usedBytes ?? 0,
         err.error.quotaBytes ?? 0,
         err.error.remainingBytes ?? 0,
         err.error.tier ?? "free",
       )
     }
-    const message = err?.error?.message ?? "Upload failed"
-    throw new Error(message)
+    throw new Error(apiErrorMessage({ code: err?.error?.code, serverMessage: err?.error?.message, fallbackKey: "pipe.uploadFailed" }))
   }
   const json = await res.json()
   return json.data ?? json
@@ -4082,7 +4125,7 @@ export async function processMedia(params: MediaProcessParams): Promise<MediaPro
 export async function downloadYouTubeAudio(url: string): Promise<{ url: string; thumbnailUrl: string | null }> {
   return apiJson("/v1/youtube-audio", {
     body: { url },
-    label: "Failed to extract audio from video",
+    label: "apiErr.extractAudioFromVideo",
   })
 }
 
@@ -4119,7 +4162,7 @@ export async function startVideoDownload(
       ...(section ? { sectionStartSec: section.startSec, sectionEndSec: section.endSec } : {}),
       ...(requireAudio !== undefined ? { requireAudio } : {}),
     },
-    label: "Failed to start download. The video may be private or require login.",
+    label: "apiErr.startDownloadTheVideoMayBePrivate",
   })
 }
 
@@ -4140,7 +4183,7 @@ const UNKNOWN_VIDEO_METADATA: VideoLinkMetadata = { durationSec: null, title: nu
  */
 export async function fetchVideoMetadata(url: string): Promise<VideoLinkMetadata> {
   try {
-    const raw = await apiJson<unknown>("/v1/video-metadata", { body: { url }, label: "Failed to read video info" })
+    const raw = await apiJson<unknown>("/v1/video-metadata", { body: { url }, label: "apiErr.readVideoInfo" })
     if (typeof raw !== "object" || raw === null) return UNKNOWN_VIDEO_METADATA
     const obj = raw as Record<string, unknown>
     return {
@@ -4163,7 +4206,7 @@ export async function textToAudioApi(prompt: string, provider?: string, duration
   return apiJson("/v1/text-to-audio", {
     body,
     workflowId: true,
-    label: "Failed to start audio generation",
+    label: "apiErr.startAudioGeneration",
   })
 }
 
@@ -4173,7 +4216,7 @@ export async function audioIsolationApi(audioUrl: string, userId?: string): Prom
   return apiJson("/v1/audio-isolation", {
     body,
     workflowId: true,
-    label: "Failed to start audio isolation",
+    label: "apiErr.startAudioIsolation",
   })
 }
 
@@ -4194,7 +4237,7 @@ export async function textToDialogueApi(
   return apiJson("/v1/text-to-dialogue", {
     body,
     workflowId: true,
-    label: "Failed to start dialogue generation",
+    label: "apiErr.startDialogueGeneration",
   })
 }
 
@@ -4213,7 +4256,7 @@ export async function voiceChangerApi(audioUrl: string | undefined, voiceId: str
   return apiJson("/v1/voice-changer", {
     body,
     workflowId: true,
-    label: "Failed to start voice changer",
+    label: "apiErr.startVoiceChanger",
   })
 }
 
@@ -4257,7 +4300,7 @@ export async function voiceChangerProApi(
   return apiJson("/v1/voice-changer-pro", {
     body,
     workflowId: true,
-    label: "Failed to start voice recast",
+    label: "apiErr.startVoiceRecast",
   })
 }
 
@@ -4299,7 +4342,7 @@ export async function dubbingApi(
   return apiJson("/v1/dubbing", {
     body,
     workflowId: true,
-    label: "Failed to start dubbing",
+    label: "apiErr.startDubbing",
   })
 }
 
@@ -4309,7 +4352,7 @@ export async function voiceRemixApi(text: string, voiceDescription: string, user
   return apiJson("/v1/voice-remix", {
     body,
     workflowId: true,
-    label: "Failed to start voice remix",
+    label: "apiErr.startVoiceRemix",
   })
 }
 
@@ -4331,7 +4374,7 @@ export async function voiceDesignApi(
   return apiJson("/v1/voice-design", {
     body,
     workflowId: true,
-    label: "Failed to start voice design",
+    label: "apiErr.startVoiceDesign",
   })
 }
 
@@ -4341,7 +4384,7 @@ export async function forcedAlignmentApi(audioUrl: string, transcript: string, u
   return apiJson("/v1/forced-alignment", {
     body,
     workflowId: true,
-    label: "Failed to start forced alignment",
+    label: "apiErr.startForcedAlignment",
   })
 }
 
@@ -4378,7 +4421,61 @@ export async function startVideoAnalysis(params: {
   return apiJson("/v1/video-analysis", {
     body,
     workflowId: true,
-    label: "Failed to start video analysis",
+    label: "apiErr.startVideoAnalysis",
+  })
+}
+
+/**
+ * Content Recipe (cloud) — one post's material in (a Video Analysis result, a
+ * scraped post, a caption or transcript), a queued recipe job out. Poll the
+ * job; its output_data is { json: recipe, text, model, warnings? }.
+ */
+export async function startContentRecipe(params: {
+  source: string
+  sourceUrl?: string
+  focus?: string
+  llmModel?: string
+  reasoningEffort?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { source: params.source }
+  if (params.sourceUrl) body.sourceUrl = params.sourceUrl
+  if (params.focus) body.focus = params.focus
+  if (params.llmModel) body.llmModel = params.llmModel
+  if (params.reasoningEffort) body.reasoningEffort = params.reasoningEffort
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/content-recipe", {
+    body,
+    workflowId: true,
+    label: "apiErr.startContentRecipe",
+  })
+}
+
+/**
+ * Content Ideas (cloud) — recipes + a brand profile in, a queued ideas job
+ * out. Poll the job; its output_data is { json: ideas, text, listResults:
+ * one brief per idea, model, warnings? }.
+ */
+export async function startContentIdeas(params: {
+  recipes: string[]
+  brand?: string
+  count?: number
+  language?: string
+  llmModel?: string
+  reasoningEffort?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { recipes: params.recipes }
+  if (params.brand) body.brand = params.brand
+  if (params.count !== undefined) body.count = params.count
+  if (params.language) body.language = params.language
+  if (params.llmModel) body.llmModel = params.llmModel
+  if (params.reasoningEffort) body.reasoningEffort = params.reasoningEffort
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/content-ideas", {
+    body,
+    workflowId: true,
+    label: "apiErr.startContentIdeas",
   })
 }
 
@@ -4409,7 +4506,7 @@ export async function runVideoAudit(params: {
   return apiJson("/v1/video-audit", {
     body,
     workflowId: true,
-    label: "Failed to start AI audit",
+    label: "apiErr.startAIAudit",
   })
 }
 
@@ -4419,7 +4516,7 @@ export async function runVideoAudit(params: {
 export async function probeVideoAnalysis(params: { youtubeUrl: string }): Promise<{ durationSec: number; title: string | null }> {
   return apiJson("/v1/video-analysis/probe", {
     body: { youtubeUrl: params.youtubeUrl },
-    label: "Failed to read video details",
+    label: "apiErr.readVideoDetails",
   })
 }
 
@@ -4427,7 +4524,7 @@ export async function sendWebhookOutput(data: { url: string; payload: Record<str
   return apiJson("/v1/webhook-output/send", {
     body: data,
     workflowId: true,
-    label: "Failed to send webhook output",
+    label: "apiErr.sendWebhookOutput",
   })
 }
 
@@ -4449,13 +4546,13 @@ export async function webScrape(params: {
   return apiJson("/v1/web-scrape", {
     body: { ...params, respondAsync: true },
     workflowId: true,
-    label: "Web scrape failed",
+    label: "apiErr.webScrapeFailed",
   })
 }
 
 /** Advertiser lookup for the Meta Ads node's advertiser mode — a name → the Facebook Pages that match it (no credits, rate-limited). */
 export async function metaAdsAdvertisers(query: string): Promise<{ advertisers: import("@nodaro/shared").MetaAdsAdvertiser[] }> {
-  return apiJson("/v1/meta-ads-scrape/advertisers", { body: { query }, label: "Meta Ads advertiser lookup" })
+  return apiJson("/v1/meta-ads-scrape/advertisers", { body: { query }, label: "apiErr.metaAdsAdvertiserLookup" })
 }
 
 export async function metaAdsScrape(params: {
@@ -4489,7 +4586,7 @@ export async function metaAdsScrape(params: {
   return apiJson("/v1/meta-ads-scrape", {
     body: { ...params, respondAsync: true },
     workflowId: true,
-    label: "Meta Ads scrape failed",
+    label: "apiErr.metaAdsScrapeFailed",
   })
 }
 
@@ -4507,8 +4604,97 @@ export async function instagramScrape(params: {
   analysisFocus?: string
   workflowId?: string
 }): Promise<{ jobId: string; json: unknown; text?: string; imageUrl?: string; videoUrl?: string; mediaStorage?: unknown; analysis?: unknown }> {
-  return apiJson("/v1/instagram-scrape", { body: params, workflowId: true, label: "Instagram scrape failed" })
+  return apiJson("/v1/instagram-scrape", { body: params, workflowId: true, label: "apiErr.instagramScrapeFailed" })
 }
+
+/**
+ * Social Search (Cloud): one platform, one keyword or account. Answers with a
+ * job id at once; the search runs in a worker (an X search can take two
+ * minutes), so poll the job for `output_data.json`, every post found.
+ */
+export async function socialSearch(
+  params: import("@nodaro/shared").SocialSearchParams,
+): Promise<{ jobId: string }> {
+  return apiJson("/v1/social-search", { body: { ...params }, workflowId: true, label: "apiErr.socialSearchFailed" })
+}
+
+// ---- Saved posts (the inspiration wall) ----
+
+type SavedPost = import("@nodaro/shared").SavedPost
+
+export async function listSavedPosts(
+  params: import("@nodaro/shared").ListSavedPostsParams = {},
+): Promise<import("@nodaro/shared").ListSavedPostsResult> {
+  const qs = new URLSearchParams()
+  if (params.platform) qs.set("platform", params.platform)
+  if (params.tag) qs.set("tag", params.tag)
+  if (params.q) qs.set("q", params.q)
+  if (params.cursor) qs.set("cursor", params.cursor)
+  if (params.limit) qs.set("limit", String(params.limit))
+  const query = qs.toString()
+  return apiJson(`/v1/saved-posts${query ? `?${query}` : ""}`, { method: "GET", label: "apiErr.loadSavedPosts" })
+}
+
+/** Which of these posts (`SocialPost.id`) the caller saved, as postId -> save id. */
+export async function lookupSavedPosts(postIds: readonly string[]): Promise<ReadonlyMap<string, string>> {
+  if (postIds.length === 0) return new Map()
+  const res = await apiJson<import("@nodaro/shared").SavedPostsLookupResult>("/v1/saved-posts/lookup", {
+    body: { postIds: [...postIds] },
+    label: "apiErr.loadSavedPosts",
+  })
+  return new Map(res.saved.map((s) => [s.postId, s.id]))
+}
+
+export async function savePost(input: import("@nodaro/shared").SavePostInput): Promise<SavedPost> {
+  return apiJson("/v1/saved-posts", { body: { ...input }, label: "apiErr.savePost" })
+}
+
+export async function updateSavedPost(id: string, input: import("@nodaro/shared").UpdateSavedPostInput): Promise<SavedPost> {
+  return apiJson(`/v1/saved-posts/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.updateSavedPost" })
+}
+
+export async function deleteSavedPost(id: string): Promise<void> {
+  await apiJson(`/v1/saved-posts/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteSavedPost" })
+}
+
+// ---- Competitors (Cloud: tracked brands, scans, action cards) ----
+
+type TrackedCompetitor = import("@nodaro/shared").TrackedCompetitor
+
+export async function listCompetitors(): Promise<TrackedCompetitor[]> {
+  const res = await apiJson<{ data: TrackedCompetitor[] }>("/v1/competitors", { method: "GET", label: "apiErr.loadCompetitors" })
+  return res.data
+}
+
+export async function getCompetitor(id: string): Promise<import("@nodaro/shared").CompetitorDetail> {
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "GET", label: "apiErr.loadCompetitors" })
+}
+
+export async function createCompetitor(input: import("@nodaro/shared").CreateCompetitorInput): Promise<TrackedCompetitor> {
+  return apiJson("/v1/competitors", { body: { ...input }, label: "apiErr.saveCompetitor" })
+}
+
+export async function updateCompetitor(id: string, input: import("@nodaro/shared").UpdateCompetitorInput): Promise<TrackedCompetitor> {
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.saveCompetitor" })
+}
+
+export async function deleteCompetitor(id: string): Promise<void> {
+  await apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteCompetitor" })
+}
+
+export async function competitorCards(): Promise<import("@nodaro/shared").CompetitorCardsResult> {
+  return apiJson("/v1/competitors/cards", { method: "GET", label: "apiErr.loadCompetitors" })
+}
+
+export async function discoverCompetitor(website: string): Promise<import("@nodaro/shared").CompetitorDiscovery> {
+  return apiJson("/v1/competitor-discover", { body: { website }, label: "apiErr.discoverCompetitor" })
+}
+
+/** Starts a paid scan; answers with the job id at once. */
+export async function scanCompetitor(id: string): Promise<{ jobId: string }> {
+  return apiJson("/v1/competitor-scan", { body: { competitorId: id }, label: "apiErr.scanCompetitor" })
+}
+
 
 export async function sunoGenerateApi(params: {
   prompt: string
@@ -4549,7 +4735,7 @@ export async function sunoGenerateApi(params: {
   return apiJson("/v1/suno/generate", {
     body,
     workflowId: true,
-    label: "Failed to start Suno generation",
+    label: "apiErr.startSunoGeneration",
   })
 }
 
@@ -4585,7 +4771,7 @@ export async function sunoCoverApi(params: {
   return apiJson("/v1/suno/cover", {
     body,
     workflowId: true,
-    label: "Failed to start Suno cover",
+    label: "apiErr.startSunoCover",
   })
 }
 
@@ -4628,7 +4814,7 @@ export async function sunoExtendApi(params: {
   return apiJson("/v1/suno/extend", {
     body,
     workflowId: true,
-    label: "Failed to start Suno extend",
+    label: "apiErr.startSunoExtend",
   })
 }
 
@@ -4641,7 +4827,7 @@ export async function sunoLyricsApi(params: {
   return apiJson("/v1/suno/lyrics", {
     body,
     workflowId: true,
-    label: "Failed to start Suno lyrics generation",
+    label: "apiErr.startSunoLyricsGeneration",
   })
 }
 
@@ -4657,7 +4843,7 @@ export async function sunoSeparateApi(params: {
   return apiJson("/v1/suno/separate", {
     body,
     workflowId: true,
-    label: "Failed to start Suno separate",
+    label: "apiErr.startSunoSeparate",
   })
 }
 
@@ -4674,7 +4860,7 @@ export async function audioSeparationApi(params: {
   return apiJson("/v1/audio-separation", {
     body,
     workflowId: true,
-    label: "Failed to start audio separation",
+    label: "apiErr.startAudioSeparation",
   })
 }
 
@@ -4688,7 +4874,7 @@ export async function sunoMusicVideoApi(params: {
   return apiJson("/v1/suno/music-video", {
     body,
     workflowId: true,
-    label: "Failed to start Suno music video",
+    label: "apiErr.startSunoMusicVideo",
   })
 }
 
@@ -4713,7 +4899,7 @@ export async function sunoMashupApi(params: {
   return apiJson("/v1/suno/mashup", {
     body,
     workflowId: true,
-    label: "Failed to start Suno mashup",
+    label: "apiErr.startSunoMashup",
   })
 }
 
@@ -4737,7 +4923,7 @@ export async function sunoReplaceSectionApi(params: {
   return apiJson("/v1/suno/replace-section", {
     body,
     workflowId: true,
-    label: "Failed to start Suno replace section",
+    label: "apiErr.startSunoReplaceSection",
   })
 }
 
@@ -4750,7 +4936,7 @@ export async function sunoStyleBoostApi(params: {
   return apiJson("/v1/suno/style-boost", {
     body,
     workflowId: true,
-    label: "Failed to start Suno style boost",
+    label: "apiErr.startSunoStyleBoost",
   })
 }
 
@@ -4766,7 +4952,7 @@ export async function sunoAddInstrumentalApi(params: {
   return apiJson("/v1/suno/add-instrumental", {
     body,
     workflowId: true,
-    label: "Failed to start Suno add instrumental",
+    label: "apiErr.startSunoAddInstrumental",
   })
 }
 
@@ -4782,7 +4968,7 @@ export async function sunoAddVocalsApi(params: {
   return apiJson("/v1/suno/add-vocals", {
     body,
     workflowId: true,
-    label: "Failed to start Suno add vocals",
+    label: "apiErr.startSunoAddVocals",
   })
 }
 
@@ -4796,7 +4982,7 @@ export async function sunoConvertWavApi(params: {
   return apiJson("/v1/suno/convert-wav", {
     body,
     workflowId: true,
-    label: "Failed to start Suno WAV conversion",
+    label: "apiErr.startSunoWAVConversion",
   })
 }
 
@@ -4827,7 +5013,7 @@ export async function sunoUploadExtendApi(params: {
   return apiJson("/v1/suno/upload-extend", {
     body,
     workflowId: true,
-    label: "Failed to start Suno upload extend",
+    label: "apiErr.startSunoUploadExtend",
   })
 }
 
@@ -4869,21 +5055,21 @@ export async function sunoVoiceValidateApi(params: {
 }): Promise<{ taskId: string }> {
   return apiJson("/v1/suno/voice/validate", {
     body: params,
-    label: "Failed to start voice validation",
+    label: "apiErr.startVoiceValidation",
   })
 }
 
 export async function sunoVoiceValidateInfoApi(taskId: string): Promise<SunoVoiceValidateInfo> {
   return apiJson(`/v1/suno/voice/validate-info?taskId=${encodeURIComponent(taskId)}`, {
     method: "GET",
-    label: "Failed to fetch validation info",
+    label: "apiErr.fetchValidationInfo",
   })
 }
 
 export async function sunoVoiceRegenerateApi(taskId: string): Promise<{ taskId: string }> {
   return apiJson("/v1/suno/voice/regenerate", {
     body: { taskId },
-    label: "Failed to regenerate validation phrase",
+    label: "apiErr.regenerateValidationPhrase",
   })
 }
 
@@ -4897,14 +5083,14 @@ export async function sunoVoiceGenerateApi(params: {
 }): Promise<{ jobId: string; kieTaskId: string }> {
   return apiJson("/v1/suno/voice/generate", {
     body: params,
-    label: "Failed to start voice generation",
+    label: "apiErr.startVoiceGeneration",
   })
 }
 
 export async function sunoVoiceRecordInfoApi(taskId: string): Promise<SunoVoiceRecordInfo> {
   return apiJson(`/v1/suno/voice/record-info?taskId=${encodeURIComponent(taskId)}`, {
     method: "GET",
-    label: "Failed to fetch voice record info",
+    label: "apiErr.fetchVoiceRecordInfo",
   })
 }
 
@@ -4921,7 +5107,7 @@ export async function transcribeApi(audioUrl: string, provider?: string, languag
   return apiJson("/v1/transcribe", {
     body,
     workflowId: true,
-    label: "Failed to start transcription",
+    label: "apiErr.startTranscription",
   })
 }
 
@@ -4942,7 +5128,7 @@ export async function imageToTextApi(
   return apiJson("/v1/image-to-text/describe", {
     body,
     workflowId: true,
-    label: "Failed to describe image",
+    label: "apiErr.describeImage",
   })
 }
 
@@ -4962,7 +5148,7 @@ export async function describeToPickerApi(
   return apiJson("/v1/describe-to-picker", {
     body,
     workflowId: true,
-    label: "Failed to analyze image",
+    label: "apiErr.analyzeImage",
   })
 }
 
@@ -4997,7 +5183,7 @@ export async function speechToVideoApi(opts: {
   return apiJson("/v1/speech-to-video", {
     body,
     workflowId: true,
-    label: "Failed to start speech-to-video generation",
+    label: "apiErr.startSpeechToVideoGeneration",
   })
 }
 
@@ -5090,7 +5276,7 @@ export async function runAiAvatar(input: {
   return apiJson("/v1/ai-avatar", {
     body,
     workflowId: true,
-    label: "Failed to start AI avatar generation",
+    label: "apiErr.startAIAvatarGeneration",
   })
 }
 
@@ -5123,7 +5309,7 @@ export async function runCinematicAvatar(input: {
   return apiJson("/v1/cinematic-avatar", {
     body,
     workflowId: true,
-    label: "Failed to start cinematic avatar generation",
+    label: "apiErr.startCinematicAvatarGeneration",
   })
 }
 
@@ -5201,7 +5387,7 @@ export async function lipSyncApi(
   return apiJson("/v1/lip-sync", {
     body,
     workflowId: true,
-    label: "Failed to start lip sync generation",
+    label: "apiErr.startLipSyncGeneration",
   })
 }
 
@@ -5219,7 +5405,7 @@ export async function generateMusicApi(prompt: string, provider?: string, durati
   return apiJson("/v1/generate-music", {
     body,
     workflowId: true,
-    label: "Failed to start music generation",
+    label: "apiErr.startMusicGeneration",
   })
 }
 
@@ -5231,7 +5417,7 @@ export async function extractYouTubeAudioApi(youtubeUrl: string, userId?: string
   return apiJson("/v1/extract-youtube-audio", {
     body,
     workflowId: true,
-    label: "Failed to start YouTube audio extraction",
+    label: "apiErr.startYouTubeAudioExtraction",
   })
 }
 
@@ -5243,7 +5429,7 @@ export interface YouTubeOEmbedData {
 
 export async function fetchYouTubeOEmbed(url: string): Promise<YouTubeOEmbedData> {
   const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`)
-  if (!res.ok) throw new Error("Failed to fetch YouTube metadata")
+  if (!res.ok) throw new Error(tx("apiErr.fetchYouTubeMetadata"))
   return res.json()
 }
 
@@ -5345,7 +5531,7 @@ export async function getJobs(userId?: string, cursor?: string, limit?: number):
   const url = params.toString() ? `/v1/jobs?${params.toString()}` : "/v1/jobs"
   return apiJson(url, {
     method: "GET",
-    label: "Failed to fetch jobs",
+    label: "apiErr.fetchJobs",
   })
 }
 
@@ -5357,7 +5543,7 @@ export async function deleteJob(jobId: string): Promise<{ success: boolean }> {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to delete job")
+    throwApiError(err, "exec.deleteJobFailed")
   }
   return { success: true }
 }
@@ -5388,7 +5574,7 @@ export async function getBatchJobStatus(jobIds: string[]): Promise<BatchJobStatu
   }
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to fetch batch job status")
+    throwApiError(err, "apiErr.fetchBatchJobStatus")
   }
   const body = await res.json()
   return body.data
@@ -5435,7 +5621,7 @@ export async function motionTransferApi(
   return apiJson("/v1/motion-transfer", {
     body,
     workflowId: true,
-    label: "Failed to start motion transfer",
+    label: "apiErr.startMotionTransfer",
   })
 }
 
@@ -5455,7 +5641,7 @@ export async function videoUpscaleApi(opts: {
   return apiJson("/v1/video-upscale", {
     body,
     workflowId: true,
-    label: "Failed to start video upscale",
+    label: "apiErr.startVideoUpscale",
   })
 }
 
@@ -5482,7 +5668,7 @@ export async function extendVideo(params: {
   return apiJson("/v1/extend-video", {
     body: params,
     workflowId: true,
-    label: "Failed to start extend video",
+    label: "apiErr.startExtendVideo",
   })
 }
 
@@ -5503,7 +5689,7 @@ export async function runVideoRetake(params: {
   return apiJson("/v1/video-retake", {
     body: params,
     workflowId: true,
-    label: "Failed to start video retake",
+    label: "apiErr.startVideoRetake",
   })
 }
 
@@ -5515,7 +5701,7 @@ export async function faceSwapApi(params: {
   return apiJson("/v1/face-swap", {
     body: params,
     workflowId: true,
-    label: "Failed to start face swap",
+    label: "apiErr.startFaceSwap",
   })
 }
 
@@ -5553,7 +5739,7 @@ export async function videoSfx(payload: {
   return apiJson("/v1/video-sfx", {
     body: payload,
     workflowId: true,
-    label: "Failed to start video SFX",
+    label: "apiErr.startVideoSFX",
   })
 }
 
@@ -5567,7 +5753,7 @@ export async function generateMask(params: {
   return apiJson("/v1/generate-mask", {
     body: params,
     workflowId: true,
-    label: "Failed to start mask generation",
+    label: "apiErr.startMaskGeneration",
   })
 }
 
@@ -5580,7 +5766,7 @@ export async function renderVideoWithSceneGraph(params: {
   return apiJson("/v1/render-video/scene-graph", {
     body: params,
     workflowId: true,
-    label: "Failed to start scene graph video render",
+    label: "apiErr.startSceneGraphVideoRender",
   })
 }
 
@@ -5599,7 +5785,7 @@ export async function generateSceneGraph(params: {
   return apiJson("/v1/scene-graph/generate", {
     body: params,
     workflowId: true,
-    label: "Scene graph generation failed",
+    label: "apiErr.sceneGraphGenerationFailed",
   })
 }
 
@@ -5621,7 +5807,7 @@ export async function generateAfterEffects(params: {
   return apiJson("/v1/after-effects/generate", {
     body: params,
     workflowId: true,
-    label: "After effects generation failed",
+    label: "apiErr.afterEffectsGenerationFailed",
   })
 }
 
@@ -5633,7 +5819,7 @@ export async function renderVideoWithPlan(params: {
   return apiJson("/v1/render-video/plan", {
     body: params,
     workflowId: true,
-    label: "Failed to start plan-based video render",
+    label: "apiErr.startPlanBasedVideoRender",
   })
 }
 
@@ -5656,7 +5842,7 @@ export async function generateLottieOverlay(params: {
   return apiJson("/v1/lottie-overlay/generate", {
     body: params,
     workflowId: true,
-    label: "Lottie overlay generation failed",
+    label: "apiErr.lottieOverlayGenerationFailed",
   })
 }
 
@@ -5680,7 +5866,7 @@ export async function generate3DTitle(params: {
   return apiJson("/v1/3d-title/generate", {
     body: params,
     workflowId: true,
-    label: "3D title generation failed",
+    label: "apiErr.3dTitleGenerationFailed",
   })
 }
 
@@ -5725,7 +5911,7 @@ export async function generate3DScene(params: {
   return apiJson("/v1/3d-scene/generate", {
     body: params,
     workflowId: true,
-    label: "3D scene generation failed",
+    label: "apiErr.3dSceneGenerationFailed",
   })
 }
 
@@ -5761,7 +5947,7 @@ export async function edit3DScene(params: {
   return apiJson("/v1/3d-scene/edit", {
     body: params,
     workflowId: true,
-    label: "3D scene edit failed",
+    label: "apiErr.3dSceneEditFailed",
   })
 }
 
@@ -5800,7 +5986,7 @@ export async function quotePro3DRender(
   return apiJson("/v1/pro-3d-render/quote", {
     body: params as unknown as Record<string, unknown>,
     workflowId: true,
-    label: "3D Render Pro quote failed",
+    label: "apiErr.3dRenderProQuoteFailed",
   })
 }
 
@@ -5823,7 +6009,7 @@ export async function proRender3D(
     body: params as unknown as Record<string, unknown>,
     workflowId: true,
     idempotencyKey,
-    label: "3D Render Pro failed",
+    label: "apiErr.3dRenderProFailed",
   })
 }
 
@@ -5853,7 +6039,7 @@ export async function generateMotionGraphics(params: {
   return apiJson("/v1/motion-graphics/generate", {
     body: params,
     workflowId: true,
-    label: "Motion graphics generation failed",
+    label: "apiErr.motionGraphicsGenerationFailed",
   })
 }
 
@@ -5891,7 +6077,7 @@ export async function wizardAnalyze(params: {
   return apiJson("/v1/prompt-helper/wizard", {
     body: { action: "analyze" as const, ...params },
     workflowId: true,
-    label: "Prompt analysis failed",
+    label: "apiErr.promptAnalysisFailed",
   })
 }
 
@@ -5922,7 +6108,7 @@ export async function wizardGenerate(params: {
   return apiJson("/v1/prompt-helper/wizard", {
     body: { action: "generate" as const, ...params },
     workflowId: true,
-    label: "Prompt generation failed",
+    label: "apiErr.promptGenerationFailed",
   })
 }
 
@@ -5979,7 +6165,7 @@ async function llmStreamGeneric(
     throw err
   }
 
-  throw new Error("Stream ended without completion")
+  throw new Error(tx("apiErr.streamEndedWithoutCompletion"))
 }
 
 export async function generateAIWriterStream(params: {
@@ -6037,7 +6223,7 @@ export async function getStats(scope: "user" | "platform" = "user", userId?: str
 
   return apiJson(`/v1/stats?${params.toString()}`, {
     method: "GET",
-    label: "Failed to fetch stats",
+    label: "dash.failedFetchStats",
   })
 }
 
@@ -6126,7 +6312,7 @@ export function mergeCostSummaries(summaries: readonly CostSummary[]): CostSumma
 export async function getBillingSurface(): Promise<BillingSurface> {
   const res = await apiJson<{ data: BillingSurface }>("/v1/billing/surface", {
     method: "GET",
-    label: "Failed to load billing surface",
+    label: "apiErr.loadBillingSurface",
   })
   return res.data
 }
@@ -6134,7 +6320,7 @@ export async function getBillingSurface(): Promise<BillingSurface> {
 export async function getBillingAccount(): Promise<BillingAccount | null> {
   const res = await apiJson<{ data: BillingAccount | null }>("/v1/billing/account", {
     method: "GET",
-    label: "Failed to load billing account",
+    label: "apiErr.loadBillingAccount",
   })
   return res.data
 }
@@ -6149,7 +6335,7 @@ export async function getWorkflowCostSummary(jobIds: readonly string[]): Promise
     Array.from({ length: batchCount }, (_, i) =>
       apiJson<{ data: CostSummary }>("/v1/jobs/cost-summary", {
         body: { jobIds: jobIds.slice(i * COST_SUMMARY_BATCH_SIZE, (i + 1) * COST_SUMMARY_BATCH_SIZE) },
-        label: "Failed to fetch cost summary",
+        label: "cost.loadError",
       }),
     ),
   )
@@ -6174,7 +6360,7 @@ export async function cancelJob(
 export async function cancelAllJobs(userId: string): Promise<{ success: boolean; cancelled: number }> {
   return apiJson("/v1/jobs/cancel-all", {
     body: { userId },
-    label: "Failed to cancel jobs",
+    label: "dash.failedCancelJobs",
   })
 }
 
@@ -6213,7 +6399,7 @@ export async function getLibraryAssets(params: {
 
   return apiJson(`/v1/library?${qs.toString()}`, {
     method: "GET",
-    label: "Failed to fetch library assets",
+    label: "apiErr.fetchLibraryAssets",
   })
 }
 
@@ -6223,7 +6409,7 @@ export async function deleteLibraryAsset(
 ): Promise<{ success: boolean }> {
   return apiJson(
     `/v1/library/${assetId}?userId=${encodeURIComponent(userId)}&permanent=true`,
-    { method: "DELETE", label: "Failed to delete asset" },
+    { method: "DELETE", label: "apiErr.deleteAsset" },
   )
 }
 
@@ -6233,7 +6419,7 @@ export async function removeLibraryAsset(
 ): Promise<{ success: boolean }> {
   return apiJson(
     `/v1/library/${assetId}?userId=${encodeURIComponent(userId)}`,
-    { method: "DELETE", label: "Failed to remove from library" },
+    { method: "DELETE", label: "assetlib.removeFailed" },
   )
 }
 
@@ -6243,7 +6429,7 @@ export async function promoteToLibrary(
 ): Promise<{ success: boolean }> {
   return apiJson(`/v1/library/${assetId}/promote`, {
     body: { userId },
-    label: "Failed to promote asset",
+    label: "apiErr.promoteAsset",
   })
 }
 
@@ -6253,7 +6439,7 @@ export async function demoteFromLibrary(
 ): Promise<{ success: boolean }> {
   return apiJson(
     `/v1/library/${assetId}/demote`,
-    { body: { userId }, label: "Failed to demote asset" },
+    { body: { userId }, label: "apiErr.demoteAsset" },
   )
 }
 
@@ -6268,7 +6454,7 @@ export async function saveGeneratedToLibrary(params: {
   return apiJson("/v1/library/save-generated", {
     body: params,
     workflowId: true,
-    label: "Failed to save to library",
+    label: "assetlib.saveFailed",
   })
 }
 
@@ -6333,7 +6519,7 @@ export async function startFreeGrantActivation(): Promise<{ data: { url: string 
   return apiJson("/v1/credits/free-grant/activation-session", {
     method: "POST",
     body: {},
-    label: "Failed to start activation",
+    label: "credits.freeGrantStartFailed",
   })
 }
 
@@ -6344,7 +6530,7 @@ export async function completeFreeGrantActivation(
   return apiJson("/v1/credits/free-grant/activate", {
     method: "POST",
     body: { sessionId },
-    label: "Failed to activate free credits",
+    label: "credits.freeGrantActivateFailed",
   })
 }
 
@@ -6361,7 +6547,7 @@ export interface CreditCheckResult {
 export async function getUserCredits(userId: string): Promise<{ data: UserBalance }> {
   return apiJson(`/v1/user/credits?userId=${encodeURIComponent(userId)}`, {
     method: "GET",
-    label: "Failed to get credits",
+    label: "apiErr.getCredits",
   })
 }
 
@@ -6372,7 +6558,7 @@ export async function checkCredits(userId: string, model: string): Promise<{ dat
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to check credits")
+    throwApiError(err, "apiErr.checkCredits")
   }
   return res.json()
 }
@@ -6384,7 +6570,7 @@ export async function getModelCreditCost(model: string): Promise<{ data: { model
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to get model cost")
+    throwApiError(err, "apiErr.getModelCost")
   }
   return res.json()
 }
@@ -6397,7 +6583,7 @@ export async function getBatchModelCreditCosts(models: string[]): Promise<Record
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to get model costs")
+    throwApiError(err, "apiErr.getModelCosts")
   }
   const body = await res.json() as {
     data: Record<string, number>
@@ -6500,7 +6686,7 @@ export async function changePlan(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error((err as Record<string, string>).error ?? "Failed to change plan")
+    throw new Error(apiErrorMessage({ serverMessage: (err as Record<string, string>).error, fallbackKey: "apiErr.changePlan" }))
   }
   const json = await res.json()
   return (json as Record<string, unknown>).data as { subscriptionId: string; tier: string }
@@ -6519,7 +6705,7 @@ export async function createCheckoutSession(params: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error((err as Record<string, string>).error ?? "Failed to create checkout session")
+    throw new Error(apiErrorMessage({ serverMessage: (err as Record<string, string>).error, fallbackKey: "apiErr.createCheckoutSession" }))
   }
   const json = await res.json()
   return (json as Record<string, unknown>).data
@@ -6539,7 +6725,7 @@ export async function createLoadSession(params: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error((err as Record<string, string>).error ?? "Failed to create load session")
+    throw new Error(apiErrorMessage({ serverMessage: (err as Record<string, string>).error, fallbackKey: "apiErr.createLoadSession" }))
   }
   const json = await res.json()
   return (json as { data: { url: string; credits: number } }).data
@@ -6558,7 +6744,7 @@ export async function getAutoRecharge(): Promise<AutoRechargeConfig> {
   const res = await fetch(`${API_BASE_URL}/v1/billing/auto-recharge`, {
     headers: await getAuthHeaders(),
   })
-  if (!res.ok) throw new Error("Failed to load auto-recharge settings")
+  if (!res.ok) throw new Error(tx("apiErr.loadAutoRechargeSettings"))
   return ((await res.json()) as { data: AutoRechargeConfig }).data
 }
 
@@ -6574,7 +6760,7 @@ export async function updateAutoRecharge(params: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error((err as Record<string, string>).error ?? "Failed to update auto-recharge settings")
+    throw new Error(apiErrorMessage({ serverMessage: (err as Record<string, string>).error, fallbackKey: "apiErr.updateAutoRechargeSettings" }))
   }
 }
 
@@ -6605,7 +6791,7 @@ export interface VoicesResponse {
 export async function getVoices(): Promise<VoicesResponse> {
   const res = await fetch(`${API_BASE_URL}/v1/voices`)
   if (!res.ok) {
-    throw new Error("Failed to fetch voices")
+    throw new Error(tx("apiErr.fetchVoices"))
   }
   return (await res.json()) as VoicesResponse
 }
@@ -6692,7 +6878,7 @@ async function fetchHeygenCatalog<T>(
   const qs = params.toString()
   const res = await fetch(`${API_BASE_URL}${path}${qs ? `?${qs}` : ""}`, { signal })
   if (!res.ok) {
-    throw new Error(`Failed to fetch HeyGen ${field}`)
+    throw new Error(tx(field === "avatars" ? "apiErr.heygenAvatars" : "apiErr.heygenVoices"))
   }
   const body = (await res.json()) as Record<string, unknown>
   const raw = body[field]
@@ -6765,7 +6951,7 @@ export async function refreshHeygenCatalog(): Promise<HeygenCatalogRefreshRespon
   })
   if (!res.ok) {
     const errJson = (await res.json().catch(() => null)) as Record<string, unknown> | null
-    throwApiError(errJson, "Failed to refresh the HeyGen catalog")
+    throwApiError(errJson, "integ.heygenRefreshFailed")
   }
   return (await res.json()) as HeygenCatalogRefreshResponse
 }
@@ -6875,7 +7061,7 @@ export async function deleteVoiceClone(id: string): Promise<void> {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to delete voice clone")
+    throwApiError(err, "apiErr.deleteVoiceClone")
   }
 }
 
@@ -6887,7 +7073,7 @@ export async function renameVoiceClone(id: string, name: string): Promise<void> 
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to rename voice clone")
+    throwApiError(err, "apiErr.renameVoiceClone")
   }
 }
 
@@ -6910,7 +7096,7 @@ export async function getCallableWorkflows(projectId?: string): Promise<Callable
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to fetch callable workflows")
+    throwApiError(err, "apiErr.fetchCallableWorkflows")
   }
   const json = await res.json()
   return json.data
@@ -6922,7 +7108,7 @@ export async function getWorkflowInterface(workflowId: string): Promise<{ routes
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to fetch workflow interface")
+    throwApiError(err, "apiErr.fetchWorkflowInterface")
   }
   const json = await res.json()
   return json.data
@@ -6942,7 +7128,7 @@ export async function exportWorkflow(
   const assets = opts?.assets ?? false
   return apiJson<WorkflowExport>(
     `/v1/workflows/${encodeURIComponent(workflowId)}/export?assets=${assets}`,
-    { method: "GET", label: "Failed to export workflow" },
+    { method: "GET", label: "apiErr.exportWorkflow" },
   )
 }
 
@@ -6970,7 +7156,7 @@ export async function importWorkflow(
   const { projectId, ...workflow_json } = input
   const json = await apiRequest<{ data: ImportedWorkflow; importReport?: WorkflowImportReport }>(
     `/v1/workflows/import`,
-    "Failed to import workflow",
+    "apiErr.importWorkflow",
     { method: "POST", body: { projectId, workflow_json } },
   )
   return { ...json.data, importReport: json.importReport }
@@ -6984,7 +7170,7 @@ export interface WorkflowExecution {
   id: string
   workflowId: string
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'stopping' | 'discarded'
-  triggerType: 'manual' | 'webhook' | 'schedule' | 'single-node' | 'app_run' | 'mcp'
+  triggerType: 'manual' | 'webhook' | 'schedule' | 'telegram' | 'telegram_account' | 'api' | 'single-node' | 'app_run' | 'mcp'
   /** MCP client name (e.g. "Claude", "Cursor") when the execution was triggered via the MCP server. */
   mcpClient?: string | null
   triggerData?: Record<string, unknown>
@@ -7017,7 +7203,7 @@ export interface WorkflowTrigger {
  */
 async function apiRequest<T>(
   path: string,
-  errorMessage: string,
+  errorMessage: MessageKey,
   opts?: { method?: string; body?: unknown; skipAuth?: boolean },
 ): Promise<T> {
   const headers: Record<string, string> = opts?.skipAuth ? {} : { ...(await getAuthHeaders()) }
@@ -7070,11 +7256,11 @@ export async function runWorkflow(
     const body = await res.json().catch(() => null)
     const execId = (body as Record<string, unknown>)?.executionId as string | undefined
     if (execId) throw new WorkflowAlreadyRunningError(execId)
-    throwApiError(body as Record<string, unknown> | null, "Failed to run workflow")
+    throwApiError(body as Record<string, unknown> | null, "apiErr.runWorkflow")
   }
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to run workflow")
+    throwApiError(err, "apiErr.runWorkflow")
   }
   return res.json() as Promise<{ executionId: string }>
 }
@@ -7100,7 +7286,7 @@ export async function createChildSubWorkflow(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to create sub-workflow")
+    throwApiError(err, "cfgext.subwfCreateFailed")
   }
   const json = await res.json()
   return json.data as CreatedSubWorkflow
@@ -7214,7 +7400,9 @@ export async function streamWorkflowExecution(
       // user stopped the run, so its results land in My Library off-canvas.
       // Short-circuit before onNodeStatesChanged so the discarded states are
       // never applied, and route to onDiscarded (not onCompleted).
-      if (eventType === "execution:discarded") {
+      // A stream that joined a run already over hears a bare "done" carrying
+      // only the row's status: a discarded one is still never painted.
+      if (eventType === "execution:discarded" || (eventType === undefined && d.status === "discarded")) {
         callbacks.onDiscarded?.(d)
         return
       }
@@ -7276,7 +7464,7 @@ export function listAllExecutions(
 
   return apiRequest(
     `/v1/executions?${params}`,
-    "Failed to list executions",
+    "apiErr.listExecutions",
   )
 }
 
@@ -7288,7 +7476,7 @@ export async function createWorkflowTrigger(
 ): Promise<WorkflowTrigger> {
   const json = await apiRequest<{ data: WorkflowTrigger }>(
     `/v1/workflow-triggers`,
-    "Failed to create trigger",
+    "apiErr.createTrigger",
     { method: "POST", body: { workflowId, type, config } },
   )
   return json.data
@@ -7298,7 +7486,7 @@ export async function createWorkflowTrigger(
 export async function listWorkflowTriggers(workflowId: string): Promise<WorkflowTrigger[]> {
   const json = await apiRequest<{ data: WorkflowTrigger[] }>(
     `/v1/workflows/${encodeURIComponent(workflowId)}/triggers`,
-    "Failed to list triggers",
+    "apiErr.listTriggers",
   )
   return json.data
 }
@@ -7313,10 +7501,12 @@ export async function listWorkflowTriggers(workflowId: string): Promise<Workflow
 export async function syncWorkflowTriggers(
   workflowId: string,
   vouchNodeIds: ReadonlyArray<string> = [],
+  /** Account triggers this editor session changed, each with the listening settings it set. */
+  accountNodes: ReadonlyArray<{ readonly id: string; readonly settings: string }> = [],
 ): Promise<{ data: { synced: boolean; created: number; updated: number; removed: number; reason?: string } }> {
-  return apiRequest(`/v1/workflows/${encodeURIComponent(workflowId)}/sync-triggers`, "Failed to sync triggers", {
+  return apiRequest(`/v1/workflows/${encodeURIComponent(workflowId)}/sync-triggers`, "apiErr.syncTriggers", {
     method: "POST",
-    body: { vouchNodeIds: [...vouchNodeIds] },
+    body: { vouchNodeIds: [...vouchNodeIds], accountNodes: accountNodes.map((n) => ({ id: n.id, settings: n.settings })) },
   })
 }
 
@@ -7327,7 +7517,7 @@ export async function updateWorkflowTrigger(
 ): Promise<WorkflowTrigger> {
   const json = await apiRequest<{ data: WorkflowTrigger }>(
     `/v1/workflow-triggers/${encodeURIComponent(triggerId)}`,
-    "Failed to update trigger",
+    "apiErr.updateTrigger",
     { method: "PATCH", body: updates },
   )
   return json.data
@@ -7337,7 +7527,7 @@ export async function updateWorkflowTrigger(
 export function deleteWorkflowTrigger(triggerId: string): Promise<void> {
   return apiRequest(
     `/v1/workflow-triggers/${encodeURIComponent(triggerId)}`,
-    "Failed to delete trigger",
+    "apiErr.deleteTrigger",
     { method: "DELETE" },
   )
 }
@@ -7409,7 +7599,7 @@ export interface SharedWorkflow {
 export function getWorkflowAccess(workflowId: string): Promise<{ data: WorkflowAccessInfo }> {
   return apiRequest<{ data: WorkflowAccessInfo }>(
     `/v1/workflows/${encodeURIComponent(workflowId)}/access`,
-    "Failed to read workflow access",
+    "apiErr.readWorkflowAccess",
   )
 }
 
@@ -7419,7 +7609,7 @@ export function listWorkflowCollaborators(
 ): Promise<{ data: WorkflowCollaborator[] }> {
   return apiRequest<{ data: WorkflowCollaborator[] }>(
     `/v1/workflows/${encodeURIComponent(workflowId)}/collaborators`,
-    "Failed to load the people with access",
+    "apiErr.loadThePeopleWithAccess",
   )
 }
 
@@ -7431,7 +7621,7 @@ export function addWorkflowCollaborator(
 ): Promise<{ data: WorkflowCollaborator }> {
   return apiRequest<{ data: WorkflowCollaborator }>(
     `/v1/workflows/${encodeURIComponent(workflowId)}/collaborators`,
-    "Failed to share the workflow",
+    "apiErr.shareTheWorkflow",
     { method: "POST", body: JSON.stringify({ ...target, role }) },
   )
 }
@@ -7443,7 +7633,7 @@ export function updateWorkflowCollaborator(
 ): Promise<{ data: WorkflowCollaborator }> {
   return apiRequest<{ data: WorkflowCollaborator }>(
     `/v1/workflows/${encodeURIComponent(workflowId)}/collaborators/${encodeURIComponent(userId)}`,
-    "Failed to change the role",
+    "apiErr.changeTheRole",
     { method: "PATCH", body: JSON.stringify({ role }) },
   )
 }
@@ -7451,7 +7641,7 @@ export function updateWorkflowCollaborator(
 export function removeWorkflowCollaborator(workflowId: string, userId: string): Promise<void> {
   return apiRequest(
     `/v1/workflows/${encodeURIComponent(workflowId)}/collaborators/${encodeURIComponent(userId)}`,
-    "Failed to remove access",
+    "apiErr.removeAccess",
     { method: "DELETE" },
   )
 }
@@ -7469,7 +7659,7 @@ export function setWorkflowVisibility(
 ): Promise<unknown> {
   return apiRequest(
     `/v1/workflows/${encodeURIComponent(workflowId)}`,
-    "Failed to change who can see this",
+    "apiErr.changeWhoCanSeeThis",
     { method: "PATCH", body: JSON.stringify({ visibility }) },
   )
 }
@@ -7478,7 +7668,7 @@ export function setWorkflowVisibility(
 export function getSharedWithMe(): Promise<{ data: SharedWorkflow[] }> {
   return apiRequest<{ data: SharedWorkflow[] }>(
     "/v1/workflows/shared-with-me",
-    "Failed to load shared work",
+    "apiErr.loadSharedWork",
   )
 }
 
@@ -7490,7 +7680,7 @@ export function getSharedWithMe(): Promise<{ data: SharedWorkflow[] }> {
 export async function shareWorkflow(workflowId: string): Promise<{ shareToken: string }> {
   const json = await apiRequest<{ shareToken: string }>(
     `/v1/workflows/${encodeURIComponent(workflowId)}/share`,
-    "Failed to share workflow",
+    "apiErr.shareWorkflow",
     { method: "POST" },
   )
   return json
@@ -7500,7 +7690,7 @@ export async function shareWorkflow(workflowId: string): Promise<{ shareToken: s
 export function unshareWorkflow(workflowId: string): Promise<void> {
   return apiRequest(
     `/v1/workflows/${encodeURIComponent(workflowId)}/share`,
-    "Failed to unshare workflow",
+    "apiErr.unshareWorkflow",
     { method: "DELETE" },
   )
 }
@@ -7517,7 +7707,7 @@ export async function getSharedWorkflow(token: string): Promise<{
 }> {
   return apiRequest(
     `/v1/present/${encodeURIComponent(token)}`,
-    "Failed to load shared workflow",
+    "apiErr.loadSharedWorkflow",
   )
 }
 
@@ -7529,7 +7719,7 @@ export async function runSharedWorkflow(
 ): Promise<{ executionId: string; status: string }> {
   return apiRequest(
     `/v1/present/${encodeURIComponent(token)}/run`,
-    "Failed to run shared workflow",
+    "apiErr.runSharedWorkflow",
     { method: "POST", body: { inputOverrides, runTarget: presentationSettings?.runTarget, subWorkflowNodeId: presentationSettings?.subWorkflowNodeId, selectedRouteId: presentationSettings?.selectedRouteId } },
   )
 }
@@ -7550,13 +7740,37 @@ export async function getSharedExecutionStatus(
 }> {
   return apiRequest(
     `/v1/present/${encodeURIComponent(token)}/status/${encodeURIComponent(execId)}`,
-    "Failed to get execution status",
+    "apiErr.getExecutionStatus",
   )
 }
 
 // ---------------------------------------------------------------------------
 // API Tokens
 // ---------------------------------------------------------------------------
+
+/** An app the user let into their account through OAuth (`GET /v1/me/connected-apps`). */
+export interface ConnectedApp {
+  authorizationId: string
+  /** The app's name. An MCP client that registered itself (`dynamic_mcp`) chose it. */
+  name: string | null
+  kind: "user" | "first_party_mcp" | "dynamic_mcp" | "community_instance" | (string & {})
+  homepageUrl: string | null
+  scopes: string[]
+  connectedAt: string
+  lastUsedAt: string | null
+}
+
+/** Every app with access to the user's account. Browser sessions only. */
+export async function listConnectedApps(): Promise<{ apps: ConnectedApp[] }> {
+  return apiRequest("/v1/me/connected-apps", "apiErr.listConnectedApps")
+}
+
+/** End an app's access: its grant and every token issued under it. */
+export async function revokeConnectedApp(authorizationId: string): Promise<{ ok: true }> {
+  return apiRequest(`/v1/me/connected-apps/${encodeURIComponent(authorizationId)}/revoke`, "apiErr.revokeConnectedApp", {
+    method: "POST",
+  })
+}
 
 export interface ApiToken {
   id: string
@@ -7575,7 +7789,7 @@ export interface CreateApiTokenResult extends ApiToken {
 }
 
 export async function listApiTokens(): Promise<{ data: ApiToken[] }> {
-  return apiRequest("/v1/api-tokens", "Failed to list API tokens")
+  return apiRequest("/v1/api-tokens", "apiErr.listAPITokens")
 }
 
 export async function createApiToken(params: {
@@ -7583,7 +7797,7 @@ export async function createApiToken(params: {
   workflowIds?: string[]
   rateLimit?: number
 }): Promise<{ data: CreateApiTokenResult }> {
-  return apiRequest("/v1/api-tokens", "Failed to create API token", {
+  return apiRequest("/v1/api-tokens", "apiErr.createAPIToken", {
     method: "POST",
     body: params,
   })
@@ -7598,14 +7812,14 @@ export async function updateApiToken(
     isActive?: boolean
   },
 ): Promise<{ data: ApiToken }> {
-  return apiRequest(`/v1/api-tokens/${encodeURIComponent(id)}`, "Failed to update API token", {
+  return apiRequest(`/v1/api-tokens/${encodeURIComponent(id)}`, "apiErr.updateAPIToken", {
     method: "PATCH",
     body: params,
   })
 }
 
 export async function deleteApiToken(id: string): Promise<{ success: boolean }> {
-  return apiRequest(`/v1/api-tokens/${encodeURIComponent(id)}`, "Failed to delete API token", {
+  return apiRequest(`/v1/api-tokens/${encodeURIComponent(id)}`, "apiErr.deleteAPIToken", {
     method: "DELETE",
   })
 }
@@ -7689,7 +7903,7 @@ export interface OAuthAppInfo {
 export async function getOAuthAppInfo(clientId: string, redirectUri?: string): Promise<OAuthAppInfo> {
   const query = new URLSearchParams({ client_id: clientId })
   if (redirectUri) query.set("redirect_uri", redirectUri)
-  return apiRequest(`/v1/oauth/app-info?${query.toString()}`, "Failed to load app info", { skipAuth: true })
+  return apiRequest(`/v1/oauth/app-info?${query.toString()}`, "oauth.failedLoadAppInfo", { skipAuth: true })
 }
 
 export interface OAuthAuthorizeInput {
@@ -7716,7 +7930,7 @@ export interface OAuthAuthorizeResult {
 export async function oauthAuthorize(input: OAuthAuthorizeInput): Promise<OAuthAuthorizeResult> {
   return apiRequest(
     "/v1/oauth/authorize",
-    "Authorization failed",
+    "oauth.authorizationFailed",
     { method: "POST", body: input },
   )
 }
@@ -7740,7 +7954,7 @@ export async function telegramChannelFetchApi(params: {
   const body: Record<string, unknown> = { channel: params.channel }
   if (params.sinceId !== undefined) body.sinceId = params.sinceId
   if (params.limit !== undefined) body.limit = params.limit
-  return apiJson("/v1/telegram-channel/fetch", { body, label: "Failed to read Telegram channel" })
+  return apiJson("/v1/telegram-channel/fetch", { body, label: "apiErr.readTelegramChannel" })
 }
 
 export async function socialPublishApi(params: {
@@ -7772,21 +7986,21 @@ export async function socialPublishApi(params: {
   return apiJson("/v1/social/publish", {
     body,
     workflowId: true,
-    label: "Failed to publish to social media",
+    label: "apiErr.publishToSocialMedia",
   })
 }
 
 export async function getSocialConnections(): Promise<{ connections: Array<SocialConnection & { created_at: string }> }> {
   return apiJson("/v1/social/connections", {
     method: "GET",
-    label: "Failed to fetch social connections",
+    label: "apiErr.fetchSocialConnections",
   })
 }
 
 export async function getSocialAuthUrl(platform: string): Promise<{ url: string }> {
   return apiJson(`/v1/social/auth-url?platform=${encodeURIComponent(platform)}`, {
     method: "GET",
-    label: "Failed to get auth URL",
+    label: "apiErr.getAuthURL",
   })
 }
 
@@ -7834,7 +8048,7 @@ export interface SocialProviderInfo {
 export async function getSocialProviders(): Promise<{ providers: SocialProviderInfo[] }> {
   return apiJson("/v1/social/providers", {
     method: "GET",
-    label: "Failed to fetch social providers",
+    label: "apiErr.fetchSocialProviders",
   })
 }
 
@@ -7845,7 +8059,7 @@ export async function connectSocialCustom(
 ): Promise<{ success: boolean; platform: string; username?: string }> {
   return apiJson("/v1/social/connect/custom", {
     body: { platform, fields },
-    label: "Failed to connect",
+    label: "apiErr.connect",
   })
 }
 
@@ -7862,21 +8076,21 @@ export async function setDefaultSocialConnection(connectionId: string): Promise<
   })
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as Record<string, unknown> | null
-    throwApiError(body, "Could not set the default account")
+    throwApiError(body, "integ.toastDefaultFailed")
   }
 }
 
 export async function disconnectSocial(connectionId: string): Promise<{ success: boolean }> {
   return apiJson(`/v1/social/connections/${encodeURIComponent(connectionId)}`, {
     method: "DELETE",
-    label: "Failed to disconnect",
+    label: "integ.toastDisconnectFailed",
   })
 }
 
 export async function connectTelegram(botToken: string) {
   return apiJson<{ success: boolean; botName: string; botUsername: string }>(
     "/v1/social/telegram/connect",
-    { body: { botToken }, label: "Failed to connect Telegram bot" },
+    { body: { botToken }, label: "apiErr.connectTelegramBot" },
   )
 }
 
@@ -7888,14 +8102,14 @@ export async function activateTelegramTrigger(params: {
 }) {
   return apiJson<{ triggerId: string; webhookToken: string }>(
     "/v1/telegram/triggers",
-    { body: params, label: "Failed to activate Telegram trigger" },
+    { body: params, label: "apiErr.activateTelegramTrigger" },
   )
 }
 
 export async function deactivateTelegramTrigger(triggerId: string) {
   return apiJson<{ success: boolean }>(
     `/v1/telegram/triggers/${encodeURIComponent(triggerId)}`,
-    { method: "DELETE", label: "Failed to deactivate Telegram trigger" },
+    { method: "DELETE", label: "apiErr.deactivateTelegramTrigger" },
   )
 }
 
@@ -8023,7 +8237,7 @@ export async function publishApp(data: {
 }): Promise<PublishedApp> {
   return apiRequest<PublishedApp>(
     "/v1/apps/publish",
-    "Failed to publish MiniApp",
+    "apiErr.publishMiniApp",
     { method: "POST", body: data },
   )
 }
@@ -8033,7 +8247,7 @@ export async function getAppByWorkflow(workflowId: string): Promise<PublishedApp
   try {
     return await apiRequest<PublishedApp>(
       `/v1/apps/by-workflow/${encodeURIComponent(workflowId)}`,
-      "Failed to load app",
+      "apiErr.loadApp",
     )
   } catch {
     return null
@@ -8047,7 +8261,7 @@ export async function getLatestComponentVersion(slug: string): Promise<{
 }> {
   return apiRequest(
     `/v1/apps/by-slug/${encodeURIComponent(slug)}/latest-version`,
-    "Failed to fetch latest component version",
+    "apiErr.fetchLatestComponentVersion",
   )
 }
 
@@ -8055,7 +8269,7 @@ export async function getLatestComponentVersion(slug: string): Promise<{
 export async function getMyApps(): Promise<PublishedApp[]> {
   return apiRequest<PublishedApp[]>(
     "/v1/apps/mine",
-    "Failed to load apps",
+    "apiErr.loadApps",
   )
 }
 
@@ -8080,7 +8294,7 @@ export async function updateApp(appId: string, data: {
 }): Promise<PublishedApp> {
   return apiRequest<PublishedApp>(
     `/v1/apps/${encodeURIComponent(appId)}`,
-    "Failed to update app",
+    "devApp.failedUpdate",
     { method: "PATCH", body: data },
   )
 }
@@ -8089,7 +8303,7 @@ export async function updateApp(appId: string, data: {
 export async function deactivateApp(appId: string): Promise<void> {
   return apiRequest(
     `/v1/apps/${encodeURIComponent(appId)}`,
-    "Failed to delete app",
+    "devApps.failedDelete",
     { method: "DELETE" },
   )
 }
@@ -8098,7 +8312,7 @@ export async function deactivateApp(appId: string): Promise<void> {
 export async function restoreApp(appId: string): Promise<{ success: boolean; restored: boolean }> {
   return apiRequest(
     `/v1/apps/${encodeURIComponent(appId)}/restore`,
-    "Failed to restore app",
+    "apiErr.restoreApp",
     { method: "POST" },
   )
 }
@@ -8114,7 +8328,7 @@ export async function expungeApp(appId: string, reason: string): Promise<{
 }> {
   return apiRequest(
     `/v1/admin/apps/${encodeURIComponent(appId)}/expunge`,
-    "Failed to expunge app",
+    "apiErr.expungeApp",
     { method: "DELETE", body: { reason } },
   )
 }
@@ -8146,7 +8360,7 @@ export async function browseApps(params: {
   const qsStr = qs.toString()
   const headers: Record<string, string> = params.favoritesOnly ? await getAuthHeaders() : {}
   const res = await fetch(`/v1/apps/browse${qsStr ? `?${qsStr}` : ""}`, { headers })
-  if (!res.ok) throw new Error("Failed to browse apps")
+  if (!res.ok) throw new Error(tx("apiErr.browseApps"))
   return res.json()
 }
 
@@ -8154,7 +8368,7 @@ export async function browseApps(params: {
 export async function toggleAppFavorite(appId: string): Promise<{ favorited: boolean }> {
   return apiRequest<{ favorited: boolean }>(
     "/v1/apps/favorite",
-    "Failed to toggle favorite",
+    "apiErr.toggleFavorite",
     { method: "POST", body: { appId } },
   )
 }
@@ -8163,7 +8377,7 @@ export async function toggleAppFavorite(appId: string): Promise<{ favorited: boo
 export async function getAppFavorites(): Promise<string[]> {
   const json = await apiRequest<{ data: string[] }>(
     "/v1/apps/favorites",
-    "Failed to fetch favorites",
+    "apiErr.fetchFavorites",
   )
   return json.data
 }
@@ -8175,7 +8389,7 @@ export async function getPublishedApp(slug: string, version?: number): Promise<P
   const qs = params.toString()
   return apiRequest<PublishedApp>(
     `/v1/app/${encodeURIComponent(slug)}${qs ? `?${qs}` : ""}`,
-    "Failed to load app",
+    "apiErr.loadApp",
     { skipAuth: true },
   )
 }
@@ -8190,7 +8404,7 @@ export async function runPublishedApp(
 ): Promise<{ executionId: string; runId: string; status: string }> {
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/run`,
-    "Failed to run app",
+    "apiErr.runApp",
     { method: "POST", body: { inputOverrides, runId, version, headless } },
   )
 }
@@ -8204,9 +8418,28 @@ export async function executeComponent(params: {
 }): Promise<{ jobId: string }> {
   return apiRequest(
     "/v1/component/execute",
-    "Failed to execute component",
+    "apiErr.executeComponent",
     { method: "POST", body: params },
   )
+}
+
+/** How long the SERVER waits on a component run: its base wait plus the
+ *  budget excess of the long renders the run's inner execution dispatched
+ *  (podcast Track 0.11). `budgetExcessMs` 0 = nothing budgeted dispatched
+ *  yet; `pendingBudgetedNodes` = the run may still dispatch one (absent from
+ *  an older server — read as false). */
+export interface ComponentWaitLimit {
+  budgetExcessMs: number
+  waitLimitMs: number
+  pendingBudgetedNodes?: boolean
+}
+
+export async function getComponentWaitLimit(jobId: string): Promise<ComponentWaitLimit> {
+  const { data } = await apiRequest<{ data: ComponentWaitLimit }>(
+    `/v1/component/execute/${encodeURIComponent(jobId)}/wait-limit`,
+    "apiErr.readTheComponentSWaitLimit",
+  )
+  return data
 }
 
 /** Estimate component credits with setting overrides. */
@@ -8217,7 +8450,7 @@ export async function estimateComponentCredits(params: {
 }): Promise<{ estimatedCredits: number }> {
   return apiRequest(
     "/v1/component/estimate-credits",
-    "Failed to estimate credits",
+    "apiErr.estimateCredits",
     { method: "POST", body: params },
   )
 }
@@ -8230,7 +8463,7 @@ export async function createAppRun(
 ): Promise<{ id: string; createdAt: string; inputValues: Record<string, Record<string, unknown>> | null; status: string }> {
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/runs`,
-    "Failed to create run",
+    "apiErr.createRun",
     { method: "POST", body: { inputValues, version } },
   )
 }
@@ -8251,7 +8484,7 @@ export async function updateAppRunInputs(
   if (nodeStates !== undefined) body.nodeStates = nodeStates
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}`,
-    "Failed to update run",
+    "apiErr.updateRun",
     { method: "PATCH", body },
   )
 }
@@ -8268,7 +8501,7 @@ export async function getAppRuns(
   const qs = params.toString()
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/runs${qs ? `?${qs}` : ""}`,
-    "Failed to load runs",
+    "apiErr.loadRuns",
   )
 }
 
@@ -8276,7 +8509,7 @@ export async function getAppRuns(
 export async function getAppRun(slug: string, runId: string): Promise<AppRun> {
   return apiRequest<AppRun>(
     `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}`,
-    "Failed to load run",
+    "apiErr.loadRun",
   )
 }
 
@@ -8284,7 +8517,7 @@ export async function getAppRun(slug: string, runId: string): Promise<AppRun> {
 export async function deleteAppRun(slug: string, runId: string): Promise<void> {
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}`,
-    "Failed to archive run",
+    "apiErr.archiveRun",
     { method: "DELETE" },
   )
 }
@@ -8293,7 +8526,7 @@ export async function deleteAppRun(slug: string, runId: string): Promise<void> {
 export async function restoreAppRun(slug: string, runId: string): Promise<void> {
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}/restore`,
-    "Failed to restore run",
+    "archive.failedRestore",
     { method: "POST", body: {} },
   )
 }
@@ -8302,7 +8535,7 @@ export async function restoreAppRun(slug: string, runId: string): Promise<void> 
 export async function permanentlyDeleteAppRun(slug: string, runId: string): Promise<void> {
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}/permanent`,
-    "Failed to permanently delete run",
+    "apiErr.permanentlyDeleteRun",
     { method: "DELETE" },
   )
 }
@@ -8328,7 +8561,7 @@ export async function getArchivedRuns(cursor?: string): Promise<{ data: Archived
   const qs = params.toString()
   return apiRequest(
     `/v1/me/archived-runs${qs ? `?${qs}` : ""}`,
-    "Failed to load archived runs",
+    "apiErr.loadArchivedRuns",
   )
 }
 
@@ -8343,7 +8576,7 @@ export async function getAppExecutionStatus(execId: string): Promise<{
 }> {
   const res = await apiRequest<{ data: Record<string, unknown> }>(
     `/v1/workflow-executions/${encodeURIComponent(execId)}`,
-    "Failed to get execution status",
+    "apiErr.getExecutionStatus",
   )
   const d = res.data
   return {
@@ -8389,7 +8622,7 @@ export interface AppAnalytics {
 export async function getAppAnalytics(appId: string): Promise<AppAnalytics> {
   return apiRequest<AppAnalytics>(
     `/v1/apps/${encodeURIComponent(appId)}/analytics`,
-    "Failed to load analytics",
+    "apiErr.loadAnalytics",
   )
 }
 
@@ -8411,7 +8644,7 @@ export async function getAppAnalyticsRuns(appId: string, cursor?: string): Promi
   const qs = params.toString()
   return apiRequest(
     `/v1/apps/${encodeURIComponent(appId)}/analytics/runs${qs ? `?${qs}` : ""}`,
-    "Failed to load analytics runs",
+    "apiErr.loadAnalyticsRuns",
   )
 }
 
@@ -8421,12 +8654,12 @@ export async function getAppAnalyticsRuns(appId: string, cursor?: string): Promi
 
 /** Get user's default monetization fees. */
 export async function getMonetizationDefaults(): Promise<{ flatFee: number; percent: number }> {
-  return apiRequest("/v1/user/monetization-defaults", "Failed to get monetization defaults")
+  return apiRequest("/v1/user/monetization-defaults", "apiErr.getMonetizationDefaults")
 }
 
 /** Update user's default monetization fees. */
 export async function updateMonetizationDefaults(data: { flatFee: number; percent: number }): Promise<{ flatFee: number; percent: number }> {
-  return apiRequest("/v1/user/monetization-defaults", "Failed to update monetization defaults", {
+  return apiRequest("/v1/user/monetization-defaults", "apiErr.updateMonetizationDefaults", {
     method: "PUT",
     body: data,
   })
@@ -8456,7 +8689,7 @@ export async function getUserEarnings(params?: { cursor?: string; limit?: number
   if (params?.cursor) query.set("cursor", params.cursor)
   if (params?.limit) query.set("limit", String(params.limit))
   const qs = query.toString()
-  return apiRequest(`/v1/user/earnings${qs ? `?${qs}` : ""}`, "Failed to get earnings")
+  return apiRequest(`/v1/user/earnings${qs ? `?${qs}` : ""}`, "apiErr.getEarnings")
 }
 
 /** Get earnings summary for a specific published app. */
@@ -8465,7 +8698,7 @@ export async function getAppEarnings(appId: string): Promise<{
   paidRuns: number
   thisMonth: number
 }> {
-  return apiRequest(`/v1/apps/${encodeURIComponent(appId)}/earnings`, "Failed to get app earnings")
+  return apiRequest(`/v1/apps/${encodeURIComponent(appId)}/earnings`, "apiErr.getAppEarnings")
 }
 
 // ---------- QA Check ----------
@@ -8480,7 +8713,7 @@ export function qaCheckApi(params: {
   advancedMode?: boolean
   maxTokens?: number
 }): Promise<{ jobId: string; score: number; approved: boolean; reason: string }> {
-  return apiRequest("/v1/qa-check", "QA check failed", {
+  return apiRequest("/v1/qa-check", "apiErr.qACheckFailed", {
     method: "POST",
     body: withWorkflowId(params),
   })
@@ -8507,7 +8740,7 @@ export function imageCriticApi(params: {
   }
   deduped?: true
 }> {
-  return apiRequest("/v1/image-critic", "Image critic failed", {
+  return apiRequest("/v1/image-critic", "apiErr.imageCriticFailed", {
     method: "POST",
     body: withWorkflowId(params),
   })
@@ -8520,7 +8753,7 @@ export function saveToStorageApi(params: {
   filename?: string
   mediaType?: "image" | "video" | "audio"
 }): Promise<{ jobId: string; url: string }> {
-  return apiRequest("/v1/save-to-storage", "Failed to save to storage", {
+  return apiRequest("/v1/save-to-storage", "apiErr.saveToStorage", {
     method: "POST",
     body: withWorkflowId(params),
   })
@@ -8542,7 +8775,7 @@ export function executeReduce(input: {
   output: string
   meta: ReduceMeta
 }> {
-  return apiRequest("/v1/reduce", "reduce failed", {
+  return apiRequest("/v1/reduce", "apiErr.reduceFailed", {
     method: "POST",
     body: withWorkflowId(input),
   })
@@ -8634,7 +8867,7 @@ export async function browseTemplates(params: {
   const query = qs.toString()
   return apiRequest<{ data: TemplateBrowseCard[]; nextCursor: string | null }>(
     `/v1/templates/browse${query ? `?${query}` : ""}`,
-    "Failed to browse templates",
+    "apiErr.browseTemplates",
     { skipAuth: !params.favoritesOnly },
   )
 }
@@ -8649,7 +8882,7 @@ export async function browseTemplates(params: {
 export async function getTemplateBySlug(slug: string): Promise<WorkflowTemplate> {
   return apiRequest<WorkflowTemplate>(
     `/v1/templates/${encodeURIComponent(slug)}`,
-    "Failed to load template",
+    "apiErr.loadTemplate",
   )
 }
 
@@ -8668,7 +8901,7 @@ export async function publishTemplate(data: {
 }): Promise<WorkflowTemplate> {
   return apiRequest<WorkflowTemplate>(
     "/v1/templates/publish",
-    "Failed to publish template",
+    "pubTemplate.publishFailed",
     { method: "POST", body: data },
   )
 }
@@ -8676,14 +8909,14 @@ export async function publishTemplate(data: {
 export async function getMyTemplates(): Promise<WorkflowTemplate[]> {
   return apiRequest<WorkflowTemplate[]>(
     "/v1/templates/mine",
-    "Failed to fetch templates",
+    "apiErr.fetchTemplates",
   )
 }
 
 export async function updateTemplate(id: string, data: Record<string, unknown>): Promise<WorkflowTemplate> {
   return apiRequest<WorkflowTemplate>(
     `/v1/templates/${encodeURIComponent(id)}`,
-    "Failed to update template",
+    "templates.failedUpdate",
     { method: "PATCH", body: data },
   )
 }
@@ -8691,7 +8924,7 @@ export async function updateTemplate(id: string, data: Record<string, unknown>):
 export async function deleteTemplate(id: string): Promise<{ success: boolean }> {
   return apiRequest<{ success: boolean }>(
     `/v1/templates/${encodeURIComponent(id)}`,
-    "Failed to delete template",
+    "templates.failedDelete",
     { method: "DELETE" },
   )
 }
@@ -8699,7 +8932,7 @@ export async function deleteTemplate(id: string): Promise<{ success: boolean }> 
 export async function cloneTemplate(slug: string, projectId: string, name?: string): Promise<{ workflowId: string; projectId: string }> {
   return apiRequest<{ workflowId: string; projectId: string }>(
     `/v1/templates/${encodeURIComponent(slug)}/clone`,
-    "Failed to clone template",
+    "templates.cloneFailed",
     { method: "POST", body: { projectId, ...(name ? { name } : {}) } },
   )
 }
@@ -8707,7 +8940,7 @@ export async function cloneTemplate(slug: string, projectId: string, name?: stri
 export async function toggleTemplateFavorite(templateId: string): Promise<{ favorited: boolean }> {
   return apiRequest<{ favorited: boolean }>(
     "/v1/templates/favorite",
-    "Failed to toggle favorite",
+    "apiErr.toggleFavorite",
     { method: "POST", body: { templateId } },
   )
 }
@@ -8715,7 +8948,7 @@ export async function toggleTemplateFavorite(templateId: string): Promise<{ favo
 export async function getTemplateFavorites(): Promise<string[]> {
   const res = await apiRequest<{ data: string[] }>(
     "/v1/templates/favorites",
-    "Failed to fetch favorites",
+    "apiErr.fetchFavorites",
   )
   return res.data
 }
@@ -8732,15 +8965,15 @@ export async function browseCommunity(params: {
   const qs = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) if (v != null && v !== "") qs.set(k, String(v))
   const query = qs.toString()
-  return apiRequest(`/v1/community/browse${query ? `?${query}` : ""}`, "Failed to browse community")
+  return apiRequest(`/v1/community/browse${query ? `?${query}` : ""}`, "apiErr.browseCommunity")
 }
 
 export async function getCommunityListing(slug: string): Promise<{ data: CommunityCard }> {
-  return apiRequest(`/v1/community/detail/${encodeURIComponent(slug)}`, "Failed to load listing")
+  return apiRequest(`/v1/community/detail/${encodeURIComponent(slug)}`, "apiErr.loadListing")
 }
 
 export async function cloneCommunityListing(id: string, entityType: string): Promise<{ entityType: string; id: string }> {
-  return apiRequest(`/v1/community/listings/${encodeURIComponent(id)}/clone`, "Failed to clone", { method: "POST", body: { entityType } })
+  return apiRequest(`/v1/community/listings/${encodeURIComponent(id)}/clone`, "community.cloneFailed", { method: "POST", body: { entityType } })
 }
 
 /** The caller's existing (non-archived) library copies of a community listing —
@@ -8751,35 +8984,35 @@ export async function getMyClonesOfListing(
 ): Promise<{ clones: { id: string; name: string; sourceImageUrl: string | null }[] }> {
   return apiRequest(
     `/v1/community/listings/${encodeURIComponent(id)}/clones?entityType=${encodeURIComponent(entityType)}`,
-    "Failed to check existing copies",
+    "apiErr.checkExistingCopies",
   )
 }
 
 export async function toggleCommunityFavorite(id: string): Promise<{ favorited: boolean }> {
-  return apiRequest(`/v1/community/listings/${encodeURIComponent(id)}/favorite`, "Failed to favorite", { method: "POST", body: {} })
+  return apiRequest(`/v1/community/listings/${encodeURIComponent(id)}/favorite`, "apiErr.favorite", { method: "POST", body: {} })
 }
 
 export async function getCommunityFavorites(): Promise<{ data: CommunityCard[] }> {
-  return apiRequest(`/v1/community/favorites`, "Failed to load favorites")
+  return apiRequest(`/v1/community/favorites`, "apiErr.loadFavorites")
 }
 
 export async function reportCommunityListing(id: string, reason: string): Promise<{ ok: boolean }> {
-  return apiRequest(`/v1/community/listings/${encodeURIComponent(id)}/report`, "Failed to report", { method: "POST", body: { reason } })
+  return apiRequest(`/v1/community/listings/${encodeURIComponent(id)}/report`, "apiErr.report", { method: "POST", body: { reason } })
 }
 
 export async function publishToCommunity(entityType: string, id: string, body: {
   title: string; description?: string; category?: string; style?: string; tags?: string[]
   attestation: true; likenessAttestation?: boolean
 }): Promise<{ slug: string; id: string }> {
-  return apiRequest(`/v1/admin/community/${encodeURIComponent(entityType)}/${encodeURIComponent(id)}/publish`, "Failed to publish", { method: "POST", body })
+  return apiRequest(`/v1/admin/community/${encodeURIComponent(entityType)}/${encodeURIComponent(id)}/publish`, "pubDialog.publishFailed", { method: "POST", body })
 }
 
 export async function getCommunityReports(): Promise<{ data: Array<Record<string, unknown>> }> {
-  return apiRequest(`/v1/admin/community/reports`, "Failed to load reports")
+  return apiRequest(`/v1/admin/community/reports`, "apiErr.loadReports")
 }
 
 export async function takedownCommunityListing(id: string): Promise<{ ok: boolean }> {
-  return apiRequest(`/v1/admin/community/listings/${encodeURIComponent(id)}/takedown`, "Failed to take down", { method: "POST", body: {} })
+  return apiRequest(`/v1/admin/community/listings/${encodeURIComponent(id)}/takedown`, "apiErr.takeDown", { method: "POST", body: {} })
 }
 
 // --- Tutorials ---
@@ -8904,7 +9137,7 @@ export async function fetchTutorialsGrouped(): Promise<{
 }> {
   return apiRequest<{ categories: TutorialCategoryWithItems[] }>(
     "/v1/tutorials",
-    "Failed to fetch tutorials",
+    "apiErr.fetchTutorials",
     { skipAuth: true },
   )
 }
@@ -8914,7 +9147,7 @@ export async function fetchTutorialsGrouped(): Promise<{
 export async function fetchAdminTutorials(): Promise<AdminTutorial[]> {
   const res = await apiRequest<{ data: AdminTutorial[] }>(
     "/v1/admin/tutorials",
-    "Failed to fetch tutorials",
+    "apiErr.fetchTutorials",
   )
   return res.data
 }
@@ -8930,7 +9163,7 @@ export async function createTutorial(data: {
 }): Promise<AdminTutorial> {
   const res = await apiRequest<{ data: AdminTutorial }>(
     "/v1/admin/tutorials",
-    "Failed to create tutorial",
+    "apiErr.createTutorial",
     { method: "POST", body: data },
   )
   return res.data
@@ -8947,7 +9180,7 @@ export async function updateTutorial(id: string, data: {
 }): Promise<AdminTutorial> {
   const res = await apiRequest<{ data: AdminTutorial }>(
     `/v1/admin/tutorials/${encodeURIComponent(id)}`,
-    "Failed to update tutorial",
+    "apiErr.updateTutorial",
     { method: "PATCH", body: data },
   )
   return res.data
@@ -8956,7 +9189,7 @@ export async function updateTutorial(id: string, data: {
 export async function deleteTutorial(id: string): Promise<{ success: boolean }> {
   return apiRequest<{ success: boolean }>(
     `/v1/admin/tutorials/${encodeURIComponent(id)}`,
-    "Failed to delete tutorial",
+    "apiErr.deleteTutorial",
     { method: "DELETE" },
   )
 }
@@ -8966,7 +9199,7 @@ export async function deleteTutorial(id: string): Promise<{ success: boolean }> 
 export async function fetchAdminTutorialCategories(): Promise<TutorialCategory[]> {
   const res = await apiRequest<{ data: TutorialCategory[] }>(
     "/v1/admin/tutorial-categories",
-    "Failed to fetch tutorial categories",
+    "apiErr.fetchTutorialCategories",
   )
   return res.data
 }
@@ -8980,7 +9213,7 @@ export async function createTutorialCategory(data: {
 }): Promise<TutorialCategory> {
   const res = await apiRequest<{ data: TutorialCategory }>(
     "/v1/admin/tutorial-categories",
-    "Failed to create category",
+    "apiErr.createCategory",
     { method: "POST", body: data },
   )
   return res.data
@@ -8998,7 +9231,7 @@ export async function updateTutorialCategory(
 ): Promise<TutorialCategory> {
   const res = await apiRequest<{ data: TutorialCategory }>(
     `/v1/admin/tutorial-categories/${encodeURIComponent(id)}`,
-    "Failed to update category",
+    "apiErr.updateCategory",
     { method: "PATCH", body: data },
   )
   return res.data
@@ -9008,7 +9241,7 @@ export async function updateTutorialCategory(
 export async function deleteTutorialCategory(id: string): Promise<{ success: boolean }> {
   return apiRequest<{ success: boolean }>(
     `/v1/admin/tutorial-categories/${encodeURIComponent(id)}`,
-    "Failed to delete category",
+    "apiErr.deleteCategory",
     { method: "DELETE" },
   )
 }
@@ -9029,7 +9262,7 @@ export async function listAdminWorkflowTemplates(params?: {
   const query = qs.toString()
   return apiRequest<{ data: AdminWorkflowTemplateRow[]; nextCursor: string | null }>(
     `/v1/admin/workflow-templates${query ? `?${query}` : ""}`,
-    "Failed to list templates",
+    "apiErr.listTemplates",
   )
 }
 
@@ -9046,8 +9279,25 @@ export async function toggleTemplateTutorialFlag(
   if (data.tutorialSortOrder !== undefined) body.tutorial_sort_order = data.tutorialSortOrder
   return apiRequest<AdminWorkflowTemplateRow>(
     `/v1/admin/workflow-templates/${encodeURIComponent(templateId)}/tutorial-flag`,
-    "Failed to update tutorial flag",
+    "apiErr.updateTutorialFlag",
     { method: "PATCH", body },
+  )
+}
+
+/**
+ * PATCH /v1/admin/workflow-templates/:id/listing — an admin's switches for ANY
+ * template, whoever made it. `isActive: false` turns it off everywhere (the
+ * gallery, its page, cloning, the tutorials); `isListed` takes it in or out of
+ * the gallery and leaves the tutorial tag alone.
+ */
+export async function setAdminTemplateListing(
+  templateId: string,
+  change: { isActive?: boolean; isListed?: boolean },
+): Promise<AdminWorkflowTemplateRow> {
+  return apiRequest<AdminWorkflowTemplateRow>(
+    `/v1/admin/workflow-templates/${encodeURIComponent(templateId)}/listing`,
+    "apiErr.updateTemplateListing",
+    { method: "PATCH", body: change },
   )
 }
 
@@ -9163,7 +9413,7 @@ export async function runVideoDirector(params: {
 }): Promise<{ jobId: string }> {
   return apiJson("/v1/video-director/run", {
     body: params as unknown as Record<string, unknown>,
-    label: "Failed to start video director",
+    label: "vd.failedStart",
   })
 }
 
@@ -9173,7 +9423,7 @@ export interface VideoProEstimateInput {
   renderMethod?:"extend"|"keyframes"; anchorMode?:"upfront"|"progressive"|"none"; contextTailSec?:number; planOnly?:boolean
 }
 export async function estimateVideoProCredits(input:VideoProEstimateInput):Promise<{credits:number;upperBound:boolean}> {
-  const result=await apiJson<{data:{credits:number;upperBound:boolean}}>("/v1/credits/video-pro-estimate",{body:{...input},label:"Failed to estimate video credits"})
+  const result=await apiJson<{data:{credits:number;upperBound:boolean}}>("/v1/credits/video-pro-estimate",{body:{...input},label:"apiErr.estimateVideoCredits"})
   return result.data
 }
 
@@ -9213,22 +9463,165 @@ export interface UpdateHttpCredentialInput {
 }
 
 export async function listHttpCredentials(): Promise<{ data: HttpCredentialSummary[] }> {
-  return apiRequest("/v1/http-credentials", "Failed to load credentials")
+  return apiRequest("/v1/http-credentials", "apiErr.loadCredentials")
 }
 
 export async function createHttpCredential(input: CreateHttpCredentialInput): Promise<{ data: HttpCredentialSummary }> {
-  return apiRequest("/v1/http-credentials", "Failed to save the credential", { method: "POST", body: input })
+  return apiRequest("/v1/http-credentials", "apiErr.saveTheCredential", { method: "POST", body: input })
 }
 
 export async function updateHttpCredential(id: string, patch: UpdateHttpCredentialInput): Promise<{ data: HttpCredentialSummary }> {
-  return apiRequest(`/v1/http-credentials/${encodeURIComponent(id)}`, "Failed to update the credential", { method: "PATCH", body: patch })
+  return apiRequest(`/v1/http-credentials/${encodeURIComponent(id)}`, "apiErr.updateTheCredential", { method: "PATCH", body: patch })
 }
 
 export async function deleteHttpCredential(id: string): Promise<{ deleted: boolean }> {
-  return apiRequest(`/v1/http-credentials/${encodeURIComponent(id)}`, "Failed to delete the credential", { method: "DELETE" })
+  return apiRequest(`/v1/http-credentials/${encodeURIComponent(id)}`, "apiErr.deleteTheCredential", { method: "DELETE" })
 }
 
 /** The gate's one-click lock: bind the credential to exactly this address. */
 export function lockHttpCredential(id: string, url: string): Promise<{ data: HttpCredentialSummary }> {
   return updateHttpCredential(id, { boundUrl: url, boundMatch: "exact" })
+}
+
+// ---------------------------------------------------------------------------
+// Telegram accounts (Integrations → Telegram account). Cloud-only; the routes
+// are served by a private plugin, browser-session only, and — until general
+// availability — answer 404 to anyone the server does not offer them to, which
+// is how the card knows to stay hidden.
+// ---------------------------------------------------------------------------
+
+export type TelegramAccountStatus = "active" | "paused" | "revoked" | "disabled"
+
+export interface TelegramAccountSummary {
+  readonly id: string
+  readonly label: string | null
+  readonly status: TelegramAccountStatus | string
+  readonly statusReason: string | null
+  readonly firstName?: string
+  readonly username?: string
+  readonly connectedAt?: string
+  readonly updatedAt: string
+}
+
+/**
+ * The terms shown before connecting; `version` is sent back with the start.
+ * `locale` is the language the server actually served (it falls back to
+ * English for a language the terms are not written in).
+ */
+export interface TelegramConsent {
+  readonly version: string
+  readonly locale?: string
+  readonly points: readonly string[]
+}
+
+export type TelegramLoginFailure =
+  | "expired"
+  | "cancelled"
+  | "account_disabled"
+  | "too_many_accounts"
+  | "too_many_tries"
+  | "flood_wait"
+  | "rate_limited"
+  | "phone_invalid"
+  | "code_expired"
+  | "login_unavailable"
+  | "api_credentials_invalid"
+  | "network"
+  | "internal"
+
+export type TelegramLoginState =
+  | { readonly status: "pending"; readonly loginUrl: string; readonly expiresAt: number }
+  | {
+      readonly status: "code_sent"
+      readonly delivery: string
+      readonly nextDelivery?: string
+      readonly codeLength?: number
+      readonly timeoutSeconds?: number
+      readonly error?: "code_invalid"
+    }
+  | { readonly status: "needs_password"; readonly hint?: string; readonly error?: "password_invalid" }
+  | { readonly status: "done"; readonly account: { readonly id: string; readonly label: string | null } }
+  | { readonly status: "failed"; readonly reason: TelegramLoginFailure; readonly retryAfterSeconds?: number }
+
+export interface StartTelegramLoginInput {
+  readonly method: "qr" | "phone"
+  readonly apiId: string
+  readonly apiHash: string
+  readonly phone?: string
+  readonly consentVersion: string
+}
+
+export function listTelegramAccounts(): Promise<{ accounts: TelegramAccountSummary[] }> {
+  return apiRequest("/v1/telegram-accounts", "apiErr.loadTelegramAccounts")
+}
+
+/** The terms in `locale` (the app's chosen language) when the server has them, else English. */
+export function getTelegramConsent(locale: string): Promise<TelegramConsent> {
+  return apiRequest(
+    `/v1/telegram-accounts/consent?locale=${encodeURIComponent(locale)}`,
+    "apiErr.loadTheTelegramTerms",
+  )
+}
+
+export function startTelegramLogin(
+  input: StartTelegramLoginInput,
+): Promise<{ attemptId?: string; state: TelegramLoginState }> {
+  return apiRequest("/v1/telegram-accounts/login", "apiErr.startConnecting", {
+    method: "POST",
+    body: { ...input, consent: true },
+  })
+}
+
+export function pollTelegramLogin(attemptId: string): Promise<{ state: TelegramLoginState }> {
+  return apiRequest(`/v1/telegram-accounts/login/${encodeURIComponent(attemptId)}`, "apiErr.checkTheConnection")
+}
+
+export function submitTelegramLoginCode(attemptId: string, code: string): Promise<{ state: TelegramLoginState }> {
+  return apiRequest(`/v1/telegram-accounts/login/${encodeURIComponent(attemptId)}/code`, "apiErr.sendTheCode", {
+    method: "POST",
+    body: { code },
+  })
+}
+
+export function submitTelegramLoginPassword(attemptId: string, password: string): Promise<{ state: TelegramLoginState }> {
+  return apiRequest(`/v1/telegram-accounts/login/${encodeURIComponent(attemptId)}/password`, "apiErr.sendThePassword", {
+    method: "POST",
+    body: { password },
+  })
+}
+
+export async function cancelTelegramLogin(attemptId: string): Promise<void> {
+  const headers = await getAuthHeaders()
+  // Best effort: an attempt that already ended answers 404, which is the goal.
+  await fetch(`${API_BASE_URL}/v1/telegram-accounts/login/${encodeURIComponent(attemptId)}`, { method: "DELETE", headers })
+}
+
+/** `loggedOut: false` means the row is gone but Telegram could not be told — the owner ends it from Devices. */
+/** One of a connected account's chats, as the trigger's chat picker lists them. */
+export interface TelegramChatSummary {
+  readonly chatId: string
+  readonly type: "private" | "group" | "supergroup" | "channel"
+  readonly title: string
+  readonly username?: string
+  readonly lastMessageAt?: string
+  /** No message in 30+ days. */
+  readonly dormant: boolean
+  /** The account's own Saved Messages (the panel shows its name in the interface language). */
+  readonly isSelf?: boolean
+}
+
+export function listTelegramAccountChats(accountId: string): Promise<{ chats: TelegramChatSummary[] }> {
+  return apiRequest(`/v1/telegram-accounts/${encodeURIComponent(accountId)}/chats`, "apiErr.loadTheAccountSChats")
+}
+
+export function disconnectTelegramAccount(id: string): Promise<{ deleted: boolean; loggedOut: boolean }> {
+  return apiRequest(`/v1/telegram-accounts/${encodeURIComponent(id)}`, "apiErr.disconnectTheAccount", { method: "DELETE" })
+}
+
+export function pauseTelegramAccount(id: string): Promise<{ id: string; status: "paused" }> {
+  return apiRequest(`/v1/telegram-accounts/${encodeURIComponent(id)}/pause`, "apiErr.pauseTheAccount", { method: "POST" })
+}
+
+export function resumeTelegramAccount(id: string): Promise<{ id: string; status: "active" }> {
+  return apiRequest(`/v1/telegram-accounts/${encodeURIComponent(id)}/resume`, "apiErr.resumeTheAccount", { method: "POST" })
 }

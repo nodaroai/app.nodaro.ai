@@ -24,6 +24,7 @@ vi.mock("../../supabase.js", () => ({ supabase: { from: mocks.fromMock } }))
 vi.mock("../../credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: mocks.refundMock }))
 
 import { cancelInFlightChildJobs } from "../cancel-inflight-jobs.js"
+import { declaredJobBudgetMs } from "../../job-budget.js"
 
 describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
   beforeEach(() => {
@@ -73,6 +74,27 @@ describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
       usageLogId: "ul-2",
       creditsReserved: 15,
     })
+  })
+
+  it("an adopted row carries the budget its job declares (Track 0.11) — the SAME registry read the dispatch made", async () => {
+    const edl = {
+      version: 1, clock: "master",
+      sources: [{ id: "A", url: "https://f.test/a.mp4", kind: "video" }],
+      segments: Array.from({ length: 25 }, (_, i) => ({ id: `s${i}`, inMs: i * 60_000, outMs: (i + 1) * 60_000, video: "A" })),
+    }
+    const inputData = { node_id: "node-9", type: "apply-edl", edl, output: "video", quality: "final" }
+    mocks.rows.push({
+      id: "j-render", input_data: inputData, provider_task_id: "task-9", usage_log_id: "ul-9", credits: 30, job_type: "apply-edl",
+    })
+    mocks.rows.push({
+      id: "j-img", input_data: { node_id: "node-10", type: "generate-image" }, provider_task_id: "kie-10", usage_log_id: "ul-10", credits: 4, job_type: "generate-image",
+    })
+
+    const { adoptable } = await cancelInFlightChildJobs("exec-1")
+
+    expect(adoptable.get("node-9")?.budgetMs).toBe(declaredJobBudgetMs("apply-edl", inputData))
+    expect(adoptable.get("node-9")?.budgetMs).toBeGreaterThan(90 * 60_000)
+    expect(adoptable.get("node-10")?.budgetMs).toBeUndefined()
   })
 
   it("POST-provider FAN-OUT iteration (iterationIndex set) → cancelled, not adopted", async () => {

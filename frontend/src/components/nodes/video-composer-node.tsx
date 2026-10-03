@@ -64,7 +64,7 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex items-center justify-center h-16 rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
             <div className="text-center">
               <div className="text-sm font-medium text-[#ff0073]">
-                {trackCount} tracks
+                {t("node.nTracks", { n: trackCount })}
               </div>
               <div className="text-[10px] text-muted-foreground">{duration}s</div>
             </div>
@@ -94,11 +94,11 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
         <div className="text-muted-foreground text-[10px] line-clamp-1">
           {nodeData.compositionPrompt?.trim()
             ? nodeData.compositionPrompt
-            : "No prompt set"}
+            : t("pro3d.noPrompt")}
         </div>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="video-composer" handleId="in"          type="target" position={Position.Left}  label="Assets"      color={HANDLE_COLORS.identity} icon={<Sparkles />} side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="video-composer" handleId="in"          type="target" position={Position.Left}  label="Media"       color={HANDLE_COLORS.identity} icon={<Sparkles />} side="left"  top="calc(100% - 24px)" />
     <HandleWithPopover nodeId={id} nodeType="video-composer" handleId="composition" type="source" position={Position.Right} label="Composition" color={HANDLE_COLORS.control} icon={<Film />}     side="right" top="24px" />
     </div>
   )

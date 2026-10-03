@@ -21,6 +21,7 @@ import { splitMedia } from "../split-media.js"
 import { removeAudio } from "../remove-audio.js"
 import { extractFrame } from "../extract-frame.js"
 import { smartLoopCut } from "../smart-loop-cut.js"
+import { applyEdl } from "../apply-edl.js"
 import { fixtureUrl, type FixtureSet } from "./fixtures.js"
 import type { Tolerances } from "./compare.js"
 
@@ -324,6 +325,117 @@ const tier1: CharacterizedOperation[] = [
         trimStartFrames: 0,
         trimEndFrames: 0,
         smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
+      })
+      return single(outputPath, "video")
+    },
+  },
+  // apply-edl (the EDL renderer behind the podcast/multicam editing nodes).
+  // Its output leans on filters whose semantics an ffmpeg bump can move:
+  // `fps` resampling + `trim=end_frame` (the cumulative frame grid), `tpad`
+  // clone / `apad` (sources held past their end), scale+pad letterboxing,
+  // `xfade` / `acrossfade`, the `anullsrc` silence, and the chunked path's
+  // concat demuxer + PCM slices joined into ONE AAC encode. Cameras A and B
+  // are TIME-CODED (ramp-a/ramp-b: each frame's luma is its index) and every
+  // sound PULSES, so the per-frame luma pins which source frame lands on each
+  // output frame and the envelope pins where each sound span starts — a
+  // one-frame or one-AAC-frame shift fails the check (testsrc2 and steady
+  // tones would hide it). Mean luma cannot see WHERE content sits in the frame
+  // (a pillarbox shifted a few px measures the same); the exact geometry is
+  // pinned by apply-edl-multicam.e2e.test.ts instead. Rendered with `checkpoint: false`
+  // — no R2, a pure-local render.
+  {
+    // The Multicam Cut shape: three cameras of different geometry (640×360;
+    // a smaller 16:9 480×270, scaled up; a portrait 320×568, pillarboxed) on
+    // one master clock with offsets either side of it, hard cuts on the
+    // frame grid, every segment's sound from the stepped, pulsing master (D19).
+    name: "apply-edl-multicam-master-audio",
+    tier: 1,
+    run: async (f) => {
+      const { outputPath } = await applyEdl({
+        edl: {
+          version: 1,
+          clock: "master",
+          sources: [
+            { id: "A", url: fixtureUrl(f.rampAMp4), kind: "video", offsetMs: 500 },
+            { id: "B", url: fixtureUrl(f.rampBMp4), kind: "video", offsetMs: 2000 },
+            { id: "P", url: fixtureUrl(f.clipPortraitMp4), kind: "video", offsetMs: -1000 },
+            { id: "M", url: fixtureUrl(f.masterStepsM4a), kind: "audio", role: "master-audio" },
+          ],
+          segments: [
+            { id: "s0", inMs: 0, outMs: 900, video: "P" },
+            { id: "s1", inMs: 900, outMs: 2100, video: "A" },
+            { id: "s2", inMs: 2100, outMs: 3000, video: "B" },
+            { id: "s3", inMs: 3000, outMs: 3400, video: "A" },
+            { id: "s4", inMs: 3400, outMs: 3900, video: "B" },
+          ],
+        },
+        output: "video",
+        quality: "final",
+        jobId: "characterize-apply-edl-multicam",
+        checkpoint: false,
+      })
+      return single(outputPath, "video")
+    },
+  },
+  {
+    // Own-camera sound (no master) with a crossfade between hard cuts:
+    // xfade on a frame-counted offset + acrossfade, D17 overlap-compressed.
+    name: "apply-edl-crossfade-own-audio",
+    tier: 1,
+    run: async (f) => {
+      const { outputPath } = await applyEdl({
+        edl: {
+          version: 1,
+          clock: "master",
+          sources: [
+            { id: "A", url: fixtureUrl(f.rampAMp4), kind: "video" },
+            { id: "B", url: fixtureUrl(f.rampBMp4), kind: "video" },
+          ],
+          segments: [
+            { id: "s0", inMs: 0, outMs: 1500, video: "A" },
+            { id: "s1", inMs: 0, outMs: 1500, video: "B", transition: { type: "crossfade", durationMs: 500 } },
+            { id: "s2", inMs: 1500, outMs: 2800, video: "A" },
+          ],
+        },
+        output: "video",
+        quality: "final",
+        jobId: "characterize-apply-edl-crossfade",
+        checkpoint: false,
+      })
+      return single(outputPath, "video")
+    },
+  },
+  {
+    // The chunked path (forced at 2 segments per chunk): picture-only chunks
+    // joined by the concat demuxer, sound rendered as lossless PCM slices —
+    // with `anullsrc` silence for the camera that has no audio stream — and
+    // encoded to AAC once in the final mux.
+    name: "apply-edl-chunked-silent-camera",
+    tier: 1,
+    run: async (f) => {
+      const { outputPath } = await applyEdl({
+        edl: {
+          version: 1,
+          clock: "master",
+          sources: [
+            { id: "A", url: fixtureUrl(f.rampAMp4), kind: "video" },
+            { id: "S", url: fixtureUrl(f.clipSilentMp4), kind: "video" },
+            { id: "B", url: fixtureUrl(f.rampBMp4), kind: "video" },
+          ],
+          segments: [
+            { id: "s0", inMs: 0, outMs: 800, video: "A" },
+            { id: "s1", inMs: 800, outMs: 1500, video: "S" },
+            { id: "s2", inMs: 0, outMs: 700, video: "B" },
+            { id: "s3", inMs: 1500, outMs: 2300, video: "S" },
+            { id: "s4", inMs: 2300, outMs: 3000, video: "A" },
+          ],
+        },
+        output: "video",
+        quality: "final",
+        jobId: "characterize-apply-edl-chunked",
+        checkpoint: false,
+        chunkThreshold: 1,
+        maxSegmentsPerChunk: 2,
       })
       return single(outputPath, "video")
     },

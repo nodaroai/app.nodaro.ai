@@ -3,6 +3,7 @@ import { Loader2, Maximize2 } from "lucide-react"
 import { toast } from "sonner"
 import { OBJECT_MOTION_PROVIDERS, resolveEntityAspect, aspectRatioToNumber, type ObjectMotionProvider } from "@nodaro/shared"
 import { generateObjectMotion, removeObjectAsset } from "@/lib/api"
+import { tx, useT } from "@/lib/i18n"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useObjectStudioJobs } from "./use-object-studio-jobs"
 import { PresetChips } from "../studio-shell/preset-chips"
@@ -58,6 +59,7 @@ interface MotionTabProps {
 }
 
 export function MotionTab({ studio }: MotionTabProps) {
+  const t = useT()
   const data = studio.stagedData
   const [customPrompt, setCustomPrompt] = useState("")
   const [provider, setProvider] = useState<ObjectMotionProvider>("kling-turbo")
@@ -68,7 +70,7 @@ export function MotionTab({ studio }: MotionTabProps) {
 
   useEffect(() => {
     jobs.onFailed((jobId) => {
-      toast.error(`Motion generation ${jobId.slice(0, 8)}… failed`)
+      toast.error(tx("studio.motionGenFailed", { id: jobId.slice(0, 8) }))
     })
   }, [jobs.onFailed])
 
@@ -81,7 +83,7 @@ export function MotionTab({ studio }: MotionTabProps) {
   async function fireGen(motionPrompt: string): Promise<void> {
     if (!data) return
     if (!data.sourceImageUrl) {
-      toast.error("Approve a main image first")
+      toast.error(tx("studio.approveMainImageFirst"))
       return
     }
     const trimmed = motionPrompt.slice(0, 200)
@@ -119,11 +121,11 @@ export function MotionTab({ studio }: MotionTabProps) {
     const existingNames = new Set(items.map((i) => i.name.toLowerCase()))
     const missing = MOTION_PRESETS.filter((p) => !existingNames.has(p.toLowerCase()))
     if (missing.length === 0) {
-      toast.info("All presets already generated")
+      toast.info(tx("studio.allPresetsGenerated"))
       return
     }
     if (missing.length >= 4) {
-      if (!window.confirm(`This will queue ${missing.length} motion generation jobs.`)) return
+      if (!window.confirm(tx("studio.confirmQueueMotionJobs", { n: missing.length }))) return
     }
     for (const variant of missing) {
       // eslint-disable-next-line no-await-in-loop -- intentional sequential
@@ -136,7 +138,7 @@ export function MotionTab({ studio }: MotionTabProps) {
     const trimmed = customPrompt.trim()
     if (!trimmed) return
     if (trimmed.length > 2000) {
-      toast.error("Custom motion prompt is too long (max 2000 chars)")
+      toast.error(tx("studio.customMotionPromptTooLong"))
       return
     }
     await fireGen(trimmed)
@@ -155,7 +157,7 @@ export function MotionTab({ studio }: MotionTabProps) {
       try {
         await removeObjectAsset(id, { column: "motion_clips", url: target.url })
       } catch {
-        toast.error("Failed to delete asset — refresh to restore")
+        toast.error(tx("studio.deleteAssetFailed"))
       }
     }
   }
@@ -164,12 +166,12 @@ export function MotionTab({ studio }: MotionTabProps) {
   const createdNames = lowerNameSet(items)
   const busyNames = lowerNameSet(trackedMotions)
   const customDisabled = disabled || !customPrompt.trim()
-  const presetTooltip = noSourceImage ? "Approve a main image first" : undefined
+  const presetTooltip = noSourceImage ? t("studio.approveMainImageFirst") : undefined
 
   return (
     <div className="space-y-4 max-w-4xl">
       <div className="flex items-center justify-between">
-        <h2 className="text-[12px] font-medium text-slate-300">🎬 Motion Clips</h2>
+        <h2 className="text-[12px] font-medium text-slate-300">🎬 {t("studio.motionClips")}</h2>
         <button
           type="button"
           onClick={handleGenerateAll}
@@ -177,7 +179,7 @@ export function MotionTab({ studio }: MotionTabProps) {
           title={presetTooltip}
           className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Generate All
+          {t("studio.generateAll")}
         </button>
       </div>
 
@@ -186,7 +188,7 @@ export function MotionTab({ studio }: MotionTabProps) {
           role="note"
           className="bg-[#1a1d27] border border-[#1e293b] text-slate-300 p-3 rounded text-[11px]"
         >
-          Approve a main image first — motion generation needs a source frame.
+          {t("studio.approveFirstNeedsSource")}
         </div>
       )}
 
@@ -209,15 +211,15 @@ export function MotionTab({ studio }: MotionTabProps) {
             <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">
               {item.name}
             </div>
-            <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 z-10">
+            <div className="absolute top-1 end-1 flex gap-1 opacity-0 group-hover:opacity-100 z-10">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
                   setLightboxIndex(idx)
                 }}
-                aria-label={`Enlarge ${item.name}`}
-                title="Enlarge"
+                aria-label={t("studio.enlargeNamed", { name: item.name })}
+                title={t("common.enlarge")}
                 className="w-6 h-6 flex items-center justify-center rounded bg-black/60 text-white hover:bg-black/80"
               >
                 <Maximize2 className="w-3 h-3" />
@@ -228,10 +230,10 @@ export function MotionTab({ studio }: MotionTabProps) {
                   e.stopPropagation()
                   void handleRemove(idx)
                 }}
-                aria-label={`Remove ${item.name}`}
+                aria-label={t("cfgshared.removeModel", { name: item.name })}
                 className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80"
               >
-                Remove
+                {t("common.remove")}
               </button>
             </div>
           </div>
@@ -242,12 +244,12 @@ export function MotionTab({ studio }: MotionTabProps) {
             className="aspect-square border border-[#1e293b] rounded bg-[#0e1117] flex flex-col items-center justify-center gap-2 text-[11px] text-slate-400"
           >
             <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
-            <span className="truncate max-w-full px-2">Generating {j.name}…</span>
+            <span className="truncate max-w-full px-2">{t("studio.generatingName", { name: j.name })}</span>
           </div>
         ))}
         {items.length === 0 && trackedMotions.length === 0 && (
           <div className="col-span-full text-center text-[11px] text-slate-500 py-8 border border-dashed border-[#1e293b] rounded">
-            No motion clips yet — pick a preset below or enter a custom motion prompt.
+            {t("studio.noMotionClipsYet")}
           </div>
         )}
       </div>
@@ -256,7 +258,7 @@ export function MotionTab({ studio }: MotionTabProps) {
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <label htmlFor="object-motion-provider" className="text-[12px] text-slate-300">
-            Provider:
+            {t("studio.providerColon")}
           </label>
           <select
             id="object-motion-provider"
@@ -274,7 +276,7 @@ export function MotionTab({ studio }: MotionTabProps) {
         </div>
         <div className="flex items-center gap-2">
           <label htmlFor="object-motion-aspect" className="text-[12px] text-slate-300">
-            Aspect ratio:
+            {t("studio.aspectRatioColon")}
           </label>
           <select
             id="object-motion-aspect"
@@ -308,7 +310,7 @@ export function MotionTab({ studio }: MotionTabProps) {
           type="text"
           value={customPrompt}
           onChange={(e) => setCustomPrompt(e.target.value)}
-          placeholder="Custom motion prompt (free-form)"
+          placeholder={t("studio.customMotionPromptPh")}
           disabled={disabled}
           title={presetTooltip}
           className="flex-1 px-3 py-2 text-[12px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600 disabled:opacity-40"
@@ -328,7 +330,7 @@ export function MotionTab({ studio }: MotionTabProps) {
           title={presetTooltip}
           className="px-4 py-2 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
         >
-          Generate
+          {t("common.generate")}
         </button>
       </div>
 

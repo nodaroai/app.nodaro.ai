@@ -694,6 +694,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "face-five-oclock-shadow", label: "Five-O'Clock Shadow", dimension: "facial-hair", description: "Heavier daily growth — denser than light stubble", promptHint: "a five-o'clock shadow, daily growth heavier than light stubble" },
 
   // -------------------- Skin Texture --------------------
+  { id: "texture-natural",    label: "Natural",     dimension: "skin-texture", description: "Real pores and natural variation", promptHint: "with natural, unretouched skin — visible pores and small, even variation in tone", term: "natural unretouched skin" },
   { id: "texture-smooth",     label: "Smooth",      dimension: "skin-texture", description: "Flawless, silky smooth skin", promptHint: "with flawless, silky smooth skin", term: "flawless smooth skin" },
   { id: "texture-wrinkled",   label: "Wrinkled",    dimension: "skin-texture", description: "Aged, deeply lined skin",     promptHint: "with deep wrinkles and aged skin texture", term: "deeply wrinkled aged skin" },
   { id: "texture-goosebumps", label: "Goosebumps",  dimension: "skin-texture", description: "Raised goosebumps on skin",   promptHint: "with goosebumps raised on the skin" },
@@ -1059,7 +1060,8 @@ export interface PersonValue {
   /** Specific age in years. Only consulted when `age === "age-custom"`. */
   customAge?: number
   /** Single id, or an array of up to 2 ids for mixed heritage (e.g.
-   *  ["slavic","mediterranean"] → "of mixed Slavic and Mediterranean heritage"). */
+   *  ["slavic","mediterranean"] → "of mixed Slavic Eastern European and
+   *  Mediterranean heritage"). */
   ethnicity?: string | ReadonlyArray<string>
   /** Regional / cultural aesthetic vibe (e.g. `"cali-beach"`, `"parisienne"`,
    *  `"kinshasa-sape"`). Composes with ethnicity, skin tone, hair, and
@@ -1237,16 +1239,31 @@ function normalizePickIds(value: unknown): string[] {
  */
 type PersonFragmentFor = (id: string | undefined | null) => string
 
+/**
+ * The heritage an ethnicity entry names, as a prompt-safe noun: its promptHint
+ * without the "of … descent" / "… heritage" wrapper ("of Mediterranean descent"
+ * → "Mediterranean"). NOT the short label — that is display copy for the
+ * picker grid ("Mediter.", "Pacific Isl.", "any", a bare "East"), which is what
+ * two picks used to put in the prompt ("of mixed Slavic and Mediter. heritage").
+ */
+function heritageNoun(id: string): string | undefined {
+  const noun = (getPerson(id)?.promptHint ?? "")
+    .trim()
+    .replace(/^of\s+/i, "")
+    .replace(/\s+(descent|heritage)$/i, "")
+    .trim()
+  return noun.length > 0 ? noun : undefined
+}
+
 function buildEthnicityFragment(value: unknown, fragmentFor: PersonFragmentFor): string {
-  const ids = normalizePickIds(value)
+  // "mixed" is itself the mixed-heritage pick; paired with a specific one it
+  // adds nothing, so the pair reads as that one.
+  const ids = normalizePickIds(value).filter((id, _, all) => all.length < 2 || id !== "mixed")
   if (ids.length === 0) return ""
   if (ids.length === 1) return fragmentFor(ids[0])
-  const labels = ids
-    .slice(0, 2)
-    .map((id) => getPerson(id)?.shortLabel ?? getPerson(id)?.label ?? "")
-    .filter((s): s is string => Boolean(s))
-  if (labels.length < 2) return fragmentFor(ids[0])
-  return `of mixed ${labels[0]} and ${labels[1]} heritage`
+  const nouns = ids.slice(0, 2).map(heritageNoun).filter((s): s is string => Boolean(s))
+  if (nouns.length < 2) return fragmentFor(ids[0])
+  return `of mixed ${nouns[0]} and ${nouns[1]} heritage`
 }
 
 /**

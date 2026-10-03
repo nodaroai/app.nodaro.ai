@@ -54,6 +54,7 @@ export function PickerJsonHandleIcon({ nodeId, nodeType }: { nodeId: string; nod
 
 /** "Update from injected" button (manual-apply mode). */
 export function PickerUpdateButton({ hasPending, onApply }: { hasPending: boolean; onApply: () => void }) {
+  const t = useT()
   return (
     <button
       type="button"
@@ -65,7 +66,7 @@ export function PickerUpdateButton({ hasPending, onApply }: { hasPending: boolea
           : "bg-muted text-muted-foreground cursor-not-allowed"
       }`}
     >
-      {hasPending ? "⚡ Update from injected" : "Up to date"}
+      {hasPending ? t("node.updateFromInjected") : t("node.upToDate")}
     </button>
   )
 }

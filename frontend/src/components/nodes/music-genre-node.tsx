@@ -6,10 +6,12 @@ import { Music } from "lucide-react"
 import { getMusicGenreLabel, getMusicSubgenre, getMusicEra, buildMusicGenreHints } from "@nodaro/prompts"
 import { pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { MusicGenreData } from "@/types/nodes"
 
 function MusicGenreNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as MusicGenreData
+  const localizeNode = useLocalizeNodeLabel()
   const genreIds = pickIds(nodeData.genre)
   const era = getMusicEra(nodeData.era)
   const composed = buildMusicGenreHints(nodeData)
@@ -27,7 +29,7 @@ function MusicGenreNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <ParameterNodeShell id={id} label={nodeData.label} icon={<Music />} handleId="out" selected={selected} fluidWidth>
       <p className="text-foreground text-sm font-medium">
-        {primaryLabel || "Music Genre"}
+        {primaryLabel || localizeNode("Music Genre")}
       </p>
       {era && (
         <p className="text-muted-foreground text-[11px] leading-snug">{era.label}</p>

@@ -32,7 +32,7 @@ function VideoView({ data }: SceneViewProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
-        <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">Scene {data.scene_index}</div>
+        <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">{t("node.sceneN", { n: data.scene_index })}</div>
         <div className="text-[10px] text-zinc-500 dark:text-zinc-400">{data.duration_seconds}s</div>
       </div>
       {compositeUrl ? (
@@ -47,7 +47,7 @@ function VideoView({ data }: SceneViewProps) {
         <div className="flex flex-col items-center justify-center aspect-video rounded-md border-2 border-dashed border-zinc-200 dark:border-[#2D2D2D] text-[10px] text-zinc-400 dark:text-zinc-500 gap-0.5">
           <span>{t("node.stage7WillPopulateThis")}</span>
           <span className="text-[9px]">
-            {clips.length} clip{clips.length === 1 ? "" : "s"} rendered
+            {clips.length === 1 ? t("node.clipsRenderedOne", { n: clips.length }) : t("node.clipsRenderedMany", { n: clips.length })}
           </span>
         </div>
       )}

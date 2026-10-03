@@ -15,6 +15,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { MUSIC_CREDIT_ID, MUSIC_PROVIDER_LABELS, resolveMusicProvider } from "@nodaro/shared"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { GenerateMusicData } from "@/types/nodes"
@@ -37,7 +38,15 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits(nodeData.provider ?? "generate-music", 4)
+  // Every Generate Music run reserves on the music id, whatever the model — the
+  // model id "minimax" would price the MiniMax VIDEO model.
+  const credits = useModelCredits(MUSIC_CREDIT_ID, 4)
+  const provider = resolveMusicProvider(nodeData.provider)
+  // MiniMax Music takes no length (its reference and lyrics set it), so the
+  // node shows none for it.
+  const musicMeta = [provider === "minimax" ? undefined : `${nodeData.duration}s`, nodeData.genre || undefined]
+    .filter(Boolean)
+    .join(" - ")
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))
@@ -72,7 +81,7 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
               <button
                 key={`${r.jobId}-${i}`}
                 type="button"
-                aria-label={`Result ${i + 1}`}
+                aria-label={t("node.resultN", { n: i + 1 })}
                 className={`w-10 h-10 flex items-center justify-center rounded-lg cursor-pointer transition-all ${
                   i === activeIndex
                     ? "ring-2 ring-[#ff0073] bg-[#ff0073]/20"
@@ -149,8 +158,8 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="flex justify-between text-muted-foreground">
-          <span>{nodeData.provider || "musicgen"}</span>
-          <span className="text-xs">{nodeData.duration}s{nodeData.genre ? ` - ${nodeData.genre}` : ""}{nodeData.instrumental ? " (inst)" : ""}</span>
+          <span>{MUSIC_PROVIDER_LABELS[provider]}</span>
+          <span className="text-xs">{musicMeta}{nodeData.instrumental ? `${t("common.fragmentGap")}${t("node.instSuffix")}` : ""}</span>
         </div>
       </div>
     </BaseNode>

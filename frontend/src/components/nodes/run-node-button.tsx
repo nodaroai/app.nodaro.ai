@@ -187,7 +187,7 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere, 
           <AlertDialogTitle>{t("node.discardRunTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
             {t("node.discardRunDesc")}
-            {hasCredits() && ` ${t("node.discardRunCreditsNote")}`}
+            {hasCredits() && `${t("common.fragmentGap")}${t("node.discardRunCreditsNote")}`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">

@@ -46,6 +46,7 @@ export function DimensionTileGrid({
   showClear = false,
   catalog,
   maxSelected = 1,
+  iconClassName = "size-14",
 }: {
   readonly entries: ReadonlyArray<DimensionEntry>
   readonly value: DimensionPickValue
@@ -61,6 +62,9 @@ export function DimensionTileGrid({
   /** Max simultaneous picks. 1 = single (back-compat). >1 = multi-pick with
    *  numbered tile badges and FIFO replace when full. */
   readonly maxSelected?: number
+  /** Size of the icon box — a fixed 56px by default; a rendered look preview
+   *  reads better filling the tile (`w-full aspect-square`). */
+  readonly iconClassName?: string
 }) {
   const [query, setQuery] = useState("")
   const i18n = useLocalizedCatalog(catalog ?? ("__noop__" as I18nCatalogId))
@@ -225,7 +229,8 @@ export function DimensionTileGrid({
                 >
                   <div
                     className={cn(
-                      "size-14 flex items-center justify-center",
+                      iconClassName,
+                      "flex items-center justify-center",
                       isSelected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                     )}
                   >

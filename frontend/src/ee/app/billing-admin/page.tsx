@@ -28,6 +28,7 @@ import {
   unitsInputError,
   type DisplayUnit,
 } from "./units"
+import { formatDate, formatNumber } from "@/lib/i18n/format"
 
 /**
  * `/billing-admin` — the deployment BILLING ACCOUNT's own page (spec §9.3).
@@ -170,7 +171,7 @@ function PoolBlock({ overview }: { overview: DeploymentBillingOverview }) {
       <div className="mt-5 border-t border-border/60 pt-4">
         <h3 className="text-sm font-medium">{t("billingAdmin.burnTitle")}</h3>
         <p className="text-xs text-muted-foreground">
-          {t("billingAdmin.burnSince", { date: new Date(burn.periodStart).toLocaleDateString() })}
+          {t("billingAdmin.burnSince", { date: formatDate(burn.periodStart) })}
         </p>
         <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Figure label={t("billingAdmin.burnCredits")} value={orDash(burn.credits)} />
@@ -180,12 +181,12 @@ function PoolBlock({ overview }: { overview: DeploymentBillingOverview }) {
         </dl>
         {burn.capped && (
           <p className="mt-2 text-xs text-muted-foreground">
-            {t("billingAdmin.burnCapped", { n: (burn.generations ?? 0).toLocaleString() })}
+            {t("billingAdmin.burnCapped", { n: formatNumber(burn.generations ?? 0) })}
           </p>
         )}
         {unprovisioned !== null && unprovisioned > 0 && (
           <p className="mt-2 text-xs text-muted-foreground">
-            {t("billingAdmin.usersUnprovisioned", { n: unprovisioned.toLocaleString() })}
+            {t("billingAdmin.usersUnprovisioned", { n: formatNumber(unprovisioned) })}
           </p>
         )}
       </div>
@@ -412,7 +413,7 @@ function CardBlock({ overview }: { overview: DeploymentBillingOverview }) {
         </Button>
         {quote !== null && (
           <span className="text-sm text-muted-foreground tabular-nums">
-            {t("billingAdmin.cardQuote", { credits: quote.toLocaleString() })}
+            {t("billingAdmin.cardQuote", { credits: formatNumber(quote) })}
           </span>
         )}
       </div>
@@ -452,7 +453,7 @@ function TransactionsBlock() {
         {purchases.map((p) => (
           <li key={p.id} className="flex flex-wrap items-baseline gap-x-4">
             <span className="text-xs text-muted-foreground">
-              {new Date(p.created_at).toLocaleDateString()}
+              {formatDate(p.created_at)}
             </span>
             <span className="tabular-nums">{p.amount_usd == null ? "—" : `$${p.amount_usd}`}</span>
             <span className="tabular-nums text-muted-foreground">{orDash(p.credits_granted)}</span>
@@ -478,7 +479,7 @@ function TransactionsBlock() {
         {ledger.map((l) => (
           <li key={l.id} className="flex flex-wrap items-baseline gap-x-4">
             <span className="text-xs text-muted-foreground">
-              {new Date(l.created_at).toLocaleDateString()}
+              {formatDate(l.created_at)}
             </span>
             <span className="tabular-nums">{orDash(l.amount)}</span>
             <span className="text-xs text-muted-foreground">{l.description ?? l.source ?? ""}</span>

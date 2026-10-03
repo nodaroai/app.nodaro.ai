@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 import type { ObjectReferencePhoto, ObjectReferencePhotoKind } from "@/types/nodes"
 
 /**
@@ -23,13 +24,15 @@ const KINDS: ReadonlyArray<ObjectReferencePhotoKind> = [
   "other",
 ]
 
-const KIND_LABELS: Readonly<Record<ObjectReferencePhotoKind, string>> = {
-  front: "front",
-  side: "side",
-  detail: "detail",
-  context: "context",
-  moodBoard: "mood board",
-  other: "other",
+// The same keys as the object studio: a kind shows by its label, never by the
+// id ("moodBoard") it is stored as.
+const KIND_LABELS: Readonly<Record<ObjectReferencePhotoKind, MessageKey>> = {
+  front: "studio.kindFront",
+  side: "studio.kindSide",
+  detail: "studio.kindDetail",
+  context: "studio.kindContext",
+  moodBoard: "studio.kindMoodBoard",
+  other: "studio.otherLower",
 }
 
 const MAX_PHOTOS = 20
@@ -40,6 +43,7 @@ interface ReferencePhotosSectionProps {
 }
 
 export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSectionProps) {
+  const t = useT()
   const [pendingUrl, setPendingUrl] = useState("")
   const [pendingKind, setPendingKind] = useState<ObjectReferencePhotoKind>("moodBoard")
   // Search/filter — match against the kind enum value (e.g. "front"), the
@@ -51,7 +55,8 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
   const visiblePhotos = q
     ? photos.filter((p) => {
         const filename = p.url.split("/").pop()?.toLowerCase() ?? ""
-        const label = KIND_LABELS[p.kind]?.toLowerCase() ?? ""
+        const labelKey = KIND_LABELS[p.kind]
+        const label = labelKey ? t(labelKey).toLowerCase() : ""
         return (
           p.kind.toLowerCase().includes(q) ||
           label.includes(q) ||
@@ -65,11 +70,11 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
     const trimmed = pendingUrl.trim()
     if (!trimmed) return
     if (photos.some((p) => p.url === trimmed)) {
-      toast.info("Photo already added")
+      toast.info(tx("creature.photoAlreadyAdded"))
       return
     }
     if (photos.length >= MAX_PHOTOS) {
-      toast.error(`Max ${MAX_PHOTOS} reference photos`)
+      toast.error(tx("creature.maxReferencePhotos", { max: MAX_PHOTOS }))
       return
     }
     onChange([...photos, { kind: pendingKind, url: trimmed }])
@@ -83,7 +88,7 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
   return (
     <div data-testid="reference-photos-section">
       <h3 className="text-[12px] font-medium text-slate-300 mb-2">
-        Reference photos <span className="text-slate-500">({photos.length}/{MAX_PHOTOS})</span>
+        {t("creature.referencePhotos")} <span className="text-slate-500">({photos.length}/{MAX_PHOTOS})</span>
       </h3>
       {showSearch && (
         <div className="flex items-center gap-2 mb-2">
@@ -91,8 +96,8 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search reference photos…"
-            aria-label="Search reference photos"
+            placeholder={t("creature.searchReferencePhotos")}
+            aria-label={t("creature.searchReferencePhotosAria")}
             className="flex-1 px-3 py-1.5 text-[11px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600"
           />
           {q && (
@@ -101,7 +106,7 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
               onClick={() => setSearchQuery("")}
               className="text-[11px] text-slate-400 hover:text-slate-200"
             >
-              Clear
+              {t("common.clear")}
             </button>
           )}
         </div>
@@ -112,22 +117,25 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
             // Original index needed for remove() to slice the correct entry
             // from the full `photos` array — filtering changes positions.
             const originalIdx = photos.indexOf(p)
+            // A kind saved before this list changed shows as stored.
+            const labelKey: MessageKey | undefined = KIND_LABELS[p.kind]
+            const kindLabel = labelKey ? t(labelKey) : p.kind
             return (
               <div key={p.url + originalIdx} className="relative group">
                 <img
                   src={p.url}
-                  alt={p.kind}
+                  alt={kindLabel}
                   loading="lazy"
                   className="w-full aspect-square object-cover rounded border border-[#1e293b]"
                 />
-                <span className="absolute top-1 left-1 bg-black/70 text-[9px] text-white px-1 rounded">
-                  {p.kind}
+                <span className="absolute top-1 start-1 bg-black/70 text-[9px] text-white px-1 rounded">
+                  {kindLabel}
                 </span>
                 <button
                   type="button"
                   onClick={() => remove(originalIdx)}
-                  aria-label={`Remove ${p.kind}`}
-                  className="absolute top-1 right-1 bg-black/70 hover:bg-red-500 text-white text-[10px] w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label={t("creature.removeNameAria", { name: kindLabel })}
+                  className="absolute top-1 end-1 bg-black/70 hover:bg-red-500 text-white text-[10px] w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   ✕
                 </button>
@@ -138,13 +146,13 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
       )}
       {zeroResults && (
         <div className="text-center text-[11px] text-slate-500 py-6 border border-dashed border-[#1e293b] rounded mb-2">
-          No matches for &quot;{searchQuery.trim()}&quot;.{" "}
+          {t("creature.noMatchesFor", { q: searchQuery.trim() })}{" "}
           <button
             type="button"
             onClick={() => setSearchQuery("")}
             className="text-pink-400 hover:underline"
           >
-            Clear
+            {t("common.clear")}
           </button>
         </div>
       )}
@@ -152,11 +160,11 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
         <select
           value={pendingKind}
           onChange={(e) => setPendingKind(e.target.value as ObjectReferencePhotoKind)}
-          aria-label="Reference kind"
+          aria-label={t("creature.referenceKindAria")}
           className="text-[11px] bg-[#1a1d27] border border-[#1e293b] rounded px-2 py-1.5 text-slate-300"
         >
           {KINDS.map((k) => (
-            <option key={k} value={k}>{k}</option>
+            <option key={k} value={k}>{t(KIND_LABELS[k])}</option>
           ))}
         </select>
         <input
@@ -164,8 +172,8 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
           value={pendingUrl}
           onChange={(e) => setPendingUrl(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add() } }}
-          placeholder="https://…"
-          aria-label="Reference photo URL"
+          placeholder={t("creature.urlPlaceholder")}
+          aria-label={t("creature.referencePhotoUrlAria")}
           className="flex-1 text-[11px] bg-[#1a1d27] border border-[#1e293b] rounded px-2 py-1.5 text-slate-300 placeholder:text-slate-600"
         />
         <button
@@ -174,7 +182,7 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
           disabled={!pendingUrl.trim() || photos.length >= MAX_PHOTOS}
           className="text-[11px] px-3 py-1.5 rounded bg-[#A78BFA] hover:bg-[#A78BFA]/90 disabled:opacity-40 disabled:cursor-not-allowed text-slate-900 font-medium"
         >
-          Add
+          {t("common.add")}
         </button>
       </div>
     </div>

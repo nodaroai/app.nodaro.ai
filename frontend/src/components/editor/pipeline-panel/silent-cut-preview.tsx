@@ -1,4 +1,5 @@
 import { SubGateApprovalCard } from "./sub-gate-approval-card"
+import { useT } from "@/lib/i18n"
 
 interface Props {
   readonly pipelineId: string
@@ -15,15 +16,16 @@ interface Props {
  * component contributes only the preview video block.
  */
 export function SilentCutPreview({ pipelineId, previewUrl }: Props) {
+  const t = useT()
   return (
     <SubGateApprovalCard
       pipelineId={pipelineId}
       gate="silent_cut_preview"
-      title="Silent preview"
-      description="Review timing before adding music"
-      approveLabel="Approve &amp; continue to music"
-      rejectTitle="Reject silent preview"
-      rejectPlaceholder="What was off about the silent cut? (optional)"
+      title={t("pipe.silentPreviewTitle")}
+      description={t("pipe.silentPreviewDesc")}
+      approveLabel={t("pipe.approveContinueToMusic")}
+      rejectTitle={t("pipe.rejectSilentPreview")}
+      rejectPlaceholder={t("pipe.silentCutChangePlaceholder")}
       cardTestId="silent-cut-preview"
     >
       <video

@@ -288,6 +288,7 @@ const map: LocaleCatalogMap = {
   "face-full-beard": { label: "पूरी दाढ़ी", description: "मोटी पूरी दाढ़ी" },
 
   // -------------------- Skin Texture --------------------
+  "texture-natural": { label: "प्राकृतिक", description: "असली रोमछिद्र और स्वाभाविक भिन्नता" },
   "texture-smooth": { label: "चिकनी", description: "Flawless, रेशमी चिकनी त्वचा" },
   "texture-wrinkled": { label: "झुर्रीदार", description: "वृद्ध, गहरी lined त्वचा" },
   "texture-goosebumps": { label: "Goosebumps", description: "त्वचा पर उठे हुए goosebumps" },

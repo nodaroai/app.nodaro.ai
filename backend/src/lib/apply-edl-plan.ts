@@ -12,10 +12,16 @@
 import {
   type Edl,
   type EdlSegment,
+  EDL_SOURCE_ROLES,
   normalizeEdl,
   validateEdl,
   edlDurationMs,
 } from "@nodaro/shared"
+import { APPLY_EDL_MAX_OUTPUT_MS } from "../providers/video/apply-edl-budget.js"
+
+/** Re-exported so every ingress reads the ONE cap (it lives in the budget
+ *  leaf, which also refuses to budget past it). */
+export { APPLY_EDL_MAX_OUTPUT_MS }
 
 /** Base credits per MINUTE of RENDERED output. Single source of truth for the
  *  per-minute rate: `STATIC_CREDIT_COSTS['apply-edl']` (ee/billing/credits.ts)
@@ -103,6 +109,8 @@ export function applyEdlBaseCredits(edl: Edl): number {
   return APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE * applyEdlReserveMinutes(edl)
 }
 
+const KNOWN_SOURCE_ROLES: ReadonlySet<string> = new Set(EDL_SOURCE_ROLES)
+
 export interface ApplyEdlValidation {
   readonly ok: boolean
   readonly issues: readonly string[]
@@ -114,8 +122,9 @@ export interface ApplyEdlValidation {
  * credits are reserved: every referenced source must have a non-empty url, a
  * `video`-output edit must give every segment a picture source, nothing the
  * phase-1 renderer cannot render may be present (multi-slot layouts, layout
- * transitions other than "cut", regions), and no segment may start before its
- * source's origin. Returns issues so the route can 400 naming exactly what is
+ * transitions other than "cut", regions), no source may carry a role this
+ * executor does not know, and no segment may start before its source's origin.
+ * Returns issues so the route can 400 naming exactly what is
  * wrong. (Whether a segment runs PAST a source's end needs the file itself and
  * is checked by the executor after download — it fails naming the segment,
  * never clamps.)
@@ -123,6 +132,33 @@ export interface ApplyEdlValidation {
 export function validateEffectiveEdl(edl: Edl, output: "video" | "audio"): ApplyEdlValidation {
   const base = validateEdl(edl)
   const issues = [...base.issues]
+
+  // The 3-hour cap (product decision 2026-09-24): one render may produce at
+  // most `APPLY_EDL_MAX_OUTPUT_MS` of output, measured exactly as the reserve
+  // is priced (`edlDurationMs`, overlaps subtracted). Refused HERE — before
+  // any credit is reserved, at every ingress — so no render's time budget can
+  // grow past that of a 180-minute output.
+  const outputMs = edlDurationMs(edl)
+  if (outputMs > APPLY_EDL_MAX_OUTPUT_MS) {
+    // Rounded UP to a tenth, so an edit a few ms over never reads as "180".
+    const over = Math.ceil(outputMs / 6_000) / 10
+    const cap = APPLY_EDL_MAX_OUTPUT_MS / 60_000
+    issues.push(
+      `the edit renders ${over} minutes of output — over the ${cap}-minute limit for one render; ` +
+        `split it into parts of at most ${cap} minutes`,
+    )
+  }
+
+  // An unknown role is only a WARNING in the shared contract (a newer producer
+  // may know more roles), but this executor knows exactly EDL_SOURCE_ROLES, and
+  // the one it acts on is "master-audio": a misspelled one would silently take
+  // every segment's sound from its own camera. So it is PROMOTED to an issue
+  // here — checked against the registry directly, never by parsing warnings.
+  for (const s of edl.sources) {
+    if (s.role !== undefined && !KNOWN_SOURCE_ROLES.has(s.role)) {
+      issues.push(`source "${s.id}": unknown role "${s.role}" — this renderer knows only ${EDL_SOURCE_ROLES.join(", ")} (a misspelled "master-audio" would take each segment's sound from its own camera)`)
+    }
+  }
 
   // Every source the segments reference must resolve to a real url (the
   // executor downloads from `EdlSource.url`). validateEdl already flags empty
@@ -188,8 +224,8 @@ export function validateEffectiveEdl(edl: Edl, output: "video" | "audio"): Apply
 
   // A segment must exist on the source it reads. `masterMs = sourceMs + offsetMs`,
   // so a segment starting before a source's origin would ask for negative source
-  // time; the renderer clamps that to 0 (`renderSlice`) and would deliver the
-  // wrong picture — so it is refused here, before anything is reserved.
+  // time. It is refused here, before anything is reserved (and the executor's
+  // window check refuses it too — it never clamps to the source's first frame).
   // "Reads" is the executor's rule exactly: the picture source only for a video
   // output (an audio cut never touches it), the sound source always.
   const masterAudioId = edl.sources.find((s) => s.role === "master-audio")?.id

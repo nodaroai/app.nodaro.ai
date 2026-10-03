@@ -61,6 +61,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "face": { faceRef: "face" },
   "face-swap": { video: "video" },
   "fade-video": { video: "video" },
+  "video-overlay": { "video-out": "video" },
   "still-to-video": { video: "video" },
   "gif-to-video": { video: "video" },
   "slideshow": { video: "video" },
@@ -133,6 +134,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   // media alongside server-side) — typed "text" so it wires into prompt/
   // caption inputs. "control" made the labeled Message output unconnectable.
   "telegram-trigger": { out: "text" },
+  "telegram-account-trigger": { out: "text", videoLink: "text", postText: "text", postLink: "text" },
   // The Posts handle emits the recent channel posts' text.
   "telegram-channel-feed": { out: "text" },
   "text-to-audio": { audio: "audio" },
@@ -161,8 +163,12 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "voice-remix": { audio: "audio" },
   "web-scrape": { json: "look" },
   "silence-detect": { json: "look" },
+  "audio-sync": { json: "look" },
   "meta-ads-scrape": { json: "look", text: "text", image: "image", video: "video" },
   "instagram-scrape": { json: "look", text: "text", image: "image", video: "video" },
+  "social-search": { json: "look", text: "text" },
   "webhook-output": { out: "approve" },
   "youtube-video": { video: "video" },
+  "content-recipe": { json: "look", text: "text" },
+  "content-ideas": { ideas: "list" },
 }

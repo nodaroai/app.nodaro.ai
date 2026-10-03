@@ -1212,7 +1212,7 @@ export function YouTubeVideoConfig({ data, nodeId }: ConfigProps<YouTubeVideoDat
       )}
       {data.title && (
         <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
-          <span className="font-medium">{t("inputcfg.title")}</span> {data.title}
+          <span className="font-medium">{t("inputcfg.title")}</span>{t("common.fragmentGap")}{data.title}
         </div>
       )}
       {nodeId && <VideoLinkStatus nodeId={nodeId} data={data} variant="panel" />}

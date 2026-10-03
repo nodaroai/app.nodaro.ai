@@ -17,7 +17,7 @@ import type { SimpleNode, ResolvedInputs } from "../types.js"
 /** Measured on frontend/src/components/editor/workflow-editor/execute-node.ts
  *  @ origin/dev d7815542 with the window+regex in the last test below. Bump it
  *  ONLY together with a new table row or a justified PARITY_EXEMPT entry. */
-const FRONTEND_MEDIA_REFUSAL_COUNT = 84 // +2 image-overlay: base image (table row) + overlay layers (the case throws its own); +1 silence-detect (audio/video source, table row); +1 apply-edl (the "connect an EDL" guard over-matches "connect a"; JSON-input guard, exempt below); +1 edit-plan (the "connect a transcript" guard over-matches "connect a"; JSON-input guard, exempt below)
+const FRONTEND_MEDIA_REFUSAL_COUNT = 86 // recounted, same guards: the refusals moved into the i18n dictionary and are now read from there, not from a 3-line source window (which over-matched 2 neighbouring lines); +1 video-overlay: base video (table row); +2 image-overlay: base image (table row) + overlay layers (the case throws its own); +1 silence-detect (audio/video source, table row); +1 apply-edl (the "connect an EDL" guard over-matches "connect a"; JSON-input guard, exempt below); +1 edit-plan (the "connect a transcript" guard over-matches "connect a"; JSON-input guard, exempt below); +1 audio-sync ("connect at least 2 recordings" — a source-COUNT guard, exempt below); +2 content-recipe / content-ideas ("connect a Video Analysis, a post or some text" / "connect at least one Content Recipe" — text-input guards over-matching "connect a", exempt below)
 
 const JOB = "job-media-required"
 const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
@@ -163,6 +163,12 @@ describe("required media inputs", () => {
     expect(() => assertRequiredMediaInputs("video-analysis", {}, node("video-analysis").data)).toThrow(/video_required/)
   })
 
+  it("video-analysis: a post's link wired into its video input is a source too, and the refusal names it", () => {
+    const empty = node("video-analysis").data
+    expect(() => assertRequiredMediaInputs("video-analysis", { videoPageUrl: "https://youtu.be/abc" }, empty)).not.toThrow()
+    expect(() => assertRequiredMediaInputs("video-analysis", {}, empty)).toThrow(/a link to a post's video/)
+  })
+
   it("leaves untabled node types alone", () => {
     expect(() => assertRequiredMediaInputs("generate-image", {}, node("generate-image").data)).not.toThrow()
   })
@@ -267,14 +273,17 @@ describe("required media inputs", () => {
     })
   })
 
-  it("face-swap stays single-entry — its face half reads only data.faceImageUrl", () => {
-    // Wiring an image into the orange handle sets resolvedInputs.imageUrl, which
-    // the case never reads. An AND entry on it would refuse that graph while the
-    // payload would still ship `undefined` — the audit-dag wiring gap, ticketed
-    // separately. The video half is guarded; the face half deliberately is not.
+  it("face-swap needs both halves — a face image and a video — and ships the wired face", () => {
+    // The face now has its own lane (the resolver routes the `face` handle into
+    // resolvedInputs.faceImageUrl), so a missing face is refused before any job
+    // is created instead of crashing at the provider.
     const n = node("face-swap")
-    expect(() => buildPayload(n, JOB, { videoUrl: "https://cdn.example/v.mp4" }, undefined, ctx(n)))
-      .not.toThrow()
+    const video = "https://cdn.example/v.mp4"
+    const face = "https://cdn.example/f.png"
+    expect(() => buildPayload(n, JOB, { videoUrl: video }, undefined, ctx(n))).toThrow(/image_required/)
+    expect(() => buildPayload(n, JOB, { faceImageUrl: face }, undefined, ctx(n))).toThrow(/video_required/)
+    const built = buildPayload(n, JOB, { videoUrl: video, faceImageUrl: face }, undefined, ctx(n))
+    expect(built.payload).toMatchObject({ faceImageUrl: face, videoUrl: video })
   })
 
   it("covers every frontend-guarded media node (parity ratchet)", () => {
@@ -319,6 +328,7 @@ describe("required media inputs", () => {
       "generate-mask",           // :5739 no image connected
       "image-collage",           // :5907 need at least 2 image inputs
       "image-overlay",           // no base image connected + no overlay image connected
+      "video-overlay",           // no base video connected (the layer refusals speak the shared validator's codes)
       "combine-videos",          // :6002 need at least 2 video inputs
       "apply-edl",               // "connect an EDL to the EDL input" — a json-input guard, not media (exempt below)
       "edit-plan",               // "connect a transcript to the Transcript input" — a json-input guard, not media (exempt below)
@@ -327,6 +337,7 @@ describe("required media inputs", () => {
       "trim-audio",              // :6125 no video input
       "extract-audio",           // :6150 no video input
       "silence-detect",          // connect an audio or video source
+      "audio-sync",              // connect at least 2 recordings to the "Sources" input (source-COUNT guard, exempt below)
       "remove-audio",            // :6166 no video input
       "split-media",             // :6184 no video or audio input found
       "trim-video",              // :6287 no video input
@@ -350,6 +361,8 @@ describe("required media inputs", () => {
       "after-effects",           // :6895 no video input connected
       "lottie-overlay",          // :6972 no video input connected
       "render-video",            // :7295 no media assets connected
+      "content-recipe",          // connect a Video Analysis, a post or some text (text-input guard, exempt below)
+      "content-ideas",           // connect at least one Content Recipe (text-input guard, exempt below)
     ]
     // Nodes whose frontend refusal CANNOT be mirrored by a media-only table row
     // without refusing graphs that run today (M-12b), or whose refusal already
@@ -394,6 +407,12 @@ describe("required media inputs", () => {
         "the frontend refusal is 'connect an EDL' — a JSON-input guard, not a media one (its media resolves from EdlSource.url inside the EDL). The backend enforces parity by building + validating the effective EDL in the payload-builder case (validateEffectiveEdl throws before the reservation), so a media-only REQUIRED_MEDIA_INPUTS row would be wrong.",
       "edit-plan":
         "the counted refusal is 'connect a transcript' — a JSON-input guard, not a media one (edit-plan reads the transcript, never pixels). buildPayload DOES enforce parity: its edit-plan case throws for BOTH an unresolved transcript AND empty sources before the reserve (mirroring the two frontend refusals). A REQUIRED_MEDIA_INPUTS row would still be wrong because the PRIMARY guard is the JSON transcript, and the media guard is a source-COUNT (min 1), not a specific typed-URL slot that table models.",
+      "content-recipe":
+        "the refusal is about its MATERIAL — text or an analysis JSON on the `in` wire — never a media URL (the `link` wire is a citation, not media). buildPayload enforces parity: its content-recipe case throws for empty material before the reserve (pinned by content-recipe-ideas.test.ts).",
+      "content-ideas":
+        "the refusal is a recipe-COUNT guard over text folded from the `recipes` wire, not a media slot. buildPayload enforces parity: its content-ideas case throws when no recipe arrived, before the reserve (pinned by content-recipe-ideas.test.ts).",
+      "audio-sync":
+        "the guard is a source-COUNT (2..6 recordings on one `sources` handle, each kept with its node id), not a typed-URL slot the table models. buildPayload DOES enforce parity: its audio-sync case throws for fewer than 2 or more than 6 wired recordings, and for any source that is not a fetchable media URL, before the reserve (pinned by ee/billing/__tests__/audio-sync-credits.test.ts).",
     }
     for (const t of FE_GUARDED) {
       if (t in PARITY_EXEMPT) continue
@@ -411,11 +430,13 @@ describe("required media inputs", () => {
    * pins the count instead. Reading a frontend source by relative path at test
    * time is the established pattern (lib/__tests__/node-registry-sync.test.ts).
    *
-   * The window+regex is a TRIPWIRE, not a classifier: it over-matches slightly
-   * (a "no prompt — … or connect a cinematography source" refusal trips the
-   * `connect a` arm) and under-matches the `need at least N` cardinality
-   * guards. That is fine — any movement in the number forces a human back to
-   * this file, which is the whole job.
+   * Each refusal is a `nodeRunError(<label>, "<key>")` call whose English
+   * lives in the frontend dictionary, so the regex runs on that text. It is a
+   * TRIPWIRE, not a classifier: it over-matches slightly (a "no prompt — … or
+   * connect a cinematography source" refusal trips the `connect a` arm) and
+   * under-matches the `need at least N` cardinality guards. That is fine — any
+   * movement in the number forces a human back to this file, which is the
+   * whole job.
    */
   it("pins the frontend's media-refusal count so a NEW guard fails the build", () => {
     // backend/src/services/workflow-engine/__tests__/ → up 5 → repo root
@@ -424,14 +445,15 @@ describe("required media inputs", () => {
       join(REPO_ROOT, "frontend/src/components/editor/workflow-editor/execute-node.ts"),
       "utf8",
     )
-    const lines = src.split("\n")
+    const dictionary = readFileSync(join(REPO_ROOT, "frontend/src/lib/i18n/en.ts"), "utf8")
+    const englishOf = (key: string): string | undefined =>
+      dictionary.match(new RegExp(`^\\s*"${key.replace(/\./g, "\\.")}":\\s*"((?:[^"\\\\]|\\\\.)*)"`, "m"))?.[1]
     const MEDIA_REFUSAL = /no .*(image|video|audio|media|GIF)|connect (a|two|at least)/i
     let count = 0
-    for (let i = 0; i < lines.length; i++) {
-      if (!lines[i].includes('Node "${')) continue
-      // 3-line window: the refusal's message often wraps onto its own line.
-      const window = lines.slice(Math.max(0, i - 1), i + 2).join("\n")
-      if (MEDIA_REFUSAL.test(window)) count++
+    for (const call of src.matchAll(/nodeRunError\([\s\S]*?"(nodeRun\.[A-Za-z0-9]+)"/g)) {
+      const english = englishOf(call[1])
+      expect(english, `${call[1]} is not in the frontend dictionary`).toBeDefined()
+      if (MEDIA_REFUSAL.test(english ?? "")) count++
     }
     expect(
       count,

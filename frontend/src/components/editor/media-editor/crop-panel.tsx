@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { parseAspectRatio, type CropState } from "./utils"
+import { useT } from "@/lib/i18n"
 
 interface CropPanelProps {
   mediaUrl: string
@@ -39,6 +40,7 @@ export function CropPanel({
   onAspectRatioChange,
   videoRef,
 }: CropPanelProps) {
+  const t = useT()
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 })
   const [dragType, setDragType] = useState<DragType>(null)
@@ -212,7 +214,7 @@ export function CropPanel({
           <img
             ref={(el) => attachObserver(el)}
             src={mediaUrl}
-            alt="Preview"
+            alt={t("common.preview")}
             draggable={false}
             className="block w-full mx-auto"
             style={{ maxHeight: "55vh" }}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useContext, useEffect, useRef, useState } from "react"
+import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 import { useStore } from "@xyflow/react"
 import { InlineGluedStripContext } from "./inline-glued-strip-context"
 import { Sparkles, Ratio, Maximize2, Settings2, Copy } from "lucide-react"
@@ -16,6 +16,11 @@ import { useGenerateImageStripModel } from "./use-generate-image-strip-model"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import { useNodeVisuallyCompact } from "@/lib/node-visual-compact"
 import type { GenerateImageData } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
+import { getModel } from "@nodaro/shared"
+import { wiredFieldSources, type WiredSettingsView } from "@/hooks/use-wired-settings"
+import { SettingsPriceNote } from "./settings-chips"
 
 interface GenerateImageQuickToolbarProps {
   readonly nodeId: string
@@ -27,6 +32,10 @@ interface GenerateImageQuickToolbarProps {
    *  active (the dropdown items render in a portal outside the node's
    *  hover area, which would otherwise trigger NodeToolbar's hide). */
   readonly onAnyOpenChange?: (open: boolean) => void
+  /** The node's Settings input as read by the node: the strip shows the values
+   *  the node runs with, a wired field is fixed (its node sets it), and a Run
+   *  the Settings input refuses is disabled with the reason. */
+  readonly settings?: WiredSettingsView
 }
 
 /**
@@ -52,7 +61,22 @@ export function GenerateImageQuickToolbar({
   credits,
   isRunning,
   onAnyOpenChange,
+  settings,
 }: GenerateImageQuickToolbarProps) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
+  // The values the node runs with (wired settings applied); the strip's
+  // handlers still write the node's own fields.
+  const stripData = (settings?.data ?? data) as GenerateImageData
+  // A field its Settings input sets → the wired node's label (the control is fixed).
+  const wiredFrom = wiredFieldSources(settings, localizeNode)
+  const refused = settings?.problem
+  const runDisabledReason = refused
+    ? t("node.settingsProviderRefused", {
+        model: getModel(refused.value)?.label ?? refused.value,
+        source: localizeNode(settings?.labels[refused.sourceId] ?? "provider"),
+      })
+    : undefined
   // Collapse to the single summary pill when the node is visually compact.
   // Shared threshold (`useNodeVisuallyCompact`) with the typed-handle labels,
   // so the toolbar and the pip labels switch modes at the exact same
@@ -74,6 +98,19 @@ export function GenerateImageQuickToolbar({
   const toolbarTransform = glued
     ? undefined
     : ({ transform: `scale(${toolbarScale})`, transformOrigin: "50% 0%" } as const)
+  // With a wired Settings input the pill carries the approved price note
+  // underneath; the pair then scales as one.
+  const priceNote = settings && settings.wired.length > 0 ? <SettingsPriceNote /> : null
+  const pillStyle = priceNote ? undefined : toolbarTransform
+  const withPriceNote = (pill: ReactNode) =>
+    priceNote ? (
+      <div className="flex flex-col items-center" style={toolbarTransform}>
+        {pill}
+        {priceNote}
+      </div>
+    ) : (
+      pill
+    )
 
   // Open-state tracking: increment on each select/popover open, decrement
   // on close. While count > 0 we report `open=true` upward so the parent
@@ -131,7 +168,7 @@ export function GenerateImageQuickToolbar({
     onResolutionChange: handleResolutionChange,
     onRepeatChange: handleRepeatChange,
     runSingleNode,
-  } = useGenerateImageStripModel(nodeId, data)
+  } = useGenerateImageStripModel(nodeId, stripData)
 
   // Ghost select trigger — no border, no background by default, subtle
   // hover only. Icon prefix + value + small chevron. `!` modifiers beat
@@ -164,10 +201,10 @@ export function GenerateImageQuickToolbar({
   // ── Compact mode (low zoom): one pill that opens a popover ─────────────
   if (isCompact) {
     const summary = `${modelShort} · ${aspectShort || currentAspect}${resolutionShort ? ` · ${resolutionShort}` : ""}`
-    return (
+    return withPriceNote(
       <div
         className={`${containerClass} gap-1.5`}
-        style={toolbarTransform}
+        style={pillStyle}
         onClick={(e) => e.stopPropagation()}
       >
         <PromptEditButton nodeId={nodeId} compact />
@@ -176,7 +213,7 @@ export function GenerateImageQuickToolbar({
             <button
               type="button"
               className="flex items-center gap-1 h-6 px-2 text-[10px] rounded-md whitespace-nowrap text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10"
-              title="Settings"
+              title={t("common.settings")}
             >
               <Settings2 className="w-3 h-3 opacity-70" />
               <span className="font-medium">{summary}</span>
@@ -192,27 +229,27 @@ export function GenerateImageQuickToolbar({
             className="w-[240px] p-2 space-y-2 node-menu-surface"
             onClick={(e) => e.stopPropagation()}
           >
-            <ToolbarSetting label="Model" icon={<Sparkles className="w-3 h-3" />}>
+            <ToolbarSetting label={t("node.model")} icon={<Sparkles className="w-3 h-3" />}>
               {isMulti ? (
                 <span className="text-xs text-muted-foreground italic px-2">
-                  Multi-provider — open node settings to edit
+                  {t("node.multiProviderOpenNodeSettings")}
                 </span>
               ) : (
-                <ModelSearchSelect disabled={isRunning}
+                <ModelSearchSelect disabled={isRunning || wiredFrom.has("provider")}
                   value={currentProvider}
                   onChange={handleModelChange}
                   onOpenChange={handleOpenChange}
                   options={IMAGE_GEN_MODELS}
                   triggerClassName={ghostPopoverTriggerClass}
                   contentClassName="node-menu-surface"
-                  ariaLabel="Model"
+                  ariaLabel={t("field.model")}
                 />
               )}
             </ToolbarSetting>
             {aspectOptions.length > 0 && (
-              <ToolbarSetting label="Aspect" icon={<Ratio className="w-3 h-3" />}>
-                <Select disabled={isRunning} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
-                  <SelectTrigger className={ghostPopoverTriggerClass}>
+              <ToolbarSetting label={t("node.aspect")} icon={<Ratio className="w-3 h-3" />}>
+                <Select disabled={isRunning || wiredFrom.has("aspectRatio")} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
+                  <SelectTrigger className={ghostPopoverTriggerClass} title={wiredFrom.has("aspectRatio") ? t("node.fromSource", { source: wiredFrom.get("aspectRatio") ?? "" }) : undefined}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="node-menu-surface">
@@ -224,7 +261,7 @@ export function GenerateImageQuickToolbar({
               </ToolbarSetting>
             )}
             {resolutionOptions && resolutionOptions.length > 0 && (
-              <ToolbarSetting label="Resolution" icon={<Maximize2 className="w-3 h-3" />}>
+              <ToolbarSetting label={t("field.resolution")} icon={<Maximize2 className="w-3 h-3" />}>
                 <Select disabled={isRunning} value={currentResolution} onValueChange={handleResolutionChange} onOpenChange={handleOpenChange}>
                   <SelectTrigger className={ghostPopoverTriggerClass}>
                     <SelectValue />
@@ -239,7 +276,7 @@ export function GenerateImageQuickToolbar({
                 </Select>
               </ToolbarSetting>
             )}
-            <ToolbarSetting label="Versions" icon={<Copy className="w-3 h-3" />}>
+            <ToolbarSetting label={t("node.versions")} icon={<Copy className="w-3 h-3" />}>
               <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
@@ -260,8 +297,10 @@ export function GenerateImageQuickToolbar({
           credits={credits}
           isRunning={isRunning}
           onRun={(nid) => runSingleNode?.(nid)}
+          disabled={!!refused}
+          disabledReason={runDisabledReason}
         />
-      </div>
+      </div>,
     )
   }
 
@@ -270,10 +309,10 @@ export function GenerateImageQuickToolbar({
   // tracking) stays here; the inner control row is the shared
   // <NodeRunStripControls> so the inline in-body strip renders the exact
   // same controls from the exact same hook.
-  return (
+  return withPriceNote(
     <div
       className={`${containerClass} gap-0.5`}
-      style={toolbarTransform}
+      style={pillStyle}
       onClick={(e) => e.stopPropagation()}
     >
       <NodeRunStripControls
@@ -281,6 +320,9 @@ export function GenerateImageQuickToolbar({
         isRunning={isRunning}
         credits={credits}
         onRun={(nid) => runSingleNode?.(nid)}
+        runDisabled={!!refused}
+        runDisabledReason={runDisabledReason}
+        lockedFields={wiredFrom}
         onOpenChange={handleOpenChange}
         isMulti={isMulti}
         modelLabel={modelLabel}
@@ -299,7 +341,7 @@ export function GenerateImageQuickToolbar({
         onRepeatChange={handleRepeatChange}
         ghostTriggerClass={ghostTriggerClass}
       />
-    </div>
+    </div>,
   )
 }
 

@@ -18,7 +18,7 @@ export function FramesAndReferencesTip({
   if (!hasFrame || !hasReference) return null
   return (
     <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-      {t("cfgext.framesTipLead")}{" "}
+      {t("cfgext.framesTipLead")}{t("common.fragmentGap")}
       <span className="font-medium">{t("cfgext.framesTipEmph")}</span>
       {t("cfgext.framesTipRest")}
     </p>

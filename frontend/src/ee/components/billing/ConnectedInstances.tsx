@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { getAuthHeaders } from "@/lib/api"
+import { tx, useT } from "@/lib/i18n"
 import { sectionCardSpaced, MONO_FONT, PINK } from "./billing-styles"
+import { formatDate, formatNumber } from "@/lib/i18n/format"
 
 /**
  * Community cloud-connect containment surface (Phase 4a): the user's
@@ -29,6 +31,7 @@ async function fetchInstances(): Promise<ConnectedInstance[]> {
 }
 
 export function ConnectedInstances() {
+  const t = useT()
   const [instances, setInstances] = useState<ConnectedInstance[] | null>(null)
 
   const reload = useCallback(() => {
@@ -44,11 +47,10 @@ export function ConnectedInstances() {
   return (
     <section style={sectionCardSpaced}>
       <h2 style={{ fontSize: 19, fontWeight: 700, color: "var(--blg-t1)", letterSpacing: "-0.01em" }}>
-        Connected Instances
+        {t("billing.connectedInstances")}
       </h2>
       <p style={{ fontSize: 13.5, color: "var(--blg-t2-dim)", marginTop: 2 }}>
-        Self-hosted Nodaro servers spending from this wallet. Set a monthly cap
-        or disconnect any of them.
+        {t("billing.connectedInstancesDesc")}
       </p>
       <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
         {instances.map((inst) => (
@@ -60,6 +62,7 @@ export function ConnectedInstances() {
 }
 
 function InstanceRow({ inst, onChanged }: { inst: ConnectedInstance; onChanged: () => void }) {
+  const t = useT()
   const [cap, setCap] = useState(inst.monthlySpendCapCredits ? String(inst.monthlySpendCapCredits) : "")
   const [revoking, setRevoking] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -78,10 +81,10 @@ function InstanceRow({ inst, onChanged }: { inst: ConnectedInstance; onChanged: 
           headers: { ...(await getAuthHeaders()), "Content-Type": "application/json" },
           body: JSON.stringify({ monthlySpendCapCredits: cap === "" ? null : parsed }),
         })
-        if (!res.ok) throw new Error("Failed to save cap")
+        if (!res.ok) throw new Error(tx("billing.saveCapFailed"))
         lastSavedRef.current = cap
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to save cap")
+        toast.error(err instanceof Error ? err.message : tx("billing.saveCapFailed"))
       }
     }, 900)
     return () => {
@@ -90,18 +93,18 @@ function InstanceRow({ inst, onChanged }: { inst: ConnectedInstance; onChanged: 
   }, [cap, inst.authorizationId])
 
   async function handleRevoke() {
-    if (!window.confirm(`Disconnect "${inst.name}"? Its access stops immediately.`)) return
+    if (!window.confirm(tx("billing.disconnectConfirm", { name: inst.name }))) return
     setRevoking(true)
     try {
       const res = await fetch(`/v1/me/connected-instances/${inst.authorizationId}/revoke`, {
         method: "POST",
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to disconnect")
-      toast.success("Instance disconnected")
+      if (!res.ok) throw new Error(tx("integ.toastDisconnectFailed"))
+      toast.success(tx("billing.instanceDisconnected"))
       onChanged()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to disconnect")
+      toast.error(err instanceof Error ? err.message : tx("integ.toastDisconnectFailed"))
     } finally {
       setRevoking(false)
     }
@@ -122,26 +125,25 @@ function InstanceRow({ inst, onChanged }: { inst: ConnectedInstance; onChanged: 
       <div style={{ flex: 1, minWidth: 220 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "var(--blg-t1)" }}>{inst.name}</div>
         <div style={{ fontFamily: MONO_FONT, fontSize: 11.5, color: "var(--blg-t2-dim)", marginTop: 2 }}>
-          {inst.instanceUrl ?? "unknown host"} · connected{" "}
-          {new Date(inst.connectedAt).toLocaleDateString()}
-          {inst.lastUsedAt ? ` · last used ${new Date(inst.lastUsedAt).toLocaleDateString()}` : ""}
+          {inst.instanceUrl ?? t("billing.unknownHost")} · {t("billing.connectedOn", { date: formatDate(inst.connectedAt) })}
+          {inst.lastUsedAt ? ` · ${t("billing.lastUsedOn", { date: formatDate(inst.lastUsedAt) })}` : ""}
         </div>
       </div>
       <div style={{ textAlign: "right" }}>
         <div style={{ fontFamily: MONO_FONT, fontSize: 10, letterSpacing: "0.14em", color: "var(--blg-t2-dim)" }}>
-          SPENT THIS MONTH
+          {t("billing.spentThisMonth")}
         </div>
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--blg-t1)" }}>
-          {inst.spentThisMonth.toLocaleString()}
+          {formatNumber(inst.spentThisMonth)}
         </div>
       </div>
       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--blg-t1-body)" }}>
-        cap
+        {t("billing.cap")}
         <input
           type="text"
           inputMode="numeric"
           value={cap}
-          placeholder="none"
+          placeholder={t("cfgext.injRefModeNone")}
           onChange={(e) => setCap(e.target.value.replace(/[^0-9]/g, ""))}
           style={{
             width: 90,
@@ -153,7 +155,7 @@ function InstanceRow({ inst, onChanged }: { inst: ConnectedInstance; onChanged: 
             padding: "7px 10px",
             outline: "none",
           }}
-          aria-label={`Monthly cap for ${inst.name}`}
+          aria-label={t("billing.monthlyCapFor", { name: inst.name })}
         />
       </label>
       <button
@@ -171,7 +173,7 @@ function InstanceRow({ inst, onChanged }: { inst: ConnectedInstance; onChanged: 
           opacity: revoking ? 0.5 : 1,
         }}
       >
-        Disconnect
+        {t("integ.disconnect")}
       </button>
     </div>
   )

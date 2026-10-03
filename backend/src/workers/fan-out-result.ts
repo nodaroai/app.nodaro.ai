@@ -62,6 +62,10 @@ export function assembleFanOutResult(
   itemCount: number,
 ): FanOutAssembly {
   const allResults: string[] = new Array(itemCount).fill("")
+  // Each row's own freshness key (Video Overlay: every list item is its own
+  // composition) — row-aligned with allResults, "" where the row has none.
+  const allCompositionKeys: string[] = new Array(itemCount).fill("")
+  let anyCompositionKey = false
   const allJobIds: string[] = []
   let firstOutput: NodeOutput | undefined            // iteration 0's output (preferred primary)
   let firstSuccessfulOutput: NodeOutput | undefined  // first fulfilled output (fallback primary)
@@ -75,6 +79,11 @@ export function assembleFanOutResult(
     if (entry.status === "fulfilled") {
       const { index, result, resultValue } = entry.value
       allResults[index] = resultValue
+      const key = result.output.resultCompositionKey
+      if (typeof key === "string" && key.length > 0) {
+        allCompositionKeys[index] = key
+        anyCompositionKey = true
+      }
       succeededCount++
       if (index === 0) firstOutput = result.output
       if (!firstSuccessfulOutput) firstSuccessfulOutput = result.output
@@ -113,6 +122,8 @@ export function assembleFanOutResult(
   const output: NodeOutput = {
     ...(primaryOutput ?? {}),
     listResults: allResults,
+    // The primary's `resultCompositionKey` is iteration 0's; the rows carry their own.
+    ...(anyCompositionKey ? { listResultCompositionKeys: allCompositionKeys } : {}),
   }
 
   return {

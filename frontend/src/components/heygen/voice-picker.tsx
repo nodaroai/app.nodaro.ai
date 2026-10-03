@@ -26,7 +26,7 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { Search, Play, Pause, AlertCircle, Volume2 } from "lucide-react"
 import type { HeygenVoice } from "@/lib/api"
-import { useHeygenVoices, keylessCatalogHint } from "./heygen-catalog"
+import { useHeygenVoices, keylessCatalogHint, genderLabel } from "./heygen-catalog"
 import { useVoicePreview } from "./use-voice-preview"
 import { Input } from "@/components/ui/input"
 import {
@@ -38,6 +38,8 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { KeylessNotice } from "./keyless-notice"
+import { useT } from "@/lib/i18n"
+import { formatNumber } from "@/lib/i18n/format"
 
 // ---------------------------------------------------------------------------
 // Pure helpers — extracted so tests can cover the filter logic without RTL
@@ -92,6 +94,7 @@ const VoiceRow = memo(function VoiceRow({
   selected,
   onSelect,
 }: VoiceRowProps) {
+  const t = useT()
   // Preview playback goes through the shared hook (active-player singleton —
   // one clip at a time), the same one the on-node voice row uses.
   const { isPlaying, toggle } = useVoicePreview(voice.previewAudio)
@@ -112,7 +115,7 @@ const VoiceRow = memo(function VoiceRow({
       aria-label={`${voice.name}, ${voice.language}, ${voice.gender}`}
       onClick={() => onSelect(voice)}
       className={cn(
-        "w-full flex items-center gap-2.5 px-2.5 py-2 text-left transition-colors rounded-md",
+        "w-full flex items-center gap-2.5 px-2.5 py-2 text-start transition-colors rounded-md",
         selected
           ? "bg-[#ff0073]/10 ring-1 ring-[#ff0073]/40"
           : "hover:bg-muted/50",
@@ -121,7 +124,7 @@ const VoiceRow = memo(function VoiceRow({
       {/* Play/Pause preview button */}
       <button
         type="button"
-        aria-label={isPlaying ? `Pause ${voice.name}` : `Play ${voice.name}`}
+        aria-label={isPlaying ? t("heygen.pauseVoice", { name: voice.name }) : t("heygen.playVoice", { name: voice.name })}
         onClick={handlePlayPause}
         disabled={!voice.previewAudio}
         className={cn(
@@ -153,12 +156,12 @@ const VoiceRow = memo(function VoiceRow({
           {/* Feature badges */}
           {voice.emotionSupport && (
             <span className="shrink-0 inline-flex items-center text-[9px] font-medium px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
-              emotion
+              {t("heygen.badgeEmotion")}
             </span>
           )}
           {voice.supportPause && (
             <span className="shrink-0 inline-flex items-center text-[9px] font-medium px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
-              pause
+              {t("heygen.badgePause")}
             </span>
           )}
         </div>
@@ -204,6 +207,7 @@ export const VoicePicker = memo(function VoicePicker({
   className,
   showKeysAction = true,
 }: VoicePickerProps) {
+  const t = useT()
   // Query definition shared with every other catalog consumer — see
   // heygen-catalog.ts (polls while the server is still filling; an empty
   // list self-heals once a key lands). `complete` is false while pages are
@@ -259,7 +263,7 @@ export const VoicePicker = memo(function VoicePicker({
     return (
       <div className={cn("flex flex-col items-center gap-2 py-8 text-center", className)}>
         <AlertCircle className="size-8 text-destructive/60" />
-        <p className="text-sm text-muted-foreground">Failed to load voices</p>
+        <p className="text-sm text-muted-foreground">{t("heygen.failedLoadVoices")}</p>
       </div>
     )
   }
@@ -271,8 +275,8 @@ export const VoicePicker = memo(function VoicePicker({
     return (
       <KeylessNotice
         icon={Volume2}
-        title="No HeyGen voices"
-        hint={keylessCatalogHint("voices")}
+        title={t("heygen.noVoices")}
+        hint={keylessCatalogHint("voices", t)}
         showAction={showKeysAction}
         className={className}
         testId="voice-picker-empty"
@@ -288,25 +292,25 @@ export const VoicePicker = memo(function VoicePicker({
       {/* Controls */}
       <div className="flex gap-2 flex-wrap">
         <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+          <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
           <Input
-            aria-label="Search voices"
-            placeholder="Search voices…"
+            aria-label={t("heygen.searchVoices")}
+            placeholder={t("heygen.searchVoicesPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="pl-8 h-8 text-xs"
+            className="ps-8 h-8 text-xs"
           />
         </div>
 
         <Select value={language} onValueChange={setLanguage}>
           <SelectTrigger
-            aria-label="Filter by language"
+            aria-label={t("heygen.filterByLanguage")}
             className="h-8 text-xs w-[120px] shrink-0"
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="max-h-60">
-            <SelectItem value="all" className="text-xs">All languages</SelectItem>
+            <SelectItem value="all" className="text-xs">{t("heygen.allLanguages")}</SelectItem>
             {languages.map((lang) => (
               <SelectItem key={lang} value={lang} className="text-xs">
                 {lang}
@@ -317,16 +321,16 @@ export const VoicePicker = memo(function VoicePicker({
 
         <Select value={gender} onValueChange={setGender}>
           <SelectTrigger
-            aria-label="Filter by gender"
+            aria-label={t("heygen.filterByGender")}
             className="h-8 text-xs w-[90px] shrink-0"
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all" className="text-xs">All genders</SelectItem>
+            <SelectItem value="all" className="text-xs">{t("heygen.allGenders")}</SelectItem>
             {genders.map((g) => (
               <SelectItem key={g} value={g} className="text-xs capitalize">
-                {g.charAt(0).toUpperCase() + g.slice(1)}
+                {genderLabel(g, t) || g.charAt(0).toUpperCase() + g.slice(1)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -335,10 +339,12 @@ export const VoicePicker = memo(function VoicePicker({
 
       {/* Item count + "still arriving" while the server fills */}
       <p className="text-[10px] text-muted-foreground px-0.5">
-        {filtered.length.toLocaleString()} voice{filtered.length !== 1 ? "s" : ""}
+        {filtered.length === 1
+          ? t("heygen.voiceCountOne", { n: formatNumber(filtered.length) })
+          : t("heygen.voiceCount", { n: formatNumber(filtered.length) })}
         {!complete && (
-          <span className="ml-1.5 text-muted-foreground/70" data-testid="voice-picker-loading-more">
-            · loading more…
+          <span className="ms-1.5 text-muted-foreground/70" data-testid="voice-picker-loading-more">
+            {t("heygen.loadingMore")}
           </span>
         )}
       </p>
@@ -346,13 +352,13 @@ export const VoicePicker = memo(function VoicePicker({
       {/* Virtualized list */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-8 text-center">
-          <p className="text-xs text-muted-foreground">No voices match your filters</p>
+          <p className="text-xs text-muted-foreground">{t("heygen.noVoicesMatch")}</p>
         </div>
       ) : (
         <div
           ref={parentRef}
           role="radiogroup"
-          aria-label="HeyGen voices"
+          aria-label={t("heygen.voicesGroup")}
           className="overflow-y-auto"
           style={{ height: 360 }}
         >

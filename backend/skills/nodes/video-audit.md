@@ -1,7 +1,7 @@
 ---
 node_type: video-audit
-generated_at: 2026-09-21T19:12:09.630Z
-generated_from: 09788c987
+generated_at: 2026-09-27T12:51:23.862Z
+generated_from: c607aa02c
 ---
 
 # AI Audit
@@ -9,7 +9,7 @@ generated_from: 09788c987
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `video-audit`
 **Category:** processing
-**Credit cost:** `215-1924` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `215-1924` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `video`, `analysis`
 **Outputs (source handles):** `json`, `text`
 
@@ -18,7 +18,7 @@ generated_from: 09788c987
 
 **Optional data fields:**
 - `videoUrl?: string`
-- `probedVideo?: { url: string; durationSec: number }`
+- `probedVideo?: ProbedVideoInfo`
 - `lastAuditReport?: VideoAuditReport`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`

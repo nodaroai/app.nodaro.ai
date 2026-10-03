@@ -121,7 +121,7 @@ here for each one anyway.
 | `FRONTEND_SUPABASE_URL` | `""` (bundled: derived `PUBLIC_URL/supabase`) | Supabase URL the **browser** uses — written into `/config.js` at boot; set it when auth lives on a managed Supabase project |
 | `DEFAULT_LOCALE` | `""` (browser detection) | The locale a fresh visitor starts in — e.g. `he`, `ar`, `de`, `fr`, `es`, `hi`, `ja`, `ko`, `pt-BR`, `ru`, `zh-CN`, `en`. Written into `/config.js` at boot; a user's own saved choice always wins, and an unset/blank/unrecognised value falls back to the visitor's browser language. Restart to apply |
 | `NODARO_TUTORIAL_PACKS` | `""` (built-in tutorials only) | Business / self-host — comma-separated directories of extra tutorial packs (each: a `manifest.json` + one `*.json` per tutorial), mounted read-only into the container. Additive; a malformed pack is skipped and logged, never corrupting the built-in tutorials. Restart to apply. See [tutorials.md](./tutorials.md) for the pack format |
-| `NODARO_SEED_MARKETPLACE_TEMPLATES` | off | Cloud only — `true` (or `1`) also seeds the built-in **marketplace** templates (the podcast editing workflows) under the system account so they appear in the marketplace (`GET /v1/templates/browse`). Off by default: on Cloud the seeder otherwise makes no database write at all. INSERT-if-missing and idempotent — a reboot is a no-op and an admin's later edits are never overwritten. Community / Business already seed the full built-in set, so the flag is inert there. Restart to apply |
+| `NODARO_SEED_MARKETPLACE_TEMPLATES` | off | Cloud only — `true` (or `1`) also seeds the built-in **marketplace** templates (the podcast editing workflows) under the system account so they appear in the marketplace (`GET /v1/templates/browse`). Off by default: on Cloud the seeder otherwise makes no database write at all. INSERT-if-missing and idempotent — a reboot is a no-op and an admin's later edits (**Admin → Templates** turns any template on or off, and in or out of the gallery) are never overwritten. Community / Business already seed the full built-in set, so the flag is inert there. Restart to apply |
 | `NODARO_UPDATE_CHECK` | on | `off` disables the update check entirely — no request leaves the install, `GET /v1/version` answers with the running version only and the sidebar shows it as plain text. For air-gapped installs. Restart to apply |
 | `NODARO_UPDATE_CHECK_TOKEN` | `""` (anonymous) | Optional GitHub token for the update check's two reads of the public release list. It needs **no scopes** — its only job is to take the reads off the anonymous quota, which GitHub counts per outbound address (60 an hour). An install with its own address never needs it; a hosted deployment that shares its outbound address with other tenants can find that quota spent by strangers, and then the version label falls back to the built-in one and the release notes stay empty until a retry gets through. The log line `[update-check] … read failed: HTTP 403 (rate limit: 0 of 60 left…)` is the sign. Sent to `api.github.com` only, never logged. Restart to apply |
 | `EDITION` | `community` | `community` · `business` · `cloud` — see §5 |
@@ -169,6 +169,10 @@ here for each one anyway.
 | `MAX_CONCURRENT_NODES_PER_EXECUTION` | `6` (max 20) | Nodes one workflow run may execute at once — the self-host parallelism ceiling |
 | `VIDEO_WORKER_CONCURRENCY` | `50` | BullMQ concurrency of the media worker (I/O-bound) |
 | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | unset (Railway's default window) | Railway only: the SIGTERM → SIGKILL window of a replaced container. The media worker reads the same variable and drains for that long minus 5 seconds, so a long model call already in progress (a [3D Render Pro](nodes/composition/pro-3d-render.md) planning or review step can take up to 6 minutes) finishes and is saved before the job moves to the new container. Set it to `420` on a service that runs 3D Render Pro. Unset, the worker keeps its 25-second drain. The container only stays up as long as work is still running |
+| `PLUGIN_DAEMONS_IN_CONTAINER` | unset | Cloud edition, read by `start.sh` only — `true` runs the [plugin daemon host](#plugin-daemon-host-cloud) inside the app container, supervised like the workers. Only while the app runs ONE replica; the alternative is its own service. Never both |
+| `PLUGIN_DAEMONS_PORT` | `9100` | Cloud edition — the plugin daemon host's internal listener. `GET /health` answers openly (for the platform's health probe); every other route requires `INTERNAL_ORCHESTRATOR_SECRET`. Never give it a public domain |
+| `PLUGIN_DAEMONS_HOST` | `::` (in-container: `127.0.0.1`) | Bind address of that listener. As its own service, `::` accepts IPv4 and IPv6 (a private network may resolve over IPv6 only); inside the app container `start.sh` binds loopback, since the API reaches it on `127.0.0.1` |
+| `PLUGIN_DAEMONS_URL` | `http://127.0.0.1:9100` | Where the API reaches the plugin daemon host — a bare http(s) origin (no credentials, path or query; boot refuses anything else, since every request to it carries the internal secret). The default suits the in-container setup; when the host runs as its own service, point it at that service's private address (on Railway: `http://<service>.railway.internal:9100`) |
 | `ORCHESTRATOR_CONCURRENCY` | `20` | BullMQ concurrency of the orchestrator (I/O-bound) |
 | `RENDER_WORKER_CONCURRENCY` | `2` (max 10) | Remotion renders in parallel — each is a headless Chrome |
 | `REMOTION_CONCURRENCY` | `2` for 3D scenes; Remotion default (50 % of cores) for other compositions | Browser tabs per render. An explicit value overrides both paths. Keep this low when running multiple 3D jobs: each WebGL tab uses additional threads and counts toward the container process limit. |
@@ -500,6 +504,7 @@ build time):
 | Var | Description |
 |---|---|
 | `VITE_STUDIO_URL` | Base URL of the external Studio app (studio.nodaro.ai) for "Open in Studio" deep links. Default `https://studio.nodaro.ai`. |
+| `VITE_PERSON_URL` | Base URL of the external Person app (person.nodaro.ai) for the home screen "Open Person" card. Default `https://person.nodaro.ai`. |
 
 ## Surface profile (`NODARO_SURFACE_PROFILE`)
 
@@ -863,6 +868,7 @@ processes side by side:
 | `node dist/render-worker.js` | Remotion renderer (headless Chrome) | CPU-bound, 1–2 per box |
 | `node dist/orchestrator.js` | Workflow orchestrator (DAG executor) | I/O-bound, low CPU |
 | `node dist/pipeline-worker.js` | Story-to-Video pipeline orchestration (all editions; exits cleanly on non-cloud) | I/O-bound, low CPU |
+| `node dist/plugin-daemons.js` | Plugin daemon host — Cloud only, and only with `PLUGIN_DAEMONS_IN_CONTAINER=true` (otherwise its own service; see [below](#plugin-daemon-host-cloud)) | I/O-bound, long-lived connections |
 
 A typical split:
 
@@ -909,6 +915,44 @@ reaps transient `video-analysis-tmp/` intermediates (analysis working
 files, orphaned after a worker crash). Self-hosted (Community/Business)
 deployments have no such cron, so include the `video-analysis-tmp/`
 prefix in your bucket lifecycle rule.
+
+### Plugin daemon host (Cloud)
+
+Some Cloud features hold a long-lived connection open on a user's behalf,
+which neither a request/response API process nor a queue worker can do.
+Those run in the **plugin daemon host**, `node dist/plugin-daemons.js`, an
+entry point in the same image. On Community and Business it exits at once
+with nothing to do.
+
+Exactly **one** copy may run per environment, in one of two ways — never
+both:
+
+- **Its own service** from the same image — required once the app runs more
+  than one replica. Start command `node /app/backend/dist/plugin-daemons.js`,
+  **one replica**, no public domain, health check `GET /health` on
+  `PLUGIN_DAEMONS_PORT` (on Railway, whose health check targets the
+  service's `PORT`, set `PORT` to the same value). Point the app's
+  `PLUGIN_DAEMONS_URL` at the service's private address.
+- **Inside the app container** — set `PLUGIN_DAEMONS_IN_CONTAINER=true` on
+  the app. Only while the app runs one replica: every replica would
+  otherwise host its own copy.
+
+As its own service, it must share these values with the app exactly. A
+mismatch does not fail at boot — it fails later, quietly:
+
+| Variable | Why it must match |
+|---|---|
+| `INTERNAL_ORCHESTRATOR_SECRET` | The app authenticates to the daemon host with it. `start.sh` generates one per container when unset, so two services need it set explicitly, to the same value |
+| `NODARO_ENCRYPTION_KEY` (or the older `SOCIAL_ENCRYPTION_KEY`) | Stored account credentials are encrypted with it; another key cannot open them |
+| `RUNTIME_ENV` / `RAILWAY_ENVIRONMENT_NAME` | Stored accounts belong to one environment, and the daemon host opens only its own environment's |
+| `CLOUD_PLUGINS_VERSION` + `NPM_TOKEN` (build) | The app and the daemon host must run the same private-plugin build |
+| `EDITION`, `SUPABASE_*`, `REDIS_URL`, `R2_*` | The same edition, database, queue and storage as the app |
+
+On SIGTERM the host stops every daemon and waits up to 8 seconds in all
+for them to release what they hold, then exits; give its service a
+`RAILWAY_DEPLOYMENT_DRAINING_SECONDS` of at least `15`. A daemon that stops
+on its own takes the process down with a non-zero exit, so the platform
+restarts it.
 
 ## 8. Backups
 
@@ -1102,6 +1146,18 @@ request from them, so enabling it is a per-environment decision rather
 than a side effect of deploying. It also needs the recast plugin loaded —
 on an edition without it the route 404s and the cron disables itself
 after one logged warning.
+
+**Scheduled competitor scans never run (Cloud).** A tracked brand's
+weekly or daily scan is started by a one-minute tick that asks the
+competitors plugin which brands are due. It is **off by default** for the
+same reason as the recast driver (a scheduled scan spends the owner's
+credits); enable it with `COMPETITOR_SCAN_CRON_ENABLED=true` on the API
+service and confirm `[competitor-scans] started` in the boot log. Scans
+started from the page ("Scan now") do not need it. When two environments
+share one database (a staging and a production deployment), enable it on
+**one** of them, the production one: either environment's tick claims every
+user's due brands, so a staging tick would run production users' paid
+scans on pre-release code.
 
 If you're still stuck, file an issue with the Docker logs at
 <https://github.com/nodaroai/app.nodaro.ai/issues>.

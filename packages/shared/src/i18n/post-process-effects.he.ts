@@ -5,7 +5,7 @@ const map: LocaleCatalogMap = {
   "vignette-heavy": { label: "ויניטה כבדה", description: "פינות שחורות דרמטיות" },
   "dodge-and-burn": { label: "Dodge & Burn", description: "היילייט/צל מפוסל" },
   "film-grain-fine": { label: "גרגירי פילם דקים", description: "גרגירים דקים בסגנון 35mm" },
-  "film-grain-heavy": { label: "גרגירי פילם כבדים", description: "גרגירים גסים מורחקים" },
+  "film-grain-heavy": { label: "גרגירי פילם כבדים", description: "גרגירים גסים מפיתוח push" },
   "halation-glow": { label: "זוהר Halation", description: "Bloom של הילה אדומה בסגנון Cinestill" },
   "bloom-glow": { label: "זוהר Bloom", description: "Bloom של היילייטים חולמני ורומנטי" },
   "chromatic-aberration": { label: "Chromatic Aberration", description: "הילה אדומה/טורקיז על קצוות" },
@@ -14,10 +14,10 @@ const map: LocaleCatalogMap = {
   "scratched-emulsion": { label: "אמולסיה שרוטה", description: "שריטות פילם וינטג' + אבק" },
   "color-fringe": { label: "הילה צבעונית", description: "הילה עדינה בקונטרסט גבוה" },
   "soft-focus-diffusion": { label: "פיזור פוקוס רך", description: "Bloom חולמני מעורפל בהיילייטים" },
-  "contrast-boost": { label: "הגברת קונטרסט", description: "צללים שחוקים + היילייטים מורמים" },
+  "contrast-boost": { label: "הגברת קונטרסט", description: "צללים מרוסקים + היילייטים מורמים" },
   "sharpening": { label: "חידוד כבד", description: "מעבר חידוד קצוות אגרסיבי" },
-  "clarity-boost": { label: "הגברת בהירות", description: "שיפור בהירות גוונים בינוניים, הגברת קונטרסט מקומי" },
-  "dehaze": { label: "Dehaze", description: "הסרת אובך אטמוספרי, הסרת רכות" },
+  "clarity-boost": { label: "הגברת צלילות", description: "שיפור צלילות גוונים בינוניים, הגברת קונטרסט מקומי" },
+  "dehaze": { label: "הסרת אובך", description: "הסרת אובך אטמוספרי, הסרת רכות" },
   "lift-gamma-gain": { label: "Lift-Gamma-Gain", description: "גלגלי דירוג צבע תלת-כיווניים" },
 }
 

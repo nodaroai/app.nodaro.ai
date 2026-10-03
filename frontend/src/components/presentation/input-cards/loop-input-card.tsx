@@ -28,6 +28,7 @@ import { PromptHelperButton } from "@/components/editor/config-panels/prompt-hel
 import type { PromptContext } from "@/lib/prompt-context"
 import { type WorkflowNode, type LoopColumn, type PresentationDisplay } from "@/types/nodes"
 import { resolveDisplay, type ResolvedPresentationDisplay, ELEMENT_SIZES, isMediaColumn, colTypeToMimePrefix } from "@/lib/presentation-display"
+import { useT, tx } from "@/lib/i18n"
 
 interface LoopInputCardProps {
   node: WorkflowNode
@@ -67,19 +68,20 @@ function MediaOverlayButtons({
   onRemove: () => void
   readOnly?: boolean
 }) {
+  const t = useT()
   return (
-    <div className="media-overlay-controls absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-      <GlassButton onClick={onPreview} title="Enlarge">
+    <div className="media-overlay-controls absolute top-1.5 end-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+      <GlassButton onClick={onPreview} title={t("common.enlarge")}>
         <Maximize2 className="w-3.5 h-3.5" />
       </GlassButton>
-      <GlassButton onClick={() => downloadFile(url, getFilenameFromUrl(url))} title="Download">
+      <GlassButton onClick={() => downloadFile(url, getFilenameFromUrl(url))} title={t("common.download")}>
         <Download className="w-3.5 h-3.5" />
       </GlassButton>
-      <GlassButton onClick={() => copyUrl(url)} title="Copy URL">
+      <GlassButton onClick={() => copyUrl(url)} title={t("cfgshared.copyUrl")}>
         <Link className="w-3.5 h-3.5" />
       </GlassButton>
       {!readOnly && (
-        <GlassButton onClick={onRemove} title="Remove">
+        <GlassButton onClick={onRemove} title={t("common.remove")}>
           <X className="w-3.5 h-3.5" />
         </GlassButton>
       )}
@@ -103,6 +105,7 @@ function RichMediaCell({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const t = useT()
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -136,7 +139,7 @@ function RichMediaCell({
           <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={() => setPreviewOpen(true)}>
             <CachedImage
               src={value}
-              alt="upload"
+              alt={t("present.uploadAlt")}
               className="w-full object-contain rounded-lg"
             />
             <MediaOverlayButtons url={value} onPreview={() => setPreviewOpen(true)} onRemove={() => onChange("")} readOnly={readOnly} />
@@ -152,7 +155,7 @@ function RichMediaCell({
             />
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
-                <Film className="w-4 h-4 text-white ml-0.5" />
+                <Film className="w-4 h-4 text-white ms-0.5" />
               </div>
             </div>
             <MediaOverlayButtons url={value} onPreview={() => setPreviewOpen(true)} onRemove={() => onChange("")} readOnly={readOnly} />
@@ -162,11 +165,11 @@ function RichMediaCell({
           <div className="relative group flex items-center gap-2 rounded-lg p-2">
             <WaveformAudioPlayer url={value} variant="compact" className="flex-1" />
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <GlassButton onClick={() => downloadFile(value, getFilenameFromUrl(value))} title="Download">
+              <GlassButton onClick={() => downloadFile(value, getFilenameFromUrl(value))} title={t("common.download")}>
                 <Download className="w-3.5 h-3.5" />
               </GlassButton>
               {!readOnly && (
-                <GlassButton onClick={() => onChange("")} title="Remove">
+                <GlassButton onClick={() => onChange("")} title={t("common.remove")}>
                   <X className="w-3.5 h-3.5" />
                 </GlassButton>
               )}
@@ -186,7 +189,7 @@ function RichMediaCell({
   if (readOnly) {
     return (
       <div className="flex items-center justify-center h-14 bg-muted/10 rounded-lg text-xs text-muted-foreground/50">
-        No file
+        {t("present.noFile")}
       </div>
     )
   }
@@ -209,12 +212,12 @@ function RichMediaCell({
       {isUploading ? (
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 border-2 border-[#ff0073]/40 border-t-[#ff0073] rounded-full animate-spin" />
-          <span className="text-[11px] text-muted-foreground">Uploading...</span>
+          <span className="text-[11px] text-muted-foreground">{t("inputcfg.uploading")}</span>
         </div>
       ) : (
         <div className="flex items-center gap-1.5">
           <Upload className="w-4 h-4 text-muted-foreground/40" />
-          <span className="text-xs text-muted-foreground">Drop or click</span>
+          <span className="text-xs text-muted-foreground">{t("present.dropOrClick")}</span>
         </div>
       )}
       <input
@@ -241,6 +244,7 @@ function BottomDropZone({
 }) {
   const [isDragOver, setIsDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const t = useT()
 
   return (
     <div
@@ -265,7 +269,7 @@ function BottomDropZone({
     >
       <div className="flex items-center gap-1.5">
         <Upload className="w-4 h-4 text-muted-foreground/40" />
-        <span className="text-xs text-muted-foreground/60">Drop files to add rows, or click to browse</span>
+        <span className="text-xs text-muted-foreground/60">{t("present.dropFilesAddRows")}</span>
       </div>
       <input
         ref={fileInputRef}
@@ -293,6 +297,7 @@ export function LoopInputCard({
   display,
   promptHelper,
 }: LoopInputCardProps) {
+  const t = useT()
   const columns: LoopColumn[] = useMemo(
     () => (node.data.columns as LoopColumn[]) ?? [],
     [node.data.columns],
@@ -456,7 +461,7 @@ export function LoopInputCard({
       e.preventDefault()
       const currentRows: string[][] = (nodeInputVals?.rows as string[][]) ?? (node.data.rows as string[][]) ?? []
       const { newRows, truncated, totalProduced } = spliceDelimitedRows(currentRows, rowIndex, colIndex, pasted, delimiter, columns.length, maxItems)
-      if (truncated) toast.warning(`Paste produced ${totalProduced} rows but max is ${maxItems}. Truncated to ${maxItems}.`)
+      if (truncated) toast.warning(tx("present.pasteTruncated", { produced: totalProduced, max: maxItems }))
       onUpdateInput(node.id, "rows", newRows)
     },
     [node.id, nodeInputVals, node.data.rows, columns.length, maxItems, onUpdateInput],
@@ -468,7 +473,7 @@ export function LoopInputCard({
   )
 
   const atMax = rows.length >= maxItems
-  const label = (node.data.label as string) || "Table"
+  const label = (node.data.label as string) || t("present.tableFallback")
 
   const { mediaColIndices, textColIndices } = useMemo(() => {
     const media: number[] = []
@@ -489,7 +494,7 @@ export function LoopInputCard({
         </label>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-muted-foreground/70">
-            {rows.length} of {maxItems} max
+            {t("present.ofMax", { n: rows.length, max: maxItems })}
           </span>
           {!readOnly && (
             <button
@@ -497,7 +502,7 @@ export function LoopInputCard({
               onClick={handleAddRow}
               disabled={atMax}
               className="flex items-center justify-center w-6 h-6 rounded-md bg-[#ff0073] text-white transition-opacity duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
-              title="Add row"
+              title={t("node.addRow")}
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -557,7 +562,7 @@ export function LoopInputCard({
           onClick={handleAddRow}
           className="sm:hidden w-full mt-3 py-2 border-2 border-dashed border-muted-foreground/20 rounded-lg text-xs text-muted-foreground/60 hover:border-[#ff0073]/40 hover:text-muted-foreground transition-colors"
         >
-          + Add Row
+          {t("present.addRowButton")}
         </button>
       )}
 
@@ -672,9 +677,10 @@ function SortableCardRow({
 /* ------------------------------------------------------------------ */
 
 function EmptyRowsPlaceholder() {
+  const t = useT()
   return (
     <div className="flex flex-col items-center justify-center py-8 text-center">
-      <p className="text-sm text-muted-foreground">No rows yet</p>
+      <p className="text-sm text-muted-foreground">{t("present.noRowsYet")}</p>
     </div>
   )
 }
@@ -696,6 +702,7 @@ function CardsView({
   onPasteSplit,
   sourceLabels,
 }: CardsViewProps) {
+  const t = useT()
   const hasMedia = mediaColIndices.length > 0
   const imgSize = ELEMENT_SIZES.cardsImage[resolved.elementSize]
 
@@ -714,7 +721,7 @@ function CardsView({
               {/* Row header */}
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
-                  Row {rowIndex + 1}
+                  {t("present.rowN", { n: rowIndex + 1 })}
                 </span>
                 {!readOnly && rows.length > minRowCount && (
                   <button
@@ -722,7 +729,7 @@ function CardsView({
                     onClick={() => handleRemoveRow(rowIndex)}
                     className="text-[11px] text-muted-foreground/50 hover:text-red-400 transition-colors"
                   >
-                    Remove
+                    {t("common.remove")}
                   </button>
                 )}
               </div>
@@ -748,7 +755,7 @@ function CardsView({
                               />
                             ) : (
                               <div className="w-full min-h-[56px] bg-muted/10 border border-border/50 rounded-lg px-3 py-2 text-[14px] text-muted-foreground/60 italic flex items-center justify-center">
-                                Waiting...
+                                {t("present.waiting")}
                               </div>
                             )
                           ) : (
@@ -790,7 +797,7 @@ function CardsView({
                             </div>
                             {col.connectedSourceId ? (
                               <div className="w-full min-h-[56px] bg-muted/10 border border-border/50 rounded-lg px-3 py-2 text-[14px] text-muted-foreground/60 italic">
-                                {cellVal || "Waiting..."}
+                                {cellVal || t("present.waiting")}
                               </div>
                             ) : (
                               <textarea
@@ -833,7 +840,7 @@ function CardsView({
                         </div>
                         {col.connectedSourceId ? (
                           <div className="w-full min-h-[56px] bg-muted/10 border border-border/50 rounded-lg px-3 py-2 text-[14px] text-muted-foreground/60 italic">
-                            {cellVal || "Waiting..."}
+                            {cellVal || t("present.waiting")}
                           </div>
                         ) : (
                           <textarea
@@ -877,6 +884,7 @@ function TableView({
   onPasteSplit,
   sourceLabels,
 }: ViewProps) {
+  const t = useT()
   if (rows.length === 0) return <EmptyRowsPlaceholder />
 
   return (
@@ -932,12 +940,12 @@ function TableView({
                           />
                         ) : (
                           <div className="w-full min-h-[56px] bg-muted/10 border border-border/50 rounded-lg px-3 py-2 text-[14px] text-muted-foreground/60 italic flex items-center">
-                            Waiting...
+                            {t("present.waiting")}
                           </div>
                         )
                       ) : (
                         <div className="w-full min-h-[32px] bg-muted/10 border border-border/50 rounded-lg px-3 py-2 text-[13px] text-muted-foreground/60 italic truncate">
-                          {cellValue || "Waiting..."}
+                          {cellValue || t("present.waiting")}
                         </div>
                       )
                     ) : isMedia ? (
@@ -957,10 +965,10 @@ function TableView({
                           readOnly={readOnly}
                           disabled={readOnly}
                           placeholder={`${col.name}...`}
-                          className={`w-full bg-transparent border-none text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none pr-8${readOnly ? " opacity-70 cursor-default" : ""}`}
+                          className={`w-full bg-transparent border-none text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none pe-8${readOnly ? " opacity-70 cursor-default" : ""}`}
                         />
                         {promptHelper && (
-                          <div className="absolute right-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/cell:opacity-100 focus-within:opacity-100 sm:opacity-0 max-sm:opacity-100 transition-opacity">
+                          <div className="absolute end-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/cell:opacity-100 focus-within:opacity-100 sm:opacity-0 max-sm:opacity-100 transition-opacity">
                             <PromptHelperButton
                               nodeType={promptHelper.nodeType}
                               currentPrompt={cellValue}
@@ -983,7 +991,7 @@ function TableView({
                       type="button"
                       onClick={() => handleRemoveRow(rowIndex)}
                       className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground/40 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                      title="Remove row"
+                      title={t("present.removeRow")}
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>

@@ -3,12 +3,14 @@ import { useState, useMemo } from "react"
 import { Link } from "react-router-dom"
 import { Loader2, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { useT } from "@/lib/i18n"
 import { WorkflowThumbnail } from "./workflow-thumbnail"
 import {
   useMyStudioWorkflows,
   useAllStudioWorkflows,
   type MyWorkflow,
 } from "@/hooks/queries/use-my-workflows-queries"
+import { formatDate } from "@/lib/i18n/format"
 
 interface StudioWorkflowsViewProps {
   /** Admin "All users" switch is on — show every user's Studio workflows. */
@@ -29,6 +31,7 @@ interface StudioWorkflowsViewProps {
  */
 export function StudioWorkflowsView({ showAll, search: controlledSearch }: StudioWorkflowsViewProps) {
   const projectDisplayName = useProjectDisplayName()
+  const t = useT()
   const mine = useMyStudioWorkflows()
   const all = useAllStudioWorkflows(showAll)
 
@@ -61,7 +64,7 @@ export function StudioWorkflowsView({ showAll, search: controlledSearch }: Studi
     return (
       <div className="text-center py-20">
         <p className="text-sm text-muted-foreground">
-          {showAll ? "No Studio workflows found." : "No Studio workflows yet."}
+          {showAll ? t("dash.noStudioWorkflowsFound") : t("dash.noStudioWorkflowsYet")}
         </p>
       </div>
     )
@@ -72,15 +75,15 @@ export function StudioWorkflowsView({ showAll, search: controlledSearch }: Studi
       {controlledSearch === undefined && (
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-medium text-muted-foreground">
-            {showAll ? "Studio Workflows — all users" : "Studio Workflows"}
+            {showAll ? t("dash.studioWorkflowsAllUsers") : t("dash.studioWorkflows")}
           </h2>
           <div className="relative w-48">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               value={ownSearch}
               onChange={(e) => setOwnSearch(e.target.value)}
-              placeholder="Search Studio workflows..."
-              aria-label="Search Studio workflows"
+              placeholder={t("dash.searchStudioWorkflows")}
+              aria-label={t("dash.searchStudioWorkflowsAria")}
               className="ps-8 h-8 text-sm w-full"
             />
           </div>
@@ -89,7 +92,7 @@ export function StudioWorkflowsView({ showAll, search: controlledSearch }: Studi
 
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
-          <p className="text-sm">No workflows match your search.</p>
+          <p className="text-sm">{t("dash.noWorkflowsMatch")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3.5">
@@ -110,7 +113,7 @@ export function StudioWorkflowsView({ showAll, search: controlledSearch }: Studi
                     </>
                   )}
                   <span className="flex-shrink-0">
-                    {new Date(wf.updatedAt).toLocaleDateString()}
+                    {formatDate(wf.updatedAt)}
                   </span>
                 </p>
               </div>

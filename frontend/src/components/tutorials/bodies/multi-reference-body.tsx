@@ -8,6 +8,7 @@
 import { useMemo, useRef } from "react"
 import { optimizedImageUrl } from "@/lib/image"
 import { formatCreditUnits } from "@/lib/credit-units"
+import { useT } from "@/lib/i18n"
 import { deriveTutorialGraph, tokenizePrompt } from "../derive-tutorial-data"
 import type { TutorialBodyProps } from "../tutorial-registry"
 import {
@@ -32,7 +33,8 @@ export default function MultiReferenceBody({
   onRunNode,
 }: TutorialBodyProps) {
   const { step, reference, focusStep, focusReference, clearReference } = focus
-  const graph = useMemo(() => deriveTutorialGraph(nodes, edges), [nodes, edges])
+  const t = useT()
+  const graph = useMemo(() => deriveTutorialGraph(nodes, edges, undefined, t), [nodes, edges, t])
   const parts = useMemo(() => tokenizePrompt(graph.prompt), [graph.prompt])
   const refByPosition = useMemo(
     () => new Map(graph.references.map((r) => [r.position, r])),
@@ -78,8 +80,8 @@ export default function MultiReferenceBody({
           <header className="mrc-head">
             <span className="mrc-badge">01</span>
             <div>
-              <div className="mrc-title">{GROUP_TITLES.a.title}</div>
-              <div className="mrc-sub">{GROUP_TITLES.a.sub}</div>
+              <div className="mrc-title">{t(GROUP_TITLES.a.title)}</div>
+              <div className="mrc-sub">{t(GROUP_TITLES.a.sub)}</div>
             </div>
           </header>
           <div className="mrc-panel-body">
@@ -94,7 +96,7 @@ export default function MultiReferenceBody({
                     <span className="mrc-num">{ref.position}</span>
                     <span>{ref.name}</span>
                   </div>
-                  <div className="mrc-ref-role">{REFERENCE_ROLES[ref.position] ?? "a reference"}</div>
+                  <div className="mrc-ref-role">{t(REFERENCE_ROLES[ref.position] ?? "tut.aReference")}</div>
                 </div>
                 <span
                   className="mrc-dot"
@@ -112,8 +114,8 @@ export default function MultiReferenceBody({
           <header className="mrc-head">
             <span className="mrc-badge">02</span>
             <div>
-              <div className="mrc-title">{GROUP_TITLES.b.title}</div>
-              <div className="mrc-sub">{GROUP_TITLES.b.sub}</div>
+              <div className="mrc-title">{t(GROUP_TITLES.b.title)}</div>
+              <div className="mrc-sub">{t(GROUP_TITLES.b.sub)}</div>
             </div>
           </header>
           <div className="mrc-panel-body">
@@ -153,8 +155,8 @@ export default function MultiReferenceBody({
             </div>
 
             <div className="mrc-explain">
-              <div className="nd-eyebrow">What this line does</div>
-              <div className="mrc-explain-body">{hint}</div>
+              <div className="nd-eyebrow">{t("tut.whatThisLineDoes")}</div>
+              <div className="mrc-explain-body">{t(hint)}</div>
             </div>
 
             {graph.modelChips.length > 0 && (
@@ -174,24 +176,24 @@ export default function MultiReferenceBody({
           <header className="mrc-head">
             <span className="mrc-badge">03</span>
             <div>
-              <div className="mrc-title">{GROUP_TITLES.c.title}</div>
-              <div className="mrc-sub">{GROUP_TITLES.c.sub}</div>
+              <div className="mrc-title">{t(GROUP_TITLES.c.title)}</div>
+              <div className="mrc-sub">{t(GROUP_TITLES.c.sub)}</div>
             </div>
           </header>
           <div className="mrc-panel-body">
             {graph.resultImageUrl && (
-              <img className="mrc-result" src={graph.resultImageUrl} alt="Generated result" />
+              <img className="mrc-result" src={graph.resultImageUrl} alt={t("tut.generatedResult")} />
             )}
             <div>
               {graph.references.map((ref) => (
                 <div key={ref.nodeId} className="mrc-contrib" data-lit={reference === ref.position}>
                   <span className="mrc-num">{ref.position}</span>
-                  <span>{CONTRIBUTIONS[ref.position] ?? ref.name}</span>
+                  <span>{CONTRIBUTIONS[ref.position] ? t(CONTRIBUTIONS[ref.position]) : ref.name}</span>
                 </div>
               ))}
             </div>
             <button type="button" className="mrc-run" onClick={onRunNode}>
-              <span className="mrc-run-label">Run this node</span>
+              <span className="mrc-run-label">{t("tut.runThisNode")}</span>
               {estimatedCredits > 0 && <span className="mrc-run-cost">{formatCreditUnits(estimatedCredits)}</span>}
             </button>
           </div>
@@ -207,14 +209,14 @@ export default function MultiReferenceBody({
                 <div className="mrc-closing-lead">
                   <span className="mrc-badge">04</span>
                   <div>
-                    <div className="mrc-title">{col.title}</div>
-                    <div className="mrc-closing-body">{col.body}</div>
+                    <div className="mrc-title">{col.title && t(col.title)}</div>
+                    <div className="mrc-closing-body">{t(col.body)}</div>
                   </div>
                 </div>
               ) : (
                 <>
-                  <div className="nd-eyebrow">{col.eyebrow}</div>
-                  <div className="mrc-closing-body">{col.body}</div>
+                  <div className="nd-eyebrow">{col.eyebrow && t(col.eyebrow)}</div>
+                  <div className="mrc-closing-body">{t(col.body)}</div>
                 </>
               )}
             </div>

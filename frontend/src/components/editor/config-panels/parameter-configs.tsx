@@ -14,14 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  getProviders,
-  getProviderLabel,
-  getModels,
-  getFirstProvider,
-  getFirstModel,
-  type ProviderCategory,
-} from "@/lib/providers-config"
+import { useEffect } from "react"
+import { PROVIDER_NODE_CATEGORIES, PROVIDER_NODE_CATEGORY_IDS, isProviderNodeCategory, validProviderSelection } from "@/lib/provider-node-models"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
+import { ModelSearchSelect } from "./model-search-select"
+import { withoutDeniedModels } from "./model-options"
 import type {
   ToneData,
   StyleGuideData,
@@ -82,7 +79,8 @@ import { LoopSubjectPicker } from "@/lib/picker-ui"
 import { PersonPicker } from "@/lib/picker-ui"
 import { MOODS as BASE_MOODS, POSES as BASE_POSES, buildFramingHints, getLensPromptHint, getCameraFormatPromptHint, buildLightingHints, getColorLookPromptHint, buildAtmosphereHints, buildActionFxHints, getStylePromptHint, getSettingPromptHint, getLoopSubjectPromptHint, buildMoodHints, buildPoseHints, buildStylingHints, buildTemporalHints, buildMaterialHints, getPhotoGenrePromptHint, getBackdropPromptHint, buildHeldPropHints, buildPhotographerHints, buildAestheticHints, getEraPromptHint, buildExposureHints, getRenderQualityPromptHint, getCompositionEffectPromptHint, buildPostProcessHints, buildPersonHints, TRANSITION_POSITIONS, TRANSITION_DURATIONS, TRANSITION_INTENSITIES, CHARACTER_FX_POSITIONS, CHARACTER_FX_DURATIONS, CHARACTER_FX_INTENSITIES, CHARACTER_MOTION_POSITIONS, CHARACTER_MOTION_PACES, CHARACTER_MOTION_MAX_PICKS } from "@nodaro/prompts"
 import { getAnimal, getVehicle, getWeapon, getFurniture } from "@nodaro/shared"
-import { MoodEmoji } from "@/lib/picker-ui"
+import { LookArt, MoodEmoji, useShowsLookRenders } from "@/lib/picker-ui"
+import { LookPreviewStyleSwitch } from "@/components/nodes/look-preview-style"
 import { DimensionTileGrid } from "@/lib/picker-ui"
 import { PoseIcon } from "@/lib/picker-ui"
 import { StylingPicker } from "@/lib/picker-ui"
@@ -149,62 +147,44 @@ export function StyleGuideConfig({ data, onUpdate }: ConfigProps<StyleGuideData>
 
 export function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
   const t = useT()
-  const category = data.category as ProviderCategory
-  const providers = getProviders(category)
-  const models = getModels(category, data.provider)
+  // Re-render when the deployment's model availability arrives (withoutDeniedModels).
+  useSurfaceAvailability()
+  const { category, provider } = validProviderSelection(data)
+
+  // Fail-safe (Provider Enum Sync step 12b): a node saved before the Provider
+  // offered real models holds a vendor name ("pika") or a category no node
+  // reads ("voice"); move it to a pair the lists below offer.
+  useEffect(() => {
+    if (data.category !== category || data.provider !== provider) onUpdate({ category, provider })
+  }, [data.category, data.provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col gap-3">
       <div>
         <Label>{t("apps.categoryLabel")}</Label>
         <Select
-          value={data.category}
+          value={category}
           onValueChange={(v) => {
-            const cat = v as ProviderCategory
-            const firstProvider = getFirstProvider(cat)
-            const firstModel = getFirstModel(cat, firstProvider)
-            onUpdate({ category: cat, provider: firstProvider, model: firstModel })
+            if (isProviderNodeCategory(v)) onUpdate({ category: v, provider: PROVIDER_NODE_CATEGORIES[v].defaultModel })
           }}
         >
           <SelectTrigger aria-label={t("apps.categoryLabel")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="image">{t("common.image")}</SelectItem>
-            <SelectItem value="video">{t("common.video")}</SelectItem>
-            <SelectItem value="voice">{t("field.voice")}</SelectItem>
-            <SelectItem value="script">{t("node.script")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label>{t("field.provider")}</Label>
-        <Select
-          value={data.provider}
-          onValueChange={(v) => {
-            const firstModel = getFirstModel(category, v)
-            onUpdate({ provider: v, model: firstModel })
-          }}
-        >
-          <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {providers.map((p) => (
-              <SelectItem key={p} value={p}>{getProviderLabel(category, p)}</SelectItem>
+            {PROVIDER_NODE_CATEGORY_IDS.map((id) => (
+              <SelectItem key={id} value={id}>{t(PROVIDER_NODE_CATEGORIES[id].label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
       <div>
         <Label>{t("field.model")}</Label>
-        <Select
-          value={data.model}
-          onValueChange={(v) => onUpdate({ model: v })}
-        >
-          <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {models.map((m) => (
-              <SelectItem key={m} value={m}>{m}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ModelSearchSelect
+          value={provider}
+          onChange={(v) => onUpdate({ provider: v })}
+          options={withoutDeniedModels(PROVIDER_NODE_CATEGORIES[category].models)}
+          ariaLabel={t("field.model")}
+        />
+        <p className="mt-1.5 text-xs text-muted-foreground">{t("paramcfg.providerSettingsHint")}</p>
       </div>
     </div>
   )
@@ -318,7 +298,10 @@ export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: Con
         postPlaceholder={t("paramcfg.eGSettlesToLockOff")}
         onChange={onUpdate}
       />
-      <Label>{t("paramcfg.cameraMotion")}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label>{t("paramcfg.cameraMotion")}</Label>
+        <LookPreviewStyleSwitch pickerKey="camera-motion" />
+      </div>
       <CameraMotionPicker
         value={data.cameraMotion || "static"}
         onValueChange={(v) => onUpdate({ cameraMotion: v })}
@@ -343,7 +326,10 @@ export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
         postPlaceholder={t("paramcfg.eGWithSubtleDollyIn")}
         onChange={onUpdate}
       />
-      <Label>{t("paramcfg.framing")}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label>{t("paramcfg.framing")}</Label>
+        <LookPreviewStyleSwitch pickerKey="framing" />
+      </div>
       <FramingPicker
         value={{
           shotSize: data.shotSize,
@@ -392,7 +378,10 @@ export function LensConfig({ data, onUpdate }: ConfigProps<LensData>) {
         postPlaceholder={t("paramcfg.eGWithChromaticAberration")}
         onChange={onUpdate}
       />
-      <Label>{t("paramcfg.lens")}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label>{t("paramcfg.lens")}</Label>
+        <LookPreviewStyleSwitch pickerKey="lens" />
+      </div>
       <LensPicker
         value={data.lens || "normal-50mm"}
         onValueChange={(v) => onUpdate({ lens: v })}
@@ -416,7 +405,10 @@ export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatD
         postPlaceholder={t("paramcfg.eGWithGrainBloom")}
         onChange={onUpdate}
       />
-      <Label>{t("paramcfg.cameraFilm")}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label>{t("paramcfg.cameraFilm")}</Label>
+        <LookPreviewStyleSwitch pickerKey="camera-format" />
+      </div>
       <CameraFormatPicker
         value={data.cameraFormat || "35mm-film"}
         onValueChange={(v) => onUpdate({ cameraFormat: v })}
@@ -441,7 +433,10 @@ export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
         postPlaceholder={t("paramcfg.eGWithPracticalLightsIn")}
         onChange={onUpdate}
       />
-      <Label>{t("paramcfg.lighting")}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label>{t("paramcfg.lighting")}</Label>
+        <LookPreviewStyleSwitch pickerKey="lighting" />
+      </div>
       <LightingPicker
         value={{
           timeOfDay: data.timeOfDay,
@@ -490,7 +485,10 @@ export function ColorLookConfig({ data, onUpdate }: ConfigProps<ColorLookData>) 
         postPlaceholder={t("paramcfg.eGWithFilmBurnAt")}
         onChange={onUpdate}
       />
-      <Label>{t("paramcfg.colorLook")}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label>{t("paramcfg.colorLook")}</Label>
+        <LookPreviewStyleSwitch pickerKey="color-look" />
+      </div>
       <ColorLookPicker
         value={data.colorLook || "warm"}
         onValueChange={(v) => onUpdate({ colorLook: v })}
@@ -514,7 +512,10 @@ export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>
         postPlaceholder={t("paramcfg.eGWithDustSuspendedIn")}
         onChange={onUpdate}
       />
-      <Label>{t("paramcfg.atmospherePickUpTo2")}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label>{t("paramcfg.atmospherePickUpTo2")}</Label>
+        <LookPreviewStyleSwitch pickerKey="atmosphere" />
+      </div>
       <AtmospherePicker
         value={data.atmosphere}
         onValueChange={(v) => onUpdate({ atmosphere: v })}
@@ -564,7 +565,10 @@ export function StyleConfig({ data, onUpdate }: ConfigProps<StyleData>) {
         postPlaceholder={t("paramcfg.eGWithHandPrintedEdges")}
         onChange={onUpdate}
       />
-      <Label>{t("field.style")}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label>{t("field.style")}</Label>
+        <LookPreviewStyleSwitch pickerKey="style" />
+      </div>
       <StylePicker
         value={data.style || "cinematic"}
         onValueChange={(v) => onUpdate({ style: v })}
@@ -721,6 +725,8 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
 export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
   const t = useT()
   const MOODS = useCuratedEntries("mood", BASE_MOODS)
+  // Renders fill the tile; the emoji illustration keeps the icon box.
+  const moodArt = useShowsLookRenders("mood")
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -752,18 +758,24 @@ export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
           className="text-xs resize-none"
         />
       </div>
-      <Label>{t("paramcfg.moodPickUpTo2")}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label>{t("paramcfg.moodPickUpTo2")}</Label>
+        <LookPreviewStyleSwitch pickerKey="mood" />
+      </div>
       {/* Multi-pick (max 2): single → single mood hint; two → blended
           "with a X and Y expression". Numbered tile badges show pick order. */}
       <DimensionTileGrid
         entries={MOODS}
         value={data.mood}
         onChange={(v) => onUpdate({ mood: v })}
-        renderIcon={(entry) => <MoodEmoji moodId={entry.id} className="size-full" />}
+        renderIcon={(entry) => (
+          <LookArt pickerKey="mood" id={entry.id} className="size-full rounded-md" width={160} fallback={<MoodEmoji moodId={entry.id} className="size-full" />} />
+        )}
         searchPlaceholder={t("paramcfg.searchMoods")}
         gridClassName="grid grid-cols-3 gap-2"
         catalog="mood"
         maxSelected={2}
+        iconClassName={moodArt ? "w-full aspect-square" : undefined}
       />
     </div>
   )

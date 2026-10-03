@@ -1,6 +1,6 @@
 import { runtimeSurfaceProfile } from "../surface-profile.js"
 import { z } from "zod"
-import { extractPresetData } from "@nodaro/shared"
+import { extractPresetData, RECAST_SEGMENT_PACKS } from "@nodaro/shared"
 import { getFactoryPresets } from "@nodaro/prompts"
 
 // App namespaces share the owner-scoped preset library without pretending to
@@ -9,7 +9,7 @@ const recastRender = z.strictObject({
   schemaVersion: z.literal(1),
   provider: z.string().trim().min(1).max(120),
   resolution: z.enum(["480p", "720p", "1080p", "4k"]),
-  segmentSec: z.enum(["max", "scenes-max", "scenes"]),
+  segmentSec: z.enum(RECAST_SEGMENT_PACKS),
   renderMethod: z.enum(["extend", "keyframes"]),
   anchorMode: z.enum(["upfront", "progressive", "none"]),
   citeStyle: z.enum(["bare", "rich"]),

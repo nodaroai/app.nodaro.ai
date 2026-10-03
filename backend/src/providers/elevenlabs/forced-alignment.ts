@@ -16,9 +16,20 @@ export async function forcedAlignment(
   transcript: string,
   meta?: EgressMeta,
 ): Promise<ForcedAlignmentResult> {
-  const headers = getElevenLabsHeaders()
-  const audioBuffer = await fetchAudioFromUrl(audioUrl)
+  return forcedAlignmentFromBuffer(await fetchAudioFromUrl(audioUrl), transcript, meta)
+}
 
+/**
+ * Align `transcript` against audio bytes the caller already holds — e.g. the
+ * speech track demuxed out of a talking-head video, which must never reach the
+ * provider as a video container.
+ */
+export async function forcedAlignmentFromBuffer(
+  audioBuffer: Buffer | Uint8Array,
+  transcript: string,
+  meta?: EgressMeta,
+): Promise<ForcedAlignmentResult> {
+  const headers = getElevenLabsHeaders()
   const formData = new FormData()
   const blob = new Blob([audioBuffer as BlobPart], { type: "audio/mpeg" })
   // ElevenLabs forced-alignment expects multipart fields named `file` + `text`

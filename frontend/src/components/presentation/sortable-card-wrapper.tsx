@@ -3,6 +3,7 @@ import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import type { PresentationDisplay } from "@/types/nodes"
 import { PresentationDisplayConfig } from "@/components/editor/config-panels/presentation-display-config"
+import { useT } from "@/lib/i18n"
 
 /** Sortable card wrapper with grip handle, remove button, and description editing */
 export function SortableCardWrapper({
@@ -35,10 +36,11 @@ export function SortableCardWrapper({
   children: React.ReactNode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const t = useT()
 
   const maxWidth = cardDisplay?.maxWidth
   const align = cardDisplay?.align ?? "left"
-  const alignClass = align === "center" ? "mx-auto" : align === "right" ? "ml-auto" : ""
+  const alignClass = align === "center" ? "mx-auto" : align === "right" ? "ms-auto" : ""
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -53,8 +55,8 @@ export function SortableCardWrapper({
         <button
           type="button"
           onClick={onRemove}
-          className="absolute -top-2 -right-2 z-10 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-full bg-red-500/80 text-white hover:bg-red-500 transition-colors"
-          title="Remove from presentation"
+          className="absolute -top-2 -end-2 z-10 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-full bg-red-500/80 text-white hover:bg-red-500 transition-colors"
+          title={t("present.removeFromPresentation")}
         >
           <X className="h-3 w-3" />
         </button>
@@ -84,7 +86,7 @@ export function SortableCardWrapper({
             type="text"
             value={cardTitle ?? ""}
             onChange={(e) => onTitleChange(e.target.value)}
-            placeholder="Custom title..."
+            placeholder={t("present.customTitlePlaceholder")}
             className="w-full bg-transparent border-none text-[11px] font-medium text-muted-foreground/60 placeholder:text-muted-foreground/30 focus:text-muted-foreground focus:outline-none"
           />
         </div>
@@ -97,7 +99,7 @@ export function SortableCardWrapper({
             type="text"
             value={cardDescription ?? ""}
             onChange={(e) => onDescriptionChange(e.target.value)}
-            placeholder="Add description..."
+            placeholder={t("present.addDescriptionPlaceholder")}
             className="w-full bg-transparent border-none text-[11px] text-muted-foreground/50 placeholder:text-muted-foreground/30 focus:text-muted-foreground focus:outline-none"
           />
         </div>

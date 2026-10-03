@@ -120,8 +120,8 @@ nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
 nodaro models list [--kind video] [--mode i2v] [--family Google] [--featured]
 
 # Pickers — valid values for parameter-picker nodes (setting, mood, person, …)
-nodaro pickers list                                     # all picker node types + option counts
-nodaro pickers get <nodeType> [--full] [--category <c>] [--field <f>]  # one picker's valid ids
+nodaro pickers list                                     # all picker node types + option counts + pictures
+nodaro pickers get <nodeType> [--full] [--category <c>] [--field <f>]  # one picker's valid ids (+ imageUrl per option)
 nodaro pickers analyze "<text>" [--target setting,mood]  # AI Fill: pick values from a description (credit-billed)
 
 # Shots — Cine share → remix records
@@ -175,11 +175,13 @@ nodaro audio combine --segment <url> --segment "<url>@12-95" --watch
 #   locations / objects — Location & Object Studio CRUD + motion
 #   prompt      — the prompt wizard (analyze / generate / wizard)
 #   presets     — node presets (factory + your own)
+#   saved-posts — the inspiration wall: posts saved from Social Search
+#   competitors — tracked brands, their scans and action cards (Cloud)
 #   community   — shared characters/locations/objects: browse, clone, favorites
 ```
 
 The authoritative per-flag reference for every command group is the
-[CLI reference](https://nodaroai.github.io/app.nodaro.ai/cli.html) — this README
+[CLI reference](https://nodaro.ai/docs/developers/cli/commands) — this README
 shows the shape, not every option.
 
 ### Three ways to run something

@@ -1,3 +1,4 @@
+import { useCallback, useRef } from "react"
 import { useReactFlow, useViewport } from "@xyflow/react"
 import { ArrowLeft, ArrowRight, Loader2, Minus, Plus } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -6,6 +7,7 @@ import type { TemplateBrowseCard } from "@/lib/api"
 import { useTemplateDetail } from "@/hooks/queries/use-template-marketplace-queries"
 import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
+import { chromeInsets } from "./chrome-insets"
 import { ReadOnlyCanvas } from "./read-only-canvas"
 import { templateCreatorName } from "./template-facts"
 import { TemplateCover } from "./template-marketplace-card"
@@ -55,19 +57,28 @@ export function TemplateCanvasPreview({ slug, open, fallback, onBack }: Template
   const summary = detail ?? (isError ? null : fallback)
   const { clone, isCloning } = useCloneTemplate()
   const startClone = () => summary && clone({ slug: summary.slug, name: summary.name })
+  // The chrome floating over the canvas; the first frame leaves it the room it takes.
+  const topBarRef = useRef<HTMLDivElement>(null)
+  const railRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const fitInsets = useCallback(
+    (canvas: DOMRect) =>
+      chromeInsets(canvas, [topBarRef, railRef, panelRef].flatMap((ref) => (ref.current ? [ref.current.getBoundingClientRect()] : []))),
+    [],
+  )
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onBack()}>
       <DialogContent
         showCloseButton={false}
         overlayClassName="bg-[var(--home-bg)]"
-        className="templates-page templates-dots @container fixed inset-0 top-0 left-0 block h-full w-full max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-[var(--home-bg)] p-0 text-[var(--home-fg)] shadow-none [--templates-dot-gap:20px] sm:max-w-none"
+        className="templates-page templates-dots @container fixed inset-0 top-0 start-0 block h-full w-full max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-[var(--home-bg)] p-0 text-[var(--home-fg)] shadow-none [--templates-dot-gap:20px] sm:max-w-none"
       >
         <DialogTitle className="sr-only">{summary?.name ?? t("templates.title")}</DialogTitle>
         <DialogDescription className="sr-only">{t("templates.readOnly")}</DialogDescription>
 
         {detail ? (
-          <ReadOnlyCanvas key={detail.id} nodes={detail.snapshotNodes} edges={detail.snapshotEdges} interactive className="absolute inset-0">
+          <ReadOnlyCanvas key={detail.id} nodes={detail.snapshotNodes} edges={detail.snapshotEdges} interactive fitInsets={fitInsets} className="absolute inset-0">
             <ZoomPill />
           </ReadOnlyCanvas>
         ) : (
@@ -78,7 +89,7 @@ export function TemplateCanvasPreview({ slug, open, fallback, onBack }: Template
 
         {/* Top bar: back pill at the start, the read-only pill centred; the zoom
             pill is the canvas's own, on the end side, so a column is kept free. */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-[18px] py-[14px] pe-[140px]">
+        <div ref={topBarRef} className="pointer-events-none absolute inset-x-0 top-0 z-10 grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-[18px] py-[14px] pe-[140px]">
           <button
             type="button"
             onClick={onBack}
@@ -105,15 +116,14 @@ export function TemplateCanvasPreview({ slug, open, fallback, onBack }: Template
 
         {/* The results, playable with sound — the canvas behind is inert by design. */}
         {detail && (
-          <TemplateResultsRail
-            snapshotNodes={detail.snapshotNodes}
-            className="absolute bottom-[18px] start-[18px] z-10 max-w-[min(760px,calc(100%-400px))] @max-[900px]:hidden"
-          />
+          <div ref={railRef} className="absolute bottom-[18px] start-[18px] z-10 max-w-[min(760px,calc(100%-400px))] @max-[900px]:hidden">
+            <TemplateResultsRail snapshotNodes={detail.snapshotNodes} />
+          </div>
         )}
 
         {/* Clone panel */}
         {summary && (
-          <div className="templates-clone-panel absolute bottom-[18px] end-[18px] z-10 w-[340px] @max-[900px]:inset-x-[18px] @max-[900px]:w-auto">
+          <div ref={panelRef} className="templates-clone-panel absolute bottom-[18px] end-[18px] z-10 w-[340px] @max-[900px]:inset-x-[18px] @max-[900px]:w-auto">
             <div className="relative overflow-hidden rounded-[17px] bg-[var(--home-panel)] p-[18px]">
               <div className="templates-clone-glow" aria-hidden />
               <div className="relative flex items-center justify-between">

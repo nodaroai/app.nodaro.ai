@@ -39,6 +39,9 @@ export const DENIED_NODE_TYPES: ReadonlySet<string> = new Set([
   "rss-feed",
   "telegram-channel-feed",
   "youtube-video",
+  // Social Search reads a platform, an account or keyword and a subreddit
+  // from node data and fetches from that platform.
+  "social-search",
 ])
 
 /**
@@ -78,6 +81,8 @@ export const NAMED_DESTINATION_FIELDS: ReadonlySet<string> = new Set([
   // whatever names the upstream text carries. Exists on that node type only.
   "advertisers",
   "query",
+  // Social Search's Reddit keyword search reads the subreddit to search in.
+  "subreddit",
   "channel",
   "chatId",
   "connectionId",

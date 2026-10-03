@@ -10,10 +10,11 @@ import { Check, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useLazyMount } from "@/components/audio-player/use-lazy-mount"
-import { avatarStatusLabel } from "@/components/heygen/heygen-catalog"
+import { avatarStatus, avatarStatusLabel } from "@/components/heygen/heygen-catalog"
 import { personMeta, type Person } from "./model"
 import { V_TAG } from "./styles"
 import { useRovingRadiogroup, type RovingItemProps } from "./use-roving-radiogroup"
+import { useT, type TFunction } from "@/lib/i18n"
 
 export const PAGE_SIZE = 24
 
@@ -27,29 +28,34 @@ interface PersonGridProps {
   readonly onMore: () => void
 }
 
-const looksCount = (person: Person) => `${person.looks.length} ${person.looks.length === 1 ? "look" : "looks"}`
+const looksCount = (person: Person, t: TFunction) =>
+  person.looks.length === 1
+    ? t("heygen.looksCountOne", { n: person.looks.length })
+    : t("heygen.looksCountMany", { n: person.looks.length })
 
 /** The accessible name carries what the eye gets from the card: name, meta,
  *  count and — for the account's own looks — the build status. */
-function accessibleName(person: Person): string {
-  return [person.name, personMeta(person), looksCount(person), avatarStatusLabel(person.cover)].filter(Boolean).join(", ")
+function accessibleName(person: Person, t: TFunction): string {
+  return [person.name, personMeta(person, t), looksCount(person, t), avatarStatusLabel(person.cover, t)].filter(Boolean).join(", ")
 }
 
 function VTag({ person, className }: { person: Person; className?: string }) {
+  const t = useT()
   if (!person.supportsV) return null
   return (
-    <span className={cn(V_TAG, "size-[18px] pointer-events-none", className)} title="Supports Avatar V" aria-hidden>
+    <span className={cn(V_TAG, "size-[18px] pointer-events-none", className)} title={t("node.supportsAvatarV")} aria-hidden>
       <Sparkles className="size-2.5" />
     </span>
   )
 }
 
 function StatusBadge({ person, className }: { person: Person; className?: string }) {
-  const status = avatarStatusLabel(person.cover)
+  const t = useT()
+  const status = avatarStatus(person.cover)
   if (!status) return null
   return (
-    <span className={cn("rounded-[5px] px-1.5 py-0.5 text-[9px] font-bold text-white pointer-events-none", status === "Failed" ? "bg-red-600/90" : "bg-amber-500/90", className)} aria-hidden>
-      {status}
+    <span className={cn("rounded-[5px] px-1.5 py-0.5 text-[9px] font-bold text-white pointer-events-none", status === "failed" ? "bg-red-600/90" : "bg-amber-500/90", className)} aria-hidden>
+      {avatarStatusLabel(person.cover, t)}
     </span>
   )
 }
@@ -62,6 +68,7 @@ interface ItemProps {
 }
 
 function PersonCard({ person, selected, onPick, roving }: ItemProps) {
+  const t = useT()
   const { ref, mounted } = useLazyMount("300px")
   return (
     // role="presentation": the wrapper only hosts the lazy-mount observer, so
@@ -71,11 +78,11 @@ function PersonCard({ person, selected, onPick, roving }: ItemProps) {
         type="button"
         role="radio"
         aria-checked={selected}
-        aria-label={accessibleName(person)}
+        aria-label={accessibleName(person, t)}
         onClick={onPick}
         {...roving}
         className={cn(
-          "group flex w-full flex-col overflow-hidden rounded-[11px] border text-left transition-colors",
+          "group flex w-full flex-col overflow-hidden rounded-[11px] border text-start transition-colors",
           selected
             ? "border-[#ff0073]/70 bg-muted/60 shadow-[0_0_0_1px_rgba(255,0,115,0.3)]"
             : "border-border/70 bg-card hover:bg-muted/50 hover:border-foreground/25",
@@ -93,15 +100,15 @@ function PersonCard({ person, selected, onPick, roving }: ItemProps) {
           ) : (
             <div className="h-full w-full animate-pulse bg-muted/60" />
           )}
-          <VTag person={person} className="absolute left-2 top-2" />
-          <span className="absolute bottom-2 left-2 rounded-[5px] bg-black/80 px-1.5 py-0.5 font-mono text-[9px] tracking-[0.06em] text-zinc-200 whitespace-nowrap pointer-events-none" aria-hidden>
-            {looksCount(person)}
+          <VTag person={person} className="absolute start-2 top-2" />
+          <span className="absolute bottom-2 start-2 rounded-[5px] bg-black/80 px-1.5 py-0.5 font-mono text-[9px] tracking-[0.06em] text-zinc-200 whitespace-nowrap pointer-events-none" aria-hidden>
+            {looksCount(person, t)}
           </span>
-          <StatusBadge person={person} className="absolute left-2 top-8" />
+          <StatusBadge person={person} className="absolute start-2 top-8" />
           <span
             aria-hidden
             className={cn(
-              "absolute right-2 top-2 grid size-5 place-items-center rounded-full bg-[#ff0073] text-white transition-opacity",
+              "absolute end-2 top-2 grid size-5 place-items-center rounded-full bg-[#ff0073] text-white transition-opacity",
               selected ? "opacity-100" : "opacity-0",
             )}
           >
@@ -110,7 +117,7 @@ function PersonCard({ person, selected, onPick, roving }: ItemProps) {
         </div>
         <div className="min-w-0 px-[11px] pb-[11px] pt-[9px]" aria-hidden>
           <div className="truncate text-[13px] text-foreground">{person.name}</div>
-          <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{personMeta(person)}</div>
+          <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{personMeta(person, t)}</div>
         </div>
       </button>
     </div>
@@ -118,16 +125,17 @@ function PersonCard({ person, selected, onPick, roving }: ItemProps) {
 }
 
 function PersonRow({ person, selected, onPick, roving }: ItemProps) {
+  const t = useT()
   return (
     <button
       type="button"
       role="radio"
       aria-checked={selected}
-      aria-label={accessibleName(person)}
+      aria-label={accessibleName(person, t)}
       onClick={onPick}
       {...roving}
       className={cn(
-        "flex w-full items-center gap-3 rounded-lg border px-2.5 py-2 text-left transition-colors",
+        "flex w-full items-center gap-3 rounded-lg border px-2.5 py-2 text-start transition-colors",
         selected ? "border-[#ff0073]/70 bg-muted/60" : "border-border/60 bg-card hover:bg-muted/50",
       )}
     >
@@ -136,11 +144,11 @@ function PersonRow({ person, selected, onPick, roving }: ItemProps) {
       </span>
       <span className="min-w-0 flex-1" aria-hidden>
         <span className="block truncate text-[13px] text-foreground">{person.name}</span>
-        <span className="block truncate text-[11px] text-muted-foreground">{personMeta(person)}</span>
+        <span className="block truncate text-[11px] text-muted-foreground">{personMeta(person, t)}</span>
       </span>
       <StatusBadge person={person} />
       <span className="font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap" aria-hidden>
-        {looksCount(person)}
+        {looksCount(person, t)}
       </span>
       <VTag person={person} />
       <span className={cn("grid size-5 place-items-center rounded-full bg-[#ff0073] text-white", selected ? "opacity-100" : "opacity-0")} aria-hidden>
@@ -151,6 +159,7 @@ function PersonRow({ person, selected, onPick, roving }: ItemProps) {
 }
 
 export function PersonGrid({ people, view, selectedKey, onPick, shown, onMore }: PersonGridProps) {
+  const t = useT()
   const visible = people.slice(0, shown)
   const remaining = people.length - visible.length
   const activeIndex = visible.findIndex((p) => p.key === selectedKey)
@@ -159,7 +168,7 @@ export function PersonGrid({ people, view, selectedKey, onPick, shown, onMore }:
     <div className="min-w-0 overflow-y-auto px-[18px] pb-[22px] pt-4" data-testid="avatar-picker-grid">
       <div
         role="radiogroup"
-        aria-label="People"
+        aria-label={t("heygen.people")}
         className={cn(view === "grid" ? "grid grid-cols-2 gap-3.5 md:grid-cols-3 xl:grid-cols-4" : "flex flex-col gap-1.5")}
         data-view={view}
       >
@@ -177,7 +186,7 @@ export function PersonGrid({ people, view, selectedKey, onPick, shown, onMore }:
           onClick={onMore}
           className="mt-4 grid w-full place-items-center rounded-[9px] border border-border/70 py-[11px] text-[12.5px] text-foreground/80 hover:bg-muted/50"
         >
-          Load {Math.min(PAGE_SIZE, remaining)} more
+          {t("heygen.loadMore", { n: Math.min(PAGE_SIZE, remaining) })}
         </button>
       )}
     </div>

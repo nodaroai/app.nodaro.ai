@@ -8,7 +8,8 @@ import { renderQueue } from "../../lib/render-queue.js"
 import { supabase } from "../../lib/supabase.js"
 import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS, probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
-import { applyEdl, applyEdlRenderBudgetMs } from "../../providers/video/apply-edl.js"
+import { applyEdl } from "../../providers/video/apply-edl.js"
+import { declaredJobBudgetMs } from "../../lib/job-budget.js"
 import { assembleNarratedVideo } from "../../providers/video/assemble-narrated-video.js"
 import { createImageCollage } from "../../providers/image/collage.js"
 import { createImageOverlay, type ImageOverlayParams } from "../../providers/image/overlay.js"
@@ -30,11 +31,13 @@ import { combineAudio } from "../../providers/video/combine-audio.js"
 import { speedRamp } from "../../providers/video/speed-ramp.js"
 import { loopVideo } from "../../providers/video/loop-video.js"
 import { fadeVideo } from "../../providers/video/fade-video.js"
+import { renderVideoOverlay, type VideoOverlayJobPayload } from "../../providers/video/video-overlay.js"
 import { stillToVideo } from "../../providers/video/still-to-video.js"
 import { gifToVideo } from "../../providers/video/gif-to-video.js"
 import { slideshow } from "../../providers/video/slideshow.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { detectSilence } from "../../providers/audio/silence-detect.js"
+import { audioSync } from "../../providers/audio/audio-sync.js"
 import { config } from "../../lib/config.js"
 import { syntheticCaptionsFromText, transcribeSegmentsToCaptions, transcriptToCaptions } from "../../providers/audio/captions-mappers.js"
 import {
@@ -218,12 +221,12 @@ const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
 // fetches and probes — so "hung" means one thing to the heartbeat and to those
 // steps. Storage I/O and ffmpeg-slot waits have no ceiling to add and are the
 // stated residual (see `workers/pre-task-heartbeat.ts`).
-handleApplyEdl.livenessBudgetMs = (job) => {
-  const { edl, output } = job.data as { edl?: Edl; output?: "video" | "audio" }
-  return edl && Array.isArray(edl.segments) && Array.isArray(edl.sources)
-    ? applyEdlRenderBudgetMs(edl, { output: output === "audio" ? "audio" : "video" })
-    : undefined
-}
+//
+// Declared THROUGH the job-budget registry (`lib/job-budget.ts`), never
+// computed here: the workflow orchestrator sizes an apply-edl node's ceilings
+// from the same `declaredJobBudgetMs` call on the same payload (Track 0.11),
+// so the heartbeat and the DAG agree on how long this job may run.
+handleApplyEdl.livenessBudgetMs = (job) => declaredJobBudgetMs("apply-edl", job.data)
 
 const handleAssembleNarratedVideo: HandlerFn = async function handleAssembleNarratedVideo(job, ctx) {
   const { blocks, voiceVolume, clipAudioVolume, maxSlowdown, trimStartFrames, trimEndFrames } = job.data as {
@@ -456,6 +459,29 @@ const handleFadeVideo: HandlerFn = async function handleFadeVideo(job, ctx) {
   const outputPath = await fadeVideo({ videoUrl, fadeIn, fadeInDuration, fadeOut, fadeOutDuration, color })
   await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegVideoJob(outputPath, ctx)
+}
+
+const handleVideoOverlay: HandlerFn = async function handleVideoOverlay(job, ctx) {
+  const payload = job.data as { jobId: string } & VideoOverlayJobPayload
+  console.log(`[worker] video-overlay ${ctx.jobId}: ${payload.layers?.length ?? 0} layer(s)${payload.outputAspect ? `, ${payload.outputAspect}` : ""}`)
+  // The handler owns the work dir (spec §4.2 step 1): completeFfmpegVideoJob
+  // removes it only when its own upload succeeds, so this finally covers a
+  // refused image, a failed render and a failed R2 put alike.
+  const workDir = await createWorkDir("video-overlay")
+  try {
+    const render = await renderVideoOverlay(payload, workDir)
+    await setJobProgress(job, ctx.jobId, 80)
+    await completeFfmpegVideoJob(render.outputPath, ctx, {
+      warnings: render.warnings,
+      width: render.width,
+      height: render.height,
+      durationSec: render.durationSec,
+      // The run's freshness key (a DAG stamp, or the canvas key a REST Run sent) rides to the node (output-extractor / the restore lanes).
+      ...(typeof payload.resultCompositionKey === "string" ? { resultCompositionKey: payload.resultCompositionKey } : {}),
+    })
+  } finally {
+    await cleanupWorkDir(workDir)
+  }
 }
 
 const handleResizeVideo: HandlerFn = async function handleResizeVideo(job, ctx) {
@@ -1175,6 +1201,41 @@ const handleSilenceDetect: HandlerFn = async function handleSilenceDetect(job, c
   console.log(`[worker] Job ${ctx.jobId} completed: ${result.ranges.length} silence range(s)`)
 }
 
+/**
+ * audio-sync: measure 2–6 recordings' clock offsets against the reference
+ * (default: the first source). A SYNC local analysis like silence-detect — the
+ * result is JSON on `output_data.json`, read + stringified by the DAG
+ * extractors exactly like silence-detect's ranges.
+ */
+const handleAudioSync: HandlerFn = async function handleAudioSync(job, ctx) {
+  const { sources, reference } = job.data as {
+    jobId: string
+    sources: Array<{ id: string; url: string }>
+    reference?: string
+  }
+  console.log(`[worker] audio-sync ${ctx.jobId}: ${sources.length} sources, reference=${reference ?? sources[0]?.id}`)
+
+  const result = await audioSync(sources, reference)
+  await setJobProgress(job, ctx.jobId, 100)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { json: result },
+  })
+  if (!ok) return
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${result.offsets.length} offsets against "${result.reference}"${result.notes.length > 0 ? `, ${result.notes.length} note(s)` : ""}`)
+}
+// Each source is proxied, fetched, probed and decoded before any correlation,
+// so a run over long uncached sources can outlive the heartbeat's default cap.
+// Declared THROUGH the job-budget registry, never computed here: the
+// orchestrator sizes an audio-sync node's ceilings from the same call on the
+// same payload (the budget leaf is `providers/audio/audio-sync-budget.ts`).
+handleAudioSync.livenessBudgetMs = (job) => declaredJobBudgetMs("audio-sync", job.data)
+// Its media proxy may fetch a multi-gigabyte original (Track 0.19): past the
+// 90-minute default, so it declares its steps' ceilings like audio-sync.
+handleSilenceDetect.livenessBudgetMs = (job) => declaredJobBudgetMs("silence-detect", job.data)
+
 const handleExtractAudio: HandlerFn = async function handleExtractAudio(job, ctx) {
   const { videoUrl } = job.data as { jobId: string; videoUrl: string }
   console.log(`[worker] extract-audio ${ctx.jobId}`)
@@ -1441,6 +1502,7 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "speed-ramp": handleSpeedRamp,
   "loop-video": handleLoopVideo,
   "fade-video": handleFadeVideo,
+  "video-overlay": handleVideoOverlay,
   "still-to-video": handleStillToVideo,
   "gif-to-video": handleGifToVideo,
   "slideshow": handleSlideshow,
@@ -1456,4 +1518,5 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "extract-audio": handleExtractAudio,
   "remove-audio": handleRemoveAudio,
   "silence-detect": handleSilenceDetect,
+  "audio-sync": handleAudioSync,
 }

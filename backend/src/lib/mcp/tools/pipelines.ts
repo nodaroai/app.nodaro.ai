@@ -11,6 +11,16 @@ const executeGate: ToolGate = { required: ["pipelines:execute"] }
 const approveGate: ToolGate = { required: ["pipelines:approve"] }
 const readGate: ToolGate = { required: ["pipelines:read"] }
 
+/**
+ * The chat stages these tools take: only those whose chat is wired end to end.
+ * An unwired stage answers 501 `chat_not_wired_for_stage`, so listing it only
+ * invites a call that cannot work; wiring a stage in CHAT_STAGES adds it here.
+ */
+const WIRED_CHAT_STAGES = CHAT_ENABLED_STAGES.filter((stage) => CHAT_WIRED_STAGES[stage]) as [
+  ChatEnabledStage,
+  ...ChatEnabledStage[],
+]
+
 export interface RegisterPipelineToolsOpts {
   server: McpServer
   session: McpSession
@@ -209,9 +219,9 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
         inputSchema: {
           pipeline_id: z.string().uuid().describe("The id of the pipeline"),
           stage: z
-            .enum(CHAT_ENABLED_STAGES as unknown as [string, ...string[]])
+            .enum(WIRED_CHAT_STAGES)
             .describe(
-              `The stage to chat with — must be awaiting_approval. Wired today: ${(Object.keys(CHAT_WIRED_STAGES) as Array<keyof typeof CHAT_WIRED_STAGES>).filter((k) => CHAT_WIRED_STAGES[k]).join(", ")}.`,
+              "The stage to chat with — must be awaiting_approval.",
             ),
           message: z
             .string()
@@ -402,7 +412,7 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
         inputSchema: {
           pipeline_id: z.string().uuid().describe("The id of the pipeline"),
           stage: z
-            .enum(CHAT_ENABLED_STAGES as unknown as [string, ...string[]])
+            .enum(WIRED_CHAT_STAGES)
             .describe("The stage the chat turn belongs to"),
           turn_id: z
             .string()
@@ -512,7 +522,7 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
         inputSchema: {
           pipeline_id: z.string().uuid().describe("The id of the pipeline"),
           stage: z
-            .enum(CHAT_ENABLED_STAGES as unknown as [string, ...string[]])
+            .enum(WIRED_CHAT_STAGES)
             .describe("The chat-enabled stage to list turns for"),
         },
         annotations: { readOnlyHint: true, destructiveHint: false },

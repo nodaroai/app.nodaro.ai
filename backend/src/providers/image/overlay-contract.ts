@@ -24,3 +24,8 @@ export const OVERLAY_MAX_LAYERS = OVERLAY_HANDLE_IDS.length
 export function overlayHandleIndex(handle: string | null | undefined): number {
   return handle ? (OVERLAY_HANDLE_IDS as readonly string[]).indexOf(handle) : -1
 }
+
+/** Per-file download cap for a layer image — matches the upload route's image limit (Image Overlay and Video Overlay). */
+export const OVERLAY_MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024
+/** Σ pixels one job may decode across its layers (Image Overlay: box pixels; Video Overlay: source pixels, decoded once by the pre-fit). */
+export const OVERLAY_MAX_TOTAL_LAYER_PIXELS = 400_000_000

@@ -3,13 +3,13 @@ import type { LocaleCatalogMap } from "./types.js"
 const map: LocaleCatalogMap = {
   // Standing
   "standing-upright": { label: "עומד זקוף", description: "תנוחת עמידה רגועה" },
-  "confident-stance": { label: "עמידה בטוחה", description: "רגליים מרוחקות, כתפיים אחורה" },
+  "confident-stance": { label: "עמידה בטוחה", description: "רגליים פשוקות, כתפיים לאחור" },
   "hands-on-hips": { label: "ידיים על המותניים", description: "ידיים על המותניים" },
-  "arms-crossed": { label: "ידיים שלובות", description: "ידיים שלובות על החזה" },
+  "arms-crossed": { label: "זרועות משוכלות", description: "זרועות משוכלות על החזה" },
   "leaning": { label: "נשען", description: "נשען על משהו" },
   "hero-pose": { label: "תנוחת גיבור", description: "עמדת גיבור דרמטית" },
   "contrapposto": { label: "Contrapposto", description: "מותן מוטה, משקל על רגל אחת" },
-  "leaning-against-wall": { label: "נשען על קיר", description: "נשען בקז'ואליות על קיר" },
+  "leaning-against-wall": { label: "נשען על קיר", description: "נשען בנינוחות על קיר" },
   "hands-behind-head": { label: "ידיים מאחורי הראש", description: "שתי הידיים שלובות מאחורי הראש" },
   "hands-behind-back": { label: "ידיים מאחורי הגב", description: "ידיים שלובות מאחורי הגב" },
 
@@ -17,9 +17,9 @@ const map: LocaleCatalogMap = {
   "sitting": { label: "יושב", description: "יושב באופן טבעי" },
   "cross-legged": { label: "ברגליים שלובות", description: "יושב ברגליים שלובות על הרצפה" },
   "kneeling": { label: "כורע", description: "כורע על הרצפה" },
-  "crouching": { label: "כפוף", description: "כפוף נמוך" },
-  "lounging": { label: "מתפנק", description: "ישיבה רגועה ומורכנת" },
-  "sitting-edge-of-bed": { label: "יושב על קצה המיטה", description: "מטופס על קצה המיטה" },
+  "crouching": { label: "משתופף", description: "משתופף נמוך" },
+  "lounging": { label: "שרוע", description: "ישיבה שרועה ורגועה" },
+  "sitting-edge-of-bed": { label: "יושב על קצה המיטה", description: "יושב על קצה המיטה" },
   "chair-arm-drape": { label: "רגליים על ידית הכיסא", description: "רגליים תלויות מעל ידית הכיסא" },
   "elbow-propped": { label: "לחי על מרפק", description: "לחי נשענת על מרפק תומך" },
   "lying-on-stomach-reading": { label: "שוכב על הבטן וקורא", description: "שוכב על הבטן, נשען על המרפקים בקריאה" },
@@ -51,30 +51,30 @@ const map: LocaleCatalogMap = {
   "thinking": { label: "חושב", description: "יד על הסנטר, מהורהר" },
 
   // Resting
-  "lying-down": { label: "שוכב", description: "שוכב שטוח" },
+  "lying-down": { label: "שוכב", description: "שוכב ישר" },
   "sleeping": { label: "ישן", description: "עיניים עצומות, ישן" },
-  "hugging": { label: "מחבק", description: "מחבק אחר" },
+  "hugging": { label: "מחבק", description: "מחבק מישהו" },
   "looking-away": { label: "מסתכל הצידה", description: "ראש מופנה, מסתכל הצידה" },
   "looking-up": { label: "מסתכל למעלה", description: "מביט בשמיים" },
   "looking-down": { label: "מסתכל למטה", description: "עיניים מורדות" },
   "head-over-shoulder": { label: "ראש מעל הכתף", description: "מסתכל לאחור מעל הכתף" },
-  "wading-in-water": { label: "צועד במים", description: "צועד בעומק אמצע ירך במים" },
+  "wading-in-water": { label: "צועד במים", description: "צועד במים עד אמצע הירך" },
 
   // Hand Position
   "hands-in-pockets": { label: "ידיים בכיסים", description: "שתי הידיים מוטמנות בכיסים" },
   "hand-on-hip": { label: "יד על המותן", description: "יד אחת על המותן" },
   "hand-position-hands-on-hips": { label: "ידיים על המותניים", description: "שתי הידיים על המותניים" },
-  "hand-on-chin": { label: "יד על הסנטר", description: "יד נשענת על הסנטר" },
+  "hand-on-chin": { label: "יד על הסנטר", description: "יד נשענת מתחת לסנטר" },
   "hand-on-collarbone": { label: "יד על עצם הבריח", description: "יד נשענת על עצם הבריח" },
   "hand-brushing-hair": { label: "יד מסרקת שיער", description: "יד עוברת בשיער" },
   "finger-to-lip": { label: "אצבע על השפה", description: "קצה אצבע נלחץ על השפה התחתונה" },
-  "arms-wrapped-around-self": { label: "ידיים סביב עצמך", description: "חיבוק עצמי, ידיים סביב הגוף" },
+  "arms-wrapped-around-self": { label: "זרועות סביב הגוף", description: "חיבוק עצמי, ידיים סביב הגוף" },
   "hands-clasped": { label: "ידיים שלובות", description: "שתי הידיים שלובות בחזית" },
 
   // Body Lean
   "leaning-back": { label: "נשען לאחור", description: "גוף נשען מעט לאחור" },
   "leaning-forward": { label: "נשען קדימה", description: "גוף נשען לעבר המצלמה" },
-  "body-lean-contrapposto": { label: "Contrapposto", description: "משקל על רגל אחת, מותן דחוף החוצה" },
+  "body-lean-contrapposto": { label: "Contrapposto", description: "משקל על רגל אחת, מותן מוטה החוצה" },
   "arched-back": { label: "גב מקושת", description: "גב מקושת בעדינות, חזה קדימה" },
   "shoulder-rolled-forward": { label: "כתף מגולגלת קדימה", description: "כתף אחת מגולגלת קדימה" },
 
@@ -82,9 +82,9 @@ const map: LocaleCatalogMap = {
   "tilted-up": { label: "מוטה למעלה", description: "ראש מוטה מעט מעלה" },
   "tilted-down": { label: "מוטה למטה", description: "ראש מוטה מעט מטה" },
   "tilted-side": { label: "מוטה הצידה", description: "ראש מוטה לעבר הכתף" },
-  "tilted-back": { label: "מוטה לאחור", description: "ראש מלא לאחור, גרון חשוף" },
+  "tilted-back": { label: "מוטה לאחור", description: "ראש לאחור עד הסוף, גרון חשוף" },
   "chin-up": { label: "סנטר למעלה", description: "סנטר מורם, מסתכל מטה במורד האף" },
-  "chin-tucked": { label: "סנטר למטה", description: "סנטר מקופל לעבר החזה" },
+  "chin-tucked": { label: "סנטר למטה", description: "סנטר אסוף לעבר החזה" },
 
   // Activity
   "activity-smoking": { label: "מעשן", description: "מחזיק ומעשן סיגריה" },

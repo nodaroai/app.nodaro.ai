@@ -27,7 +27,7 @@ The Telegram Channel Feed node reads a public channel's recent posts via its web
 
 ## Pricing
 
-Costs **1 credit** per run.
+Costs **10 credits** per run.
 
 ## Notes & limits
 

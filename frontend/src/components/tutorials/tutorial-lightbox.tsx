@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { X, ZoomIn, ZoomOut, Maximize2 } from "lucide-react"
+import { useT } from "@/lib/i18n"
 import "./tutorial-lightbox.css"
 
 const MIN_ZOOM = 1
@@ -22,6 +23,7 @@ export function TutorialLightbox({
   alt?: string
   onClose: () => void
 }) {
+  const t = useT()
   const [zoom, setZoom] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const drag = useRef<{ x: number; y: number } | null>(null)
@@ -46,7 +48,7 @@ export function TutorialLightbox({
   }, [onClose, zoom, zoomTo])
 
   return (
-    <div className="tl" onClick={onClose} role="dialog" aria-modal="true" aria-label={alt ?? "Image"}>
+    <div className="tl" onClick={onClose} role="dialog" aria-modal="true" aria-label={alt ?? t("common.image")}>
       <img
         className="tl-img"
         src={src}
@@ -78,17 +80,17 @@ export function TutorialLightbox({
       />
 
       <div className="tl-bar" onClick={(e) => e.stopPropagation()}>
-        <button type="button" onClick={() => zoomTo(zoom - STEP)} aria-label="Zoom out" disabled={zoom <= MIN_ZOOM}>
+        <button type="button" onClick={() => zoomTo(zoom - STEP)} aria-label={t("templates.zoomOut")} disabled={zoom <= MIN_ZOOM}>
           <ZoomOut className="tl-icon" />
         </button>
         <span className="tl-level">{Math.round(zoom * 100)}%</span>
-        <button type="button" onClick={() => zoomTo(zoom + STEP)} aria-label="Zoom in" disabled={zoom >= MAX_ZOOM}>
+        <button type="button" onClick={() => zoomTo(zoom + STEP)} aria-label={t("templates.zoomIn")} disabled={zoom >= MAX_ZOOM}>
           <ZoomIn className="tl-icon" />
         </button>
-        <button type="button" onClick={() => zoomTo(MIN_ZOOM)} aria-label="Fit to screen">
+        <button type="button" onClick={() => zoomTo(MIN_ZOOM)} aria-label={t("tut.fitToScreen")}>
           <Maximize2 className="tl-icon" />
         </button>
-        <button type="button" onClick={onClose} aria-label="Close">
+        <button type="button" onClick={onClose} aria-label={t("common.close")}>
           <X className="tl-icon" />
         </button>
       </div>

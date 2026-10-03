@@ -78,7 +78,7 @@ function VoiceDesignNodeComponent({ id, data, selected }: NodeProps) {
               <button
                 key={`${r.jobId}-${i}`}
                 type="button"
-                aria-label={`Result ${i + 1}`}
+                aria-label={t("node.resultN", { n: i + 1 })}
                 className={`w-10 h-10 flex items-center justify-center rounded-lg cursor-pointer transition-all ${
                   i === activeIndex
                     ? "ring-2 ring-[#ff0073] bg-[#ff0073]/20"
@@ -158,7 +158,7 @@ function VoiceDesignNodeComponent({ id, data, selected }: NodeProps) {
             type="button"
             onClick={(e) => { e.stopPropagation(); handleCopyVoiceId() }}
             className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/50 text-[10px] text-muted-foreground hover:bg-muted transition-colors truncate"
-            title={`Voice ID: ${nodeData.generatedVoiceId}`}
+            title={t("node.voiceIdValue", { id: nodeData.generatedVoiceId ?? "" })}
           >
             {copied ? <Check className="w-2.5 h-2.5 shrink-0" /> : <Copy className="w-2.5 h-2.5 shrink-0" />}
             <span className="truncate">{nodeData.generatedVoiceId}</span>

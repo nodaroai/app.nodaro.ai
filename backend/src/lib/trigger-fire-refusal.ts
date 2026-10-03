@@ -35,7 +35,7 @@ export const RUN_REQUIRES_AUTHENTICATED_MEMBER = "run_requires_authenticated_mem
 export async function recordTriggerFireRefusal(args: {
   workflowId: string
   userId: string
-  triggerType: "webhook" | "schedule" | "telegram"
+  triggerType: "webhook" | "schedule" | "telegram" | "telegram_account"
   /** Which trigger died — dedupe stays per (workflow, owner, lane), but the
    *  owner deserves to know which URL/schedule this was. */
   triggerId?: string

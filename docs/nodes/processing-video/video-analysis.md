@@ -29,7 +29,9 @@ scene can later be re-cast onto your own characters, objects, or locations.
 
 ## Inputs & Outputs
 
-**Inputs:** Video (optional handle) — a wired upstream video, or a YouTube URL
+**Inputs:** Video (optional handle) — a wired upstream video, a post's link
+wired from a text output (for example the Telegram Account Trigger's **Video
+link**), a [Social Search](../input/social-search.md)'s posts, or a YouTube URL
 set in config.
 **Outputs:** Analysis JSON (`meta` + `slots` + `scenes[]`) on the `json` output
 handle, and the same analysis as a plain string on the `text` output handle —
@@ -46,16 +48,27 @@ original without you extracting or wiring a single frame.
 
 ### Source precedence
 
-You provide the source one of two ways:
+You provide the source one of three ways:
 
 - **Wired video** — connect any video producer to the node's video input.
+- **Wired link** — connect a text output that carries a post's link to the same
+  video input, for example the Telegram Account Trigger's **Video link** or a
+  Text node. The wire must carry just the link: a lone `http(s)` link is read,
+  any other text on that wire is ignored, and the node then asks for a video
+  or a link. A message that carries a video file (a Telegram bot trigger's
+  video message) is analyzed as the file.
+- **Social Search posts** — connect a Social Search's posts (its JSON output)
+  to the video input: each post is analyzed by its page link. A wire made in
+  the editor starts in **Each** mode, so every post the search passes on gets
+  its own analysis; on any other mode the first post is analyzed.
 - **YouTube URL** — set `youtubeUrl` in the node config.
 
-**Precedence, not exactly-one:** a wired video input **always wins**. A stale
-`youtubeUrl` left in config alongside a wired video never rejects the run and is
-ignored — the wired video is analyzed. YouTube URLs must be `youtube.com` /
-`youtu.be` hosts; **live streams are rejected** (wait for the stream to end and
-the VOD to become available). Any source is capped at **10 minutes (600s)**.
+**Precedence, not exactly-one:** a wired video input **always wins**, then a
+wired link, then the link in config. A stale `youtubeUrl` left in config
+alongside a wired video or a wired link never rejects the run and is ignored.
+Links, typed or wired, must be `youtube.com` / `youtu.be` hosts; **live streams
+are rejected** (wait for the stream to end and the VOD to become available).
+Any source is capped at **10 minutes (600s)**.
 
 ## Configuration
 
@@ -357,7 +370,11 @@ every downstream consumer should render from today.
 
 Video Analysis is **dynamically priced** by duration bucket and quality tier. The
 bucket is the smallest of **60s / 180s / 360s / 600s** that fits the video's
-probed duration; each tier has its own per-bucket price. The table below is
+probed duration, with a **3-second pricing grace**: a video up to 1:03 is priced as
+≤60s, up to 3:03 as ≤180s, up to 6:03 as ≤360s
+(`VIDEO_ANALYSIS_BUCKET_GRACE_SEC`). A part of a longer YouTube video cut at
+1:00 in the Video URL node downloads at about 1:03, because the cut lands on
+keyframes, and is priced as a minute. Each tier has its own per-bucket price. The table below is
 published as `VIDEO_ANALYSIS_BUCKET_CREDITS` in
 `packages/shared/src/video-analysis-pricing.ts` (the credit prices users are
 charged) — generated and drift-guarded internally, never hand-written.
@@ -412,13 +429,11 @@ the result's `warnings`.
 > real terms did not rise. It is not exactly 10× because the formula rounds up
 > to a whole credit: with finer credits there is less to round away, so each
 > bucket was re-derived from the formula rather than multiplied. That rounding
-> is why the ≤60s `fast` bucket is 23 rather than 30.
+> is why the ≤60s `fast` bucket came out at 23 rather than 30 at the time (the
+> later reprices above replaced those figures).
 
-> **Repriced 2026-07-28.** Video Analysis now runs on the model provider's own
-> API rather than through a reseller, which is what lets it send real media to
-> the model instead of a link. Those calls cost roughly 3.3–3.5× more per token,
-> and the prices above are the same formula re-run against them — the margin on
-> this node is unchanged.
+> **Repriced 2026-07-28.** Video Analysis now sends the video itself to the
+> model instead of a link to it, and the prices were recalculated for that.
 
 Longer videos cost more because they are analyzed in more overlapping windows (a
 video over 180s is split into ~150-second windows), and higher tiers cost more
@@ -432,23 +447,35 @@ several economy-tier donor rolls — and always refines the merged result. That
 repetition is the main reason a tier costs what it does, and it is why the
 mixed and smart tiers sit well above a single-model tier.
 
-**±3-second duration tolerance.** Credits are reserved up front from the bucket
-that fits the probed (metadata) duration. After download, the worker re-probes
-the true duration and re-checks the bucket with a **±3-second grace**
-(`VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC`) — `ffprobe` floats routinely run a
-fraction of a second over a nominal length, and zero tolerance would wrongly
-bump a genuine 1:00 / 3:00 / 6:00 / 10:00 video into the next (pricier) bucket.
+**Duration tolerance.** Credits are reserved up front from the bucket that fits
+the probed (metadata) duration, grace included. After download, the worker
+re-probes the true duration and re-checks it against the reserved bucket with a
+**6-second allowance** (`VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC`). That is the
+3-second pricing grace plus 3 seconds for `ffprobe` floats, which routinely run a
+fraction of a second over a nominal length. So a video the grace priced into a
+bucket is never refused at its true length.
 
 **Missing-duration fallback.** If the duration can't be determined at submit
 time, the ceiling bucket (≤600s) price is reserved. In practice the route probes
 duration first and rejects un-probeable sources, so this fallback is only a
 safety net.
 
+**Links in a workflow run.** A link the node reads in a workflow run — typed in
+the field, or wired from another node such as a trigger's Video link — is probed
+the same way before anything is reserved, so the run is priced by the video's
+own bucket. A live stream or a video over 10 minutes is refused at that point
+and nothing is charged. When the probe cannot read the length (the page does
+not state it, or the platform did not answer), the length the editor read for
+the same link is used if there is one, else the ceiling fallback above; a
+video that then cannot be fetched fails the node and its credits are
+refunded.
+
 ## Limits
 
-- **Maximum duration:** 600 seconds (10 minutes) for any source. Enforced
-  strictly at submit time, then re-checked worker-side after download (±3s
-  grace, as above).
+- **Maximum duration:** 600 seconds (10 minutes) for any source. Enforced at
+  submit time, then re-checked worker-side after download (with the allowance
+  above). A longer YouTube video wired from a Video URL node asks for a part
+  of up to 10 minutes before the run; a part of up to a minute costs the least.
 - **YouTube hosts only:** `youtube.com` / `youtu.be`. Other URL hosts are
   rejected.
 - **No live streams:** a YouTube live stream is rejected up front — analyze the

@@ -44,15 +44,22 @@ export default function ProjectsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { createWorkflow, isCreating } = useCreateWorkflow()
 
+  const displayName = user?.user_metadata?.full_name?.split(" ")[0]
+    ?? user?.email?.split("@")[0]
+    ?? ""
+  // One whole sentence per variant: where the name sits, and what punctuation
+  // or honorific surrounds it, depends on the language.
   const greeting = (() => {
     const hour = new Date().getHours()
+    if (displayName) {
+      if (hour < 12) return t("dash.goodMorningName", { name: displayName })
+      if (hour < 18) return t("dash.goodAfternoonName", { name: displayName })
+      return t("dash.goodEveningName", { name: displayName })
+    }
     if (hour < 12) return t("dash.goodMorning")
     if (hour < 18) return t("dash.goodAfternoon")
     return t("dash.goodEvening")
   })()
-  const displayName = user?.user_metadata?.full_name?.split(" ")[0]
-    ?? user?.email?.split("@")[0]
-    ?? ""
 
   // The admin "All users" switch lives here, not in the Continue tab: the user
   // list it needs comes from an ee/ hook, and this page is the allowlisted place
@@ -120,7 +127,7 @@ export default function ProjectsPage() {
       </div>
 
       <HomeHeader
-        greeting={`${greeting}${displayName ? `, ${displayName}` : ""}`}
+        greeting={greeting}
         activeTab={activeTab}
         exploreVisible={exploreVisible}
         onSelectTab={selectTab}

@@ -1,7 +1,7 @@
 ---
 node_type: social-media-format
-generated_at: 2026-09-21T19:12:09.757Z
-generated_from: 09788c987
+generated_at: 2026-09-27T12:51:24.082Z
+generated_from: c607aa02c
 ---
 
 # Social Media Format
@@ -9,7 +9,7 @@ generated_from: 09788c987
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `social-media-format`
 **Category:** processing
-**Credit cost:** `20` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `media`, `text`
 **Outputs (source handles):** `media`, `text`
 

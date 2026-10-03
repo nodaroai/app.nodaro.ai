@@ -12,6 +12,7 @@ import {
   rectSortingStrategy,
 } from "@dnd-kit/sortable"
 import { Button } from "@/components/ui/button"
+import { useT } from "@/lib/i18n"
 import type { WorkflowNode } from "@/types/nodes"
 import { getItemSortId } from "@nodaro/shared"
 import type { PresentationItem } from "@nodaro/shared"
@@ -61,6 +62,7 @@ export function NodeSection({
   onAddGroup,
   showDisplayConfig = true,
 }: NodeSectionProps) {
+  const t = useT()
   // Items-based rendering when items + renderItem are provided
   const useItems = items && items.length > 0 && renderItem
 
@@ -103,7 +105,7 @@ export function NodeSection({
                 className="h-7 text-xs border-border text-muted-foreground hover:text-foreground hover:bg-muted"
                 onClick={onAddGroup}
               >
-                <FolderPlus className="h-3 w-3 mr-1" />Group
+                <FolderPlus className="h-3 w-3 me-1" />{t("present.groupButton")}
               </Button>
             )}
             <Button
@@ -112,14 +114,14 @@ export function NodeSection({
               className="h-7 text-xs border-border text-muted-foreground hover:text-foreground hover:bg-muted"
               onClick={onAdd}
             >
-              <Plus className="h-3 w-3 mr-1" />Add
+              <Plus className="h-3 w-3 me-1" />{t("common.add")}
             </Button>
           </div>
         )}
       </div>
       {isEmpty ? (
         <div className="text-xs text-muted-foreground p-6 border border-dashed border-border rounded-xl text-center">
-          {isEditing ? `Click "Add" to select ${label.toLowerCase()} nodes` : `No ${label.toLowerCase()} configured`}
+          {isEditing ? t("present.clickAddToSelect", { label: label.toLowerCase() }) : t("present.noneConfigured", { label: label.toLowerCase() })}
         </div>
       ) : useItems ? (
         /* Items-based rendering (groups, fields, richtext, nodes) */

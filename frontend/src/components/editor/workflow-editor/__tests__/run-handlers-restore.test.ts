@@ -25,6 +25,8 @@ vi.mock("sonner", () => ({
     error: (...args: unknown[]) => mockToastError(...args),
     success: (...args: unknown[]) => mockToastSuccess(...args),
     info: (...args: unknown[]) => mockToastInfo(...args),
+    // The server-run stream warns once when it loses the connection.
+    warning: vi.fn(),
   },
 }))
 
@@ -118,6 +120,8 @@ vi.mock("../list-execution", () => ({
 // ---------------------------------------------------------------------------
 
 import { restorePollingForRunningJobs } from "../run-handlers"
+import { videoOverlayCompositionKey, videoOverlaySlotSources } from "@nodaro/shared"
+import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
 import type { ExecutionContext } from "../types"
 
 // ---------------------------------------------------------------------------
@@ -473,9 +477,9 @@ describe("restorePollingForRunningJobs", () => {
   })
 
   // 10. Poll failure counter - after 5 consecutive failures, stops and marks error
-  it("marks node as failed after 5 consecutive poll failures", async () => {
+  it("marks node as failed, with a message, after 5 answers that the job is gone", async () => {
     mockNodes = [makeNode("n1")]
-    mockGetJobStatus.mockRejectedValue(new Error("Network error"))
+    mockGetJobStatus.mockRejectedValue(Object.assign(new Error("Job not found"), { status: 404 }))
 
     const ctx = makeCtx()
     const setIsRunning = vi.fn()
@@ -491,12 +495,41 @@ describe("restorePollingForRunningJobs", () => {
       await vi.advanceTimersByTimeAsync(3000)
     }
 
-    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", {
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({
       executionStatus: "failed",
+      errorMessage: expect.stringMatching(/can't be found/),
       currentJobId: undefined,
       currentJobProgress: undefined,
-    })
+    }))
     expect(ctx.untrackInterval).toHaveBeenCalled()
+  })
+
+  it("a lost connection never fails the node: the poll keeps going and lands the result", async () => {
+    mockNodes = [makeNode("n1", "generate-image", { generatedResults: [] })]
+    let callCount = 0
+    mockGetJobStatus.mockImplementation(async () => {
+      callCount++
+      if (callCount <= 12) throw new TypeError("Failed to fetch")
+      return { status: "completed", output_data: { imageUrl: "https://cdn.example.com/late.png" } }
+    })
+
+    const ctx = makeCtx()
+    restorePollingForRunningJobs(
+      [{ nodeId: "n1", jobId: "j1", nodeType: "generate-image" }],
+      ctx,
+      vi.fn(),
+    )
+
+    for (let i = 0; i < 12; i++) await vi.advanceTimersByTimeAsync(3000)
+    const failedPatches = mockUpdateNodeData.mock.calls.filter(([, patch]) => patch.executionStatus === "failed")
+    expect(failedPatches).toEqual([])
+    expect(ctx.untrackInterval).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({
+      executionStatus: "completed",
+      generatedImageUrl: "https://cdn.example.com/late.png",
+    }))
   })
 
   // 11. Poll failures reset on successful poll
@@ -903,6 +936,54 @@ describe("restorePollingForRunningJobs", () => {
   // onto generatedJson — NOT a blank-url media result. Without the type branch
   // the generic path completed the node empty (reported 2026-08-03: analysis
   // billed + completed while the poll was dead, node showed nothing).
+  // Video Overlay: a job restored after a reload lands its warnings / canvas /
+  // length on the node and the result, the same mapping every live lane writes.
+  it("puts a restored video-overlay's warnings, canvas and length on the node and the result", async () => {
+    const skipped = { layer: 1, slot: 2, code: "skipped", detail: "starts at 9 s, after the video ends (5.00 s)" }
+    mockNodes = [makeNode("n1", "video-overlay")]
+    mockGetJobStatus.mockResolvedValue({
+      status: "completed",
+      output_data: { videoUrl: "https://cdn/o.mp4", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 },
+    })
+    restorePollingForRunningJobs([{ nodeId: "n1", jobId: "j1", nodeType: "video-overlay" }], makeCtx(), vi.fn())
+    await vi.advanceTimersByTimeAsync(3000)
+    const completion = mockUpdateNodeData.mock.calls.find(
+      (call: unknown[]) => call[0] === "n1" && (call[1] as Record<string, unknown>).executionStatus === "completed",
+    )![1] as Record<string, unknown>
+    expect(completion).toMatchObject({ generatedVideoUrl: "https://cdn/o.mp4", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 })
+    expect((completion.generatedResults as Array<Record<string, unknown>>)[0]).toMatchObject({ jobId: "j1", warnings: [skipped] })
+  })
+
+  // Reload during a canvas single-node Run: the REST job's output_data carries
+  // the key the canvas sent with the request (the route stores it, the worker
+  // echoes it), so the restored result reads fresh under the node's settings.
+  it("reload during a single-node Run: the restored result carries the key the canvas sent and reads fresh", async () => {
+    const layers = [{ start: 1, end: 3, preset: "card" as const }]
+    const canvasKey = videoOverlayCompositionKey({ baseUrl: "https://x/base.mp4", sources: videoOverlaySlotSources(layers, ["https://x/a.png"]), data: { layers } })
+    mockNodes = [makeNode("n1", "video-overlay")]
+    mockGetJobStatus.mockResolvedValue({ status: "completed", output_data: { videoUrl: "https://cdn/r.mp4", resultCompositionKey: canvasKey } })
+    restorePollingForRunningJobs([{ nodeId: "n1", jobId: "j1", nodeType: "video-overlay" }], makeCtx(), vi.fn())
+    await vi.advanceTimersByTimeAsync(3000)
+    const completion = mockUpdateNodeData.mock.calls.find(
+      (call: unknown[]) => call[0] === "n1" && (call[1] as Record<string, unknown>).executionStatus === "completed",
+    )![1] as Record<string, unknown>
+    const [restored] = completion.generatedResults as Array<Record<string, unknown>>
+    expect(videoOverlayResultFresh(canvasKey, restored)).toBe(true)
+    expect(videoOverlayResultFresh(canvasKey, completion)).toBe(true)
+  })
+
+  it("a restored backend-run completion stamps the freshness key on the node and the result", async () => {
+    mockNodes = [makeNode("n1", "video-overlay")]
+    mockGetJobStatus.mockResolvedValue({ status: "completed", output_data: { videoUrl: "https://cdn/k.mp4", resultCompositionKey: "K1" } })
+    restorePollingForRunningJobs([{ nodeId: "n1", jobId: "j1", nodeType: "video-overlay" }], makeCtx(), vi.fn())
+    await vi.advanceTimersByTimeAsync(3000)
+    const completion = mockUpdateNodeData.mock.calls.find(
+      (call: unknown[]) => call[0] === "n1" && (call[1] as Record<string, unknown>).executionStatus === "completed",
+    )![1] as Record<string, unknown>
+    expect(completion.resultCompositionKey).toBe("K1")
+    expect((completion.generatedResults as Array<Record<string, unknown>>)[0]).toMatchObject({ jobId: "j1", resultCompositionKey: "K1" })
+  })
+
   it("writes generatedJson for a restored video-analysis completion", async () => {
     const analysis = {
       meta: { durationSec: 72 },

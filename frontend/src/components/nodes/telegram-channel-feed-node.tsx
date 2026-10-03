@@ -1,6 +1,7 @@
 "use client"
 
 import { memo } from "react"
+import { useT } from "@/lib/i18n"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Rss } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -15,6 +16,7 @@ import type { TelegramChannelFeedData } from "@/types/nodes"
 const ICON = <Rss className="h-4 w-4" />
 
 function TelegramChannelFeedNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as TelegramChannelFeedData
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
@@ -50,7 +52,7 @@ function TelegramChannelFeedNodeComponent({ id, data, selected }: NodeProps) {
             <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-wrap">{nodeData.generatedText}</p>
           ) : (
             <p className="text-sm text-muted-foreground line-clamp-2">
-              {nodeData.channel ? `Reads @${nodeData.channel.replace(/^@/, "")}` : "Set a public channel..."}
+              {nodeData.channel ? t("node.readsChannel", { channel: nodeData.channel.replace(/^@/, "") }) : t("node.setPublicChannelPlaceholder")}
             </p>
           )}
         </div>

@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Sparkles, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { useT } from "@/lib/i18n"
 
 interface AiHelperButtonProps {
   readonly onSuggest: () => Promise<string>
@@ -12,9 +13,11 @@ interface AiHelperButtonProps {
 export function AiHelperButton({
   onSuggest,
   onReplace,
-  title = "Suggest with AI",
+  title: titleProp,
   disabled,
 }: AiHelperButtonProps) {
+  const t = useT()
+  const title = titleProp ?? t("misc.suggestWithAi")
   const [busy, setBusy] = useState(false)
 
   const click = async () => {
@@ -24,7 +27,7 @@ export function AiHelperButton({
       const text = await onSuggest()
       if (text.trim().length > 0) onReplace(text.trim())
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't generate suggestion.")
+      toast.error(err instanceof Error ? err.message : t("misc.suggestionFailed"))
     } finally {
       setBusy(false)
     }

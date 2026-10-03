@@ -72,7 +72,7 @@ function SunoExtendNodeComponent({ id, data, selected }: NodeProps) {
               <button
                 key={`${r.jobId}-${i}`}
                 type="button"
-                aria-label={`Result ${i + 1}`}
+                aria-label={t("node.resultN", { n: i + 1 })}
                 className={`w-10 h-10 flex items-center justify-center rounded-lg cursor-pointer transition-all ${
                   i === activeIndex
                     ? "ring-2 ring-[#ff0073] bg-[#ff0073]/20"
@@ -149,7 +149,7 @@ function SunoExtendNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="flex justify-between text-muted-foreground">
-          <span className="text-xs">Extend · {nodeData.model ?? DEFAULT_SUNO_MODEL}</span>
+          <span className="text-xs">{t("node.extend")} · {nodeData.model ?? DEFAULT_SUNO_MODEL}</span>
           {nodeData.title && <span className="text-xs truncate max-w-[120px]">{nodeData.title}</span>}
         </div>
       </div>

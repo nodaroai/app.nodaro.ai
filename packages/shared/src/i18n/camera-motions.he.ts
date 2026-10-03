@@ -1,26 +1,26 @@
 import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
-  "auto": { label: "אוטומטי", description: "תן למודל לבחור תנועת מצלמה מתאימה" },
+  "auto": { label: "אוטומטי", description: "המודל בוחר תנועת מצלמה מתאימה" },
   "static": { label: "סטטי", description: "מצלמה קבועה, ללא תנועה" },
   "handheld": { label: "מצלמת יד", description: "רעידת יד טבעית" },
   "steadicam": { label: "Steadicam", description: "צילום הליכה חלק ומיוצב" },
 
-  "pan-left": { label: "Pan שמאלה", description: "סובב מצלמה אופקית שמאלה" },
-  "pan-right": { label: "Pan ימינה", description: "סובב מצלמה אופקית ימינה" },
+  "pan-left": { label: "Pan שמאלה", description: "סיבוב המצלמה אופקית שמאלה" },
+  "pan-right": { label: "Pan ימינה", description: "סיבוב המצלמה אופקית ימינה" },
   "whip-pan-left": { label: "Whip Pan שמאלה", description: "Whip Pan מהיר שמאלה עם טשטוש תנועה" },
   "whip-pan-right": { label: "Whip Pan ימינה", description: "Whip Pan מהיר ימינה עם טשטוש תנועה" },
 
-  "tilt-up": { label: "Tilt למעלה", description: "הטה מצלמה כלפי מעלה" },
-  "tilt-down": { label: "Tilt למטה", description: "הטה מצלמה כלפי מטה" },
+  "tilt-up": { label: "Tilt למעלה", description: "הטיית המצלמה כלפי מעלה" },
+  "tilt-down": { label: "Tilt למטה", description: "הטיית המצלמה כלפי מטה" },
 
   "zoom-in": { label: "Zoom In", description: "Zoom של עדשה לכיוון הסובייקט" },
   "zoom-out": { label: "Zoom Out", description: "Zoom של עדשה הרחק מהסובייקט" },
   "crash-zoom-in": { label: "Crash Zoom In", description: "Zoom in מהיר בסגנון whip" },
   "crash-zoom-out": { label: "Crash Zoom Out", description: "Zoom out מהיר בסגנון whip" },
 
-  "dolly-in": { label: "Dolly In", description: "דחף מצלמה לעבר הסובייקט (פרלקסה)" },
-  "dolly-out": { label: "Dolly Out", description: "משוך מצלמה הרחק (פרלקסה)" },
+  "dolly-in": { label: "Dolly In", description: "דחיפת המצלמה לעבר הסובייקט (פרלקסה)" },
+  "dolly-out": { label: "Dolly Out", description: "משיכת המצלמה לאחור (פרלקסה)" },
   "dolly-zoom": { label: "Dolly Zoom", description: "אפקט ורטיגו: dolly מנוגד ל-zoom" },
   "push-in": { label: "Push In", description: "דחיפה מהירה ונמרצת לעבר הסובייקט" },
   "pull-out": { label: "Pull Out", description: "משיכה מהירה ונמרצת מהסובייקט" },
@@ -29,14 +29,14 @@ const map: LocaleCatalogMap = {
   "creep-in": { label: "Creep-In", description: "Push-in איטי באופן בלתי מורגש, בונה אימה או מתח" },
   "creep-out": { label: "Creep-Out", description: "Pull-out איטי באופן בלתי מורגש, מבודד את הסובייקט במרחב" },
 
-  "truck-left": { label: "Truck שמאלה", description: "החלק את גוף המצלמה לרוחב שמאלה" },
-  "truck-right": { label: "Truck ימינה", description: "החלק את גוף המצלמה לרוחב ימינה" },
+  "truck-left": { label: "Truck שמאלה", description: "החלקת גוף המצלמה לרוחב שמאלה" },
+  "truck-right": { label: "Truck ימינה", description: "החלקת גוף המצלמה לרוחב ימינה" },
 
-  "pedestal-up": { label: "Pedestal למעלה", description: "הרם את גוף המצלמה אנכית" },
-  "pedestal-down": { label: "Pedestal למטה", description: "הורד את גוף המצלמה אנכית" },
+  "pedestal-up": { label: "Pedestal למעלה", description: "הרמת גוף המצלמה אנכית" },
+  "pedestal-down": { label: "Pedestal למטה", description: "הורדת גוף המצלמה אנכית" },
 
-  "roll-left": { label: "Roll שמאלה", description: "סובב מצלמה נגד כיוון השעון" },
-  "roll-right": { label: "Roll ימינה", description: "סובב מצלמה עם כיוון השעון" },
+  "roll-left": { label: "Roll שמאלה", description: "סיבוב המצלמה נגד כיוון השעון" },
+  "roll-right": { label: "Roll ימינה", description: "סיבוב המצלמה עם כיוון השעון" },
   "dutch-angle": { label: "Dutch Angle", description: "פריים מוטה סטטי ליצירת מתח" },
 
   "orbit-left": { label: "Orbit שמאלה", description: "הקפה חלקית רחבה סביב הסובייקט שמאלה" },
@@ -52,8 +52,8 @@ const map: LocaleCatalogMap = {
   "boom-down": { label: "Boom למטה", description: "ירידת זרוע boom" },
 
   "tracking-shot": { label: "Tracking Shot", description: "מצלמה עוקבת אחרי סובייקט נע לצדו" },
-  "follow": { label: "מעקב", description: "עקוב אחר סובייקט מאחור" },
-  "lead": { label: "הובלה", description: "נוע לפני סובייקט מתקדם" },
+  "follow": { label: "מעקב", description: "מעקב אחר הסובייקט מאחור" },
+  "lead": { label: "הובלה", description: "תנועה לפני סובייקט מתקדם" },
   "drone-follow": { label: "מעקב רחפן", description: "מעקב רחפן מורם אחרי הסובייקט" },
   "dolly-track": { label: "Dolly Track", description: "Dolly על מסילה מקבילה לצד הסובייקט" },
   "gimbal-walk": { label: "הליכה עם Gimbal", description: "צילום הליכה חלק על gimbal תלת-צירי, תנועה קדימה יציבה ומרחפת" },
@@ -61,18 +61,18 @@ const map: LocaleCatalogMap = {
   "serpentine": { label: "מסלול נחשי", description: "המצלמה מתפתלת בין מכשולים בעקומות S, מסלול קדימה מתעקל" },
 
   "pov": { label: "POV", description: "נקודת מבט גוף ראשון" },
-  "over-the-shoulder": { label: "מעל הכתף", description: "מסגר מעבר לכתף של דמות" },
-  "birds-eye": { label: "מבט ציפור", description: "מבט עליון ישיר מלמעלה" },
+  "over-the-shoulder": { label: "מעבר לכתף", description: "צילום מעבר לכתף של דמות" },
+  "birds-eye": { label: "מעוף הציפור", description: "מבט עליון ישיר מלמעלה" },
   "worms-eye": { label: "מבט תולעת", description: "זווית נמוכה קיצונית הצופה למעלה" },
   "aerial": { label: "אווירי", description: "צילום מסגנון רחפן בגובה רב" },
   "helicopter": { label: "מסוק", description: "צילום אווירי רחב סוחף בגובה רב" },
   "fly-over": { label: "מעבר טיסה", description: "מעבר אווירי נמוך ומהיר מעל הסצנה" },
   "flythrough": { label: "מעוף-דרך", description: "מצלמה טסה דרך החלל" },
-  "reveal": { label: "חשיפה", description: "חשוף בהדרגה סצנה רחבה יותר" },
+  "reveal": { label: "חשיפה", description: "חשיפה הדרגתית של סצנה רחבה יותר" },
   "snorricam": { label: "Snorricam", description: "מצלמה מורכבת על הגוף (סובייקט נעול לפריים)" },
-  "rack-focus": { label: "Rack Focus", description: "משוך פוקוס בין קדמה לרקע" },
+  "rack-focus": { label: "Rack Focus", description: "משיכת פוקוס בין החזית לרקע" },
 
-  "handheld-vlog": { label: "Vlog יד", description: "מצלמת יד קז'ואל בסגנון vlog" },
+  "handheld-vlog": { label: "Vlog במצלמת יד", description: "מצלמת יד קז'ואל בסגנון vlog" },
   "pov-walk": { label: "POV הליכה", description: "POV הליכה בגוף ראשון" },
   "velocity-edit": { label: "Velocity Edit", description: "קצב Speed-ramp של TikTok" },
   "match-cut-zoom": { label: "Match Cut Zoom", description: "Zoom מהיר עם חיתוך חד לצורה תואמת" },

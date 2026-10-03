@@ -2,7 +2,7 @@ import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
   // -------------------- Hip Hop / R&B --------------------
-  "hip-hop": { label: "היפ הופ", description: "מסירה קצבית מדוברת, ביטים מודגמים או מתוכנתים" },
+  "hip-hop": { label: "היפ הופ", description: "הגשה קצבית מדוברת, ביטים מדוגמים או מתוכנתים" },
   "trap": { label: "טראפ", description: "טראפ" },
   "boom-bap": { label: "בום באפ", description: "היפ הופ בום באפ" },
   "lo-fi-hip-hop": { label: "לו-פיי היפ הופ", description: "היפ הופ לו-פיי" },
@@ -24,7 +24,7 @@ const map: LocaleCatalogMap = {
   "moombahton": { label: "מומבטון", description: "מומבטון" },
   "glitch-hop": { label: "גליץ' הופ", description: "גליץ' הופ" },
 
-  "rnb": { description: "וקאלים חלקים, השפעות סול" },
+  "rnb": { description: "ווקאלים חלקים, השפעות סול" },
   "neo-soul": { label: "ניאו-סול", description: "ניאו-סול" },
   "contemporary-rnb": { label: "R&B עכשווי", description: "R&B עכשווי" },
   "alt-rnb": { label: "R&B אלטרנטיבי", description: "R&B אלטרנטיבי" },
@@ -33,7 +33,7 @@ const map: LocaleCatalogMap = {
   "new-jack-swing": { label: "ניו ג'ק סווינג", description: "ניו ג'ק סווינג" },
   "future-soul": { label: "סול עתידי", description: "סול עתידי" },
 
-  "soul": { label: "סול", description: "וקאלים רגשיים, שורשי גוספל, R&B וינטג'" },
+  "soul": { label: "סול", description: "ווקאלים רגשיים, שורשי גוספל, R&B וינטג'" },
   "motown": { label: "מוטאון", description: "סול מוטאון" },
   "northern-soul": { label: "סול צפוני", description: "סול צפוני" },
   "southern-soul": { label: "סול דרומי", description: "סול דרומי" },
@@ -45,7 +45,7 @@ const map: LocaleCatalogMap = {
   "electro-funk": { label: "אלקטרו פאנק", description: "אלקטרו-פאנק" },
   "jazz-funk": { label: "ג'אז-פאנק", description: "ג'אז-פאנק" },
 
-  "lofi": { label: "לו-פיי", description: "רעש סרט חמים, ביטים מתונים, נוסטלגי" },
+  "lofi": { label: "לו-פיי", description: "רחש טייפ חמים, ביטים מתונים, נוסטלגי" },
   "lofi-beats": { label: "ביטים", description: "ביטי לו-פיי" },
   "lofi-jazz": { label: "ג'אז", description: "ג'אז לו-פיי" },
   "chillhop": { label: "צ'ילהופ", description: "צ'ילהופ" },
@@ -78,7 +78,7 @@ const map: LocaleCatalogMap = {
   "footwork": { label: "פוטוורק", description: "פוטוורק" },
   "indie-electronic": { label: "אלקטרוני אינדי", description: "אלקטרוני אינדי" },
 
-  "industrial": { label: "אינדסטריאל", description: "אלקטרוני קשוח, מרקמים מכניים, חורק" },
+  "industrial": { label: "אינדסטריאל", description: "אלקטרוני קשוח, מרקמים מכניים, צורם" },
   "ebm": { label: "EBM", description: "מוזיקת גוף אלקטרונית" },
   "industrial-metal": { label: "מטאל אינדסטריאל", description: "מטאל אינדסטריאל" },
   "noise": { label: "נויז", description: "נויז אינדסטריאל" },
@@ -101,7 +101,7 @@ const map: LocaleCatalogMap = {
   "downtempo": { label: "דאון-טמפו", description: "דאון-טמפו" },
   "trip-hop": { label: "טריפ הופ", description: "טריפ הופ" },
 
-  "disco": { label: "דיסקו", description: "ארבע תחתית, כלי מיתר עשירים, עידן רחבת הריקודים" },
+  "disco": { label: "דיסקו", description: "קצב ארבע על הרצפה (four-on-the-floor), כלי מיתר עשירים, עידן רחבת הריקודים" },
   "italo-disco": { label: "איטלו דיסקו", description: "איטלו דיסקו" },
   "nu-disco": { label: "נו-דיסקו", description: "נו-דיסקו" },
   "euro-disco": { label: "יורו דיסקו", description: "יורו דיסקו" },
@@ -150,7 +150,7 @@ const map: LocaleCatalogMap = {
   "skate-punk": { label: "סקייט פאנק", description: "סקייט פאנק" },
   "anarcho-punk": { label: "אנרכו", description: "אנרכו-פאנק" },
 
-  "metal": { label: "מטאל", description: "דיסטורשן כבד, וקאלים אגרסיביים" },
+  "metal": { label: "מטאל", description: "דיסטורשן כבד, ווקאלים אגרסיביים" },
   "heavy-metal": { description: "הבי מטאל" },
   "death-metal": { description: "דת' מטאל" },
   "black-metal": { description: "בלאק מטאל" },
@@ -178,7 +178,7 @@ const map: LocaleCatalogMap = {
   "nu-jazz": { label: "נו-ג'אז", description: "נו-ג'אז" },
   "acid-jazz": { label: "אסיד ג'אז", description: "אסיד ג'אז" },
 
-  "blues": { label: "בלוז", description: "תבנית 12 תיבות, וקאלים אקספרסיביים, בנדים" },
+  "blues": { label: "בלוז", description: "תבנית 12 תיבות, ווקאלים אקספרסיביים, בנדים" },
   "delta-blues": { label: "בלוז דלתא", description: "בלוז דלתא" },
   "chicago-blues": { label: "בלוז שיקגו", description: "בלוז שיקגו" },
   "electric-blues": { label: "בלוז חשמלי", description: "בלוז חשמלי" },
@@ -215,7 +215,7 @@ const map: LocaleCatalogMap = {
   "ska": { label: "סקא", description: "סקא" },
   "rocksteady": { label: "רוקסטדי", description: "רוקסטדי" },
 
-  "latin": { label: "לטינית", description: "מסורות מוזיקליות אמריקה הלטינית" },
+  "latin": { label: "לטינית", description: "מסורות מוזיקליות של אמריקה הלטינית" },
   "salsa": { label: "סלסה", description: "סלסה" },
   "bossa-nova": { label: "בוסה נובה", description: "בוסה נובה" },
   "reggaeton": { label: "רגטון", description: "רגטון" },

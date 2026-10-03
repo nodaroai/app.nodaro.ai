@@ -116,7 +116,7 @@ function CinematicAvatarNodeComponent({ id, data, selected }: NodeProps) {
                   {r.thumbnailUrl ? (
                     <CachedImage
                       src={r.thumbnailUrl}
-                      alt={`Result ${i + 1}`}
+                      alt={t("node.resultN", { n: i + 1 })}
                       className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
                         i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                       }`}
@@ -246,7 +246,7 @@ function CinematicAvatarNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex flex-col items-center justify-center gap-2 py-4 text-muted-foreground/60">
                 <Clapperboard className="w-8 h-8" />
                 <span className="text-[10px] text-center">
-                  Describe the scene + pick 1–3 avatar looks
+                  {t("node.describeSceneAndPickLooks")}
                 </span>
               </div>
             )}

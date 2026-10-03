@@ -53,6 +53,15 @@ Organization-only keys: `allowed_email_domains` (lower-case domains, e.g.
 vocabulary, e.g. `{ "workspace": "Cohort" }`). Both are replaced wholesale
 when updated, never merged.
 
+The interface shows the workspace word inside sentences. In languages with
+grammatical gender, such as Hebrew and Portuguese, the rest of the sentence
+agrees with the word. When you set your own `workspace` word, also set
+`workspace_gender` to `"m"` or `"f"` in the same `vocabulary_overrides`
+object, for example `{ "workspace": "Grupo", "workspace_gender": "m" }`.
+Without it, the interface treats your word as feminine, the gender of the
+default words ("Class" and "Team" in those languages). Because the object is
+replaced wholesale, an update that omits `workspace_gender` removes it.
+
 Defaults by kind — **school**: admins edit, workflows private, members view
 shared work, members cannot create projects, caps on, personal space on,
 workspace admins can invite, collaborators cannot. **team**: admins view,

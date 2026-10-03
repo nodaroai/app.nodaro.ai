@@ -3,7 +3,7 @@
  * Order matches the visual BOTTOM-to-TOP layout on the node's left edge,
  * grouped into 4 clusters: text / image / audio / pickers.
  */
-import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, SETTINGS_INPUT_HANDLE, settingsInputAccepts } from "@nodaro/shared"
 import {
   TEXT_PRODUCER_TYPES,
   IMAGE_PRODUCER_TYPES,
@@ -21,6 +21,8 @@ export const GENERATE_VIDEO_INPUT_HANDLES = [
   "audio", "audioReferences",
   // Pickers cluster
   "assets", "elements", "look",
+  // Generation Settings (Aspect Ratio / Duration / Provider), one input for all
+  SETTINGS_INPUT_HANDLE,
 ] as const
 
 export type GenerateVideoInputHandle = typeof GENERATE_VIDEO_INPUT_HANDLES[number]
@@ -57,6 +59,8 @@ export function isValidGenerateVideoConnection(
       return IDENTITY_TYPES.has(sourceType)
     case "look":
       return LOOK_PICKER_SET.has(sourceType)
+    case SETTINGS_INPUT_HANDLE:
+      return settingsInputAccepts("generate-video", sourceType)
     case "elements":
       return ELEMENTS_PICKER_SET.has(sourceType) || (isPickerType(sourceType) && !LOOK_PICKER_SET.has(sourceType))
     default:

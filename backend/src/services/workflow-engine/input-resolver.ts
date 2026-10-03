@@ -10,12 +10,14 @@ import type {
   NodeExecutionState,
   ResolvedInputs,
 } from "./types.js"
-import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, ANALYSIS_PRODUCER_TYPES } from "./output-extractor.js"
+import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, savedOutputFor, ANALYSIS_PRODUCER_TYPES, type ExtractContext } from "./output-extractor.js"
 import {
-  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
+  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostLink } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
+import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap } from "./payload-builder.js"
+import { jsonArrayItems, listFor, savedDataAllowed } from "./saved-data.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
 
 /**
@@ -26,21 +28,22 @@ import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
  * `context` (allNodes + edges) is required when the source is a group or
  * collect node — they compute their output dynamically from children /
  * upstream edges, not from static `data`. When omitted, group/collect emit
- * nothing.
+ * nothing. Their members are read through `nodeStates` — the same states
+ * this call reads — never through a context's own.
  */
 export function getNodeOutput(
   node: SimpleNode,
   sourceHandle: string | null | undefined,
   nodeStates: Record<string, NodeExecutionState>,
   triggerData?: Record<string, unknown>,
-  context?: { nodes: SimpleNode[]; edges: SimpleEdge[] },
+  context?: Pick<ExtractContext, "nodes" | "edges">,
 ): string | undefined {
   const state = nodeStates[node.id]
   if (state?.output) {
     return getPrimaryOutput(state.output, node.type, sourceHandle)
   }
   if (isSourceNode(node.type) || node.type === "group" || node.type === "collect") {
-    const srcOutput = extractSourceNodeOutput(node, triggerData, sourceHandle, context)
+    const srcOutput = extractSourceNodeOutput(node, triggerData, sourceHandle, context && { nodes: context.nodes, edges: context.edges, nodeStates })
     if (srcOutput) return getPrimaryOutput(srcOutput, node.type, sourceHandle)
   }
   return undefined
@@ -79,7 +82,7 @@ export function resolveNodeInputs(
 
   const incomingEdges = edges.filter((e) => e.target === targetNode.id)
   const inputs: ResolvedInputs = {}
-  const ctx = { nodes: allNodes, edges }
+  const ctx = { nodes: allNodes, edges, nodeStates }
 
   // Prompt-handle injection control (generate-image / generate-video): a source
   // placed via {label} in the consumer's prompt/negative — or when Inject Prompt
@@ -172,21 +175,21 @@ export function resolveNodeInputs(
     // listResults fan-out path (selector never populates state.output.listResults)
     // and the resolver falls through to extractAllGeneratedResults which reads
     // data.generatedResults (not pickedResults/restResults).
+    // Saved data stands in only for a node this run did not run or gate
+    // (saved-data.ts): a node that ran contributes what THIS run produced.
+    const savedOk = savedDataAllowed(state)
     const selectorListResults: string[] | undefined =
       sourceNode.type === "selector"
         ? (effectiveSourceHandle === "rest"
             ? (state?.output?.restResults
-                ?? (sourceNode.data.restResults as string[] | undefined))
+                ?? (savedOk ? (sourceNode.data.restResults as string[] | undefined) : undefined))
             : (state?.output?.pickedResults
-                ?? (sourceNode.data.pickedResults as string[] | undefined)))
+                ?? (savedOk ? (sourceNode.data.pickedResults as string[] | undefined) : undefined)))
         : undefined
 
     const effectiveListResults = isLlmChatItemsEdge
       ? undefined
-      : selectorListResults
-        ?? state?.output?.listResults
-        ?? extractAllGeneratedResults(sourceNode.data as Record<string, unknown>)
-        ?? extractGeneratedJsonAsList(sourceNode.data as Record<string, unknown>)
+      : selectorListResults ?? listFor(sourceNode, state)
     // What a fan-out iteration indexes BY ROW: the row-aligned twin when the
     // source publishes one (Extract Field), else the list itself. Addressing by
     // position (item / item:N / range / Bundle) keeps using the public list above.
@@ -196,8 +199,10 @@ export function resolveNodeInputs(
     // `inputs.inputs` array regardless of edgeOutputMode — collect strategies
     // fold the list into one value, they are never fanned out per-item. When
     // upstream has no list (no fan-out happened), wrap its single output as
-    // `[output]` so the strategy still has something to fold.
-    if (FAN_IN_NODE_TYPES.has(targetNode.type)) {
+    // `[output]` so the strategy still has something to fold. Per EDGE, not per
+    // node: Choose Best folds every wire, Content Ideas only its `recipes` wire
+    // (its `field-brand` wire is a field) — FAN_IN_TARGETS in @nodaro/shared.
+    if (isFanInEdge(targetNode.type, edge.targetHandle)) {
       // llm-chat `items` edge: the fold source is the current ===NEXT=== split
       // (not the stale-generatedResults-derived effectiveListResults, which we
       // zeroed above), so a reduce over `items` folds the same blocks the
@@ -413,6 +418,14 @@ export function resolveNodeInputs(
     // text-source carve-out keeps it routing into `inputs.prompt`.
     if (PARAMETER_NODE_TYPES.has(sourceNode.type) && !TEXT_SOURCE_NODE_TYPES.has(sourceNode.type)) continue
 
+    // edit-plan's `offsets` wired but carrying no audio-sync result: record the
+    // wire (null) so the payload builder fails the run rather than plan without
+    // the sync the user wired (B4).
+    if (!output && targetNode.type === "edit-plan" && edge.targetHandle === "offsets") {
+      inputs.editPlanOffsets = null
+      continue
+    }
+
     if (!output) continue
 
     // Route the output to the correct input field based on source type + target node type
@@ -529,9 +542,10 @@ function resolveSelectedNodeFallbacks(
     if (!selectedId) continue
     const node = nodeById.get(selectedId)
     if (!node) continue
-    // Reuse getNodeOutput, with saved-data fallback for previously-executed nodes
+    // Reuse getNodeOutput, with saved-data fallback for a node this run did
+    // not run or gate (saved-data.ts).
     const url = getNodeOutput(node, undefined, nodeStates, triggerData)
-      ?? getSavedNodeOutput(node)
+      ?? (savedDataAllowed(nodeStates[node.id]) ? getSavedNodeOutput(node) : undefined)
     if (url) (inputs as Record<string, unknown>)[inputField] = url
   }
 }
@@ -575,8 +589,11 @@ function resolveLlmChatItems(
   nodeStates: Record<string, NodeExecutionState>,
 ): string[] | undefined {
   if (node.type !== "llm-chat" || sourceHandle !== "items") return undefined
-  const stateItems = nodeStates[node.id]?.output?.items
+  const state = nodeStates[node.id]
+  const stateItems = state?.output?.items
   if (stateItems && stateItems.length > 0) return stateItems
+  // The saved text stands in only for a node this run did not run or gate.
+  if (!savedDataAllowed(state)) return undefined
   const items = splitGeneratedItems(
     (node.data as Record<string, unknown>).generatedText as string | undefined,
   )
@@ -664,7 +681,7 @@ function resolveListLoopColumnItems(
   visited.add(sourceNode.id)
   const isValue = (v: unknown): v is string => typeof v === "string" && (keepEmpty || v.length > 0)
 
-  const ctx = { nodes: allNodes, edges }
+  const ctx: ExtractContext = { nodes: allNodes, edges, nodeStates }
   const columns = sourceNode.data.columns as
     | Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string; connectedSourceId?: string; connectedSourceHandle?: string }>
     | undefined
@@ -724,9 +741,10 @@ function resolveListLoopColumnItems(
         // miss it. Prefer state.output, fall back to data.* snapshots.
         const state = nodeStates[upstreamNode.id]
         const data = upstreamNode.data as Record<string, unknown>
+        const savedOk = savedDataAllowed(state)
         const channel = colInEdge.sourceHandle === "rest"
-          ? (state?.output?.restResults ?? (data.restResults as string[] | undefined))
-          : (state?.output?.pickedResults ?? (data.pickedResults as string[] | undefined))
+          ? (state?.output?.restResults ?? (savedOk ? (data.restResults as string[] | undefined) : undefined))
+          : (state?.output?.pickedResults ?? (savedOk ? (data.pickedResults as string[] | undefined) : undefined))
         if (channel && channel.length > 0) {
           upstreamVals = channel.filter(isValue)
         }
@@ -736,7 +754,7 @@ function resolveListLoopColumnItems(
         const state = nodeStates[upstreamNode.id]
         if (state?.output?.listResults && state.output.listResults.length > 0) {
           upstreamVals = (keepEmpty ? (state.output.alignedListResults ?? state.output.listResults) : state.output.listResults).filter(isValue)
-        } else {
+        } else if (savedDataAllowed(state)) {
           const fromData = extractAllGeneratedResults(upstreamNode.data as Record<string, unknown>)
           if (fromData && fromData.length > 0) upstreamVals = fromData
         }
@@ -813,7 +831,7 @@ export function getListFanOutForNode(
   // Fan-in targets consume the upstream list — they are NOT fanned out themselves.
   // Returning undefined here keeps the orchestrator from creating one execution
   // per upstream item and lets resolveNodeInputs populate `inputs.inputs` instead.
-  if (FAN_IN_NODE_TYPES.has(targetNode.type)) return undefined
+  if (isFanInNodeType(targetNode.type)) return undefined
 
   // Build O(1) lookup indexes once (replaces per-edge linear array scans).
   const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
@@ -824,7 +842,7 @@ export function getListFanOutForNode(
     else edgesByTarget.set(e.target, [e])
   }
 
-  const ctx = { nodes: allNodes, edges }
+  const ctx = { nodes: allNodes, edges, nodeStates }
   const incomingEdges = edgesByTarget.get(targetNode.id) ?? []
 
   // Every "each" list that could fan this node out, in wire order. A list
@@ -914,11 +932,12 @@ export function getListFanOutForNode(
     //    output entirely. Prefer state.output, fall back to data.* snapshots
     //    for nodes that ran in a previous session.
     const state = nodeStates[sourceNode.id]
+    const savedOk = savedDataAllowed(state)
     if (sourceNode.type === "selector") {
       const data = sourceNode.data as Record<string, unknown>
       const channel = edge.sourceHandle === "rest"
-        ? (state?.output?.restResults ?? (data.restResults as string[] | undefined))
-        : (state?.output?.pickedResults ?? (data.pickedResults as string[] | undefined))
+        ? (state?.output?.restResults ?? (savedOk ? (data.restResults as string[] | undefined) : undefined))
+        : (state?.output?.pickedResults ?? (savedOk ? (data.pickedResults as string[] | undefined) : undefined))
       if (channel && channel.length > 1) consider(edge, selectListItems(channel, selectorArg))
       continue
     }
@@ -930,6 +949,14 @@ export function getListFanOutForNode(
       const before = candidates.length
       consider(edge, selectListItems(state.output.alignedListResults ?? state.output.listResults, selectorArg))
       if (candidates.length > before) continue
+    }
+
+    // A node this run ran (or gated) holds only what THIS run produced: a JSON
+    // array it made (web-scrape) is its list; its saved results are not.
+    if (!savedOk) {
+      const runJson = jsonArrayItems(state?.output?.json)
+      if (runJson) consider(edge, selectListItems(runJson, selectorArg))
+      continue
     }
 
     // 5. Fallback: accumulated generatedResults from multiple manual runs
@@ -1125,10 +1152,15 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   // `analysis` INPUT is intercepted in routeOutput before this set is consulted.)
   "video-analysis",
   "video-audit",
-  // Incoming Telegram message — text is the primary output.
+  // Incoming Telegram message (bot or connected account) — text is the primary output.
   "telegram-trigger",
+  "telegram-account-trigger",
   // Telegram Channel Feed — the recent posts' text.
   "telegram-channel-feed",
+  // Content Recipe (the readable recipe) and Content Ideas (one brief per idea,
+  // or the digest) — text is the primary output of both.
+  "content-recipe",
+  "content-ideas",
 ])
 
 // Preview routes by actual media type, not always to text (handled in routeOutput)
@@ -1142,11 +1174,6 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
  *  list wired to either handle lands in the right array instead of being
  *  joined into a single comma-separated string. */
 const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combine-audio", "image-collage", "assemble-narrated-video", "slideshow"])
-
-/** Target node types that consume an upstream list as a single fan-in input.
- *  The resolver collects all upstream items into `inputs.inputs` and skips
- *  per-item routing entirely — the strategy folds the list into one value. */
-const FAN_IN_NODE_TYPES = new Set(["reduce"])
 
 // REFERENCE_HANDLE_MAP now lives in `@nodaro/shared` (single source of truth):
 // the same 6 legacy + canonical handle aliases drive BOTH this resolver's
@@ -1207,6 +1234,18 @@ function readSunoIdsFromData(data: Record<string, unknown>): { trackId?: string;
     trackId: str(active?.sunoTrackId) ?? str(data.sunoTrackId),
     taskId: str(active?.sunoTaskId) ?? str(data.sunoTaskId),
   }
+}
+
+/**
+ * Did this dual-mode node (audio or video out) produce a video? What it made
+ * in this run decides; its saved video counts only where saved data may stand
+ * in — a node that ran in audio mode this run must never route its audio as
+ * the video it made last time.
+ */
+function producedVideoIn(src: SimpleNode, nodeStates: Record<string, NodeExecutionState>): boolean {
+  const state = nodeStates[src.id]
+  if (state?.output?.videoUrl) return true
+  return savedDataAllowed(state) && Boolean(src.data.generatedVideoUrl)
 }
 
 // Suno-id sources: `SUNO_TRACK_SOURCE_TYPES` from @nodaro/shared — one set with
@@ -1327,6 +1366,30 @@ function routeOutput(
     return
   }
 
+  // --- Video Overlay: routed by HANDLE like Image Overlay. "video" is the
+  // base; "overlay".."overlay12" are the layer images, index-aligned with
+  // data.layers[]; the reserved JSON id "layerPlan" lands in inputs.layerPlan,
+  // which v1 does not read. A wire on an unknown / missing handle fills the
+  // base only while it is still empty (an API-authored edge still runs).
+  if (targetType === "video-overlay") {
+    const handle = edge.targetHandle ?? ""
+    if (handle === VIDEO_OVERLAY_LAYER_PLAN_HANDLE) {
+      inputs.layerPlan = output
+      return
+    }
+    const slot = videoOverlaySlotOfHandle(handle)
+    if (slot > 0) {
+      const next = [...(inputs.overlayImageUrls ?? [])]
+      next[slot - 1] = output
+      inputs.overlayImageUrls = next
+      return
+    }
+    if (handle === "video" || !inputs.videoUrl) {
+      inputs.videoUrl = output
+    }
+    return
+  }
+
   if (targetType === "image-collage") {
     inputs.imageUrls = [...(inputs.imageUrls ?? []), output]
     // Lockstep sibling of imageUrls — the payload builder aligns the node's
@@ -1380,6 +1443,23 @@ function routeOutput(
     } else {
       inputs.prompt = output
     }
+    return
+  }
+
+  // --- Social Search: both handles are text for the target — `json` the
+  // posts stringified, `text` their digest (getPrimaryOutput narrowed it by
+  // handle). Into Video Analysis's `video` input the `json` output is a post
+  // to analyze by its page link: one post on an Each wire, the first of the
+  // list on any other (the digest holds no single link, so it brings none and
+  // the node's own refusal names the missing source). Mirrors the frontend
+  // node-input-resolver. ---
+  if (srcType === "social-search") {
+    if (targetType === "video-analysis" && edge.targetHandle === "video") {
+      const link = socialSearchPostLink(output)
+      if (link) inputs.videoPageUrl = link
+      return
+    }
+    inputs.prompt = output
     return
   }
 
@@ -1460,9 +1540,55 @@ function routeOutput(
   // schema failure at full price. Mirrors the frontend node-input-resolver.
   if (targetType === "video-audit" && edge.targetHandle === "analysis") {
     if (ANALYSIS_PRODUCER_TYPES.has(srcType)) {
-      const analysis = nodeStates[src.id]?.output?.json ?? extractSavedNodeOutput(src)?.json
+      const analysis = nodeStates[src.id]?.output?.json ?? savedOutputFor(src, nodeStates[src.id])?.json
       if (analysis !== undefined && analysis !== null) inputs.analysis = analysis
     }
+    return
+  }
+
+  // --- content-recipe `link` handle: the post's own address, cited on the
+  // recipe and never fetched. A Video URL node is read for its PAGE link —
+  // the `video` output it would otherwise route here is the downloaded FILE,
+  // which identifies nothing. Any other source contributes its text. Gated on
+  // the target type (a handle-name-only interceptor would hijack same-named
+  // handles elsewhere). Mirrors the frontend node-input-resolver. ---
+  if (targetType === "content-recipe" && edge.targetHandle === "link") {
+    const link = srcType === "youtube-video" ? videoLinkPageUrl(src.data) : output
+    if (typeof link === "string" && link.trim() !== "") inputs.sourceLink = link.trim()
+    return
+  }
+
+  // --- video-analysis `video` handle given a LINK: a text output (the
+  // Telegram Account Trigger's Video link, a Text node) carries a post's
+  // address, which the node fetches and analyzes — read like its own link
+  // field. Only a lone http(s) link is kept; any other text contributes
+  // nothing, so the node's own refusal names the missing source. A video or
+  // dynamic producer is not a link, and neither is a source whose output
+  // carries a video FILE (a bot trigger's video message): those fall through
+  // to the file routing below. Gated on the target type. Mirrors the frontend
+  // node-input-resolver. ---
+  if (
+    targetType === "video-analysis" &&
+    edge.targetHandle === "video" &&
+    !VIDEO_PRODUCER_TYPES.has(srcType) &&
+    !DYNAMIC_PRODUCER_TYPES.has(srcType) &&
+    !nodeStates[src.id]?.output?.videoUrl
+  ) {
+    const link = output.trim()
+    if (/^https?:\/\/\S+$/i.test(link)) inputs.videoPageUrl = link
+    return
+  }
+
+  // --- face-swap: the `face` handle is the face photo. Routed by handle BEFORE
+  // any source-type branch, which would put an image producer's file in
+  // `imageUrl` and an entity's portrait in `referenceImageUrls`, where the
+  // face-swap payload never looks (every server-run Face Swap then crashed at
+  // the provider with no face). `output` is the source's image either way, as
+  // it is for the lip-sync / motion-transfer entity routes below. The `video`
+  // handle falls through to the normal video routing. Mirrors the frontend
+  // node-input-resolver face-swap branch. ---
+  if (targetType === "face-swap" && edge.targetHandle === "face") {
+    inputs.faceImageUrl = output
     return
   }
 
@@ -1477,10 +1603,21 @@ function routeOutput(
   if (targetType === "edit-plan") {
     if (edge.targetHandle === "transcript") {
       inputs.transcript = output
+      // The recording the transcript was made from (B4): the plan follows the
+      // master's clock, so the payload builder refuses a transcript made from
+      // an offset camera.
+      const origin = editPlanTranscriptOrigin(src.id, (id) => allNodes.find((n) => n.id === id)?.type, allEdges)
+      if (origin) inputs.editPlanTranscriptOrigin = origin
       return
     }
     if (edge.targetHandle === "silence") {
       inputs.silence = output
+      return
+    }
+    // audio-sync's result (stringified json) — folded into the sources'
+    // offsetMs by the payload builder (B4).
+    if (edge.targetHandle === "offsets") {
+      inputs.editPlanOffsets = output
       return
     }
     if (edge.targetHandle === "sources") {
@@ -1491,12 +1628,32 @@ function routeOutput(
       // editPlanSourceDurationSec adds the AUDIO lane (metadata.durationSeconds) —
       // a podcast's upload-audio master has its length there ONLY.
       const duration = editPlanSourceDurationSec(src.data as Record<string, unknown>)
+      // The node's label names the source in an offsets error.
+      const label = (src.data as Record<string, unknown> | undefined)?.label
       inputs.editPlanSources = [
         ...(inputs.editPlanSources ?? []),
-        { nodeId: src.id, url: output, kind, ...(duration !== undefined ? { duration } : {}) },
+        {
+          nodeId: src.id, url: output, kind,
+          ...(duration !== undefined ? { duration } : {}),
+          ...(typeof label === "string" && label ? { label } : {}),
+        },
       ]
       return
     }
+  }
+
+  // --- audio-sync `sources`: routed by targetHandle BEFORE any source-type
+  // branch (else an audio edge falls into inputs.audioUrl and a video edge into
+  // inputs.videoUrl, and the node loses which recording is which). Each row
+  // keeps its source NODE id — the result's `sourceId`, and the EdlSource id an
+  // edit plan uses for the same recording. `output` is the media URL
+  // getPrimaryOutput narrowed for the edge. Gated on targetType. Mirrors the
+  // frontend node-input-resolver audio-sync branch. ---
+  if (targetType === "audio-sync" && edge.targetHandle === "sources") {
+    if (typeof output === "string" && output) {
+      inputs.audioSyncSources = [...(inputs.audioSyncSources ?? []), { nodeId: src.id, url: output }]
+    }
+    return
   }
 
   // --- apply-edl inputs: routed by targetHandle BEFORE any source-type branch
@@ -1611,7 +1768,19 @@ function routeOutput(
   // lane, video → video lane, audio → audio lane, and text → prompt/caption
   // (never a fake image ref). A photo message thus feeds a References/image
   // input directly; a text message feeds a prompt. ---
-  if (srcType === "telegram-trigger") {
+  if (srcType === "telegram-trigger" || srcType === "telegram-account-trigger") {
+    // An account trigger's NAMED output (a post field, a message fact) is text:
+    // route the value this wire carries — `output` was resolved from the
+    // edge's own handle — never the message in its place. An empty one routes
+    // nothing. The message handle (`out`, an older `text`, or no handle) is
+    // routed by the message's media kind below.
+    if (srcType === "telegram-account-trigger" && isTelegramAccountTriggerNamedHandle(edge.sourceHandle)) {
+      if (output) {
+        if (SOCIAL_POST_NODE_TYPES.has(targetType)) inputs.caption = output
+        else inputs.prompt = output
+      }
+      return
+    }
     const out = nodeStates[src.id]?.output
     const refKey = REFERENCE_HANDLE_MAP[edge.targetHandle ?? ""]
     if (out?.imageUrl && (refKey === "referenceImageUrls" || edge.targetHandle === "image" || edge.targetHandle === "references")) {
@@ -2059,9 +2228,7 @@ function routeOutput(
   // by getPrimaryOutput via the source handle; route it to the matching slot.
   // Default (no explicit handle) prefers video when the node produced one.
   if (srcType === "voice-changer") {
-    const producedVideo =
-      Boolean(nodeStates[src.id]?.output?.videoUrl) ||
-      Boolean(src.data.generatedVideoUrl)
+    const producedVideo = producedVideoIn(src, nodeStates)
     if (edge.sourceHandle === "video" || (edge.sourceHandle !== "audio" && producedVideo)) {
       inputs.videoUrl = output
     } else {
@@ -2075,9 +2242,7 @@ function routeOutput(
   // independently. Route by the tapped source handle; default prefers video
   // when the node produced one (mirrors the voice-changer pattern exactly).
   if (srcType === "voice-changer-pro") {
-    const producedVideo =
-      Boolean(nodeStates[src.id]?.output?.videoUrl) ||
-      Boolean(src.data.generatedVideoUrl)
+    const producedVideo = producedVideoIn(src, nodeStates)
     if (edge.sourceHandle === "video" || (edge.sourceHandle !== "audio" && producedVideo)) {
       inputs.videoUrl = output
     } else {
@@ -2092,9 +2257,7 @@ function routeOutput(
   // sidecar). Route by the tapped source handle; default prefers video when
   // the node produced one (mirrors the voice-changer pattern exactly).
   if (srcType === "dubbing") {
-    const producedVideo =
-      Boolean(nodeStates[src.id]?.output?.videoUrl) ||
-      Boolean(src.data.generatedVideoUrl)
+    const producedVideo = producedVideoIn(src, nodeStates)
     if (edge.sourceHandle === "video" || (edge.sourceHandle !== "audio" && producedVideo)) {
       inputs.videoUrl = output
     } else {
@@ -2113,9 +2276,7 @@ function routeOutput(
   // by the apply-edl / add-captions target interceptor, or falls through to the
   // generic json/text routing. Mirrors the frontend node-input-resolver. ---
   if (srcType === "apply-edl" && edge.sourceHandle !== "json") {
-    const producedVideo =
-      Boolean(nodeStates[src.id]?.output?.videoUrl) ||
-      Boolean(src.data.generatedVideoUrl)
+    const producedVideo = producedVideoIn(src, nodeStates)
     if (producedVideo) {
       routeVideoOutput(inputs, output, targetType, src.id)
     } else {
@@ -2138,9 +2299,11 @@ function routeOutput(
     // be joined to a stored (earlier run's) task id.
     if (SUNO_TRACK_SOURCE_TYPES.has(srcType)) {
       const fresh = nodeStates[src.id]?.output
-      const ids = fresh?.sunoTrackId || fresh?.sunoTaskId
+      const ids: { trackId?: string; taskId?: string } = fresh?.sunoTrackId || fresh?.sunoTaskId
         ? { trackId: fresh.sunoTrackId, taskId: fresh.sunoTaskId }
-        : readSunoIdsFromData(src.data)
+        : savedDataAllowed(nodeStates[src.id])
+          ? readSunoIdsFromData(src.data)
+          : {}
       if (ids.trackId) inputs.sunoTrackId = ids.trackId
       if (ids.taskId) inputs.sunoTaskId = ids.taskId
     }

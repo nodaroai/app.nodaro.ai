@@ -7,7 +7,19 @@
  * Two billing cycles: "monthly" (higher price) and "annual" (billed yearly at lower per-month rate).
  */
 
+import type { MessageKey } from "@/lib/i18n"
+
 export type BillingCycle = "monthly" | "annual"
+
+/**
+ * One line of a tier's feature list: a dictionary key and its values, so the
+ * list reads in the interface language. Numbers stay numbers and are formatted
+ * at render; units and acronyms (GB, LLM) live in the dictionary text.
+ */
+export interface TierFeature {
+  readonly key: MessageKey
+  readonly vars?: Readonly<Record<string, string | number>>
+}
 
 export interface PricingTier {
   readonly id: string
@@ -19,9 +31,9 @@ export interface PricingTier {
   readonly credits: number
   readonly llmRequests: number | null
   readonly storage: string
-  readonly features: readonly string[]
+  readonly features: readonly TierFeature[]
   readonly highlighted?: boolean
-  readonly cta: string
+  readonly cta: MessageKey
 }
 
 export const PRICING_TIERS: readonly PricingTier[] = [
@@ -36,14 +48,14 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     llmRequests: 20,
     storage: "1 GB",
     features: [
-      "No daily cap",
-      "20 LLM requests / month",
-      "1 GB storage",
-      "Basic models only",
-      "Watermarked exports",
-      "60-day media retention",
+      { key: "pricing.feat.noDailyCap" },
+      { key: "pricing.feat.llmRequests", vars: { n: 20 } },
+      { key: "pricing.feat.storage", vars: { size: "1 GB" } },
+      { key: "pricing.feat.basicModelsOnly" },
+      { key: "pricing.feat.watermarkedExports" },
+      { key: "pricing.feat.mediaRetention", vars: { days: 60 } },
     ],
-    cta: "Start Free",
+    cta: "pricing.cta.startFree",
   },
   {
     // Synthetic DISPLAY entry for the derived pay-as-you-go tier. Not a
@@ -60,14 +72,14 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     llmRequests: 100,
     storage: "10 GB",
     features: [
-      "No subscription — buy credit packs",
-      "Credits valid for 12 months",
-      "All models unlocked",
-      "No watermark",
-      "No daily cap",
-      "10 GB storage",
+      { key: "pricing.feat.noSubscription" },
+      { key: "pricing.feat.creditsValid12Months" },
+      { key: "pricing.feat.allModelsUnlocked" },
+      { key: "pricing.feat.noWatermark" },
+      { key: "pricing.feat.noDailyCap" },
+      { key: "pricing.feat.storage", vars: { size: "10 GB" } },
     ],
-    cta: "Buy credits",
+    cta: "pricing.cta.buyCredits",
   },
   {
     id: "basic",
@@ -80,14 +92,14 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     llmRequests: 100,
     storage: "10 GB",
     features: [
-      "4,500 credits / month",
-      "100 LLM requests / month",
-      "10 GB storage",
-      "All standard models",
-      "No watermark",
-      "Priority queue \u2014 up to 2x speed",
+      { key: "pricing.feat.creditsPerMonth", vars: { n: 4_500 } },
+      { key: "pricing.feat.llmRequests", vars: { n: 100 } },
+      { key: "pricing.feat.storage", vars: { size: "10 GB" } },
+      { key: "pricing.feat.allStandardModels" },
+      { key: "pricing.feat.noWatermark" },
+      { key: "pricing.feat.priorityQueue", vars: { x: 2 } },
     ],
-    cta: "Subscribe",
+    cta: "pricing.cta.subscribe",
   },
   {
     id: "standard",
@@ -100,14 +112,14 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     llmRequests: 300,
     storage: "25 GB",
     features: [
-      "11,000 credits / month",
-      "300 LLM requests / month",
-      "25 GB storage",
-      "All models incl. premium",
-      "No watermark",
-      "Priority queue \u2014 up to 3x speed",
+      { key: "pricing.feat.creditsPerMonth", vars: { n: 11_000 } },
+      { key: "pricing.feat.llmRequests", vars: { n: 300 } },
+      { key: "pricing.feat.storage", vars: { size: "25 GB" } },
+      { key: "pricing.feat.allModelsPremium" },
+      { key: "pricing.feat.noWatermark" },
+      { key: "pricing.feat.priorityQueue", vars: { x: 3 } },
     ],
-    cta: "Subscribe",
+    cta: "pricing.cta.subscribe",
   },
   {
     id: "pro",
@@ -120,15 +132,15 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     llmRequests: 1000,
     storage: "50 GB",
     features: [
-      "23,000 credits / month",
-      "1,000 LLM requests / month",
-      "50 GB storage",
-      "All models incl. premium",
-      "No watermark",
-      "Fastest queue \u2014 up to 5x speed",
+      { key: "pricing.feat.creditsPerMonth", vars: { n: 23_000 } },
+      { key: "pricing.feat.llmRequests", vars: { n: 1_000 } },
+      { key: "pricing.feat.storage", vars: { size: "50 GB" } },
+      { key: "pricing.feat.allModelsPremium" },
+      { key: "pricing.feat.noWatermark" },
+      { key: "pricing.feat.fastestQueue", vars: { x: 5 } },
     ],
     highlighted: true,
-    cta: "Subscribe",
+    cta: "pricing.cta.subscribe",
   },
   {
     id: "business",
@@ -141,14 +153,14 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     llmRequests: null,
     storage: "200 GB",
     features: [
-      "52,000 credits / month",
-      "Unlimited LLM requests",
-      "200 GB storage",
-      "All models incl. premium",
-      "No watermark",
-      "Fastest queue \u2014 up to 8x speed",
+      { key: "pricing.feat.creditsPerMonth", vars: { n: 52_000 } },
+      { key: "pricing.feat.unlimitedLlm" },
+      { key: "pricing.feat.storage", vars: { size: "200 GB" } },
+      { key: "pricing.feat.allModelsPremium" },
+      { key: "pricing.feat.noWatermark" },
+      { key: "pricing.feat.fastestQueue", vars: { x: 8 } },
     ],
-    cta: "Subscribe",
+    cta: "pricing.cta.subscribe",
   },
 ] as const
 

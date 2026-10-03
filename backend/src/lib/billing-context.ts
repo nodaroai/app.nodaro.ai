@@ -273,12 +273,64 @@ export async function resolveBillingContext(input: BillingResolveInput): Promise
 /**
  * The per-request resolve point. Registered in app.ts AFTER
  * `registerOrgsContextHook` — rung 2 reads the `req.workspaceId` that hook
- * validated, so the order is load-bearing.
+ * validated, so the order is load-bearing. The hook reads the request; the
+ * decision itself is `requestBillingContext` below (cost, lanes, rungs).
+ */
+export function registerBillingContextHook(app: FastifyInstance): void {
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    if (!req.userId) return
+
+    // Reads never spend: resolving on every workspace-scoped GET would run
+    // the standing check twice per request (the orgs hook already ran it)
+    // for an answer nothing consumes. Spend sites live on mutating verbs.
+    // Ahead of every rung, the deployment one included.
+    if (req.method === "GET" || req.method === "HEAD") return
+
+    const internal = req.authKind === "internal"
+    const rawWorkflowId = internal ? undefined : (extractWorkflowId(req.body) ?? undefined)
+    // Client-supplied and outside every Zod schema: a non-uuid value would
+    // only ever drive the resolver's error path (22P02) — drop it here, and
+    // never 400 (the injected-field contract tolerates garbage).
+    const workflowId = rawWorkflowId && UUID_RE.test(rawWorkflowId) ? rawWorkflowId : undefined
+
+    const ctx = await requestBillingContext({
+      userId: req.userId,
+      workspaceId: req.workspaceId,
+      workflowId,
+      isAppRun: req.isAppRun === true,
+      internal,
+    })
+    if (ctx) req.billingContext = ctx
+  })
+}
+
+/** What the per-request decision reads off a request, already validated. */
+export interface RequestBillingInput {
+  userId: string
+  /** The workspace the orgs hook validated (`req.workspaceId`). */
+  workspaceId?: string
+  /** A uuid-shaped body workflowId; always absent on the internal lane. */
+  workflowId?: string
+  isAppRun: boolean
+  internal: boolean
+}
+
+/**
+ * The payer a mutating request is stamped with — the hook's whole decision,
+ * and the ONE copy of it. `undefined` means "leave the request unstamped"
+ * (no capable service: absent reads as personal downstream).
  *
- * Cost on the hot path: zero queries for a personal request. The plugin is
- * only consulted when the request names a workspace (validated header) or a
- * workflow (`withWorkflowId()` injects one on most editor generation POSTs —
- * that rung is one indexed `workspace_id` read inside the resolver, which
+ * Besides the hook, a READ-ONLY caller that must decide as a spend request
+ * would, with no request of its own passing through the hook, calls this
+ * with the same inputs that request would carry: the UGC quote prices under
+ * the payer a generation from the same MCP session will be stamped with
+ * (internal lane, the session's workspace). It spends nothing, so the
+ * resolve-once rule — one payer per execution — is not in play there.
+ *
+ * Cost: zero queries for a personal request. The plugin is only consulted
+ * when the request names a workspace (validated header) or a workflow
+ * (`withWorkflowId()` injects one on most editor generation POSTs — that
+ * rung is one indexed `workspace_id` read inside the resolver, which
  * short-circuits on NULL).
  *
  * The INTERNAL lane (`authKind === "internal"`: orchestrator loopback, MCP
@@ -288,48 +340,25 @@ export async function resolveBillingContext(input: BillingResolveInput): Promise
  * payers. On that lane the forwarded workspace header IS the decision, and
  * no header means the parent decided personal.
  */
-export function registerBillingContextHook(app: FastifyInstance): void {
-  app.addHook("preHandler", async (req: FastifyRequest) => {
-    if (!req.userId) return
+export async function requestBillingContext(input: RequestBillingInput): Promise<BillingContext | undefined> {
+  // Deployment payer (item 9): decided BEFORE the plugin gate — the target
+  // instance has no orgs plugin, and `if (!svc) return` would otherwise
+  // leave every request personal exactly where the payer is configured.
+  // Sync + zero queries (cached grade, background-refreshed).
+  if (deploymentPayerActive()) return deploymentBillingContext(input.userId)
 
-    // Reads never spend: resolving on every workspace-scoped GET would run
-    // the standing check twice per request (the orgs hook already ran it)
-    // for an answer nothing consumes. Spend sites live on mutating verbs.
-    // Hoisted above the plugin gate so the deployment rung below shares it.
-    if (req.method === "GET" || req.method === "HEAD") return
+  const svc = billingService()
+  if (!svc) return undefined
 
-    // Deployment payer (item 9): stamped BEFORE the plugin gate — the
-    // target instance has no orgs plugin, and `if (!svc) return` would
-    // otherwise leave every request personal exactly where the payer is
-    // configured. Sync + zero queries (cached grade, background-refreshed).
-    if (deploymentPayerActive()) {
-      req.billingContext = deploymentBillingContext(req.userId)
-      return
-    }
+  // Trivially personal — nothing names a workspace or a workflow. Answer
+  // without consulting the plugin at all.
+  if (!input.workflowId && !input.workspaceId) return personalPayer(input.userId)
 
-    const svc = billingService()
-    if (!svc) return
-
-    const internal = req.authKind === "internal"
-    const rawWorkflowId = internal ? undefined : (extractWorkflowId(req.body) ?? undefined)
-    // Client-supplied and outside every Zod schema: a non-uuid value would
-    // only ever drive the resolver's error path (22P02) — drop it here, and
-    // never 400 (the injected-field contract tolerates garbage).
-    const workflowId = rawWorkflowId && UUID_RE.test(rawWorkflowId) ? rawWorkflowId : undefined
-
-    // Trivially personal — nothing names a workspace or a workflow. Answer
-    // without consulting the plugin at all.
-    if (!workflowId && !req.workspaceId) {
-      req.billingContext = personalPayer(req.userId)
-      return
-    }
-
-    req.billingContext = await resolveBillingContext({
-      userId: req.userId,
-      explicitWorkspaceId: req.workspaceId,
-      workflowId,
-      isAppRun: req.isAppRun === true,
-      internal,
-    })
+  return resolveBillingContext({
+    userId: input.userId,
+    explicitWorkspaceId: input.workspaceId,
+    workflowId: input.workflowId,
+    isAppRun: input.isAppRun,
+    internal: input.internal,
   })
 }

@@ -2,6 +2,7 @@ import { useCallback, useState } from "react"
 import { toast } from "sonner"
 import { CHARACTER_MOTION_PROVIDERS, resolveCharacterAspectRatio, aspectRatioToNumber } from "@nodaro/shared"
 import { generateCharacterMotion } from "@/lib/api"
+import { tx, useT } from "@/lib/i18n"
 import { DEFAULT_IMAGE_MODEL } from "./expressions-tab"
 import { ensureBodyAngleForMotion } from "./ensure-body-angle"
 import type { CharacterStudioState } from "./use-character-studio"
@@ -52,6 +53,7 @@ export function MotionsTab({
   jobs: CharacterStudioJobs
   onSwitchToAppearance?: () => void
 }) {
+  const t = useT()
   const hasPortrait = Boolean(state.staged.sourceImageUrl)
   const items = state.staged.motions
   const pendingForType = Array.from(jobs.pending.entries()).filter(([, m]) => m.assetType === "motions")
@@ -85,7 +87,7 @@ export function MotionsTab({
         characterId = await state.ensureSaved()
       } catch (e) {
         jobs.abort(tempId)
-        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        toast.error(e instanceof Error ? e.message : tx("studio.couldNotSaveCharacter"))
         return
       }
       // Auto-chain: when the row has no body angles yet, generate a `front`
@@ -104,8 +106,8 @@ export function MotionsTab({
         jobs.abort(tempId)
         toast.error(
           e instanceof Error
-            ? `Body reference failed: ${e.message}`
-            : "Body reference generation failed.",
+            ? tx("studio.bodyRefFailedWith", { message: e.message })
+            : tx("studio.bodyRefGenFailed"),
         )
         return
       }
@@ -133,7 +135,7 @@ export function MotionsTab({
         jobs.settle(tempId, jobId)
       } catch (e) {
         jobs.abort(tempId)
-        toast.error(e instanceof Error ? e.message : "Generation failed.")
+        toast.error(e instanceof Error ? e.message : tx("studio.generationFailedDot"))
       }
     },
     [state, jobs],
@@ -147,7 +149,7 @@ export function MotionsTab({
       try {
         characterId = await state.ensureSaved()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        toast.error(e instanceof Error ? e.message : tx("studio.couldNotSaveCharacter"))
         return
       }
       if (mode === "replace") {
@@ -170,8 +172,8 @@ export function MotionsTab({
       } catch (e) {
         toast.error(
           e instanceof Error
-            ? `Body reference failed: ${e.message}`
-            : "Body reference generation failed.",
+            ? tx("studio.bodyRefFailedWith", { message: e.message })
+            : tx("studio.bodyRefGenFailed"),
         )
         return
       }
@@ -208,7 +210,7 @@ export function MotionsTab({
         characterId = await state.ensureSaved()
       } catch (e) {
         jobs.abort(tempId)
-        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        toast.error(e instanceof Error ? e.message : tx("studio.couldNotSaveCharacter"))
         return
       }
       // Auto-chain: see handleGenerate for the rationale.
@@ -225,8 +227,8 @@ export function MotionsTab({
         jobs.abort(tempId)
         toast.error(
           e instanceof Error
-            ? `Body reference failed: ${e.message}`
-            : "Body reference generation failed.",
+            ? tx("studio.bodyRefFailedWith", { message: e.message })
+            : tx("studio.bodyRefGenFailed"),
         )
         return
       }
@@ -249,7 +251,7 @@ export function MotionsTab({
         jobs.settle(tempId, jobId)
       } catch (e) {
         jobs.abort(tempId)
-        toast.error(e instanceof Error ? e.message : "Generation failed.")
+        toast.error(e instanceof Error ? e.message : tx("studio.generationFailedDot"))
       }
     },
     [state, jobs, currentModel],
@@ -262,14 +264,14 @@ export function MotionsTab({
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-3 py-6 text-center">
         <div className="text-[11px] text-amber-300 mb-2">
-          Generate a portrait first to enable asset generations.
+          {t("studio.generatePortraitFirstGate")}
         </div>
         <button
           type="button"
           onClick={onSwitchToAppearance}
           className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5"
         >
-          Open Profile
+          {t("studio.openProfile")}
         </button>
       </div>
     )
@@ -279,9 +281,9 @@ export function MotionsTab({
     <div className="flex-1 flex flex-col overflow-hidden relative">
       <div className="px-4.5 pt-3 pb-2 border-b border-[#1e293b] flex items-center justify-between">
         <div>
-          <div className="text-sm font-semibold text-slate-200">Motions</div>
+          <div className="text-sm font-semibold text-slate-200">{t("node.assetBadgeMotions")}</div>
           <div className="text-[10px] text-slate-500 mt-0.5">
-            Short video clips generated from the portrait (Kling / Wan i2v)
+            {t("studio.motionsDescription")}
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -290,23 +292,23 @@ export function MotionsTab({
             onClick={() => setGenPanelOpen(true)}
             className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
           >
-            Custom prompt
+            {t("studio.customPrompt")}
           </button>
           <button
             type="button"
             onClick={() => setRefsDrawerOpen(true)}
             className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
           >
-            Real-life refs
+            {t("studio.realLifeRefs")}
           </button>
           <button
             onClick={() => {
-              const url = window.prompt("Paste a video URL to import as a motion clip:")?.trim()
+              const url = window.prompt(tx("studio.pasteVideoUrlMotion"))?.trim()
               if (url) state.patch({ motions: [...state.staged.motions, { name: "imported", url }] })
             }}
             className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-400"
           >
-            ↑ Import
+            ↑ {t("common.import")}
           </button>
         </div>
       </div>
@@ -362,8 +364,8 @@ export function MotionsTab({
         models={CHARACTER_MOTION_PROVIDERS}
         defaultModel={DEFAULT_MOTION_PROVIDER}
         disabled={!hasPortrait}
-        disabledHint="Generate a portrait first."
-        customPlaceholder='Custom motion: e.g. "walking confidently toward camera"'
+        disabledHint={t("studio.generatePortraitFirst")}
+        customPlaceholder={t("studio.customMotionExamplePh")}
         onGenerate={handleGenerate}
         onModelChange={setCurrentModel}
         createdNames={createdNames}
@@ -377,13 +379,14 @@ export function MotionsTab({
           void fireCustomGen(submission)
         }}
         assetType="motions"
+        typeLabel={t("node.assetBadgeMotions").toLowerCase()}
         characterId={state.staged.characterDbId ?? ""}
         canonicalDescription={state.staged.canonicalDescription}
       />
       <PerVariantRealLifeRefsDrawer
         open={refsDrawerOpen}
         onClose={() => setRefsDrawerOpen(false)}
-        title="Real-life refs · Motions"
+        title={t("studio.realLifeRefsTitle", { title: t("node.assetBadgeMotions") })}
         variants={MOTION_PRESETS}
         refsByVariant={state.staged.realLifeRefsByVariant ?? {}}
         onChange={(next) => state.patch({ realLifeRefsByVariant: next })}

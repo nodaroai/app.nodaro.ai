@@ -244,7 +244,7 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = new Set<string>([
   // never finalizeJobWithMedia.
   "combine-videos", "assemble-narrated-video", "image-collage", "image-overlay",
   "merge-video-audio", "trim-audio", "trim-video", "extract-frame",
-  "speed-ramp", "loop-video", "fade-video", "still-to-video",
+  "speed-ramp", "loop-video", "fade-video", "video-overlay", "still-to-video",
   "gif-to-video", "slideshow", "resize-video", "adjust-volume",
   "audio-fx", "add-captions", "mix-audio", "combine-audio",
   "transcode-video", "social-media-format", "split-media",
@@ -252,6 +252,9 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = new Set<string>([
   // silence-detect — a SYNC local-ffmpeg analysis (no provider_task_id, its own
   // markJobCompleted with output_data.json); never finalizeJobWithMedia.
   "silence-detect",
+  // audio-sync — the same shape: a SYNC local analysis (ffmpeg decode +
+  // in-process correlation), own markJobCompleted with output_data.json.
+  "audio-sync",
   // apply-edl — a local-ffmpeg EDL render (no provider_task_id; chunked with its
   // OWN R2 checkpoint-resume, all-or-nothing, own markJobCompleted). Recovery is
   // the worker's, not the generic media-finalize path — like combine-videos above.

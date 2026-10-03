@@ -7,6 +7,7 @@ import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared"
 import type { ScheduleRule } from "@nodaro/shared"
+import type { VideoOverlayFit, VideoOverlayLayerInput, VideoOverlayOutputAspect, VideoOverlayWarning } from "@nodaro/shared"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "utility"
 
@@ -543,9 +544,14 @@ export type StyleGuideData = {
 export type ProviderData = {
   [key: string]: unknown
   label: string
+  /** Which models the node offers (`lib/provider-node-models.ts`). "voice" and
+   *  "script" only on nodes saved before it offered real models; the panel
+   *  moves them to "image". */
   category: "image" | "video" | "voice" | "script"
+  /** The model id it sets on the node whose Settings input it is wired into. */
   provider: string
-  model: string
+  /** Unused: the variant older Provider nodes stored beside a vendor name. */
+  model?: string
 }
 
 export type SceneCountData = {
@@ -1577,7 +1583,7 @@ export type GenerateScriptData = PromptAffixFields & {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up. Undefined (not
+   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -1586,6 +1592,8 @@ export type GenerateScriptData = PromptAffixFields & {
   maxTokens?: number
   sceneCount: number
   styleGuide: string
+  /** Legacy: saved workflows carry it, but it was never wired to the generator,
+   *  so the panel no longer shows it. */
   structure: "freeform" | "8-step" | "custom"
   tone: string
   targetLength: number
@@ -2768,7 +2776,7 @@ export type QACheckData = {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up. Undefined (not
+   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -2793,7 +2801,7 @@ export type ImageCriticData = PromptAffixFields & {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up. Undefined (not
+   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -3466,7 +3474,7 @@ export type ImageToTextData = PromptAffixFields & {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up. Undefined (not
+   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -3489,7 +3497,7 @@ export type DescribeToPickerData = {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up. Undefined (not
+   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -3726,6 +3734,61 @@ export type ImageOverlayData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedImageUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+}
+
+/**
+ * What the browser learned about a WIRED video (`useUpstreamVideoProbe`),
+ * cached on the node and trusted only while `url` still matches the resolved
+ * upstream url. `durationSec` is present only for a finite, positive length;
+ * `width` / `height` are the display size (`videoWidth` / `videoHeight`), kept
+ * whenever the read yields them; `error` marks a probe that produced no usable
+ * length — a load error, a timeout, OR metadata that reports no finite length
+ * (streamed MP4s, MediaRecorder WebM report Infinity) — so every settled probe
+ * is distinguishable from "not probed yet" (`!error && durationSec === undefined`).
+ */
+export type ProbedVideoInfo = {
+  url: string
+  durationSec?: number
+  width?: number
+  height?: number
+  error?: true
+}
+
+/** Video Overlay: timed image layers over a video. `layers[]` is index-aligned
+ *  with the layer handles (layers[0] ↔ "overlay", [1] ↔ "overlay2", …; 12
+ *  handles, 20 layers — 13 and up exist only in data, via `imageUrl`). A stored
+ *  layer may be partial or `null` (an untouched slot, a JSON write): every
+ *  reader expands it with `expandVideoOverlayLayer` (@nodaro/shared), and a
+ *  wired slot with no settings runs as DEFAULT_VIDEO_OVERLAY_LAYER. */
+export type VideoOverlayData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  layers: Array<VideoOverlayLayerInput | null>
+  /** Layer handles shown on the node (1..12); grown automatically to cover wired or configured layers. */
+  layerCount?: number
+  /** Render onto this canvas instead of the base's own display size. */
+  outputAspect?: VideoOverlayOutputAspect
+  /** With outputAspect: how the base fills it (default cover). */
+  baseFit?: VideoOverlayFit
+  /** With outputAspect + contain: the padding colour, #RRGGBB (default #000000). */
+  backgroundColor?: string
+  probedVideo?: ProbedVideoInfo
+  /** The composition the last run's result was rendered from — stamped by the canvas Run and by every backend (DAG) run; the result entry carries the same key ("Result (old)" when it differs). */
+  resultCompositionKey?: string
+  /** The last run's output_data.warnings. */
+  warnings?: VideoOverlayWarning[]
+  /** The last run's output canvas and duration. */
+  width?: number
+  height?: number
+  durationSec?: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
   currentJobId?: string
@@ -4116,7 +4179,7 @@ export type VideoComposerData = {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up. Undefined (not
+   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -4140,7 +4203,7 @@ export type AfterEffectsData = {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up. Undefined (not
+   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -4166,7 +4229,7 @@ export type LottieOverlayData = {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up. Undefined (not
+   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -4191,7 +4254,7 @@ export type ThreeDTitleData = PromptAffixFields & {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up. Undefined (not
+   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -4430,7 +4493,7 @@ export type MotionGraphicsData = PromptAffixFields & {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up. Undefined (not
+   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -5314,7 +5377,7 @@ export type LLMChatData = PromptAffixFields & {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up. Undefined (not
+   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   temperature: number
@@ -5378,6 +5441,54 @@ export type WebScrapeNodeData = {
   lastGoodCount?: number
 }
 
+// --- Audio Sync Node Data ---
+
+/** One recording's measured clock offset against the reference (D19:
+ *  `referenceMs = sourceMs + offsetMs`). `sourceId` is the upstream NODE id. */
+export type AudioSyncOffset = {
+  sourceId: string
+  offsetMs: number
+  /** 0..1; below 0.5 a note asks for a check by ear. */
+  confidence: number
+  /** Measured clock drift against the reference (ms gained per hour); null when
+   *  the overlap was too short to measure it. Measured, never corrected. */
+  driftMsPerHour: number | null
+}
+
+/** audio-sync's `json` output. */
+export type AudioSyncResult = {
+  version: number
+  reference: string
+  offsets: AudioSyncOffset[]
+  notes: string[]
+}
+
+/** audio-sync — measures how far apart the clocks of 2–6 recordings of one
+ *  conversation are (camera files and/or a master mic) by cross-correlating
+ *  their audio. Keyless (local ffmpeg + in-process correlation). The recordings
+ *  wire into the `sources` handle (audio OR video); each one's id is its
+ *  upstream NODE id. One `json` output carrying an AudioSyncResult. */
+export type AudioSyncNodeData = {
+  [key: string]: unknown
+  label: string
+  /** The source every offset is measured against — one of the wired source
+   *  NODE ids. Unset (or no longer wired) → the first source. */
+  reference?: string
+  /** User-configured source ordering (source node ids), mirroring edit-plan's
+   *  `sourceOrder` — drives the ConnectedMediaList reorder (and so which source
+   *  is "first", the default reference). */
+  sourceOrder?: string[]
+  fieldMappings?: Record<string, unknown>
+  // execution state
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  /** The single structured json output (an AudioSyncResult). Mirrors
+   *  SilenceDetectNodeData.generatedJson so the DAG extractors read it uniformly. */
+  generatedJson?: unknown
+}
+
 // --- Silence Detect Node Data ---
 
 export type SilenceDetectNodeData = {
@@ -5426,6 +5537,56 @@ export type InstagramScrapeNodeData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedJson?: unknown
+  lastRunOutcome?: "success" | "empty" | "failed"
+  lastRunAt?: number
+  lastRunCount?: number
+  lastRunStartedAt?: number
+  lastRunFingerprint?: string
+  lastGoodAt?: number
+  lastGoodCount?: number
+}
+
+// --- Social Search Node Data ---
+
+export type SocialSearchNodeData = {
+  [key: string]: unknown
+  label: string
+  platform?: import("@nodaro/shared").SocialPlatform
+  /** "keyword" (default), "account" (a creator, a company page, an advertiser) or "community" (a subreddit) */
+  mode?: import("@nodaro/shared").SocialSearchMode
+  /** A keyword, or an account (handle, profile link, subreddit, company page, advertiser) */
+  query?: string
+  /** Results per search: 20, 40 or 60 */
+  count?: import("@nodaro/shared").SocialSearchCount
+  period?: import("@nodaro/shared").SocialSearchPeriod
+  sort?: import("@nodaro/shared").SocialSearchSort
+  /** TikTok keyword search: two-letter region */
+  region?: string
+  /** Meta ads: two-letter country or ALL */
+  country?: string
+  /** Meta ads: running ads only (default true) */
+  activeOnly?: boolean
+  /** Reddit keyword search inside one subreddit */
+  subreddit?: string
+  /** YouTube: all, videos or shorts */
+  videoKind?: import("@nodaro/shared").SocialSearchVideoKind
+  /** How many posts a run passes on when nobody picked (default 5) */
+  pickTop?: number
+  /** Keep the picked posts on workflow runs instead of searching again */
+  keepPicks?: boolean
+  // execution state — same #765 contract as WebScrapeNodeData
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  /** Every post the last search found (the picker's grid) */
+  searchResults?: import("@nodaro/shared").SocialPost[]
+  /** The posts a person picked, by id, in picking order */
+  pickedIds?: string[]
+  /** The posts the node passes on: the picks, else the first `pickTop` */
+  generatedJson?: import("@nodaro/shared").SocialPost[]
+  /** generatedJson as a digest, for text inputs */
+  generatedText?: string
+  /** Non-fatal notes from the last search */
+  searchWarnings?: string[]
   lastRunOutcome?: "success" | "empty" | "failed"
   lastRunAt?: number
   lastRunCount?: number
@@ -5496,12 +5657,12 @@ export type VideoAnalysisNodeData = PromptAffixFields & {
   // Same url-bound shape for a WIRED video: the duration read from the video's own
   // metadata, so the credit estimate is not forced to the :600s ceiling. Only
   // trusted while `probedVideo.url` still matches the resolved upstream url.
-  probedVideo?: { url: string; durationSec: number }
+  probedVideo?: ProbedVideoInfo
   // Analysis config
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up. Undefined (not
+   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -5590,6 +5751,98 @@ export type EditPlanNodeData = PromptAffixFields & {
   generatedJson?: unknown
 }
 
+// --- Content Recipe / Content Ideas ("steal the format") ---
+
+/** A content recipe as the cloud returns it (`output_data.json`). Read
+ *  defensively: every field may be missing on a partial or older result. */
+export type ContentRecipeView = {
+  version?: number
+  source?: { kind?: string; url?: string; platform?: string; handle?: string; title?: string; language?: string }
+  hook?: { spoken?: string; onScreenText?: string; visual?: string; types?: string[]; whyItStops?: string }
+  format?: { label?: string; confidence?: number }
+  beats?: Array<{ start?: number; end?: number; purpose?: string; description?: string }>
+  whyItWorks?: Array<{ reason?: string; detail?: string }>
+  cta?: { kind?: string; text?: string }
+  sound?: { kind?: string; detail?: string }
+  durationSec?: number
+  pace?: string
+  aspect?: string
+  topic?: string
+  summary?: string
+}
+
+/** Content Recipe — why a post worked, as a reusable recipe (hook, format,
+ *  beats, why it works, CTA, sound, pace). Cloud-only: a private plugin runs
+ *  it. Reads the text on its `in` wire (a Video Analysis result, a scraped
+ *  post, a caption or transcript); the `link` wire (a Video URL node's page
+ *  link) or the typed `sourceUrl` is cited as the recipe's source. */
+export type ContentRecipeNodeData = {
+  [key: string]: unknown
+  label: string
+  llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
+  /** Optional steer — what to pay special attention to. */
+  focus?: string
+  /** The post's link when nothing is wired into Source post. */
+  sourceUrl?: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  /** The recipe — an OBJECT, never an array: a list here would be read as
+   *  several recipes by a fan-in consumer. No `generatedResults` history for
+   *  the same reason. */
+  generatedJson?: ContentRecipeView
+  /** The readable recipe — the node's text output. */
+  generatedText?: string
+  /** Notes from the last run (e.g. only the first of several posts was read). */
+  runWarnings?: string[]
+}
+
+/** One idea as the cloud returns it (an element of `output_data.json`). */
+export type ContentIdeaView = {
+  title?: string
+  format?: string
+  hook?: { line?: string; firstShot?: string; onScreenText?: string }
+  beats?: Array<{ start?: number; end?: number; purpose?: string; description?: string }>
+  shotList?: string[]
+  durationSec?: number
+  cta?: string
+  whyItFitsUs?: string
+  inspiredBy?: { recipe?: number; url?: string; title?: string; borrowed?: string }
+}
+
+/** Content Ideas — one or more recipes + a brand profile → N post ideas.
+ *  Cloud-only. Folds every recipe wired into `recipes`; emits one brief per
+ *  idea, so the node after it runs once per idea (FAN_OUT_EACH_TYPES). */
+export type ContentIdeasNodeData = {
+  [key: string]: unknown
+  label: string
+  /** Free text: product, audience, tone, offers, and what the brand never does. */
+  brand?: string
+  /** 1–10; ideas are charged per batch of up to five. */
+  count?: number
+  /** Optional, e.g. "Hebrew". Empty = the brand text's language. */
+  language?: string
+  llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  /** The ideas (structured) — for the cards and for Extract Field. */
+  generatedJson?: ContentIdeaView[]
+  /** One brief per idea — the list items the next node runs on. Kept OFF
+   *  `__listResults` (that would clone the node on the canvas) and off
+   *  `generatedResults` (a history there is read as a list). */
+  ideaBriefs?: string[]
+  /** All briefs as one text — the node's single text value. */
+  generatedText?: string
+  runWarnings?: string[]
+}
+
 // --- Video Audit ("AI Audit") Node Data ---
 
 /** One disclosed outcome of the audit's fix-and-disclose contract. The audit is
@@ -5625,7 +5878,7 @@ export type VideoAuditNodeData = {
   // url-bound duration cache for the credit-bucket estimate, same shape and
   // same trust rule as video-analysis's `probedVideo`: only honoured while
   // `probedVideo.url` still matches the resolved upstream url.
-  probedVideo?: { url: string; durationSec: number }
+  probedVideo?: ProbedVideoInfo
   // The disclosure report from the last run — rendered as the node's summary
   // strip. Kept beside `generatedJson` (the corrected analysis) rather than
   // inside it so downstream consumers see a plain analysis payload.
@@ -6181,6 +6434,36 @@ export type TelegramTriggerData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
 }
 
+/**
+ * Fires when a message arrives in a chosen chat of a Telegram account the
+ * owner connected (Integrations → Telegram account). Cloud; the listening runs
+ * in a private plugin. Projected on save only while `isActive` with an
+ * account and at least one chat.
+ */
+export type TelegramAccountTriggerData = {
+  [key: string]: unknown
+  label: string
+  accountId?: string
+  /** Bot-API chat ids to listen to. */
+  chatIds?: string[]
+  /** Titles of the picked chats, for the card and panel only. */
+  chatTitles?: Record<string, string>
+  /** "text" or a media kind; empty = every type. */
+  messageTypeFilters?: string[]
+  /** Case-insensitive; any one of them in the text. */
+  keywords?: string[]
+  /** The owner's own messages from their other devices. */
+  includeOutgoing?: boolean
+  /**
+   * Inbox mode: only the owner's own shares start a run — a post link (one
+   * run per link) or a forwarded post — and every other message is ignored.
+   * Fills the post outputs (`videoLink`, `postText`, `postLink`).
+   */
+  inboxMode?: boolean
+  isActive?: boolean
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+}
+
 export type TelegramChannelFeedData = {
   [key: string]: unknown
   label: string
@@ -6404,6 +6687,7 @@ export type SceneNodeData =
   | LoopVideoData
   | GifToVideoData
   | FadeVideoData
+  | VideoOverlayData
   | TranscodeVideoData
   | ManualEditData
   | LipSyncData
@@ -6427,11 +6711,15 @@ export type SceneNodeData =
   | LLMChatData
   | WebScrapeNodeData
   | SilenceDetectNodeData
+  | AudioSyncNodeData
   | MetaAdsScrapeNodeData
   | InstagramScrapeNodeData
+  | SocialSearchNodeData
   | VideoAnalysisNodeData
   | VideoAuditNodeData
   | EditPlanNodeData
+  | ContentRecipeNodeData
+  | ContentIdeasNodeData
   | ListNodeData
   | LoopNodeData
   | CombineTextNodeData
@@ -6458,6 +6746,7 @@ export type SceneNodeData =
   | WebhookTriggerData
   | ScheduleTriggerData
   | TelegramTriggerData
+  | TelegramAccountTriggerData
   | TelegramChannelFeedData
   | SocialPostData
   | MusicGenreData
@@ -6480,6 +6769,7 @@ export type SceneNodeType =
   | "web-scrape"
   | "meta-ads-scrape"
   | "instagram-scrape"
+  | "social-search"
   | "reference-audio"
   | "tone"
   | "style-guide"
@@ -6572,6 +6862,8 @@ export type SceneNodeType =
   | "combine-videos"
   | "apply-edl"
   | "edit-plan"
+  | "content-recipe"
+  | "content-ideas"
   | "image-collage"
   | "image-overlay"
   | "assemble-narrated-video"
@@ -6585,6 +6877,7 @@ export type SceneNodeType =
   | "split-media"
   | "extract-audio"
   | "silence-detect"
+  | "audio-sync"
   | "remove-audio"
   | "mix-audio"
   | "combine-audio"
@@ -6606,6 +6899,7 @@ export type SceneNodeType =
   | "loop-video"
   | "gif-to-video"
   | "fade-video"
+  | "video-overlay"
   | "transcode-video"
   | "manual-edit"
   | "lip-sync"
@@ -6658,6 +6952,7 @@ export type SceneNodeType =
   | "telegram-post"
   | "publish-social"
   | "telegram-trigger"
+  | "telegram-account-trigger"
   | "telegram-channel-feed"
   | "component"
   | "music-genre"
@@ -6781,6 +7076,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: { label: "Instagram", mode: "profile", targets: "", count: 20, period: "30d" } as InstagramScrapeNodeData,
   },
   {
+    type: "social-search",
+    label: "Social Search",
+    category: "input",
+    creditCost: 10,
+    inputs: ["in"],
+    outputs: ["json", "text"],
+    defaultData: { label: "Social Search", platform: "tiktok", mode: "keyword", query: "", count: 20, period: "month", sort: "relevance", pickTop: 5 } as SocialSearchNodeData,
+  },
+  {
     type: "reference-audio",
     label: "Reference Audio",
     category: "input",
@@ -6830,7 +7134,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "parameter",
     creditCost: 0,
     inputs: ["in"],
-    outputs: ["style_guide"],
+    outputs: ["style"],
     defaultData: { label: "Style Guide", text: "" },
   },
   {
@@ -6840,7 +7144,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: ["in"],
     outputs: ["provider"],
-    defaultData: { label: "Provider", category: "image", provider: "nano-banana", model: "" },
+    // The video default (DEFAULT_VIDEO_PROVIDER, written out: gen-skills parses
+    // this file textually): Generate Video / Generate Video Pro are the nodes a
+    // Provider drives through their Settings input.
+    defaultData: { label: "Provider", category: "video", provider: "seedance-2-fast" },
   },
   {
     type: "scene-count",
@@ -6848,7 +7155,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "parameter",
     creditCost: 0,
     inputs: ["in"],
-    outputs: ["scene_count"],
+    outputs: ["count"],
     defaultData: { label: "Scene Count", count: 5 },
   },
   {
@@ -6866,7 +7173,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "parameter",
     creditCost: 0,
     inputs: ["in"],
-    outputs: ["aspect_ratio"],
+    outputs: ["ratio"],
     defaultData: { label: "Aspect Ratio", ratio: "16:9" },
   },
   {
@@ -7252,7 +7559,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Generate Script",
     category: "ai",
     creditCost: 2,
-    inputs: ["prompt"],
+    inputs: ["prompt", "field-tone", "field-styleGuide", "field-sceneCount", "field-targetLength"],
     outputs: ["scenes", "images", "dialogue", "music", "sfx", "characters", "locations"],
     defaultData: { label: "Generate Script", provider: "gemini", model: "gemini-2.5-flash", sceneCount: 5, styleGuide: "", structure: "freeform", tone: "", targetLength: 60, fieldMappings: {} },
   },
@@ -7261,7 +7568,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Generate Image",
     category: "ai",
     creditCost: 5,
-    inputs: ["prompt", "negative", "references", "assets", "elements", "look"],
+    inputs: ["prompt", "negative", "references", "assets", "elements", "look", "settings"],
     outputs: ["image"],
     width: 220,
     defaultData: { label: "Generate Image", prompt: "", provider: "nano-banana-pro", model: "gemini-2.5-flash-image", style: "", aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
@@ -7431,9 +7738,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // Mirrors GENERATE_VIDEO_INPUT_HANDLES (the handle set the node renders) so
     // every input is offered as a connection candidate; kept in lockstep by the
     // drift test in enumerate-connection-options.test.ts.
-    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look"],
+    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look", "settings"],
     outputs: ["video"],
-    defaultData: { label: "Generate Video", provider: "seedance-2-fast", duration: 5, prompt: "", negativePrompt: "", fieldMappings: {} },
+    // duration is the literal DEFAULT_VIDEO_DURATION_SEC (the API's default):
+    // gen-skills parses this file textually and cannot resolve a constant. At 5 s
+    // a new node's first run billed Seedance 2 Fast's 8 s tier. Guarded by
+    // generate-video-default-duration.test.ts.
+    defaultData: { label: "Generate Video", provider: "seedance-2-fast", duration: 4, prompt: "", negativePrompt: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
     exposableFields: [
       {
@@ -7472,7 +7783,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Generate Video Pro",
     category: "ai",
     creditCost: 82,
-    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look"],
+    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look", "settings"],
     outputs: ["video"],
     defaultData: {
       label: "Generate Video Pro",
@@ -7768,7 +8079,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 5,
     inputs: ["prompt", "ref-audio", "audio-style"],
     outputs: ["audio"],
-    defaultData: { label: "Generate Music", prompt: "", provider: "suno", duration: 8, genre: "", mood: "", instrumental: true, lyrics: "", referenceAudioUrl: "", referenceYouTubeUrl: "", referenceSource: "none", modelVersion: "stereo-large", fieldMappings: {} },
+    // "minimax" is DEFAULT_MUSIC_PROVIDER, written out (gen-skills parses this
+    // file textually). New nodes used to start on "suno", a model this node
+    // never ran: every first run failed validation.
+    defaultData: { label: "Generate Music", prompt: "", provider: "minimax", duration: 8, genre: "", mood: "", instrumental: true, lyrics: "", referenceAudioUrl: "", referenceYouTubeUrl: "", referenceSource: "none", modelVersion: "stereo-large", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "audio" as const }],
     exposableFields: [
       { key: "duration", label: "Duration (s)", type: "slider" as const, min: 1, max: 60, step: 1 },
@@ -7806,12 +8120,12 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // NODE_DEFINITIONS textually and cannot resolve identifiers. Guarded by suno-model-picker.test.tsx.
   {
     type: "suno-generate",
-    label: "Suno Generate",
+    label: "Suno Create Music",
     category: "ai",
     creditCost: 3,
     inputs: ["prompt", "audio-style", "voice", "field-style", "field-lyrics", "field-title", "field-negativeStyle"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Generate", prompt: "", model: "V6", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoGenerateData,
+    defaultData: { label: "Suno Create Music", prompt: "", model: "V6", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoGenerateData,
   },
   {
     type: "suno-cover",
@@ -8200,7 +8514,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // per-run cost is dynamic (buildEditPlanCreditId → mode × tier × duration
     // bucket) and PROVISIONAL until the launch probe.
     creditCost: 240,
-    inputs: ["transcript", "silence", "sources"],
+    inputs: ["transcript", "silence", "offsets", "sources"],
     outputs: ["edl"],
     defaultData: {
       label: "Edit Plan",
@@ -8210,6 +8524,43 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as EditPlanNodeData,
+  },
+  {
+    type: "content-recipe",
+    label: "Content Recipe",
+    category: "ai",
+    // Economy default (gemini-3.6-flash); the live cost follows the chosen
+    // model's tier (contentRecipeCreditId → useModelCredits).
+    creditCost: 5,
+    inputs: ["in", "link"],
+    outputs: ["json", "text"],
+    defaultData: {
+      label: "Content Recipe",
+      llmModel: "gemini-3.6-flash",
+      focus: "",
+      sourceUrl: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as ContentRecipeNodeData,
+  },
+  {
+    type: "content-ideas",
+    label: "Content Ideas",
+    category: "ai",
+    // Economy default, five ideas (one batch). Six to ten ideas bill two
+    // batches (contentIdeasCreditId → useModelCredits).
+    creditCost: 10,
+    inputs: ["recipes", "field-brand"],
+    outputs: ["ideas"],
+    defaultData: {
+      label: "Content Ideas",
+      llmModel: "gemini-3.6-flash",
+      brand: "",
+      count: 5,
+      language: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as ContentIdeasNodeData,
   },
   {
     type: "image-collage",
@@ -8260,6 +8611,30 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       { key: "image", label: "Composited Image", outputType: "image" as const },
       { key: "mask", label: "Mask (white = may change)", outputType: "image" as const },
     ],
+  },
+  {
+    type: "video-overlay",
+    label: "Video Overlay",
+    category: "processing",
+    creditCost: 20,
+    // Base video + the 12 layer handles, index-aligned with data.layers[]
+    // (overlay → 0, overlay2 → 1, …). Literal on purpose (the gen-skills
+    // parser reads this file as text) — must equal ["video",
+    // ...VIDEO_OVERLAY_HANDLE_IDS]; node-input-handles-completeness pins it.
+    // The reserved JSON id "layerPlan" is deliberately NOT an input: no pip
+    // renders for it in v1.
+    inputs: ["video", "overlay", "overlay2", "overlay3", "overlay4", "overlay5", "overlay6", "overlay7", "overlay8", "overlay9", "overlay10", "overlay11", "overlay12"],
+    outputs: ["video-out"],
+    defaultData: {
+      label: "Video Overlay",
+      layers: [],
+      layerCount: 4,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as VideoOverlayData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
   },
   {
     type: "assemble-narrated-video",
@@ -8376,6 +8751,17 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["json"],
     defaultData: { label: "Silence Detect", thresholdDb: -35, minSilenceMs: 700, padMs: 120, fieldMappings: {} } as SilenceDetectNodeData,
+  },
+  {
+    type: "audio-sync",
+    label: "Audio Sync",
+    category: "processing",
+    // The 2-source price (10 × (sources − 1)); the live cost follows the wired
+    // source count (`audio-sync:<n>src`, lib/audio-sync.ts).
+    creditCost: 10,
+    inputs: ["sources"],
+    outputs: ["json"],
+    defaultData: { label: "Audio Sync", fieldMappings: {} } as AudioSyncNodeData,
   },
   {
     type: "remove-audio",
@@ -9706,6 +10092,25 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Telegram Trigger",
       messageTypeFilters: ["text", "photo", "video", "audio", "document"],
     } as TelegramTriggerData,
+  },
+  {
+    type: "telegram-account-trigger",
+    label: "Telegram Account Trigger",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    // A literal on purpose (gen:skills reads it statically); a test pins it to
+    // @nodaro/shared TELEGRAM_ACCOUNT_TRIGGER_OUTPUT_HANDLES.
+    outputs: ["out", "videoLink", "postText", "postLink"],
+    defaultData: {
+      label: "Telegram Account Trigger",
+      chatIds: [],
+      messageTypeFilters: [],
+      keywords: [],
+      includeOutgoing: false,
+      inboxMode: false,
+      isActive: false,
+    } as TelegramAccountTriggerData,
   },
   {
     type: "telegram-channel-feed",

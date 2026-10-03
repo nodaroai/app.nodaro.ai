@@ -37,6 +37,18 @@ const mocks = vi.hoisted(() => ({
   >(),
   /** Every runtime-env scope call the scan made, verbatim. */
   scanFilters: [] as Array<{ method: "eq" | "or"; args: string[] }>,
+  /** Budget excess (ms) per execution — what `executionBudgetExcessMs` reads
+   *  from the rows (Track 0.11; the reader itself is pinned in
+   *  lib/__tests__/execution-budget.test.ts). Absent = 0. */
+  budgetExcess: new Map<string, number>(),
+  budgetReads: [] as string[],
+}))
+
+vi.mock("../../execution-budget.js", () => ({
+  executionBudgetExcessMs: async (id: string) => {
+    mocks.budgetReads.push(id)
+    return mocks.budgetExcess.get(id) ?? 0
+  },
 }))
 
 vi.mock("../../supabase.js", () => {
@@ -170,6 +182,8 @@ describe("reconcileWorkflowExecutionsTick", () => {
     mocks.updates.length = 0
     mocks.orchJob.clear()
     mocks.scanFilters.length = 0
+    mocks.budgetExcess.clear()
+    mocks.budgetReads.length = 0
     for (const k of ENV_KEYS) {
       SAVED_ENV[k] = process.env[k]
       delete process.env[k]
@@ -396,6 +410,52 @@ describe("reconcileWorkflowExecutionsTick", () => {
     expect(mocks.updates).toHaveLength(1)
     expect(mocks.updates[0].updates.status).toBe("failed")
     expect(mocks.updates[0].updates.error_message).toMatch(/abandoned/)
+  })
+
+  // Podcast Track 0.11. The abandon branch runs BEFORE the queue-liveness gate,
+  // so a run whose cap legitimately passed 4 hours (it dispatched a long
+  // render: cap = 120 min + excess) would be written off while alive. The
+  // threshold grows by the same excess; nothing budgeted → exactly 4 hours.
+  describe("abandon threshold grows by the run's budget excess (Track 0.11)", () => {
+    const HOUR = 60 * 60 * 1000
+    const seedOld = (id: string, ageMs: number) => {
+      mocks.executions.push({
+        id,
+        started_at: new Date(Date.now() - ageMs).toISOString(),
+        node_states: { n1: { status: "running", jobId: `${id}-n1` } },
+      })
+    }
+
+    it("a 5-hour-old run whose long render adds 2 hours is NOT abandoned — it falls through to the liveness gate", async () => {
+      seedOld("exec-long", 5 * HOUR)
+      mocks.budgetExcess.set("exec-long", 2 * HOUR)
+      mocks.orchJob.set("exec-long", { state: "active" })
+
+      await reconcileWorkflowExecutionsTick()
+
+      expect(mocks.budgetReads).toEqual(["exec-long"])
+      expect(mocks.updates).toHaveLength(0)
+    })
+
+    it("past 4 hours + its excess, it is abandoned exactly as before", async () => {
+      seedOld("exec-dead", 7 * HOUR)
+      mocks.budgetExcess.set("exec-dead", 2 * HOUR)
+
+      await reconcileWorkflowExecutionsTick()
+
+      expect(mocks.updates).toHaveLength(1)
+      expect(mocks.updates[0].updates.error_message).toMatch(/abandoned/)
+    })
+
+    it("under 4 hours the excess is never read (no extra query for any run)", async () => {
+      seedRunningExecution("exec-young")
+      mocks.orchJob.set("exec-young", { state: "active" })
+
+      await reconcileWorkflowExecutionsTick()
+
+      expect(mocks.budgetReads).toEqual([])
+      expect(mocks.updates).toHaveLength(0)
+    })
   })
 
   it("emits no updates when there are no stuck rows", async () => {

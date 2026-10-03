@@ -6,6 +6,7 @@ import { ActionMenu } from "./action-menu"
 import { ActionBar } from "./action-bar"
 import { shareMedia } from "./share-utils"
 import { ELEMENT_SIZES } from "@/lib/presentation-display"
+import { useT } from "@/lib/i18n"
 
 /** Heights for the 7-bar loading waveform */
 const LOADING_WAVEFORM_HEIGHTS = [14, 18, 12, 20, 16, 22, 14]
@@ -25,6 +26,7 @@ interface AudioOutputCardProps {
 }
 
 function AudioOutputCardImpl({ label, status, url, nodeId, elementSize, actions }: AudioOutputCardProps) {
+  const t = useT()
   const heightClass = ELEMENT_SIZES.audioOutput[elementSize ?? "md"]
   const bound = resolveCardActions(actions, nodeId, "audio", url)
   return (
@@ -58,7 +60,7 @@ function AudioOutputCardImpl({ label, status, url, nodeId, elementSize, actions 
         <>
           <div className="flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border">
             <WaveformAudioPlayer url={url} variant="compact" className="flex-1" />
-            <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title="Download">
+            <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title={t("common.download")}>
               <Download className="w-3.5 h-3.5" />
             </GlassButton>
           </div>
@@ -78,7 +80,7 @@ function AudioOutputCardImpl({ label, status, url, nodeId, elementSize, actions 
         <div className={`flex flex-col items-center justify-center ${heightClass} rounded-lg bg-muted/30 text-muted-foreground`}>
           <Music className="w-8 h-8 mb-1 animate-pulse" />
           <span className="text-xs">
-            {status === "failed" ? "Generation failed" : "Awaiting generation"}
+            {status === "failed" ? t("present.generationFailed") : t("present.awaitingGeneration")}
           </span>
         </div>
       )}

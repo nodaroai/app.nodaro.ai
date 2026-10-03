@@ -21,7 +21,8 @@ import type { TrimAudioData } from "@/types/nodes"
 function TrimAudioNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as TrimAudioData
-  const credits = useModelCredits("ffmpeg", 1)
+  // The id its route reserves (its own row), not the generic "ffmpeg" one.
+  const credits = useModelCredits("trim-audio", 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
@@ -64,7 +65,7 @@ function TrimAudioNodeComponent({ id, data, selected }: NodeProps) {
               <button
                 key={`${r.jobId}-${i}`}
                 type="button"
-                aria-label={`Result ${i + 1}`}
+                aria-label={t("node.resultN", { n: i + 1 })}
                 className={`w-10 h-10 flex items-center justify-center rounded-lg cursor-pointer transition-all ${
                   i === activeIndex
                     ? "ring-2 ring-[#ff0073] bg-[#ff0073]/20"

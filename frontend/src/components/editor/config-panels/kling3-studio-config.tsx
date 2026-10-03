@@ -34,6 +34,7 @@ import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import type { ConfigProps } from "./types"
 import { useT, tx } from "@/lib/i18n"
 import { useLocalizeNodeLabel, useLocalizeHandleLabel } from "@/lib/i18n/labels"
+import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
 
 type Kling3Tab = "scene" | "shots" | "elements"
 
@@ -321,7 +322,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
             />
           )}
           <p className="text-[10px] text-muted-foreground mt-1.5">
-            {t("cfgext.kling3TipTextPromptNode", { node: localizeNode("Text Prompt") })}
+            {t("cfgext.kling3TipTextPromptNode", { node: localizeNode(nodeTypeDefaultLabel("text-prompt")) })}
           </p>
         </div>
       )}
@@ -759,7 +760,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
 
           <div className="rounded-xl border border-border bg-gradient-to-br from-[#ff0073]/5 to-transparent p-3">
             <p className="text-[10px] text-muted-foreground">
-              {t("cfgext.kling3ExampleLabel")} <span className="font-mono text-foreground">{t("cfgext.kling3ExamplePrompt")}</span>
+              {t("cfgext.kling3ExampleLabel")}{t("common.fragmentGap")}<span className="font-mono text-foreground">{t("cfgext.kling3ExamplePrompt")}</span>
             </p>
           </div>
         </div>

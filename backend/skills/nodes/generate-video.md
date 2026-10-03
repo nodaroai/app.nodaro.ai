@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-09-21T19:12:09.229Z
-generated_from: 09788c987
+generated_at: 2026-09-28T22:17:11.724Z
+generated_from: 41c73564b
 ---
 
 # Generate Video
@@ -9,8 +9,8 @@ generated_from: 09788c987
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `generate-video`
 **Category:** ai
-**Credit cost:** `10-8550` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
-**Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`, `audio`, `audioReferences`, `assets`, `elements`, `look`
+**Credit cost:** `10-8550` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`, `audio`, `audioReferences`, `assets`, `elements`, `look`, `settings`
 **Outputs (source handles):** `video`
 
 **Required data fields:**
@@ -79,7 +79,7 @@ generated_from: 09788c987
 {
   "label": "Generate Video",
   "provider": "seedance-2-fast",
-  "duration": 5,
+  "duration": 4,
   "prompt": "",
   "negativePrompt": "",
   "fieldMappings": {}
@@ -126,7 +126,8 @@ The per-family doctrine below (Kling, MiniMax, VEO, Gemini Omni, Grok, Wan, Happ
 
 ## Common gotchas
 
-(Add prose here.)
+- The `settings` input takes Aspect Ratio, Duration, Provider and Motion nodes (one input for all). The first three replace the node's own `aspectRatio`, `duration` or `provider` at run time, fitted to the model (the estimate prices the wired values); Motion adds a clause to the prompt.
+- A wired Provider must name a video model this node runs, or the run stops before anything is charged.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example
@@ -142,7 +143,7 @@ The per-family doctrine below (Kling, MiniMax, VEO, Gemini Omni, Grok, Wan, Happ
   "data": {
     "label": "Generate Video",
     "provider": "seedance-2-fast",
-    "duration": 5,
+    "duration": 4,
     "prompt": "",
     "negativePrompt": "",
     "fieldMappings": {}

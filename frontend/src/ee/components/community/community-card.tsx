@@ -2,6 +2,7 @@ import { Copy, Heart, Sparkles } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { formatCount } from "@/lib/template-utils"
 import type { CommunityCard as CommunityCardData } from "@/lib/api"
+import { useT } from "@/lib/i18n"
 
 interface CommunityCardProps {
   item: CommunityCardData
@@ -9,6 +10,7 @@ interface CommunityCardProps {
 }
 
 export function CommunityCard({ item, onClick }: CommunityCardProps) {
+  const t = useT()
   const thumbnail = item.preview_media_url ?? item.preview_images[0]?.url ?? null
 
   return (
@@ -38,7 +40,7 @@ export function CommunityCard({ item, onClick }: CommunityCardProps) {
         <h3 className="text-sm font-semibold text-foreground truncate">{item.title}</h3>
         {item.creator_display_name && (
           <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            by {item.creator_display_name}
+            {t("preview.by", { name: item.creator_display_name })}
           </p>
         )}
       </div>
@@ -63,7 +65,7 @@ export function CommunityCard({ item, onClick }: CommunityCardProps) {
               </span>
             ))}
             {item.tags.length > 3 && (
-              <span className="text-[10px] text-white/50">+{item.tags.length - 3} more</span>
+              <span className="text-[10px] text-white/50">{t("node.plusNMore", { n: item.tags.length - 3 })}</span>
             )}
           </div>
         )}
@@ -83,7 +85,7 @@ export function CommunityCard({ item, onClick }: CommunityCardProps) {
         </div>
 
         {item.creator_display_name && (
-          <p className="text-[10px] text-white/50 truncate">by {item.creator_display_name}</p>
+          <p className="text-[10px] text-white/50 truncate">{t("preview.by", { name: item.creator_display_name })}</p>
         )}
       </div>
     </div>

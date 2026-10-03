@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/hooks/use-auth"
 import { hydrateWorkspaces, setActiveWorkspace } from "@/lib/workspace-context"
+import { tx, useT } from "@/lib/i18n"
 import { OrgApiError, joinByCode } from "@/ee/lib/orgs-api"
 
 /**
@@ -24,6 +25,7 @@ import { OrgApiError, joinByCode } from "@/ee/lib/orgs-api"
  * nothing.
  */
 export default function JoinCodePage() {
+  const t = useT()
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
   const [code, setCode] = useState("")
@@ -55,14 +57,14 @@ export default function JoinCodePage() {
       <Card className="w-full max-w-md p-8">
         <form onSubmit={submit} className="space-y-5">
           <div className="space-y-2">
-            <h1 className="text-xl font-semibold">Join with a code</h1>
+            <h1 className="text-xl font-semibold">{t("org.joinWithCode")}</h1>
             <p className="text-sm text-muted-foreground">
-              Enter the code you were given. It is eight characters, and the hyphen is optional.
+              {t("org.enterJoinCodeHint")}
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="join-code">Join code</Label>
+            <Label htmlFor="join-code">{t("org.joinCode")}</Label>
             <Input
               id="join-code"
               value={code}
@@ -82,15 +84,15 @@ export default function JoinCodePage() {
 
           {authLoading ? (
             <Button disabled className="w-full">
-              Checking your session…
+              {t("org.checkingSession")}
             </Button>
           ) : user ? (
             <Button type="submit" disabled={busy || code.trim().length === 0} className="w-full">
-              {busy ? "Joining…" : "Join"}
+              {busy ? t("org.joining") : t("org.join")}
             </Button>
           ) : (
             <Button asChild className="w-full">
-              <Link to={`/login?redirect=${encodeURIComponent("/join")}`}>Sign in to join</Link>
+              <Link to={`/login?redirect=${encodeURIComponent("/join")}`}>{t("org.signInToJoin")}</Link>
             </Button>
           )}
         </form>
@@ -105,16 +107,16 @@ function failureMessage(code: string): string {
       // One answer for "no such code", "disabled" and "archived workspace",
       // matching the server: a code is guessable, so trying codes must not
       // reveal which of the three is true.
-      return "That code is not valid. Check it and try again, or ask for a new one."
+      return tx("org.joinCodeInvalid")
     case "member_suspended":
-      return "Your membership is suspended. A code cannot lift that — ask an administrator."
+      return tx("org.memberSuspended")
     case "domain_not_allowed":
-      return "This organization only admits certain email addresses, and yours is not one of them."
+      return tx("org.domainNotAllowed")
     case "org_not_active":
-      return "That organization is not active yet."
+      return tx("org.orgNotActiveYet")
     case "rate_limit_exceeded":
-      return "Too many attempts. Wait a minute and try again."
+      return tx("org.tooManyAttempts")
     default:
-      return "Something went wrong joining. Try again in a moment."
+      return tx("org.joinFailedGeneric")
   }
 }

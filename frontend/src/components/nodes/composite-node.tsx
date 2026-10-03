@@ -62,7 +62,7 @@ function CompositeNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex items-center justify-center h-16 rounded-md bg-[#475569]/10 border border-[#475569]/30">
             <div className="text-center">
               <div className="text-sm font-medium text-[#475569]">
-                {layerCount} layer{layerCount !== 1 ? "s" : ""}
+                {layerCount === 1 ? t("node.layerCountOne", { n: layerCount }) : t("node.layerCountMany", { n: layerCount })}
               </div>
               <div className="text-[10px] text-muted-foreground">{nodeData.durationSeconds}s</div>
             </div>
@@ -91,8 +91,8 @@ function CompositeNodeComponent({ id, data, selected }: NodeProps) {
 
         <div className="text-muted-foreground text-[10px] line-clamp-1">
           {nodeData.layers.length > 0
-            ? `${nodeData.layers.length} layer${nodeData.layers.length !== 1 ? "s" : ""} configured`
-            : "Connect videos to compose"}
+            ? t(nodeData.layers.length === 1 ? "node.layersConfiguredOne" : "node.layersConfiguredMany", { n: nodeData.layers.length })
+            : t("node.connectVideosToCompose")}
         </div>
       </div>
     </BaseNode>

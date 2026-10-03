@@ -19,4 +19,4 @@ const tokens = await client.oauth.exchangeCode({
 
 Scopes gate routes (e.g. `workflows:execute`, `jobs:read`); a missing scope
 surfaces as `ForbiddenError.missingScope`. Full walkthrough:
-https://nodaroai.github.io/app.nodaro.ai/oauth-flow.md
+https://nodaro.ai/docs/developers/oauth.md

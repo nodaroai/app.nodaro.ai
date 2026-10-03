@@ -4,6 +4,7 @@ import type { StoryboardCohesionCriticVerdict } from "@nodaro/shared"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { CriticBanner, type CriticBannerTone } from "./_critic-banner"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 interface Props {
   readonly assessment: StoryboardCohesionCriticVerdict["overall_assessment"]
@@ -47,13 +48,13 @@ const ASSESSMENT_TONE: Record<
   incoherent: "red",
 }
 
-const ASSESSMENT_LABELS: Record<
+const ASSESSMENT_LABEL_KEYS: Record<
   StoryboardCohesionCriticVerdict["overall_assessment"],
-  string
+  MessageKey
 > = {
-  coherent: "Coherent",
-  minor_issues: "Minor issues",
-  incoherent: "Incoherent",
+  coherent: "pipe.cohesionCoherent",
+  minor_issues: "pipe.cohesionMinorIssues",
+  incoherent: "pipe.cohesionIncoherent",
 }
 
 const ASSESSMENT_PILL_CLASSES: Record<
@@ -93,6 +94,7 @@ export function StoryboardCohesionBanner({
   onBranchFromShotList,
   onDismiss,
 }: Props) {
+  const t = useT()
   return (
     <CriticBanner
       tone={ASSESSMENT_TONE[assessment]}
@@ -101,7 +103,7 @@ export function StoryboardCohesionBanner({
       dismissTestId="storyboard-cohesion-dismiss"
       header={
         <>
-          <div className="font-medium">Storyboard Cohesion</div>
+          <div className="font-medium">{t("pipe.storyboardCohesion")}</div>
           <span
             className={cn(
               "text-xs px-1.5 py-0.5 rounded",
@@ -109,7 +111,7 @@ export function StoryboardCohesionBanner({
             )}
             data-testid="storyboard-cohesion-assessment"
           >
-            {ASSESSMENT_LABELS[assessment]}
+            {t(ASSESSMENT_LABEL_KEYS[assessment])}
           </span>
           <span
             className={cn(
@@ -130,7 +132,7 @@ export function StoryboardCohesionBanner({
             onClick={onBranchFromShotList}
             data-testid="storyboard-cohesion-branch-btn"
           >
-            Branch from Shot List
+            {t("pipe.branchFromShotList")}
           </Button>
         ) : undefined
       }
@@ -167,7 +169,7 @@ export function StoryboardCohesionBanner({
                           className="font-mono text-[10px] px-1 py-0.5 rounded bg-white/60 dark:bg-zinc-900/40 border border-current/20"
                           data-testid="storyboard-cohesion-affected-scene"
                         >
-                          scene {scene}
+                          {t("pipe.sceneNumberLower", { n: scene })}
                         </span>
                       ))}
                     </span>
@@ -177,7 +179,7 @@ export function StoryboardCohesionBanner({
                   {f.description}
                 </div>
                 <div className="text-zinc-500 dark:text-zinc-400">
-                  Try: {f.suggested_action}
+                  {t("pipe.tryPrefix", { suggestion: f.suggested_action })}
                 </div>
               </div>
             </li>

@@ -13,7 +13,7 @@ There are no settings — connect a video and run.
 **Inputs:** Video (required)
 
 **Outputs:**
-- Audio (MP3)
+- Audio (MP3), saved and downloaded as an `.mp3` file
 
 ## Configuration
 

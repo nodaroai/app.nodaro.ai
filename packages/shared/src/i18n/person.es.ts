@@ -288,6 +288,7 @@ const map: LocaleCatalogMap = {
   "face-full-beard": { label: "Barba Completa", description: "Barba gruesa y completa" },
 
   // -------------------- Skin Texture --------------------
+  "texture-natural": { label: "Natural", description: "Poros reales y variación natural" },
   "texture-smooth": { label: "Lisa", description: "Piel impecable, sedosa y lisa" },
   "texture-wrinkled": { label: "Arrugada", description: "Piel envejecida, profundamente marcada" },
   "texture-goosebumps": { label: "Piel de Gallina", description: "Piel de gallina levantada" },

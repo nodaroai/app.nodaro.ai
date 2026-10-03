@@ -45,6 +45,7 @@ import { resolveNodeInputs, getListInputForNode, getListFanOutForNode } from "..
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
 import { extractSourceNodeOutput, extractSavedNodeOutput } from "../services/workflow-engine/output-extractor.js"
+import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
 import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { labelRefHintContext } from "../services/workflow-engine/label-ref-hint-context.js"
 import {
@@ -61,8 +62,9 @@ import type {
   ResolvedInputs,
   OrchestratorContext,
 } from "../services/workflow-engine/types.js"
-import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
-import { filterCloneNodes, PARAMETER_NODE_TYPES, migrateEdgeOutputMode, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, planFanOut, type FanOutPlan, decodeProviderItem, calculateMonetizationMarkup, resolveEffectiveTier } from "@nodaro/shared"
+import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs, workflowCapMs } from "../lib/job-budget.js"
+import { executionBudgetExcessMs } from "../lib/execution-budget.js"
+import { filterCloneNodes, PARAMETER_NODE_TYPES, migrateEdgeOutputMode, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, planFanOut, type FanOutPlan, decodeProviderItem, calculateMonetizationMarkup, resolveEffectiveTier, withWiredSettings } from "@nodaro/shared"
 import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts"
 import { applyInputOverridesToNodes } from "./apply-input-overrides.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
@@ -100,9 +102,11 @@ export function getParallelismLimit(tier: string | undefined): number {
  *      will re-pick the orchestration job within `stalledInterval` and
  *      another worker will resume it. We only mark as failed if the
  *      execution has been "running" for much longer than any job could
- *      reasonably take (safety net for truly abandoned rows).
+ *      reasonably take (safety net for truly abandoned rows): 4 hours
+ *      (`STALE_EXECUTION_THRESHOLD_MS`, `lib/job-budget.ts` — shared with the
+ *      90-s cron), plus the budget excess of any long render the run
+ *      dispatched (Track 0.11), so both sweeps draw the line in the same place.
  */
-const STALE_EXECUTION_THRESHOLD_MS = 4 * 60 * 60 * 1000 // 4 hours
 
 /** Cap per-restart sweep so a large backlog (e.g., several hundred stuck
  *  rows after a prolonged outage) doesn't hold up worker startup. Each row
@@ -270,9 +274,12 @@ export async function cleanupStaleExecutions(): Promise<void> {
     // For non-null started_at, only abandon when past the >4h threshold —
     // otherwise let BullMQ's stalled-job retry pick it back up.
     const startedAt = row.started_at ? new Date(row.started_at).getTime() : 0
+    // The run's budget excess is read only once the base threshold is passed,
+    // so a run with nothing budgeted is judged exactly as before.
     const isAbandonable =
       startedAt === 0 ||
-      (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS)
+      (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS &&
+        now - startedAt > staleExecutionThresholdMs(await executionBudgetExcessMs(row.id, states)))
 
     if (isAbandonable) {
       await tryTerminalWrite(
@@ -779,11 +786,14 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // cancelled + refunded (re-running them is free); post-provider jobs
     // (provider_task_id set) are ADOPTED — the node executor polls the
     // existing job instead of creating a new one, so the provider is never
-    // paid twice for the same node (audit A2). MUST run after the
-    // carry-forward above (cancelling earlier would make reconcile map these
-    // to "skipped" and carry their nodes forward as done). No-op on a first
-    // pick. See cancelInFlightChildJobs for the residual-race note.
-    const { adoptable } = await cancelInFlightChildJobs(executionId)
+    // paid twice for the same node (audit A2). So is a BUDGETED render
+    // (apply-edl) whose worker is still heartbeating — re-attached on its
+    // original clocks, never restarted (Track 0.11 follow-up, decided
+    // 2026-09-24). MUST run after the carry-forward above (cancelling earlier
+    // would make reconcile map these to "skipped" and carry their nodes
+    // forward as done). No-op on a first pick. See cancelInFlightChildJobs for
+    // the residual-race note.
+    const { adoptable } = await cancelInFlightChildJobs(executionId, { adoptLiveBudgetedRenders: true })
     if (adoptable.size > 0) ctx.adoptableJobs = adoptable
     // Jobs → owning node. Fan-out creates one job per iteration, so the
     // scalar nodeStates[node].jobId field would only remember the last one
@@ -861,20 +871,10 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         // executable filter excludes it (status === "completed"), and the
         // render-video payload reads output.plan FIRST (payload-builder §render-video),
         // so the frozen plan — not a re-roll — drives the render.
-        nodeStates[node.id] = {
-          status: "completed",
-          output: { plan: node.data.motionPlan as Record<string, unknown> },
-          completedAt: new Date().toISOString(),
-        }
+        nodeStates[node.id] = seededFromSavedData({ plan: node.data.motionPlan as Record<string, unknown> })
       } else if (isSourceNode(node.type)) {
         const output = extractSourceNodeOutput(node, triggerData)
-        if (output) {
-          nodeStates[node.id] = {
-            status: "completed",
-            output,
-            completedAt: new Date().toISOString(),
-          }
-        }
+        if (output) nodeStates[node.id] = seededFromSavedData(output)
       } else if (node.type && PARAMETER_NODE_TYPES.has(node.type)) {
         // Parameter pickers (mood, action-fx, loop-subject, person, etc.) emit
         // a prompt fragment via FieldMappings — they never make API calls and
@@ -886,29 +886,15 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         // Graph-composed pickers (labelRefHintContext) get the run graph, so
         // that text matches the editor (wired names, minor-age floor).
         const hint = getParameterPromptHint(node, labelRefHintContext(node, nodes, edges))
-        nodeStates[node.id] = {
-          status: "completed",
-          output: hint ? { text: hint } : {},
-          completedAt: new Date().toISOString(),
-        }
+        nodeStates[node.id] = seededFromSavedData(hint ? { text: hint } : {})
       } else if (skippedIds.has(node.id)) {
         // Skipped = frozen: don't re-execute, but preserve saved output
         // so downstream nodes can still resolve inputs from this node.
-        const output = extractSavedNodeOutput(node) ?? extractSourceNodeOutput(node, triggerData)
-        nodeStates[node.id] = {
-          status: "completed",
-          output: output ?? undefined,
-          completedAt: new Date().toISOString(),
-        }
+        nodeStates[node.id] = seededFromSavedData(extractSavedNodeOutput(node) ?? extractSourceNodeOutput(node, triggerData))
       } else if (nodeSubset && !nodeSubset.has(node.id)) {
         // Node is outside the requested subset — treat as pre-completed
         // so downstream nodes can resolve inputs from its saved data.
-        const output = extractSavedNodeOutput(node) ?? extractSourceNodeOutput(node, triggerData)
-        nodeStates[node.id] = {
-          status: "completed",
-          output: output ?? undefined,
-          completedAt: new Date().toISOString(),
-        }
+        nodeStates[node.id] = seededFromSavedData(extractSavedNodeOutput(node) ?? extractSourceNodeOutput(node, triggerData))
       }
     }
 
@@ -927,7 +913,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // Compute nodes downstream of upload-* nodes — their jobs should be force_private
     ctx.uploadDescendantIds = getUploadDescendantIds(nodes, edges)
 
-    // Initialize all executable nodes as "pending" so they appear in the UI immediately
+    // Every executable node is marked "pending" (below, after the fan-out
+    // pre-scan) so it appears in the UI immediately.
     const executableNodes = nodes.filter((n) => {
       if (isSourceNode(n.type)) return false
       if (isSkipNode(n.type)) return false
@@ -942,19 +929,15 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       return true
     })
 
-    for (const node of executableNodes) {
-      if (!nodeStates[node.id]) {
-        nodeStates[node.id] = {
-          status: "pending",
-          nodeType: node.type,
-        }
-      }
-    }
-
     // 5b. Pre-scan for fan-out to get accurate initial total_nodes.
     //     Source node outputs are already in nodeStates, so direct fan-out
     //     from list/loop nodes can be detected. Transitive fan-out (through
     //     text-prompts) is also detected since getListInputForNode handles it.
+    //     It runs BEFORE the executable nodes are marked pending: a node that
+    //     has not run yet has no state here, so its saved list sizes the
+    //     estimate (saved-data.ts) — an estimate is all this count is. Marked
+    //     pending first, every such node would count once and the progress
+    //     would overshoot its total.
     let totalExecutions = executableNodes.length
     for (const node of executableNodes) {
       const listItems = getListInputForNode(
@@ -985,6 +968,15 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         totalExecutions += expandedCount - 1
       } else if (repeatCount > 1) {
         totalExecutions += repeatCount - 1
+      }
+    }
+
+    for (const node of executableNodes) {
+      if (!nodeStates[node.id]) {
+        nodeStates[node.id] = {
+          status: "pending",
+          nodeType: node.type,
+        }
       }
     }
 
@@ -1027,7 +1019,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // review is failed at the execution level even though every node-level
       // clock was correctly frozen. MAX across children, not sum — sibling
       // holds overlap in wall-clock time.
-      if (Date.now() - startTime - (ctx.maxChildHeldMs ?? 0) > WORKFLOW_TIMEOUT_MS) {
+      //
+      // The cap is WORKFLOW_TIMEOUT_MS plus the summed budget excess of every
+      // long render this run has dispatched (Track 0.11 — `ctx.budgetExcessMs`,
+      // grown by the node executor at dispatch). A run with nothing budgeted
+      // keeps 120 minutes exactly.
+      if (Date.now() - startTime - (ctx.maxChildHeldMs ?? 0) > workflowCapMs(ctx.budgetExcessMs)) {
         await failExecution(executionId, "Workflow execution timed out", nodeStates)
         return
       }
@@ -1132,10 +1129,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
 
           // Check for list fan-out input. The plan pins every iteration to the
           // ROW it reads and carries the handle the driving list is wired to.
+          // Planned on the node as it runs: a Provider wired into its
+          // Settings input makes a several-model image run one model.
           const expanded = planFanOut(
             getListFanOutForNode(node, edges, nodeStates, nodes, triggerData),
             node.type,
-            node.data as Record<string, unknown>,
+            withWiredSettings(node, nodes, edges).data as Record<string, unknown>,
           )
 
           let result: ExecuteNodeResult

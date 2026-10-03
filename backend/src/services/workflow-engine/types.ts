@@ -6,7 +6,7 @@ import type { MediaItem } from "../social/platforms/index.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import type { Caption } from "@remotion/captions"
 import type { ErrorHint } from "../../lib/safety-block.js"
-import type { NodeExecutionStatus, NodeExecutionStateWire } from "@nodaro/shared"
+import type { NodeExecutionStatus, NodeExecutionStateWire, VideoOverlayWarning } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
@@ -70,6 +70,10 @@ export interface NodeOutput {
   paramOutputs?: Record<string, string>
   /** Accumulated results from fan-out (list/loop/split-text) execution */
   listResults?: string[]
+  /** social-search: EVERY post the search found (the editor's picker grid);
+   *  `json` holds only the posts the node passes on. Lets a server-side run
+   *  repaint the node card the way the editor's own run does. */
+  searchResults?: unknown[]
   /**
    * The same list ROW-ALIGNED with the array it was cut from: one entry per
    * element, "" where the element has no value (Extract Field, List output).
@@ -78,6 +82,13 @@ export interface NodeOutput {
    * item / item:N / range / Bundle and every list node index.
    */
   alignedListResults?: string[]
+  /**
+   * Video Overlay list fan-out: each row's own freshness key
+   * (`videoOverlayCompositionKey` of the composition that produced that row),
+   * ROW-ALIGNED with `listResults` — "" where the row has none. Absent when no
+   * iteration carried a key. The canvas stamps each result row with it.
+   */
+  listResultCompositionKeys?: string[]
   /** Selector node `picked` output channel (selected items). */
   pickedResults?: string[]
   /** Selector node `rest` output channel (items NOT picked). */
@@ -133,6 +144,14 @@ export interface NodeOutput {
   panelUrls?: readonly string[]
   /** 3D Render Pro: one still per shot of the exported composition, in shot order. */
   shotStills?: ReadonlyArray<{ shotIndex: number; frame: number; assetId: string; url: string }>
+  /** Video Overlay: the worker's warnings (clipped / skipped / …) — the node's "Last run" line. */
+  warnings?: ReadonlyArray<VideoOverlayWarning>
+  /** Video Overlay: the output canvas and length. */
+  width?: number
+  height?: number
+  durationSec?: number
+  /** Video Overlay: the freshness key the DAG payload stamped (`videoOverlayCompositionKey`). */
+  resultCompositionKey?: string
 }
 
 /**
@@ -187,6 +206,11 @@ export interface NodeExecutionState {
    *  while a child is legitimately under review. Cleared when the job leaves
    *  review. */
   awaitingReview?: boolean
+  /** The run built this state from the node's saved data (or its own config)
+   *  instead of running it: a source or parameter node, a node frozen with
+   *  Skip, a node outside a partial run's subset. Only then may a reader fall
+   *  back to the node's saved results — see `saved-data.ts`. */
+  fromSavedData?: true
 }
 
 /**
@@ -207,7 +231,7 @@ export interface WorkflowExecutionJob {
   executionId: string
   workflowId: string
   userId: string
-  triggerType: "manual" | "webhook" | "schedule" | "api" | "telegram" | "app_run"
+  triggerType: "manual" | "webhook" | "schedule" | "api" | "telegram" | "telegram_account" | "app_run"
   triggerData?: Record<string, unknown>
   /** Optional subset of node IDs to execute (for "run from here" / "run selected"). */
   nodeIds?: string[]
@@ -296,6 +320,11 @@ export interface ResolvedInputs {
    *  prompt routing. */
   negativePrompt?: string
   imageUrl?: string
+  /** face-swap: the face photo wired into its `face` handle (an image
+   *  producer's file or an entity's portrait). Its own lane, like the editor's
+   *  `faceImageUrl`, so the face never lands in `imageUrl` or
+   *  `referenceImageUrls` where the face-swap payload does not look. */
+  faceImageUrl?: string
   videoUrl?: string
   /** Upstream video duration (seconds) — used for accurate credit estimation
    *  on trim-video / loop-video. Set when the upstream node exposes a
@@ -314,10 +343,14 @@ export interface ResolvedInputs {
    *  the wire's index-aligned imageSizes array. Mirrors
    *  videoUrlsWithSourceIds; pushed in lockstep with imageUrls. */
   imageUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>
-  /** Image Overlay: overlay image URLs keyed by HANDLE index — overlay → [0],
-   *  overlay2 → [1], … overlay12 → [11]. Sparse when a middle handle is unwired;
-   *  the payload builder skips the holes and aligns data.layers[i] by index. */
+  /** Image Overlay and Video Overlay: layer image URLs keyed by HANDLE index —
+   *  overlay → [0], overlay2 → [1], … overlay12 → [11]. Sparse when a middle
+   *  handle is unwired; the payload builder skips the holes and aligns
+   *  data.layers[i] by index. */
   overlayImageUrls?: (string | undefined)[]
+  /** Video Overlay's reserved JSON layer-plan input (VIDEO_OVERLAY_LAYER_PLAN_HANDLE).
+   *  Routed, never read in v1 — no pip renders for it yet. */
+  layerPlan?: string
   /** Text wired into an image-overlay node's "qrText" handle (fills its fromInput QR layers). */
   overlayQrText?: string
 
@@ -431,18 +464,52 @@ export interface ResolvedInputs {
    *  ceiling. The builder also annotates each row with the node's per-source config
    *  (role/speakers/offsetMs/kind override) into the plugin's `sources[]`. Richer
    *  than apply-edl's positional `sources`. */
-  editPlanSources?: Array<{ nodeId: string; url: string; kind: "video" | "audio"; duration?: number }>
+  editPlanSources?: Array<{ nodeId: string; url: string; kind: "video" | "audio"; duration?: number; label?: string }>
+  /** edit-plan: audio-sync's result (stringified json) from the `offsets`
+   *  handle — the payload builder writes it onto the sources' `offsetMs`
+   *  (`applyAudioSyncOffsets`, B4). */
+  editPlanOffsets?: unknown
+  /** edit-plan: the node the transcript was made from, when the canvas shows
+   *  it (`editPlanTranscriptOrigin`) — checked against the master's clock. */
+  editPlanTranscriptOrigin?: string
+  /** audio-sync: the recordings wired into the `sources` handle, in wire order,
+   *  each carrying its source NODE id — which becomes the result's `sourceId`
+   *  (the same id an edit plan mints as that recording's EdlSource id). The
+   *  payload builder orders them by the node's `sourceOrder`. */
+  audioSyncSources?: Array<{ nodeId: string; url: string }>
+  /** content-recipe: the post's own link, from a wire into the node's `link`
+   *  handle — a Video URL node's PAGE link (never its downloaded file) or a
+   *  text node's text. Cited on the recipe, never fetched. */
+  sourceLink?: string
+  /** video-analysis: a post's link from a TEXT output wired into the node's
+   *  `video` handle (the Telegram Account Trigger's Video link, a Text node).
+   *  Read like the node's own link field, and before it; a wired video file
+   *  still wins over both. Only an http(s) link is kept. */
+  videoPageUrl?: string
 }
 
 // ---------------------------------------------------------------------------
 // Execution context passed to orchestrator internals
 // ---------------------------------------------------------------------------
 
+/** Where an ADOPTED job's poll clocks start (podcast Track 0.11 follow-up).
+ *  A live budgeted render re-attached on an orchestrator resume is timed from
+ *  its row, not from the adoption: the poll-absolute clock from the original
+ *  dispatch (`jobs.created_at`), the processing clock from the worker's pickup
+ *  (`jobs.started_at`). A resume therefore never grants a fresh budget — a
+ *  render adopted after its budget is spent times out on the first tick, as
+ *  it would have without the re-pick. Absent fields fall back to today's
+ *  "now" / first-seen-processing. */
+export interface AdoptedJobClocks {
+  readonly dispatchedAtMs?: number
+  readonly processingStartedAtMs?: number
+}
+
 export interface OrchestratorContext {
   executionId: string
   workflowId: string
   userId: string
-  triggerType: "manual" | "webhook" | "schedule" | "api" | "telegram" | "app_run"
+  triggerType: "manual" | "webhook" | "schedule" | "api" | "telegram" | "telegram_account" | "app_run"
   triggerData?: Record<string, unknown>
   /** Abort signal — set when execution is cancelled */
   cancelled: boolean
@@ -472,14 +539,31 @@ export interface OrchestratorContext {
    *  sum: sibling holds overlap in wall-clock time, so summing would
    *  over-credit a fan-out. */
   maxChildHeldMs?: number
+  /** Σ over this execution's budgeted dispatches of how far each declared
+   *  budget reaches past `NODE_TIMEOUT_MS` (podcast Track 0.11 —
+   *  `lib/job-budget.ts`). The orchestrator's cap is `WORKFLOW_TIMEOUT_MS`
+   *  plus this (`workflowCapMs`). Grown by `addBudgetExcess`: at dispatch of a
+   *  node whose job declares a budget (apply-edl), on adopting such a job, and
+   *  when a component node's inner execution finishes (its own summed excess).
+   *  Inline sub-workflows share this context, so their long nodes count too.
+   *  Undefined (= 0) for a run with nothing budgeted — today's 120 minutes. */
+  budgetExcessMs?: number
   /** Node IDs that have upload-* ancestors — their jobs should be force_private */
   uploadDescendantIds?: Set<string>
-  /** In-flight child jobs from a prior (crashed) orchestrator attempt whose
-   *  provider call already went out — the node executor ADOPTS these (polls
-   *  the existing job) instead of creating a new job + paying the provider a
-   *  second time (audit A2). Keyed by owning node id; populated on re-pick by
+  /** In-flight child jobs from a prior (crashed) orchestrator attempt that the
+   *  node executor ADOPTS (polls the existing job) instead of creating a new
+   *  one: a provider job whose call already went out (audit A2 — no second
+   *  provider charge), or a budgeted render whose worker is still heartbeating
+   *  (Track 0.11 follow-up — the render never restarts; `clocks` carry its
+   *  original start). Keyed by owning node id; populated on re-pick by
    *  cancelInFlightChildJobs. */
-  adoptableJobs?: Map<string, { jobId: string; usageLogId?: string; creditsReserved?: number }>
+  adoptableJobs?: Map<string, {
+    jobId: string
+    usageLogId?: string
+    creditsReserved?: number
+    budgetMs?: number
+    clocks?: AdoptedJobClocks
+  }>
   /** Whether this execution is running a published app (affects free-tier app credit allowance) */
   isAppRun?: boolean
   /** Pool-aware spend-surface mode (D1 v2): true when the run was triggered
@@ -516,7 +600,12 @@ export interface OrchestratorContext {
  *  ~60min at MAX_POLL_ATTEMPTS_LIP_SYNC_LONG=360 × 10s cap) plus 30-min
  *  headroom. Without this, lip-sync nodes time out the orchestrator before
  *  the upstream completes, and the workflow_execution row stays `failed`
- *  even when reconcile later recovers the underlying job. */
+ *  even when reconcile later recovers the underlying job.
+ *
+ *  The DEFAULT: a node whose job declares a budget (apply-edl — a final render
+ *  of a long episode is hours of ffmpeg) is held to that budget instead, and
+ *  the execution's cap grows by the same excess (`lib/job-budget.ts ::
+ *  nodeCeilings` / `workflowCapMs`, podcast Track 0.11). */
 export const NODE_TIMEOUT_MS = 90 * 60 * 1000 // 90 minutes
 
 /** Max time for an entire workflow execution (ms). Sized to cover a
@@ -526,14 +615,20 @@ export const NODE_TIMEOUT_MS = 90 * 60 * 1000 // 90 minutes
  *  per-node ceiling. This is the EXECUTION ceiling only —
  *  it no longer mirrors the BullMQ `lockDuration`, which is short and
  *  auto-renewed (ORCHESTRATOR_LOCK_MS in orchestrator-worker.ts). Shrinking
- *  the lock does NOT shrink how long an execution may run. */
+ *  the lock does NOT shrink how long an execution may run.
+ *
+ *  The cap for a run with nothing budgeted. A run that dispatched long renders
+ *  gets this plus the sum of their excesses (`OrchestratorContext.
+ *  budgetExcessMs`, `lib/job-budget.ts :: workflowCapMs`). */
 export const WORKFLOW_TIMEOUT_MS = 120 * 60 * 1000 // 120 minutes
 
 /** Polling interval for checking job completion (ms) */
 export const JOB_POLL_INTERVAL_MS = 3_000 // 3 seconds
 
 /** Absolute max time a single poll loop can run, including queue wait (ms).
- *  Safety net — even if the job stays "pending" forever (worker down), we bail out. */
+ *  Safety net — even if the job stays "pending" forever (worker down), we bail out.
+ *  Grows by a budgeted node's excess exactly like `NODE_TIMEOUT_MS`
+ *  (`lib/job-budget.ts :: nodeCeilings`). */
 export const POLL_ABSOLUTE_TIMEOUT_MS = 90 * 60 * 1000 // 90 minutes
 
 /** Max depth for sub-workflow nesting */

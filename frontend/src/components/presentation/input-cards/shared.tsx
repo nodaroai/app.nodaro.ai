@@ -8,6 +8,7 @@ import type { InputMode } from "@/types/nodes"
 import type { PromptContext } from "@/lib/prompt-context"
 import { GlassCard } from "../output-cards/shared"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
+import { useT } from "@/lib/i18n"
 
 /** Deterministic waveform bar heights for decorative display */
 export const WAVEFORM_HEIGHTS = [18, 14, 22, 16, 20]
@@ -120,6 +121,7 @@ export function UrlInputRow({
   onChange: (value: string) => void
   onSubmit: () => void
 }) {
+  const t = useT()
   return (
     <div className="mt-2 flex gap-2">
       <input
@@ -127,7 +129,7 @@ export function UrlInputRow({
         value={urlValue}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && onSubmit()}
-        placeholder="https://..."
+        placeholder={t("apps.previewMediaPlaceholder")}
         className="flex-1 bg-muted/30 border border-border rounded-lg px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-[#ff0073]/50"
         autoFocus
       />
@@ -136,7 +138,7 @@ export function UrlInputRow({
         onClick={onSubmit}
         className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 text-muted-foreground rounded-lg transition-colors"
       >
-        Set
+        {t("present.set")}
       </button>
     </div>
   )
@@ -144,11 +146,12 @@ export function UrlInputRow({
 
 /** Upload spinner shown during file upload */
 export function UploadSpinner({ size = "md" }: { size?: "sm" | "md" }) {
+  const t = useT()
   const dim = size === "sm" ? "w-6 h-6" : "w-8 h-8"
   return (
     <div className="flex flex-col items-center gap-2">
       <div className={`${dim} border-2 border-[#ff0073]/40 border-t-[#ff0073] rounded-full animate-spin`} />
-      <span className="text-xs text-muted-foreground">Uploading...</span>
+      <span className="text-xs text-muted-foreground">{t("inputcfg.uploading")}</span>
     </div>
   )
 }
@@ -179,6 +182,7 @@ export function FileDropZone({
   height?: string
   onShowUrl: () => void
 }) {
+  const t = useT()
   return (
     <div
       className={`relative flex flex-col items-center justify-center ${height} border-2 border-dashed rounded-lg transition-all duration-200 cursor-pointer ${
@@ -202,7 +206,7 @@ export function FileDropZone({
             className="mt-2 py-1.5 px-2 text-[11px] text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-1 transition-colors touch-manipulation"
             onClick={(e) => { e.stopPropagation(); onShowUrl() }}
           >
-            <Link className="w-3 h-3" /> or paste URL
+            <Link className="w-3 h-3" /> {t("present.orPasteUrl")}
           </button>
         </>
       )}

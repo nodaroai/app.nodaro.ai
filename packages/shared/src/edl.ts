@@ -1,3 +1,6 @@
+import { speakerSwitchOverlaps, speakerPresentationWarnings } from "./speaker-layouts.js"
+import type { EdlTargetAspect } from "./speaker-layouts.js"
+
 /**
  * EDL — the edit decision list contract.
  *
@@ -9,8 +12,9 @@
  * vocabulary — no prompts, no heuristics, no editorial judgment — which is why
  * it lives in the Apache-licensed `@nodaro/shared` (the wire shape of
  * `/v1/edl/*`, an SDK type, an MCP output). Every published version is an
- * irrevocable grant, so the four resolved decisions (see below) all land in
- * version 1: renaming or adding a field later would be a breaking major bump.
+ * irrevocable grant, so the three resolved decisions (see below) all land in
+ * version 1: renaming a field, or adding a REQUIRED one, later would be a
+ * breaking major bump — so every later field is optional and additive.
  *
  * This module is PURE — no I/O, no ffmpeg, no network. The executors
  * (`apply-edl`, `speaker-view`) turn an EDL into pixels; they live in the app
@@ -21,18 +25,21 @@
  *  - D17 OVERLAP: a crossfade consumes time from the outgoing segment (ffmpeg
  *    `xfade`, as combine-videos already does), so the rendered timeline is
  *    SHORTER than the sum of segment durations. `edlDurationMs` subtracts the
- *    overlap transitions; `cut`/`pan`/`zoom` consume no time (geometry tweens
- *    inside one source).
+ *    overlap transitions; cut/pan/zoom consume no time (pan: a geometry tween
+ *    inside ONE source; zoom: a tween inside each segment); only the `xfade:*`
+ *    family and a segment `crossfade` overlap.
  *  - D19 CLOCK/SOURCE/SIGN: `Edl.clock` says whether `segments` are on the
  *    source master clock or an output clock; `Transcript.sourceId` says which
  *    source a transcript came from; the offset sign is `masterMs = sourceMs +
  *    offsetMs(source)`, applied by the remap functions.
  *  - D20 PRECEDENCE/RENAME: region precedence
- *    `slot.region ▷ segment.region (single-slot only) ▷ regions[speaker] ▷
- *    source.region ▷ full frame`; `segment.region` is invalid when the
- *    segment's layout has more than one slot; `slots[].weight` (0..1, active
- *    = 1) replaces the design's `slots[].emphasis` so it no longer collides
- *    with `layout.emphasis` ({ style, durationMs }).
+ *    `slot.region ▷ segment.region (single-slot only) ▷ a caller's per-slot
+ *    resolver (v3 tracks) ▷ regions[(source, speaker)] ▷ source.region ▷ full
+ *    frame`, implemented ONCE by `resolveEdlSegmentSlots` (edl-multicam.ts);
+ *    `segment.region` is invalid when the segment's layout has more than one
+ *    slot; `slots[].weight` (0..1, active = 1) replaces the design's
+ *    `slots[].emphasis` so it no longer collides with `layout.emphasis`
+ *    ({ style, durationMs }).
  *
  * Time is INTEGER MILLISECONDS everywhere. There is no seconds→ms guessing
  * (`normalizeEdl` never reinterprets a unit — an implausible value is a
@@ -49,6 +56,11 @@ export interface EdlRegion {
   readonly h: number
 }
 
+export const EDL_SOURCE_ROLES = ["master-audio", "camera", "wide", "screen"] as const
+export type EdlSourceRole = (typeof EDL_SOURCE_ROLES)[number]
+
+const KNOWN_SOURCE_ROLES: ReadonlySet<string> = new Set(EDL_SOURCE_ROLES)
+
 /** A media input to the edit. Ids are minted once (by `edit-plan`) and never
  *  re-derived, so downstream nodes resolve media from `url` in the data, not
  *  from canvas handle order. Keep the `url` key: the cloud relay re-hosts
@@ -59,7 +71,9 @@ export interface EdlSource {
   readonly kind: "video" | "audio"
   /** This source's origin on the master clock. `masterMs = sourceMs + offsetMs`. Default 0. */
   readonly offsetMs?: number
-  readonly role?: "master-audio" | "camera" | "wide" | "screen"
+  /** Known roles: EDL_SOURCE_ROLES. Open (`string & {}`) so an EDL written by a newer producer still type-checks
+   *  and still validates — an unknown role is a WARNING (validateEdl); an executor that cannot honour it refuses it. */
+  readonly role?: EdlSourceRole | (string & {})
   /** Speaker labels this source frames (multicam). Empty = unknown. */
   readonly speakers?: readonly string[]
   /** A static crop for this source (speaker-view v1 framing). */
@@ -68,7 +82,10 @@ export interface EdlSource {
 
 /** How a segment is presented on screen (speaker-view, phase 2). `mode` and
  *  `transition.type` are ids from the `SPEAKER_LAYOUTS` / `SPEAKER_SWITCHES`
- *  registries (phase 2); v1 leaves layout undefined (single camera). */
+ *  registries (speaker-layouts.ts); `emphasis.style` is a `+`-joined set of
+ *  atomic `SPEAKER_EMPHASIS_STYLES` (e.g. "scale+border"). Unknown ids are
+ *  validation WARNINGS, and `mode` stays an open string on purpose. v1 leaves
+ *  layout undefined (single camera). */
 export interface EdlLayout {
   /** "single" | "side-by-side" | "stacked" | "grid" | "pip" | … */
   readonly mode: string
@@ -80,10 +97,11 @@ export interface EdlLayout {
      *  colliding with `layout.emphasis`.) */
     readonly weight?: number
   }>
-  /** "none" | "scale" | "border" | "dim" | …, eased over durationMs. */
+  /** A "+"-joined set of "none" | "scale" | "border" | "dim" | …, eased over durationMs. */
   readonly emphasis?: { readonly style: string; readonly durationMs: number }
   /** Into THIS segment. "cut" | "pan" | "zoom" consume no time; "xfade:<id>" overlaps (D17).
-   *  `durationMs` is optional and inert for the non-overlap types. */
+   *  `durationMs` never consumes timeline time for the non-overlap types: it
+   *  is the tween length for `pan` / `zoom` and is ignored for `cut`. */
   readonly transition?: { readonly type: string; readonly durationMs?: number }
 }
 
@@ -128,7 +146,10 @@ export interface Edl {
   readonly meta?: {
     readonly title?: string
     readonly hook?: string
-    readonly targetAspect?: "16:9" | "9:16" | "1:1" | "4:5"
+    /** Known aspects: `EDL_TARGET_ASPECTS`. Open (`string & {}`) so an EDL
+     *  written by a newer producer still type-checks — an unknown aspect is a
+     *  validation WARNING (validateEdl), never an issue. */
+    readonly targetAspect?: EdlTargetAspect | (string & {})
     readonly platform?: string
     readonly notes?: string
   }
@@ -147,95 +168,6 @@ export interface EdlClipSet {
 export interface ChapterSet {
   readonly version: 1
   readonly chapters: ReadonlyArray<{ readonly startMs: number; readonly title: string }>
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-//  edit-plan credit-id scheme (STRUCTURE only — the per-mode/tier/bucket credit
-//  VALUES live app-side in backend/ee/billing/credits.ts + migration 432, since
-//  they are probe-set placeholders and the DB row wins at runtime). Lives HERE
-//  so BOTH core payload-builder and ee credits.ts read one id builder — core
-//  may not import ee (check-ee-imports), the same reason buildVideoAnalysisCreditId
-//  is shared. Mirrors the plugin's own (D13-local) pricing.ts scheme.
-// ─────────────────────────────────────────────────────────────────────────
-
-export type EditPlanMode = "tighten" | "clips" | "chapters"
-export type EditPlanTier = "economy" | "standard" | "premium"
-export const EDIT_PLAN_MODES: readonly EditPlanMode[] = ["tighten", "clips", "chapters"]
-export const EDIT_PLAN_TIERS: readonly EditPlanTier[] = ["economy", "standard", "premium"]
-/** The coarse duration ladder (MINUTES) a probed source duration rounds UP to;
- *  the composite credit id carries the bucket. 3 modes × 3 tiers × 6 buckets =
- *  54 composites (+ the bare `edit-plan`). */
-export const EDIT_PLAN_BUCKET_MINUTES: readonly number[] = [15, 30, 60, 90, 120, 180]
-/** Hard duration cap (design §7.4). */
-export const EDIT_PLAN_MAX_MINUTES = 180
-/** `clips` mode: how many clips a plan returns when the caller names no count,
- *  and the most it may be asked for. One source for the credit estimate, the
- *  orchestrated payload clamp and the request schema. */
-export const EDIT_PLAN_DEFAULT_CLIP_COUNT = 8
-export const EDIT_PLAN_MAX_CLIP_COUNT = 50
-
-/** Clamp a requested clip count into `[1, EDIT_PLAN_MAX_CLIP_COUNT]`; `undefined`
- *  for anything that is not a positive number (the planner then uses its default). */
-export function clampEditPlanClipCount(count: unknown): number | undefined {
-  if (typeof count !== "number" || !Number.isFinite(count) || count <= 0) return undefined
-  return Math.min(EDIT_PLAN_MAX_CLIP_COUNT, Math.max(1, Math.floor(count)))
-}
-/** The bare estimator / DB-down fallback id. */
-export const EDIT_PLAN_BASE_CREDIT_ID = "edit-plan"
-
-/** Round a source duration (seconds) UP to the smallest covering ladder bucket
- *  (capped at the max), in minutes. `undefined` / non-finite → the ceiling
- *  bucket (the safe over-reserve direction). */
-export function editPlanBucketMinutes(durationSec: number | undefined): number {
-  const secs = typeof durationSec === "number" && Number.isFinite(durationSec) ? durationSec : EDIT_PLAN_MAX_MINUTES * 60
-  const mins = Math.max(1, Math.ceil(secs / 60))
-  const capped = Math.min(mins, EDIT_PLAN_MAX_MINUTES)
-  for (const b of EDIT_PLAN_BUCKET_MINUTES) if (capped <= b) return b
-  return EDIT_PLAN_BUCKET_MINUTES[EDIT_PLAN_BUCKET_MINUTES.length - 1]!
-}
-
-/** `edit-plan:<mode>:<tier>:<bucket>m`. `durationSec` undefined → the ceiling
- *  bucket. Single source of truth for the composite id shape. */
-export function buildEditPlanCreditId(mode: EditPlanMode, tier: EditPlanTier, durationSec?: number): string {
-  return `edit-plan:${mode}:${tier}:${editPlanBucketMinutes(durationSec)}m`
-}
-
-/** Narrow an arbitrary value to a known edit-plan mode, defaulting to "tighten". */
-export function asEditPlanMode(v: unknown): EditPlanMode {
-  return v === "clips" || v === "chapters" ? v : "tighten"
-}
-
-/** Narrow an arbitrary value to a known edit-plan tier, defaulting to "standard". */
-export function asEditPlanTier(v: unknown): EditPlanTier {
-  return v === "economy" || v === "premium" ? v : "standard"
-}
-
-/**
- * Unwrap an `edit-plan` job's `output_data` into the value stored on the node's
- * `data.generatedJson`, which every output extractor then reads. This is the ONE
- * place the three modes are normalized (the same rule on both engines and every
- * result-application site, so audit-dag parity can't drift):
- *   - `clips`    → the BARE `Edl[]` (T5: the `list` fan-out reads `Array.isArray`
- *                  on `generatedJson`; each element becomes one JSON-stringified
- *                  item a downstream `edl` input `normalizeEdl`-parses).
- *   - `chapters` → the `{ version, chapters }` object.
- *   - `tighten`  → the `Edl` object at top level.
- *
- * The cloud relay object-spreads `output_data` and adds `viaNodaroCloud: true`;
- * that key (and any other bookkeeping) is stripped here. The unwrap lives HERE —
- * NEVER in `output_data` — because a bare array written into `output_data` would
- * be corrupted into numeric keys by the relay's object-spread (see `EdlClipSet`).
- */
-export function unwrapEditPlanOutput(outputData: unknown): unknown {
-  if (!outputData || typeof outputData !== "object") return outputData
-  const o = outputData as Record<string, unknown>
-  // clips: EdlClipSet { version, clips: Edl[] } → the bare Edl[].
-  if (Array.isArray(o.clips)) return o.clips
-  // chapters: { version, chapters: [...] } → the object, minus bookkeeping.
-  if (Array.isArray(o.chapters)) return { version: EDL_VERSION, chapters: o.chapters }
-  // tighten: the Edl object at top level → drop the relay's viaNodaroCloud.
-  const { viaNodaroCloud: _viaNodaroCloud, ...rest } = o
-  return rest
 }
 
 /** The normalized JSON form of a transcribe result. */
@@ -313,10 +245,10 @@ function segmentTransitionOverlaps(t: EdlSegment["transition"]): boolean {
 }
 
 /** Is this layout-transition an OVERLAP one? Only the `xfade:*` family
- *  (a real cross-source blend); `cut`/`pan`/`zoom` are geometry tweens inside
- *  one source and consume no output time. */
+ *  (a real cross-source blend) — THE one rule, `speakerSwitchOverlaps`;
+ *  `cut`/`pan`/`zoom` consume no output time. */
 function layoutTransitionOverlaps(t: EdlLayout["transition"]): boolean {
-  return !!t && t.type.startsWith("xfade:") && (t.durationMs ?? 0) > 0
+  return !!t && speakerSwitchOverlaps(t.type) && (t.durationMs ?? 0) > 0
 }
 
 /** The overlap duration consumed at the boundary INTO this segment (D17).
@@ -374,9 +306,14 @@ function regionIssues(r: EdlRegion, where: string): string[] {
   return out
 }
 
+/** Library-produced (never construct one yourself — fields may be added). `ok` is `issues.length === 0`;
+ *  warnings never flip it. Issues = facts intrinsic to the EDL. Warnings = judgements against a REGISTRY
+ *  (source roles, speaker layouts/switches/emphasis, target aspects) that a newer version may widen — so an
+ *  older validator never rejects a newer EDL. */
 export interface EdlValidation {
   readonly ok: boolean
   readonly issues: readonly string[]
+  readonly warnings: readonly string[]
 }
 
 /** Structural validation. Coercion (defaults, clamping) is `normalizeEdl`'s
@@ -395,6 +332,7 @@ export interface EdlValidation {
  *  It applies only to overlap transitions; `cut`/`pan`/`zoom` are unbounded. */
 export function validateEdl(edl: Edl): EdlValidation {
   const issues: string[] = []
+  const warnings: string[] = []
 
   // A public validator reports, it does not throw: guard a raw object that
   // skipped normalizeEdl (missing/typed-wrong sources/segments).
@@ -416,6 +354,9 @@ export function validateEdl(edl: Edl): EdlValidation {
     sourceIds.add(s.id)
     if (!s.url || !s.url.trim()) issues.push(`source "${s.id}": url is empty (media resolves from url)`)
     if (s.role === "master-audio") masterAudioCount++
+    else if (s.role != null && !KNOWN_SOURCE_ROLES.has(s.role)) {
+      warnings.push(`source "${s.id}": unknown role "${s.role}" (known: ${EDL_SOURCE_ROLES.join(", ")})`)
+    }
     if (s.region) issues.push(...regionIssues(s.region, `source "${s.id}"`))
     if (s.offsetMs !== undefined && !Number.isFinite(s.offsetMs)) issues.push(`source "${s.id}": offsetMs not finite`)
   }
@@ -489,19 +430,24 @@ export function validateEdl(edl: Edl): EdlValidation {
     }
   }
 
-  return { ok: issues.length === 0, issues }
+  // Registry-class findings (layouts, switches, emphasis, target aspect).
+  warnings.push(...speakerPresentationWarnings(edl))
+
+  return { ok: issues.length === 0, issues, warnings }
 }
 
 /** Validate a clip set (the `clips` mode output). */
 export function validateEdlClipSet(set: EdlClipSet): EdlValidation {
   const issues: string[] = []
+  const warnings: string[] = []
   if (set.version !== EDL_VERSION) issues.push(`clipset version must be ${EDL_VERSION}`)
   if (set.clips.length === 0) issues.push("clipset has no clips")
   set.clips.forEach((clip, i) => {
     const r = validateEdl(clip)
     if (!r.ok) issues.push(...r.issues.map(m => `clip[${i}]: ${m}`))
+    warnings.push(...r.warnings.map(m => `clip[${i}]: ${m}`))
   })
-  return { ok: issues.length === 0, issues }
+  return { ok: issues.length === 0, issues, warnings }
 }
 
 function offsetFor(edl: Edl, sourceId: string | undefined): number {

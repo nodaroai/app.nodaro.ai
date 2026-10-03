@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, type MessageKey } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo, useRef } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle, X, RotateCcw, Upload, Image as ImageIcon } from "lucide-react"
@@ -20,6 +20,9 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { GifToVideoData } from "@/types/nodes"
+
+/** The background choices, by their config-panel label (the summary shows the label, never the stored value). */
+const BACKGROUND_LABEL: Record<GifToVideoData["alphaBackground"], MessageKey> = { white: "proccfg.white", black: "proccfg.black" }
 
 const ACCEPTS_IMAGE = (t: string) => isValidGifToVideoConnection("image", t)
 
@@ -90,8 +93,8 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const hasResult = status !== "running" && !!activeUrl && !videoError
   const isQueued = status === "running" && (!progressPct || progressPct <= 3)
   const isEncoding = status === "running" && !isQueued
-  const loopLabel = nodeData.loopToMinimum ? `loop→${nodeData.targetDuration ?? 3}s` : "as-is"
-  const summaryLabel = `${loopLabel} · ${nodeData.interpolate ? "smooth" : "stepped"} · bg ${nodeData.alphaBackground ?? "white"}`
+  const loopLabel = nodeData.loopToMinimum ? t("node.gifLoopTo", { n: nodeData.targetDuration ?? 3 }) : t("node.gifAsIs")
+  const summaryLabel = `${loopLabel} · ${nodeData.interpolate ? t("node.gifSmooth") : t("node.gifStepped")} · ${t("node.gifBackground", { color: t(BACKGROUND_LABEL[nodeData.alphaBackground ?? "white"]).toLowerCase() })}`
 
   return (
     <div className="relative group/node" style={{ width: "100%", height: "100%", overflow: "visible" }}>
@@ -120,7 +123,7 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
             {isUploading && (
               <div className="flex-1 min-h-24 flex flex-col items-center justify-center gap-2 bg-muted/30 rounded-md">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Uploading GIF…</span>
+                <span className="text-xs text-muted-foreground">{t("node.uploadingGif")}</span>
               </div>
             )}
 
@@ -218,9 +221,9 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 >
                   <div className="flex items-center gap-1.5 text-muted-foreground/60">
                     <ImageIcon className="w-4 h-4" />
-                    <span className="text-xs">{isDragOver ? "Drop GIF" : "Choose or wire a GIF"}</span>
+                    <span className="text-xs">{isDragOver ? t("node.dropGif") : t("node.chooseOrWireGif")}</span>
                   </div>
-                  <span className="text-[9px] text-muted-foreground/50">GIF → MP4 for use as a motion reference</span>
+                  <span className="text-[9px] text-muted-foreground/50">{t("node.gifToMp4MotionReference")}</span>
                 </button>
               )
             )}

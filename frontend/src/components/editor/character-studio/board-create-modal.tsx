@@ -12,6 +12,7 @@ import { formatCreditUnits } from "@/lib/credit-units"
 import { hasCredits } from "@/lib/edition"
 import { optimizedImageUrl } from "@/lib/image"
 import { cn } from "@/lib/utils"
+import { tx, useT } from "@/lib/i18n"
 import type { CharacterBoardEntry } from "@/types/nodes"
 import {
   BOARD_CREDIT_MODEL_ID,
@@ -52,6 +53,7 @@ export function BoardCreateModal({
   capReached,
   onGenerate,
 }: BoardCreateModalProps) {
+  const t = useT()
   const [name, setName] = useState("")
   const [selected, setSelected] = useState<readonly string[]>([])
   const cost = useModelCredits(BOARD_CREDIT_MODEL_ID, 0)
@@ -79,7 +81,7 @@ export function BoardCreateModal({
     setSelected((prev) => {
       if (prev.includes(url)) return prev.filter((u) => u !== url)
       if (prev.length >= MAX_BOARD_IMAGES) {
-        toast.error(`Up to ${MAX_BOARD_IMAGES} images per board.`)
+        toast.error(tx("studio.maxImagesPerBoard", { n: MAX_BOARD_IMAGES }))
         return prev
       }
       return [...prev, url]
@@ -115,50 +117,50 @@ export function BoardCreateModal({
         overlayClassName={STUDIO_CHILD_DIALOG_Z}
       >
         <DialogHeader>
-          <DialogTitle>Create identity board</DialogTitle>
+          <DialogTitle>{t("studio.createIdentityBoard")}</DialogTitle>
         </DialogHeader>
 
         <div className="flex items-center gap-3">
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder='Board name — the look, e.g. "Evening gown"'
-            aria-label="Board name"
+            placeholder={t("studio.boardNamePh")}
+            aria-label={t("studio.boardName")}
             className="h-8 max-w-sm text-sm"
           />
           <span className="text-xs tabular-nums text-muted-foreground">
-            {selected.length}/{MAX_BOARD_IMAGES} selected
+            {t("studio.nOfMaxSelected", { n: selected.length, max: MAX_BOARD_IMAGES })}
           </span>
         </div>
 
         {startFromBoards.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Start from a board — re-selects its source images
+              {t("studio.startFromBoardHint")}
             </p>
             <div className="flex flex-wrap gap-1.5">
               {startFromBoards.map((b) => (
                 <button
                   key={`${b.name}-${b.url}`}
                   type="button"
-                  aria-label={`Start from ${b.name}`}
+                  aria-label={t("studio.startFromNamed", { name: b.name })}
                   onClick={() => applyBoard(b)}
                   className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:border-primary/60"
                 >
                   <LayoutGrid className="size-3.5 text-muted-foreground" />
                   {/* Unnamed boards (legacy studio sheets) fall back to "board"
                       so the chip never renders as a bare icon. */}
-                  <span className="max-w-32 truncate">{b.name || "board"}</span>
+                  <span className="max-w-32 truncate">{b.name || t("studio.boardFallback")}</span>
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto pr-1">
+        <div className="flex-1 overflow-y-auto pe-1">
           {groups.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
-              This character has no images yet — generate a portrait or some variants first.
+              {t("studio.characterNoImagesYet")}
             </p>
           ) : (
             groups.map((g) => (
@@ -187,17 +189,17 @@ export function BoardCreateModal({
                           className="h-full w-full object-cover"
                         />
                         {on && (
-                          <span className="absolute left-1 top-1 grid size-5 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                          <span className="absolute start-1 top-1 grid size-5 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
                             {order + 1}
                           </span>
                         )}
                         {on && (
-                          <span className="absolute right-1 top-1 rounded-sm bg-primary p-0.5 text-primary-foreground">
+                          <span className="absolute end-1 top-1 rounded-sm bg-primary p-0.5 text-primary-foreground">
                             <Check className="size-3" />
                           </span>
                         )}
                         {it.name && (
-                          <span className="absolute inset-x-0 bottom-0 truncate bg-black/55 px-1 py-0.5 text-left text-[10px] text-white">
+                          <span className="absolute inset-x-0 bottom-0 truncate bg-black/55 px-1 py-0.5 text-start text-[10px] text-white">
                             {it.name}
                           </span>
                         )}
@@ -213,16 +215,16 @@ export function BoardCreateModal({
         <div className="flex items-center justify-between border-t border-border pt-3">
           <p className="text-xs text-muted-foreground">
             {capReached
-              ? `Up to ${MAX_CHARACTER_BOARDS} boards — delete one first.`
-              : `Composites ${selected.length >= MIN_BOARD_IMAGES ? selected.length : `${MIN_BOARD_IMAGES}+`} images into one 4K identity sheet.`}
+              ? t("studio.maxBoardsDeleteFirst", { n: MAX_CHARACTER_BOARDS })
+              : t("studio.compositesIntoSheet", { n: selected.length >= MIN_BOARD_IMAGES ? selected.length : `${MIN_BOARD_IMAGES}+` })}
           </p>
           <div className="flex items-center gap-2">
             <Button type="button" variant="outline" size="sm" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="button" size="sm" disabled={!canGenerate} onClick={handleGenerate}>
               <Sparkles className="size-4" />
-              {hasCredits() && cost > 0 ? `Generate (${formatCreditUnits(cost)})` : "Generate"}
+              {hasCredits() && cost > 0 ? `${t("common.generate")} (${formatCreditUnits(cost)})` : t("common.generate")}
             </Button>
           </div>
         </div>

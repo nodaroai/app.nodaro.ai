@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useT } from "@/lib/i18n"
 
 interface Props {
   /** Human-readable stage label, e.g. "2. Characters". */
@@ -23,6 +24,7 @@ interface Props {
  * `awaiting_approval` and mode !== 'auto'.
  */
 export function StageApproveBar({ stageLabel, onApprove }: Props) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
 
   async function handleClick() {
@@ -40,8 +42,7 @@ export function StageApproveBar({ stageLabel, onApprove }: Props) {
       data-testid="stage-approve-bar"
     >
       <div className="text-sm text-blue-900 dark:text-blue-200">
-        All variants for <span className="font-semibold">{stageLabel}</span> are
-        ready. Approve to continue to the next stage.
+        {t("pipe.allVariantsForPre")}<span className="font-semibold">{stageLabel}</span>{t("pipe.allVariantsForPost")}
       </div>
       <Button
         size="sm"
@@ -50,8 +51,8 @@ export function StageApproveBar({ stageLabel, onApprove }: Props) {
         className="shrink-0 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
         data-testid="stage-approve-button"
       >
-        {busy && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
-        {busy ? "Approving…" : "Approve variants & continue"}
+        {busy && <Loader2 className="w-3 h-3 me-1 animate-spin" />}
+        {busy ? t("pipe.approving") : t("pipe.approveVariantsContinue")}
       </Button>
     </div>
   )

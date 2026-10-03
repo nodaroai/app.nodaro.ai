@@ -21,7 +21,6 @@ import {
   META_ADS_ANALYSIS_CREDITS_PER_AD,
   META_ADS_ANALYSIS_FOCUS_MAX,
   STRUCTURED_VISION_MODELS,
-  adCreativeAnalysisFrom,
   metaAdsAdvertisersFrom,
   metaAdsAnalysisTier,
   metaAdsNodeMode,
@@ -30,9 +29,10 @@ import {
   type MetaAdsScrapeStatus,
 } from "@nodaro/shared"
 import { useT, tx } from "@/lib/i18n"
+import { useAppDir, useLocaleStore } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
 import type { MetaAdsScrapeNodeData } from "@/types/nodes"
-import { META_ADS_COUNTRIES } from "@/lib/meta-ads-countries"
+import { META_ADS_COUNTRIES, countryDisplayName } from "@/lib/meta-ads-countries"
 import { relativeTime } from "@/components/nodes/web-scrape-run-state"
 import { MetaAdMedia } from "@/components/nodes/meta-ad-media"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
@@ -60,6 +60,7 @@ import { Switch } from "@/components/ui/switch"
 import { MappableField } from "./mappable-field"
 import { MetaAdsAdvertiserPicker } from "./meta-ads-advertiser-picker"
 import { LlmModelSelect } from "./llm-model-select"
+import { CreativeAnalysisView } from "./creative-analysis-view"
 import type { ConfigProps } from "./types"
 
 const STRUCTURED_VISION_MODEL_IDS = new Set(STRUCTURED_VISION_MODELS.map((m) => m.id))
@@ -132,6 +133,7 @@ export function MetaAdsScrapeConfig(props: ConfigProps<MetaAdsScrapeNodeData>) {
 
 function MetaAdsScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<MetaAdsScrapeNodeData>) {
   const t = useT()
+  const locale = useLocaleStore((s) => s.locale)
   const mode: MetaAdsNodeMode = metaAdsNodeMode(data.mode)
   const count = typeof data.count === "number" ? data.count : META_ADS_SCRAPE_DEFAULT_COUNT
   const selectedPlatforms = Array.isArray(data.platforms) ? data.platforms.filter((p): p is string => typeof p === "string") : []
@@ -234,7 +236,7 @@ function MetaAdsScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapF
             <SelectContent>
               <SelectItem value="ALL">{t("cfgext.metaAdsAllCountries")}</SelectItem>
               {META_ADS_COUNTRIES.map((c) => (
-                <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
+                <SelectItem key={c.code} value={c.code}>{countryDisplayName(c, locale)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -412,48 +414,6 @@ function MetaAdsScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapF
 
 type ResultsView = "list" | "grid" | "json"
 
-/** The per-ad AI analysis on an expanded Results row — shown only when the run analysed that ad. */
-function MetaAdAnalysisView({ ad }: { readonly ad: Record<string, unknown> }) {
-  const t = useT()
-  const analysis = adCreativeAnalysisFrom(ad.analysis)
-  if (!analysis) {
-    return ad.analysisSkipped === "failed" || ad.analysisSkipped === "deadline" ? (
-      <p className="text-[11.5px] font-semibold text-[var(--meta-ads-muted)]">{t("cfgext.metaAdsAnalyzeSkipped")}</p>
-    ) : null
-  }
-  const list = (label: string, items: readonly string[]) =>
-    items.length === 0 ? null : (
-      <div className="flex flex-col gap-0.5">
-        <span className="text-[10.5px] font-extrabold uppercase tracking-[.06em] text-[var(--meta-ads-info)]">{label}</span>
-        <ul className="flex flex-col gap-0.5">
-          {items.map((it, i) => (
-            <li key={i} className="text-[12px] leading-snug text-[var(--meta-ads-text-2)]">· {it}</li>
-          ))}
-        </ul>
-      </div>
-    )
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] p-2.5">
-      <div className="flex items-center gap-1.5">
-        <span className="text-[10.5px] font-extrabold uppercase tracking-[.08em] text-[#FF0073]">{t("cfgext.metaAdsAnalyzeTitle")}</span>
-        <span className="rounded-full bg-[var(--meta-ads-chip)] px-1.5 py-[1px] text-[10px] font-bold text-[var(--meta-ads-text-2)]">{analysis.assetType}</span>
-        {analysis.format && <span className="text-[11px] text-[var(--meta-ads-muted)]">{analysis.format}</span>}
-      </div>
-      <p className="text-[12.5px] leading-[1.5] text-[var(--meta-ads-text)]">{analysis.summary}</p>
-      {list(t("cfgext.metaAdsAnalyzeVisualHooks"), analysis.visualHooks)}
-      {list(t("cfgext.metaAdsAnalyzeAudiences"), analysis.audiences)}
-      {list(t("cfgext.metaAdsAnalyzeCopyHooks"), analysis.copywritingHooks)}
-      {list(t("cfgext.metaAdsAnalyzeUsps"), analysis.usps)}
-      {analysis.graphicIdentity && (
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[10.5px] font-extrabold uppercase tracking-[.06em] text-[var(--meta-ads-info)]">{t("cfgext.metaAdsAnalyzeGraphic")}</span>
-          <p className="text-[12px] leading-snug text-[var(--meta-ads-text-2)]">{analysis.graphicIdentity}</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
 export function MetaAdsScrapeResultsTab({
   data,
   onUpdate,
@@ -462,6 +422,7 @@ export function MetaAdsScrapeResultsTab({
   readonly onUpdate: (d: Record<string, unknown>) => void
 }) {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const [view, setView] = useState<ResultsView>("list")
   const [openIndex, setOpenIndex] = useState(-1)
   const items = metaAdsScrapeItems(data.generatedJson)
@@ -637,7 +598,7 @@ export function MetaAdsScrapeResultsTab({
                 {open && (
                   <div className="mb-3 ms-[72px] me-2 flex flex-col gap-2.5 rounded-xl border border-[var(--meta-ads-border)] bg-[var(--meta-ads-surface-2)] p-3">
                     <p className="whitespace-pre-wrap text-[12.5px] leading-[1.55] text-[var(--meta-ads-text-2)]">{typeof ad.text === "string" ? ad.text : ""}</p>
-                    <MetaAdAnalysisView ad={ad} />
+                    <CreativeAnalysisView item={ad} skippedKey="cfgext.metaAdsAnalyzeSkipped" />
                     {metaAdPlatforms(ad).length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {metaAdPlatforms(ad).map((p) => (
@@ -660,7 +621,7 @@ export function MetaAdsScrapeResultsTab({
                     </div>
                     <div className="flex items-center justify-between gap-2 text-[12px] font-bold">
                       <span className="text-[var(--meta-ads-muted)]">
-                        {metaAdDateRange(ad)}
+                        {metaAdDateRange(ad, isRtl)}
                         {days !== null ? ` · ${t("cfgext.metaAdsRunDays", { count: days })}` : ""}
                       </span>
                       <span className="flex items-center gap-2">

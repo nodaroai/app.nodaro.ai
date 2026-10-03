@@ -6,6 +6,7 @@ import { X, Image as ImageIcon } from "lucide-react"
 import type { LibraryAsset } from "@/lib/api"
 import { LibraryMediaBrowser } from "./library-media-browser"
 import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
+import { useT } from "@/lib/i18n"
 
 interface MediaLibraryModalProps {
   open: boolean
@@ -19,6 +20,7 @@ interface MediaLibraryModalProps {
  * search/filter/grid and is also embedded in the My Library "All Files" tab.
  */
 export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibraryModalProps) {
+  const t = useT()
   const isMac = isMacPlatform()
   // Escape to close
   useEffect(() => {
@@ -46,12 +48,12 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
             <div className="w-8 h-8 rounded-lg bg-[#ff0073]/10 flex items-center justify-center">
               <ImageIcon className="w-4 h-4 text-[#ff0073]" />
             </div>
-            <h2 className="text-base font-semibold">Media Library</h2>
+            <h2 className="text-base font-semibold">{t("canvas.mediaLibrary")}</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("common.close")}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground"
           >
             <X className="w-4 h-4" />
@@ -62,7 +64,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
           onAddToCanvas={onAddToCanvas}
           autoFocusSearch
           owned
-          footerHint={<p className="text-xs text-muted-foreground/40">{formatBinding(SHORTCUTS.mediaLibrary.bindings[0], isMac)} to toggle</p>}
+          footerHint={<p className="text-xs text-muted-foreground/40">{t("assetlib.toggleHint", { sc: formatBinding(SHORTCUTS.mediaLibrary.bindings[0], isMac) })}</p>}
         />
       </div>
     </div>,

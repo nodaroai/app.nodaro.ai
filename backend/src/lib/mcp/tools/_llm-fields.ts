@@ -32,7 +32,7 @@ export const LLM_MCP_FIELDS = {
     .boolean()
     .optional()
     .describe(
-      "Gemini models only. Runs the request on the provider's own API so temperature, max tokens and the full reasoning range actually apply. Bills one credit tier up; a non-Gemini model returns 400 advanced_mode_unsupported.",
+      "Gemini models only. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit tier up, capped at premium; a non-Gemini model returns 400 advanced_mode_unsupported.",
     ),
   temperature: z
     .number()

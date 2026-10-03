@@ -11,6 +11,7 @@ import {
 } from "@/lib/surface-selectors"
 import { tx, type MessageKey } from "@/lib/i18n"
 import type { DisplayUnit } from "@/ee/app/billing-admin/units"
+import { formatNumber } from "@/lib/i18n/format"
 
 /**
  * The BILLING ACCOUNT's data layer (Track A, WS6) — `/v1/deployment-billing/*`.
@@ -582,7 +583,7 @@ export function useGrantAllowanceMutation() {
       // default.
       toast.success(
         tx("billingAdmin.topupDone", {
-          granted: data.allowance.granted == null ? "—" : data.allowance.granted.toLocaleString(),
+          granted: data.allowance.granted == null ? "—" : formatNumber(data.allowance.granted),
           unit: surfaceCreditUnitLabel(),
         }),
       )

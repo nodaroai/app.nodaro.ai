@@ -45,7 +45,7 @@ export function RemixProjectDialog({ open, onOpenChange, onConfirm }: RemixProje
             <SelectTrigger><SelectValue placeholder={t("project.remixSelect")} /></SelectTrigger>
             <SelectContent>
               {targets.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{projectDisplayName(p)}{p.isDefault ? ` ${t("project.defaultSuffix")}` : ""}</SelectItem>
+                <SelectItem key={p.id} value={p.id}>{projectDisplayName(p)}{p.isDefault ? `${t("common.fragmentGap")}${t("project.defaultSuffix")}` : ""}</SelectItem>
               ))}
             </SelectContent>
           </Select>

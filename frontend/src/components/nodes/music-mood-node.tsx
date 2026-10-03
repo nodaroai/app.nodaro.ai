@@ -6,15 +6,17 @@ import { Activity } from "lucide-react"
 import { getMusicEnergy, getMusicEmotion, getMusicVibe, buildMusicMoodHints } from "@nodaro/prompts"
 import { pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { MusicMoodData } from "@/types/nodes"
 
 function MusicMoodNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as MusicMoodData
+  const localizeNode = useLocalizeNodeLabel()
   const e = getMusicEnergy(nodeData.energy)
   const emotionLabels = pickIds(nodeData.emotion).map((id) => getMusicEmotion(id)?.label).filter((l): l is string => !!l)
   const vibeLabels = pickIds(nodeData.vibe).map((id) => getMusicVibe(id)?.label).filter((l): l is string => !!l)
   const composed = buildMusicMoodHints(nodeData)
-  const summary = [e?.label, ...emotionLabels, ...vibeLabels].filter(Boolean).join(" / ") || "Music Mood"
+  const summary = [e?.label, ...emotionLabels, ...vibeLabels].filter(Boolean).join(" / ") || localizeNode("Music Mood")
 
   return (
     <ParameterNodeShell id={id} label={nodeData.label} icon={<Activity />} handleId="out" selected={selected} fluidWidth>

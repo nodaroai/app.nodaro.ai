@@ -71,7 +71,7 @@ export const VoiceDeliveryPicker = memo(function VoiceDeliveryPicker({
   const anyVisible = filtered.some((s) => s.entries.length > 0)
 
   return (
-    <div className={cn("flex flex-col gap-3", className)}>
+    <div className={cn("@container flex flex-col gap-3", className)}>
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
@@ -79,7 +79,7 @@ export const VoiceDeliveryPicker = memo(function VoiceDeliveryPicker({
           placeholder="Search pace, emotion, archetype"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="pl-8 h-8 text-xs"
+          className="pl-8 h-9 text-[13px]"
         />
       </div>
 
@@ -98,6 +98,7 @@ export const VoiceDeliveryPicker = memo(function VoiceDeliveryPicker({
           <SoundDimensionSection
             key={key}
             label={label}
+            art={{ catalogId: "voice-delivery", field: key }}
             entries={entries}
             selectedIds={selectedIds}
             checked={checked}

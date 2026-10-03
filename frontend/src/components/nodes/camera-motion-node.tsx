@@ -6,8 +6,9 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Video, Sparkles, Frame } from "lucide-react"
 import { getCameraMotion, getCameraMotionLabel } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { LookPreviewStyleSwitch } from "./look-preview-style"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
-import { CameraMotionPreview } from "@/lib/picker-ui"
+import { CameraMotionPreview, LookArt } from "@/lib/picker-ui"
 import { ACCEPTS_PARAMETER_PICKER } from "@/lib/target-handle-registry"
 import type { HandleConfig } from "./base-node"
 import type { CameraMotionData } from "@/types/nodes"
@@ -80,10 +81,13 @@ function CameraMotionNodeComponent({ id, data, selected }: NodeProps) {
         </>
       }
     >
-      <p className="text-foreground text-sm font-medium">
-        {getCameraMotionLabel(motionId)}
-      </p>
-      <CameraMotionPreview motionId={motionId} className="w-full aspect-[16/9]" />
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-foreground text-sm font-medium min-w-0">
+          {getCameraMotionLabel(motionId)}
+        </p>
+        <LookPreviewStyleSwitch pickerKey="camera-motion" />
+      </div>
+      <LookArt pickerKey="camera-motion" id={motionId} className="w-full aspect-[16/9]" width={640} fallback={<CameraMotionPreview motionId={motionId} className="w-full aspect-[16/9]" />} />
       {description && (
         <p className="text-muted-foreground text-[11px] leading-snug">
           {description}

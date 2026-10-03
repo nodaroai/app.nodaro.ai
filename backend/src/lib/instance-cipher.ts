@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto"
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto"
 import { config } from "./config.js"
 
 /**
@@ -82,7 +82,61 @@ export function decryptSecret(encoded: string): string {
   return decipher.update(ciphertext, undefined, "utf8") + decipher.final("utf8")
 }
 
+/**
+ * A cipher for ONE purpose, on a subkey derived from the instance key
+ * (HKDF-SHA256, `info` = the purpose), that binds `aad` into every envelope's
+ * authentication tag.
+ *
+ * For secrets whose envelope must not be portable: an envelope opens only
+ * under the same purpose AND the same associated data, so a ciphertext copied
+ * onto another row (another owner, another account) is refused, and code
+ * running under another purpose — e.g. another environment's subkey against
+ * a shared database — cannot open it even though it holds the instance key.
+ *
+ * Same wire shape as the plain cipher (base64(iv || tag || ciphertext)), with
+ * the tag length pinned to 16 on both sides so a truncated tag is refused.
+ */
+export interface BoundCipher {
+  encrypt(plaintext: string, aad: string): string
+  decrypt(encoded: string, aad: string): string
+}
+
+const subkeys = new Map<string, Buffer>()
+
+function subkeyFor(purpose: string): Buffer {
+  const { key } = resolve()
+  const hit = subkeys.get(purpose)
+  if (hit) return hit
+  const derived = Buffer.from(hkdfSync("sha256", key, Buffer.alloc(0), purpose, 32))
+  subkeys.set(purpose, derived)
+  return derived
+}
+
+export function boundCipher(purpose: string): BoundCipher {
+  if (purpose.length === 0) throw new Error("boundCipher needs a purpose")
+  return {
+    encrypt(plaintext, aad) {
+      const iv = randomBytes(IV_LENGTH)
+      const cipher = createCipheriv(ALGORITHM, subkeyFor(purpose), iv, { authTagLength: TAG_LENGTH })
+      cipher.setAAD(Buffer.from(aad, "utf8"))
+      const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()])
+      return Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString("base64")
+    },
+    decrypt(encoded, aad) {
+      const buf = Buffer.from(encoded, "base64")
+      if (buf.length < IV_LENGTH + TAG_LENGTH) throw new Error("bound envelope is truncated")
+      const decipher = createDecipheriv(ALGORITHM, subkeyFor(purpose), buf.subarray(0, IV_LENGTH), {
+        authTagLength: TAG_LENGTH,
+      })
+      decipher.setAAD(Buffer.from(aad, "utf8"))
+      decipher.setAuthTag(buf.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH))
+      return decipher.update(buf.subarray(IV_LENGTH + TAG_LENGTH), undefined, "utf8") + decipher.final("utf8")
+    },
+  }
+}
+
 /** Tests swap the key between cases; production never calls this. */
 export function resetInstanceCipherForTests(): void {
   cached = null
+  subkeys.clear()
 }

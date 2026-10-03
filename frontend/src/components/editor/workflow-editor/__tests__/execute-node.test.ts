@@ -273,6 +273,7 @@ import {
   rejectManualEdit,
   rejectAllManualEdits,
 } from "../execute-node"
+import { generateMusicApi } from "@/lib/api"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -485,23 +486,22 @@ describe("generate-script", () => {
       "n1",
       "test prompt",
       expect.anything(),
-      5,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
+      { sceneCount: 5 },
+      {},
     )
   })
 
-  it("passes sceneCount, tone, targetLength, provider, llmModel, reasoningEffort from data", async () => {
+  it("passes the typed settings and the model, normalized to what the route accepts", async () => {
     mockResolveNodeInputs.mockReturnValue({ prompt: "p" })
     mockRunScriptGeneration.mockResolvedValue(undefined)
     await executeNode(
       makeNode("generate-script", {
         sceneCount: 3,
         tone: "dramatic",
+        // Not a number of seconds: dropped so the generator's default applies,
+        // instead of the route refusing the whole request.
         targetLength: "short",
+        styleGuide: "  Noir, short lines, rain in every scene  ",
         provider: "claude",
         llmModel: "claude-sonnet-4.6",
         reasoningEffort: "medium",
@@ -512,13 +512,68 @@ describe("generate-script", () => {
       "n1",
       "p",
       expect.anything(),
-      3,
-      "dramatic",
-      "short",
-      "claude",
-      "claude-sonnet-4.6",
-      "medium",
+      { sceneCount: 3, tone: "dramatic", styleGuide: "Noir, short lines, rain in every scene" },
+      { provider: "claude", llmModel: "claude-sonnet-4.6", reasoningEffort: "medium" },
     )
+  })
+
+  it("applies a mapped Tone and a mapped Scene Count (both used to be ignored)", async () => {
+    const tone = { id: "tone1", type: "tone", data: { label: "Tone", tone: "wry and warm" } }
+    const count = { id: "count1", type: "scene-count", data: { label: "Scenes", count: 7 } }
+    const script = makeNode("generate-script", {
+      tone: "typed tone",
+      sceneCount: 3,
+      fieldMappings: { tone: { sourceNodeId: "tone1" }, sceneCount: { sourceNodeId: "count1" } },
+    })
+    mockNodes = [script, tone, count]
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a lighthouse keeper" })
+    mockRunScriptGeneration.mockResolvedValue(undefined)
+    await executeNode(script, makeCtx())
+    expect(mockRunScriptGeneration).toHaveBeenCalledWith(
+      "n1",
+      "a lighthouse keeper",
+      expect.anything(),
+      // The Scene Count node reports "7" as text; it arrives as the number 7.
+      expect.objectContaining({ tone: "wry and warm", sceneCount: 7 }),
+      {},
+    )
+  })
+
+  it("applies the Scene Count and Duration nodes wired into the settings inputs", async () => {
+    const count = { id: "count1", type: "scene-count", data: { label: "Scenes", count: 9 } }
+    const duration = { id: "dur1", type: "duration", data: { label: "Length", seconds: 45 } }
+    const script = makeNode("generate-script", { sceneCount: 3, targetLength: 60 })
+    mockNodes = [script, count, duration]
+    mockEdges = [
+      { id: "e1", source: "count1", target: "n1", targetHandle: "field-sceneCount" },
+      { id: "e2", source: "dur1", target: "n1", targetHandle: "field-targetLength" },
+    ]
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a lighthouse keeper" })
+    mockRunScriptGeneration.mockResolvedValue(undefined)
+    await executeNode(script, makeCtx())
+    expect(mockRunScriptGeneration).toHaveBeenCalledWith(
+      "n1",
+      "a lighthouse keeper",
+      expect.anything(),
+      // The wire wins over the typed 3 and 60; both nodes report their number as text.
+      expect.objectContaining({ sceneCount: 9, targetDuration: 45 }),
+      {},
+    )
+  })
+
+  it("falls back to the saved {Label} topic when the resolver hid the wired Text node", async () => {
+    // Older workflows carry a hidden `prompt: "{Story}"` from the connect-time
+    // auto-fill. It makes the resolver drop the wired Text (its label is
+    // "referenced"), and the single-node run used to fail with "No prompt".
+    const story = { id: "t1", type: "text-prompt", data: { label: "Story", text: "a knight's last quest" } }
+    const script = makeNode("generate-script", { prompt: "{Story}" })
+    mockNodes = [script, story]
+    mockEdges = [{ id: "e1", source: "t1", target: "n1", targetHandle: "prompt" }]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockExtractNodeOutput.mockImplementation((node: any) => (node.id === "t1" ? "a knight's last quest" : undefined))
+    mockRunScriptGeneration.mockResolvedValue(undefined)
+    await executeNode(script, makeCtx())
+    expect(mockRunScriptGeneration).toHaveBeenCalledWith("n1", "a knight's last quest", expect.anything(), {}, {})
   })
 })
 
@@ -1773,6 +1828,72 @@ describe("text-to-video", () => {
 // generate-video (negative handle parity — synthetic alias to t2v/i2v)
 // ---------------------------------------------------------------------------
 
+describe("generate-image — Settings input", () => {
+  const settingsNodes = [
+    { id: "ratio", type: "aspect-ratio", data: { label: "Aspect Ratio", ratio: "9:16" } },
+    { id: "nb", type: "provider", data: { label: "Provider", category: "image", provider: "nano-banana" } },
+    { id: "veo", type: "provider", data: { label: "Video model", category: "video", provider: "veo3" } },
+  ]
+  const wire = (source: string) => ({ id: `e-${source}`, source, target: "n1", targetHandle: "settings" })
+
+  it("runs the wired model at the wired ratio", async () => {
+    const node = makeNode("generate-image", { provider: "nano-banana-pro", aspectRatio: "16:9" })
+    mockNodes = [node, ...settingsNodes]
+    mockEdges = [wire("ratio"), wire("nb")]
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a cat" })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    mockCollectAncestorRefs.mockReturnValue([])
+    await executeNode(node, makeCtx())
+    const call = mockRunImageGeneration.mock.calls[0]
+    expect(call[4]).toBe("nano-banana")
+    expect(call[5]).toBe("9:16")
+  })
+
+  it("refuses a wired video model before any request", async () => {
+    const node = makeNode("generate-image", { provider: "nano-banana-pro" })
+    mockNodes = [node, ...settingsNodes]
+    mockEdges = [wire("veo")]
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a cat" })
+    await expect(executeNode(node, makeCtx())).rejects.toThrow()
+    expect(mockRunImageGeneration).not.toHaveBeenCalled()
+    expect(mockToastError).toHaveBeenCalled()
+  })
+})
+
+describe("generate-video — Settings input", () => {
+  const settingsNodes = [
+    { id: "ratio", type: "aspect-ratio", data: { label: "Aspect Ratio", ratio: "4:5" } },
+    { id: "len", type: "duration", data: { label: "Duration", seconds: 60 } },
+    { id: "veo", type: "provider", data: { label: "Provider", category: "video", provider: "veo3" } },
+    { id: "img", type: "provider", data: { label: "Image model", category: "image", provider: "nano-banana" } },
+  ]
+  const wire = (source: string) => ({ id: `e-${source}`, source, target: "n1", targetHandle: "settings" })
+
+  it("runs with the wired Aspect Ratio, Duration and Provider, fitted to the model", async () => {
+    const node = makeNode("generate-video", { provider: "seedance-2-fast", duration: 4, aspectRatio: "16:9" })
+    mockNodes = [node, ...settingsNodes]
+    mockEdges = [wire("ratio"), wire("len"), wire("veo")]
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a sunset" })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(node, makeCtx())
+    const call = mockRunTextToVideoGeneration.mock.calls[0]
+    expect(call[3]).toBe("veo3")
+    // 60 s → VEO 3.1's longest length (4/6/8); 4:5 → its nearest ratio.
+    expect(call[4]).toMatchObject({ duration: 8, aspectRatio: "9:16" })
+  })
+
+  it("refuses a wired Provider naming a model the node cannot run, before any request", async () => {
+    const node = makeNode("generate-video", { provider: "seedance-2-fast" })
+    mockNodes = [node, ...settingsNodes]
+    mockEdges = [wire("img")]
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a sunset" })
+    await expect(executeNode(node, makeCtx())).rejects.toThrow()
+    expect(mockRunTextToVideoGeneration).not.toHaveBeenCalled()
+    expect(mockRunVideoGeneration).not.toHaveBeenCalled()
+    expect(mockToastError).toHaveBeenCalled()
+  })
+})
+
 describe("generate-video — negative handle parity", () => {
   // generate-video is structurally aliased to text-to-video / image-to-video
   // at execute-node.ts:2014–2021 — the synthetic-node branch rewrites
@@ -1954,6 +2075,17 @@ describe("generate-music", () => {
     await expect(promise).rejects.toThrow("Reference audio required")
     expect(mockToastError).toHaveBeenCalled()
     expect(mockPollJobWithNodeUpdate).not.toHaveBeenCalled()
+  })
+
+  // New nodes started on "suno" — a model this node never ran, so every first
+  // run failed validation. A model that is gone runs as MiniMax Music.
+  it.each(["suno", "musicgen"])("sends MiniMax Music for a node saved with %s", async (provider) => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "jazz", audioUrl: "https://cdn.example/ref.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("generate-music", { provider }), makeCtx())
+    const apiCall = mockPollJobWithNodeUpdate.mock.calls[0][1] as () => Promise<unknown>
+    await apiCall()
+    expect(vi.mocked(generateMusicApi).mock.calls[0]?.[1]).toBe("minimax")
   })
 
   it("calls pollJobWithNodeUpdate via runProcessingNode", async () => {
@@ -3093,7 +3225,7 @@ describe("suno-generate", () => {
       "n1",
       expect.any(Function),
       "generatedAudioUrl",
-      "Suno Generate",
+      "Suno Create Music",
       expect.anything(),
       expect.any(Function),
     )

@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query"
 import type { PipelineMode, PipelineStatus } from "@nodaro/shared"
 import { Button } from "@/components/ui/button"
 import { pipelinesApi } from "@/lib/pipelines-api"
+import { useT } from "@/lib/i18n"
 
 interface Props {
   pipelineId: string
@@ -22,6 +23,7 @@ interface Props {
  * thrown error from the mutation.
  */
 export function ModeSwitchButton({ pipelineId, mode, status, onSwitched }: Props) {
+  const t = useT()
   const mutation = useMutation({
     mutationFn: () => pipelinesApi.patchMode(pipelineId, "manual"),
     onSuccess: () => onSwitched(),
@@ -38,7 +40,7 @@ export function ModeSwitchButton({ pipelineId, mode, status, onSwitched }: Props
       onClick={() => mutation.mutate()}
       data-testid="mode-switch-button"
     >
-      {mutation.isPending ? "Switching…" : "Switch to Manual"}
+      {mutation.isPending ? t("pipe.switchingToManual") : t("pipe.switchToManual")}
     </Button>
   )
 }

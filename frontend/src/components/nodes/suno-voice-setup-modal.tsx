@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Mic, RefreshCw, Upload, AlertCircle, CheckCircle2 } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { toast } from "sonner"
+import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { hasCredits } from "@/lib/edition"
 import {
   sunoVoiceValidateApi, sunoVoiceValidateInfoApi, sunoVoiceRegenerateApi,
   sunoVoiceGenerateApi, sunoVoiceRecordInfoApi, uploadAudio,
@@ -47,6 +49,7 @@ const RECORD_MAX_ATTEMPTS = 80            // 4 min
 
 export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
   const t = useT()
+  const voiceCreateCredits = useModelCredits("suno-voice-create", 200)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
 
   // Step state — initialized from saved node data so a partially-completed
@@ -296,11 +299,18 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
           </DialogTitle>
           <DialogDescription>
             {t("node.sunoSetupStepOf3", { step })}
-            {step === 3 && data.voiceId ? <>{" "}{t("node.sunoSetupAlreadyGenerated")}</> : null}
-            {". "}
-            {t("node.sunoSetupCostPre")}{" "}
-            <span className="font-medium">{t("node.sunoSetupCostCredits")}</span>{" "}
-            {t("node.sunoSetupCostPost")}
+            {step === 3 && data.voiceId ? <>{t("common.fragmentGap")}{t("node.sunoSetupAlreadyGenerated")}</> : null}
+            {t("common.sentenceEnd")}
+            {/* The live price (the "suno-voice-create" row), only where there is billing.
+                A literal space before the figure: every language spaces a number. */}
+            {hasCredits() && (
+              <>
+                {t("common.fragmentGap")}
+                {t("node.sunoSetupCostPre")}{" "}
+                <span className="font-medium">{t("node.sunoSetupCostCredits", { n: voiceCreateCredits })}</span>{t("common.fragmentGap")}
+                {t("node.sunoSetupCostPost")}
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -571,7 +581,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
                 onClick={() => void handleGenerate()}
               >
                 {generating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : null}
-                {generating ? t("node.creatingVoice") : t("node.createVoiceCredits")}
+                {generating ? t("node.creatingVoice") : hasCredits() ? t("node.createVoiceCredits", { n: voiceCreateCredits }) : t("node.createVoice")}
               </Button>
             )}
           </div>

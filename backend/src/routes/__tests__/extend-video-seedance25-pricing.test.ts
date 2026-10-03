@@ -95,7 +95,7 @@ describe("workflow estimate — the quote the user is shown", () => {
   it("lever unset ⇒ 530 for the 8s/720p default", () => {
     vi.stubEnv("SEEDANCE_EXTEND_GENERATION_MODEL", undefined as unknown as string)
     expect(
-      CreditsService.estimateWorkflowCredits([
+      CreditsService.estimateWorkflowBaseCredits([
         { type: "extend-video", data: { provider: "seedance-2-extend" } },
       ]),
     ).toBe(530)
@@ -103,7 +103,7 @@ describe("workflow estimate — the quote the user is shown", () => {
 
   it("lever on ⇒ the estimate follows the reservation instead of quoting 2.0", () => {
     vi.stubEnv("SEEDANCE_EXTEND_GENERATION_MODEL", "seedance-2-5")
-    const estimate = CreditsService.estimateWorkflowCredits([
+    const estimate = CreditsService.estimateWorkflowBaseCredits([
       { type: "extend-video", data: { provider: "seedance-2-extend" } },
     ])
     expect(estimate).toBe(760)

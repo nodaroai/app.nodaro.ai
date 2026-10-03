@@ -739,9 +739,10 @@ describe("block 4 — 'this period' follows resetAt, and only resetAt", () => {
 
   it("shows the renewed row's own period start, and shows none on a row without one", () => {
     const { container } = renderPage()
+    // In the chosen language (Hebrew, per beforeEach) — not the browser's.
     expect(
       container.querySelector("[data-testid='user-period-u1']")!.textContent,
-    ).toContain(new Date("2026-09-01T00:00:00.000Z").toLocaleDateString())
+    ).toContain(new Date("2026-09-01T00:00:00.000Z").toLocaleDateString("he"))
     // u2 has never renewed: an invented date here would be a fabricated fact.
     expect(container.querySelector("[data-testid='user-period-u2']")).toBeNull()
   })

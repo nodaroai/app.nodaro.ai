@@ -29,8 +29,10 @@ A trigger that is **wired to something** runs only the branch behind it — the 
 
 | Field | Description |
 |-------|-------------|
-| Webhook URL | Full URL endpoint (auto-generated) |
-| Token | 32-byte hex authentication token (masked) |
+| Webhook URL | The full URL to POST to, with a copy button. It appears once the workflow has been saved with the node. |
+| Token | 32-byte hex authentication token (masked), with a copy button |
+
+On the canvas the node shows the URL with its token shortened, since the token is the endpoint's only credential. Copy the full URL from the settings panel.
 
 ## Activation
 
@@ -39,7 +41,7 @@ saving mints a 32-byte token and registers `POST /v1/webhooks/<token>`;
 removing the node retires it. The token is minted once and then left alone, so
 the URL you hand to an external system stays valid across every later save.
 
-Read the current URL and token with `GET /v1/workflows/<id>/triggers`.
+The editor shows the URL in the node's settings as soon as that save lands. Through the API, read the current URL and token with `GET /v1/workflows/<id>/triggers`; the row whose `config.nodeId` is the node's id is this node's trigger.
 
 ## Inputs & Outputs
 

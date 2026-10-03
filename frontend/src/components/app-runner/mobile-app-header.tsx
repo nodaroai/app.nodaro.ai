@@ -6,8 +6,10 @@ import { CreditBalance } from "@/ee/components/credits/CreditBalance"
 import { RunTargetSelector } from "@/components/presentation/run-target-selector"
 import { ViewModeSelector } from "@/components/presentation/view-mode-selector"
 import { hasCredits } from "@/lib/edition"
+import { useT } from "@/lib/i18n"
 import type { WorkflowNode } from "@/types/nodes"
 import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
+import { formatDate } from "@/lib/i18n/format"
 
 interface MobileAppHeaderProps {
   appName: string
@@ -60,6 +62,7 @@ export function MobileAppHeader({
   onSelectVersion,
   latestVersion,
 }: MobileAppHeaderProps) {
+  const t = useT()
   const [menuOpen, setMenuOpen] = useState(false)     // controls mount
   const [menuVisible, setMenuVisible] = useState(false) // controls CSS animation
   const [progressVisible, setProgressVisible] = useState(false)
@@ -129,7 +132,7 @@ export function MobileAppHeader({
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-30 bg-card border-b border-border"
+      className="fixed top-0 start-0 end-0 z-30 bg-card border-b border-border"
       style={{ paddingTop: "var(--safe-area-top, 0px)" }}
     >
       {/* Top bar */}
@@ -138,20 +141,20 @@ export function MobileAppHeader({
         <a
           href="/"
           className="shrink-0 flex items-center min-w-[44px] min-h-[44px] justify-center touch-manipulation [&>span]:mt-0"
-          aria-label="Nodaro home"
+          aria-label={t("runner.nodaroHome")}
         >
           <NodaroLogo variant="icon" size="sm" />
         </a>
 
         {/* App name + version — pull closer to logo */}
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 -ml-2.5">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 -ms-2.5">
           <span className="text-sm font-semibold truncate translate-y-[2px]">{appName}</span>
           {hasMultipleVersions && (
             <button
               type="button"
               onClick={() => { openMenu(); setShowVersionPicker(true) }}
               className="shrink-0 flex items-center gap-0.5 text-[10px] text-muted-foreground px-0.5 py-0.5 touch-manipulation hover:text-foreground transition-colors min-h-[28px] translate-y-[3px]"
-              aria-label="Select version"
+              aria-label={t("runner.selectVersion")}
             >
               v{displayVersion}
               <ChevronDown className="h-3 w-3" />
@@ -172,14 +175,14 @@ export function MobileAppHeader({
             className="shrink-0 h-8 px-3 rounded-full text-xs font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-1 transition-colors touch-manipulation"
           >
             <Plus className="h-3.5 w-3.5" />
-            New
+            {t("common.new")}
           </button>
         )}
         <button
           type="button"
           onClick={() => menuOpen ? closeMenu() : openMenu()}
           className="shrink-0 flex items-center justify-center w-11 h-11 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors touch-manipulation"
-          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          aria-label={menuOpen ? t("runner.closeMenu") : t("nav.openMenu")}
           aria-expanded={menuOpen}
         >
           <div className="w-5 h-4 relative flex flex-col justify-between">
@@ -213,14 +216,14 @@ export function MobileAppHeader({
               {/* Credits */}
               {isAuthenticated && hasCredits() && userId && (
                 <div className="px-4 py-3 flex items-center justify-between gap-3">
-                  <span className="text-sm text-muted-foreground">Credits</span>
+                  <span className="text-sm text-muted-foreground">{t("runner.credits")}</span>
                   <CreditBalance userId={userId} onClick={onGetCredits} />
                 </div>
               )}
 
               {/* Run target */}
               <div className="px-4 py-3 flex items-center justify-between gap-3">
-                <span className="text-sm text-muted-foreground">Run target</span>
+                <span className="text-sm text-muted-foreground">{t("runner.runTarget")}</span>
                 <RunTargetSelector
                   nodes={nodes}
                   presentationSettings={presentationSettings}
@@ -230,7 +233,7 @@ export function MobileAppHeader({
 
               {/* View mode */}
               <div className="px-4 py-3 flex items-center justify-between gap-3">
-                <span className="text-sm text-muted-foreground">View</span>
+                <span className="text-sm text-muted-foreground">{t("common.view")}</span>
                 <ViewModeSelector
                   viewMode={viewMode}
                   onChange={onViewModeChange}
@@ -246,10 +249,10 @@ export function MobileAppHeader({
                     onClick={() => setShowVersionPicker((v) => !v)}
                     className="flex items-center justify-between w-full touch-manipulation min-h-[44px]"
                   >
-                    <span className="text-sm text-muted-foreground">Version</span>
+                    <span className="text-sm text-muted-foreground">{t("runner.version")}</span>
                     <span className="flex items-center gap-1 text-sm font-medium">
                       {selectedVersion === null
-                        ? `v${latestVersion} (latest)`
+                        ? t("runner.versionLatest", { n: latestVersion })
                         : `v${selectedVersion}`}
                       <ChevronDown
                         className={`h-4 w-4 transition-transform ${showVersionPicker ? "rotate-180" : ""}`}
@@ -265,13 +268,13 @@ export function MobileAppHeader({
                           setShowVersionPicker(false)
                           closeMenu()
                         }}
-                        className={`w-full text-left px-3 py-2 rounded-md text-sm touch-manipulation transition-colors ${
+                        className={`w-full text-start px-3 py-2 rounded-md text-sm touch-manipulation transition-colors ${
                           selectedVersion === null
                             ? "bg-[#ff0073]/10 text-[#ff0073]"
                             : "hover:bg-muted text-foreground"
                         }`}
                       >
-                        v{latestVersion} (latest)
+                        {t("runner.versionLatest", { n: latestVersion })}
                       </button>
                       {versions
                         .filter((v) => v.version !== latestVersion)
@@ -284,15 +287,15 @@ export function MobileAppHeader({
                               setShowVersionPicker(false)
                               closeMenu()
                             }}
-                            className={`w-full text-left px-3 py-2 rounded-md text-sm touch-manipulation transition-colors ${
+                            className={`w-full text-start px-3 py-2 rounded-md text-sm touch-manipulation transition-colors ${
                               selectedVersion === v.version
                                 ? "bg-[#ff0073]/10 text-[#ff0073]"
                                 : "hover:bg-muted text-foreground"
                             }`}
                           >
                             v{v.version}
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              {new Date(v.createdAt).toLocaleDateString()}
+                            <span className="ms-2 text-xs text-muted-foreground">
+                              {formatDate(v.createdAt)}
                             </span>
                           </button>
                         ))}
@@ -314,7 +317,7 @@ export function MobileAppHeader({
                     className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-[#ff0073] transition-colors disabled:opacity-50"
                   >
                     <Shuffle className="h-4 w-4" />
-                    {isRemixing ? "Remixing..." : "Remix this MiniApp"}
+                    {isRemixing ? t("runner.remixing") : t("runner.remixThisMiniApp")}
                   </button>
                 </div>
               )}
@@ -327,14 +330,14 @@ export function MobileAppHeader({
                   className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-[#ff0073] transition-colors"
                 >
                   <LayoutGrid className="h-4 w-4" />
-                  More MiniApps
+                  {t("runner.moreMiniApps")}
                 </a>
               </div>
 
               {/* Theme */}
               <div className="px-4 py-2">
                 <div className="flex items-center justify-between min-h-[44px]">
-                  <span className="text-sm text-foreground">Theme</span>
+                  <span className="text-sm text-foreground">{t("runner.theme")}</span>
                   <ThemeToggle />
                 </div>
               </div>
@@ -357,7 +360,7 @@ export function MobileAppHeader({
                       className="flex items-center gap-2 text-sm touch-manipulation text-muted-foreground hover:text-foreground transition-colors shrink-0"
                     >
                       <LogOut className="h-4 w-4" />
-                      Sign out
+                      {t("nav.signOut")}
                     </button>
                   </div>
                 ) : (
@@ -370,7 +373,7 @@ export function MobileAppHeader({
                     className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-[#ff0073] transition-colors"
                   >
                     <LogIn className="h-4 w-4" />
-                    Sign in
+                    {t("auth.signIn")}
                   </button>
                 )}
               </div>

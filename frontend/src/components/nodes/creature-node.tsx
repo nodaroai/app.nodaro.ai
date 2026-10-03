@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, type MessageKey } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { PawPrint, Loader2, AlertCircle, X, ImageIcon, Maximize2, Type, Download, Link, Pencil } from "lucide-react"
@@ -30,11 +30,12 @@ const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT = (t: string) => isValidCreatureConnection("in",   t, isPickerType)
 const ACCEPTS_TYPE   = (t: string) => isValidCreatureConnection("type", t, isPickerType)
 
-const STYLE_LABELS: Record<string, string> = {
-  realistic: "Realistic",
-  anime: "Anime",
-  "3d-pixar": "3D Pixar",
-  illustration: "Illustration",
+/** Same keys the entity config panel's style select reads. */
+const STYLE_LABEL_KEYS: Record<string, MessageKey> = {
+  realistic: "imgcfg.styleRealistic",
+  anime: "cfgext.entStyleAnime",
+  "3d-pixar": "cfgext.entStyle3dPixar",
+  illustration: "cfgext.entStyleIllustration",
 }
 
 function CreatureNodeComponent({ id, data, selected }: NodeProps) {
@@ -130,7 +131,7 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
               )}
               <CachedImage
                 src={activeUrl}
-                alt={nodeData.creatureName || "Animal/Creature"}
+                alt={nodeData.creatureName || t("node.animalCreature")}
                 className="w-full h-full object-cover cursor-pointer"
                 thumbnail={!useFull}
                 thumbnailWidth={320}
@@ -169,7 +170,7 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
                 a.download = `${nodeData.label || 'image'}.png`
                 a.click()
               }}
-              title="Download"
+              title={t("common.download")}
             >
               <Download className="w-3 h-3" />
             </button>
@@ -180,7 +181,7 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
               className="absolute bottom-1 right-[25px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={(e) => {
                 e.stopPropagation()
-                copyToClipboard(activeUrl ?? '', "URL copied")
+                copyToClipboard(activeUrl ?? '', t("node.urlCopied"))
               }}
               title={t("cfgshared.copyUrl")}
             >
@@ -194,14 +195,14 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
                 e.stopPropagation()
                 setLightboxSrc(activeUrl)
               }}
-              title="Enlarge"
+              title={t("common.enlarge")}
             >
               <Maximize2 className="w-3 h-3" />
             </button>
             {results.length > 0 && (
               <button
                 type="button"
-                aria-label="Remove" className="absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label={t("common.remove")} className="absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(e) => {
                   e.stopPropagation()
                   setDeleteConfirm(activeIndex)
@@ -255,7 +256,7 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
                 </button>
                 <button
                   type="button"
-                  aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                  aria-label={t("common.remove")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(i)
@@ -273,11 +274,11 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
             only) so renders with the same neutral idle state as a 0-count
             badge. */}
         <div className="grid grid-cols-5 gap-1 text-[9px]">
-          <AssetBadge icon="📐" label="Angles" count={counts.angles} status={nodeData.anglesStatus ?? "idle"} />
-          <AssetBadge icon="🧍" label="Poses" count={counts.poses} status={nodeData.posesStatus ?? "idle"} />
-          <AssetBadge icon="✨" label="Variations" count={counts.variations} status={nodeData.variationsStatus ?? "idle"} />
-          <AssetBadge icon="🎬" label="Motion" count={counts.motionClips} status={nodeData.motionStatus ?? "idle"} variant="video" />
-          <AssetBadge icon="📷" label="Refs" count={counts.referencePhotos} status="idle" />
+          <AssetBadge icon="📐" label={t("node.assetBadgeAngles")} count={counts.angles} status={nodeData.anglesStatus ?? "idle"} />
+          <AssetBadge icon="🧍" label={t("node.assetBadgePoses")} count={counts.poses} status={nodeData.posesStatus ?? "idle"} />
+          <AssetBadge icon="✨" label={t("node.assetBadgeVariations")} count={counts.variations} status={nodeData.variationsStatus ?? "idle"} />
+          <AssetBadge icon="🎬" label={t("field.motion")} count={counts.motionClips} status={nodeData.motionStatus ?? "idle"} variant="video" />
+          <AssetBadge icon="📷" label={t("node.assetBadgeRefs")} count={counts.referencePhotos} status="idle" />
         </div>
 
         {/* Choose existing / replace from library or gallery */}
@@ -299,7 +300,7 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Metadata */}
         <div className="flex justify-between text-muted-foreground text-[10px]">
-          <span>{STYLE_LABELS[nodeData.style] ?? nodeData.style}</span>
+          <span>{nodeData.style in STYLE_LABEL_KEYS ? t(STYLE_LABEL_KEYS[nodeData.style]) : nodeData.style}</span>
           <span>{nodeData.species || nodeData.category || ""}</span>
         </div>
       </div>
@@ -320,7 +321,7 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
 
     <ImageLightbox
       src={lightboxSrc}
-      alt={nodeData.creatureName || "Animal/Creature"}
+      alt={nodeData.creatureName || t("node.animalCreature")}
       onClose={() => setLightboxSrc(null)}
     />
     </div>
@@ -340,10 +341,11 @@ function AssetBadge({
   readonly status: string
   readonly variant?: "image" | "video"
 }) {
+  const t = useT()
   if (status === "running") {
     return (
       <span
-        title={`${label} — generating`}
+        title={t("node.labelGenerating", { label })}
         className="flex flex-col items-center gap-0 px-0.5 py-0.5 rounded bg-muted/40"
       >
         <Loader2 className="w-2.5 h-2.5 animate-spin" />

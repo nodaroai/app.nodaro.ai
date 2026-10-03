@@ -29,8 +29,8 @@ export function AiAvatarNewRunToggle({ active, onToggle, disabled = false }: AiA
       aria-pressed={active}
       title={
         active
-          ? "Back to the results — nothing runs"
-          : "Hide the results and start fresh — pick another look, change the voice or the text, then Run for a new version. Click again to bring the results back."
+          ? t("node.backToResultsNothingRuns")
+          : t("node.hideResultsStartFresh")
       }
       disabled={disabled}
       onMouseDown={(e) => e.stopPropagation()}

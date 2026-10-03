@@ -5,12 +5,18 @@ import { createPortal } from "react-dom"
 import { Paintbrush, Eraser, Triangle, Undo2, Redo2, X, Loader2 } from "lucide-react"
 import { uploadImage, getImageProxyUrl } from "@/lib/api"
 import { useBackToClose } from "@/hooks/use-back-to-close"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 type Tool = "brush" | "eraser" | "lasso"
 type ViewMode = "overlay" | "mask" | "source"
 
 const PINK = "#ff0073"
 const UNDO_CAP = 20
+const VIEW_MODE_KEYS: Record<ViewMode, MessageKey> = {
+  overlay: "mediaed.viewOverlay",
+  mask: "mediaed.viewMask",
+  source: "mediaed.viewSource",
+}
 
 interface MaskPainterModalProps {
   readonly isOpen: boolean
@@ -37,6 +43,7 @@ export function MaskPainterModal({
   isOpen, onClose, imageUrl, initialMaskUrl, onSave,
   initialBrushSize, initialBrushHardness,
 }: MaskPainterModalProps) {
+  const tr = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const cursorRef = useRef<HTMLDivElement>(null)
@@ -500,7 +507,7 @@ export function MaskPainterModal({
               <Paintbrush className="w-4 h-4" />
             </div>
             <div className="flex flex-col gap-0.5 min-w-0">
-              <div className="text-[#f4f4f5] text-sm font-medium leading-none">Mask editor</div>
+              <div className="text-[#f4f4f5] text-sm font-medium leading-none">{tr("mediaed.maskEditorTitle")}</div>
               <div className="text-[#75757c] text-[11px] font-mono leading-none whitespace-nowrap overflow-hidden text-ellipsis">
                 {baseName}{imgSize ? ` · ${imgSize.w} × ${imgSize.h}` : ""}
               </div>
@@ -515,7 +522,7 @@ export function MaskPainterModal({
                   onClick={() => setViewMode(v)}
                   className={`px-3.5 h-7 rounded-[7px] text-xs capitalize transition-colors ${viewMode === v ? "bg-[#2e2e34] text-[#f4f4f5]" : "text-[#8a8a92] hover:text-[#c9c9d0]"}`}
                 >
-                  {v}
+                  {tr(VIEW_MODE_KEYS[v])}
                 </button>
               ))}
             </div>
@@ -532,18 +539,18 @@ export function MaskPainterModal({
         <div className="flex flex-1 min-h-0">
 
           {/* Tool rail */}
-          <div className="w-[76px] shrink-0 border-r border-[#232327] bg-[#151518] flex flex-col items-center gap-1.5 py-3.5">
-            {toolBtn("brush", <Paintbrush className="w-[17px] h-[17px]" />, "Brush")}
-            {toolBtn("eraser", <Eraser className="w-[17px] h-[17px]" />, "Erase")}
-            {toolBtn("lasso", <Triangle className="w-[17px] h-[17px]" />, "Shape")}
+          <div className="w-[76px] shrink-0 border-e border-[#232327] bg-[#151518] flex flex-col items-center gap-1.5 py-3.5">
+            {toolBtn("brush", <Paintbrush className="w-[17px] h-[17px]" />, tr("mediaed.toolBrush"))}
+            {toolBtn("eraser", <Eraser className="w-[17px] h-[17px]" />, tr("mediaed.toolErase"))}
+            {toolBtn("lasso", <Triangle className="w-[17px] h-[17px]" />, tr("mediaed.toolShape"))}
             <div className="w-9 h-px bg-[#26262b] my-2" />
             <button type="button" onClick={handleUndo} disabled={!canUndo}
               className="w-[52px] h-11 flex flex-col items-center justify-center gap-1 rounded-[11px] text-[#75757c] hover:text-[#c9c9d0] disabled:opacity-30 transition-colors">
-              <Undo2 className="w-4 h-4" /><span className="text-[9.5px]">Undo</span>
+              <Undo2 className="w-4 h-4" /><span className="text-[9.5px]">{tr("ctb.undo")}</span>
             </button>
             <button type="button" onClick={handleRedo} disabled={!canRedo}
               className="w-[52px] h-11 flex flex-col items-center justify-center gap-1 rounded-[11px] text-[#75757c] hover:text-[#c9c9d0] disabled:opacity-30 transition-colors">
-              <Redo2 className="w-4 h-4" /><span className="text-[9.5px]">Redo</span>
+              <Redo2 className="w-4 h-4" /><span className="text-[9.5px]">{tr("ctb.redo")}</span>
             </button>
             <div className="flex-1" />
             <div className="text-[#4d4d54] text-[9px] font-mono text-center leading-relaxed px-2">B / E<br />[ ]</div>
@@ -577,14 +584,14 @@ export function MaskPainterModal({
             {/* Ring cursor */}
             <div
               ref={cursorRef}
-              className="absolute left-0 top-0 rounded-full pointer-events-none opacity-0 -translate-x-1/2 -translate-y-1/2"
+              className="absolute start-0 top-0 rounded-full pointer-events-none opacity-0 -translate-x-1/2 -translate-y-1/2"
               style={{ border: "1.5px solid rgba(255,255,255,.9)", boxShadow: "0 0 0 1px rgba(0,0,0,.5) inset, 0 0 0 1px rgba(0,0,0,.4)" }}
             />
 
             {/* Coverage pill */}
-            <div className="absolute left-4 top-3.5 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[rgba(19,19,22,.82)] border border-[#26262b] backdrop-blur-md">
+            <div className="absolute start-4 top-3.5 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[rgba(19,19,22,.82)] border border-[#26262b] backdrop-blur-md">
               <div className="w-2 h-2 rounded-[2px]" style={{ background: PINK }} />
-              <div className="text-[#c9c9d0] text-[11px] font-mono whitespace-nowrap">{coverage}% will be regenerated</div>
+              <div className="text-[#c9c9d0] text-[11px] font-mono whitespace-nowrap">{tr("mediaed.coverageLine", { pct: coverage })}</div>
             </div>
 
             {/* Zoom pill */}
@@ -593,18 +600,18 @@ export function MaskPainterModal({
               <div className="min-w-[52px] text-center text-[#c9c9d0] text-[11px] font-mono">{zoom}%</div>
               <button type="button" onClick={() => setZoom((z) => Math.min(400, z + 25))} className="min-w-7 h-6 px-2 rounded-md text-[#c9c9d0] text-xs hover:bg-white/5">+</button>
               <div className="w-px h-4 bg-[#2c2c32] mx-1" />
-              <button type="button" onClick={() => setZoom(100)} className="min-w-7 h-6 px-2 rounded-md text-[#c9c9d0] text-xs hover:bg-white/5">Fit</button>
+              <button type="button" onClick={() => setZoom(100)} className="min-w-7 h-6 px-2 rounded-md text-[#c9c9d0] text-xs hover:bg-white/5">{tr("mediaed.zoomFit")}</button>
             </div>
           </div>
 
           {/* Right panel */}
-          <div className="w-[264px] shrink-0 border-l border-[#232327] bg-[#151518] flex flex-col gap-[22px] px-[18px] pt-[18px] pb-5 overflow-y-auto">
+          <div className="w-[264px] shrink-0 border-s border-[#232327] bg-[#151518] flex flex-col gap-[22px] px-[18px] pt-[18px] pb-5 overflow-y-auto">
             <div className="flex flex-col gap-3.5">
-              <div className="text-[#75757c] text-[10px] font-medium tracking-[.12em] uppercase">Brush</div>
+              <div className="text-[#75757c] text-[10px] font-medium tracking-[.12em] uppercase">{tr("mediaed.toolBrush")}</div>
               {([
-                { label: "Size", value: brushSize, suffix: " px", min: 4, max: 200, set: setBrushSize },
-                { label: "Hardness", value: hardness, suffix: "%", min: 0, max: 100, set: setHardness },
-                { label: "Flow", value: flow, suffix: "%", min: 10, max: 100, set: setFlow },
+                { label: tr("cfgext.paintBrushSize"), value: brushSize, suffix: " px", min: 4, max: 200, set: setBrushSize },
+                { label: tr("cfgext.paintBrushHardness"), value: hardness, suffix: "%", min: 0, max: 100, set: setHardness },
+                { label: tr("mediaed.brushFlow"), value: flow, suffix: "%", min: 10, max: 100, set: setFlow },
               ] as const).map((s) => (
                 <div key={s.label} className="flex flex-col gap-[7px]">
                   <div className="flex justify-between items-baseline">
@@ -626,31 +633,31 @@ export function MaskPainterModal({
             <div className="h-px bg-[#232327]" />
 
             <div className="flex flex-col gap-3">
-              <div className="text-[#75757c] text-[10px] font-medium tracking-[.12em] uppercase">Selection</div>
+              <div className="text-[#75757c] text-[10px] font-medium tracking-[.12em] uppercase">{tr("mediaed.selectionHeader")}</div>
               <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => fillAll("#ffffff")} className={panelBtn}>Select all</button>
-                <button type="button" onClick={handleInvert} className={panelBtn}>Invert</button>
-                <button type="button" onClick={() => fillAll("#000000")} className={panelBtn}>Clear</button>
-                <button type="button" onClick={handleFeather} className={panelBtn}>Feather</button>
+                <button type="button" onClick={() => fillAll("#ffffff")} className={panelBtn}>{tr("canvas.selectAll")}</button>
+                <button type="button" onClick={handleInvert} className={panelBtn}>{tr("mediaed.invert")}</button>
+                <button type="button" onClick={() => fillAll("#000000")} className={panelBtn}>{tr("common.clear")}</button>
+                <button type="button" onClick={handleFeather} className={panelBtn}>{tr("mediaed.feather")}</button>
               </div>
             </div>
 
             <div className="h-px bg-[#232327]" />
 
             <div className="flex flex-col gap-3">
-              <div className="text-[#75757c] text-[10px] font-medium tracking-[.12em] uppercase">Legend</div>
+              <div className="text-[#75757c] text-[10px] font-medium tracking-[.12em] uppercase">{tr("mediaed.legend")}</div>
               <div className="flex items-center gap-2.5">
                 <div className="w-[26px] h-[26px] rounded-md bg-white shrink-0" />
                 <div className="flex flex-col gap-px">
-                  <span className="text-[#f4f4f5] text-xs">White — edit area</span>
-                  <span className="text-[#75757c] text-[11px]">Repainted by the model</span>
+                  <span className="text-[#f4f4f5] text-xs">{tr("mediaed.legendWhite")}</span>
+                  <span className="text-[#75757c] text-[11px]">{tr("mediaed.legendWhiteHint")}</span>
                 </div>
               </div>
               <div className="flex items-center gap-2.5">
                 <div className="w-[26px] h-[26px] rounded-md bg-black border border-[#2c2c32] shrink-0" />
                 <div className="flex flex-col gap-px">
-                  <span className="text-[#f4f4f5] text-xs">Black — preserve</span>
-                  <span className="text-[#75757c] text-[11px]">Kept pixel-for-pixel</span>
+                  <span className="text-[#f4f4f5] text-xs">{tr("mediaed.legendBlack")}</span>
+                  <span className="text-[#75757c] text-[11px]">{tr("mediaed.legendBlackHint")}</span>
                 </div>
               </div>
             </div>
@@ -659,14 +666,14 @@ export function MaskPainterModal({
 
         {/* Footer */}
         <div className="flex items-center justify-between gap-4 px-[18px] py-3.5 border-t border-[#232327] bg-[#151518]">
-          <div className="text-[#75757c] text-[11.5px]">Paint over what you want the model to change. Everything else stays untouched.</div>
+          <div className="text-[#75757c] text-[11.5px]">{tr("mediaed.maskFooterHint")}</div>
           <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={onClose}
               className="px-[18px] h-[38px] rounded-[10px] border border-[#2c2c32] bg-transparent text-[#c9c9d0] text-[13px] hover:bg-[#1f1f24] hover:text-[#f4f4f5] transition-colors"
             >
-              Cancel
+              {tr("common.cancel")}
             </button>
             <button
               type="button"
@@ -676,7 +683,7 @@ export function MaskPainterModal({
               style={{ background: PINK }}
             >
               {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Save mask
+              {tr("mediaed.saveMask")}
             </button>
           </div>
         </div>

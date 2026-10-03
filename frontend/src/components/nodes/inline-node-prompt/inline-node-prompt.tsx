@@ -211,7 +211,7 @@ export function InlineNodePrompt({ nodeId, onFocusChange, affordancesVisible = f
             bare
             value={promptValue}
             onChange={writeField}
-            placeholder="Describe what you want to generate… Type @ for references, { for variables"
+            placeholder={t("node.phDescribeToGenerate")}
             rows={2}
             maxRows={6}
             referenceImages={referenceImages}

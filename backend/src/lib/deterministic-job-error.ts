@@ -33,7 +33,9 @@ export class DeterministicJobError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options)
     this.name = "DeterministicJobError"
-    Object.setPrototypeOf(this, DeterministicJobError.prototype)
+    // `new.target`, not `DeterministicJobError`: pinning the base prototype
+    // made every subclass instance fail its own `instanceof`.
+    Object.setPrototypeOf(this, new.target.prototype)
   }
 }
 

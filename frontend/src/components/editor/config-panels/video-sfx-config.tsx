@@ -21,6 +21,8 @@ import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-fina
 import { useFinalPromptSegments, negativeRoutingCaption } from "./use-final-prompt-segments"
 import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { VideoSfxNodeData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
@@ -70,6 +72,7 @@ export function VideoSfxConfig({
   nodeId,
 }: ConfigProps<VideoSfxNodeData> & { nodeId?: string }) {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const localizeNode = useLocalizeNodeLabel()
   const [showAdvanced, setShowAdvanced] = useState(false)
   const promptSnippets = useSnippetPool("audio", "prompt")
@@ -102,9 +105,9 @@ export function VideoSfxConfig({
           workaround is to mux the SFX back into the original via Merge
           Video + Audio downstream. */}
       <p className="text-xs text-muted-foreground leading-snug">
-        {t("cfgext.sfxReplacesAudioBefore")}
-        <span className="font-medium text-foreground"> {localizeNode("Merge Video & Audio")} </span>
-        {t("cfgext.sfxReplacesAudioAfter")}
+        {t("cfgext.sfxReplacesAudioBefore")}{t("common.fragmentGap")}
+        <span className="font-medium text-foreground">{localizeNode("Merge Video & Audio")}</span>
+        {t("common.fragmentGap")}{t("cfgext.sfxReplacesAudioAfter")}
       </p>
 
       {/* 2. Prompt — mappable from upstream text nodes. The AI helper
@@ -216,7 +219,7 @@ export function VideoSfxConfig({
           <SelectContent>
             {[1, 2, 3, 4].map((n) => (
               <SelectItem key={n} value={String(n)}>
-                {n} {n === 1 ? t("cfgext.sfxTake") : t("cfgext.sfxTakes")}
+                {t(n === 1 ? "cfgext.sfxTakeCountOne" : "cfgext.sfxTakeCountMany", { n })}
               </SelectItem>
             ))}
           </SelectContent>
@@ -235,7 +238,7 @@ export function VideoSfxConfig({
         onClick={() => setShowAdvanced((v) => !v)}
         className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
       >
-        {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className={cn("w-3 h-3", isRtl && "rotate-180")} />}
         {t("utilcfg.modeAdvanced")}
       </button>
 

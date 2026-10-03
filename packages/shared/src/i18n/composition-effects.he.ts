@@ -3,7 +3,7 @@ import type { LocaleCatalogMap } from "./types.js"
 const map: LocaleCatalogMap = {
   "none": { label: "ללא", description: "ללא אפקט קומפוזיציה" },
   "bursting-through-frame": { label: "פורץ דרך הפריים", description: "קריעת נייר תלת-ממדית הפורצת את הפריים" },
-  "breaking-out-of-frame": { label: "פורץ מחוץ לפריים", description: "גף נמתח מעבר לגבול הקנבס" },
+  "breaking-out-of-frame": { label: "פורץ מהפריים", description: "גף נמתח מעבר לגבול הקנבס" },
   "pixel-disintegration": { label: "פירוק לפיקסלים", description: "סובייקט מתפרק לחלקיקים" },
   "smoke-sculpture": { label: "פסל עשן", description: "סובייקט הבנוי מעשן מסולסל" },
   "liquid-sculpture": { label: "פסל נוזל", description: "סובייקט הבנוי מנוזל זורם" },
@@ -16,9 +16,9 @@ const map: LocaleCatalogMap = {
   "silhouette-outline": { label: "מתאר צללית", description: "צללית שחורה נקייה על רקע שטוח" },
   "exploding-particles": { label: "חלקיקים מתפוצצים", description: "מתאר מתפזר לחלקיקים" },
   "matte-painting": { label: "Matte Painting", description: "רקע matte-painting מורכב מעורב עם צילום חי" },
-  "double-exposure": { label: "חשיפה כפולה", description: "שתי חשיפות צילום שכבתיות מוזגות" },
+  "double-exposure": { label: "חשיפה כפולה", description: "שתי חשיפות צילום בשכבות ממוזגות לתמונה אחת" },
   "multiple-exposure": { label: "חשיפה מרובה", description: "שלוש חשיפות או יותר מוערמות" },
-  "in-camera-effects": { label: "אפקטים בתוך-מצלמה", description: "אפקטים אופטיים מעשיים בתוך-מצלמה, ללא post" },
+  "in-camera-effects": { label: "אפקטים בתוך-מצלמה", description: "אפקטים אופטיים מעשיים בתוך-מצלמה, ללא פוסט-פרודקשן" },
   "prism-flares": { label: "Prism Flares", description: "Flares של אור שבור על ידי פריזמת קריסטל המתפצל לפסים ספקטרליים" },
 }
 

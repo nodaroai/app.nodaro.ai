@@ -34,29 +34,29 @@ type J = CreatureStudioJobs
  * voice is set (mirrors the character voice nav entry).
  */
 export const CREATURE_STUDIO_NAV: StudioNavConfig<S, J> = {
-  accentActiveClassName: "text-[#A78BFA] bg-[#221a33] border-r-2 border-[#A78BFA]",
+  accentActiveClassName: "text-[#A78BFA] bg-[#221a33] border-e-2 border-[#A78BFA]",
   groups: [
-    { label: "Resources", pages: [
-      { key: "references", label: "References", icon: "📷", Component: ReferencesPage },
+    { label: "studioNav.resources", pages: [
+      { key: "references", label: "studioNav.references", icon: "📷", Component: ReferencesPage },
     ] },
-    { label: "Identity", pages: [
-      { key: "appearance", label: "Appearance", icon: "🐾", Component: AppearancePage },
+    { label: "studioNav.identity", pages: [
+      { key: "appearance", label: "studioNav.appearance", icon: "🐾", Component: AppearancePage },
     ] },
-    { label: "Composition", pages: [
-      { key: "angles", label: "Angles", icon: "📐", Component: AnglesPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.angles) }) },
-      { key: "poses", label: "Poses", icon: "🧍", Component: PosesPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.poses) }) },
+    { label: "studioNav.composition", pages: [
+      { key: "angles", label: "studioNav.angles", icon: "📐", Component: AnglesPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.angles) }) },
+      { key: "poses", label: "studioNav.poses", icon: "🧍", Component: PosesPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.poses) }) },
     ] },
-    { label: "Variants", pages: [
-      { key: "variations", label: "Variations", icon: "✨", Component: VariationsPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.variations) }) },
+    { label: "studioNav.variants", pages: [
+      { key: "variations", label: "studioNav.variations", icon: "✨", Component: VariationsPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.variations) }) },
     ] },
-    { label: "Motion", pages: [
-      { key: "motion", label: "Motion", icon: "🎬", Component: MotionPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.motionClips) }) },
+    { label: "studioNav.motion", pages: [
+      { key: "motion", label: "studioNav.motion", icon: "🎬", Component: MotionPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.motionClips) }) },
     ] },
-    { label: "Character", pages: [
-      { key: "voice", label: "Voice", icon: "🎤", Component: VoicePage, badge: (s) => (s.stagedData?.voice ? { kind: "check" } : null) },
+    { label: "studioNav.character", pages: [
+      { key: "voice", label: "studioNav.voice", icon: "🎤", Component: VoicePage, badge: (s) => (s.stagedData?.voice ? { kind: "check" } : null) },
     ] },
-    { label: "Sheet", pages: [
-      { key: "board", label: "Board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.boards) }) },
+    { label: "studioNav.sheet", pages: [
+      { key: "board", label: "studioNav.board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.boards) }) },
     ] },
   ],
 }

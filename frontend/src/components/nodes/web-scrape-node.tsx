@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 import { memo, useEffect, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Globe, Braces } from "lucide-react"
@@ -21,7 +21,19 @@ import {
   relativeTime,
   webScrapeItems,
   webScrapePeekLine,
+  type WebScrapeCountNoun,
 } from "./web-scrape-run-state"
+
+const COUNT_NOUN_KEYS: Readonly<Record<WebScrapeCountNoun, MessageKey>> = {
+  results: "node.nounResults",
+  pages: "node.nounPages",
+}
+
+/** "12 results" as one phrase, so a language can put the number where it belongs. */
+const COUNT_PHRASE_KEYS: Readonly<Record<WebScrapeCountNoun, MessageKey>> = {
+  results: "node.resultsCount",
+  pages: "node.pagesCount",
+}
 
 const ACCEPTS_IN = (t: string) => isValidWebScrapeConnection("in", t)
 
@@ -33,17 +45,17 @@ const HANDLES = [
 function getActorSummary(nodeData: WebScrapeNodeData): string {
   switch (nodeData.actor) {
     case "content-crawler":
-      return nodeData.url?.trim() || "Enter website URL..."
+      return nodeData.url?.trim() || tx("node.enterWebsiteUrl")
     case "instagram":
     case "tiktok":
-      return nodeData.target?.trim() || "Enter target..."
+      return nodeData.target?.trim() || tx("node.enterTarget")
     // rss reads url like content-crawler — it fell through to the query
     // default and showed "Enter search query..." on a configured feed.
     case "rss":
-      return nodeData.url?.trim() || "Enter feed URL..."
+      return nodeData.url?.trim() || tx("node.enterFeedUrl")
     case "google-search":
     default:
-      return nodeData.query?.trim() || "Enter search query..."
+      return nodeData.query?.trim() || tx("node.enterSearchQuery")
   }
 }
 
@@ -200,13 +212,13 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
                 {state.kind === "success" && (
                   <span className="flex items-center gap-1.5 font-medium text-foreground">
                     <StatusDot color="#22c55e" />
-                    {state.count} {peek.countNoun}
+                    {t(COUNT_PHRASE_KEYS[peek.countNoun], { n: state.count })}
                   </span>
                 )}
                 {state.kind === "empty" && (
                   <span className="flex items-center gap-1.5 text-muted-foreground">
                     <StatusDot color="var(--muted-foreground)" />
-                    Searched · 0 {peek.countNoun}
+                    {t("node.searchedZero", { noun: t(COUNT_NOUN_KEYS[peek.countNoun]) })}
                   </span>
                 )}
                 {state.kind === "failed" && (
@@ -240,11 +252,11 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
                   {nodeData.errorMessage || t("node.scrapeFailed")}
                   {state.kept && (
                     <>
-                      {" "}
+                      {t("common.fragmentGap")}
                       <span className="font-medium text-foreground/80">
                         {t(state.kept.count === 1 ? "node.previousResultKeptOne" : "node.previousResultKeptOther", {
                           n: state.kept.count,
-                          when: state.kept.at ? `, ${relativeTime(state.kept.at, now)}` : "",
+                          when: state.kept.at ? `${t("common.listComma")}${relativeTime(state.kept.at, now)}` : "",
                         })}
                       </span>
                     </>

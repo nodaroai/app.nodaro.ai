@@ -2,6 +2,7 @@ import {
   surfaceCreditUnitLabel,
   surfaceCreditsToUnits,
 } from "./surface-selectors"
+import { formatNumber } from "@/lib/i18n/format"
 
 /**
  * Credit figures in the DISPLAY unit (Phase B).
@@ -51,7 +52,7 @@ export function formatCreditUnits(
   opts: { readonly label?: string; readonly localized?: boolean } = {},
 ): string {
   const n = creditUnits(credits)
-  const figure = opts.localized ? n.toLocaleString() : String(n)
+  const figure = opts.localized ? formatNumber(n) : String(n)
   return `${figure} ${creditUnitLabel(opts.label)}`
 }
 

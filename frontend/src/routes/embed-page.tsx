@@ -263,7 +263,7 @@ export default function EmbedPage() {
         isOwner={false}
         onCancel={cancel}
         onNewRun={user ? runSlots.handleHeaderAction : undefined}
-        newRunLabel={runSlots.newRunLabel}
+        newRunAction={runSlots.newRunAction}
         inputsReadOnly={runSlots.inputsReadOnlyValue}
         suppressOutputFallback={runSlots.activeSlotId !== null && runSlots.activeSlotId !== ORIGINAL_SLOT_ID}
         showFullscreenToggle
@@ -275,7 +275,7 @@ export default function EmbedPage() {
               onClick={() => runSlots.setShowHistory(true)}
               className="h-8 border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation shrink-0 md:hidden"
             >
-              <Clock className="h-4 w-4 mr-1" />
+              <Clock className="h-4 w-4 me-1" />
               {t("runner.runs")}
             </Button>
           ) : null

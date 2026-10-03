@@ -19,6 +19,8 @@ import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { WebhookParam, TelegramTriggerData, TelegramChannelFeedData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { useSocialConnections } from "./social-configs"
+import { useWebhookTriggerUrl } from "@/hooks/use-webhook-trigger-url"
+import { webhookEndpointUrl } from "@/lib/webhook-url"
 
 // ── Webhook Trigger ────────────────────────────────────────────
 
@@ -29,12 +31,16 @@ interface WebhookTriggerData {
   params?: WebhookParam[]
 }
 
-export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTriggerData>) {
+export function WebhookTriggerConfig({ data, onUpdate, nodeId }: ConfigProps<WebhookTriggerData> & { nodeId?: string }) {
   const t = useT()
   const [copied, setCopied] = useState(false)
 
-  const webhookUrl = data.webhookUrl || ""
-  const hasToken = !!data.webhookToken
+  // The URL lives on the trigger row the server keeps for this node; node data
+  // only ever carried one in workflows from before the rows existed.
+  const live = useWebhookTriggerUrl(nodeId)
+  const webhookUrl = live.url ?? (data.webhookUrl ? webhookEndpointUrl(data.webhookUrl) : "")
+  const webhookToken = live.token ?? data.webhookToken ?? ""
+  const hasToken = !!webhookUrl && !!webhookToken
   const params = data.params ?? []
 
   const handleCopy = () => {
@@ -65,7 +71,7 @@ export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTrig
         <Label>{t("utilcfg.webhookUrl")}</Label>
         {hasToken ? (
           <div className="flex items-center gap-2 mt-1">
-            <Input
+            <Input dir="ltr"
               value={webhookUrl}
               readOnly
               className="text-xs font-mono bg-muted/30"
@@ -86,7 +92,7 @@ export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTrig
           </div>
         ) : (
           <p className="text-xs text-muted-foreground mt-1 p-2 bg-muted/30 rounded-md border border-dashed border-border">
-            {t("cfgext.trigWebhookSettingsHint")}
+            {live.loading ? t("common.loading") : t("cfgext.trigWebhookSaveHint")}
           </p>
         )}
       </div>
@@ -94,12 +100,12 @@ export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTrig
       {hasToken && (
         <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2 border border-border">
           <span className="font-medium">{t("cfgext.trigTokenLabel")}</span>{" "}
-          <span className="font-mono">{data.webhookToken!.slice(0, 8)}{"••••••••"}</span>
+          <span className="font-mono">{webhookToken.slice(0, 8)}{"••••••••"}</span>
           <Button
             variant="ghost"
             size="sm"
             className="h-5 text-[10px] ms-2 px-1.5"
-            onClick={() => navigator.clipboard.writeText(data.webhookToken!)}
+            onClick={() => navigator.clipboard.writeText(webhookToken)}
           >
             {t("apiTok.copy")}
           </Button>
@@ -216,7 +222,7 @@ export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTr
             : "bg-gray-50 dark:bg-[#2D2D2D] border-gray-200 dark:border-[#2D2D2D] text-gray-500 dark:text-[#64748B]"
       }`}>
         <div className={`h-2 w-2 rounded-full ${listening ? "bg-green-500" : isActive ? "bg-amber-500" : "bg-gray-400"}`} />
-        {listening ? t("cfgext.trigActiveListening") : isActive ? t("cfgext.trigPickBotFirst") : t("apps.inactive")}
+        {listening ? t("cfgext.trigActiveListening") : isActive ? t("cfgext.trigPickBotFirst") : t("sched.inactive")}
       </div>
 
       {/* Connection selector */}
@@ -224,8 +230,9 @@ export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTr
         <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("cfgext.trigTelegramBot")}</Label>
         {!loadingConnections && connections.length === 0 ? (
           <p className="text-xs text-muted-foreground mt-1.5 p-2 bg-muted/30 rounded-md border border-dashed border-border">
-            {t("cfgext.trigNoTelegramBot")}{" "}
-            <a href="/integrations" className="underline">{t("cfgext.socialConnectIn", { surface: t("nav.integrations") })}</a>.
+            {t("cfgext.trigNoTelegramBot")}{t("common.fragmentGap")}
+            <a href="/integrations" className="underline">{t("cfgext.socialConnectIn", { surface: t("nav.integrations") })}</a>
+            {t("common.sentenceEnd")}
           </p>
         ) : (
           <Select

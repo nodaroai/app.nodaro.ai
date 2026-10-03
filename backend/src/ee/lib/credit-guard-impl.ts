@@ -12,6 +12,7 @@ import type { CreditReservation, StorageSnapshot, CreditGuardOpts } from "../../
 import { resolveEffectiveTier } from "@nodaro/shared"
 import { isWebFreeModeCandidate, sendSubscriptionRequired } from "./payg-surface-guard.js"
 import { applyServiceMarkup } from "../billing/service-margin.js"
+import { payerProfileId } from "../billing/org-entitlements.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { ReserveRpcError, mapReserveError } from "../../lib/reserve-errors.js"
 import { allowanceEnforcementActive } from "../../lib/deployment-payer.js"
@@ -141,7 +142,7 @@ export function creditGuardImpl(
     const { data: profile, error: profileError } = (await supabase
       .from("profiles")
       .select(GUARD_PROFILE_COLUMNS + (welcomeOffer.enabled ? ", welcome_consent_pending" : ""))
-      .eq("id", dep ? dep.payerId : userId)
+      .eq("id", payerProfileId(userId, req.billingContext))
       .single()) as unknown as { data: GuardProfileRow | null; error: unknown }
 
     if (profileError || !profile) {

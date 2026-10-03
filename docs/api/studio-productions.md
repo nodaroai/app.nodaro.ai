@@ -310,13 +310,13 @@ per-shot audio merges, the join, the optional 4K finish:
       "node": "merge-video-audio",
       "label": "Voice over shot 2",
       "creditModel": "merge-video-audio",
-      "credits": 2,
+      "credits": 20,
       "params": { "videoUrl": "https://…/shot-2.mp4", "audioUrl": "https://…/vo.mp3" }
     },
     {
       "id": "combine",
       "node": "combine-videos",
-      "label": "Join 3 shots",
+      "label": "Join 2 shots",
       "creditModel": "combine-videos",
       "credits": 4,
       "params": {
@@ -327,7 +327,7 @@ per-shot audio merges, the join, the optional 4K finish:
     }
   ],
   "resultStepId": "combine",
-  "estimate": 6,
+  "estimate": 24,
   "unpriced": []
 }
 ```

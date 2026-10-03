@@ -14,6 +14,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { creditUnits } from "@/lib/credit-units"
 import type { GeneratedScript, ExtractedReference, CharacterDefinition, ScriptScene } from "@/types/nodes"
 import { getSceneCharacterNames, getSceneMoodDisplay } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
 
 interface ScriptPreviewModalProps {
   readonly isOpen: boolean
@@ -46,6 +47,7 @@ export function ScriptPreviewModal({
   extractedReferences,
   onSaveReferences,
 }: ScriptPreviewModalProps) {
+  const t = useT()
   const [generatingAll, setGeneratingAll] = useState(false)
   const [extractModalScene, setExtractModalScene] = useState<number | null>(null)
   const [extractAutoOpened, setExtractAutoOpened] = useState(false)
@@ -203,7 +205,7 @@ export function ScriptPreviewModal({
       >
         <button
           type="button"
-          className="absolute top-3 right-3 z-10 text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white transition-colors"
+          className="absolute top-3 end-3 z-10 text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white transition-colors"
           onClick={onClose}
         >
           <X className="w-5 h-5" />
@@ -211,13 +213,13 @@ export function ScriptPreviewModal({
 
         {/* Header */}
         <div className="px-6 pt-5 pb-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
-          <h2 className="text-lg font-semibold pr-8 text-gray-900 dark:text-white">{script.title}</h2>
+          <h2 className="text-lg font-semibold pe-8 text-gray-900 dark:text-white">{script.title}</h2>
           <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 dark:text-[#94A3B8]">
-            <span>{sceneCount} scenes</span>
-            <span>{script.totalDuration}s total</span>
+            <span>{t("scriptprev.scenesCount", { n: sceneCount })}</span>
+            <span>{t("scriptprev.totalSeconds", { n: script.totalDuration })}</span>
             <span className="flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5" />
-              Est. {creditUnits(totalCredits)} credits
+              {t("scriptprev.estCredits", { n: creditUnits(totalCredits) })}
             </span>
           </div>
           <div className="mt-3 flex gap-2">
@@ -230,15 +232,15 @@ export function ScriptPreviewModal({
               {generatingAll ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Generating {allProgress.current}/{allProgress.total}...
+                  {t("scene.generatingProgress", { current: allProgress.current, total: allProgress.total })}
                 </>
               ) : (
                 <>
                   <Play className="w-3.5 h-3.5" />
-                  Generate All Images
+                  {t("scriptprev.generateAllImages")}
                   {pendingCount > 0 && (
                     <span className="text-white/70">
-                      ({creditUnits(pendingCount * 5)} credits for {pendingCount} images)
+                      {t("scriptprev.creditsForImages", { credits: creditUnits(pendingCount * 5), n: pendingCount })}
                     </span>
                   )}
                 </>
@@ -250,7 +252,7 @@ export function ScriptPreviewModal({
               onClick={onExpandToNodes}
             >
               <Layers className="w-3.5 h-3.5" />
-              Expand to Nodes
+              {t("scriptprev.expandToNodes")}
             </button>
           </div>
         </div>
@@ -279,7 +281,7 @@ export function ScriptPreviewModal({
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1 text-xs font-semibold text-[#ff0073]">
                       <DragHandle />
-                      Scene {scene.sceneNumber}
+                      {t("cfgext.sceneNumbered", { index: scene.sceneNumber })}
                     </span>
                     <div className="flex items-center gap-1">
                       <input
@@ -288,26 +290,26 @@ export function ScriptPreviewModal({
                         max={60}
                         value={scene.durationHint}
                         onChange={(e) => onUpdateSceneField(i, "durationHint", Math.max(1, Math.min(60, parseInt(e.target.value) || 1)))}
-                        className="w-12 h-5 text-xs text-right text-gray-500 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1"
-                        title="Duration (seconds)"
+                        className="w-12 h-5 text-xs text-end text-gray-500 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1"
+                        title={t("field.durationSeconds")}
                       />
                       {script.scenes.length > 1 && (
                         confirmingDeleteScene === i ? (
                           <span className="flex items-center gap-1 text-[10px]">
-                            <span className="text-red-500 font-medium">Delete?</span>
+                            <span className="text-red-500 font-medium">{t("scriptprev.deleteQuestion")}</span>
                             <button
                               type="button"
                               className="px-1.5 py-0.5 rounded text-[10px] bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] text-gray-600 dark:text-[#94A3B8]"
                               onClick={(e) => { e.stopPropagation(); setConfirmingDeleteScene(null) }}
                             >
-                              Cancel
+                              {t("common.cancel")}
                             </button>
                             <button
                               type="button"
                               className="px-1.5 py-0.5 rounded text-[10px] bg-red-500 hover:bg-red-600 text-white"
                               onClick={(e) => { e.stopPropagation(); handleDeleteScene(i) }}
                             >
-                              Delete
+                              {t("common.delete")}
                             </button>
                           </span>
                         ) : (
@@ -315,7 +317,7 @@ export function ScriptPreviewModal({
                             type="button"
                             className="w-5 h-5 flex items-center justify-center text-gray-300 dark:text-[#64748B] hover:text-red-500 transition-colors opacity-0 group-hover/scene:opacity-100"
                             onClick={(e) => { e.stopPropagation(); setConfirmingDeleteScene(i) }}
-                            title="Delete scene"
+                            title={t("scriptprev.deleteScene")}
                           >
                             <Trash2 className="w-3 h-3" />
                           </button>
@@ -329,7 +331,7 @@ export function ScriptPreviewModal({
                     {activeImage ? (
                       <CachedImage
                         src={activeImage.url}
-                        alt={`Scene ${scene.sceneNumber}`}
+                        alt={t("cfgext.sceneNumbered", { index: scene.sceneNumber })}
                         className="w-full h-full object-cover"
                         thumbnail
                         thumbnailWidth={800}
@@ -365,11 +367,11 @@ export function ScriptPreviewModal({
                           }}
                         >
                           {status === "failed" && !activeImage ? (
-                            <><RotateCcw className="w-3 h-3" />Retry</>
+                            <><RotateCcw className="w-3 h-3" />{t("common.retry")}</>
                           ) : activeImage ? (
-                            <><Play className="w-3 h-3" />New Version</>
+                            <><Play className="w-3 h-3" />{t("scenecfg.newVersion")}</>
                           ) : (
-                            <><Play className="w-3 h-3" />Generate</>
+                            <><Play className="w-3 h-3" />{t("common.generate")}</>
                           )}
                         </button>
                       </div>
@@ -397,7 +399,7 @@ export function ScriptPreviewModal({
                           </button>
                           <button
                             type="button"
-                            className="absolute -top-1 -right-1 w-3.5 h-3.5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/ver:opacity-100 transition-opacity"
+                            className="absolute -top-1 -end-1 w-3.5 h-3.5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/ver:opacity-100 transition-opacity"
                             onClick={(e) => {
                               e.stopPropagation()
                               setDeleteConfirm({ sceneIndex: i, imageIndex: vi })
@@ -418,9 +420,9 @@ export function ScriptPreviewModal({
                       onClick={(e) => { e.stopPropagation(); setExtractModalScene(i) }}
                     >
                       <Scissors className="w-3 h-3" />
-                      Extract References
+                      {t("scriptprev.extractReferences")}
                       {extractedReferences.filter((r) => r.sourceSceneIndex === i).length > 0 && (
-                        <span className="ml-auto text-[9px] bg-purple-600 text-white rounded-full px-1.5">
+                        <span className="ms-auto text-[9px] bg-purple-600 text-white rounded-full px-1.5">
                           {extractedReferences.filter((r) => r.sourceSceneIndex === i).length}
                         </span>
                       )}
@@ -434,7 +436,7 @@ export function ScriptPreviewModal({
                     onClick={(e) => { e.stopPropagation(); onCreateSceneNode(i) }}
                   >
                     <Clapperboard className="w-3 h-3" />
-                    Create Scene Node
+                    {t("scriptprev.createSceneNode")}
                   </button>
 
                   {/* Mood - editable (always visible, compact) */}
@@ -446,34 +448,34 @@ export function ScriptPreviewModal({
                       onUpdateSceneField(i, "mood", val.includes(",") ? val.split(",").map((s) => s.trim()).filter(Boolean) : val)
                     }}
                     className="w-full text-[10px] italic text-gray-500 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1.5 py-0.5"
-                    placeholder="Mood (comma-separated)..."
+                    placeholder={t("scriptprev.moodPlaceholder")}
                   />
 
                   {/* Section: Action */}
                   <div className="border-t border-gray-100 dark:border-[#2D2D2D]/50 pt-1.5">
                     <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
-                      <Pen className="w-3 h-3" />Action
+                      <Pen className="w-3 h-3" />{t("scriptcfg.sceneAction")}
                     </div>
                     <textarea
                       value={scene.action}
                       onChange={(e) => onUpdateSceneField(i, "action", e.target.value)}
                       rows={2}
                       className="w-full text-xs font-medium text-gray-900 dark:text-[#E2E8F0] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1.5 py-1 resize-y"
-                      placeholder="Action..."
+                      placeholder={t("scriptprev.actionPlaceholder")}
                     />
                   </div>
 
                   {/* Section: Visual Description */}
                   <div className="border-t border-gray-100 dark:border-[#2D2D2D]/50 pt-1.5">
                     <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
-                      <Eye className="w-3 h-3" />Visual Description
+                      <Eye className="w-3 h-3" />{t("scriptcfg.visualDescription")}
                     </div>
                     <textarea
                       value={scene.visualDescription}
                       onChange={(e) => onUpdateSceneField(i, "visualDescription", e.target.value)}
                       rows={3}
                       className="w-full text-[10px] text-gray-600 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1.5 py-1 resize-y"
-                      placeholder="Visual description..."
+                      placeholder={t("scriptprev.visualDescPlaceholder")}
                     />
                   </div>
 
@@ -481,7 +483,7 @@ export function ScriptPreviewModal({
                   <div className="border-t border-gray-100 dark:border-[#2D2D2D]/50 pt-1.5">
                     <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
                       <MessageSquare className="w-3 h-3" />
-                      Dialogue
+                      {t("audiocfg.mergeRoleDialogue")}
                       {(scene.dialogue ?? []).length > 0 && (
                         <span className="text-[9px] font-normal normal-case tracking-normal text-gray-400 dark:text-[#64748B]">
                           ({(scene.dialogue ?? []).length})
@@ -490,7 +492,7 @@ export function ScriptPreviewModal({
                     </div>
                     <div className="flex flex-col gap-1">
                       {(scene.dialogue ?? []).map((d, di) => (
-                        <div key={di} className="flex flex-col gap-0.5 pl-1 border-l-2 border-[#ff0073]/30">
+                        <div key={di} className="flex flex-col gap-0.5 ps-1 border-s-2 border-[#ff0073]/30">
                           <div className="flex items-center gap-1">
                             <input
                               type="text"
@@ -501,7 +503,7 @@ export function ScriptPreviewModal({
                                 onUpdateSceneField(i, "dialogue", newDialogue)
                               }}
                               className="flex-1 text-[10px] font-medium text-gray-900 dark:text-[#E2E8F0] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1 py-0.5"
-                              placeholder="Speaker"
+                              placeholder={t("scenecfg.speaker")}
                             />
                             <input
                               type="text"
@@ -512,7 +514,7 @@ export function ScriptPreviewModal({
                                 onUpdateSceneField(i, "dialogue", newDialogue)
                               }}
                               className="w-16 text-[10px] italic text-gray-500 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1 py-0.5"
-                              placeholder="emotion"
+                              placeholder={t("scriptprev.emotionPlaceholder")}
                             />
                             <button
                               type="button"
@@ -534,7 +536,7 @@ export function ScriptPreviewModal({
                               onUpdateSceneField(i, "dialogue", newDialogue)
                             }}
                             className="w-full text-[10px] text-gray-600 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1 py-0.5"
-                            placeholder="Line..."
+                            placeholder={t("scriptprev.linePlaceholder")}
                           />
                         </div>
                       ))}
@@ -546,7 +548,7 @@ export function ScriptPreviewModal({
                         }}
                         className="flex items-center gap-0.5 text-[9px] text-gray-500 dark:text-[#94A3B8] hover:text-gray-900 dark:hover:text-white transition-colors self-start px-1"
                       >
-                        <Plus className="w-2.5 h-2.5" /> Add line
+                        <Plus className="w-2.5 h-2.5" /> {t("scriptprev.addLine")}
                       </button>
                     </div>
                   </div>
@@ -555,7 +557,7 @@ export function ScriptPreviewModal({
                   <div className="border-t border-gray-100 dark:border-[#2D2D2D]/50 pt-1.5">
                     <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
                       <Users className="w-3 h-3" />
-                      Characters
+                      {t("assetlib.tabCharacters")}
                       {charNames.length > 0 && (
                         <span className="text-[9px] font-normal normal-case tracking-normal text-gray-400 dark:text-[#64748B]">
                           ({charNames.length})
@@ -572,7 +574,7 @@ export function ScriptPreviewModal({
                           <span
                             key={char}
                             className="inline-flex items-center gap-1 h-6 px-2.5 text-xs font-medium rounded-full bg-purple-600 text-white"
-                            title={isDescOnly ? "Description only - needs reference image" : hasRef ? "Has reference image" : undefined}
+                            title={isDescOnly ? t("scriptprev.descOnlyNeedsRefImage") : hasRef ? t("scriptprev.hasReferenceImage") : undefined}
                           >
                             {isDescOnly && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0" />}
                             {hasRef && <ImageIcon className="w-3 h-3 text-blue-200" />}
@@ -580,7 +582,7 @@ export function ScriptPreviewModal({
                               <button type="button" className="hover:underline" onClick={(e) => { e.stopPropagation(); setEditingCharDef(matchingDef); setShowDefineCharModal(true) }}>{char}</button>
                             ) : char}
                             {otherScenes.length > 0 && (
-                              <span className="inline-flex items-center gap-0.5 text-purple-200" title={`Also in scene${otherScenes.length > 1 ? "s" : ""} ${otherScenes.join(", ")}`}>
+                              <span className="inline-flex items-center gap-0.5 text-purple-200" title={t(otherScenes.length > 1 ? "scriptprev.alsoInScenes" : "scriptprev.alsoInScene", { list: otherScenes.join(", ") })}>
                                 <Link className="w-2.5 h-2.5" />
                                 <span className="text-[9px]">{otherScenes.length}</span>
                               </span>
@@ -601,7 +603,7 @@ export function ScriptPreviewModal({
                       <div className="relative">
                         <input
                           type="text"
-                          placeholder="Search characters..."
+                          placeholder={t("scriptprev.searchCharacters")}
                           className="h-6 w-28 px-2 text-xs rounded-full border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#121212] outline-none focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/30 placeholder:text-gray-400 dark:placeholder:text-[#64748B] text-gray-900 dark:text-[#E2E8F0]"
                           value={characterInput[i] ?? ""}
                           onChange={(e) => setCharacterInput({ ...characterInput, [i]: e.target.value })}
@@ -636,12 +638,12 @@ export function ScriptPreviewModal({
                           )
                           if (suggestions.length === 0 && !inputVal) return null
                           return (
-                            <div className="absolute top-full left-0 mt-1 w-44 max-h-28 overflow-y-auto rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shadow-lg z-30">
+                            <div className="absolute top-full start-0 mt-1 w-44 max-h-28 overflow-y-auto rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shadow-lg z-30">
                               {suggestions.map((char) => (
                                 <button
                                   key={char}
                                   type="button"
-                                  className="w-full text-left px-2 py-1 text-xs text-gray-700 dark:text-[#E2E8F0] hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors flex items-center justify-between"
+                                  className="w-full text-start px-2 py-1 text-xs text-gray-700 dark:text-[#E2E8F0] hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors flex items-center justify-between"
                                   onMouseDown={(e) => {
                                     e.preventDefault()
                                     onUpdateSceneCharacters(i, [...charNames, char])
@@ -655,23 +657,23 @@ export function ScriptPreviewModal({
                                     {(() => {
                                       const def = allCharDefs.find((d) => d.name === char)
                                       if (def?.type === "description" && !def.referenceImageUrl) {
-                                        return <span title="Description only - needs reference"><FileText className="w-2.5 h-2.5 text-orange-500" /></span>
+                                        return <span title={t("scriptprev.descOnlyNeedsRef")}><FileText className="w-2.5 h-2.5 text-orange-500" /></span>
                                       }
                                       if (def?.type === "reference" || def?.referenceImageUrl) {
-                                        return <span title="Has reference image"><ImageIcon className="w-2.5 h-2.5 text-blue-500" /></span>
+                                        return <span title={t("scriptprev.hasReferenceImage")}><ImageIcon className="w-2.5 h-2.5 text-blue-500" /></span>
                                       }
                                       return null
                                     })()}
                                     {char}
                                   </span>
                                   <span className="text-[9px] text-gray-400 dark:text-[#64748B]">
-                                    {(charSceneMap[char] ?? []).length} scene{(charSceneMap[char] ?? []).length !== 1 ? "s" : ""}
+                                    {t((charSceneMap[char] ?? []).length === 1 ? "scriptprev.sceneCountOne" : "scriptprev.scenesCount", { n: (charSceneMap[char] ?? []).length })}
                                   </span>
                                 </button>
                               ))}
                               {suggestions.length === 0 && inputVal && (
                                 <div className="px-2 py-1.5 text-xs text-gray-500 dark:text-[#94A3B8]">
-                                  No character found.{" "}
+                                  {t("scriptprev.noCharacterFound")}{" "}
                                   <button
                                     type="button"
                                     className="text-[#ff0073] hover:underline"
@@ -681,7 +683,7 @@ export function ScriptPreviewModal({
                                       setShowDefineCharModal(true)
                                     }}
                                   >
-                                    Define new
+                                    {t("scriptprev.defineNew")}
                                   </button>
                                 </div>
                               )}
@@ -693,7 +695,7 @@ export function ScriptPreviewModal({
                     <div className="flex items-center gap-2 mt-1.5">
                       {i === 0 && (
                         <p className="text-[9px] text-gray-400 dark:text-[#64748B]">
-                          Tip: Use the same name across scenes for a consistent look
+                          {t("scriptprev.sameNameTip")}
                         </p>
                       )}
                       <button
@@ -701,7 +703,7 @@ export function ScriptPreviewModal({
                         onClick={(e) => { e.stopPropagation(); setShowDefineCharModal(true) }}
                         className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] rounded border border-dashed border-gray-200 dark:border-[#2D2D2D] hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors text-gray-500 dark:text-[#94A3B8] whitespace-nowrap"
                       >
-                        <UserPlus className="w-2.5 h-2.5" /> Define character
+                        <UserPlus className="w-2.5 h-2.5" /> {t("scriptprev.defineCharacter")}
                       </button>
                     </div>
                   </div>
@@ -722,7 +724,7 @@ export function ScriptPreviewModal({
               className="rounded-xl border-2 border-dashed border-gray-200 dark:border-[#2D2D2D] p-3 flex flex-col items-center justify-center gap-2 min-h-[200px] hover:border-[#ff0073]/40 hover:bg-gray-50 dark:hover:bg-[#1E1E1E] transition-colors cursor-pointer"
             >
               <Plus className="w-6 h-6 text-gray-300 dark:text-[#64748B]" />
-              <span className="text-xs text-gray-400 dark:text-[#64748B]">Add Scene</span>
+              <span className="text-xs text-gray-400 dark:text-[#64748B]">{t("scriptprev.addScene")}</span>
             </button>
           </div>
           </SortableContext>
@@ -770,7 +772,7 @@ export function ScriptPreviewModal({
                 }
               }
             }}
-            suggestedMessage={extractAutoOpened ? "Save character references for consistent look in other scenes" : undefined}
+            suggestedMessage={extractAutoOpened ? t("scriptprev.saveRefsSuggestion") : undefined}
           />
         )
       })()}
@@ -794,8 +796,8 @@ export function ScriptPreviewModal({
         onConfirm={() => {
           if (deleteConfirm !== null) onDeleteImage(deleteConfirm.sceneIndex, deleteConfirm.imageIndex)
         }}
-        title="Delete this image version?"
-        description="This action cannot be undone. The generated image will be permanently removed."
+        title={t("scriptprev.deleteImageVersionTitle")}
+        description={t("scriptprev.deleteImageVersionDesc")}
       />
     </div>,
     document.body

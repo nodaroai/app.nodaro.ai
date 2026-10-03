@@ -182,6 +182,32 @@ describe("POST /v1/workflow-triggers — a schedule as rules", () => {
   })
 })
 
+describe("PATCH /v1/workflow-triggers/:id — a Telegram account row", () => {
+  const ACCOUNT_ROW = { workflow_id: WF, type: "telegram_account", config: { nodeId: "ta1", accountId: "acc-1", chatIds: ["777"] } }
+  const patchActive = (isActive: boolean) =>
+    app.inject({ method: "PATCH", url: "/v1/workflow-triggers/00000000-0000-4000-8000-000000000077", payload: { isActive } })
+
+  it("is never re-armed through the API — it is started in the editor", async () => {
+    const { updates } = tables(ACCOUNT_ROW)
+    const res = await patchActive(true)
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("editor_only")
+    expect(updates).toHaveLength(0)
+  })
+
+  it("is never re-configured through the API", async () => {
+    const { updates } = tables(ACCOUNT_ROW)
+    expect((await patch({ timezone: "UTC" })).statusCode).toBe(403)
+    expect(updates).toHaveLength(0)
+  })
+
+  it("can still be paused", async () => {
+    const { updates } = tables(ACCOUNT_ROW)
+    expect((await patchActive(false)).statusCode).toBe(200)
+    expect(updates).toEqual([{ is_active: false }])
+  })
+})
+
 describe("PATCH /v1/workflow-triggers/:id — the same rules, the same refusals, merged into the stored config", () => {
   const STORED = {
     workflow_id: WF,

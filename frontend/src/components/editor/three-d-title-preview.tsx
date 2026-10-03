@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react"
 import { Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { labelOf, useT, type MessageKey } from "@/lib/i18n"
+import type { ThreeDTitleCameraAnimation } from "@remotion-pkg/plan-types"
+
+/** A camera animation by its label, keyed by the plan's own union: a new type without a label fails tsc. */
+const CAMERA_ANIMATION_LABEL: Readonly<Record<ThreeDTitleCameraAnimation["type"], MessageKey>> = {
+  orbit: "preview.cameraOrbit",
+  dolly: "preview.cameraDolly",
+  static: "preview.cameraStatic",
+}
 
 interface TextObject {
   id: string
@@ -75,6 +84,7 @@ function SliderField({
 }
 
 function TextObjectCard({ object, fps, onChange }: { object: TextObject; fps: number; onChange: (updated: TextObject) => void }) {
+  const t = useT()
   const startSec = (object.animation.startFrame / fps).toFixed(1)
   const endSec = ((object.animation.startFrame + object.animation.durationFrames) / fps).toFixed(1)
 
@@ -82,7 +92,7 @@ function TextObjectCard({ object, fps, onChange }: { object: TextObject; fps: nu
     <div className="border border-[var(--border-primary)] rounded-md p-3 flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium truncate">{object.text}</span>
-        <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
+        <span className="text-[10px] text-muted-foreground shrink-0 ms-2">
           {startSec}s – {endSec}s
         </span>
       </div>
@@ -95,30 +105,31 @@ function TextObjectCard({ object, fps, onChange }: { object: TextObject; fps: nu
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <SliderField label="Size" value={object.size} min={0.1} max={5} step={0.1} onChange={(v) => onChange({ ...object, size: v })} />
-        <SliderField label="Depth" value={object.depth} min={0.01} max={2} step={0.01} onChange={(v) => onChange({ ...object, depth: v })} />
+        <SliderField label={t("preview.size")} value={object.size} min={0.1} max={5} step={0.1} onChange={(v) => onChange({ ...object, size: v })} />
+        <SliderField label={t("preview.depth")} value={object.depth} min={0.01} max={2} step={0.01} onChange={(v) => onChange({ ...object, depth: v })} />
       </div>
     </div>
   )
 }
 
 function ParticleObjectCard({ object, onChange }: { object: ParticleObject; onChange: (updated: ParticleObject) => void }) {
+  const t = useT()
   return (
     <div className="border border-[var(--border-primary)] rounded-md p-3 flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium">Particles</span>
-        <span className="text-[10px] text-muted-foreground">{object.count} particles</span>
+        <span className="text-xs font-medium">{t("preview.particles")}</span>
+        <span className="text-[10px] text-muted-foreground">{t("preview.particleCount", { n: object.count })}</span>
       </div>
 
       <div className="text-[10px] text-muted-foreground flex items-center gap-2">
         <span className="inline-block w-3 h-3 rounded-full border border-white/20" style={{ backgroundColor: object.color }} />
-        <span>Speed: {object.speed.toFixed(1)}</span>
+        <span>{t("preview.speedLine", { n: object.speed.toFixed(1) })}</span>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <SliderField label="Size" value={object.size} min={0.01} max={0.5} step={0.01} onChange={(v) => onChange({ ...object, size: v })} />
-        <SliderField label="Speed" value={object.speed} min={0} max={10} step={0.1} onChange={(v) => onChange({ ...object, speed: v })} />
-        <SliderField label="Opacity" value={object.opacity} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...object, opacity: v })} />
+        <SliderField label={t("preview.size")} value={object.size} min={0.01} max={0.5} step={0.01} onChange={(v) => onChange({ ...object, size: v })} />
+        <SliderField label={t("preview.speed")} value={object.speed} min={0} max={10} step={0.1} onChange={(v) => onChange({ ...object, speed: v })} />
+        <SliderField label={t("proccfg.overlay.opacity")} value={object.opacity} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...object, opacity: v })} />
       </div>
     </div>
   )
@@ -131,6 +142,7 @@ export function ThreeDTitlePreview({
   onRegenerate,
   isGenerating,
 }: ThreeDTitlePreviewProps) {
+  const t = useT()
   const [allObjects, setAllObjects] = useState<TitleObject[]>(
     () => (titlePlan.objects as TitleObject[]) ?? [],
   )
@@ -171,7 +183,7 @@ export function ThreeDTitlePreview({
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-[var(--text-primary)]">
-          Title Plan ({allObjects.length} objects)
+          {t("preview.titlePlanCount", { n: allObjects.length })}
         </span>
         {onRegenerate && (
           <Button
@@ -181,7 +193,7 @@ export function ThreeDTitlePreview({
             onClick={onRegenerate}
             disabled={isGenerating}
           >
-            Regenerate
+            {t("common.regenerate")}
           </Button>
         )}
       </div>
@@ -189,8 +201,8 @@ export function ThreeDTitlePreview({
       {/* Camera info */}
       {camera && (
         <div className="text-[10px] text-muted-foreground border border-[var(--border-primary)] rounded-md p-2 flex flex-col gap-0.5">
-          <span>Camera FOV: {camera.fov as number}</span>
-          {cameraAnim && <span>Animation: {cameraAnim.type as string}</span>}
+          <span>{t("preview.cameraFov", { n: camera.fov as number })}</span>
+          {cameraAnim && <span>{t("preview.animationLine", { type: labelOf(CAMERA_ANIMATION_LABEL, String(cameraAnim.type), t) })}</span>}
         </div>
       )}
 
@@ -201,7 +213,7 @@ export function ThreeDTitlePreview({
               type="button"
               className="mt-3 shrink-0"
               onClick={() => toggleObject(i)}
-              title={disabledObjects.has(i) ? "Enable object" : "Disable object"}
+              title={disabledObjects.has(i) ? t("preview.enableObject") : t("preview.disableObject")}
             >
               {disabledObjects.has(i) ? (
                 <EyeOff className="w-3 h-3 text-muted-foreground/50" />

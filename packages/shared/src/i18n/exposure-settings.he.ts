@@ -7,7 +7,7 @@ const map: LocaleCatalogMap = {
   "aperture-f2-8": { description: "סובייקט חד, רקע רך" },
   "aperture-f4": { description: "DOF יומיומי מאוזן" },
   "aperture-f5-6": { description: "חד לאורך הסובייקט" },
-  "aperture-f8": { description: "חדות נקודה מתוקה" },
+  "aperture-f8": { description: "חדות אופטימלית (sweet spot)" },
   "aperture-f11": { description: "DOF נופי עמוק" },
   "aperture-f16": { description: "Hyperfocal, כוכבי שמש" },
 
@@ -22,7 +22,7 @@ const map: LocaleCatalogMap = {
   "iso-400": { description: "טקסטורה קלה, ISO יומיומי" },
   "iso-800": { description: "גרגירים נראים אך נעימים" },
   "iso-1600": { label: "ISO 1600 (גרגירים נראים)", description: "טקסטורת אור נמוך אדיטוריאלית" },
-  "iso-3200": { label: "ISO 3200 (גרגירים כבדים)", description: "מורחק, מראה דוקומנטרי גס" },
+  "iso-3200": { label: "ISO 3200 (גרגירים כבדים)", description: "פיתוח push, תחושה דוקומנטרית גסה" },
 }
 
 export default map

@@ -7,10 +7,11 @@ import type { ExecutionContext } from "./types"
 import type { FrontendResolvedInputs } from "./node-input-resolver"
 import { shouldAbandonNode } from "./abandon-guard"
 import { RUN_START_RESET } from "./poll-job"
+import { clearJobConnectionLost, jobGoneMessage, shouldStopPolling } from "./poll-connection"
+import { ComponentWaitDeadline } from "./component-wait"
 import { tx } from "@/lib/i18n"
 
 const POLL_INTERVAL_MS = 2_500
-const TIMEOUT_MS = 30 * 60 * 1000
 
 /**
  * Execute a component node via POST /v1/component/execute.
@@ -105,14 +106,32 @@ export async function executeComponent(
     // Store job ID so cancel + resume-after-refresh can find it
     updateNodeData(node.id, { currentJobId: jobId })
 
-    // Poll wrapper job
+    // Poll wrapper job — for 30 minutes, or as long as the server allows when
+    // the run renders something long inside (ComponentWaitDeadline).
     const startTime = Date.now()
+    const deadline = new ComponentWaitDeadline(jobId)
     let lastProgress = -1
+    let pollFailures = 0
 
-    while (Date.now() - startTime < TIMEOUT_MS) {
+    while (!(await deadline.reached(Date.now() - startTime))) {
       if (ctx.isWorkflowStale()) throw new Error("Workflow changed during execution")
 
-      const job = await getJobStatusLean(jobId)
+      // A check that cannot reach the server is not the component failing: it
+      // used to be, on the FIRST network blip. The shared rule ends the wait
+      // only for a job the server says is gone (poll-connection.ts).
+      let job: Awaited<ReturnType<typeof getJobStatusLean>>
+      try {
+        job = await getJobStatusLean(jobId)
+      } catch (err) {
+        pollFailures++
+        if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
+          throw new Error(jobGoneMessage())
+        }
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
+        continue
+      }
+      pollFailures = 0
+      clearJobConnectionLost({ nodeId: node.id, jobId })
 
       if (
         (job.status === "completed" || job.status === "failed") &&
@@ -159,7 +178,7 @@ export async function executeComponent(
       }
 
       // A wrapper job parked in `pending_review` is waiting on a HUMAN, and a
-      // review routinely outlives this 30-minute budget. Break out now and say
+      // review routinely outlives this wait. Break out now and say
       // so, instead of burning the budget and then reporting a timeout that
       // never happened. (Freezing the budget for the held interval — so the
       // component simply resumes on approve — is deferred with the rest of the
@@ -190,6 +209,7 @@ export async function executeComponent(
       errorMessage: err instanceof Error ? err.message : "Unknown error",
       currentJobId: undefined,
       currentJobProgress: undefined,
+      jobConnectionLost: undefined,
     })
     throw err
   }

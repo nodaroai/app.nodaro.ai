@@ -100,7 +100,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
           seed: newSeed,
           referenceImageUrls: baseRefUrls.length ? baseRefUrls : undefined,
         }),
-      "Re-roll board",
+      tx("node.reRollBoard"),
     )
   }
 
@@ -119,7 +119,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
           refineRefUrls.length ? refineRefUrls : undefined,
           {},
         ),
-      "Global edit",
+      tx("node.globalEdit"),
     ).then(() => setRefineInstruction(""))
   }
 
@@ -145,7 +145,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
           refineRefUrls.length ? refineRefUrls : undefined,
           { maskUrl },
         ),
-      "Masked edit",
+      tx("node.maskedEdit"),
     ).then(() => setRefineInstruction(""))
   }
 

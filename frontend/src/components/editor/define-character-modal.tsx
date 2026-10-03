@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { X, Upload, ImageIcon, FileText, Loader2 } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { uploadImage } from "@/lib/api"
+import { useT, tx } from "@/lib/i18n"
 import type { CharacterDefinition } from "@/types/nodes"
 
 interface DefineCharacterModalProps {
@@ -30,6 +31,7 @@ export function DefineCharacterModal({
   const [error, setError] = useState("")
   const [initialized, setInitialized] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const t = useT()
 
   // Pre-fill when editing
   if (isOpen && editingCharacter && !initialized) {
@@ -59,7 +61,7 @@ export function DefineCharacterModal({
 
   async function handleFileUpload(file: File) {
     if (!file.type.startsWith("image/")) {
-      setError("Please select an image file")
+      setError(tx("entity.selectImageFile"))
       return
     }
     setUploading(true)
@@ -68,7 +70,7 @@ export function DefineCharacterModal({
       const { url } = await uploadImage(file)
       setReferenceImageUrl(url)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed")
+      setError(err instanceof Error ? err.message : tx("pipe.uploadFailed"))
     } finally {
       setUploading(false)
     }
@@ -77,20 +79,20 @@ export function DefineCharacterModal({
   function handleSave() {
     const trimmedName = name.trim()
     if (!trimmedName) {
-      setError("Name is required")
+      setError(tx("pubTemplate.nameRequired"))
       return
     }
     const isNameTaken = existingNames.includes(trimmedName) && (!editingCharacter || editingCharacter.name !== trimmedName)
     if (isNameTaken) {
-      setError("A character with this name already exists")
+      setError(tx("entity.characterNameTaken"))
       return
     }
     if (type === "description" && !description.trim()) {
-      setError("Description is required")
+      setError(tx("entity.descriptionRequired"))
       return
     }
     if (type === "reference" && !referenceImageUrl) {
-      setError("Please upload a reference image")
+      setError(tx("entity.uploadReferenceRequired"))
       return
     }
 
@@ -117,7 +119,7 @@ export function DefineCharacterModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h3 className="text-sm font-semibold">{editingCharacter ? "Edit Character" : "Define New Character"}</h3>
+          <h3 className="text-sm font-semibold">{editingCharacter ? t("entity.editCharacter") : t("entity.defineNewCharacter")}</h3>
           <button type="button" onClick={handleClose} className="p-1 rounded-md hover:bg-muted">
             <X className="w-4 h-4" />
           </button>
@@ -127,12 +129,12 @@ export function DefineCharacterModal({
         <div className="p-4 flex flex-col gap-4">
           {/* Name */}
           <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Name</label>
+            <label className="text-xs font-medium text-muted-foreground block mb-1">{t("common.name")}</label>
             <input
               type="text"
               value={name}
               onChange={(e) => { setName(e.target.value); setError("") }}
-              placeholder="e.g. Maya the Bee"
+              placeholder={t("entity.characterNamePlaceholder")}
               className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
               autoFocus
             />
@@ -140,7 +142,7 @@ export function DefineCharacterModal({
 
           {/* Type toggle */}
           <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-2">Type</label>
+            <label className="text-xs font-medium text-muted-foreground block mb-2">{t("entity.typeLabel")}</label>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -149,7 +151,7 @@ export function DefineCharacterModal({
                   type === "reference" ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"
                 }`}
               >
-                <ImageIcon className="w-3.5 h-3.5" /> Reference Image
+                <ImageIcon className="w-3.5 h-3.5" /> {t("field.referenceImage")}
               </button>
               <button
                 type="button"
@@ -158,7 +160,7 @@ export function DefineCharacterModal({
                   type === "description" ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"
                 }`}
               >
-                <FileText className="w-3.5 h-3.5" /> Text Description
+                <FileText className="w-3.5 h-3.5" /> {t("entity.textDescription")}
               </button>
             </div>
           </div>
@@ -168,11 +170,11 @@ export function DefineCharacterModal({
             <div>
               {referenceImageUrl ? (
                 <div className="relative">
-                  <CachedImage src={referenceImageUrl} alt="Reference" className="w-full h-32 object-contain rounded-md border" thumbnail thumbnailWidth={480} />
+                  <CachedImage src={referenceImageUrl} alt={t("imgcfg.referenceAlt")} className="w-full h-32 object-contain rounded-md border" thumbnail thumbnailWidth={480} />
                   <button
                     type="button"
                     onClick={() => setReferenceImageUrl("")}
-                    className="absolute top-1 right-1 p-0.5 rounded-full bg-background/80 hover:bg-destructive hover:text-destructive-foreground"
+                    className="absolute top-1 end-1 p-0.5 rounded-full bg-background/80 hover:bg-destructive hover:text-destructive-foreground"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -189,7 +191,7 @@ export function DefineCharacterModal({
                   ) : (
                     <>
                       <Upload className="w-5 h-5" />
-                      <span className="text-xs">Click to upload image</span>
+                      <span className="text-xs">{t("entity.clickToUploadImage")}</span>
                     </>
                   )}
                 </button>
@@ -214,15 +216,15 @@ export function DefineCharacterModal({
               <textarea
                 value={description}
                 onChange={(e) => { setDescription(e.target.value); setError("") }}
-                placeholder="A humble male drone bee with simple eyes, grey-brown fur, smaller wings..."
+                placeholder={t("entity.characterDescPlaceholder")}
                 rows={3}
                 className="w-full px-3 py-2 text-sm border rounded-md bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary"
               />
               <p className="text-[10px] text-muted-foreground mt-1">
-                This description will be appended to the image prompt.
+                {t("entity.descAppendedHint")}
               </p>
               <p className="text-[10px] text-orange-500/80 mt-1">
-                Tip: Without a reference image, you'll need to save one after generating the first image for reuse in other scenes.
+                {t("entity.noReferenceTip")}
               </p>
             </div>
           )}
@@ -240,7 +242,7 @@ export function DefineCharacterModal({
             onClick={handleClose}
             className="px-3 py-1.5 text-xs rounded-md border hover:bg-muted transition-colors"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -248,7 +250,7 @@ export function DefineCharacterModal({
             disabled={uploading || !name.trim() || (type === "description" && !description.trim()) || (type === "reference" && !referenceImageUrl)}
             className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
-            {editingCharacter ? "Update" : "Save Character"}
+            {editingCharacter ? t("common.update") : t("entity.saveCharacter")}
           </button>
         </div>
       </div>

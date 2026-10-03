@@ -14,15 +14,27 @@ Unlike the `transition` field on the Combine Videos node (which is an FFmpeg pos
 |-------|------|---------|-------------|
 | Transition | multi-select | `"auto"` | Catalog entry id, or array of 1-2 ids for compound transitions (e.g., `["smash-cut","white-flash"]`). |
 | Position | select | `"auto"` | Where in the clip the transition occurs: `auto` / `start` / `middle` / `end` / `full`. |
-| Duration | select | `"auto"` | How long the transition lasts: `auto` / `instant` / `short` (~1s) / `medium` (~2s) / `long` (~3s). |
-| Intensity | select | `"auto"` | Energy/character of the transition: `auto` / `subtle` / `natural` / `dynamic` / `crazy`. |
+| Duration | select | `"auto"` | How long the transition lasts: `auto` / `instant` / `short` (~1s) / `medium` (~2s) / `long` (~3s). Ignored for a cut (see below). |
+| Intensity | select | `"auto"` | Energy/character of the transition: `auto` / `subtle` / `natural` / `dynamic` / `crazy`. Ignored for a cut (see below). |
 | Pre Text | text | empty | Free-form text prepended to the composed hint. |
 | Post Text | text | empty | Free-form text appended to the composed hint. |
-| Hint mode  | select       | `full`    | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
+| Hint mode  | select       | `full`    | Does not change how the transition itself is written — always `<name> (<description>)` (see below). It still sets the detail level of the pickers wired into `startState` / `endState`. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 All four enum fields default to `auto`, which contributes no prompt text. Setting them to non-`auto` values appends descriptive clauses to the composed hint.
 
 Position, Duration and Intensity are catalogs, not free values: the `transition` picker catalog exposes them as `dimensions` beside its `options` (`GET /v1/picker-catalogs/transition`, `client.pickerCatalogs.get("transition")`, the MCP `get_picker_catalog` tool, or `TRANSITION_POSITIONS` / `TRANSITION_DURATIONS` / `TRANSITION_INTENSITIES` from `@nodaro/prompts`), each row carrying the exact clause it injects. The [Character FX](./character-fx.md) node has the same three fields with the same ids but its own wording — read each node's own rows. See [Parameter Picker Catalogs](../../picker-catalogs.md#single-dimension-pickers-with-secondary-parameters-transition-character-fx).
+
+**How a transition reads in the video prompt.** Each picked transition is written as its short name followed by the full description of how it plays out, in parentheses: `<name> (<description>)`. For example, `whip pan (the camera whips sideways at high speed, smearing the frame into heavy horizontal motion blur, and the second shot enters already travelling in the same direction before it settles into its framing)`. The name alone was not enough for video models to perform the transition. The description does not repeat a leading heading: any "Heading:" of up to five words at the start of a description (for example `match cut:` or `whip pan transition:`) is removed, including on rows a catalog pack adds, and a transition whose description is only its name is written as the name alone. Position, Duration and Intensity follow the parentheses: `…), lasting approximately 1 second, with natural timing`. This is the same in both hint modes, and the same for a transition sent in the `direction` field of a video request. Transitions never reach image prompts.
+
+**Inside a shot's time window.** When the transition is written into one shot of a multi-shot prompt (`0-2s — …`, `2-4s — …`), the Position wording refers to that shot, not the whole clip: `the transition occurs in the middle of this shot` instead of `… of the clip`, and `full` (on a transition that is not a cut) reads `the transition spans this entire shot` instead of `… the entire clip`. `@nodaro/prompts` callers opt in with `composeTransitionHintFromConnections(id, startHints, endHints, timing, mode, { scope: "shot" })`; without it the wording is the clip's.
+
+**Cuts are worded as true hard cuts.** Eight transitions are cuts — the change happens between two frames: `none` (hard cut), `snap-to-black`, `match-cut`, `smash-cut`, `seamless-match`, `jump-cut`, `jump-match` and `action-relay`. When every picked transition is a cut:
+
+- The parentheses end, once, with an explicit anti-blend instruction: `match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)`. Without it, video models often render a cut as a short dissolve. With two cuts picked, the instruction appears once, in the first one's parentheses — the part of the prompt kept longest when a long prompt has to be shortened for a model's length limit.
+- Duration and Intensity are dropped from the prompt. Both describe how a transition plays out over time ("lasting approximately 1 second", "with natural timing"), and on a cut either one makes video models blend the two images instead of cutting.
+- Position still applies — where the cut lands is a real choice — except `full`: a single-frame cut cannot span the whole clip, so `full` adds nothing to the prompt. `start`, `middle` and `end` still place the cut.
+
+When two transitions are picked and only one is a cut, no anti-blend instruction is added and Duration and Intensity are kept. The picker catalog marks the cut rows `instant: true` on their options, and `@nodaro/prompts` exports `isInstantTransition(id)`, so a client can hide the Duration and Intensity controls for them.
 
 ## Catalog (82 entries across 8 categories)
 
@@ -41,7 +53,7 @@ Two defaults round out the catalog: `auto` (let the model choose) and `none` (ha
 
 ## Multi-pick
 
-Up to 2 transitions can be selected and compounded (`action-fx` parity). The composer joins their prompt hints with `", and "`. Examples:
+Up to 2 transitions can be selected and compounded (`action-fx` parity). Each is written as `<name> (<description>)` and the two are joined with `", and "`. Examples:
 - `["smash-cut", "white-flash"]` — a jarring smash cut blended with a camera-flash bloom.
 - `["fast-forward-day-night", "color-invert"]` — time accelerates with a color-flip moment.
 
@@ -56,7 +68,7 @@ The node has two input handles that accept any upstream parameter picker (Tone, 
 
 Worked example with `fast-forward-day-night`, position=`end`, duration=`medium`, intensity=`dynamic`, startState wired to `[Tone: "warm golden morning light"]`, endState wired to `[Tone: "deep blue moonlit night"]`:
 
-> *"fast-forward time-lapse transition: the sun visibly arcs across the sky, shadows sweep, clouds streak, sky shifts from daylight blue through golden hour to deep night, stars emerge, all while the framing and camera position remain locked on the same scene, the transition occurs at the end of the clip, lasting approximately 2 seconds, with dynamic energy and assertive flourish, starting from warm golden morning light, ending at deep blue moonlit night"*
+> *"day-to-night time-lapse (the same view with framing locked while hours pass in seconds: light and shadows sweep across the scene, daylight warms to dusk and fades to night, lights come on, until the picture matches the end frame), the transition occurs at the end of the clip, lasting approximately 2 seconds, with dynamic energy and assertive flourish, starting from warm golden morning light, ending at deep blue moonlit night"*
 
 ## Inputs & Outputs
 

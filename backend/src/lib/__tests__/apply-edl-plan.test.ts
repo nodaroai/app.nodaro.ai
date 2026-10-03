@@ -244,6 +244,40 @@ describe("validateEffectiveEdl — refuses what the renderer cannot render", () 
   })
 })
 
+// The shared contract files an unknown `role` as a WARNING (a newer producer may
+// know more roles); this executor knows exactly EDL_SOURCE_ROLES and acts on
+// "master-audio", so a misspelled one would silently use each camera's own
+// sound. Ingress PROMOTES it to an issue.
+describe("validateEffectiveEdl — an unknown source role is refused", () => {
+  const withRole = (role: string): Edl =>
+    buildEffectiveEdl({
+      version: 1,
+      clock: "master",
+      sources: [
+        { id: "mic", url: "https://m.test/m.wav", kind: "audio", role },
+        { id: "A", url: "https://m.test/a.mp4", kind: "video", role: "camera" },
+      ],
+      segments: [{ id: "s0", inMs: 0, outMs: 2000, video: "A" }],
+    })
+
+  it("promotes the shared-contract warning to an issue naming the source and the known roles", () => {
+    const edl = withRole("master-audo")
+    // The shared validator only warns…
+    expect(validateEdl(edl).ok).toBe(true)
+    expect(validateEdl(edl).warnings.join("\n")).toMatch(/unknown role "master-audo"/)
+    // …the executor refuses.
+    const r = validateEffectiveEdl(edl, "video")
+    expect(r.ok).toBe(false)
+    expect(r.issues).toContainEqual(expect.stringMatching(/^source "mic": unknown role "master-audo" — this renderer knows only master-audio, camera, wide, screen/))
+  })
+
+  it("accepts every known role", () => {
+    for (const role of ["master-audio", "camera", "wide", "screen"]) {
+      expect(validateEffectiveEdl(withRole(role), "video").issues, role).toEqual([])
+    }
+  })
+})
+
 // `masterMs = sourceMs + offsetMs`: a segment starting before a source's origin
 // would read negative source time. The renderer used to clamp that to 0 and
 // deliver the wrong picture; ingress now names the segment and the source.

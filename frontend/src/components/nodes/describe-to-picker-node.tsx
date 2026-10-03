@@ -72,11 +72,11 @@ function DescribeToPickerNodeComponent({ id, data, selected }: NodeProps) {
               )}
             </div>
           ) : detected > 0 ? (
-            <p className="text-sm font-medium text-foreground">Detected {detected} traits</p>
+            <p className="text-sm font-medium text-foreground">{t("node.detectedTraits", { n: detected })}</p>
           ) : (
             <p className="text-xs text-muted-foreground">{t("node.connectAnImageThenRun")}</p>
           )}
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">&rarr; Person</p>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("node.arrowPerson")}</p>
         </div>
       </BaseNode>
       <HandleWithPopover nodeId={id} nodeType="describe-to-picker" handleId="image" type="target" position={Position.Left} label="Image" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left" top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />

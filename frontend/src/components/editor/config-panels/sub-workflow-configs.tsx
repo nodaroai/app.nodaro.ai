@@ -146,7 +146,7 @@ export function SubWorkflowInputConfig({ data, onUpdate }: ConfigProps<SubWorkfl
       <div>
         <Label className="text-xs font-medium">{t("cfgext.subwfRouteId")}</Label>
         <div className="flex items-center gap-2 mt-1">
-          <Input
+          <Input dir="ltr"
             className="flex-1 h-8 text-xs font-mono"
             value={routeId}
             readOnly
@@ -421,7 +421,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
           <SelectContent>
             {mergedWorkflows.map((w) => (
               <SelectItem key={w.id} value={w.id}>
-                {w.name}{w.id === workflowId ? ` ${t("cfgext.subwfCurrent")}` : ""}{" "}
+                {w.name}{w.id === workflowId ? `${t("common.fragmentGap")}${t("cfgext.subwfCurrent")}` : ""}{t("common.fragmentGap")}
                 {w.routes.length === 1
                   ? t("cfgext.subwfRouteCountOne", { count: w.routes.length })
                   : t("cfgext.subwfRouteCount", { count: w.routes.length })}

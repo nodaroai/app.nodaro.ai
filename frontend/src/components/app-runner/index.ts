@@ -1,4 +1,4 @@
-export type { RunSlot, RunSlotNodeState } from "./types"
+export type { RunSlot, RunSlotNodeState, NewRunAction } from "./types"
 export { ORIGINAL_SLOT_ID, makeEmptyInputs, makeSnapshotInputs, makeSnapshotNodeStates, toSlotStatus, dbStatusToSlotStatus, isMediaUrl } from "./types"
 export { useRunSlots } from "./use-run-slots"
 export { AppRunnerLayout } from "./app-runner-layout"

@@ -1,6 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, type Transcript } from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest } from "@nodaro/shared";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
@@ -12,6 +12,7 @@ import type {
   SelectorNodeData,
   WebScrapeNodeData,
   SilenceDetectNodeData,
+  AudioSyncNodeData,
   VideoAnalysisNodeData,
   VideoAuditNodeData,
   DescribeToPickerData,
@@ -91,9 +92,12 @@ export function getEffectivelySkippedIds(
   nodes: WorkflowNode[],
   _edges: WorkflowEdge[],
 ): Set<string> {
+  // A Social Search node keeping its picks is frozen like a skipped one: it
+  // passes its chosen posts on instead of searching again. Same rule as the
+  // backend orchestrator (`isSocialSearchPickFrozen`).
   return new Set(
     nodes
-      .filter((n) => !!(n.data as Record<string, unknown>).skipped)
+      .filter((n) => !!(n.data as Record<string, unknown>).skipped || isSocialSearchPickFrozen(n.type, n.data as Record<string, unknown>))
       .map((n) => n.id),
   );
 }
@@ -245,7 +249,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     const triggerData = data.__triggerData as Record<string, unknown> | undefined;
     return (triggerData?.timestamp as string | undefined)?.trim();
   }
-  if (type === "telegram-trigger") {
+  if (type === "telegram-trigger" || type === "telegram-account-trigger") {
     const triggerData = data.__triggerData as Record<string, unknown> | undefined;
     const fields: Record<string, string> = {
       text: String((triggerData?.text ?? data.text) || ""),
@@ -254,7 +258,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       audioUrl: String((triggerData?.audioUrl ?? data.audioUrl) || ""),
       chatId: String((triggerData?.chatId ?? data.chatId) || ""),
       messageId: String((triggerData?.messageId ?? data.messageId) || ""),
+      senderId: String((triggerData?.senderId ?? data.senderId) || ""),
+      chatType: String((triggerData?.chatType ?? data.chatType) || ""),
     };
+    // The account trigger's named outputs: an empty one answers "", never the
+    // message text — the backend getPrimaryOutput trigger branch answers the
+    // same, so a field pip it feeds is emptied the same way in both engines.
+    if (type === "telegram-account-trigger" && isTelegramAccountTriggerNamedHandle(sourceHandle)) {
+      return telegramAccountTriggerOutputs(triggerData)[sourceHandle] ?? "";
+    }
     if (sourceHandle && fields[sourceHandle] !== undefined) {
       return fields[sourceHandle] || undefined;
     }
@@ -540,6 +552,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "loop-video" ||
     type === "gif-to-video" ||
     type === "fade-video" ||
+    type === "video-overlay" ||
     type === "manual-edit" ||
     type === "transcode-video" ||
     type === "remove-audio"
@@ -720,6 +733,16 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     if (sourceHandle === "video") return featured.videoUrl;
     return undefined;
   }
+  if (type === "social-search") {
+    // `json` = the posts the node passes on (a person's picks, else the first
+    // few), `text` = the same posts as a digest. Mirrors the backend
+    // getPrimaryOutput / extractSavedNodeOutput branches.
+    const chosen = socialPostsFrom((node.data as { generatedJson?: unknown }).generatedJson);
+    if (chosen.length === 0) return undefined;
+    if (sourceHandle === "text") return socialPostsDigest(chosen);
+    if (sourceHandle === "json" || !sourceHandle) return JSON.stringify(chosen);
+    return undefined;
+  }
   if (type === "instagram-scrape") {
     const d = node.data as { generatedJson?: unknown; featuredIndex?: unknown };
     if (sourceHandle === "json" || !sourceHandle) {
@@ -735,6 +758,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     const d = node.data as WebScrapeNodeData;
     // Single json handle — stringify for text consumers; Extract Field reads
     // d.generatedJson directly (bypasses extractNodeOutput).
+    if (sourceHandle === "json" || !sourceHandle) {
+      return d.generatedJson === undefined ? undefined : JSON.stringify(d.generatedJson);
+    }
+    return undefined;
+  }
+  if (type === "audio-sync") {
+    const d = node.data as AudioSyncNodeData;
+    // Single json handle carrying { version, reference, offsets, notes } —
+    // stringified exactly like silence-detect's ranges below.
     if (sourceHandle === "json" || !sourceHandle) {
       return d.generatedJson === undefined ? undefined : JSON.stringify(d.generatedJson);
     }
@@ -773,6 +805,22 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   // normalizeEdl would treat `[edl]` as an EDL with no sources/segments →
   // validate 400. Emit the FIRST clip (one valid EDL), or nothing when empty.
   // Mirrors the backend getPrimaryOutput edit-plan branch.
+  // Content Recipe: `json` → the recipe object, stringified; `text` / no
+  // handle → the readable recipe. Mirrors the backend getPrimaryOutput branch
+  // (TEXT_SOURCE_TYPES + its json-handle case).
+  if (type === "content-recipe") {
+    const d = node.data as { generatedJson?: unknown; generatedText?: string };
+    if (sourceHandle === "json") return d.generatedJson === undefined ? undefined : JSON.stringify(d.generatedJson);
+    return d.generatedText?.trim() ? d.generatedText : undefined;
+  }
+  // Content Ideas: the SCALAR value is the digest of every idea. The per-idea
+  // briefs a fan-out runs on come from extractNodeOutputAsList (ideaBriefs).
+  if (type === "content-ideas") {
+    const d = node.data as { generatedText?: string; ideaBriefs?: unknown };
+    if (d.generatedText?.trim()) return d.generatedText;
+    const briefs = Array.isArray(d.ideaBriefs) ? d.ideaBriefs.filter((b): b is string => typeof b === "string" && b.trim() !== "") : [];
+    return briefs.length > 0 ? briefs.join("\n\n") : undefined;
+  }
   if (type === "edit-plan") {
     const d = node.data as { generatedJson?: unknown };
     const plan = d.generatedJson;
@@ -1099,6 +1147,7 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "loop-video",
   "gif-to-video",
   "fade-video",
+  "video-overlay",
   "transcode-video",
   "manual-edit",
   "video-sfx",
@@ -1156,8 +1205,14 @@ export function detectPreviewItemType(
   // media URL — classify it as data so its preview isn't mis-typed by the URL
   // fallthrough below.
   if (nodeType === "silence-detect") return "data"
+  // audio-sync emits its offsets as JSON, never a media URL.
+  if (nodeType === "audio-sync") return "data"
   // edit-plan emits an EDL plan (json), never a media URL — classify as data.
   if (nodeType === "edit-plan") return "data"
+  // Content Recipe's `json` handle is the recipe object; its `text` handle
+  // and Content Ideas are readable text.
+  if (nodeType === "content-recipe") return sourceHandle === "json" ? "data" : "text"
+  if (nodeType === "content-ideas") return "text"
   // apply-edl `json` handle = the remapped Transcript (data). Its media handle
   // falls through to the URL regex below (mp4 → video, m4a → audio).
   if (nodeType === "apply-edl" && sourceHandle === "json") return "data"

@@ -3,6 +3,7 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
 import { resolveAssetId } from "../asset-resolver.js"
+import { resolveSpeechSourceUrl } from "./_speech-source.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import {
   parseJobId,
@@ -20,30 +21,7 @@ import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MO
  *  provider enum, so disabling this lane in @nodaro/shared fails the build here
  *  instead of 400ing every MCP transcribe call at the route. It is word-level,
  *  which is what makes `output_data.json.words` dependable for MCP callers. */
-const MCP_TRANSCRIBE_PROVIDER: TranscribeProvider = "elevenlabs-stt"
-
-/**
- * Resolve an `audio_asset_id` that is documented as "audio OR video job id".
- *
- * `resolveAssetId` is kind-strict, so asking it for audio refuses every
- * ordinary video job ("expected audio, got job of type …") — yet the routes
- * behind these verbs take any media URL, and a video is the common input
- * (captioning a clip, isolating a voice out of one, reverbing a voice-over).
- * Try audio first, then video; ownership is enforced inside `resolveAssetId`
- * on BOTH attempts, and any other failure (not found, foreign id, an image)
- * propagates untouched.
- *
- * One helper rather than a copy per verb: the tool descriptions all make the
- * same promise, so they have to resolve the same way.
- */
-async function resolveSpeechSource(assetId: string, userId: string): Promise<string | null> {
-  try {
-    return await resolveAssetId({ assetId, userId, expectedKind: "audio" })
-  } catch (err) {
-    if (!(err instanceof Error) || !err.message.startsWith("expected audio")) throw err
-    return resolveAssetId({ assetId, userId, expectedKind: "video" })
-  }
-}
+export const MCP_TRANSCRIBE_PROVIDER: TranscribeProvider = "elevenlabs-stt"
 
 /**
  * Suno versions as the MCP verbs describe them — one string, reused by every
@@ -123,7 +101,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "Generate a music track from a text prompt. Returns a job_id.\n\n" +
         "**Picking a model**: Default `suno-v6` (flagship: richer detail, natural vocals). " +
         "`suno-v6_wild` is bolder and less predictable; `suno-v6_mini` is faster. " +
-        "`suno-v5_5` / `suno-v5` / `suno` are earlier generations. `minimax` for short instrumental loops. " +
+        "`suno-v5_5` / `suno-v5` / `suno` are earlier generations. `minimax` follows a reference track. " +
         "For instrumental tracks set `instrumental: true`; for songs with vocals " +
         "provide `lyrics`.\n\n" +
         "**Presets/templates**: call list_node_presets { nodeType: \"generate-music\" } " +
@@ -160,7 +138,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             `Music model. Default ${DEFAULT_SUNO_CATALOG_ID}; suno-v6_wild bolder, suno-v6_mini faster; ` +
-            "suno-v5_5 / suno-v5 / suno earlier; minimax for short instrumental loops.",
+            "suno-v5_5 (also as suno-v5-5) / suno-v5 / suno earlier; minimax needs a reference_audio_url.",
           ),
         duration: z.number().min(1).max(30).optional(),
         instrumental: z.boolean().optional(),
@@ -177,6 +155,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         ),
         genre: z.string().optional(),
         mood: z.string().optional(),
+        reference_audio_url: z.string().url().optional().describe("minimax: the song, voice or instrumental it follows."),
+        reference_audio_asset_id: z.string().optional().describe("Or a Nodaro audio job id."),
       },
               outputSchema: {
           jobId: z.string(),
@@ -278,6 +258,33 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       // MiniMax goes through /v1/generate-music. Dispatch by catalog id.
       const sunoVersion = SUNO_VERSION_BY_CATALOG_ID.get(modelId)
       const isSuno = sunoVersion !== undefined
+      // MiniMax Music is reference-conditioned: without a reference track the
+      // provider refuses the run, so ask for one here instead of dispatching a
+      // job the route will refuse.
+      const referenceAudioUrl = isSuno
+        ? undefined
+        : ((effective.reference_audio_url as string | undefined) ??
+          (effective.reference_audio_asset_id
+            ? await resolveAssetId({
+                assetId: effective.reference_audio_asset_id as string,
+                userId: session.userId,
+                expectedKind: "audio",
+              })
+            : undefined) ??
+          undefined)
+      if (!isSuno && !referenceAudioUrl) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                "minimax (MiniMax Music) needs a reference song, voice or instrumental: pass reference_audio_url " +
+                "or reference_audio_asset_id — or use a Suno model (the default), which needs none.",
+            },
+          ],
+          isError: true as const,
+        }
+      }
       const url = isSuno ? "/v1/suno/generate" : "/v1/generate-music"
       // Fold mcp's generic `genre` + `mood` into suno's `style` (same intent)
       // — previously `mood` was silently dropped on the suno path. In custom
@@ -335,6 +342,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             lyrics,
             genre,
             mood,
+            referenceAudioUrl,
             mcp_client: session.clientName,
             userId: session.userId,
           }
@@ -427,7 +435,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "`elevenlabs-multilingual` is a legacy v2 model via a third-party " +
             "wrapper known to garble some languages (Hebrew observed) — only " +
             "use it for a v2-only-verified voice (`text` is capped at 5,000 chars on " +
-            "every model — split longer scripts). Call " +
+            "every model — split longer scripts). `elevenlabs` is the legacy id " +
+            "of `elevenlabs-turbo`. Call " +
             "list_models { kind: \"audio\", mode: \"tts\" } for the full sheet.",
           ),
         voice_type: z.enum(["premade", "custom", "library"]).optional(),
@@ -2008,7 +2017,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       // "audio or video job id" is what the arg promises — resolve it as both.
       const audioUrl =
         args.audio_url ??
-        (args.audio_asset_id ? await resolveSpeechSource(args.audio_asset_id, session.userId) : null)
+        (args.audio_asset_id ? await resolveSpeechSourceUrl(args.audio_asset_id, session.userId) : null)
       if (!audioUrl) return { content: [{ type: "text" as const, text: "Pass audio_url or audio_asset_id." }], isError: true }
       return dispatchJob(fastify, session, { url: "/v1/audio-isolation", payload: { audioUrl, mcp_client: session.clientName, userId: session.userId }, label: "audio isolation", widgetKind: "audio", widgetData: { prompt: "(isolate audio)", model: "audio-isolation" } })
     },
@@ -2102,7 +2111,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       // "audio or video job id" is what the arg promises — resolve it as both.
       const audioUrl =
         args.audio_url ??
-        (args.audio_asset_id ? await resolveSpeechSource(args.audio_asset_id, session.userId) : null)
+        (args.audio_asset_id ? await resolveSpeechSourceUrl(args.audio_asset_id, session.userId) : null)
       if (!audioUrl) return { content: [{ type: "text" as const, text: "Pass audio_url or audio_asset_id." }], isError: true }
       return dispatchJob(fastify, session, {
         url: "/v1/audio-fx",
@@ -2136,7 +2145,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
-      const audioUrl = args.audio_url ?? (args.audio_asset_id ? await resolveSpeechSource(args.audio_asset_id, session.userId) : null)
+      const audioUrl = args.audio_url ?? (args.audio_asset_id ? await resolveSpeechSourceUrl(args.audio_asset_id, session.userId) : null)
       if (!audioUrl) return { content: [{ type: "text" as const, text: "Pass audio_url or audio_asset_id." }], isError: true }
       const payload: Record<string, unknown> = {
         audioUrl,
@@ -2187,7 +2196,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
   server.registerTool(
     "suno_generate",
     {
-      title: "Suno Generate",
+      title: "Suno Create Music",
       description:
         "Generate an original song with Suno AI. Returns a job_id. The job " +
         "output contains sunoTaskId + sunoTrackId needed by follow-up tools " +
@@ -2474,7 +2483,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         title: z.string().max(SUNO_TITLE_MAX).optional(),
         negative_style: z.string().max(500).optional(),
         vocal_gender: z.enum(["male", "female"]).optional(),
-        use_default_params: z.boolean().optional().describe("Use Suno defaults instead of the supplied style/title. Default false."),
+        use_default_params: z.boolean().optional().describe("true: Suno picks style/title. Default false: yours are used."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -2488,7 +2497,11 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         uploadUrl: args.audio_url,
         continueAt: args.continue_at,
         model: args.model ?? DEFAULT_SUNO_MODEL,
-        defaultParamFlag: args.use_default_params ?? false,
+        // The provider's `defaultParamFlag: true` is its CUSTOM mode (your
+        // style / title / continueAt) despite the name, so it is the inverse of
+        // `use_default_params`. Mapping it straight through dropped the style
+        // and title a caller passed by default.
+        defaultParamFlag: !(args.use_default_params ?? false),
         ...(args.style ? { style: args.style } : {}),
         ...(args.title ? { title: args.title } : {}),
         ...(args.negative_style ? { negativeStyle: args.negative_style } : {}),

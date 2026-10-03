@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useT } from "@/lib/i18n"
 
 interface Overlay {
   id: string
@@ -68,6 +69,7 @@ function OverlayCard({
   fps: number
   onChange: (updated: Overlay) => void
 }) {
+  const t = useT()
   const filename = overlay.src.split("/").pop()?.slice(0, 20) ?? overlay.src.slice(0, 20)
   const startSec = (overlay.startFrame / fps).toFixed(1)
   const endSec = ((overlay.startFrame + overlay.durationInFrames) / fps).toFixed(1)
@@ -78,18 +80,23 @@ function OverlayCard({
         <span className="text-xs font-medium truncate" title={overlay.src}>
           {filename}
         </span>
-        <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
+        <span className="text-[10px] text-muted-foreground shrink-0 ms-2">
           {startSec}s – {endSec}s
         </span>
       </div>
 
       <div className="text-[10px] text-muted-foreground">
-        Position: ({overlay.position.x.toFixed(0)}%, {overlay.position.y.toFixed(0)}%) – {overlay.position.width.toFixed(0)}x{overlay.position.height.toFixed(0)}%
+        {t("preview.positionLine", {
+          x: overlay.position.x.toFixed(0),
+          y: overlay.position.y.toFixed(0),
+          w: overlay.position.width.toFixed(0),
+          h: overlay.position.height.toFixed(0),
+        })}
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <SliderField label="Opacity" value={overlay.opacity} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...overlay, opacity: v })} />
-        <SliderField label="Playback Rate" value={overlay.playbackRate} min={0.1} max={3} step={0.1} suffix="x" onChange={(v) => onChange({ ...overlay, playbackRate: v })} />
+        <SliderField label={t("proccfg.overlay.opacity")} value={overlay.opacity} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...overlay, opacity: v })} />
+        <SliderField label={t("preview.playbackRate")} value={overlay.playbackRate} min={0.1} max={3} step={0.1} suffix="x" onChange={(v) => onChange({ ...overlay, playbackRate: v })} />
 
         <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer">
           <input
@@ -98,7 +105,7 @@ function OverlayCard({
             onChange={(e) => onChange({ ...overlay, loop: e.target.checked })}
             className="accent-[#ff0073]"
           />
-          Loop animation
+          {t("preview.loopAnimation")}
         </label>
       </div>
     </div>
@@ -112,6 +119,7 @@ export function LottieOverlayPreview({
   onRegenerate,
   isGenerating,
 }: LottieOverlayPreviewProps) {
+  const t = useT()
   const [allOverlays, setAllOverlays] = useState<Overlay[]>(
     () => (overlayPlan.overlays as Overlay[]) ?? [],
   )
@@ -149,7 +157,7 @@ export function LottieOverlayPreview({
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-[var(--text-primary)]">
-          Overlay Plan ({allOverlays.length} overlays)
+          {t("preview.overlayPlanCount", { n: allOverlays.length })}
         </span>
         {onRegenerate && (
           <Button
@@ -159,7 +167,7 @@ export function LottieOverlayPreview({
             onClick={onRegenerate}
             disabled={isGenerating}
           >
-            Regenerate
+            {t("common.regenerate")}
           </Button>
         )}
       </div>
@@ -171,7 +179,7 @@ export function LottieOverlayPreview({
               type="button"
               className="mt-3 shrink-0"
               onClick={() => toggleOverlay(i)}
-              title={disabledOverlays.has(i) ? "Enable overlay" : "Disable overlay"}
+              title={disabledOverlays.has(i) ? t("preview.enableOverlay") : t("preview.disableOverlay")}
             >
               {disabledOverlays.has(i) ? (
                 <EyeOff className="w-3 h-3 text-muted-foreground/50" />

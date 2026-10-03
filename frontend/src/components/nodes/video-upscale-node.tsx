@@ -157,7 +157,7 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
                     )}
                     <button
                       type="button"
-                      aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                      aria-label={t("common.remove")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                       onClick={(e) => {
                         e.stopPropagation()
                         handleDeleteResult(i)
@@ -176,10 +176,10 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
                   VEO node" refusal made no sense (2026-09-09). */}
               <span>
                 {upscaleProvider === "veo-1080p"
-                  ? "VEO 1080p Upscale"
+                  ? t("node.veo1080pUpscale")
                   : upscaleProvider === "veo-4k"
-                    ? "VEO 4K Upscale"
-                    : `Topaz ${nodeData.upscaleFactor}x Upscale`}
+                    ? t("node.veo4kUpscale")
+                    : t("node.topazUpscale", { factor: nodeData.upscaleFactor ?? "" })}
               </span>
             </div>
           </div>

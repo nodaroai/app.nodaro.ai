@@ -8,6 +8,7 @@
 // both strings come from readiness.ts.
 
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 import { META_MONO, PANEL_BG, PANEL_EDGE } from "./styles"
 import type { AiAvatarReadiness } from "./readiness"
 
@@ -19,8 +20,9 @@ interface AiAvatarStatusBarProps {
 }
 
 export function AiAvatarStatusBar({ readiness, engineLabel, failure }: AiAvatarStatusBarProps) {
+  const t = useT()
   if (failure) {
-    const text = failure.message?.trim() ? `Failed · ${failure.message.trim()}` : "Failed · run again from the strip"
+    const text = failure.message?.trim() ? t("node.failedWithMessage", { message: failure.message.trim() }) : t("node.failedRunAgainFromStrip")
     return (
       <div
         className={cn("shrink-0 flex items-center gap-2 px-3 py-2 border-t", PANEL_EDGE, "bg-red-500/10")}

@@ -1,5 +1,6 @@
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { csvFields } from "./ffprobe-csv.js"
 
 interface TrimVideoOptions {
   readonly videoUrl: string
@@ -110,8 +111,10 @@ export async function trimVideo(options: TrimVideoOptions): Promise<{ videoPath:
       try {
         const kfs = await probeKeyframeTimes(inputPath)
         const snapped = kfs.filter((kt) => kt <= startTime + 1e-3).reduce((a, b) => Math.max(a, b), 0)
-        const vcodec = (await runFfprobe(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", inputPath])).trim().split(/\r?\n/)[0] ?? ""
-        const acodec = (await runFfprobe(["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", inputPath])).trim().split(/\r?\n/)[0] ?? ""
+        // csvFields: a rotated phone clip's side data appends an empty field
+        // ("h264,"), which never equalled "h264" — every such clip re-encoded.
+        const vcodec = csvFields(await runFfprobe(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", inputPath]))[0] ?? ""
+        const acodec = csvFields(await runFfprobe(["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", inputPath]))[0] ?? ""
         const copySafe = vcodec === "h264" && (acodec === "" || acodec === "aac" || acodec === "mp3")
         console.log(`[trimVideo] keyframe snap: requested start ${startTime}s -> ${snapped}s (copySafe=${copySafe})`)
         startTime = snapped

@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { queryKeys } from "@/lib/query-keys"
 import { useWorkspace } from "@/ee/hooks/use-workspace"
+import { useT, type MessageKey, type TFunction } from "@/lib/i18n"
 import { listOrgAudit, type OrgAuditEntry } from "@/ee/lib/orgs-api"
+import { formatDateTime } from "@/lib/i18n/format"
 
 /**
  * `/org/:slug/audit` — what happened, newest first.
@@ -25,6 +27,7 @@ import { listOrgAudit, type OrgAuditEntry } from "@/ee/lib/orgs-api"
  * raw string, which is still readable.
  */
 export default function OrgAuditPage() {
+  const t = useT()
   const { slug = "" } = useParams<{ slug: string }>()
   const { organizations, status: membershipStatus } = useWorkspace()
   const [cursor, setCursor] = useState<string | undefined>(undefined)
@@ -41,7 +44,7 @@ export default function OrgAuditPage() {
   })
 
   if (membershipStatus === "idle" || membershipStatus === "loading") {
-    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+    return <div className="p-6 text-sm text-muted-foreground">{t("common.loading")}</div>
   }
 
   // "We could not find out" is not "it does not exist". Collapsing them
@@ -51,12 +54,12 @@ export default function OrgAuditPage() {
     return (
       <div className="mx-auto max-w-xl p-6">
         <Card className="space-y-4 p-8">
-          <h1 className="text-xl font-semibold">Could not load your organizations</h1>
+          <h1 className="text-xl font-semibold">{t("org.orgsLoadFailedTitle")}</h1>
           <p className="text-sm text-muted-foreground">
-            This is a problem reaching Nodaro, not a change to what you belong to. Try again in a moment.
+            {t("org.orgsLoadFailedBody")}
           </p>
           <Button variant="outline" onClick={() => window.location.reload()}>
-            Try again
+            {t("common.tryAgain")}
           </Button>
         </Card>
       </div>
@@ -68,15 +71,15 @@ export default function OrgAuditPage() {
       <div className="mx-auto max-w-xl p-6">
         <Card className="space-y-4 p-8">
           <h1 className="text-xl font-semibold">
-            {membership ? "Not available to you" : "Organization not found"}
+            {membership ? t("org.notAvailableToYou") : t("org.orgNotFound")}
           </h1>
           <p className="text-sm text-muted-foreground">
             {membership
-              ? "Only an owner or an administrator can read the history of an organization."
-              : "This organization does not exist, or you are not a member of it."}
+              ? t("org.auditOwnerAdminOnly")
+              : t("org.orgMissingOrNotMember")}
           </p>
           <Button asChild variant="outline">
-            <Link to={membership ? `/org/${slug}` : "/"}>Back</Link>
+            <Link to={membership ? `/org/${slug}` : "/"}>{t("common.back")}</Link>
           </Button>
         </Card>
       </div>
@@ -86,17 +89,17 @@ export default function OrgAuditPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold">History</h1>
+        <h1 className="text-2xl font-semibold">{t("org.history")}</h1>
         <Link to={`/org/${slug}`} className="text-sm text-muted-foreground hover:underline">
           {membership.name}
         </Link>
       </header>
 
-      {audit.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-      {audit.error && <p className="text-sm text-muted-foreground">Could not load the history.</p>}
+      {audit.isLoading && <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}
+      {audit.error && <p className="text-sm text-muted-foreground">{t("org.historyLoadFailed")}</p>}
 
       {audit.data?.data.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nothing has been recorded yet.</p>
+        <p className="text-sm text-muted-foreground">{t("org.nothingRecorded")}</p>
       )}
 
       {(audit.data?.data.length ?? 0) > 0 && (
@@ -109,12 +112,12 @@ export default function OrgAuditPage() {
 
       {audit.data?.nextCursor && (
         <Button variant="outline" onClick={() => setCursor(audit.data.nextCursor ?? undefined)}>
-          Show older
+          {t("org.showOlder")}
         </Button>
       )}
       {cursor && (
         <Button variant="ghost" onClick={() => setCursor(undefined)}>
-          Back to the newest
+          {t("org.backToNewest")}
         </Button>
       )}
     </div>
@@ -122,19 +125,20 @@ export default function OrgAuditPage() {
 }
 
 function AuditRow({ entry }: { entry: OrgAuditEntry }) {
+  const t = useT()
   const actor = entry.actor?.displayName ?? entry.actor?.email ?? null
   return (
     <li className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-3">
       <div className="min-w-0">
-        <p className="text-sm">{describeAction(entry)}</p>
+        <p className="text-sm">{describeAction(entry, t)}</p>
         <p className="text-xs text-muted-foreground">
           {/* "The system" rather than a blank: an action with no actor was
               taken by nobody, and an empty space reads as missing data. */}
-          {actor ?? (entry.actor ? entry.actor.userId : "The system")}
+          {actor ?? (entry.actor ? entry.actor.userId : t("org.theSystem"))}
         </p>
       </div>
       <time className="text-xs text-muted-foreground" dateTime={entry.createdAt}>
-        {new Date(entry.createdAt).toLocaleString()}
+        {formatDateTime(entry.createdAt)}
       </time>
     </li>
   )
@@ -156,38 +160,39 @@ function AuditRow({ entry }: { entry: OrgAuditEntry }) {
  * commitment, and naming a feature before it exists is a promise made in the
  * wrong place. Add the label when the lever ships.
  */
-const ACTION_WORDS: Record<string, string> = {
-  "org.created": "Organization created",
-  "org.approved": "Organization approved",
-  "org.suspended": "Organization suspended",
-  "org.unsuspended": "Organization restored",
-  "org.deleted": "Organization deleted",
-  "org.settings.updated": "Organization settings changed",
-  "org.ownership.transferred": "Ownership transferred",
-  "org.member.invited": "Someone was invited",
-  "org.member.joined": "Someone joined",
-  "org.member.role_changed": "A member's role changed",
-  "org.member.suspended": "A member was suspended",
-  "org.member.unsuspended": "A member was reinstated",
-  "org.member.removed": "A member was removed",
-  "org.member.left": "A member left",
-  "invitation.resent": "An invitation was resent",
-  "invitation.revoked": "An invitation was revoked",
-  "workspace.created": "Workspace created",
-  "workspace.updated": "Workspace renamed or described",
-  "workspace.archived": "Workspace archived",
-  "workspace.unarchived": "Workspace restored",
-  "workspace.settings.updated": "Workspace settings changed",
-  "workspace.member.added": "Someone was added to a workspace",
-  "workspace.member.role_changed": "A workspace role changed",
-  "workspace.member.suspended": "A workspace member was suspended",
-  "workspace.member.unsuspended": "A workspace member was reinstated",
-  "workspace.member.removed": "Someone was removed from a workspace",
-  "workspace.join_code.rotated": "A join code was rotated",
-  "workspace.join_code.enabled": "A join code was enabled",
-  "workspace.join_code.disabled": "A join code was disabled",
+const ACTION_WORDS: Record<string, MessageKey> = {
+  "org.created": "org.auditOrgCreated",
+  "org.approved": "org.auditOrgApproved",
+  "org.suspended": "org.auditOrgSuspended",
+  "org.unsuspended": "org.auditOrgRestored",
+  "org.deleted": "org.auditOrgDeleted",
+  "org.settings.updated": "org.auditOrgSettings",
+  "org.ownership.transferred": "org.auditOwnershipTransferred",
+  "org.member.invited": "org.auditMemberInvited",
+  "org.member.joined": "org.auditMemberJoined",
+  "org.member.role_changed": "org.auditMemberRoleChanged",
+  "org.member.suspended": "org.auditMemberSuspended",
+  "org.member.unsuspended": "org.auditMemberReinstated",
+  "org.member.removed": "org.auditMemberRemoved",
+  "org.member.left": "org.auditMemberLeft",
+  "invitation.resent": "org.auditInvitationResent",
+  "invitation.revoked": "org.auditInvitationRevoked",
+  "workspace.created": "org.auditWsCreated",
+  "workspace.updated": "org.auditWsUpdated",
+  "workspace.archived": "org.auditWsArchived",
+  "workspace.unarchived": "org.auditWsRestored",
+  "workspace.settings.updated": "org.auditWsSettings",
+  "workspace.member.added": "org.auditWsMemberAdded",
+  "workspace.member.role_changed": "org.auditWsRoleChanged",
+  "workspace.member.suspended": "org.auditWsMemberSuspended",
+  "workspace.member.unsuspended": "org.auditWsMemberReinstated",
+  "workspace.member.removed": "org.auditWsMemberRemoved",
+  "workspace.join_code.rotated": "org.auditJoinCodeRotated",
+  "workspace.join_code.enabled": "org.auditJoinCodeEnabled",
+  "workspace.join_code.disabled": "org.auditJoinCodeDisabled",
 }
 
-function describeAction(entry: OrgAuditEntry): string {
-  return ACTION_WORDS[entry.action] ?? entry.action
+function describeAction(entry: OrgAuditEntry, t: TFunction): string {
+  const key = ACTION_WORDS[entry.action]
+  return key ? t(key) : entry.action
 }

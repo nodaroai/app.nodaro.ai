@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Play, Pause, Volume2, VolumeX, Maximize2, Minimize2 } from "lucide-react"
+import { useT } from "@/lib/i18n"
 import "./tutorial-video.css"
 
 interface TutorialVideoProps {
@@ -28,6 +29,7 @@ export function TutorialVideo({
   muted = true,
   badge,
 }: TutorialVideoProps) {
+  const t = useT()
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [playing, setPlaying] = useState(!!autoPlay)
@@ -90,16 +92,16 @@ export function TutorialVideo({
       />
       {badge && <div className="tv-badge">{badge}</div>}
       <div className="tv-controls">
-        <button type="button" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
+        <button type="button" onClick={togglePlay} aria-label={t(playing ? "common.pause" : "common.play")}>
           {playing ? <Pause className="tv-icon" /> : <Play className="tv-icon" />}
         </button>
-        <button type="button" onClick={toggleMute} aria-label={isMuted ? "Unmute" : "Mute"}>
+        <button type="button" onClick={toggleMute} aria-label={t(isMuted ? "present.unmute" : "present.mute")}>
           {isMuted ? <VolumeX className="tv-icon" /> : <Volume2 className="tv-icon" />}
         </button>
         <button
           type="button"
           onClick={toggleFullscreen}
-          aria-label={full ? "Exit full screen" : "Full screen"}
+          aria-label={t(full ? "common.exitFullscreen" : "common.fullscreen")}
         >
           {full ? <Minimize2 className="tv-icon" /> : <Maximize2 className="tv-icon" />}
         </button>

@@ -123,6 +123,7 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "makeup-editorial", label: "Editorial",     dimension: "makeup",     description: "Avant-garde fashion makeup", promptHint: "with avant-garde editorial makeup, artistic and unconventional", term: "editorial makeup" },
   { id: "makeup-goth",      label: "Goth",          dimension: "makeup",     description: "Dark goth aesthetic",       promptHint: "with goth makeup — pale skin, black eyeliner, dark lips", term: "goth makeup" },
   { id: "makeup-dewy",      label: "Dewy Glow",     dimension: "makeup",     description: "Glowing fresh-skin focus",  promptHint: "with dewy makeup, glowing fresh skin and minimal coverage", term: "dewy makeup" },
+  { id: "makeup-bare",      label: "Bare Face",     dimension: "makeup",     description: "No makeup at all",          promptHint: "with a completely bare face, no makeup at all", term: "bare face, no makeup" },
 
   // -------------------- Eyewear --------------------
   { id: "eyewear-sunglasses",      label: "Sunglasses",      dimension: "eyewear", description: "Generic dark sunglasses", promptHint: "wearing sunglasses" },
@@ -303,6 +304,7 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "outfit-one-piece-swim",   label: "One-Piece Swimsuit", dimension: "outfit", description: "Fitted one-piece swimsuit",       promptHint: "in a fitted one-piece swimsuit" , adultOnly: true },
   { id: "outfit-lingerie",         label: "Lingerie Set",     dimension: "outfit", description: "Matching lingerie set",             promptHint: "in a matching lingerie set" , adultOnly: true },
   { id: "outfit-pajamas",          label: "Pajamas",          dimension: "outfit", description: "Soft cotton pajama set",            promptHint: "in a soft cotton pajama set — a button-up top and matching pants" },
+  { id: "outfit-casual-home",      label: "At-Home Casual",   dimension: "outfit", description: "Soft tee or knit with relaxed trousers", promptHint: "wearing relaxed at-home clothes — a soft tee or knit top with comfortable trousers", term: "at-home casual clothes" },
   { id: "outfit-bathrobe",         label: "Bathrobe",         dimension: "outfit", description: "Plush terrycloth robe",             promptHint: "wrapped in a plush terrycloth bathrobe tied at the waist" },
   { id: "outfit-kimono",           label: "Kimono",           dimension: "outfit", description: "Traditional Japanese kimono",       promptHint: "dressed in a traditional Japanese kimono with an obi sash" },
   { id: "outfit-ballerina",        label: "Ballerina",        dimension: "outfit", description: "Classical ballerina costume",       promptHint: "dressed in a classical ballerina costume — fitted leotard and tulle tutu", term: "ballerina leotard and tutu" },
@@ -463,6 +465,24 @@ export const STYLING_DIMENSION_ORDER: ReadonlyArray<StylingDimension> = [
   // Modifiers — fabric and state apply to whatever garment(s) above.
   "fabric",
   "wardrobe-state",
+]
+
+/**
+ * The Styling picker's topics, in display order (mirrors PERSON_DIMENSION_SECTIONS):
+ * every dimension belongs to exactly one — styling-sections.test.ts fails the build
+ * when a new dimension is left out or listed twice. The editor lays the open
+ * picker out by these, and the API serves them as the catalog's `sections`.
+ */
+export interface StylingDimensionSection {
+  readonly label: string
+  readonly dimensions: ReadonlyArray<StylingDimension>
+}
+
+export const STYLING_DIMENSION_SECTIONS: ReadonlyArray<StylingDimensionSection> = [
+  { label: "Beauty & Hair", dimensions: ["makeup", "hair-cut", "hair-treatment", "hair-state", "nails", "face-paint"] },
+  { label: "Accessories",   dimensions: ["eyewear", "headwear", "jewelry"] },
+  { label: "Wardrobe",      dimensions: ["outfit", "top", "bottom", "outerwear", "legwear", "footwear"] },
+  { label: "Fabric & Fit",  dimensions: ["fabric", "wardrobe-state"] },
 ]
 
 export const STYLING_DIMENSION_LABELS: Readonly<Record<StylingDimension, string>> = {

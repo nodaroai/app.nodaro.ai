@@ -363,6 +363,100 @@ const CAPTION_DOCTRINE_TO_SKILL_BYTES = -1_530
 // the mechanics stay in the skill. measured: add_captions 6_491 -> 6_683 B
 // (1_509 B of per-tool headroom left); total 362_355 -> 362_547, headroom 186 B.
 const CAPTION_TEXT_SEMANTICS_BYTES = 192
+// RAISED 2026-09-23 by two fixes from the transition QA, and nothing else. No
+// tool added — the membership fixtures do not move.
+// (1) `generate_studio_clip.mode` gains `start-end` (F8): `start` silently drops
+// a pinned end frame, and the tool offered no way to force a start+end run. The
+// description says what omitting mode does and what each lane sends. Measured:
+// 362_636 total − 362_547 dev = 89 B.
+// (2) The job envelope (`get_job` / `wait_for_job` outputSchema) gains `input`,
+// an ALLOWLISTED subset of the job's input_data (F12: a server-side prompt fold
+// could not be verified over MCP), and get_job's description names it.
+// Measured: 362_892 − 362_636 = 256 B. Together 345 B, so the list keeps the
+// 186 B of headroom it had before.
+const STUDIO_CLIP_START_END_MODE_BYTES = 89
+const JOB_ENVELOPE_INPUT_BYTES = 256
+// RAISED by overlay_images (Video Overlay) and nothing else — one NEW core,
+// execute-scoped tool. It is UNGATED, so BOTH the cloud/all AND the
+// community/all membership fixtures name it, and the total rises by the
+// tool's full serialized size. measured by this suite: 3_805 B, well under
+// the 8_192 B per-tool budget.
+const VIDEO_OVERLAY_TOOL_BYTES = 3_805
+// RAISED 2026-09-25 by audio_sync (podcast B3) and nothing else — one NEW core,
+// execute-scoped tool, UNGATED like silence_detect, so BOTH the cloud/all AND
+// the community/all membership fixtures move (each names it). Measured by this
+// suite: 365_147 total − 362_947 base = 2_200 B, the tool's full serialized
+// size; well under the 8_192 B per-tool budget, and the list keeps exactly the
+// headroom it had before.
+const AUDIO_SYNC_TOOL_BYTES = 2_200
+// RAISED by the three UGC video builders (build_ugc_creator / build_ugc_clips /
+// build_ugc_cards) and nothing else — three NEW cloud-only tools, registered
+// inside the hasCredits() block and ungated by scope, so cloud/all, cloud/jobs
+// and cloud/none name them and the community sets do not. measured by this
+// suite: 1_322 + 1_291 + 1_140 = 3_753 B, each far under the 8_192 B per-tool
+// budget (no outputSchema, and only spent_job_ids carries a description).
+const UGC_BUILDER_TOOL_BYTES = 3_753
+// get_recipe's description gains one sentence saying the listing includes the
+// UGC website video on Nodaro Cloud. measured by this suite: +136 B.
+const GET_RECIPE_UGC_SENTENCE_BYTES = 136
+// RAISED 2026-09-27 by ONE argument and a title, and nothing else: `style_guide`
+// on `generate_script` (the route takes `styleGuide`, and the Generate Script
+// panel's main text field is the style guide, which the model now receives), and
+// `suno_generate`'s title following the node's name, "Suno Create Music". The
+// `scene_count` description also traded "default determined by model" for the
+// real default. No tool was added, so the fixture does NOT move. measured by
+// this suite: 373_062 total − 372_935 base = 127 B, which keeps the 37 B of
+// headroom the list had before.
+const GENERATE_SCRIPT_STYLE_GUIDE_BYTES = 127
+// RAISED 2026-09-29 by two arguments on `generate_music` and nothing else:
+// `reference_audio_url` / `reference_audio_asset_id`. MiniMax Music follows a
+// reference track and its route refuses a run without one, so `model:
+// "minimax"` could never run over MCP; the model's line now says so instead of
+// "short instrumental loops". No tool was added, so the fixture does NOT move.
+// measured by this suite: 373_260 total − 373_053 base = 207 B, which keeps the
+// 46 B of headroom the list had before.
+const GENERATE_MUSIC_REFERENCE_BYTES = 207
+// Docs review of the generated tool-parameters page (docs/mcp/): the 3D scene
+// tools' `references[]` say what `objectId` is and that v1 takes a whole clip
+// (`startSeconds` / `endSeconds` are refused otherwise); `generate_speech`
+// names `elevenlabs` as the legacy id of `elevenlabs-turbo`; `generate_music`
+// names the `suno-v5-5` spelling; `generate_script` states its defaults. Less:
+// the three pipeline-chat `stage` enums drop the unwired `shot_list` and the
+// "Wired today" sentence. No tool was added, so the fixture does NOT move.
+// measured by this suite: 373_669 total − 373_260 base = 409 B, which keeps
+// the 46 B of headroom the list had before.
+const DOCS_REVIEW_WORDING_BYTES = 409
+// RAISED 2026-10-02 by social_search and nothing else — one NEW cloud-only
+// tool (the Social Search node's MCP twin), registered inside the hasCredits()
+// block and gated by `workflows:execute`, so cloud/all names it and the
+// community sets and the scope-less sets do not. measured by this suite:
+// 376_790 total − 373_669 base = 3_121 B, well under the 8_192 B per-tool
+// budget, and the list keeps the 46 B of headroom it had before.
+const SOCIAL_SEARCH_TOOL_BYTES = 3_121
+// RAISED 2026-10-02 by save_post and list_saved_posts and nothing else — two
+// NEW cloud-only tools (the inspiration wall), registered beside social_search
+// inside the hasCredits() block and gated by assets:write / assets:read, so
+// cloud/all names them and the community sets and the scope-less sets do not.
+// measured by this suite: 378_637 total − 376_790 base = 1_847 B, both far
+// under the 8_192 B per-tool budget, and the list keeps the 46 B of headroom
+// it had before.
+const SAVED_POST_TOOLS_BYTES = 1_847
+// RAISED 2026-10-03 by plan_edit's multicam path (podcast B4) and nothing
+// else: three new arguments (`sources[].id`, `offsets`, `transcript_source_id`)
+// and one sentence each on plan_edit and audio_sync saying how the two
+// connect. No tool was added, so the fixture does NOT move. measured by this
+// suite: 379_338 total − 378_637 base = 701 B, which keeps the 46 B of headroom
+// the list had before. The multicam rules themselves live in the edit-plan
+// docs, not the description.
+const PLAN_EDIT_OFFSETS_BYTES = 701
+// RAISED 2026-10-02 by list_competitors, competitor_cards, add_competitor and
+// scan_competitor and nothing else — four NEW cloud-only tools (competitor
+// tracking), registered beside social_search inside the hasCredits() block,
+// gated by assets:read / assets:write / workflows:execute, so cloud/all names
+// them and the community sets and the scope-less sets do not. measured by
+// this suite: 382_349 total − 379_338 base = 3_011 B, each far under the
+// 8_192 B per-tool budget, and the list keeps the 46 B of headroom it had.
+const COMPETITOR_TOOLS_BYTES = 3_011
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -391,7 +485,20 @@ export const TOOL_WIRE_BUDGET = {
     SEEDANCE_VIDEO_EDIT_VERB_BYTES +
     STUDIO_PERSON_VOCABULARY_BYTES +
     CAPTION_DOCTRINE_TO_SKILL_BYTES +
-    CAPTION_TEXT_SEMANTICS_BYTES,
+    CAPTION_TEXT_SEMANTICS_BYTES +
+    STUDIO_CLIP_START_END_MODE_BYTES +
+    JOB_ENVELOPE_INPUT_BYTES +
+    VIDEO_OVERLAY_TOOL_BYTES +
+    AUDIO_SYNC_TOOL_BYTES +
+    UGC_BUILDER_TOOL_BYTES +
+    GET_RECIPE_UGC_SENTENCE_BYTES +
+    GENERATE_SCRIPT_STYLE_GUIDE_BYTES +
+    GENERATE_MUSIC_REFERENCE_BYTES +
+    DOCS_REVIEW_WORDING_BYTES +
+    SOCIAL_SEARCH_TOOL_BYTES +
+    SAVED_POST_TOOLS_BYTES +
+    PLAN_EDIT_OFFSETS_BYTES +
+    COMPETITOR_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

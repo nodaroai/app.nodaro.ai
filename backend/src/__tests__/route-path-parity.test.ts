@@ -232,6 +232,41 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   // plugin's own route matrices.
   "/v1/workflows/:p/collaborators",
   "/v1/workflows/:p/collaborators/:p",
+  // Telegram accounts are Cloud-only routes, registered at runtime by the
+  // cloud-plugins `registerRoutes()` and deliberately absent from core: a
+  // deployment without the plugin answers 404, which the Integrations card
+  // reads as "not offered here" and renders nothing. The contract is the
+  // plugin's own and exercised by its route tests.
+  "/v1/telegram-accounts",
+  "/v1/telegram-accounts/:p",
+  "/v1/telegram-accounts/:p/pause",
+  "/v1/telegram-accounts/:p/resume",
+  "/v1/telegram-accounts/:p/chats",
+  "/v1/telegram-accounts/consent",
+  "/v1/telegram-accounts/login",
+  "/v1/telegram-accounts/login/:p",
+  "/v1/telegram-accounts/login/:p/code",
+  "/v1/telegram-accounts/login/:p/password",
+  // Content Recipe and Content Ideas are Cloud-only nodes (CLOUD_ONLY_NODE_TYPES,
+  // no relay): their routes are registered at runtime by the cloud-plugins
+  // `registerRoutes()` and deliberately absent from core — the prompts and
+  // handlers are the plugin's. Off Cloud the pickers hide both nodes and the
+  // workflow routes refuse a graph holding them, so nothing calls these there.
+  "/v1/content-recipe",
+  "/v1/content-ideas",
+  // Social Search is a Cloud-only node (CLOUD_ONLY_NODE_TYPES, no relay): its
+  // route is registered at runtime by the cloud-plugins `registerRoutes()` and
+  // deliberately absent from core. Off Cloud the pickers hide the node and the
+  // workflow routes refuse a graph holding it, so nothing calls it there.
+  "/v1/social-search",
+  // Competitor tracking: every route is the cloud-plugins `competitors`
+  // plugin's (registered at runtime, deliberately absent from core). Off Cloud
+  // the page is not offered and nothing calls them.
+  "/v1/competitors",
+  "/v1/competitors/:p",
+  "/v1/competitors/cards",
+  "/v1/competitor-scan",
+  "/v1/competitor-discover",
 ])
 
 // ---------------------------------------------------------------------------

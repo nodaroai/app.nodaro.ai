@@ -1,15 +1,18 @@
 import type { FastifyInstance } from "fastify"
 import { hasCredits } from "../config.js"
 import { buildToolkit } from "./toolkit.js"
+import { daemonListProblem } from "./daemons.js"
 import { CONTRACT_VERSION } from "./types.js"
 import type {
   NodaroPrivatePlugin,
+  PluginDaemon,
   PluginEngines,
   PluginHandlerFn,
   PluginServices,
   PluginToolkit,
   PrivatePluginsModule,
   PromptTable,
+  RecipeTable,
 } from "./types.js"
 
 /**
@@ -41,6 +44,12 @@ export interface LoadPrivatePluginsOpts {
    * the loader without depending on Task 9.
    */
   toolkit?: PluginToolkit
+  /**
+   * Collect every plugin's `daemons(tk)` into `result.daemons`. ONLY the
+   * daemon host (`plugin-daemons.ts`) sets this — the API server and the
+   * workers never construct a daemon.
+   */
+  daemons?: boolean
 }
 
 export interface LoadPrivatePluginsResult {
@@ -69,6 +78,19 @@ export interface LoadPrivatePluginsResult {
    * that has no reference to this result.
    */
   services: PluginServices
+  /**
+   * Merged from each loaded plugin's `recipes()` — last write wins per recipe
+   * name. Also published to `getPluginRecipes()` (a leaf registry, so the
+   * `get_recipe` MCP tool reads it without importing this loader's toolkit
+   * graph).
+   */
+  recipes: RecipeTable
+  /**
+   * Present only when `opts.daemons` asked for it: every plugin's daemons,
+   * in plugin order, already validated as a hostable list (unique, well-formed
+   * names). Absent after a failed load — the host reads that as none.
+   */
+  daemons?: PluginDaemon[]
 }
 
 /**
@@ -82,6 +104,8 @@ export interface LoadPrivatePluginsResult {
 let pluginServices: PluginServices = {}
 export { getPluginEngines } from "./engine-registry.js"
 import { setPluginEngines } from "./engine-registry.js"
+export { getPluginRecipes } from "./recipe-registry.js"
+import { setPluginRecipes } from "./recipe-registry.js"
 
 /**
  * The private plugins' service surface, or `{}` when no plugin provided one
@@ -93,6 +117,18 @@ export function getPluginServices(): PluginServices {
   return pluginServices
 }
 
+/**
+ * Publish stand-in services without loading a plugin, for a process that only
+ * ENUMERATES what core registers when a plugin is present: the MCP docs
+ * generator (gen-skills), whose Nodaro Cloud capture must see the tools
+ * production registers with the cloud plugin loaded (the workspace tools ask
+ * for `orgs`). Enumeration builds tool schemas and never runs a handler, so
+ * nothing published here is ever called. Never called on a boot path.
+ */
+export function publishStandInPluginServices(services: PluginServices): void {
+  pluginServices = services
+}
+
 function emptyResult(): LoadPrivatePluginsResult {
   // Every early return routes through here — community/business, a failed
   // load, an optional-mode skip — so clearing the published surface here is
@@ -101,11 +137,12 @@ function emptyResult(): LoadPrivatePluginsResult {
   // later one failed.
   pluginServices = {}
   setPluginEngines({})
+  setPluginRecipes({})
   // Fresh object per call — loadPrivatePlugins() is called from more than
   // one boot path (app.ts + video-worker.ts, Task 10), and callers merge
   // into `handlers` (e.g. Object.assign(allHandlers, handlers)). Sharing one
   // mutable object across calls would alias that merge across processes.
-  return { handlers: {}, loaded: [], engines: {}, prompts: {}, services: {} }
+  return { handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {} }
 }
 
 function isOptionalMode(): boolean {
@@ -224,6 +261,8 @@ export async function loadPrivatePlugins(
   const engines: PluginEngines = {}
   const prompts: PromptTable = {}
   const services: PluginServices = {}
+  const recipes: RecipeTable = {}
+  let daemons: readonly PluginDaemon[] = []
 
   for (const plugin of plugins) {
     // A capability that THROWS while being constructed is a load failure like
@@ -251,10 +290,21 @@ export async function loadPrivatePlugins(
       if (plugin.services) {
         Object.assign(services, plugin.services(getToolkit()))
       }
+      if (plugin.recipes) {
+        Object.assign(recipes, plugin.recipes())
+      }
       if (plugin.prompts) {
         const pluginPrompts = plugin.prompts()
         Object.assign(prompts, pluginPrompts)
         await applyPipelinePrompts(pluginPrompts)
+      }
+      if (opts.daemons && plugin.daemons) {
+        const contributed: unknown = plugin.daemons(getToolkit())
+        if (!Array.isArray(contributed)) throw new Error("daemons() must return a list")
+        const next = [...daemons, ...(contributed as PluginDaemon[])]
+        const problem = daemonListProblem(next)
+        if (problem) throw new Error(problem)
+        daemons = next
       }
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
@@ -265,7 +315,16 @@ export async function loadPrivatePlugins(
 
   pluginServices = services
   setPluginEngines(engines)
-  return { handlers, loaded, engines, prompts, services }
+  setPluginRecipes(recipes)
+  return {
+    handlers,
+    loaded,
+    engines,
+    prompts,
+    services,
+    recipes,
+    ...(opts.daemons ? { daemons: [...daemons] } : {}),
+  }
 }
 
 /**

@@ -452,12 +452,15 @@ describe("generate_music verb", () => {
       model: "minimax",
       duration: 20,
       instrumental: true,
+      reference_audio_url: "https://cdn.nodaro.ai/audio/ref.mp3",
     })
 
     expect(result.isError).toBeUndefined()
     expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-gm")
     expect(received.body?.provider).toBe("minimax")
     expect(received.body?.duration).toBe(20)
+    // MiniMax Music follows a reference track — the route refuses a run without one.
+    expect(received.body?.referenceAudioUrl).toBe("https://cdn.nodaro.ai/audio/ref.mp3")
   })
 
   it("dispatches model=suno-v5 to /v1/suno/generate with model=V5", async () => {
@@ -1171,6 +1174,66 @@ describe("voice_design verb", () => {
   })
 })
 
+describe("generate_script verb", () => {
+  it("forwards style_guide as styleGuide, beside the other settings", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-script", { jobId: "j-gs" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_script", {
+      prompt: "a lighthouse keeper's last night",
+      scene_count: 4,
+      tone: "wistful",
+      target_duration: 45,
+      style_guide: "noir, short lines, rain in every scene",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body).toMatchObject({
+      prompt: "a lighthouse keeper's last night",
+      sceneCount: 4,
+      tone: "wistful",
+      targetDuration: 45,
+      styleGuide: "noir, short lines, rain in every scene",
+    })
+  })
+
+  it("sends no styleGuide when none is given", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-script", { jobId: "j-gs2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "generate_script", { prompt: "a short story" })
+    expect(received.body).not.toHaveProperty("styleGuide")
+  })
+})
+
+describe("suno_upload_extend verb", () => {
+  // The provider's `defaultParamFlag: true` is its CUSTOM mode (the caller's
+  // style / title / continueAt), so it is the inverse of `use_default_params`.
+  it("uses the caller's style and title by default (defaultParamFlag: true)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/suno/upload-extend", { jobId: "j-ue" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "suno_upload_extend", {
+      audio_url: "https://cdn.example/song.mp3",
+      continue_at: 30,
+      style: "lo-fi",
+      title: "Night drive",
+    })
+    expect(received.body).toMatchObject({ defaultParamFlag: true, style: "lo-fi", title: "Night drive" })
+  })
+
+  it("lets Suno pick when use_default_params is true (defaultParamFlag: false)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/suno/upload-extend", { jobId: "j-ue2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "suno_upload_extend", {
+      audio_url: "https://cdn.example/song.mp3",
+      continue_at: 30,
+      use_default_params: true,
+    })
+    expect(received.body).toMatchObject({ defaultParamFlag: false })
+  })
+})
+
 // suno_separate_stems / suno_extend error-path coverage requires a
 // supabase mock that matches resolveSunoIds' specific column selection
 // (output_data, user_id, is_public, status). The shared file-level mock
@@ -1425,6 +1488,114 @@ describe("silence_detect verb", () => {
   })
 })
 
+describe("audio_sync verb", () => {
+  it("calls /v1/audio-sync with the sources verbatim and the chosen reference", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/audio-sync", { jobId: "j-as" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const sources = [
+      { id: "mic", url: "https://a/mic.m4a" },
+      { id: "camA", url: "https://a/camA.mp4" },
+      { id: "camB", url: "https://a/camB.mp4" },
+    ]
+    const result = await callTool(server, "audio_sync", { sources, reference: "camA" })
+
+    expect(result.isError).toBeUndefined()
+    expect((result.structuredContent as Record<string, unknown>)?.jobId).toBe("j-as")
+    expect(received.body?.sources).toEqual(sources)
+    expect(received.body?.reference).toBe("camA")
+    expect(received.body?.mcp_client).toBe("Claude")
+    expect(received.body?.userId).toBe("u1")
+  })
+
+  it("omits reference when none is given (the route defaults to the first source)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/audio-sync", { jobId: "j-as2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "audio_sync", {
+      sources: [{ id: "a", url: "https://a/a.wav" }, { id: "b", url: "https://a/b.wav" }],
+    })
+    expect(received.body && "reference" in received.body).toBe(false)
+  })
+
+  it("does NOT register without workflows:execute scope", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: readOnlySession(), fastify: Fastify() })
+    const tools = await listTools(server)
+    expect(tools.map((t) => t.name)).not.toContain("audio_sync")
+  })
+})
+
+// B4 (decided 2026-09-25): plan_edit takes audio_sync's result and writes it
+// onto the sources before dispatch — refused, before any charge, when it
+// would render out of sync.
+describe("plan_edit verb — audio_sync offsets", () => {
+  const transcript = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 500 }] }
+  const sources = [
+    { id: "mic", url: "https://a/mic.m4a", kind: "audio", role: "master-audio" },
+    { id: "camA", url: "https://a/camA.mp4", kind: "video" },
+  ]
+  const sync = (confidence: number) => ({
+    version: 1,
+    reference: "mic",
+    offsets: [
+      { sourceId: "mic", offsetMs: 0, confidence: 1, driftMsPerHour: 0 },
+      { sourceId: "camA", offsetMs: 2_000, confidence, driftMsPerHour: 0 },
+    ],
+    notes: [],
+  })
+
+  it("writes the measured offsets onto the sources (and stamps the transcript's source); `offsets` is never sent", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "j-ep" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "plan_edit", { mode: "tighten", transcript, sources, offsets: sync(0.9), transcript_source_id: "mic" })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.sources).toEqual([sources[0], { ...sources[1], offsetMs: 2_000 }])
+    expect(received.body && "offsets" in received.body).toBe(false)
+    expect((received.body?.transcript as { sourceId?: string }).sourceId).toBe("mic")
+  })
+
+  it("accepts the result as a JSON string too", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "j-ep2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "plan_edit", { mode: "tighten", transcript, sources, offsets: JSON.stringify(sync(0.9)) })
+    expect((received.body?.sources as Array<{ offsetMs?: number }>)[1]!.offsetMs).toBe(2_000)
+  })
+
+  it("refuses a weak match before dispatch — nothing is charged", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "never" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "plan_edit", { mode: "tighten", transcript, sources, offsets: sync(0.2) })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toMatch(/audio-sync's match for \\"camA\\" is too weak to trust/)
+    expect(received.body).toBeUndefined()
+  })
+
+  it("refuses offsets when a source has no id to match them by", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "never" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "plan_edit", {
+      mode: "tighten", transcript, sources: [sources[0], { url: "https://a/camA.mp4" }], offsets: sync(0.9),
+    })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toMatch(/give every source the `id` you gave audio_sync/)
+    expect(received.body).toBeUndefined()
+  })
+
+  it("without offsets, unnamed sources stay unnamed (the plugin mints their ids)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "j-ep3" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "plan_edit", { mode: "tighten", transcript, sources: [{ url: "https://a/ep.mp4" }] })
+    expect(received.body?.sources).toEqual([{ url: "https://a/ep.mp4" }])
+  })
+})
+
 describe("apply_edl verb", () => {
   const validEdl = {
     version: 1,
@@ -1499,6 +1670,21 @@ describe("apply_edl verb", () => {
     expect((result.content[0] as { text: string }).text).toContain("seg1")
     expect((result.content[0] as { text: string }).text).toContain("video source")
     expect(received.body).toBeUndefined() // never dispatched
+  })
+
+  it("refuses an edit over the 3-hour output cap, naming the length and the cap, never dispatching", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/apply-edl", { jobId: "j-long" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const longEdl = { ...validEdl, segments: [{ id: "seg1", inMs: 0, outMs: 200 * 60_000, video: "s1" }] }
+    const result = await callTool(server, "apply_edl", { edl: longEdl })
+
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toContain(
+      "the edit renders 200 minutes of output — over the 180-minute limit for one render",
+    )
+    expect(received.body).toBeUndefined() // never dispatched → nothing reserved
   })
 
   it("does NOT register without workflows:execute scope", async () => {

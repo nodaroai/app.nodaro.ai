@@ -11,7 +11,7 @@
 // measured ends injected: no ffprobe here.
 import { describe, it, expect } from "vitest"
 import type { Edl } from "@nodaro/shared"
-import { assertSegmentsWithinSources, SOURCE_END_TOLERANCE_SEC } from "../apply-edl.js"
+import { assertSegmentsWithinSources, SOURCE_END_TOLERANCE_SEC, DECLARED_END_TOLERANCE_SEC } from "../apply-edl.js"
 import type { StreamEnds, TrackEnd } from "../ffmpeg-utils.js"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 
@@ -120,6 +120,48 @@ describe("assertSegmentsWithinSources", () => {
     ])
     // per track, not per file: the measured, short sound track still refuses
     expect(() => assertSegmentsWithinSources(e, undefined, true, ends({ A: { video: UNMEASURED, audio: m(6) } }))).toThrow(/audio track/)
+  })
+
+  // An MPEG-TS/PS file's per-track ends are not on the render's clock, but its
+  // declared duration spans every stream — an upper bound that can only
+  // OVER-state a track's end while its timestamps run forward (the probe
+  // attaches it only then). Refusing past it (+ a wider tolerance) never fails
+  // a correct edit, and stops an overrun rendering minutes of frozen picture
+  // over silence (the source is held past its end).
+  it("an MPEG-TS/PS track (unmeasured, with a declared bound) is refused past declared + tolerance, passes inside it", () => {
+    const TS: TrackEnd = { state: "unmeasured", reason: "MPEG-TS/PS container re-anchors timestamps; not on the render's clock", declaredEndSec: 60 }
+    const at = (outMs: number) => edl([A], [{ id: "s0", inMs: 0, outMs, video: "A" }])
+    const tsEnds = ends({ A: { video: TS, audio: TS } })
+    expect(assertSegmentsWithinSources(at((60 + DECLARED_END_TOLERANCE_SEC) * 1000 - 1), undefined, true, tsEnds)).toEqual([])
+    const err = thrown(() => assertSegmentsWithinSources(at(90_000), undefined, true, tsEnds))
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(String(err)).toMatch(/segment\[0\] "s0" ends at 90\.00s on source "A", but that file declares only 60\.00s/)
+    expect(DECLARED_END_TOLERANCE_SEC).toBeGreaterThan(SOURCE_END_TOLERANCE_SEC)
+  })
+
+  it("an unmeasured track with NO declared bound (a failed scan) is still skipped and reported — never refused on a guess", () => {
+    const e = edl([A], [{ id: "s0", inMs: 0, outMs: 90_000, video: "A" }])
+    expect(assertSegmentsWithinSources(e, undefined, true, ends({ A: { video: UNMEASURED, audio: ABSENT } }))).toHaveLength(1)
+  })
+
+  // Ingress already refuses a read before a source's origin; the executor must
+  // too, never clamp it to the source's first frame (A1, found by B1).
+  it("a read that starts before its source's origin is refused, naming the segment — never clamped", () => {
+    const late = { ...A, offsetMs: 4000 }
+    const at = (inMs: number) => edl([late], [{ id: "s0", inMs, outMs: inMs + 2000, video: "A" }])
+    const err = thrown(() => assertSegmentsWithinSources(at(3000), undefined, true, ends({ A: { video: m(60), audio: m(60) } })))
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(String(err)).toMatch(/segment\[0\] "s0" starts at 3\.000s on the master clock, before source "A" begins \(its offsetMs is 4000\)/)
+    expect(assertSegmentsWithinSources(at(4000), undefined, true, ends({ A: { video: m(60), audio: m(60) } }))).toEqual([])
+  })
+
+  it("the pre-origin refusal needs no probe data: a source whose probe failed, or whose sound track is absent, is refused too", () => {
+    const late = { ...A, offsetMs: 4000 }
+    const e = edl([late], [{ id: "s0", inMs: 3000, outMs: 5000, video: "A" }])
+    // probe failed outright → no entry at all
+    expect(() => assertSegmentsWithinSources(e, undefined, true, new Map())).toThrow(/starts at 3\.000s .* before source "A" begins/)
+    // an audio-only cut from a source whose sound track is absent
+    expect(() => assertSegmentsWithinSources(e, undefined, false, ends({ A: { video: m(60), audio: ABSENT } }))).toThrow(/before source "A" begins/)
   })
 
   it("a source with no entry at all (its probe failed outright; the caller already logged it) is skipped", () => {

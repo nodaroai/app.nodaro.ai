@@ -166,6 +166,11 @@ const TOOLS_WITHOUT_INPUTS: ReadonlySet<string> = new Set<string>([
   // Tools confirmed parameter-less by manual inspection. Most "list_*" tools
   // accept pagination params (limit/cursor/search) and are NOT in this set.
   "check_balance",
+  // A person tracks at most COMPETITORS_MAX (50) brands, so the list returns
+  // all of them, and the cards are each brand's latest scan's cards — bounded
+  // the same way. No pagination or filter to offer. See competitors.ts.
+  "competitor_cards",
+  "list_competitors",
   // Pure content-delivery tool — returns the generated recast authoring guide
   // verbatim. No knobs, no per-call variation. See recast.ts.
   "get_recast_authoring_skill",

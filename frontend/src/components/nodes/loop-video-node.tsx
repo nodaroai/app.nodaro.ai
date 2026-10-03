@@ -119,7 +119,7 @@ function LoopVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="text-[10px] text-amber-500">{t("node.videoLoadFailed")}</span>
                 <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
               </div>
-              <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">Loop {modeLabel}</div>
+              <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{t("node.loopBadge", { mode: modeLabel })}</div>
               {results.length > 0 && (
                 <button type="button" aria-label={t("node.removeResult")} className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); if (activeJobId) setDeleteConfirm(activeJobId) }}><X className="w-3 h-3" /></button>
               )}
@@ -141,7 +141,7 @@ function LoopVideoNodeComponent({ id, data, selected }: NodeProps) {
           {status !== "running" && !activeUrl && status !== "failed" && (
             <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40"><Repeat className="w-5 h-5" /></div>
           )}
-          <p className="text-muted-foreground">{nodeData.mode === "duration" ? `Loop to ${nodeData.targetDuration ?? 10}s` : `Repeat ${nodeData.repeatCount ?? 2}x`}</p>
+          <p className="text-muted-foreground">{nodeData.mode === "duration" ? t("node.loopToSeconds", { n: nodeData.targetDuration ?? 10 }) : t("node.repeatTimes", { n: nodeData.repeatCount ?? 2 })}</p>
         </div>
       )}
     </BaseNode>

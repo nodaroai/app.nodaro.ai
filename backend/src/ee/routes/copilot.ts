@@ -89,6 +89,12 @@ const messageBody = z.object({
    * which one — and nothing else: it addresses no write and pins no argument.
    */
   focus: z.object({ shotId: z.string().optional() }).optional(),
+  /**
+   * The interface locale the composer is showing ("he", "en", …), so the
+   * assistant answers in the language the person reads. Advisory: it only
+   * adds a reply-language line to the turn's context (see reply-language.ts).
+   */
+  locale: z.string().max(16).optional(),
 })
 
 const patchThreadBody = z.object({
@@ -614,6 +620,7 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
           message: parsed.data.message,
           surface,
           focus: parsed.data.focus ?? null,
+          locale: parsed.data.locale ?? null,
           tier,
           caps: effectiveCaps,
           usageLogId: reservation?.usageLogId ?? null,

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { Command } from "commander"
-import { writeFileSync, rmSync } from "node:fs"
+import { writeFileSync, rmSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { fileURLToPath } from "node:url"
+import { VIDEO_OVERLAY_CORNERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_PRESET_IDS } from "@nodaro/shared"
 import { mediaCommand } from "../media.js"
 import { warn, success, emit } from "../../output.js"
 
@@ -18,6 +20,7 @@ const mocks = {
   imageCollage: vi.fn(),
   imageOverlay: vi.fn(),
   suggestOverlayPlacement: vi.fn(),
+  videoOverlay: vi.fn(),
   addCaptions: vi.fn(),
   jobsGet: vi.fn(),
 }
@@ -36,6 +39,7 @@ vi.mock("../../client.js", () => ({
       imageCollage: mocks.imageCollage,
       imageOverlay: mocks.imageOverlay,
       suggestOverlayPlacement: mocks.suggestOverlayPlacement,
+      videoOverlay: mocks.videoOverlay,
       addCaptions: mocks.addCaptions,
     },
     jobs: { get: mocks.jobsGet },
@@ -438,6 +442,71 @@ describe("media overlay command", () => {
   })
 })
 
+describe("media video-overlay command", () => {
+  it("pairs each positional layer URL with its --at window and the shared preset", async () => {
+    mocks.videoOverlay.mockResolvedValueOnce({ jobId: "j-vo" })
+    await runCmd(
+      "media", "video-overlay", "https://x/clip.mp4", "https://x/a.png", "https://x/b.png",
+      "--at", "1.2-2.6", "--at", "3", "--preset", "card", "--json",
+    )
+    expect(mocks.videoOverlay).toHaveBeenCalledWith({
+      videoUrl: "https://x/clip.mp4",
+      layers: [
+        { imageUrl: "https://x/a.png", start: 1.2, end: 2.6, preset: "card" },
+        { imageUrl: "https://x/b.png", start: 3, preset: "card" },
+      ],
+    })
+  })
+
+  it("maps --corner, --aspect, --base-fit and --background-color", async () => {
+    mocks.videoOverlay.mockResolvedValueOnce({ jobId: "j-vo2" })
+    await runCmd(
+      "media", "video-overlay", "https://x/clip.mp4", "https://x/logo.png", "--at", "0",
+      "--preset", "corner-badge", "--corner", "top-right",
+      "--aspect", "9:16", "--base-fit", "contain", "--background-color", "#101010", "--json",
+    )
+    expect(mocks.videoOverlay).toHaveBeenCalledWith({
+      videoUrl: "https://x/clip.mp4",
+      layers: [{ imageUrl: "https://x/logo.png", start: 0, preset: "corner-badge", corner: "top-right" }],
+      outputAspect: "9:16",
+      baseFit: "contain",
+      backgroundColor: "#101010",
+    })
+  })
+
+  it("reads the full layers array from --layers-file", async () => {
+    const file = join(tmpdir(), `video-overlay-layers-${Date.now()}.json`)
+    const layers = [{ imageUrl: "https://x/logo.png", start: 0, anchor: "top-left", x: 4, y: 4, width: 12, opacity: 0.9 }]
+    writeFileSync(file, JSON.stringify(layers))
+    mocks.videoOverlay.mockResolvedValueOnce({ jobId: "j-vo3" })
+    try {
+      await runCmd("media", "video-overlay", "https://x/clip.mp4", "--layers-file", file, "--json")
+    } finally {
+      rmSync(file, { force: true })
+    }
+    expect(mocks.videoOverlay).toHaveBeenCalledWith({ videoUrl: "https://x/clip.mp4", layers })
+  })
+
+  it("refuses a --at count that does not match the layers, and a window that ends before it starts", async () => {
+    await expect(runCmd("media", "video-overlay", "https://x/clip.mp4", "https://x/a.png", "https://x/b.png", "--at", "1")).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("one --at per layer URL"))
+    await expect(runCmd("media", "video-overlay", "https://x/clip.mp4", "https://x/a.png", "--at", "5-4")).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining('--at must be "<start>" or "<start>-<end>"'))
+    expect(mocks.videoOverlay).not.toHaveBeenCalled()
+  })
+
+  it("refuses positional layers with --layers-file, an unknown --preset, and --base-fit without --aspect", async () => {
+    await expect(
+      runCmd("media", "video-overlay", "https://x/clip.mp4", "https://x/a.png", "--layers-file", "layers.json"),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("not both"))
+    await expect(runCmd("media", "video-overlay", "https://x/clip.mp4", "https://x/a.png", "--at", "0", "--preset", "banner")).rejects.toThrow("process.exit(1)")
+    await expect(runCmd("media", "video-overlay", "https://x/clip.mp4", "https://x/a.png", "--at", "0", "--base-fit", "contain")).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith("--base-fit and --background-color need --aspect")
+    expect(mocks.videoOverlay).not.toHaveBeenCalled()
+  })
+})
+
 describe("media overlay-placement command", () => {
   it("asks for a placement and prints it (no job to poll)", async () => {
     const placement = { anchor: "bottom-right", x: -4, y: -6, width: 12, reason: "Calm sky in the corner." }
@@ -652,5 +721,37 @@ describe("media add-captions command", () => {
     ).rejects.toThrow("process.exit(1)")
     expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--transcribe-provider"))
     expect(mocks.addCaptions).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * docs/cli.md is the public CLI reference; every `nodaro media` subcommand the
+ * package ships must be listed there (video-overlay shipped without one).
+ */
+describe("docs/cli.md covers the media command surface", () => {
+  const doc = readFileSync(
+    fileURLToPath(new URL("../../../../../docs/cli.md", import.meta.url)),
+    "utf8",
+  ).replace(/\r\n/g, "\n")
+  const synopsisOf = (name: string): string | undefined =>
+    doc.split("\n").find((line) => line.startsWith(`nodaro media ${name} `))
+
+  it.each(mediaCommand().commands.map((c) => c.name()))("documents `nodaro media %s`", (name) => {
+    expect(synopsisOf(name)).toBeDefined()
+  })
+
+  it("lists every video-overlay flag and enum value in its synopsis", () => {
+    const line = synopsisOf("video-overlay") ?? ""
+    const sub = mediaCommand().commands.find((c) => c.name() === "video-overlay")
+    const flags = (sub?.options ?? []).map((o) => o.long).filter((f): f is string => !!f && f !== "--profile")
+    expect(flags.length).toBeGreaterThan(5)
+    for (const flag of flags) expect(line).toContain(`[${flag}`)
+    expect(line).toContain(`--preset ${VIDEO_OVERLAY_PRESET_IDS.join("|")}`)
+    expect(line).toContain(`--corner ${VIDEO_OVERLAY_CORNERS.join("|")}`)
+    expect(line).toContain(`--aspect ${VIDEO_OVERLAY_OUTPUT_ASPECTS.join("|")}`)
+  })
+
+  it("names video overlay in the Media section header", () => {
+    expect(doc).toMatch(/^# Media — .*\bvideo overlay\b/m)
   })
 })

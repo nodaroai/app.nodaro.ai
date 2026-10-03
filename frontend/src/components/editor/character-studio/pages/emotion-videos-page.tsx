@@ -1,6 +1,7 @@
 import type { StudioPageProps } from "../../studio-shell/types"
 import type { CharacterStudioState } from "../use-character-studio"
 import type { CharacterStudioJobs } from "../use-character-studio-jobs"
+import { useT } from "@/lib/i18n"
 
 /**
  * Emotion videos page — read-only display of the character's reference video
@@ -12,6 +13,7 @@ import type { CharacterStudioJobs } from "../use-character-studio-jobs"
  * first" scope).
  */
 export function EmotionVideosPage({ state }: StudioPageProps<CharacterStudioState, CharacterStudioJobs>) {
+  const t = useT()
   const byEmotion = state.staged.referenceVideosByVariant ?? {}
   const emotions = Object.entries(byEmotion)
     .map(([emotion, urls]) => [emotion, (urls ?? []).filter(Boolean)] as const)
@@ -20,9 +22,9 @@ export function EmotionVideosPage({ state }: StudioPageProps<CharacterStudioStat
   if (emotions.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-3 py-6 text-center">
-        <p className="text-sm text-muted-foreground">No emotion videos yet.</p>
+        <p className="text-sm text-muted-foreground">{t("studio.noEmotionVideosYet")}</p>
         <p className="mt-1 text-xs text-muted-foreground/70">
-          Reference clips recorded per emotion in the studio appear here.
+          {t("studio.emotionVideosHint")}
         </p>
       </div>
     )
@@ -34,7 +36,7 @@ export function EmotionVideosPage({ state }: StudioPageProps<CharacterStudioStat
         <section key={emotion}>
           <h3 className="mb-2 text-sm font-medium capitalize text-foreground">
             {emotion}
-            <span className="ml-1.5 text-xs text-muted-foreground">({urls.length})</span>
+            <span className="ms-1.5 text-xs text-muted-foreground">({urls.length})</span>
           </h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {urls.map((url, i) => (

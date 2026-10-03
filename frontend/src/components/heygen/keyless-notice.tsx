@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react"
 import { Link, useInRouterContext } from "react-router-dom"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 
 /**
  * The one way a "this install has no key for this catalog" state renders.
@@ -75,6 +76,7 @@ export function KeylessNotice({
 }
 
 function KeysScreenLink({ compact }: { readonly compact: boolean }) {
+  const t = useT()
   const inRouter = useInRouterContext()
   // `nodrag nopan`: these pickers also live inside React Flow nodes, where a
   // mousedown otherwise starts a canvas drag instead of following the link.
@@ -82,7 +84,7 @@ function KeysScreenLink({ compact }: { readonly compact: boolean }) {
     "nodrag nopan mt-2 inline-block rounded-full bg-amber-500/15 font-semibold hover:bg-amber-500/25",
     compact ? "px-2.5 py-0.5 text-[10px]" : "px-3 py-1 text-xs",
   )
-  const label = "Open Integrations →"
+  const label = t("heygen.openIntegrations")
   return inRouter ? (
     <Link to={KEYS_SCREEN_PATH} className={className}>
       {label}

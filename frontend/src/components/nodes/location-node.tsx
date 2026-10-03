@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, type MessageKey } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { MapPin, Loader2, AlertCircle, X, ImageIcon, Maximize2, Type, Download, Link, Pencil, Aperture } from "lucide-react"
@@ -28,23 +28,24 @@ const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT         = (t: string) => isValidLocationConnection("in",             t, isPickerType)
 const ACCEPTS_CINEMATOGRAPHY = (t: string) => isValidLocationConnection("cinematography", t, isPickerType)
 
-const STYLE_LABELS: Record<string, string> = {
-  realistic: "Realistic",
-  anime: "Anime",
-  "3d-pixar": "3D Pixar",
-  illustration: "Illustration",
+/** Same keys the entity config panel's style select reads. */
+const STYLE_LABEL_KEYS: Record<string, MessageKey> = {
+  realistic: "imgcfg.styleRealistic",
+  anime: "cfgext.entStyleAnime",
+  "3d-pixar": "cfgext.entStyle3dPixar",
+  illustration: "cfgext.entStyleIllustration",
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  indoor: "Indoor",
-  outdoor: "Outdoor",
-  urban: "Urban",
-  nature: "Nature",
-  fantasy: "Fantasy",
-  "sci-fi": "Sci-Fi",
-  historical: "Historical",
-  futuristic: "Futuristic",
-  other: "Other",
+const CATEGORY_LABEL_KEYS: Record<string, MessageKey> = {
+  indoor: "node.locCatIndoor",
+  outdoor: "node.locCatOutdoor",
+  urban: "node.locCatUrban",
+  nature: "entity.objCatNature",
+  fantasy: "node.locCatFantasy",
+  "sci-fi": "node.locCatSciFi",
+  historical: "node.locCatHistorical",
+  futuristic: "node.locCatFuturistic",
+  other: "cat.other",
 }
 
 function LocationNodeComponent({ id, data, selected }: NodeProps) {
@@ -154,7 +155,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
               )}
               <CachedImage
                 src={activeUrl}
-                alt={nodeData.locationName || "Location"}
+                alt={nodeData.locationName || t("assetlib.typeLocation")}
                 className="w-full h-full object-cover cursor-pointer"
                 thumbnail={!useFull}
                 thumbnailWidth={320}
@@ -193,7 +194,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
                 a.download = `${nodeData.label || 'image'}.png`
                 a.click()
               }}
-              title="Download"
+              title={t("common.download")}
             >
               <Download className="w-3 h-3" />
             </button>
@@ -204,7 +205,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
               className="absolute bottom-1 right-[25px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={(e) => {
                 e.stopPropagation()
-                copyToClipboard(activeUrl ?? '', "URL copied")
+                copyToClipboard(activeUrl ?? '', t("node.urlCopied"))
               }}
               title={t("cfgshared.copyUrl")}
             >
@@ -218,14 +219,14 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
                 e.stopPropagation()
                 setLightboxSrc(activeUrl)
               }}
-              title="Enlarge"
+              title={t("common.enlarge")}
             >
               <Maximize2 className="w-3 h-3" />
             </button>
             {results.length > 0 && (
               <button
                 type="button"
-                aria-label="Remove" className="absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label={t("common.remove")} className="absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(e) => {
                   e.stopPropagation()
                   setDeleteConfirm(activeIndex)
@@ -279,7 +280,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
                 </button>
                 <button
                   type="button"
-                  aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                  aria-label={t("common.remove")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(i)
@@ -294,12 +295,12 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Compact 6-bucket asset grid (5 image buckets + 1 video bucket for atmosphere motions) */}
         <div className="grid grid-cols-6 gap-1 text-[9px]">
-          <AssetBadge icon="🌅" label="TOD" count={counts.timeOfDay} status={nodeData.timeOfDayStatus ?? "idle"} />
-          <AssetBadge icon="🌧" label="Weather" count={counts.weather} status={nodeData.weatherStatus ?? "idle"} />
-          <AssetBadge icon="🍁" label="Seasons" count={counts.seasons} status={nodeData.seasonsStatus ?? "idle"} />
-          <AssetBadge icon="📐" label="Angles" count={counts.angles} status={nodeData.anglesStatus ?? "idle"} />
-          <AssetBadge icon="💡" label="Lighting" count={counts.lighting} status={nodeData.lightingStatus ?? "idle"} />
-          <AssetBadge icon="🎬" label="Motion" count={counts.atmosphereMotions} status={nodeData.atmosphereStatus ?? "idle"} variant="video" />
+          <AssetBadge icon="🌅" label={t("node.assetBadgeTod")} count={counts.timeOfDay} status={nodeData.timeOfDayStatus ?? "idle"} />
+          <AssetBadge icon="🌧" label={t("node.assetBadgeWeather")} count={counts.weather} status={nodeData.weatherStatus ?? "idle"} />
+          <AssetBadge icon="🍁" label={t("node.assetBadgeSeasons")} count={counts.seasons} status={nodeData.seasonsStatus ?? "idle"} />
+          <AssetBadge icon="📐" label={t("node.assetBadgeAngles")} count={counts.angles} status={nodeData.anglesStatus ?? "idle"} />
+          <AssetBadge icon="💡" label={t("paramcfg.lighting")} count={counts.lighting} status={nodeData.lightingStatus ?? "idle"} />
+          <AssetBadge icon="🎬" label={t("field.motion")} count={counts.atmosphereMotions} status={nodeData.atmosphereStatus ?? "idle"} variant="video" />
         </div>
 
         {/* Choose existing / replace from library or gallery */}
@@ -321,8 +322,8 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Metadata */}
         <div className="flex justify-between text-muted-foreground text-[10px]">
-          <span>{STYLE_LABELS[nodeData.style] ?? nodeData.style}</span>
-          <span>{CATEGORY_LABELS[nodeData.category] ?? nodeData.category}</span>
+          <span>{nodeData.style in STYLE_LABEL_KEYS ? t(STYLE_LABEL_KEYS[nodeData.style]) : nodeData.style}</span>
+          <span>{nodeData.category in CATEGORY_LABEL_KEYS ? t(CATEGORY_LABEL_KEYS[nodeData.category]) : nodeData.category}</span>
         </div>
       </div>
     </BaseNode>
@@ -342,7 +343,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
 
     <ImageLightbox
       src={lightboxSrc}
-      alt={nodeData.locationName || "Location"}
+      alt={nodeData.locationName || t("assetlib.typeLocation")}
       onClose={() => setLightboxSrc(null)}
     />
     </div>
@@ -362,10 +363,11 @@ function AssetBadge({
   readonly status: string
   readonly variant?: "image" | "video"
 }) {
+  const t = useT()
   if (status === "running") {
     return (
       <span
-        title={`${label} — generating`}
+        title={t("node.labelGenerating", { label })}
         className="flex flex-col items-center gap-0 px-0.5 py-0.5 rounded bg-muted/40"
       >
         <Loader2 className="w-2.5 h-2.5 animate-spin" />

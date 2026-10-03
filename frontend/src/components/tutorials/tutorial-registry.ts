@@ -8,11 +8,20 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import type { TutorialFocus } from "./use-tutorial-focus"
+import { tx, type MessageKey, type TFunction } from "@/lib/i18n"
 
+/** A rail step as the shell shows it — already translated. */
 export interface TutorialStep {
   n: number
   title: string
   sub: string
+}
+
+/** A rail step as the registry authors it: dictionary keys, translated by `getTutorial`. */
+interface TutorialStepKeys {
+  n: number
+  title: MessageKey
+  sub: MessageKey
 }
 
 /** Props every tutorial body receives from the shell. */
@@ -52,170 +61,175 @@ export interface TutorialDefinition {
   Body: LazyExoticComponent<ComponentType<TutorialBodyProps>>
 }
 
-const REGISTRY: Record<string, TutorialDefinition> = {
+/**
+ * The authored form of a definition. Every piece of copy is a dictionary key,
+ * so the registry can live at module level; `getTutorial` translates it at the
+ * moment it is asked, in the language the reader has chosen.
+ */
+interface TutorialEntry extends Omit<TutorialDefinition, "title" | "summary" | "steps" | "note" | "chip"> {
+  title?: MessageKey
+  summary?: MessageKey
+  steps: TutorialStepKeys[]
+  note?: { eyebrow: MessageKey; body: MessageKey }
+  chip?: MessageKey
+}
+
+const REGISTRY: Record<string, TutorialEntry> = {
   "multi-reference-control": {
-    title: "Multi-Reference Control",
-    summary: "Five source images, one generated image. Point at a picture instead of describing it.",
+    title: "tut.regMrcTitle",
+    summary: "tut.regMrcSummary",
     minutes: 3,
     steps: [
-      { n: 1, title: "Add your references", sub: "Five uploads into one References handle" },
+      { n: 1, title: "tut.mrcAddRefsTitle", sub: "tut.regMrcStep1Sub" },
       // The stored token is `{image:N}`; the editor — and this tutorial — show
       // it as an `@image:N` chip, which is the form the user actually sees.
-      { n: 2, title: "Write the prompt", sub: "Point at positions with @image:N" },
-      { n: 3, title: "Generate", sub: "One image, five sources" },
-      { n: 4, title: "Make it yours", sub: "Swap one image, rerun, compare" },
+      { n: 2, title: "tut.mrcWritePromptTitle", sub: "tut.regMrcStep2Sub" },
+      { n: 3, title: "common.generate", sub: "tut.mrcGenerateSub" },
+      { n: 4, title: "tut.mrcMakeItYours", sub: "tut.regMrcStep4Sub" },
     ],
     Body: lazy(() => import("./bodies/multi-reference-body")),
   },
 
   "welcome-demo": {
-    title: "Welcome to Nodaro",
-    summary:
-      "One sentence became an image, the image became motion, and a voice line tied it together. This canvas is a finished run.",
+    title: "welcome.eyebrow",
+    summary: "tut.regWdSummary",
     minutes: 4,
     startCostModel: "z-image",
     note: {
-      eyebrow: "Nothing here costs anything to look at",
-      body: "Every result is already generated. Edit the Scene Idea and press Run on Scene Image when you want it to be yours.",
+      eyebrow: "tut.wdNoteEyebrow",
+      body: "tut.wdNoteBody",
     },
     steps: [
-      { n: 1, title: "Scene Idea", sub: "One sentence, in plain words" },
-      { n: 2, title: "Scene Image", sub: "Z-Image, the first thing worth running" },
-      { n: 3, title: "Animate", sub: "Seedance 2 Fast, 5 seconds" },
-      { n: 4, title: "Narration and Voiceover", sub: "A second chain, running in parallel" },
-      { n: 5, title: "Final Cut", sub: "Video and voice merged" },
+      { n: 1, title: "tut.wdIdeaTitle", sub: "tut.wdIdeaSub" },
+      { n: 2, title: "tut.wdImageTitle", sub: "tut.regWdStep2Sub" },
+      { n: 3, title: "tut.wdVideoTitle", sub: "tut.regWdStep3Sub" },
+      { n: 4, title: "tut.wdAudioTitle", sub: "tut.regWdStep4Sub" },
+      { n: 5, title: "tut.wdFinalTitle", sub: "tut.regWdStep5Sub" },
     ],
     Body: lazy(() => import("./bodies/welcome-demo-body")),
   },
 
   "person-node-basics": {
-    title: "Getting Started with the Person Node",
-    summary:
-      "Pick attributes from dropdowns and the node writes the character prompt for you. Three runs, from one node to a full stack.",
+    title: "tut.regPnTitle",
+    summary: "tut.regPnSummary",
     minutes: 5,
-    chip: "3 runs",
+    chip: "tut.regPnChip",
     note: {
-      eyebrow: "The pattern",
-      body: "Compose images from modular blocks. Swap any node to iterate fast.",
+      eyebrow: "tut.pnNoteEyebrow",
+      body: "tut.pnNoteBody",
     },
     steps: [
       // No number here on purpose: the card counts the picks off the node, and a
       // multi-value field (this person carries two ethnicities) makes any figure
       // written down here disagree with what is on screen.
-      { n: 1, title: "Meet the Person node", sub: "Picks become a written prompt" },
-      { n: 2, title: "Same node, different character", sub: "Change the picks, change everything" },
-      { n: 3, title: "Stack nodes for scene control", sub: "Backdrop, Framing and Mood on top" },
+      { n: 1, title: "tut.pnLesson1Title", sub: "tut.pnLesson1Sub" },
+      { n: 2, title: "tut.pnLesson2Title", sub: "tut.pnLesson2Sub" },
+      { n: 3, title: "tut.pnRailStep3Title", sub: "tut.pnRailStep3Sub" },
     ],
     Body: lazy(() => import("./bodies/person-node-body")),
   },
 
   "suno-music-basics": {
-    title: "Making music with nodes",
-    summary:
-      "You do not write a song description. You pick options, and the nodes write it for you.",
+    title: "tut.regSunoTitle",
+    summary: "tut.regSunoSummary",
     minutes: 6,
-    chip: "7 runs",
+    chip: "tut.regSunoChip",
     note: {
-      eyebrow: "How to use this tutorial",
-      body: "Step through the runs. Each one changes exactly one thing from the run before it, so the difference you hear is the option that moved.",
+      eyebrow: "tut.regSunoNoteEyebrow",
+      body: "tut.regSunoNoteBody",
     },
     steps: [
-      { n: 1, title: "Pick options on the style nodes", sub: "Genre, mood, instrumentation, voice" },
-      { n: 2, title: "Send them into Suno Generate", sub: "The picks become the style description" },
-      { n: 3, title: "Get a finished track", sub: "Play it, then change one option" },
+      { n: 1, title: "tut.regSunoStep1Title", sub: "tut.regSunoStep1Sub" },
+      { n: 2, title: "tut.regSunoStep2Title", sub: "tut.regSunoStep2Sub" },
+      { n: 3, title: "tut.regSunoStep3Title", sub: "tut.regSunoStep3Sub" },
     ],
     Body: lazy(() => import("./bodies/suno-music-body")),
   },
 
   "social-media-autopilot": {
-    title: "Social Media Autopilot",
-    summary:
-      "Paste an idea. Seven nodes split it into slides, draw an image for each one, write the caption, and post it.",
+    title: "tut.regApTitle",
+    summary: "tut.regApSummary",
     minutes: 4,
-    chip: "runs unattended",
+    chip: "tut.apChipUnattended",
     steps: [
-      { n: 1, title: "Give it one block of text", sub: "Nothing else to fill in" },
-      { n: 2, title: "It writes and draws ten slides", sub: "Copy per slide, an image each" },
-      { n: 3, title: "It captions and publishes", sub: "Formatted for the feed, then posted" },
+      { n: 1, title: "tut.regApStep1Title", sub: "tut.regApStep1Sub" },
+      { n: 2, title: "tut.regApStep2Title", sub: "tut.regApStep2Sub" },
+      { n: 3, title: "tut.regApStep3Title", sub: "tut.regApStep3Sub" },
     ],
     Body: lazy(() => import("./bodies/autopilot-body")),
   },
 
   "get-started-with-image-editing": {
-    title: "Get started with image editing",
-    summary:
-      "One image is generated once, and nine independent edits each read that same original. Nothing stacks, so nothing degrades.",
+    title: "tut.regIedTitle",
+    summary: "tut.regIedSummary",
     minutes: 4,
     // A price is the wrong headline: all nine edits are already generated and
     // reading them costs nothing. What is worth counting is how many there are.
-    chip: "9 edits",
+    chip: "tut.iedChipEdits",
     note: {
-      eyebrow: "This is a fan-out, not a chain",
-      body: "Every edit reads the original directly. Change one and the other eight are unaffected — that is the whole idea.",
+      eyebrow: "tut.regIedNoteEyebrow",
+      body: "tut.regIedNoteBody",
     },
     steps: [
-      { n: 1, title: "The original", sub: "Generated once, then scored" },
-      { n: 2, title: "Nine edits, one source", sub: "Each reads the same image" },
-      { n: 3, title: "Follow any result", sub: "Click a tile to see what made it" },
+      { n: 1, title: "tut.theOriginal", sub: "tut.regIedStep1Sub" },
+      { n: 2, title: "tut.regIedStep2Title", sub: "tut.regIedStep2Sub" },
+      { n: 3, title: "tut.regIedStep3Title", sub: "tut.regIedStep3Sub" },
     ],
     Body: lazy(() => import("./bodies/image-editing-body")),
   },
 
   "camera-coverage": {
-    title: "Camera Coverage — one frame, ten angles",
-    summary:
-      "One reference frame in, ten shots of the same scene out. Only the camera changes — a director's coverage plan you can cut together, from a single image.",
+    title: "tut.regCcvTitle",
+    summary: "tut.regCcvSummary",
     minutes: 4,
     // A finished run: every image is already generated and reading them costs
     // nothing. What a newcomer actually spends is the ten-image fan-out.
-    chip: "10 shots",
+    chip: "tut.regCcvChip",
     note: {
-      eyebrow: "The lever is the list",
-      body: "One image node, ten rows. The list fans it out so ten shots cost six nodes, not twenty-five — and editing one line re-shoots one angle.",
+      eyebrow: "tut.regCcvNoteEyebrow",
+      body: "tut.regCcvNoteBody",
     },
     // One step per column. This template is not IN → OUT: there is a plan you
     // see before you spend, so the body is three columns and the rail follows.
     steps: [
-      { n: 1, title: "The reference frame", sub: "One image, and the brief that governs the plan" },
-      { n: 2, title: "The shot list", sub: "Ten lines you can read — and rewrite — before you spend" },
-      { n: 3, title: "The contact sheet", sub: "Ten shots of one moment, from one image node" },
+      { n: 1, title: "tut.ccvInTitle", sub: "tut.regCcvStep1Sub" },
+      { n: 2, title: "tut.ccvListTitle", sub: "tut.regCcvStep2Sub" },
+      { n: 3, title: "tut.ccvOutTitle", sub: "tut.regCcvStep3Sub" },
     ],
     Body: lazy(() => import("./bodies/camera-coverage-body")),
   },
 
   "one-character-any-scene": {
-    title: "One Character, Any Scene",
-    summary:
-      "Two source images, five one-line recipes, no masks and no layers. What changes between the results is which part of each source you name — and which number you name it on.",
+    title: "tut.regOcTitle",
+    summary: "tut.regOcSummary",
     minutes: 4,
     // Every result is already generated; reading them costs nothing. What is
     // worth counting is the recipes.
-    chip: "5 recipes",
+    chip: "tut.regOcChip",
     // The IN column already says "same two, every time"; the rail adds the
     // one thing a first-timer gets wrong.
     note: {
-      eyebrow: "Read the numbers, not the pictures",
-      body: "{image:1} and {image:2} are positions in the References list — the order the sources were connected — not the nodes' names. Recipe 2 is recipe 1 with the numbers swapped, and that is the whole lesson.",
+      eyebrow: "tut.regOcNoteEyebrow",
+      body: "tut.regOcNoteBody",
     },
     // One step per column: the sources, the recipes, the result.
     steps: [
-      { n: 1, title: "Two sources", sub: "One generated, one uploaded — {image:1} and {image:2}" },
-      { n: 2, title: "Five recipes", sub: "Click one: what it takes from each source, and what it teaches" },
-      { n: 3, title: "The result", sub: "The image, and how the borrowed parts add up to it" },
+      { n: 1, title: "tut.ocInTitle", sub: "tut.regOcStep1Sub" },
+      { n: 2, title: "tut.ocRecipesTitle", sub: "tut.regOcStep2Sub" },
+      { n: 3, title: "tut.theResult", sub: "tut.regOcStep3Sub" },
     ],
     Body: lazy(() => import("./bodies/one-character-body")),
   },
 
   "underwater-giants": {
-    title: "Underwater Giants",
-    summary:
-      "Write eight scenes. Each becomes an image, then a five second shot, edited together with music and posted as a reel.",
+    title: "tut.regUwTitle",
+    summary: "tut.regUwSummary",
     minutes: 5,
-    chip: "8 scenes",
+    chip: "tut.uwChipScenes",
     steps: [
-      { n: 1, title: "Write eight scenes", sub: "One paragraph each" },
-      { n: 2, title: "Stills, then motion", sub: "Each scene anchored to the last" },
-      { n: 3, title: "Scored, cut and posted", sub: "34 seconds, vertical" },
+      { n: 1, title: "tut.regUwStep1Title", sub: "tut.regUwStep1Sub" },
+      { n: 2, title: "tut.regUwStep2Title", sub: "tut.regUwStep2Sub" },
+      { n: 3, title: "tut.regUwStep3Title", sub: "tut.regUwStep3Sub" },
     ],
     Body: lazy(() => import("./bodies/underwater-body")),
   },
@@ -225,9 +239,20 @@ const REGISTRY: Record<string, TutorialDefinition> = {
 // whoever publishes it, so `constructor` or `toString` is a slug someone can
 // actually create, and both would otherwise resolve through Object.prototype —
 // handing the card a function where a tutorial definition belongs.
-export function getTutorial(slug: string | undefined): TutorialDefinition | null {
+//
+// The copy comes back translated with `t` — the caller's, or the live locale's
+// when none is given — so a reader sees the rail in the language they chose.
+export function getTutorial(slug: string | undefined, t: TFunction = tx): TutorialDefinition | null {
   if (!slug || !Object.hasOwn(REGISTRY, slug)) return null
-  return REGISTRY[slug]
+  const entry = REGISTRY[slug]
+  return {
+    ...entry,
+    title: entry.title && t(entry.title),
+    summary: entry.summary && t(entry.summary),
+    steps: entry.steps.map((step) => ({ n: step.n, title: t(step.title), sub: t(step.sub) })),
+    note: entry.note && { eyebrow: t(entry.note.eyebrow), body: t(entry.note.body) },
+    chip: entry.chip && t(entry.chip),
+  }
 }
 
 /** Slugs with a guided view — used to decide whether to link to /tutorials/:slug. */

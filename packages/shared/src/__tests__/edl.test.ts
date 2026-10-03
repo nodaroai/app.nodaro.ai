@@ -9,16 +9,18 @@ import {
   speakerTurns,
   normalizeEdl,
   normalizeTranscript,
-  unwrapEditPlanOutput,
-  buildEditPlanCreditId,
-  editPlanBucketMinutes,
   transcriptDurationSec,
   type Edl,
   type Transcript,
+} from "../edl.js"
+import {
+  unwrapEditPlanOutput,
+  buildEditPlanCreditId,
+  editPlanBucketMinutes,
   clampEditPlanClipCount,
   EDIT_PLAN_DEFAULT_CLIP_COUNT,
   EDIT_PLAN_MAX_CLIP_COUNT,
-} from "../edl.js"
+} from "../edit-plan-contract.js"
 import { editPlanSourceDurationSec } from "../video-duration.js"
 
 /** A minimal valid single-camera tighten EDL: two kept spans of the master. */
@@ -162,7 +164,7 @@ describe("remapTranscriptThroughEdl", () => {
 
 describe("validateEdl", () => {
   it("accepts a well-formed tighten EDL", () => {
-    expect(validateEdl(tightenEdl())).toEqual({ ok: true, issues: [] })
+    expect(validateEdl(tightenEdl())).toEqual({ ok: true, issues: [], warnings: [] })
   })
 
   it("rejects outMs <= inMs, unknown source ids, and dropped∩segments", () => {
@@ -678,5 +680,143 @@ describe("clampEditPlanClipCount", () => {
   it("the default sits inside the allowed range", () => {
     expect(EDIT_PLAN_DEFAULT_CLIP_COUNT).toBeGreaterThanOrEqual(1)
     expect(EDIT_PLAN_DEFAULT_CLIP_COUNT).toBeLessThanOrEqual(EDIT_PLAN_MAX_CLIP_COUNT)
+  })
+})
+
+// ── Warning class (F2): registry judgements never flip `ok` ───────────────
+
+/** A two-camera EDL on a master mic, every field valid; each case below bends ONE thing. */
+function multicamEdl(): Edl {
+  return {
+    version: 1,
+    clock: "master",
+    sources: [
+      { id: "mic", url: "https://x/m.wav", kind: "audio", role: "master-audio" },
+      { id: "wide", url: "https://x/w.mp4", kind: "video", role: "wide" },
+      { id: "camA", url: "https://x/a.mp4", kind: "video", role: "camera" },
+      { id: "camB", url: "https://x/b.mp4", kind: "video", role: "camera" },
+    ],
+    segments: [
+      { id: "s0", inMs: 0, outMs: 4000, video: "wide" },
+      { id: "s1", inMs: 4000, outMs: 8000, video: "camA" },
+    ],
+    meta: { targetAspect: "16:9" },
+  }
+}
+
+/** Replace segment[1] with extra fields. */
+function withSeg1(extra: Partial<Edl["segments"][number]>, base: Edl = multicamEdl()): Edl {
+  return { ...base, segments: [base.segments[0], { ...base.segments[1], ...extra }] }
+}
+
+function expectWarnOnly(edl: Edl, pattern: RegExp): void {
+  const r = validateEdl(edl)
+  expect(r.issues).toEqual([])
+  expect(r.ok).toBe(true)
+  expect(r.warnings.length).toBeGreaterThanOrEqual(1)
+  expect(r.warnings.join("\n")).toMatch(pattern)
+}
+
+describe("validateEdl — warnings (registry class; ok stays true)", () => {
+  it("the valid multicam fixture has neither issues nor warnings", () => {
+    expect(validateEdl(multicamEdl())).toEqual({ ok: true, issues: [], warnings: [] })
+  })
+
+  it("an unknown source role warns (known roles are listed)", () => {
+    const base = multicamEdl()
+    const edl: Edl = { ...base, sources: base.sources.map((s) => (s.id === "camB" ? { ...s, role: "b-roll" } : s)) }
+    expectWarnOnly(edl, /source "camB": unknown role "b-roll" \(known: master-audio, camera, wide, screen\)/)
+  })
+
+  it("a typo'd master-audio stays visible: normalizeEdl passes the role through and it warns", () => {
+    const n = normalizeEdl({ ...multicamEdl(), sources: [{ id: "mic", url: "u", kind: "audio", role: "master-audo" }, { id: "wide", url: "w", kind: "video" }, { id: "camA", url: "a", kind: "video" }] })
+    expect(n.sources[0].role).toBe("master-audo")
+    expect(validateEdl(n).warnings.join("\n")).toMatch(/unknown role "master-audo"/)
+  })
+
+  it("an unknown meta.targetAspect warns — and the type accepts it (open like role)", () => {
+    const edl: Edl = { ...multicamEdl(), meta: { targetAspect: "21:9" } }
+    expectWarnOnly(edl, /meta\.targetAspect "21:9"/)
+  })
+
+  it("a JSON null for an absent field is absent: null targetAspect / null role never warn", () => {
+    const edl = {
+      ...multicamEdl(),
+      meta: { targetAspect: null },
+      sources: multicamEdl().sources.map((s, i) => (i === 0 ? { ...s, role: null } : s)),
+    } as unknown as Edl
+    expect(validateEdl(edl).warnings).toEqual([])
+  })
+
+  it("a known-atom emphasis that breaks the set rules says which rule, not 'unknown'", () => {
+    expectWarnOnly(withSeg1({ layout: { mode: "single", emphasis: { style: "none+scale", durationMs: 200 } } }), /"none" must stand alone/)
+    expectWarnOnly(withSeg1({ layout: { mode: "single", emphasis: { style: "glow", durationMs: 200 } } }), /unknown emphasis style "glow"/)
+  })
+
+  it("an unknown layout mode warns (mode stays an open string)", () => {
+    expectWarnOnly(withSeg1({ layout: { mode: "carousel" } }), /segment\[1\] "s1": unknown layout mode "carousel"/)
+  })
+
+  it("a known layout whose slot count is outside [min, max] warns", () => {
+    const edl = withSeg1({ layout: { mode: "side-by-side", slots: [{ source: "camA" }, { source: "camB" }, { source: "wide" }] } })
+    expectWarnOnly(edl, /layout "side-by-side" takes 2 slot\(s\), got 3/)
+  })
+
+  it("a known layout not drawn for the known targetAspect warns", () => {
+    const base = { ...multicamEdl(), meta: { targetAspect: "9:16" as const } }
+    const edl = withSeg1({ layout: { mode: "side-by-side", slots: [{ source: "camA" }, { source: "camB" }] } }, base)
+    expectWarnOnly(edl, /layout "side-by-side" is not drawn for targetAspect 9:16/)
+    // …and the same layout on 16:9 is silent.
+    expect(validateEdl(withSeg1({ layout: { mode: "side-by-side", slots: [{ source: "camA" }, { source: "camB" }] } })).warnings).toEqual([])
+  })
+
+  it("an unknown layout transition type warns", () => {
+    expectWarnOnly(withSeg1({ layout: { mode: "single", transition: { type: "wipe" } } }), /unknown layout transition "wipe"/)
+    // A known xfade id is silent.
+    expect(validateEdl(withSeg1({ layout: { mode: "single", transition: { type: "xfade:fade", durationMs: 200 } } })).warnings).toEqual([])
+  })
+
+  it("a same-source switch (pan) between two DIFFERENT single picture sources warns", () => {
+    expectWarnOnly(withSeg1({ layout: { mode: "single", transition: { type: "pan" } } }), /switch "pan" moves within ONE picture source.*"wide".*"camA"/)
+  })
+
+  it("pan within one source, or across a multi-slot neighbour, does not warn (no defined 'picture source' there)", () => {
+    const same = withSeg1({ video: "wide", region: { x: 0.5, y: 0, w: 0.5, h: 1 }, layout: { mode: "single", transition: { type: "pan" } } })
+    expect(validateEdl(same).warnings).toEqual([])
+    const multi = withSeg1({ layout: { mode: "side-by-side", slots: [{ source: "camA" }, { source: "camB" }], transition: { type: "pan" } } })
+    expect(validateEdl(multi).warnings).toEqual([])
+    // zoom is not a same-source switch.
+    expect(validateEdl(withSeg1({ layout: { mode: "single", transition: { type: "zoom" } } })).warnings).toEqual([])
+  })
+
+  it("an unknown emphasis style (any unknown atom) warns; a known '+'-joined set does not", () => {
+    expectWarnOnly(withSeg1({ layout: { mode: "single", emphasis: { style: "scale+glow", durationMs: 200 } } }), /unknown emphasis style "scale\+glow"/)
+    expect(validateEdl(withSeg1({ layout: { mode: "single", emphasis: { style: "scale+border", durationMs: 200 } } })).warnings).toEqual([])
+  })
+
+  it("a slots-only layout with ≥2 slots WARNS after normalizeEdl defaults its mode to \"single\" — that EDL is ambiguous; do not 'fix' normalize by guessing a mode", () => {
+    const n = normalizeEdl({ ...multicamEdl(), segments: [multicamEdl().segments[0], { id: "s1", inMs: 4000, outMs: 8000, video: "camA", layout: { slots: [{ source: "camA" }, { source: "camB" }] } }] })
+    expect(n.segments[1].layout?.mode).toBe("single")
+    expectWarnOnly(n, /layout "single" takes 1 slot\(s\), got 2/)
+  })
+
+  it("an existing error case still yields ok:false (warnings never mask issues)", () => {
+    const base = multicamEdl()
+    const edl: Edl = {
+      ...base,
+      sources: [...base.sources, { id: "mic2", url: "u", kind: "audio", role: "master-audio" }, { id: "x", url: "u", kind: "video", role: "b-roll" }],
+    }
+    const r = validateEdl(edl)
+    expect(r.ok).toBe(false)
+    expect(r.issues.join("\n")).toMatch(/more than one source has role:"master-audio"/)
+    expect(r.warnings.join("\n")).toMatch(/unknown role "b-roll"/)
+  })
+
+  it("validateEdlClipSet propagates warnings with the clip[i] prefix and stays ok", () => {
+    const warned = withSeg1({ layout: { mode: "carousel" } })
+    const r = validateEdlClipSet({ version: 1, clips: [multicamEdl(), warned] })
+    expect(r.ok).toBe(true)
+    expect(r.issues).toEqual([])
+    expect(r.warnings).toEqual([expect.stringMatching(/^clip\[1\]: segment\[1\] "s1": unknown layout mode "carousel"/)])
   })
 })

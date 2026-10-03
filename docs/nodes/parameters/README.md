@@ -36,6 +36,10 @@ to hold on to; `compact` keeps the prompt short when many pickers feed one
 generation, or when the model already knows the trade vocabulary and the long
 form only dilutes it. `preText` / `postText` are appended in both modes.
 
+**Exception — Transition.** A transition is always written as its term followed by
+its description in parentheses, in both modes, because video models did not
+perform a transition from its term alone. See [Transition](./transition.md).
+
 **Where to set it.** Two places, same lever. On the canvas: hover (or select)
 any picker node — the control row at the top of the card carries a **Prompt
 hint** toggle on the left — `Full` / `Compact` — beside the existing Picks /
@@ -91,3 +95,34 @@ Styling, Temporal, Exposure Settings) and Sound / Music / Voice. The free-text
 and pure-runtime parameter nodes (Tone, Style Guide, Provider, Scene Count,
 Duration, Aspect Ratio, Motion) have no catalog term behind them, so they carry
 no hint-mode toggle.
+
+## Preview pictures: real or illustration
+
+On nodaro.ai, the Look and Camera pickers picture each option with a real
+render: the same base frame put through that option. For Camera Motion it is a
+short silent clip that loops over its still wherever the option is pictured —
+the picker, the canvas node and a published app's input card (icon-size spots
+such as a dropdown's items show the still); with reduced motion turned on in
+your OS, only the still shows. Each of those pickers also
+has a drawn illustration, and you can pick which one a node shows.
+
+**Which pickers.** Camera Motion, Color / Look, Style, Lens, Lighting,
+Atmosphere, Camera / Film, Framing and Mood (whose illustration is its emoji).
+Era and Composition Effects have no illustration, so they always show the
+render. Self-hosted installs (Community / Business) have no renders at all:
+they show the illustrations and never offer the switch.
+
+**Where to switch.** Two places, same setting. On the canvas: hover (or
+select) the node — a two-icon switch (film = real, pen = illustration) sits
+beside the selected option's title, in the **Picks** and **Both** display
+modes. In the config panel and the fullscreen picker: the same switch sits
+beside the picker's heading and changes both the option grid and the node.
+
+**What is saved.** The choice is saved on the node as `previewStyle` (`"real"`
+or `"illustration"`); absent means `"real"`, so existing workflows look the
+same as before. It changes only the pictures, never the prompt fragment. A
+published app's input card follows the creator's saved choice and offers app
+users no switch. Your last choice for each picker type is remembered in this
+browser and applied to the next node of that type you add. Camera Motion and
+Color / Look remember separately, and nodes already on the canvas keep
+their own setting.

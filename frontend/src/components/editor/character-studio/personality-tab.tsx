@@ -1,6 +1,7 @@
 import type { CharacterStudioState } from "./use-character-studio"
+import { useT } from "@/lib/i18n"
 
-const EMPTY = { mood: "", speechStyle: "", movementStyle: "", behavioralNotes: "" }
+const EMPTY ={ mood: "", speechStyle: "", movementStyle: "", behavioralNotes: "" }
 type PersonalityFields = typeof EMPTY
 
 /**
@@ -53,6 +54,7 @@ function Field({
  * Phase 1 stores it as-is; Phase 2 auto-injects it into generation + script prompts.
  */
 export function PersonalityTab({ state }: { state: CharacterStudioState }) {
+  const t = useT()
   const p = state.staged.personality ?? EMPTY
   const set = (patch: Partial<PersonalityFields>) => {
     const next = { ...p, ...patch }
@@ -62,12 +64,12 @@ export function PersonalityTab({ state }: { state: CharacterStudioState }) {
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-lg">
-      <div className="text-[9px] uppercase tracking-wide text-slate-500">Personality</div>
-      <Field label="Mood / Temperament" value={p.mood} onChange={(v) => set({ mood: v })} ph="serious and focused, rarely smiles" />
-      <Field label="Speech Style" value={p.speechStyle} onChange={(v) => set({ speechStyle: v })} ph="speaks in short, direct sentences. Never jokes." />
-      <Field label="Movement Style" value={p.movementStyle} onChange={(v) => set({ movementStyle: v })} ph="confident, deliberate movement, stands very still" />
-      <Field label="Behavioral Notes" value={p.behavioralNotes} onChange={(v) => set({ behavioralNotes: v })} area ph="responds aggressively when challenged. Protective of allies." />
-      <div className="text-[9px] text-slate-500">Stored now; auto-injected into generation prompts + script writing in a later release.</div>
+      <div className="text-[9px] uppercase tracking-wide text-slate-500">{t("studio.personality")}</div>
+      <Field label={t("studio.moodLabel")} value={p.mood} onChange={(v) => set({ mood: v })} ph={t("studio.moodPh")} />
+      <Field label={t("studio.speechStyleLabel")} value={p.speechStyle} onChange={(v) => set({ speechStyle: v })} ph={t("studio.speechStylePh")} />
+      <Field label={t("studio.movementStyleLabel")} value={p.movementStyle} onChange={(v) => set({ movementStyle: v })} ph={t("studio.movementStylePh")} />
+      <Field label={t("studio.behavioralNotesLabel")} value={p.behavioralNotes} onChange={(v) => set({ behavioralNotes: v })} area ph={t("studio.behavioralNotesPh")} />
+      <div className="text-[9px] text-slate-500">{t("studio.personalityStoredNote")}</div>
     </div>
   )
 }

@@ -197,7 +197,7 @@ export function CredentialsCard({ addOpen, onAddOpenChange }: CredentialsCardPro
                       size="sm"
                       className="h-7 gap-1 text-xs"
                       onClick={() => setDialog({ mode: "lock", credential: cred })}
-                      aria-label={`${cred.boundUrl ? t("creds.changeAddress") : t("creds.lock")}: ${cred.name}`}
+                      aria-label={`${cred.boundUrl ? t("creds.changeAddress") : t("creds.lock")}${t("common.labelColon")}${cred.name}`}
                     >
                       <Lock className="h-3 w-3" />
                       {cred.boundUrl ? t("creds.changeAddress") : t("creds.lock")}
@@ -207,7 +207,7 @@ export function CredentialsCard({ addOpen, onAddOpenChange }: CredentialsCardPro
                       size="sm"
                       className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
                       onClick={() => setDeleting(cred)}
-                      aria-label={`${t("creds.delete")}: ${cred.name}`}
+                      aria-label={`${t("creds.delete")}${t("common.labelColon")}${cred.name}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>

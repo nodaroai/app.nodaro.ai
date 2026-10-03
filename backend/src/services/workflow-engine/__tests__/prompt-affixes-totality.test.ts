@@ -105,7 +105,8 @@ describe("prompt affixes reach every affix-capable node's payload exactly once",
   }
 
   it("a node with NO affixes is byte-identical to before (no-op guarantee)", () => {
-    const plain = buildPayload({ id: "n1", type: "generate-music", data: { prompt: "a jazzy tune" } }, "job-1", {})
+    // (MiniMax Music, the node's model, needs a reference track.)
+    const plain = buildPayload({ id: "n1", type: "generate-music", data: { prompt: "a jazzy tune", referenceAudioUrl: "https://cdn.nodaro.ai/audio/ref.mp3" } }, "job-1", {})
     expect(plain.payload.prompt).toBe("a jazzy tune")
   })
 

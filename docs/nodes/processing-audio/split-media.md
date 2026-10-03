@@ -36,7 +36,7 @@ After execution, a chunk selector appears in the config panel so you can choose 
 
 ## Pricing
 
-2 credits per execution.
+20 credits per execution.
 
 ## Common Use Cases
 

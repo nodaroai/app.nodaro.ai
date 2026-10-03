@@ -23,7 +23,8 @@ import { getAuthHeaders } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { sendCopilotMessage } from "@/ee/lib/copilot/turn-engine"
 import { copilotState, setCopilotState } from "@/ee/lib/copilot/turn-store"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
+import { tx } from "@/lib/i18n"
 import type { CopilotThread } from "@/ee/lib/copilot/types"
 
 /** Survives a remount of the panel; a handoff is once per workflow, per session. */
@@ -116,7 +117,7 @@ export function useCopilotHandoff(thread: CopilotThread | null, workflowId: stri
         if (!prompt) return
         // The panel went away mid-hop — an editor tab switch unmounts it. The
         // sentence must not die with it silently.
-        if (!alive.current) return handBack(prompt, S.handoffInterrupted)
+        if (!alive.current) return handBack(prompt, tx(K.handoffInterrupted))
 
         // The state that mattered when the effect ran is not necessarily the
         // state now. These two are terminal for this workflow and deliberately
@@ -132,11 +133,11 @@ export function useCopilotHandoff(thread: CopilotThread | null, workflowId: stri
         // early returns, not throws. Asking whether a turn started is the only
         // way to know; catching would have caught nothing.
         if (alive.current && copilotState().turn.userText !== prompt.trim()) {
-          handBack(prompt, S.handoffSendFailed)
+          handBack(prompt, tx(K.handoffSendFailed))
         }
       } catch {
         // Only the read can throw (a non-2xx, a timeout, a dropped network).
-        if (alive.current) handBack(prompt, S.handoffFetchFailed)
+        if (alive.current) handBack(prompt, tx(K.handoffFetchFailed))
       } finally {
         clearTimeout(timer)
         running.current = false

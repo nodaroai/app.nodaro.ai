@@ -2,7 +2,7 @@ import { Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { Loader2, Users } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { formatRelative } from "@/lib/i18n"
+import { formatRelative, useT } from "@/lib/i18n"
 import { getSharedWithMe } from "@/lib/api"
 
 /**
@@ -19,6 +19,7 @@ import { getSharedWithMe } from "@/lib/api"
  */
 export default function SharedWithMePage() {
   const { user } = useAuth()
+  const t = useT()
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["workflows", "shared-with-me"],
@@ -33,19 +34,19 @@ export default function SharedWithMePage() {
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6 flex items-center gap-2">
         <Users className="h-5 w-5 text-muted-foreground" />
-        <h1 className="text-2xl font-semibold">Shared with me</h1>
+        <h1 className="text-2xl font-semibold">{t("dash.sharedWithMe")}</h1>
       </div>
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading
+          {t("common.loading")}
         </div>
       ) : error ? (
-        <p className="text-sm text-destructive">Could not load shared work.</p>
+        <p className="text-sm text-destructive">{t("dash.sharedLoadFailed")}</p>
       ) : workflows.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Nothing yet. When somebody shares a workflow with you it turns up here.
+          {t("dash.sharedEmpty")}
         </p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -73,7 +74,7 @@ export default function SharedWithMePage() {
                       honest thing to show on a list is what was given. What
                       they can actually do is enforced where it matters, on
                       the canvas. */}
-                  <span>{w.grantedRole === "editor" ? "Can edit" : "Can view"}</span>
+                  <span>{w.grantedRole === "editor" ? t("dash.canEdit") : t("dash.canView")}</span>
                   <span>{formatRelative(w.updatedAt)}</span>
                 </div>
               </Link>

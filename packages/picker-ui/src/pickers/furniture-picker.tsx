@@ -158,7 +158,7 @@ export const FurniturePicker = memo(function FurniturePicker({
                     <span
                       className={cn(
                         "text-[10.5px] font-medium leading-tight px-0.5 pb-0.5 text-center line-clamp-2",
-                        selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
+                        selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                       )}
                     >
                       {label}

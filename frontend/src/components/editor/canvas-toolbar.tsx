@@ -305,7 +305,7 @@ export function CanvasToolbar({
           onClick={onTidyUp}
         />
         <MobileToolbarButton
-          icon={<PanelLeft className="w-5 h-5" />}
+          icon={<PanelLeft className={cn("w-5 h-5", isRtl && "rotate-180")} />}
           label={t("ctb.toggleSidebar")}
           onClick={onToggleSidebar}
           active={sidebarVisible}
@@ -460,7 +460,7 @@ export function CanvasToolbar({
 
         {/* View controls */}
         <ToolbarButton
-          icon={<PanelLeft className="w-5 h-5" />}
+          icon={<PanelLeft className={cn("w-5 h-5", isRtl && "rotate-180")} />}
           label={t("ctb.toggleSidebar")}
           shortcut={formatBinding(SHORTCUTS.sidebar.bindings[0], isMac)}
           onClick={onToggleSidebar}

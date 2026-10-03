@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from "react"
 import { VoiceBrowser } from "../config-panels/voice-browser"
 import { textToSpeech, lipSyncApi, voiceDesignApi, getJobStatusLean } from "@/lib/api"
 import type { CharacterVoice } from "@/types/nodes"
-import { tx } from "@/lib/i18n"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
+
+/** The voice source's caption beside the chosen voice. */
+const VOICE_TYPE_KEYS: Record<"premade" | "custom" | "library", MessageKey> = {
+  premade: "voice.type.premade",
+  custom: "voice.type.custom",
+  library: "voice.type.library",
+}
 
 type Mode = "browse" | "design"
 
@@ -78,6 +85,7 @@ function previewErrorText(e: unknown, fallback: string): string {
 }
 
 export function VoiceResource({ voice: v, onVoiceChange, sourceImageUrl }: VoiceResourceProps) {
+  const t = useT()
   const [mode, setMode] = useState<Mode>("browse")
   const [line, setLine] = useState("Hi, I'm here. Let's get started.")
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
@@ -106,9 +114,9 @@ export function VoiceResource({ voice: v, onVoiceChange, sourceImageUrl }: Voice
       const url = await pollJobUrl(jobId, "audioUrl", () => mounted.current)
       if (!mounted.current) return
       if (url) setAudioUrl(url)
-      else setError("Timed out or failed.")
+      else setError(tx("entity.voiceTimedOut"))
     } catch (e) {
-      if (mounted.current) setError(previewErrorText(e, "Speech failed — try again."))
+      if (mounted.current) setError(previewErrorText(e, tx("entity.speechFailed")))
     } finally {
       if (mounted.current) setBusy(null)
     }
@@ -122,14 +130,14 @@ export function VoiceResource({ voice: v, onVoiceChange, sourceImageUrl }: Voice
       const audio = await pollJobUrl(tts.jobId, "audioUrl", () => mounted.current)
       // User left mid-render — don't start a SECOND (lip-sync) job after unmount.
       if (!mounted.current) return
-      if (!audio) { setError("Timed out or failed."); return }
+      if (!audio) { setError(tx("entity.voiceTimedOut")); return }
       const ls = await lipSyncApi(sourceImageUrl, audio)
       const url = await pollJobUrl(ls.jobId, "videoUrl", () => mounted.current)
       if (!mounted.current) return
       if (url) setVideoUrl(url)
-      else setError("Timed out or failed.")
+      else setError(tx("entity.voiceTimedOut"))
     } catch (e) {
-      if (mounted.current) setError(previewErrorText(e, "Lip-sync failed — try again."))
+      if (mounted.current) setError(previewErrorText(e, tx("entity.lipSyncFailed")))
     } finally {
       if (mounted.current) setBusy(null)
     }
@@ -146,7 +154,7 @@ export function VoiceResource({ voice: v, onVoiceChange, sourceImageUrl }: Voice
             onClick={() => setMode(m)}
             className={`text-[11px] px-3 py-1.5 rounded ${mode === m ? "bg-[#1a2744] text-[#3b82f6]" : "text-slate-400 hover:text-slate-200"}`}
           >
-            {m === "browse" ? "Browse" : "Design from text"}
+            {m === "browse" ? t("explore.browse") : t("entity.voiceDesignFromText")}
           </button>
         ))}
       </div>
@@ -167,18 +175,18 @@ export function VoiceResource({ voice: v, onVoiceChange, sourceImageUrl }: Voice
       {v?.voiceId && (
         <div className="border border-[#1e293b] rounded p-3 space-y-2">
           <div className="text-[12px] text-slate-200">
-            {v.voiceName} <span className="text-[10px] text-slate-500">· {v.voiceType ?? "premade"}</span>
+            {v.voiceName} <span className="text-[10px] text-slate-500">· {t(VOICE_TYPE_KEYS[v.voiceType ?? "premade"])}</span>
           </div>
           {v.previewUrl && <audio src={v.previewUrl} controls className="w-full h-8" />}
           <textarea
             value={v.traits}
             onChange={(e) => setVoice({ traits: e.target.value })}
             rows={2}
-            placeholder="deep, calm, British accent"
+            placeholder={t("entity.voiceTraitsPlaceholder")}
             className="w-full text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
           />
           <div className="border-t border-[#1e293b] pt-2 space-y-2">
-            <div className="text-[10px] text-[#9db4ff]">▶ Talk</div>
+            <div className="text-[10px] text-[#9db4ff]">{t("entity.voiceTalk")}</div>
             <textarea
               value={line}
               onChange={(e) => setLine(e.target.value)}
@@ -191,20 +199,20 @@ export function VoiceResource({ voice: v, onVoiceChange, sourceImageUrl }: Voice
                 onClick={speak}
                 className="text-[11px] px-3 py-1.5 rounded bg-[#2a3b6e] text-[#cdd9ff] disabled:opacity-50"
               >
-                {busy === "speak" ? "Speaking…" : "🔊 Speak"}
+                {busy === "speak" ? t("entity.voiceSpeaking") : t("entity.voiceSpeak")}
               </button>
               <button
                 disabled={busy !== null || !hasPortrait}
-                title={!hasPortrait ? "Approve a portrait on Profile first" : ""}
+                title={!hasPortrait ? t("entity.approvePortraitFirst") : ""}
                 onClick={speakAndLipSync}
                 className="text-[11px] px-3 py-1.5 rounded bg-[#1a1e25] text-slate-300 disabled:opacity-50"
               >
-                {busy === "lipsync" ? "Rendering…" : "🎬 Speak + lip-sync portrait"}
+                {busy === "lipsync" ? t("entity.voiceRendering") : t("entity.voiceSpeakLipSync")}
               </button>
             </div>
             {!hasPortrait && (
               <div className="text-[9px] text-slate-500">
-                Lip-sync needs an approved portrait — set one on the Profile page first.
+                {t("entity.lipSyncNeedsPortrait")}
               </div>
             )}
             {error && <div className="text-[9px] text-red-400">{error}</div>}
@@ -223,6 +231,7 @@ const DESIGN_MIN_CHARS = 100
  *  this phase — "Save as voice" lands in Phase 4). `voiceDesignApi` requires the
  *  preview `text` to be ≥100 chars, so the textarea enforces it before enabling. */
 function DesignAuditionPanel() {
+  const t = useT()
   const [description, setDescription] = useState("")
   const [text, setText] = useState(
     "Hello there. This is a preview of the voice you are designing — read aloud so you can hear its tone, pacing, and character before you commit to it.",
@@ -245,9 +254,9 @@ function DesignAuditionPanel() {
       const url = await pollJobUrl(jobId, "audioUrl", () => mounted.current)
       if (!mounted.current) return
       if (url) setAudioUrl(url)
-      else setError("Timed out or failed.")
+      else setError(tx("entity.voiceTimedOut"))
     } catch (e) {
-      if (mounted.current) setError(previewErrorText(e, "Audition failed — try again."))
+      if (mounted.current) setError(previewErrorText(e, tx("entity.auditionFailed")))
     } finally {
       if (mounted.current) setBusy(false)
     }
@@ -255,15 +264,15 @@ function DesignAuditionPanel() {
 
   return (
     <div className="border border-[#1e293b] rounded p-3 space-y-2">
-      <div className="text-[10px] text-slate-400">Describe a voice, then audition it. (Saving designed voices comes later.)</div>
+      <div className="text-[10px] text-slate-400">{t("entity.voiceDesignIntro")}</div>
       <textarea
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         rows={2}
-        placeholder="A warm, gravelly old storyteller with a slight Irish lilt"
+        placeholder={t("entity.voiceDesignPlaceholder")}
         className="w-full text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
       />
-      <div className="text-[10px] text-slate-400">Preview line (≥{DESIGN_MIN_CHARS} chars)</div>
+      <div className="text-[10px] text-slate-400">{t("entity.voicePreviewLine", { min: DESIGN_MIN_CHARS })}</div>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -271,15 +280,16 @@ function DesignAuditionPanel() {
         className="w-full text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
       />
       <div className={`text-[9px] ${tooShort ? "text-amber-400" : "text-slate-500"}`}>
-        {text.trim().length}/{DESIGN_MIN_CHARS} characters
-        {tooShort ? " — add more so the preview is long enough" : ""}
+        {tooShort
+          ? t("entity.voiceCharCountShort", { len: text.trim().length, min: DESIGN_MIN_CHARS })
+          : t("entity.voiceCharCount", { len: text.trim().length, min: DESIGN_MIN_CHARS })}
       </div>
       <button
         disabled={!description.trim() || tooShort || busy}
         onClick={audition}
         className="text-[11px] px-3 py-1.5 rounded bg-[#2a3b6e] text-[#cdd9ff] disabled:opacity-50"
       >
-        {busy ? "Auditioning…" : "🔊 Audition"}
+        {busy ? t("entity.voiceAuditioning") : t("entity.voiceAudition")}
       </button>
       {error && <div className="text-[9px] text-red-400">{error}</div>}
       {audioUrl && <audio src={audioUrl} controls className="w-full" />}

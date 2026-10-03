@@ -7,7 +7,7 @@ import {
   renderDirectionHints,
 } from "../direction-registry.js"
 import { getStylePromptHint, getStyleTerm } from "../style.js"
-import { getTransitionPromptHint, getTransitionTerm } from "../transitions.js"
+import { renderTransitionBases } from "../transitions.js"
 import { getCameraMotionPromptHint, getCameraMotionTerm } from "../camera-motions.js"
 import { getFramingPromptHint } from "../framing.js"
 import { getLightingPromptHint } from "../lighting.js"
@@ -78,28 +78,36 @@ describe("composeVideoPromptText — the verbosity policy", () => {
   })
 
   it("renders a MOTION dimension as its compact term, not its full hint", () => {
-    const out = composeVideoPromptText("a knight", { transition: TRANSITION })
-    expect(out).toBe(`a knight. ${getTransitionTerm(TRANSITION)}`)
-    expect(out).not.toContain(getTransitionPromptHint(TRANSITION))
+    const out = composeVideoPromptText("a knight", { cameraMotion: CAMERA_MOTION })
+    expect(out).toBe(`a knight. ${getCameraMotionTerm(CAMERA_MOTION)}`)
+    expect(out).not.toContain(getCameraMotionPromptHint(CAMERA_MOTION))
+  })
+
+  it("renders a TRANSITION as `term (hint)` in every mode — the bare term did not steer the model", () => {
+    const expected = `a knight. ${renderTransitionBases([TRANSITION])[0]}`
+    expect(composeVideoPromptText("a knight", { transition: TRANSITION })).toBe(expected)
+    for (const hintMode of ["full", "compact"] as const) {
+      expect(composeVideoPromptText("a knight", { transition: TRANSITION }, undefined, { hintMode })).toBe(expected)
+    }
   })
 
   it("applies both halves of the split policy in ONE fold", () => {
     const out = composeVideoPromptText("a knight", {
       style: STYLE,
-      transition: TRANSITION,
+      cameraMotion: CAMERA_MOTION,
     })
     expect(out).toContain(getStylePromptHint(STYLE))
-    expect(out).toContain(getTransitionTerm(TRANSITION))
-    expect(out).not.toContain(getTransitionPromptHint(TRANSITION))
+    expect(out).toContain(getCameraMotionTerm(CAMERA_MOTION))
+    expect(out).not.toContain(getCameraMotionPromptHint(CAMERA_MOTION))
   })
 
   it("honors a whole-fold `hintMode` override in both directions", () => {
     // "full" promotes the motion family to its full clause…
     expect(
-      composeVideoPromptText("a knight", { transition: TRANSITION }, undefined, {
+      composeVideoPromptText("a knight", { cameraMotion: CAMERA_MOTION }, undefined, {
         hintMode: "full",
       }),
-    ).toBe(`a knight. ${getTransitionPromptHint(TRANSITION)}`)
+    ).toBe(`a knight. ${getCameraMotionPromptHint(CAMERA_MOTION)}`)
     // …and "compact" demotes the look family to its term. Verbosity does not
     // move a clause: the look term still reads in the section.
     expect(
@@ -124,7 +132,7 @@ describe("composeVideoPromptText — what stays in the body", () => {
       transition: TRANSITION,
     })
     expect(out).toBe(
-      `a knight. ${getCameraMotionTerm(CAMERA_MOTION)}. ${getTransitionTerm(TRANSITION)}`,
+      `a knight. ${getCameraMotionTerm(CAMERA_MOTION)}. ${renderTransitionBases([TRANSITION])[0]}`,
     )
     expect(out).not.toContain("[style]")
   })
@@ -248,13 +256,13 @@ describe("composeVideoPromptText — tolerance", () => {
 describe("composeVideoPromptText — an empty or absent body", () => {
   it("returns the hints alone for an empty prompt (never a leading '. ')", () => {
     expect(composeVideoPromptText("", { transition: TRANSITION })).toBe(
-      getTransitionTerm(TRANSITION),
+      renderTransitionBases([TRANSITION])[0],
     )
   })
 
   it("returns the hints alone for an ABSENT prompt", () => {
     expect(composeVideoPromptText(undefined, { transition: TRANSITION })).toBe(
-      getTransitionTerm(TRANSITION),
+      renderTransitionBases([TRANSITION])[0],
     )
   })
 

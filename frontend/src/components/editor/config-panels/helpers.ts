@@ -1,9 +1,10 @@
-import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, resolveTopazUpscale, applyDefaultVideoSelection } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
+import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import type { LlmFeature } from "@nodaro/shared"
 /** Every node type whose output is prose/text. Used to build the compatible
  *  source list for any text-shaped field so the MappableField dropdown is
@@ -358,10 +359,12 @@ export function addCaptionsCreditId(
  * and an under-quote only for an imported or MCP-written 2560 px plan.
  */
 export function getModelIdentifier(
-  node: WorkflowNode,
+  storedNode: WorkflowNode,
   edges?: ReadonlyArray<WorkflowEdge>,
   nodes?: ReadonlyArray<WorkflowNode>,
 ): string {
+  // Priced as it runs: a wired Settings input sets the model and length.
+  const node = withWiredSettings(storedNode, nodes, edges)
   const data = node.data as Record<string, unknown>
   if (node.type === "dubbing" && /^(he|heb)$/i.test(String(data.targetLanguage ?? ""))) return "elevenlabs-dubbing-v2"
 
@@ -370,9 +373,19 @@ export function getModelIdentifier(
   // the SAME resolver the orchestrator uses to pick the row it charges.
   if (node.type === "render-video") return renderVideoCreditIdForNode(node, nodes, edges)
 
+  // Generate Music reserves on the music id whatever the model (the route and
+  // the orchestrator both do); the model id "minimax" is the MiniMax VIDEO price.
+  if (node.type === "generate-music") return MUSIC_CREDIT_ID
+
   // Component nodes: return empty string so the fallback estimateNodeCredits is used
   // (component cost depends on estimatedCredits from the published metadata, not a model lookup)
   if (node.type === "component") return ""
+
+  // Content Recipe / Content Ideas: the shared builders — the same ids the
+  // cloud route, the orchestrator and the node badge use (the effective
+  // model's tier; ideas add the per-five-ideas bucket).
+  if (node.type === "content-recipe") return contentRecipeCreditId(data.llmModel, data.reasoningEffort as string | undefined)
+  if (node.type === "content-ideas") return contentIdeasCreditId(data.count, data.llmModel, data.reasoningEffort as string | undefined)
 
   // motion-graphics: feature is engine-dependent (design §8 — every credit-id site branches on engine)
   if (node.type === "motion-graphics") {
@@ -435,6 +448,11 @@ export function getModelIdentifier(
   // button, the Execute total and the >100 cr confirm all quoted the flat
   // "instagram-scrape" row while the route reserved the tiered one. Same builder
   // as the backend estimator (ee/billing/credits.ts) and the guard.
+  // Social Search: the page count the run reserves (one page per 20 posts) —
+  // the builder the orchestrator and the plugin route share.
+  if (nodeType === "social-search") {
+    return socialSearchCreditIdFromNode(data)
+  }
   if (nodeType === "instagram-scrape") {
     return instagramScrapeCreditIdFromNode(data)
   }
@@ -457,7 +475,7 @@ export function getModelIdentifier(
   // bucket (never the smart ceiling).
   if (nodeType === "video-analysis") {
     const probedYoutube = data.probedYoutube as { url: string; durationSec: number } | undefined
-    const probedVideo = data.probedVideo as { url: string; durationSec: number } | undefined
+    const probedVideo = data.probedVideo as ProbedVideoInfo | undefined
     const durationSec =
       (probedYoutube && probedYoutube.url === data.youtubeUrl ? probedYoutube.durationSec : undefined) ??
       probedVideo?.durationSec
@@ -473,11 +491,19 @@ export function getModelIdentifier(
   // from the EDGES (videoAuditAnalysisWired); the duration from the node's
   // url-bound probe, exactly as estimateNodeCredits reads them.
   if (nodeType === "video-audit") {
-    const probedVideo = data.probedVideo as { url: string; durationSec: number } | undefined
+    const probedVideo = data.probedVideo as ProbedVideoInfo | undefined
     return buildVideoAuditCreditId({
       analysisProvided: videoAuditAnalysisWired(node.id, edges),
       durationSec: probedVideo?.durationSec,
     })
+  }
+
+  // Audio Sync: priced per source aligned to the reference — `audio-sync:<n>src`
+  // from the number of recordings wired into `sources` (the SAME count the
+  // node's pill and estimateNodeCredits read, lib/audio-sync). Without edges it
+  // quotes the 6-source ceiling rather than the cheapest row.
+  if (nodeType === "audio-sync") {
+    return audioSyncCreditId(audioSyncWiredSourceCount(node.id, edges))
   }
 
   // Edit Plan: mode × tier × duration-bucket composite — the SAME id the reserve
@@ -562,6 +588,10 @@ export function getModelIdentifier(
   if (nodeType === "transcribe") {
     return (typeof data.provider === "string" && data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
   }
+
+  // Adjust Speed: the smooth tier is its own, dearer id (route + orchestrator
+  // price it the same way), so the estimate must not quote the fast tier.
+  if (nodeType === "speed-ramp") return speedRampCreditId(data.quality)
 
   const provider = data.provider as string | undefined
   if (!provider) return nodeType

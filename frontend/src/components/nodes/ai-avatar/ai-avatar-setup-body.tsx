@@ -15,6 +15,7 @@
 // strip, never in the card. Handles and the settings panel are untouched.
 
 import { useCallback, useState } from "react"
+import { useT } from "@/lib/i18n"
 import type { HeygenAvatar } from "@/lib/api"
 import type { AiAvatarData } from "@/types/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -71,8 +72,9 @@ export function AiAvatarSetupBody({ nodeId, data, failed = false, failureMessage
   )
   const openPicker = useCallback((query?: string) => setPicker({ open: true, query }), [])
 
-  const readiness = computeAiAvatarReadiness(data, wiring)
-  const engineLabel = aiAvatarEngineLabel(data)
+  const t = useT()
+  const readiness = computeAiAvatarReadiness(data, wiring, t)
+  const engineLabel = aiAvatarEngineLabel(data, t)
 
   let view: "quick-pick" | "image-empty" | "configured"
   if (source === "image") view = hasImage ? "configured" : "image-empty"
@@ -123,7 +125,7 @@ export function AiAvatarSetupBody({ nodeId, data, failed = false, failureMessage
           onSelect={pickAvatar}
           // Credits are a Cloud thing: off-cloud the hook hands back its
           // fallback, which must never be shown as a price.
-          costLabel={hasCredits() && costCredits !== undefined && costCredits > 0 ? `from ${formatCreditUnits(costCredits)}` : undefined}
+          costLabel={hasCredits() && costCredits !== undefined && costCredits > 0 ? t("node.fromCost", { cost: formatCreditUnits(costCredits) }) : undefined}
         />
       )}
     </div>

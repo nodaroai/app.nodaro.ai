@@ -277,6 +277,7 @@ const map: LocaleCatalogMap = {
   "face-short-beard": { label: "لحية قصيرة", description: "لحية قصيرة مهذبة" },
   "face-full-beard": { label: "لحية كاملة", description: "لحية كاملة كثيفة" },
 
+  "texture-natural": { label: "طبيعية", description: "مسام حقيقية وتفاوت طبيعي" },
   "texture-smooth": { label: "ناعمة", description: "بشرة ناعمة كالحرير، خالية من العيوب" },
   "texture-wrinkled": { label: "متجعدة", description: "بشرة متقدمة في السن، مخططة بعمق" },
   "texture-goosebumps": { label: "قشعريرة", description: "قشعريرة بارزة على البشرة" },

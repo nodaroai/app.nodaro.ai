@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, type TFunction } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Merge, FileText, X, Copy, Type } from "lucide-react"
@@ -19,13 +19,13 @@ import type { CombineTextNodeData } from "@/types/nodes"
 const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_TEXT = (t: string) => isValidCombineTextConnection("text", t, isVisualPicker)
 
-const SEPARATOR_LABELS: Record<string, string> = {
+const separatorLabels = (t: TFunction): Record<string, string> => ({
   newline: "\\n",
   "double-newline": "\\n\\n",
   comma: ", ",
-  space: "Space",
-  custom: "Custom",
-}
+  space: t("utilcfg.sepSpace"),
+  custom: t("common.custom"),
+})
 
 function TextPreviewModal({
   isOpen,
@@ -85,7 +85,7 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
     ? combinedText.split("\n").filter((l) => l.trim().length > 0).length
     : 0
 
-  const separatorLabel = SEPARATOR_LABELS[nodeData.separator] ?? nodeData.separator
+  const separatorLabel = separatorLabels(t)[nodeData.separator] ?? nodeData.separator
 
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
@@ -123,7 +123,7 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
                 }}
               >
                 <p className="text-xs text-foreground/80 line-clamp-3 break-words">
-                  {lineCount} line{lineCount !== 1 ? "s" : ""} combined
+                  {lineCount === 1 ? t("node.linesCombinedOne", { n: lineCount }) : t("node.linesCombinedMany", { n: lineCount })}
                 </p>
                 <span className="text-[10px] text-muted-foreground mt-1 block">
                   {t("node.clickToExpand")}
@@ -136,7 +136,7 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
                   className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                   onClick={(e) => {
                     e.stopPropagation()
-                    copyToClipboard(combinedText ?? "", "Text copied")
+                    copyToClipboard(combinedText ?? "", t("node.textCopied"))
                   }}
                 >
                   <Copy className="w-3 h-3" />
@@ -150,7 +150,7 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           <div className="flex justify-between text-muted-foreground">
-            <span>Separator: {separatorLabel}</span>
+            <span>{t("node.separatorLabel", { value: separatorLabel })}</span>
           </div>
         </div>
       </BaseNode>

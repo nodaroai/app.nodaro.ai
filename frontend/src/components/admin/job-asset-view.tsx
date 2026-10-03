@@ -4,14 +4,16 @@ import {
   type ExtractedAsset,
 } from "./job-asset-view-extractors"
 import { WaveformAudioPlayer } from "@/components/audio-player"
+import { useT } from "@/lib/i18n"
 
 interface JobAssetViewProps {
   readonly data: Record<string, unknown> | null
 }
 
 export function JobAssetView({ data }: JobAssetViewProps) {
+  const t = useT()
   if (data === null) {
-    return <p className="text-xs text-muted-foreground">No data</p>
+    return <p className="text-xs text-muted-foreground">{t("misc.noData")}</p>
   }
 
   const textFields = extractTextFields(data)
@@ -41,7 +43,7 @@ export function JobAssetView({ data }: JobAssetViewProps) {
 
       <details open={noContent}>
         <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground select-none mb-2">
-          Raw JSON
+          {t("misc.rawJson")}
         </summary>
         <pre className="text-xs bg-muted/50 rounded-lg p-4 overflow-auto max-h-64 whitespace-pre-wrap">
           {JSON.stringify(data, null, 2)}

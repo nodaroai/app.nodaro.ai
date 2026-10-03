@@ -6,7 +6,7 @@ const map: LocaleCatalogMap = {
   "smartphone-raised": { label: "掲げたスマホ", description: "撮影中に掲げたスマホ" },
   "polaroid-camera": { label: "ポラロイドカメラ", description: "ヴィンテージのインスタントカメラ" },
   "vintage-camera": { label: "ヴィンテージカメラ", description: "ストラップ付きの古いフィルムカメラ" },
-  "dslr-camera": { label: "デジタル一眼レフ", description: "モダンなDSLR／ミラーレスカメラ" },
+  "dslr-camera": { label: "デジタル一眼レフ", description: "モダンなデジタル一眼レフ／ミラーレスカメラ" },
   "video-camera": { label: "ビデオカメラ", description: "肩担ぎのビデオカメラ" },
   "microphone": { label: "マイク", description: "手持ちのボーカルマイク" },
   "megaphone": { label: "メガホン", description: "拡声器／メガホン" },
@@ -16,7 +16,7 @@ const map: LocaleCatalogMap = {
   "coffee-cup": { label: "コーヒーカップ", description: "陶器のコーヒーカップ" },
   "takeaway-coffee": { label: "テイクアウトのコーヒー", description: "紙のテイクアウト用コーヒーカップ" },
   "wine-glass": { label: "ワイングラス", description: "脚付きの赤ワイングラス" },
-  "champagne-flute": { label: "シャンパンフルート", description: "高いシャンパンフルート" },
+  "champagne-flute": { label: "シャンパンフルート", description: "背の高いシャンパンフルート" },
   "martini-glass": { label: "マティーニグラス", description: "クラシックなマティーニグラス" },
   "cocktail-glass": { label: "カクテルグラス", description: "カクテル入りのショートグラス" },
   "beer-bottle": { label: "ビール瓶", description: "茶色いビール瓶" },
@@ -71,14 +71,14 @@ const map: LocaleCatalogMap = {
   "wine-bottle": { label: "ワインボトル", description: "ホイル封のついた未開封のボトル" },
 
   // Additional held props
-  "parasol": { label: "パラソル", description: "陽射しを遮る装飾的なパラソル" },
-  "locket": { label: "ロケット", description: "指で開いたヴィンテージのロケットペンダント" },
+  "parasol": { label: "パラソル", description: "ヴィクトリア朝風／アジア風の装飾的なパラソル" },
+  "locket": { label: "ロケット", description: "開いたヴィンテージのロケットペンダント" },
   "lighter": { label: "ライター", description: "炎に親指を添えたクロームのライター" },
   "lantern": { label: "ランタン", description: "暖かな琥珀色に灯るヴィンテージの手持ちランタン" },
-  "flashlight": { label: "懐中電灯", description: "モダンな懐中電灯の光線、探検／ミステリー" },
-  "compass": { label: "コンパス", description: "手持ちの航海用コンパス、探検" },
+  "flashlight": { label: "懐中電灯", description: "光線で闇を切り裂くモダンな懐中電灯" },
+  "compass": { label: "コンパス", description: "ヴィンテージの手持ち航海用コンパス" },
   "bow-and-arrow": { label: "弓矢", description: "矢をつがえて引き絞った弓" },
-  "shield": { label: "盾", description: "手持ちの盾、中世／ファンタジー" },
+  "shield": { label: "盾", description: "手持ちの中世の盾" },
 
   // --- picker-gaps 2026-09-01 ---
   "work-gloves": { label: "作業用手袋", description: "手に持った使い込まれた革の作業用手袋" },

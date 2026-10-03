@@ -13,11 +13,13 @@ import { VARIABLES_HANDLE_ID } from "@nodaro/shared"
 import type { FilterListNodeData } from "@/types/nodes"
 import { isValidFilterListConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { isVisualPickerType } from "@/lib/parameter-picker-types"
+import { useT } from "@/lib/i18n"
 
 const ACCEPTS_IN        = (t: string) => isValidFilterListConnection("in", t, isVisualPickerType)
 const ACCEPTS_VARIABLES = (t: string) => isValidFilterListConnection("variables", t, isVisualPickerType)
 
 function FilterListNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as FilterListNodeData
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -62,12 +64,12 @@ function FilterListNodeComponent({ id, data, selected }: NodeProps) {
           {hasResult ? (
             <div className="w-full rounded-md bg-muted/30 p-2">
               <p className="text-xs text-foreground/80">
-                {itemCount} item{itemCount === 1 ? "" : "s"} kept
+                {itemCount === 1 ? t("node.itemsKeptOne", { n: itemCount }) : t("node.itemsKeptMany", { n: itemCount })}
               </p>
               <span className="text-[10px] text-muted-foreground mt-0.5 block">
                 {conditionCount === 0
-                  ? "No conditions"
-                  : `${conditionCount} condition${conditionCount === 1 ? "" : "s"} (${logic})`}
+                  ? t("node.noConditions")
+                  : t(conditionCount === 1 ? "node.conditionsOne" : "node.conditionsMany", { n: conditionCount, logic })}
               </span>
             </div>
           ) : (
@@ -75,8 +77,8 @@ function FilterListNodeComponent({ id, data, selected }: NodeProps) {
               <FileText className="w-5 h-5" />
               <span className="text-[10px] mt-0.5">
                 {conditionCount === 0
-                  ? "No conditions"
-                  : `${conditionCount} condition${conditionCount === 1 ? "" : "s"} (${logic})`}
+                  ? t("node.noConditions")
+                  : t(conditionCount === 1 ? "node.conditionsOne" : "node.conditionsMany", { n: conditionCount, logic })}
               </span>
             </div>
           )}

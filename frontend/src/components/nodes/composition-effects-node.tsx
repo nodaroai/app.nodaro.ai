@@ -5,6 +5,7 @@ import type { NodeProps } from "@xyflow/react"
 import { Wand2 } from "lucide-react"
 import { getCompositionEffect, getCompositionEffectLabel } from "@nodaro/prompts"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { LookArt } from "@/lib/picker-ui"
 import type { CompositionEffectsData } from "@/types/nodes"
 
 function CompositionEffectsNodeComponent({ id, data, selected }: NodeProps) {
@@ -20,6 +21,7 @@ function CompositionEffectsNodeComponent({ id, data, selected }: NodeProps) {
       <p className="text-foreground text-sm font-medium">
         {getCompositionEffectLabel(effectId)}
       </p>
+      <LookArt pickerKey="composition-effects" id={effectId} className="w-full aspect-[16/9]" width={640} fallback={null} />
       {description && (
         <p className="text-muted-foreground text-[11px] leading-snug line-clamp-3">
           {description}

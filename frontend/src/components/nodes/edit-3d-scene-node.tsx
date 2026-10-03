@@ -72,10 +72,10 @@ function Edit3DSceneNodeComponent({ id, data, selected }: NodeProps) {
               <Loader2 className="absolute top-1 right-1 w-3 h-3 animate-spin text-[#ff0073]" />
             )}
             <div className="text-center">
-              <div className="text-sm font-medium text-[#ff0073]">{objectCount} objects</div>
+              <div className="text-sm font-medium text-[#ff0073]">{t("node.nObjects", { n: objectCount })}</div>
               <div className="text-[10px] text-muted-foreground">
-                {revision ? `rev ${revision.slice(0, 6)}` : "unversioned"}
-                {lockedCount > 0 ? ` · ${lockedCount} locked` : ""}
+                {revision ? t("node.revShort", { rev: revision.slice(0, 6) }) : t("node.unversioned")}
+                {lockedCount > 0 ? ` · ${t("node.nLocked", { n: lockedCount })}` : ""}
               </div>
             </div>
           </div>
@@ -84,14 +84,14 @@ function Edit3DSceneNodeComponent({ id, data, selected }: NodeProps) {
         {nodeData.scenePendingPlan && (
           <div className="flex items-center gap-1 text-[10px] text-amber-500">
             <History className="w-3 h-3 shrink-0" />
-            <span className="line-clamp-1">New revision waiting — open the panel</span>
+            <span className="line-clamp-1">{t("node.newRevisionWaiting")}</span>
           </div>
         )}
 
         {lockedCount > 0 && !scenePlan && (
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
             <Lock className="w-3 h-3 shrink-0" />
-            <span>{lockedCount} locked</span>
+            <span>{t("node.nLocked", { n: lockedCount })}</span>
           </div>
         )}
 
@@ -116,7 +116,7 @@ function Edit3DSceneNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="text-muted-foreground text-[10px] line-clamp-1">
-          {nodeData.editPrompt?.trim() ? nodeData.editPrompt : "No edit instruction set"}
+          {nodeData.editPrompt?.trim() ? nodeData.editPrompt : t("node.noEditInstructionSet")}
         </div>
       </div>
     </BaseNode>

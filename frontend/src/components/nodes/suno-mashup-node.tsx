@@ -66,7 +66,7 @@ function SunoMashupNodeComponent({ id, data, selected }: NodeProps) {
               <button
                 key={`${r.jobId}-${i}`}
                 type="button"
-                aria-label={`Result ${i + 1}`}
+                aria-label={t("node.resultN", { n: i + 1 })}
                 className={`w-10 h-10 flex items-center justify-center rounded-lg cursor-pointer transition-all ${
                   i === activeIndex
                     ? "ring-2 ring-[#ff0073] bg-[#ff0073]/20"

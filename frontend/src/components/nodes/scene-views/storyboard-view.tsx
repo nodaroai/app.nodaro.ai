@@ -20,9 +20,9 @@ function StoryboardView({ data }: SceneViewProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
-        <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">Scene {data.scene_index}</div>
+        <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">{t("node.sceneN", { n: data.scene_index })}</div>
         <div className="text-[10px] text-zinc-500 dark:text-zinc-400">
-          {shots.length} shot{shots.length === 1 ? "" : "s"} · {data.duration_seconds}s
+          {shots.length === 1 ? t("node.shotCountOne", { n: shots.length }) : t("node.shotCountMany", { n: shots.length })} · {data.duration_seconds}s
         </div>
       </div>
       {shots.length === 0 ? (

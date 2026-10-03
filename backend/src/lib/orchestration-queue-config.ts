@@ -84,7 +84,8 @@ export const ORCHESTRATOR_ALIVE_STATES: ReadonlySet<string> = new Set([
  * re-pick the execution. Terminal nodes are carried forward, but nodes still
  * IN FLIGHT are dropped by the `completed || skipped` carry-forward filter and
  * re-attempt — `cancelInFlightChildJobs` adopts post-provider children and
- * refunds pre-provider ones first, so the residual exposure is the
+ * still-heartbeating budgeted renders, and refunds the other pre-provider
+ * ones first, so the residual exposure is the
  * concurrent-live-orchestrator race that function documents, not a bare
  * double charge. The orchestrator is I/O-bound
  * (Supabase reads + a 3s poll sleep, node-executor.ts:1726), so a block that

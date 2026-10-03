@@ -34,7 +34,7 @@ import { COMPOSITION_RATIOS, PRO3D_ASPECT_RATIOS } from "./model-options"
 import { adoptLocalRevision, findRevision, restoreContextPatch } from "@/lib/scene3d/revisions"
 import { scene3DEditInput } from "@/lib/scene3d/scene-input"
 import { planRevisionId } from "@/lib/scene3d/plan-view"
-import { SCENE3D_REFERENCE_ROLES, DEFAULT_REFERENCE_ROLE } from "@/lib/scene3d/references"
+import { SCENE3D_REFERENCE_ROLES, SCENE3D_REFERENCE_ROLE_LABEL, DEFAULT_REFERENCE_ROLE } from "@/lib/scene3d/references"
 import { PRO3D_RENDER_DEFAULT_REPAIR_PASSES, PRO3D_RENDER_LIMITS, PRO3D_RENDER_MAX_REPAIR_PASSES, PRO3D_RENDER_QUALITY_PROFILES, SCENE3D_BASIC_ENGINE, SCENE3D_BASIC_SCHEMA_VERSION, scene3DPlanSchemaVersion, resolveScene3DAuthoringEngine } from "@nodaro/shared"
 import { useScene3DAdvancedEngines, useScene3DProCapabilities } from "@/lib/scene3d-pro-availability"
 import { useT } from "@/lib/i18n"
@@ -181,7 +181,7 @@ function ReferenceRoles({
             <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               {SCENE3D_REFERENCE_ROLES.map((role) => (
-                <SelectItem key={role} value={role} className="text-[11px] capitalize">{role}</SelectItem>
+                <SelectItem key={role} value={role} className="text-[11px]">{t(SCENE3D_REFERENCE_ROLE_LABEL[role])}</SelectItem>
               ))}
             </SelectContent>
           </Select>

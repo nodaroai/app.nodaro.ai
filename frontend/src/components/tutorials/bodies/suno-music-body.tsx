@@ -8,6 +8,8 @@
 
 import { useMemo, useState } from "react"
 import { TutorialAudio } from "../tutorial-audio"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { TutorialBodyProps } from "../tutorial-registry"
 import { DEFAULT_SUNO_MODEL } from "@nodaro/shared"
 import { deriveSunoRuns, describeChange, INPUT_ORDER } from "./suno-runs"
@@ -25,11 +27,16 @@ const KIND_LABELS: Record<string, string> = {
 export default function SunoMusicBody({ nodes, edges, onRunNode }: TutorialBodyProps) {
   const runs = useMemo(() => deriveSunoRuns(nodes, edges), [nodes, edges])
   const [index, setIndex] = useState(0)
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
 
-  if (runs.length === 0) return <div className="nd-state">This template has no runs to show.</div>
+  if (runs.length === 0) return <div className="nd-state">{t("tut.noRunsToShow")}</div>
 
   const run = runs[Math.min(index, runs.length - 1)]
-  const change = describeChange(runs[index - 1], run)
+  // Mid-sentence, so the family's canvas name in lower case ("Added music genre.").
+  const change = describeChange(runs[index - 1], run, t, (kind) =>
+    localizeNode(KIND_LABELS[kind] ?? kind.replace(/-/g, " ")).toLowerCase(),
+  )
   const total = String(runs.length).padStart(2, "0")
 
   // Every family the template uses anywhere, so a family this run leaves out
@@ -42,9 +49,9 @@ export default function SunoMusicBody({ nodes, edges, onRunNode }: TutorialBodyP
     <div className="sm">
       <div className="sm-stepper">
         <div>
-          <div className="nd-eyebrow">Run</div>
+          <div className="nd-eyebrow">{t("tut.runEyebrow")}</div>
           <div className="sm-run-count">
-            {String(index + 1).padStart(2, "0")} of {total}
+            {t("tut.ofTotal", { n: String(index + 1).padStart(2, "0"), total })}
           </div>
         </div>
         <span className="sm-divider" />
@@ -56,7 +63,7 @@ export default function SunoMusicBody({ nodes, edges, onRunNode }: TutorialBodyP
               className="sm-pill"
               data-active={i === index}
               onClick={() => setIndex(i)}
-              aria-label={`Run ${i + 1}`}
+              aria-label={t("tut.runN", { n: i + 1 })}
               aria-current={i === index}
             >
               {String(i + 1).padStart(2, "0")}
@@ -66,7 +73,7 @@ export default function SunoMusicBody({ nodes, edges, onRunNode }: TutorialBodyP
         <p className="sm-change">{change}</p>
         <div className="sm-nav">
           <button type="button" onClick={() => setIndex((i) => i - 1)} disabled={index === 0}>
-            Previous
+            {t("common.previous")}
           </button>
           <button
             type="button"
@@ -74,7 +81,7 @@ export default function SunoMusicBody({ nodes, edges, onRunNode }: TutorialBodyP
             onClick={() => setIndex((i) => i + 1)}
             disabled={index >= runs.length - 1}
           >
-            Next run
+            {t("tut.nextRun")}
           </button>
         </div>
       </div>
@@ -85,8 +92,8 @@ export default function SunoMusicBody({ nodes, edges, onRunNode }: TutorialBodyP
           <header className="sm-head">
             <span className="sm-badge">1</span>
             <div>
-              <div className="sm-title">The options you pick</div>
-              <div className="sm-sub">Dropdowns on the style nodes. No writing.</div>
+              <div className="sm-title">{t("tut.sunoPicksTitle")}</div>
+              <div className="sm-sub">{t("tut.sunoPicksSub")}</div>
             </div>
           </header>
           <div className="sm-body">
@@ -95,13 +102,13 @@ export default function SunoMusicBody({ nodes, edges, onRunNode }: TutorialBodyP
               return (
                 <div key={kind} className="sm-card" data-unused={used.length === 0}>
                   <div className="sm-card-head">
-                    <span className="sm-card-name">{KIND_LABELS[kind] ?? kind}</span>
-                    {used.length === 0 && <span className="sm-tag">Not in this run</span>}
-                    {used.length > 1 && <span className="sm-tag">Second one, layered</span>}
+                    <span className="sm-card-name">{localizeNode(KIND_LABELS[kind] ?? kind)}</span>
+                    {used.length === 0 && <span className="sm-tag">{t("tut.notInThisRun")}</span>}
+                    {used.length > 1 && <span className="sm-tag">{t("tut.secondLayered")}</span>}
                   </div>
                   <div className="sm-card-body">
                     {used.length === 0 ? (
-                      <span className="sm-value">Any</span>
+                      <span className="sm-value">{t("tut.any")}</span>
                     ) : (
                       used
                         .flatMap((u) => u.picks)
@@ -120,7 +127,7 @@ export default function SunoMusicBody({ nodes, edges, onRunNode }: TutorialBodyP
 
         <div className="sm-connector">
           <span className="sm-connector-bar" />
-          <span className="sm-connector-label">FEEDS</span>
+          <span className="sm-connector-label">{t("tut.feeds")}</span>
         </div>
 
         {/* 2 — the generator */}
@@ -128,27 +135,27 @@ export default function SunoMusicBody({ nodes, edges, onRunNode }: TutorialBodyP
           <header className="sm-head">
             <span className="sm-badge">2</span>
             <div>
-              <div className="sm-title">Suno Generate</div>
-              <div className="sm-sub">Where the picks turn into audio</div>
+              <div className="sm-title">{localizeNode("Suno Generate")}</div>
+              <div className="sm-sub">{t("tut.sunoGenSub")}</div>
             </div>
           </header>
           <div className="sm-body">
             <div className="sm-style">
-              <div className="nd-eyebrow">Style description</div>
-              <p className="sm-style-note">Written automatically from every option on the left.</p>
+              <div className="nd-eyebrow">{t("tut.styleDescription")}</div>
+              <p className="sm-style-note">{t("tut.styleAutoNote")}</p>
               <p className="sm-style-text">{run.styleDescription || "—"}</p>
             </div>
 
-            <div className="nd-eyebrow">Your prompt (optional)</div>
+            <div className="nd-eyebrow">{t("tut.yourPromptOptional")}</div>
             <div className="sm-prompt" data-filled={!!run.prompt}>
-              {run.prompt || "Empty in this run"}
+              {run.prompt || t("tut.emptyInRun")}
             </div>
 
             <div className="sm-toggle-row">
-              <span>Instrumental</span>
+              <span>{t("tut.instrumental")}</span>
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span className="sm-toggle-state" data-on={run.instrumental}>
-                  {run.instrumental ? "ON" : "OFF"}
+                  {run.instrumental ? t("tut.on") : t("tut.off")}
                 </span>
                 <span className="sm-toggle" data-on={run.instrumental} aria-hidden="true">
                   <span className="sm-knob" />
@@ -159,19 +166,19 @@ export default function SunoMusicBody({ nodes, edges, onRunNode }: TutorialBodyP
             <div className="nd-chips">
               {run.model && <span className="nd-chip">Suno {run.model}</span>}
               <span className="nd-chip">
-                {run.inputs.length} node{run.inputs.length === 1 ? "" : "s"} connected
+                {run.inputs.length === 1 ? t("tut.oneNodeConnected") : t("tut.nodesConnected", { n: run.inputs.length })}
               </span>
             </div>
 
             <button type="button" className="sm-run" onClick={onRunNode}>
-              Run with these options
+              {t("tut.runWithOptions")}
             </button>
           </div>
         </section>
 
         <div className="sm-connector">
           <span className="sm-connector-bar" />
-          <span className="sm-connector-label">MAKES</span>
+          <span className="sm-connector-label">{t("tut.makes")}</span>
         </div>
 
         {/* 3 — the track */}
@@ -179,32 +186,32 @@ export default function SunoMusicBody({ nodes, edges, onRunNode }: TutorialBodyP
           <header className="sm-head">
             <span className="sm-badge sm-badge--payoff">3</span>
             <div>
-              <div className="sm-title">The track it made</div>
-              <div className="sm-sub">Already generated, free to play</div>
+              <div className="sm-title">{t("tut.trackTitle")}</div>
+              <div className="sm-sub">{t("tut.trackSub")}</div>
             </div>
           </header>
           <div className="sm-body" style={{ padding: "18px 16px" }}>
-            <div className="sm-track-eyebrow">Track {String(index + 1).padStart(2, "0")}</div>
-            <h2 className="sm-track-title">{run.styleDescription.split(",")[0] || "Untitled"}</h2>
+            <div className="sm-track-eyebrow">{t("tut.trackN", { n: String(index + 1).padStart(2, "0") })}</div>
+            <h2 className="sm-track-title">{run.styleDescription.split(",")[0] || t("common.untitled")}</h2>
             <p className="sm-track-desc">{change}</p>
 
             {run.audioUrl ? (
               <div className="sm-player">
                 {/* Keyed on the run so switching runs loads the new track rather
                     than leaving the previous one playing under a new title. */}
-                <TutorialAudio key={run.id} src={run.audioUrl} label={`track ${index + 1}`} />
+                <TutorialAudio key={run.id} src={run.audioUrl} label={t("tut.trackLabel", { n: index + 1 })} />
                 <div className="sm-caption">
-                  Generated with Suno {run.model ?? DEFAULT_SUNO_MODEL}
+                  {t("tut.generatedWithSuno", { model: run.model ?? DEFAULT_SUNO_MODEL })}
                 </div>
               </div>
             ) : (
               <p className="sm-track-desc" style={{ marginTop: 14 }}>
-                This run has no saved audio.
+                {t("tut.noSavedAudio")}
               </p>
             )}
 
             <div className="sm-why">
-              <div className="nd-eyebrow">Why it sounds different</div>
+              <div className="nd-eyebrow">{t("tut.whySoundsDifferent")}</div>
               <p className="sm-why-body">{change}</p>
             </div>
           </div>

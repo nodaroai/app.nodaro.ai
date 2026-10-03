@@ -17,6 +17,7 @@ import { ACCEPTS_MEDIA } from "@/lib/ffmpeg-handles"
 import { ACCEPTS_JSON, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { buildEditPlanCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared"
 import { useT } from "@/lib/i18n"
+import { copyToClipboard } from "@/lib/utils"
 import type { EditPlanNodeData } from "@/types/nodes"
 
 function ResultTreeModal({
@@ -44,11 +45,11 @@ function ResultTreeModal({
             <button
               type="button"
               className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80 transition-colors"
-              onClick={() => navigator.clipboard.writeText(JSON.stringify(plan, null, 2))}
+              onClick={() => copyToClipboard(JSON.stringify(plan, null, 2), t("node.dataCopied"))}
             >
               {t("cfgext.scrapeCopyJson")}
             </button>
-            <button type="button" aria-label="Close" className="text-muted-foreground hover:text-foreground" onClick={onClose}>
+            <button type="button" aria-label={t("common.close")} className="text-muted-foreground hover:text-foreground" onClick={onClose}>
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -109,6 +110,7 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
         handles={[
           { id: "transcript", type: "target", position: Position.Left,  customStyle: { top: "24px",              left: "-29px" },  external: true },
           { id: "silence",    type: "target", position: Position.Left,  customStyle: { top: "52px",              left: "-29px" },  external: true },
+          { id: "offsets",    type: "target", position: Position.Left,  customStyle: { top: "80px",              left: "-29px" },  external: true },
           { id: "sources",    type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 24px)", left: "-29px" },  external: true },
           { id: "edl",        type: "source", position: Position.Right, customStyle: { top: "24px",              right: "-29px" }, external: true },
         ]}
@@ -162,7 +164,7 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
                   className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
-                    navigator.clipboard.writeText(JSON.stringify(plan, null, 2))
+                    copyToClipboard(JSON.stringify(plan, null, 2), t("node.dataCopied"))
                   }}
                 >
                   <Copy className="w-3 h-3" />
@@ -184,6 +186,7 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
       </BaseNode>
       <HandleWithPopover nodeId={id} nodeType="edit-plan" handleId="transcript" type="target" position={Position.Left}  label={t("node.transcript")} color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="24px"              accepts={ACCEPTS_JSON} />
       <HandleWithPopover nodeId={id} nodeType="edit-plan" handleId="silence"    type="target" position={Position.Left}  label={t("node.silence")}    color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="52px"              accepts={ACCEPTS_JSON} />
+      <HandleWithPopover nodeId={id} nodeType="edit-plan" handleId="offsets"    type="target" position={Position.Left}  label={t("node.editPlanOffsets")} color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="80px"              accepts={ACCEPTS_JSON} />
       <HandleWithPopover nodeId={id} nodeType="edit-plan" handleId="sources"    type="target" position={Position.Left}  label={t("node.sources")}    color={HANDLE_COLORS.video}    icon={<Film />}   side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_MEDIA} orderMatters />
       <HandleWithPopover nodeId={id} nodeType="edit-plan" handleId="edl"        type="source" position={Position.Right} label={t("node.editPlanEdl")} color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="24px" />
       {plan !== undefined && plan !== null && (

@@ -166,15 +166,26 @@ export function formatTimecode(sec: number): string {
 
 export type RangeValidation =
   | { readonly ok: true; readonly startSec: number; readonly endSec: number }
-  | { readonly ok: false; readonly reason: "format" | "order" | "beyond" }
+  | { readonly ok: false; readonly reason: "format" | "order" | "beyond" | "tooLong" }
 
-/** The "from / to" fields of a long video. `durationSec` null = length unknown. */
-export function validateRange(fromText: string, toText: string, durationSec: number | null): RangeValidation {
+/**
+ * The "from / to" fields of a long video. `durationSec` null = length unknown.
+ * `maxPartSec` is the longest part the nodes after it read (see
+ * lib/video-link-length-limits); a longer part is refused here, before it is
+ * downloaded, rather than by the node that cannot read it, mid-run.
+ */
+export function validateRange(
+  fromText: string,
+  toText: string,
+  durationSec: number | null,
+  maxPartSec?: number,
+): RangeValidation {
   const startSec = parseTimecode(fromText)
   const endSec = parseTimecode(toText)
   if (startSec === null || endSec === null) return { ok: false, reason: "format" }
   if (startSec >= endSec) return { ok: false, reason: "order" }
   if (durationSec !== null && endSec > durationSec) return { ok: false, reason: "beyond" }
+  if (maxPartSec !== undefined && endSec - startSec > maxPartSec) return { ok: false, reason: "tooLong" }
   return { ok: true, startSec, endSec }
 }
 

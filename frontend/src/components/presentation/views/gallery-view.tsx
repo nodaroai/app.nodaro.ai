@@ -8,15 +8,16 @@ import { PLATFORM_LABELS } from "@/lib/social-media-specs"
 import { isVideoUrl } from "@/lib/media-type"
 import { GlassCard, StatusBadge, type OutputStatus } from "../output-cards/shared"
 import { WaveformBars } from "../input-cards/shared"
+import { useT, type MessageKey } from "@/lib/i18n"
 import type { WorkflowNode } from "@/types/nodes"
 import type { ViewProps } from "./types"
 
 type Tab = "all" | "outputs" | "inputs"
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "inputs", label: "Inputs" },
-  { key: "outputs", label: "Outputs" },
+const TABS: { key: Tab; labelKey: MessageKey }[] = [
+  { key: "all", labelKey: "common.all" },
+  { key: "inputs", labelKey: "preview.inputs" },
+  { key: "outputs", labelKey: "preview.outputs" },
 ]
 
 export function GalleryView({
@@ -30,6 +31,7 @@ export function GalleryView({
 }: ViewProps) {
   const [activeTab, setActiveTab] = useState<Tab>("all")
   const [textPreview, setTextPreview] = useState<{ title: string; text: string } | null>(null)
+  const t = useT()
 
   const outputItems = useMemo(() => {
     return orderedOutputNodes.map((node) => {
@@ -67,7 +69,7 @@ export function GalleryView({
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {tab.label}
+                {t(tab.labelKey)}
               </button>
             ))}
           </div>
@@ -77,10 +79,10 @@ export function GalleryView({
         {showInputs && (
           <>
             {activeTab === "all" && inputItems.length > 0 && (
-              <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-3">Inputs</h3>
+              <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-3">{t("preview.inputs")}</h3>
             )}
             {inputItems.length === 0 && activeTab !== "all" ? (
-              <div className="text-sm text-muted-foreground text-center py-16">No inputs configured</div>
+              <div className="text-sm text-muted-foreground text-center py-16">{t("present.noInputsConfigured")}</div>
             ) : inputItems.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {inputItems.map(({ node, result, title }) => (
@@ -94,7 +96,7 @@ export function GalleryView({
                           <video src={result.url} className="w-full h-full object-cover rounded-lg" muted playsInline />
                           <div className="absolute inset-0 flex items-center justify-center">
                             <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">
-                              <Play className="w-3.5 h-3.5 text-white ml-0.5" fill="white" />
+                              <Play className="w-3.5 h-3.5 text-white ms-0.5" fill="white" />
                             </div>
                           </div>
                         </div>
@@ -110,7 +112,7 @@ export function GalleryView({
                       ) : result.text ? (
                         <p className="text-xs px-2 line-clamp-4">{result.text}</p>
                       ) : (
-                        <span className="text-xs">Input</span>
+                        <span className="text-xs">{t("present.inputLabel")}</span>
                       )}
                     </div>
                   </GlassCard>
@@ -124,10 +126,10 @@ export function GalleryView({
         {showOutputs && (
           <>
             {activeTab === "all" && outputItems.length > 0 && (
-              <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-3">Outputs</h3>
+              <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-3">{t("preview.outputs")}</h3>
             )}
             {outputItems.length === 0 && activeTab !== "all" ? (
-              <div className="text-sm text-muted-foreground text-center py-16">No outputs configured</div>
+              <div className="text-sm text-muted-foreground text-center py-16">{t("present.noOutputsConfigured")}</div>
             ) : outputItems.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {outputItems.map(({ node, outputType, status, result, title }) => (
@@ -191,6 +193,7 @@ function GalleryCard({
   onOpenConfig?: (node: WorkflowNode) => void
 }) {
   const isConfigType = !!(node.type && CONFIG_INPUT_TYPES.has(node.type))
+  const t = useT()
 
   const handleClick = () => {
     if (isConfigType) {
@@ -252,7 +255,7 @@ function GalleryCard({
             <video src={url} className="w-full h-full object-cover" muted playsInline />
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
-                <Play className="w-4 h-4 text-white ml-0.5" fill="white" />
+                <Play className="w-4 h-4 text-white ms-0.5" fill="white" />
               </div>
             </div>
           </div>
@@ -266,7 +269,7 @@ function GalleryCard({
         ) : isConfigType ? (
           <div className="flex flex-col items-center gap-2 text-muted-foreground/60">
             <Settings className="w-8 h-8" />
-            <span className="text-[10px]">Click to edit</span>
+            <span className="text-[10px]">{t("present.clickToEdit")}</span>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-1 text-muted-foreground/40">
@@ -275,7 +278,7 @@ function GalleryCard({
              outputType === "audio" ? <Music className="w-8 h-8" /> :
              <FileText className="w-8 h-8" />}
             <span className="text-[10px]">
-              {status === "failed" ? "Failed" : "Pending"}
+              {status === "failed" ? t("common.failed") : t("present.pending")}
             </span>
           </div>
         )}

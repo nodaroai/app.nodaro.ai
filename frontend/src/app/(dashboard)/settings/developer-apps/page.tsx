@@ -35,8 +35,11 @@ import {
 } from "@/hooks/queries/use-developer-apps-queries"
 import type { DeveloperApp, DeveloperAppStatus } from "@/lib/api"
 import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { ALL_SCOPES, type Scope, SCOPE_DESCRIPTIONS } from "@/lib/dev-app-scopes"
 import { isCapReached } from "@/lib/dev-app-cap"
+import { formatDate } from "@/lib/i18n/format"
 
 function StatusBadge({ status }: { status: DeveloperAppStatus }) {
   const t = useT()
@@ -76,6 +79,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 
 export default function DeveloperAppsPage() {
   const t = useT()
+  const isRtl = useAppDir() === "rtl"
   const { loading: authLoading, isAdmin } = useAuth()
   const { data: apps, isLoading } = useDeveloperApps()
   // Mirrors the server: only hand-registered apps count toward the cap, and
@@ -228,7 +232,7 @@ export default function DeveloperAppsPage() {
           to="/settings"
           className="text-muted-foreground hover:text-foreground transition-colors"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className={cn("h-5 w-5", isRtl && "rotate-180")} />
         </Link>
         <div>
           <h1 className="text-2xl font-bold">{t("devApps.title")}</h1>
@@ -279,7 +283,7 @@ export default function DeveloperAppsPage() {
                   ))}
                 </div>
                 <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                  <span>{t("devApps.created", { date: new Date(appRow.createdAt).toLocaleDateString() })}</span>
+                  <span>{t("devApps.created", { date: formatDate(appRow.createdAt) })}</span>
                 </div>
               </div>
 
@@ -287,7 +291,7 @@ export default function DeveloperAppsPage() {
                 <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-xs">
                   <Link to={`/settings/developer-apps/${appRow.id}`}>
                     {t("devApps.view")}
-                    <ExternalLink className="h-3 w-3 ml-1" />
+                    <ExternalLink className="h-3 w-3 ms-1" />
                   </Link>
                 </Button>
                 <Button
@@ -311,7 +315,7 @@ export default function DeveloperAppsPage() {
         disabled={capReached}
         className="bg-[#ff0073] hover:bg-[#e00067] text-white"
       >
-        <Plus className="h-4 w-4 mr-2" />
+        <Plus className="h-4 w-4 me-2" />
         {t("devApps.createApp")}
       </Button>
       {capReached && (
@@ -361,10 +365,10 @@ export default function DeveloperAppsPage() {
                   {t("devApps.clientId")}
                 </Label>
                 <div className="relative">
-                  <code className="block w-full p-3 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-sm font-mono break-all pr-10">
+                  <code className="block w-full p-3 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-sm font-mono break-all pe-10">
                     {createdApp.clientId}
                   </code>
-                  <div className="absolute right-1 top-1">
+                  <div className="absolute end-1 top-1">
                     <CopyButton text={createdApp.clientId} label={t("devApps.copyClientId")} />
                   </div>
                 </div>
@@ -375,10 +379,10 @@ export default function DeveloperAppsPage() {
                   {t("devApps.clientSecret")}
                 </Label>
                 <div className="relative">
-                  <code className="block w-full p-3 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-sm font-mono break-all pr-10">
+                  <code className="block w-full p-3 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-sm font-mono break-all pe-10">
                     {createdApp.clientSecret}
                   </code>
-                  <div className="absolute right-1 top-1">
+                  <div className="absolute end-1 top-1">
                     <CopyButton text={createdApp.clientSecret} label={t("devApps.copyClientSecret")} />
                   </div>
                 </div>
@@ -430,7 +434,7 @@ export default function DeveloperAppsPage() {
 
               <div>
                 <Label htmlFor="app-redirects">{t("devApps.redirectsLabel")}</Label>
-                <Textarea
+                <Textarea dir="ltr"
                   id="app-redirects"
                   value={redirectUrisText}
                   onChange={(e) => setRedirectUrisText(e.target.value)}
@@ -445,7 +449,7 @@ export default function DeveloperAppsPage() {
 
               <div>
                 <Label htmlFor="app-origins">{t("devApps.originsLabel")}</Label>
-                <Textarea
+                <Textarea dir="ltr"
                   id="app-origins"
                   value={allowedOriginsText}
                   onChange={(e) => setAllowedOriginsText(e.target.value)}
@@ -492,7 +496,7 @@ export default function DeveloperAppsPage() {
                   className="bg-[#ff0073] hover:bg-[#e00067] text-white"
                 >
                   {createMutation.isPending && (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    <Loader2 className="h-4 w-4 animate-spin me-2" />
                   )}
                   {t("devApps.createApp")}
                 </Button>
@@ -518,7 +522,7 @@ export default function DeveloperAppsPage() {
               onClick={() => deletingId && handleDelete(deletingId)}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin me-2" />}
               {t("devApps.delete")}
             </Button>
           </DialogFooter>

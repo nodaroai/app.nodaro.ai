@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { X, FileText, Loader2, Download } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useImportableWorkflows } from "@/hooks/queries/use-editor-queries"
+import { useT } from "@/lib/i18n"
 import type { CharacterDefinition } from "@/types/nodes"
 
 interface ImportCharacterModalProps {
@@ -22,12 +23,13 @@ export function ImportCharacterModal({
   existingNames,
   projectId,
 }: ImportCharacterModalProps) {
+  const t = useT()
   const { data: workflows = [], isLoading: loading, error: queryError } = useImportableWorkflows(
     projectId,
     currentWorkflowId,
     isOpen,
   )
-  const error = queryError instanceof Error ? queryError.message : queryError ? "Failed to load workflows" : ""
+  const error = queryError instanceof Error ? queryError.message : queryError ? t("entity.loadWorkflowsFailed") : ""
 
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("")
   const [selectedCharIds, setSelectedCharIds] = useState<Set<string>>(new Set())
@@ -90,7 +92,7 @@ export function ImportCharacterModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h3 className="text-sm font-semibold">Import Characters from Workflow</h3>
+          <h3 className="text-sm font-semibold">{t("entity.importCharactersTitle")}</h3>
           <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-muted">
             <X className="w-4 h-4" />
           </button>
@@ -108,7 +110,7 @@ export function ImportCharacterModal({
 
           {!loading && workflows.length === 0 && !error && (
             <p className="text-xs text-muted-foreground text-center py-8">
-              No other workflows with characters found.
+              {t("entity.noWorkflowsWithCharacters")}
             </p>
           )}
 
@@ -116,7 +118,7 @@ export function ImportCharacterModal({
             <>
               {/* Workflow selector */}
               <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Select Workflow</label>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">{t("entity.selectWorkflow")}</label>
                 <select
                   value={selectedWorkflowId}
                   onChange={(e) => {
@@ -125,10 +127,10 @@ export function ImportCharacterModal({
                   }}
                   className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
                 >
-                  <option value="">Choose a workflow...</option>
+                  <option value="">{t("entity.chooseWorkflow")}</option>
                   {workflows.map((w) => (
                     <option key={w.id} value={w.id}>
-                      {w.name} ({w.characters.length} character{w.characters.length !== 1 ? "s" : ""})
+                      {w.name} {w.characters.length === 1 ? t("entity.characterCountOne") : t("entity.characterCountMany", { n: w.characters.length })}
                     </option>
                   ))}
                 </select>
@@ -138,10 +140,10 @@ export function ImportCharacterModal({
               {selectedWorkflow && (
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-2">
-                    Characters ({importableChars.length} available)
+                    {t("entity.charactersAvailable", { n: importableChars.length })}
                   </label>
                   {importableChars.length === 0 && duplicateChars.length > 0 && (
-                    <p className="text-xs text-muted-foreground">All characters already exist in current workflow.</p>
+                    <p className="text-xs text-muted-foreground">{t("entity.allCharactersExist")}</p>
                   )}
                   <div className="grid grid-cols-3 gap-2">
                     {importableChars.map((char) => {
@@ -166,7 +168,7 @@ export function ImportCharacterModal({
                           <span className={`text-[9px] px-1.5 py-0.5 rounded ${
                             char.type === "reference" ? "bg-blue-500/10 text-blue-500" : "bg-orange-500/10 text-orange-500"
                           }`}>
-                            {char.type === "reference" ? "ref" : "desc"}
+                            {char.type === "reference" ? t("entity.badgeRef") : t("entity.badgeDesc")}
                           </span>
                         </button>
                       )
@@ -174,7 +176,9 @@ export function ImportCharacterModal({
                   </div>
                   {duplicateChars.length > 0 && (
                     <p className="text-[10px] text-muted-foreground mt-2">
-                      Skipped {duplicateChars.length} character{duplicateChars.length !== 1 ? "s" : ""} already in current workflow: {duplicateChars.map((c) => c.name).join(", ")}
+                      {duplicateChars.length === 1
+                        ? t("entity.skippedCharactersOne", { names: duplicateChars.map((c) => c.name).join(", ") })
+                        : t("entity.skippedCharactersMany", { n: duplicateChars.length, names: duplicateChars.map((c) => c.name).join(", ") })}
                     </p>
                   )}
                 </div>
@@ -190,7 +194,7 @@ export function ImportCharacterModal({
             onClick={onClose}
             className="px-3 py-1.5 text-xs rounded-md border hover:bg-muted transition-colors"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -199,7 +203,7 @@ export function ImportCharacterModal({
             className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             <Download className="w-3 h-3" />
-            Import {selectedCharIds.size > 0 ? `(${selectedCharIds.size})` : "Selected"}
+            {selectedCharIds.size > 0 ? t("entity.importCount", { n: selectedCharIds.size }) : t("entity.importSelected")}
           </button>
         </div>
       </div>

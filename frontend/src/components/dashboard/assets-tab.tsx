@@ -1,9 +1,12 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
+
 export function AssetsTab() {
+  const t = useT()
   return (
     <div className="text-sm text-muted-foreground py-8 text-center">
-      Asset gallery coming soon. Generated images and videos will appear here.
+      {t("dash.assetsComingSoon")}
     </div>
   )
 }

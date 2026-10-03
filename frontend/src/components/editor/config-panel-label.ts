@@ -18,6 +18,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "web-scrape": "Web Scrape",
   "meta-ads-scrape": "Meta Ads",
   "instagram-scrape": "Instagram",
+  "social-search": "Social Search",
   "video-analysis": "Video Analysis",
   "video-audit": "AI Audit",
   "reference-audio": "Reference Audio",
@@ -95,7 +96,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "voice-design": "Voice Design",
   "forced-alignment": "Forced Alignment",
   "suno-voice": "Suno Voice",
-  "suno-generate": "Suno Generate",
+  "suno-generate": "Suno Create Music",
   "suno-cover": "Suno Cover",
   "suno-extend": "Suno Extend",
   "suno-lyrics": "Suno Lyrics",
@@ -116,9 +117,12 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "combine-videos": "Combine Videos",
   "apply-edl": "Apply EDL",
   "edit-plan": "Edit Plan",
+  "content-recipe": "Content Recipe",
+  "content-ideas": "Content Ideas",
   "assemble-narrated-video": "Assemble Narrated Video",
   "image-collage": "Image Collage",
   "image-overlay": "Image Overlay",
+  "video-overlay": "Video Overlay",
   "merge-video-audio": "Merge Video & Audio",
   "add-captions": "Add Captions",
   "resize-video": "Resize Video",
@@ -127,6 +131,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "split-media": "Split into Chunks",
   "extract-audio": "Extract Audio",
   "silence-detect": "Silence Detect",
+  "audio-sync": "Audio Sync",
   "remove-audio": "Remove Audio",
   "mix-audio": "Mix Audio",
   "combine-audio": "Combine Audio",
@@ -185,6 +190,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "publish-social": "Publish to Social",
   "telegram-channel-feed": "Telegram Channel Feed",
   "telegram-trigger": "Telegram Trigger",
+  "telegram-account-trigger": "Telegram Account Trigger",
   "teleport-send": "Teleport Send",
   "teleport-receive": "Teleport Receive",
   "router": "Router",
@@ -206,7 +212,7 @@ export function getNodeTypeDisplayName(type: string): string {
 
 /**
  * The label the palette PERSISTS for a node type (`NODE_DEFINITIONS[].label`,
- * mirrored into `defaultData.label`) — the exact string `NODE_LABELS_HE` is
+ * mirrored into `defaultData.label`) — the exact string the `node` label tables are
  * keyed by. The Label field's round-trip (show localized → commit English)
  * compares against THIS, so it can never disagree with what the node stores.
  */

@@ -1,5 +1,6 @@
 import { resolveNodeRefs, readPromptAffixes, type PromptAffixes } from "@nodaro/shared"
 import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
+import { joinSentences } from "./hint-join.js"
 
 export interface ResolvePromptArgs {
   override?: string
@@ -72,7 +73,8 @@ export function applyPromptAffixes(
  *  override (list fan-out) > first present typed candidate > wired > "".
  *  "present" = non-empty after trim. {Label} refs are resolved on the chosen
  *  branch via the shared resolveNodeRefs. With `appendWired`, the chosen base
- *  AND the wired value are both emitted (joined ". "). Affixes wrap the result. */
+ *  AND the wired value are both emitted, joined as sentences (`joinSentences`:
+ *  ". ", or a space after one that already ends). Affixes wrap the result. */
 export function resolvePrompt({ override, typed = [], wired, refMap, appendWired, affixes }: ResolvePromptArgs): string {
   return applyPromptAffixes(resolveCore({ override, typed, wired, refMap, appendWired }), affixes, refMap)
 }
@@ -83,7 +85,7 @@ function resolveCore({ override, typed = [], wired, refMap, appendWired }: Omit<
   // so per-item fan-out prompts are unchanged.
   if (appendWired && !present(override)) {
     const base = typed.find(present)
-    return [base, wired].filter(present).map((s) => rr(s, refMap)).join(". ")
+    return joinSentences([base, wired].filter(present).map((s) => rr(s, refMap)))
   }
   if (present(override)) return rr(override, refMap)
   for (const t of typed) if (present(t)) return rr(t, refMap)
@@ -92,13 +94,13 @@ function resolveCore({ override, typed = [], wired, refMap, appendWired }: Omit<
 }
 
 /** Compose a final NEGATIVE prompt from a TYPED base + a WIRED (connected
- *  negative-handle) value: both are emitted, joined ". " (mirrors `appendWired`
+ *  negative-handle) value: both are emitted, joined as sentences (`joinSentences`, mirrors `appendWired`
  *  for the positive prompt). Pure join — the caller resolves `{label}` refs on
  *  the typed value first, and the wired value is already a resolved output that
  *  the input-resolver has filtered (referenced / Inject-Negative-off dropped).
  *  Generate-image / generate-video only; empty parts are dropped. */
 export function composeNegative(typed?: string, wired?: string): string {
-  return [typed, wired].filter(present).join(". ")
+  return joinSentences([typed, wired])
 }
 
 /** Ordered typed-candidate fields per node type — the precedence source of
@@ -183,4 +185,20 @@ export function computeLlmChatFields(
     userInput: resolvePrompt({ override, typed: [data.userInput as string | undefined], wired: wiredUserInput, refMap, affixes: readPromptAffixes(data) }),
     systemPrompt: resolvePrompt({ typed: [data.systemPrompt as string | undefined], wired: wiredSystemPrompt, refMap }),
   }
+}
+
+/** generate-script's topic. Both engines call this, so a wired Text node reads
+ *  the same on a single-node run and a server run.
+ *
+ *  Precedence is override (a list fan-out item) > wired > `data.prompt`. Wired
+ *  comes BEFORE the typed field, the reverse of `computeNodePrompt`, because
+ *  `data.prompt` has no editor: the panel's text field is the style guide. A
+ *  value there was written by the old connect-time `{Label}` auto-fill or by an
+ *  agent, and it is kept only as the fallback that saved workflows rely on. */
+export function computeScriptTopic(
+  data: Record<string, unknown>,
+  { override, wired, refMap }: Omit<ComputeNodePromptArgs, "appendWired">,
+): string {
+  const core = [override, wired, data.prompt as string | undefined].find(present)
+  return applyPromptAffixes(core === undefined ? "" : rr(core, refMap), readPromptAffixes(data), refMap)
 }

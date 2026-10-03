@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { ChevronDown, ChevronUp, Eye, EyeOff, Wand2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 interface Effect {
   type: string
@@ -27,15 +28,15 @@ interface AfterEffectsPreviewProps {
   isGenerating?: boolean
 }
 
-const EFFECT_LABELS: Record<string, string> = {
-  "color-grade": "Color Grade",
-  vignette: "Vignette",
-  "film-grain": "Film Grain",
-  "noise-overlay": "Noise Overlay",
-  letterbox: "Letterbox",
-  "motion-blur": "Motion Blur",
-  "animated-blur": "Animated Blur",
-  trail: "Trail",
+const EFFECT_LABELS: Record<string, MessageKey> = {
+  "color-grade": "preview.fxColorGrade",
+  vignette: "preview.fxVignette",
+  "film-grain": "preview.fxFilmGrain",
+  "noise-overlay": "preview.fxNoiseOverlay",
+  letterbox: "preview.fxLetterbox",
+  "motion-blur": "preview.fxMotionBlur",
+  "animated-blur": "preview.fxAnimatedBlur",
+  trail: "preview.fxTrail",
 }
 
 function EffectEditor({
@@ -45,9 +46,11 @@ function EffectEditor({
   effect: Effect
   onChange: (updated: Effect) => void
 }) {
+  const t = useT()
   const [expanded, setExpanded] = useState(false)
 
-  const label = EFFECT_LABELS[effect.type] ?? effect.type
+  const labelKey = EFFECT_LABELS[effect.type]
+  const label = labelKey ? t(labelKey) : effect.type
 
   return (
     <div className="border border-[var(--border-primary)] rounded-md overflow-hidden">
@@ -67,68 +70,68 @@ function EffectEditor({
         <div className="px-3 pb-3 flex flex-col gap-2">
           {effect.type === "color-grade" && (
             <>
-              <SliderField label="Brightness" value={effect.brightness as number ?? 1} min={0.5} max={2} step={0.05} onChange={(v) => onChange({ ...effect, brightness: v })} />
-              <SliderField label="Contrast" value={effect.contrast as number ?? 1} min={0.5} max={2} step={0.05} onChange={(v) => onChange({ ...effect, contrast: v })} />
-              <SliderField label="Saturation" value={effect.saturation as number ?? 1} min={0} max={3} step={0.05} onChange={(v) => onChange({ ...effect, saturation: v })} />
-              <SliderField label="Temperature" value={effect.temperature as number ?? 0} min={-100} max={100} step={1} onChange={(v) => onChange({ ...effect, temperature: v })} />
+              <SliderField label={t("preview.brightness")} value={effect.brightness as number ?? 1} min={0.5} max={2} step={0.05} onChange={(v) => onChange({ ...effect, brightness: v })} />
+              <SliderField label={t("preview.contrast")} value={effect.contrast as number ?? 1} min={0.5} max={2} step={0.05} onChange={(v) => onChange({ ...effect, contrast: v })} />
+              <SliderField label={t("preview.saturation")} value={effect.saturation as number ?? 1} min={0} max={3} step={0.05} onChange={(v) => onChange({ ...effect, saturation: v })} />
+              <SliderField label={t("preview.temperature")} value={effect.temperature as number ?? 0} min={-100} max={100} step={1} onChange={(v) => onChange({ ...effect, temperature: v })} />
             </>
           )}
           {effect.type === "vignette" && (
             <>
-              <SliderField label="Intensity" value={effect.intensity as number ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...effect, intensity: v })} />
-              <SliderField label="Radius" value={effect.radius as number ?? 0.7} min={0.2} max={1} step={0.05} onChange={(v) => onChange({ ...effect, radius: v })} />
+              <SliderField label={t("paramcfg.intensity")} value={effect.intensity as number ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...effect, intensity: v })} />
+              <SliderField label={t("preview.radius")} value={effect.radius as number ?? 0.7} min={0.2} max={1} step={0.05} onChange={(v) => onChange({ ...effect, radius: v })} />
             </>
           )}
           {effect.type === "film-grain" && (
             <>
-              <SliderField label="Intensity" value={effect.intensity as number ?? 0.3} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...effect, intensity: v })} />
-              <SliderField label="Size" value={effect.size as number ?? 2} min={1} max={4} step={0.1} onChange={(v) => onChange({ ...effect, size: v })} />
+              <SliderField label={t("paramcfg.intensity")} value={effect.intensity as number ?? 0.3} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...effect, intensity: v })} />
+              <SliderField label={t("preview.size")} value={effect.size as number ?? 2} min={1} max={4} step={0.1} onChange={(v) => onChange({ ...effect, size: v })} />
             </>
           )}
           {effect.type === "noise-overlay" && (
             <>
-              <SliderField label="Opacity" value={effect.opacity as number ?? 0.1} min={0} max={0.5} step={0.01} onChange={(v) => onChange({ ...effect, opacity: v })} />
-              <SliderField label="Scale" value={effect.scale as number ?? 0.005} min={0.001} max={0.01} step={0.001} onChange={(v) => onChange({ ...effect, scale: v })} />
+              <SliderField label={t("proccfg.overlay.opacity")} value={effect.opacity as number ?? 0.1} min={0} max={0.5} step={0.01} onChange={(v) => onChange({ ...effect, opacity: v })} />
+              <SliderField label={t("preview.scale")} value={effect.scale as number ?? 0.005} min={0.001} max={0.01} step={0.001} onChange={(v) => onChange({ ...effect, scale: v })} />
             </>
           )}
           {effect.type === "letterbox" && (
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] text-muted-foreground">Aspect Ratio</span>
+              <span className="text-[10px] text-muted-foreground">{t("field.aspectRatio")}</span>
               <Select
                 value={String(effect.ratio ?? 2.35)}
                 onValueChange={(v) => onChange({ ...effect, ratio: parseFloat(v) })}
               >
-                <SelectTrigger className="h-7 text-xs" aria-label="Aspect ratio">
+                <SelectTrigger className="h-7 text-xs" aria-label={t("paramcfg.aspectRatio")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="2.35">2.35:1 (Cinemascope)</SelectItem>
-                  <SelectItem value="2.39">2.39:1 (Anamorphic)</SelectItem>
-                  <SelectItem value="1.85">1.85:1 (Widescreen)</SelectItem>
-                  <SelectItem value="2.76">2.76:1 (Ultra Panavision)</SelectItem>
+                  <SelectItem value="2.35">{t("preview.ratioCinemascope")}</SelectItem>
+                  <SelectItem value="2.39">{t("preview.ratioAnamorphic")}</SelectItem>
+                  <SelectItem value="1.85">{t("preview.ratioWidescreen")}</SelectItem>
+                  <SelectItem value="2.76">{t("preview.ratioUltraPanavision")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           )}
           {effect.type === "motion-blur" && (
             <>
-              <SliderField label="Shutter Angle" value={effect.shutterAngle as number ?? 180} min={0} max={360} step={1} onChange={(v) => onChange({ ...effect, shutterAngle: v })} />
-              <SliderField label="Samples" value={effect.samples as number ?? 10} min={1} max={8} step={1} onChange={(v) => onChange({ ...effect, samples: v })} />
+              <SliderField label={t("preview.shutterAngle")} value={effect.shutterAngle as number ?? 180} min={0} max={360} step={1} onChange={(v) => onChange({ ...effect, shutterAngle: v })} />
+              <SliderField label={t("preview.samples")} value={effect.samples as number ?? 10} min={1} max={8} step={1} onChange={(v) => onChange({ ...effect, samples: v })} />
             </>
           )}
           {effect.type === "animated-blur" && (
             <>
-              <SliderField label="Start Blur" value={effect.startBlur as number ?? 20} min={0} max={50} step={1} onChange={(v) => onChange({ ...effect, startBlur: v })} />
-              <SliderField label="End Blur" value={effect.endBlur as number ?? 0} min={0} max={50} step={1} onChange={(v) => onChange({ ...effect, endBlur: v })} />
-              <SliderField label="Start Frame" value={effect.startFrame as number ?? 0} min={0} max={600} step={1} onChange={(v) => onChange({ ...effect, startFrame: v })} />
-              <SliderField label="Duration (frames)" value={effect.durationFrames as number ?? 60} min={1} max={300} step={1} onChange={(v) => onChange({ ...effect, durationFrames: v })} />
+              <SliderField label={t("preview.startBlur")} value={effect.startBlur as number ?? 20} min={0} max={50} step={1} onChange={(v) => onChange({ ...effect, startBlur: v })} />
+              <SliderField label={t("preview.endBlur")} value={effect.endBlur as number ?? 0} min={0} max={50} step={1} onChange={(v) => onChange({ ...effect, endBlur: v })} />
+              <SliderField label={t("vidcfg.startFrame")} value={effect.startFrame as number ?? 0} min={0} max={600} step={1} onChange={(v) => onChange({ ...effect, startFrame: v })} />
+              <SliderField label={t("preview.durationFrames")} value={effect.durationFrames as number ?? 60} min={1} max={300} step={1} onChange={(v) => onChange({ ...effect, durationFrames: v })} />
             </>
           )}
           {effect.type === "trail" && (
             <>
-              <SliderField label="Layers" value={effect.layers as number ?? 3} min={1} max={5} step={1} onChange={(v) => onChange({ ...effect, layers: v })} />
-              <SliderField label="Lag (frames)" value={effect.lagInFrames as number ?? 1.5} min={0.5} max={5} step={0.5} onChange={(v) => onChange({ ...effect, lagInFrames: v })} />
-              <SliderField label="Opacity" value={effect.trailOpacity as number ?? 0.4} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...effect, trailOpacity: v })} />
+              <SliderField label={t("node.overlayLayers")} value={effect.layers as number ?? 3} min={1} max={5} step={1} onChange={(v) => onChange({ ...effect, layers: v })} />
+              <SliderField label={t("preview.lagFrames")} value={effect.lagInFrames as number ?? 1.5} min={0.5} max={5} step={0.5} onChange={(v) => onChange({ ...effect, lagInFrames: v })} />
+              <SliderField label={t("proccfg.overlay.opacity")} value={effect.trailOpacity as number ?? 0.4} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...effect, trailOpacity: v })} />
             </>
           )}
         </div>
@@ -178,6 +181,7 @@ export function AfterEffectsPreview({
   onRegenerate,
   isGenerating,
 }: AfterEffectsPreviewProps) {
+  const t = useT()
   // Track all effects (including disabled) separately from the plan
   const [allEffects, setAllEffects] = useState<Effect[]>(() => (effectPlan.effects as Effect[]) ?? [])
   const textOverlays = useMemo(() => (effectPlan.textOverlays as TextOverlay[]) ?? [], [effectPlan])
@@ -215,7 +219,7 @@ export function AfterEffectsPreview({
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-[var(--text-primary)]">
-          Effect Plan ({allEffects.length} effects)
+          {t("preview.effectPlanCount", { n: allEffects.length })}
         </span>
         {onRegenerate && (
           <Button
@@ -225,7 +229,7 @@ export function AfterEffectsPreview({
             onClick={onRegenerate}
             disabled={isGenerating}
           >
-            Regenerate
+            {t("common.regenerate")}
           </Button>
         )}
       </div>
@@ -237,7 +241,7 @@ export function AfterEffectsPreview({
               type="button"
               className="mt-2 shrink-0"
               onClick={() => toggleEffect(i)}
-              title={disabledEffects.has(i) ? "Enable effect" : "Disable effect"}
+              title={disabledEffects.has(i) ? t("preview.enableEffect") : t("preview.disableEffect")}
             >
               {disabledEffects.has(i) ? (
                 <EyeOff className="w-3 h-3 text-muted-foreground/50" />
@@ -258,7 +262,7 @@ export function AfterEffectsPreview({
       {textOverlays.length > 0 && (
         <div className="flex flex-col gap-1.5 mt-2">
           <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-            Text Overlays
+            {t("preview.textOverlays")}
           </span>
           {textOverlays.map((overlay, i) => (
             <div

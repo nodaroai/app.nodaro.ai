@@ -663,8 +663,16 @@ re-project a workflow (`{ data: { synced, created, updated, removed } }`).
 Its optional body `{ vouchNodeIds: [...] }` names the trigger nodes the
 caller just added; only an owner's own browser session can vouch, and only
 those rows count as the owner's own runs for a plain stored credential.
+Likewise `accountNodes: [{ id, settings }]` names the Telegram Account
+Triggers the owner's editor changed, each with the listening settings it set
+(`telegramAccountListeningSignature` in `@nodaro/shared`): only the owner's
+own browser session can name them, and one is armed, widened or re-pointed
+only while the stored node still says exactly that. Any other save made as
+the owner (a token, a connected app, MCP) can switch an account trigger off,
+never on.
 Inspect a workflow's triggers with `GET /v1/workflows/<id>/triggers`; pause
-or resume one with `PATCH /v1/workflow-triggers/<id>`. Triggers you create directly with
+or resume one with `PATCH /v1/workflow-triggers/<id>` (a Telegram Account
+Trigger's row can only be paused there: it is started in the editor). Triggers you create directly with
 `POST /v1/workflow-triggers` are not managed by any node, so saving the
 workflow never changes or removes them.
 
@@ -783,6 +791,7 @@ All errors share the same shape:
 | 404 | `workspace_not_found` | — | (Cloud edition, organizations) The workspace named by workspace-paid work does not exist (or was deleted mid-flight). Rollout-gated. |
 | 409 | `workspace_archived` | — | (Cloud edition, organizations) Workspace-paid work into an archived workspace. Unarchive it or move the work. Rollout-gated. |
 | 409 | `retained_image_in_use` | — | A delete would remove protected image bytes, or a production has active jobs using retained images. Finish or cancel active jobs before deleting the production. |
+| 409 | `workflow_conflict` | `currentVersion`, `currentUpdatedAt`, `currentRecord` | `PATCH /v1/workflows/:id`: the workflow changed since your `expectedVersion` / `expectedUpdatedAt` — merge onto `currentRecord` and save again (see [`workflows.update`](./sdk-reference.md#updateid-input)). An edges-only save (`edges` without `nodes`) that wires a [Video Overlay](./nodes/processing-video/video-overlay.md) layer rewrites that node and returns `409 workflow_conflict` (with `currentVersion` / `currentRecord`) if the workflow changed since it was read — even when you sent no `expectedVersion`; nothing is overwritten and the save is not retried. |
 | 422 | `job_blocked` | — | A job policy registered by this deployment refused the generation before it ran. `message` is user-facing text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is. No job was created and nothing was charged. The platform does not retry a refused request; whether the same request would be judged differently is the deployment's policy's business. Only occurs on deployments that register a job policy — see [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile). Two bookkeeping inserts are the honest exception: the Suno voice-persona ownership rows and the connected-cloud LLM mirror row treat a block as best-effort — the operation proceeds and its row is simply not recorded — so a policy blocking one of those neither stops the call nor reaches you as a 422. |
 | 422 | `upload_blocked` | — | An upload policy registered by this deployment refused the upload before it was stored (every byte-carrying ingestion lane: `POST /v1/upload*`, the proxy PUT and the handoff POST). `message` is the deployment's own reason — show it as-is. Nothing was written. Only occurs on deployments that register an upload policy. |
 | 429 | `rate_limited` | — | You've exceeded the per-minute bucket. Back off. |
@@ -1192,7 +1201,7 @@ node type the server has registered without hard-coding a list.
 | `GET` | `/v1/nodes/:type` | Return a single descriptor by node type string. 404 `not_found` when the type doesn't exist. |
 
 `NodeDescriptor` fields (subset): `type`, `label`, `category`,
-`outputType`, `creditCost` (static credit cost when known — Cloud only; community and business installs have no credit system and omit the field), `inputSchema`
+`outputType`, `creditCost` (the credits a run is charged, the same figure as the node's Run button: one number for a flat price, a `"min-max"` range for a node priced per model or setting — Cloud only; community and business installs have no credit system and omit the field), `inputSchema`
 (JSON Schema for the node's config fields), `providers` (supported
 provider slugs), `capabilities` (feature flags the node exposes). Nodes
 with per-model constraints carry additional discovery fields —
@@ -1209,8 +1218,11 @@ forward-compatible.
 Every AI prompt node also lists `promptPrefix` and `promptSuffix` (`text`) in
 `inputSchema` — see [Prompt pre & post text](./prompt-pre-post-text.md).
 
-Neither endpoint requires authentication; they expose only static
-registry metadata. No scopes required.
+Neither endpoint requires authentication; they expose only registry
+metadata and prices. No scopes required. Both describe what a USER of the
+instance can use: a node the deployment withholds from users is absent, and
+Web Scrape's description leaves out any source it withdraws (its Instagram
+source follows the Instagram node's availability).
 
 ### Model catalog
 
@@ -1220,8 +1232,9 @@ minutes (`Cache-Control: public, max-age=300`). Returns
 `{ sections, recommendations, totalModels }`: models grouped by kind
 (`image` / `video` / `audio`) and vendor family, each with capability
 sheets (`modes`, `features`, `aspectRatios`, `resolutions`, `durations`),
-per-variant credit `pricing` (Cloud only — like `creditCost` on
-`/v1/nodes`, editions without a credit system omit it), compact
+per-variant credit `pricing` — the credits a run is charged, the price
+`GET /v1/credits/model-cost` returns for that variant (Cloud only — like
+`creditCost` on `/v1/nodes`, editions without a credit system omit it), compact
 `promptTips`, and the
 `doctrineCovered` truth flag (`true` only when a sourced per-family prompt
 doctrine exists — gate "vendor doctrine" badges on it; never overclaim).
@@ -1810,7 +1823,7 @@ discovery (`Cache-Control: public, max-age=300`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/picker-catalogs` | Directory of every picker (`{ data: PickerCatalogSummary[] }`) — each `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount }`. |
+| `GET` | `/v1/picker-catalogs` | Directory of every picker (`{ data: PickerCatalogSummary[] }`) — each `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount, imageCount }`; `imageCount` is how many of its options carry an `imageUrl` (0 = no pictures). |
 | `GET` | `/v1/picker-catalogs/:nodeType` | One picker's catalog (`{ data: PickerCatalog }`). 404 `not_found` for an unknown type. |
 
 `GET /v1/picker-catalogs/:nodeType` accepts these query params (a bad value
@@ -1818,7 +1831,7 @@ returns 400 `validation_error`):
 
 | Param | Values | Purpose |
 |---|---|---|
-| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`. `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
+| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`, `imageUrl` (when the option has a picture). `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
 | `category` | string | Single-dim pickers: filter options to one category. |
 | `field` | string | Return only this dimension's field — multi-dim pickers (person / styling / framing), and the secondary parameters of a single-dim picker (transition / character-fx: `position` / `duration` / `intensity`; character-motion: `position` / `pace`). |
 
@@ -1838,6 +1851,52 @@ catalogs that ship as pure data in [`@nodaro/shared`](https://www.npmjs.com/pack
 [Parameter Picker Catalogs](picker-catalogs.md)); the REST endpoints exist for
 clients that can't.
 
+#### Pictures (`imageUrl`, `sections`)
+
+Every option that has a picture carries an **absolute** `imageUrl`, at both
+detail levels, in `options` and in `dimensions[].options` alike; an option
+without one simply has no `imageUrl`. These are the pictures the editor's
+pickers show:
+
+| Pickers | Picture |
+|---|---|
+| `person`, `styling`, `held-prop`, `material`, `animal` | A photo, WebP, up to 480px wide. |
+| `music-genre`, `music-mood`, `instrumentation`, `voice-character`, `voice-delivery` | A 3D emoji (WebP, 128px) or a flag (WebP, 120px wide). |
+| Look pickers (`style`, `color-look`, `lens`, `framing`, `lighting`, `mood`, `camera-format`, `camera-motion`, …) | Nodaro Cloud only: a 480px still of the rendered preview from the Nodaro CDN (a frame of the clip for `camera-motion`). A self-hosted install returns none. |
+
+- **Host.** Self-hosted pictures are served by the installation itself under
+  `/picker-art/`, so `imageUrl` uses its public address — `PUBLIC_URL`
+  (Nodaro Cloud: `https://app.nodaro.ai`; a self-hosted install: its own
+  `PUBLIC_URL`, e.g. `http://localhost:3000`). Use the URL as given; never
+  build one from an option id.
+- **Caching.** File names carry a content hash, so a changed picture gets a
+  new URL; they are served with `Cache-Control: public, max-age=31536000,
+  immutable` and `Access-Control-Allow-Origin: *` (usable from `<img>`,
+  `fetch` and canvas on any origin).
+- **Topics.** `person` and `styling` also return `sections`: the topics the
+  editor groups their settings under, in order — each `{ label, fields,
+  imageUrl? }`, where `fields` are the node-data fields of the settings in
+  that topic (`Identity` → `type`, `age`, `ethnicity`, `regionalAesthetic`)
+  and `imageUrl` is the topic's round picture.
+
+```bash
+curl -s https://app.nodaro.ai/v1/picker-catalogs/person | jq '.data.sections[0], .data.dimensions[0].options[0]'
+```
+
+```json
+{ "label": "Identity", "fields": ["type", "age", "ethnicity", "regionalAesthetic"],
+  "imageUrl": "https://app.nodaro.ai/picker-art/character/sections/identity.2d5ec1a4.webp" }
+{ "id": "man", "label": "Man", "term": "man",
+  "imageUrl": "https://app.nodaro.ai/picker-art/character/person/man.441363db.webp" }
+```
+
+A look picker on Nodaro Cloud (`/v1/picker-catalogs/mood`):
+
+```json
+{ "id": "happy", "label": "Happy", "category": "positive", "term": "happy expression",
+  "imageUrl": "https://cdn.nodaro.ai/cdn-cgi/image/width=480,format=auto,quality=80/images/710df65a-3c1e-485b-b8b7-29f7b3baf479.png" }
+```
+
 ### Catalogs (server-driven projection)
 
 `GET /v1/catalogs` returns **every** picker catalog in one call, projected to a
@@ -1851,15 +1910,15 @@ catalogs. Public, no auth, same 5-minute cache (`Cache-Control: public, max-age=
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/catalogs` | Every registered catalog (`{ data: ProjectedCatalog[] }`). |
+| `GET` | `/v1/catalogs` | Every registered catalog: `{ curated, packs, version, data? }`. `data: ProjectedCatalog[]` is present only when the deployment registered catalog packs (`curated: true`); with none (`curated: false`) the catalogs are the bundled ones, served per picker by `/v1/picker-catalogs/:nodeType`. |
 
 Query param (a bad value returns 400 `validation_error`):
 
 | Param | Values | Purpose |
 |---|---|---|
-| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`. `full`: additionally includes each option's `description` and `promptHint`. |
+| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`, `imageUrl` (when the option has a picture). `full`: additionally includes each option's `description` and `promptHint`. |
 
-Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, defaultValue?, categoryOrder?, categoryLabels?, detail, options?, fields?, dimensions? }` — single-dim catalogs carry `options`; multi-dim catalogs carry `dimensions` (one `{ field, label, options }` per field); a single-dim catalog with secondary parameter fields (`transition`, `character-fx`: `position` / `duration` / `intensity`; `character-motion`: `position` / `pace`) carries both. Each option is `{ id, label, category?, term, icon?, description?, promptHint? }`; `term` rides at **both** detail levels so a thin client can render `label` and inject the compact professional term without a second `detail=full` fetch. The shape is deliberately tag/policy-free.
+Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, defaultValue?, categoryOrder?, categoryLabels?, detail, options?, fields?, dimensions?, sections? }` — single-dim catalogs carry `options`; multi-dim catalogs carry `dimensions` (one `{ field, label, options }` per field); a single-dim catalog with secondary parameter fields (`transition`, `character-fx`: `position` / `duration` / `intensity`; `character-motion`: `position` / `pace`) carries both. Each option is `{ id, label, category?, term, icon?, imageUrl?, description?, promptHint? }` — `imageUrl` and `sections` follow the [picture rules above](#pictures-imageurl-sections); `term` rides at **both** detail levels so a thin client can render `label` and inject the compact professional term without a second `detail=full` fetch. The shape is deliberately tag/policy-free.
 
 ### Text → pickers (AI Fill)
 
@@ -1916,7 +1975,7 @@ symmetric**: `maxTokens` applies on every call — a deliberate departure from
 the LLM routes that put both levers behind the Advanced-mode gate —
 while `temperature` is **silently ignored** unless you also send
 `advancedMode: true`. Advanced mode pins the call to the vendor's own API,
-where those levers take effect, and therefore bills **one credit tier up**;
+where those levers take effect, and therefore bills **one credit tier up** (capped at premium);
 asking for it on a model with no direct lane is a 400
 `advanced_mode_unsupported`. The call is
 **synchronous and a single call may run several minutes**: each attempt is
@@ -2123,6 +2182,22 @@ editor but are equally suited to external polling clients. `input_data` and
 private pre-watermark remux base are removed recursively for every caller,
 including administrators.
 
+### How long a component run may take
+
+`POST /v1/component/execute` answers `202 { jobId }` and runs the component in the
+background; poll that wrapper job like any other. The server gives the run 90 minutes,
+plus the time budget of any long render inside it (today: an Apply EDL final render,
+whose budget is sized from its edit). A client that polls with its own time limit can ask
+how long the server will wait:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/component/execute/:jobId/wait-limit` | `{ data: { budgetExcessMs, waitLimitMs, pendingBudgetedNodes } }` — `waitLimitMs` is the server's wait on this run (90 minutes + `budgetExcessMs`); `budgetExcessMs` is `0` until the run has started a long render. `pendingBudgetedNodes` is `true` while the run still has a long render it has not started yet (and while the run has not started at all), so a `0` excess does not yet mean "nothing long inside". Both can change while the run goes on, so ask again when `waitLimitMs` is reached. Owner-only (404 on a foreign or non-component job); `jobs:read` scope with an OAuth token. |
+
+The editor keeps its own 30-minute wait for a run with nothing long inside. When the run
+has started a long render it waits `waitLimitMs`; when a long render is still to come
+(`pendingBudgetedNodes`) it waits at least the server's 90 minutes, and asks again then.
+
 ### Video Pro segment estimates
 
 `POST /v1/credits/video-pro-estimate` accepts `provider`, `resolution`, `duration`, `aspectRatio`, `renderMethod`, `anchorMode`, `contextTailSec`, `planOnly`, and the Video Pro segment controls. It reads prices without creating a job or reserving credits.
@@ -2131,7 +2206,7 @@ including administrators.
 {"provider":"gemini-omni-flash","resolution":"720p","duration":12,"renderMethod":"keyframes","segmentMode":"short"}
 ```
 
-The response is `{ "data": { "credits": 660, "upperBound": true } }` in an example configuration with a 660-credit reservation. Read the live response for current prices. For Short/Long, `upperBound` identifies the pre-plan reservation limit; settlement follows the actual plan. A plan-only estimate covers the planning fee and returns `upperBound: false`.
+The response is `{ "data": { "credits": 760, "upperBound": true } }` in an example configuration with a 760-credit reservation. Read the live response for current prices. For Short/Long, `upperBound` identifies the pre-plan reservation limit; settlement follows the actual plan. A plan-only estimate covers the planning fee and returns `upperBound: false`.
 
 `segmentMode` accepts `short`, `long`, or `max` and cannot be combined with numeric `preferredSegmentSec` or explicit `segmentDurations`. Short/Long first assign complete actions to source spans. A plan-only result’s `sourceSegmentDurations` and `planCheckpoint` can be passed back as `sourceSegmentDurations` and `seedPlan` with the same mode and generation settings. See [Generate Video Pro](nodes/ai-video/generate-video-pro.md#how-segmentation-works).
 
@@ -2301,7 +2376,7 @@ orchestrator.
 
 **Response (201):** `{ pipelineId: string, clonedStages: string[], clonedEntities: number }`
 
-**Errors:** 400 (pipeline_not_completed, invalid_stage) · 404 (pipeline_not_found) · 403 (forbidden) · 401 (unauthorized)
+**Errors:** 400 (pipeline_not_completed, invalid_stage) · 404 (pipeline_not_found, also for a pipeline that is not yours) · 401 (unauthorized)
 
 **Scope (OAuth):** `pipelines:execute`
 
@@ -2437,6 +2512,131 @@ curl -s -X POST "https://app.nodaro.ai/v1/node-presets/favorites" \
 curl -s -X DELETE "https://app.nodaro.ai/v1/node-presets/favorites?nodeType=generate-image&presetId=generate-image%2Fcharacter-board" \
   -H "Authorization: Bearer $NODARO_TOKEN" | jq .
 ```
+
+## 16b. Saved posts (inspiration wall)
+
+Save a post you found (a [Social Search](./nodes/input/social-search.md) result)
+with a note and tags, then come back to it on the **Inspiration** page or feed
+it into a workflow. A save keeps a snapshot of the post, because links and
+numbers on the platform change, and the post's still is copied into your
+storage so the wall outlives the platform's expiring image links. The copy
+counts toward your storage and stays out of the media picker. One save per
+post: saving the same post again updates its note and tags.
+
+| Method | Path | Query / Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/saved-posts` | `platform`, `tag`, `q`, `cursor`, `limit` (1-100, default 40) | Your saves, newest first. Returns `{ data: SavedPost[], nextCursor }`. |
+| `POST` | `/v1/saved-posts` | body `{ post, note?, tags?, source? }` | Save a post (`post` is a `SocialPost`, exactly as Social Search returns it). `201` with the new save; `200` with the existing save when the post was already saved. |
+| `POST` | `/v1/saved-posts/lookup` | body `{ postIds }` (up to 200) | Which of these posts you saved. Returns `{ saved: [{ postId, id }] }`. |
+| `PATCH` | `/v1/saved-posts/:id` | body `{ note?, tags? }` | Change a save's note or tags. |
+| `DELETE` | `/v1/saved-posts/:id` | none | Remove a save and its copied still. Returns `{ success: true }`. |
+
+Tags are stored lower-case without a leading `#`: at most 10 per save, 40
+characters each. A comma in any script splits a tag (`"hooks, openers"` is two
+tags), and braces, quotes and backslashes are removed. A note is up to 2,000
+characters. `q` finds words in the note, the post's text and its title.
+`nextCursor` is an opaque token; pass it back as `?cursor=` for the next page
+(`null` on the last page). A cursor the list did not give out is refused with
+`400 invalid_cursor`.
+
+The post is checked before it is stored. A post without an id, a supported
+platform, an `http(s)` link, an author (`handle` and `name`) or text is refused
+with `400`; any other field of the wrong kind (a count that is not a number, a
+link that is not `http(s)`) is dropped. A post snapshot over 64 KB is refused
+with `413 post_too_large`.
+
+`thumbnailUrl` is the copied still, or `null` when there is none (the copy
+failed, or it was cleaned up under the account's
+[media retention](#8b-pay-as-you-go-accounts)); the post's own
+`media.thumbnailUrl` is then the only, expiring, link. Saving the post again
+copies the still again.
+
+OAuth app tokens need `assets:read` for the reads and `assets:write` for the
+writes (no-op for user / API-key auth: you own the resources). Saving is
+limited to 30 requests a minute per token (`429`). On a server that does not
+have saved posts yet, the reads answer empty and the writes answer
+`503 not_available`.
+
+```bash
+# Save one post from a Social Search run (post.json holds that post)
+curl -s -X POST https://app.nodaro.ai/v1/saved-posts \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --slurpfile p post.json '{post: $p[0], note: "strong hook", tags: ["hooks"]}')" | jq .
+
+# Your saved TikTok posts tagged "hooks"
+curl -s "https://app.nodaro.ai/v1/saved-posts?platform=tiktok&tag=hooks" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | {url, note}'
+```
+
+The same routes are wrapped by the SDK (`client.savedPosts`), the MCP tools
+(`save_post` / `list_saved_posts`) and the CLI (`nodaro saved-posts`).
+
+## 16c. Competitors (Nodaro Cloud)
+
+Track brands (your competitors, or your own) and get action cards: what
+happened, why it matters, what to do, each with the posts it rests on. A
+scan reads the brand's accounts and searches posts that name it, one Social
+Search page per search; see [Competitors](./features/competitors.md).
+
+| Method | Path | Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/competitors` | none | Every tracked brand: `{ data: TrackedCompetitor[] }`. |
+| `POST` | `/v1/competitors` | `{ brand, website?, accounts?, aboutPlatforms?, isOwn?, schedule? }` | Track a brand. `accounts` takes a handle or link per platform: `tiktok`, `instagram`, `youtube` (`@handle` or `youtube.com/channel/…`; an old `youtube.com/c/…` or `/user/…` link is refused), `x`, `linkedin` (company page), `meta_ads` (advertiser). A repeated `aboutPlatforms` entry counts once. `201` with the brand; `409 too_many_competitors` past 50 brands. |
+| `GET` | `/v1/competitors/:id` | none | One brand with its latest scan (posts and cards) and its scan history (counts only). |
+| `PATCH` | `/v1/competitors/:id` | any field of the above | Change it. `accounts` replaces the whole set: send every account to keep. A new `schedule` restarts its clock, so send it only to change it. While a scan of the brand runs, a change to `brand`, `accounts`, `aboutPlatforms` or `isOwn` answers `409 scan_running` (the scan was priced on them). |
+| `DELETE` | `/v1/competitors/:id` | none | Stop tracking it (its scans and cards go too). |
+| `GET` | `/v1/competitors/cards` | none | Every card from each brand's latest scan, most urgent first: `{ cards, posts }`, where `posts` holds the posts the cards rest on. |
+| `POST` | `/v1/competitor-discover` | `{ website }` | Find a brand's accounts from its website (free). Each account says whether the site linked it or it is a guess to check. |
+| `POST` | `/v1/competitor-scan` | `{ competitorId }` | Scan now. Answers `{ jobId }` at once; poll the job. |
+
+**Price.** A scan of a brand with `n` searches (`TrackedCompetitor.searches`:
+one per account, one per platform its name is searched on) costs `n`
+Social Search pages, the credit id `competitor-scan:<n>`. The scan runs the
+searches it was priced on, even if the brand changes before it starts.
+Searches that fail are not charged; if every search fails the scan fails
+and nothing is charged. Adding, reading and website lookups are free.
+
+**Schedule.** `weekly` (the default) or `daily` scans start on their own
+and are charged like a manual scan; `off` scans only on request. A scan
+that could not start (no credits, the feature not offered on your account)
+is reported on the brand as `lastScanError`.
+
+**Cards.** Each card has a `kind` (`outlier`, `launch`, `complaints`,
+`spreading`, `sound`, `mentions_up`, `pace`, `market_sound`,
+`top_in_sources`), a `priority` (1 act now, 2 opening, 3 good to know),
+`params` (the numbers to phrase it with), the ids of the posts it rests on,
+English `title` / `why` / `action`, and a `strength` from 0 to 1. The list
+comes ordered: priority, then a fixed order of kinds, then strength, across
+all your brands. Competitor scans do not produce `top_in_sources`. A scan's
+`counts.okSearches` names the searches that returned (`own:tiktok`,
+`about:reddit`); a post is new only against scans that could read its
+platform.
+
+OAuth app tokens need `assets:read` for the reads and `assets:write` for the
+writes and the website lookup; a scan spends credits, so it also needs a
+`:write` or `:execute` scope. While the tables are missing on a server the
+reads answer empty and the writes answer `503 not_available`.
+
+```bash
+# Track a brand from its website, then scan it
+curl -s -X POST https://app.nodaro.ai/v1/competitor-discover \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -d '{"website": "acme.example"}' | jq .
+curl -s -X POST https://app.nodaro.ai/v1/competitors \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -d '{"brand": "Acme", "accounts": {"tiktok": "acme", "instagram": "acme"}}' | jq '.id'
+curl -s -X POST https://app.nodaro.ai/v1/competitor-scan \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -d '{"competitorId": "<id>"}' | jq .
+
+# What to do now
+curl -s https://app.nodaro.ai/v1/competitors/cards -H "Authorization: Bearer $NODARO_TOKEN" | jq '.cards[] | {title, action}'
+```
+
+The same routes are wrapped by the SDK (`client.competitors`), the MCP tools
+(`list_competitors`, `competitor_cards`, `add_competitor`,
+`scan_competitor`) and the CLI (`nodaro competitors`).
 
 ## 17. Community
 
@@ -2715,8 +2915,10 @@ for the formula). Off Cloud, the three `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/trim-audio` | Trim/extract audio (`{ videoUrl? \| audioUrl?, startTime?, endTime?, audioFormat?: mp3\|wav\|aac }`) → job. |
 | `POST` | `/v1/add-captions` | Burn captions into a video (`{ videoUrl, text? \| captions?[] \| transcript? \| auto_transcribe?, transcribe_provider?: incredibly-fast-whisper\|elevenlabs-stt\|whisper, style?: subtitle\|word-highlight\|karaoke\|tiktok-words\|word-pop\|bouncy, position?, positionY?, fontSize?, color?, backgroundColor?, look?: outline\|clean, fontFamily?, fontWeight?, strokeColor?, strokeWidth?, uppercase?, maxWordsPerLine?, highlightColor?, animate?, wordLevel?, segments?[] }`) → job. Caption-source precedence: `captions[]` > `transcript` > `text` on `subtitle` > auto-transcription. On a top-level `subtitle` (no `segments`) `text` is burned as-is as ONE static block for the whole video — never transcribed over, with or without styling levers; omit it to caption the speech. On a kinetic style `text` is only the fallback (used when transcription returns nothing or `auto_transcribe` is `false`, spread evenly across the video). An unset `look` is `outline` on the kinetic styles and `clean` on `subtitle`. `maxWordsPerLine` (integer 1–20, optional) caps the words on one caption line — or one `tiktok-words` page — **on top of** the frame-width budget, sentence ends and ≥0.5 s pauses (`1`–`2` = the punchy CapCut read, unset = fit the width); it counts words, not caption entries (a phrase-level entry holding more than N words is split into sub-phrases of at most N words; on a `text` subtitle it only sets the line breaks of the one static block); it exists top-level and per `segments[]` entry (a segment inherits the top-level value) and is inert on `word-pop`. `word-highlight`, `karaoke` and `bouncy` show one held line at a time. `highlightColor` and `animate` are kinetic-only (`400` on `subtitle`); every other lever, `maxWordsPerLine` included, also styles a `subtitle`. A kinetic style needs a `transcribe_provider` that returns word timings (`incredibly-fast-whisper`, the default, or `elevenlabs-stt`) — `whisper` is a `400` on `transcribe_provider` there when transcription is the render's only caption source; `subtitle` needs phrase timing only and works with any engine. A bare plain-text `subtitle` is the cheap FFmpeg burn; a kinetic style, any styling lever, timed captions, auto-transcription or `segments` renders via Remotion, bills at the kinetic price and keeps the source frame rate (whole number, 15–60 fps; a variable-frame-rate or very long source renders at 30 fps). Full reference: [Add Captions](./nodes/processing-video/add-captions.md). |
 | `POST` | `/v1/silence-detect` | Detect silent spans in an audio or video source, local FFmpeg, **10 credits**, keyless (`{ audioUrl, thresholdDb?: -35, minSilenceMs?: 700, padMs?: 120 }`; `output_data.json` = `{ version, ranges: [{ startMs, endMs }], durationMs }`) → job. |
+| `POST` | `/v1/audio-sync` | Measure how far apart the clocks of 2–6 recordings of one conversation are, from their sound, local FFmpeg + correlation, **10 × (sources − 1) credits** (2 → 10, 4 → 30, 6 → 50), keyless (`{ sources: [{ id, url }] (2–6, unique ids, audio or video), reference?: <one of the ids, default the first> }`; a repeated id or a `reference` that is not one of the ids is a `400 validation_error` naming it; `output_data.json` = `{ version, reference, offsets: [{ sourceId, offsetMs, confidence, driftMsPerHour }], notes }` with `referenceMs = sourceMs + offsetMs`; drift is measured and warned in `notes` past 33 ms over the shared stretch, never corrected). Full reference: [Audio Sync](./nodes/processing-audio/audio-sync.md). → job. |
 | `POST` | `/v1/still-to-video` | One still image + one audio track → MP4, local FFmpeg, **0 credits** (`{ imageUrl, audioUrl, motion?, intensity?, resolution?, aspectRatio?, fps?, fit?, padColor? }`; output duration = the audio's duration, no duration field) → job. |
 | `POST` | `/v1/slideshow` | 2–100 images + one optional audio track → MP4 slideshow, local FFmpeg, **0 credits** (`{ imageUrls[], audioUrl?, imageDurations?[] (null=auto), perImageDuration?, transition?, transitionDuration?, motion?, intensity?, resolution?, aspectRatio?, fps?, fit?, padColor? }`; with audio the duration IS the audio's — pinned-row mismatches scale proportionally, disclosed in output) → job. |
+| `POST` | `/v1/video-overlay` | 1–20 timed image layers over a video, local FFmpeg, **20 credits** (`{ videoUrl, layers[]: { imageUrl, start, end?, preset?: card\|corner-badge\|full-frame, corner?, anchor?, x?, y?, width?, height?, fit?: contain\|cover, opacity?, animate?, zIndex? }, outputAspect?: 16:9\|9:16\|1:1\|4:5, baseFit?: cover\|contain, backgroundColor? }`; an explicit box field overrides the preset, neither = a corner badge (bottom-right, or the `corner` it names); `end` omitted = to the end of the video; base audio untouched; 30 requests / minute per user) → job; output `{ videoUrl, thumbnailUrl, width, height, durationSec, warnings[] }`. Full reference: [Video Overlay](./nodes/processing-video/video-overlay.md). |
 | `POST` | `/v1/save-to-storage` | Server-side copy of an external URL into storage (`{ mediaUrl, filename?, mediaType? }`) → job. |
 
 ### Social connections & publishing
@@ -2734,7 +2936,7 @@ Connect flows are popup-based and meant for the web app; publishing is available
 | `POST` | `/v1/social/telegram/connect` | Connect Telegram by pasting a bot token (`{ botToken }`). |
 | `POST` | `/v1/social/connect/custom` | Connect a `custom_fields` network (`{ platform, fields }`) — Bluesky, Dev.to, Hashnode, Medium, WordPress, Lemmy. Field specs come from `GET /v1/social/providers` (`customFields`); the credential is validated against the network before saving. |
 | `POST` | `/v1/social/publish` | Publish now (`{ platform, action, connectionId?, caption?, mediaUrl? \| mediaItems?, … }`) → job. 10 credits. Retry semantics differ by failure: `503 publish_retryable` means nothing was posted and the identical request is safe to re-send, while `500 publish_failed` means the outcome is unknown — re-sending it can duplicate the post. |
-| `POST` | `/v1/social/scheduled-posts` | Schedule a publish (`{ connectionId, action, scheduledAt, caption?, media?: [{type, r2Key \| url}], … }`). Media must be assets hosted on this deployment (stable refs — resolved to fresh URLs at publish time; foreign URLs are rejected). 1 credit, charged at publish. |
+| `POST` | `/v1/social/scheduled-posts` | Schedule a publish (`{ connectionId, action, scheduledAt, caption?, media?: [{type, r2Key \| url}], … }`). Media must be assets hosted on this deployment (stable refs — resolved to fresh URLs at publish time; foreign URLs are rejected). 10 credits, charged at publish. |
 | `GET` | `/v1/social/scheduled-posts?from=&to=&status=` | List the caller's scheduled posts (calendar range). |
 | `PATCH` | `/v1/social/scheduled-posts/:id` | Edit while still `queued`/`draft` (`409 not_editable` once publishing). |
 | `DELETE` | `/v1/social/scheduled-posts/:id` | Cancel a queued post (soft — history retained). |

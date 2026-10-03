@@ -36,24 +36,24 @@ Duration is derived automatically from the input video via ffprobe. The duration
 
 | Input video duration | Bucket | Credits / version |
 |----------------------|--------|------------------:|
-| ≤ 8s   | `:8s`   | 2  |
-| ≤ 15s  | `:15s`  | 2  |
-| ≤ 30s  | `:30s`  | 3  |
-| ≤ 60s  | `:60s`  | 4  |
-| ≤ 120s | `:120s` | 7  |
-| ≤ 300s | `:300s` | 14 |
+| ≤ 8s   | `:8s`   | 10  |
+| ≤ 15s  | `:15s`  | 10  |
+| ≤ 30s  | `:30s`  | 20  |
+| ≤ 60s  | `:60s`  | 30  |
+| ≤ 120s | `:120s` | 50  |
+| ≤ 300s | `:300s` | 110 |
 
 For multi-version runs the cost multiplies: `versions × per-version`. Worked examples:
 
 | Duration | Versions | Total credits |
 |----------|---------:|--------------:|
-| 5s       | 1        | 2             |
-| 8s       | 1        | 2             |
-| 12s      | 1        | 2             |
-| 30s      | 1        | 3             |
-| 31s      | 1        | 4             |
-| 60s      | 4        | 15            |
-| 180s     | 1        | 14            |
+| 5s       | 1        | 10            |
+| 8s       | 1        | 10            |
+| 12s      | 1        | 10            |
+| 30s      | 1        | 20            |
+| 31s      | 1        | 30            |
+| 60s      | 4        | 120           |
+| 180s     | 1        | 110           |
 
 If ffprobe fails to derive a duration, the `:8s` bucket is used as a fallback and a warning is logged.
 
@@ -73,7 +73,7 @@ If ffprobe fails to derive a duration, the `:8s` bucket is used as a fallback an
 ## Best Practices
 
 - Write prompts that describe the sound, not the on-screen action ("crackling fire" beats "campfire scene").
-- Keep clips short for iteration — `:8s` and `:15s` buckets share the same 1-credit BASE, so an 8-second test clip costs the same as a 15-second one.
+- Keep clips short for iteration — `:8s` and `:15s` buckets share the same 10-credit BASE, so an 8-second test clip costs the same as a 15-second one.
 - If you want layered audio (e.g. SFX over music), generate the SFX here then mix the music in via Mix Audio.
 
 ## Common Use Cases

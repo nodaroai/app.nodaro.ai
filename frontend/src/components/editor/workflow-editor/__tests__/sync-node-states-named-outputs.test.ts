@@ -64,6 +64,8 @@ vi.mock("../clear-run-results", () => ({ clearedConnectedListRows: () => null })
 
 import { streamBackendExecution, teardownActiveWorkflowStream } from "../run-handlers"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
+import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
+import { contentRunResultPatch } from "@/lib/content-run-output"
 import type { ExecutionContext } from "../types"
 
 const ctx = {
@@ -126,5 +128,147 @@ describe("syncNodeStatesToStore — a finished node's named side outputs", () =>
     expect(byId.align.alignmentResults).toEqual([{ word: "hi", start: 0, end: 1 }])
     expect(byId.combine.combinedText).toBe("a b")
     expect(byId.split.splitResults).toEqual(["a", "b"])
+  })
+})
+
+// Video Overlay on a BACKEND run (Execute All, Run from here, schedule, webhook,
+// app): the worker's warnings, canvas and length must reach the node exactly as
+// the single-node Run writes them — the panel's "Last run" line reads the field
+// whichever path ran — and a run without warnings must clear an earlier line.
+describe("syncNodeStatesToStore — Video Overlay run facts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+    mockGetWorkflowExecution.mockResolvedValue({ status: "running", nodeStates: {} })
+  })
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  const skipped = { layer: 1, slot: 2, code: "skipped", detail: "starts at 9 s, after the video ends (5.00 s)" }
+
+  it("a backend-completed node carries the skipped warning, the canvas and the length — on the node and on the new result", () => {
+    mockNodes = [{ id: "vo", type: "video-overlay", data: { executionStatus: "running" } }]
+    streamBackendExecution("exec-1", ctx, vi.fn(), vi.fn())
+    const byId = sync({
+      vo: {
+        status: "completed",
+        jobId: "job-9",
+        output: { videoUrl: "https://cdn.test/o.mp4", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 },
+      },
+    })
+    expect(byId.vo).toMatchObject({ executionStatus: "completed", generatedVideoUrl: "https://cdn.test/o.mp4", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 })
+    const [first] = byId.vo.generatedResults as Array<Record<string, unknown>>
+    expect(first).toMatchObject({ url: "https://cdn.test/o.mp4", jobId: "job-9", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 })
+  })
+
+  it("a backend run stamps the freshness key on the node and on the new result; an unstamped output leaves the result reading old", () => {
+    mockNodes = [{ id: "vo", type: "video-overlay", data: { executionStatus: "running" } }]
+    streamBackendExecution("exec-4", ctx, vi.fn(), vi.fn())
+    const byId = sync({ vo: { status: "completed", jobId: "job-4", output: { videoUrl: "https://cdn.test/k.mp4", resultCompositionKey: "K1" } } })
+    expect(byId.vo.resultCompositionKey).toBe("K1")
+    const [first] = byId.vo.generatedResults as Array<Record<string, unknown>>
+    expect(first).toMatchObject({ url: "https://cdn.test/k.mp4", resultCompositionKey: "K1" })
+
+    mockNodes = [{ id: "vo", type: "video-overlay", data: { executionStatus: "running", resultCompositionKey: "K0" } }]
+    streamBackendExecution("exec-5", ctx, vi.fn(), vi.fn())
+    const unstamped = sync({ vo: { status: "completed", jobId: "job-5", output: { videoUrl: "https://cdn.test/u.mp4" } } })
+    expect(unstamped.vo.resultCompositionKey).toBeUndefined()
+    const [plain] = unstamped.vo.generatedResults as Array<Record<string, unknown>>
+    expect(videoOverlayResultFresh("K1", plain)).toBe(false)
+  })
+
+  it("a list fan-out stamps each row with the key of the composition that produced it, not the node's", () => {
+    mockNodes = [{ id: "vo", type: "video-overlay", data: { executionStatus: "running" } }]
+    streamBackendExecution("exec-6", ctx, vi.fn(), vi.fn())
+    const byId = sync({
+      vo: {
+        status: "completed",
+        jobId: "job-c",
+        jobIds: ["job-a", "job-c"],
+        output: {
+          videoUrl: "https://cdn.test/a.mp4",
+          resultCompositionKey: "KA",
+          listResults: ["https://cdn.test/a.mp4", "", "https://cdn.test/c.mp4"],
+          listResultCompositionKeys: ["KA", "", "KC"],
+        },
+      },
+    })
+    const rows = byId.vo.generatedResults as Array<Record<string, unknown>>
+    expect(rows.find((r) => r.url === "https://cdn.test/a.mp4")).toMatchObject({ resultCompositionKey: "KA" })
+    expect(rows.find((r) => r.url === "https://cdn.test/c.mp4")).toMatchObject({ resultCompositionKey: "KC" })
+  })
+
+  it("a later run with no warnings clears the line an earlier single-node run left", () => {
+    mockNodes = [
+      { id: "vo", type: "video-overlay", data: { executionStatus: "running", warnings: [skipped], width: 720, height: 1280, durationSec: 9 } },
+    ]
+    streamBackendExecution("exec-2", ctx, vi.fn(), vi.fn())
+    const byId = sync({ vo: { status: "completed", output: { videoUrl: "https://cdn.test/o2.mp4", width: 1080, height: 1920, durationSec: 5 } } })
+    expect(byId.vo.warnings).toEqual([])
+    expect(byId.vo).toMatchObject({ width: 1080, height: 1920, durationSec: 5 })
+  })
+
+  it("another node type is untouched by the mapping", () => {
+    mockNodes = [{ id: "img", type: "image-overlay", data: { executionStatus: "running" } }]
+    streamBackendExecution("exec-3", ctx, vi.fn(), vi.fn())
+    const byId = sync({ img: { status: "completed", output: { imageUrl: "https://cdn.test/i.png" } } })
+    expect("warnings" in byId.img).toBe(false)
+  })
+})
+
+// Content Recipe / Content Ideas on a BACKEND run (the editor's Execute and
+// Run from here go through the orchestrator): the node gets the live run's own
+// mapping — never the generic writes, which would put the briefs on
+// __listResults (cloning the node on the canvas) and the digest into a
+// generatedResults text history (read downstream as a list).
+describe("syncNodeStatesToStore — Content Recipe / Content Ideas", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+    mockGetWorkflowExecution.mockResolvedValue({ status: "running", nodeStates: {} })
+  })
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  const ideasOutput = {
+    json: [{ title: "one" }, { title: "two" }],
+    text: "CONTENT IDEAS (2)",
+    listResults: ["IDEA 1 of 2: one", "IDEA 2 of 2: two"],
+  }
+
+  it("content-ideas: the briefs land on ideaBriefs, never __listResults or generatedResults", () => {
+    mockNodes = [{ id: "ideas", type: "content-ideas", data: { executionStatus: "running" } }]
+    streamBackendExecution("exec-c1", ctx, vi.fn(), vi.fn())
+    const byId = sync({ ideas: { status: "completed", jobId: "job-i", output: ideasOutput } })
+    expect(byId.ideas).toMatchObject(contentRunResultPatch("content-ideas", ideasOutput)!)
+    expect(byId.ideas.ideaBriefs).toEqual(ideasOutput.listResults)
+    expect(byId.ideas.__listResults).toBeUndefined()
+    expect(byId.ideas.generatedResults).toBeUndefined()
+  })
+
+  it("content-ideas: a later tick on the completed node writes nothing again", () => {
+    mockNodes = [{ id: "ideas", type: "content-ideas", data: { executionStatus: "running" } }]
+    streamBackendExecution("exec-c2", ctx, vi.fn(), vi.fn())
+    sync({ ideas: { status: "completed", output: ideasOutput } })
+    const before = mockNodes[0]!.data
+    sync({ ideas: { status: "completed", output: ideasOutput } })
+    expect(mockNodes[0]!.data).toBe(before)
+  })
+
+  it("content-recipe: the recipe object and its text, no text history", () => {
+    const output = { json: { version: 1, topic: "t" }, text: "CONTENT RECIPE: t" }
+    mockNodes = [{ id: "recipe", type: "content-recipe", data: { executionStatus: "running" } }]
+    streamBackendExecution("exec-c3", ctx, vi.fn(), vi.fn())
+    const byId = sync({ recipe: { status: "completed", output } })
+    expect(byId.recipe).toMatchObject({ executionStatus: "completed", generatedJson: output.json, generatedText: output.text })
+    expect(byId.recipe.generatedResults).toBeUndefined()
   })
 })

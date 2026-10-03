@@ -42,7 +42,15 @@ import type { ZodError, ZodType } from "zod"
 import type { AudioFxPreset, PresetSettings, SurroundDirection } from "@nodaro/shared"
 import type { PluginScene3DEngine, PluginStageToolkit } from "./scene3d-contract.js"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared"
+import type {
+  PluginAccountSecretsToolkit,
+  PluginDaemon,
+  PluginDaemonClientToolkit,
+  PluginRedisLeaseToolkit,
+  PluginTriggersToolkit,
+} from "./daemon-contract.js"
 export type * from "./scene3d-contract.js"
+export type * from "./daemon-contract.js"
 
 // ============================================================================
 // Job / handler shapes
@@ -374,6 +382,43 @@ export interface PluginProvidersToolkit {
    * boundary (both members above throw instances of it).
    */
   YtUrlNotAllowedError: new (message?: string) => Error
+  /**
+   * Mirrors `socialPostOf` (`providers/video/social-post-video.ts`): the
+   * canonical link when `url` is ONE post on a platform the hardened lane
+   * fetches (YouTube, TikTok, Instagram, X, Facebook), else null — a profile,
+   * a channel, a story or a share short link is not. Optional: absent on an
+   * older host.
+   */
+  socialPostVideoUrl?(url: string): string | null
+  /**
+   * Mirrors `probeSocialPostVideo`: the post's length and whether it is live,
+   * before anything is paid for. Throws `YtUrlNotAllowedError` for a link
+   * `socialPostVideoUrl` refuses. Optional: absent on an older host.
+   */
+  probeSocialPostVideo?(url: string, opts?: { signal?: AbortSignal }): Promise<{
+    durationSec: number | null
+    title: string | null
+    isLive: boolean
+  }>
+  /**
+   * Mirrors `downloadSocialPostVideo`: the hardened fetch of one post's video
+   * (that platform's extractors only, no live stream, nothing past
+   * `maxDurationSec`, a size cap, one wall-clock limit, a minimal child
+   * environment). Throws `YtUrlNotAllowedError` for a link
+   * `socialPostVideoUrl` refuses. A fetch that must not be retried rejects
+   * with an Error whose `name` is `"YtDlpHaltError"` and whose `reason` is
+   * `"refused"` (live, or past `maxDurationSec`), `"aborted"`,
+   * `"out_of_time"` or `"too_much_output"` — match it by that shape; the class
+   * lives in the host. Optional: absent on an older host.
+   */
+  downloadSocialPostVideo?(opts: {
+    url: string
+    outPath: string
+    maxDurationSec: number
+    maxFilesizeBytes?: number
+    maxHeight?: number
+    signal?: AbortSignal
+  }): Promise<void>
 }
 
 // ============================================================================
@@ -1851,6 +1896,41 @@ export interface PluginPipelinesToolkit {
   getSnapshot(pipelineId: string, userId: string): Promise<PipelineSnapshot | null>
 }
 
+/**
+ * One server-sent event a plugin route may write: the subset of the app's
+ * `StreamEvent` (`lib/sse.ts`) plugin streams carry today. A new member needs
+ * its app-side twin in `StreamEvent` first.
+ */
+export type PluginSseEvent =
+  | { type: "field"; data: { field: string; value: string | string[] } }
+  | { type: "done"; data: Record<string, unknown> }
+  | { type: "error"; data: { code: string; message: string } }
+
+/** An open event stream on a plugin route's response (`lib/sse.ts`'s `SSEController`). */
+export interface PluginSseController {
+  sendEvent(event: PluginSseEvent): void
+  /** An SSE comment line (a keepalive ping). */
+  sendComment(text?: string): void
+  /** End the stream. Writes after this, or after the client left, are no-ops. */
+  close(): void
+  /** True after close() or once the client disconnected. */
+  readonly isClosed: boolean
+}
+
+/**
+ * Server-sent events on a plugin route, written by the app's own helper: one
+ * JSON object per `data:` line, a blank line between events, keepalive
+ * comments, and origin-checked CORS headers (the raw write bypasses
+ * Fastify's CORS hook).
+ */
+export interface PluginSseToolkit {
+  /**
+   * Open the stream. It writes `200 text/event-stream` at once, so every
+   * plain HTTP error (auth, validation, credits) must be sent BEFORE this.
+   */
+  create(req: FastifyRequest, reply: FastifyReply): Promise<PluginSseController>
+}
+
 // ============================================================================
 // PluginToolkit — the full dependency-injection surface handed to every plugin
 // ============================================================================
@@ -1925,6 +2005,29 @@ export interface PluginToolkit {
    * the host; the plugin only ever asks for a URL.
    */
   billing?: PluginBillingToolkit
+  /**
+   * The generic account-secret store (`plugin_account_secrets`). Its
+   * decrypting members exist only in the daemon host's toolkit — see
+   * `PluginAccountSecretsToolkit`. ADDITIVE-OPTIONAL — `?.`-guard it.
+   */
+  accountSecrets?: PluginAccountSecretsToolkit
+  /**
+   * The API side of the internal hop to a hosted daemon. ADDITIVE-OPTIONAL —
+   * `?.`-guard it.
+   */
+  daemons?: PluginDaemonClientToolkit
+  /**
+   * Trigger lanes served by a hosted daemon: read a lane's active rows and
+   * start a run from one through the built-in fire-time gates. Daemon host
+   * only. ADDITIVE-OPTIONAL — `?.`-guard it.
+   */
+  triggers?: PluginTriggersToolkit
+  /**
+   * Server-sent events on a plugin route's response, in the app's own
+   * convention. ADDITIVE-OPTIONAL — `?.`-guard it; an older host has none,
+   * so a route that can stream answers JSON there.
+   */
+  sse?: PluginSseToolkit
 }
 
 /**
@@ -1984,6 +2087,12 @@ export interface PluginRedisToolkit {
     /** Remaining TTL in seconds; negative when absent or unexpiring. */
     ttl(key: string): Promise<number>
   }
+  /**
+   * Single-holder leases (`SET NX PX` + compare-and-extend/delete) — the one
+   * shape `kv` cannot express atomically. ADDITIVE-OPTIONAL (no
+   * CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  lease?: PluginRedisLeaseToolkit
 }
 
 /**
@@ -2590,6 +2699,24 @@ export interface PluginSurroundEngine {
  */
 export type PromptTable = Record<string, string>
 
+/**
+ * Additive. One content recipe a plugin serves through `get_recipe` — the
+ * same shape a local `backend/skills/recipes/<name>/` folder carries, as
+ * DATA: `body` is the recipe's instructions (frontmatter already stripped),
+ * `files` maps a bundled reference name to its text. A `library` recipe is
+ * loadable by name but never listed (it is shared material other recipes
+ * point at, not an entry point). `files` is a plain map — lookups are exact
+ * key matches, never paths resolved against anything.
+ */
+export interface PluginRecipe {
+  readonly description: string
+  readonly triggers: readonly string[]
+  readonly library?: boolean
+  readonly body: string
+  readonly files: Readonly<Record<string, string>>
+}
+export type RecipeTable = Record<string, PluginRecipe>
+
 export interface NodaroPrivatePlugin {
   name: string
   registerRoutes?(app: FastifyInstance, tk: PluginToolkit): Promise<void>
@@ -2617,6 +2744,19 @@ export interface NodaroPrivatePlugin {
    * write wins per named member.
    */
   services?(tk: PluginToolkit): Partial<PluginServices>
+  /**
+   * Additive: content recipes served by the `get_recipe` MCP tool beside the
+   * local catalog (see `PluginRecipe`). Merged by the loader with
+   * `Object.assign`, last write wins per recipe name; a local recipe of the
+   * same name always wins over a plugin one.
+   */
+  recipes?(): RecipeTable
+  /**
+   * Additive: long-lived processes, run only by the daemon host
+   * (`plugin-daemons.ts`) — see `PluginDaemon`. The host passes its own
+   * toolkit, the one whose `accountSecrets` can decrypt.
+   */
+  daemons?(tk: PluginToolkit): PluginDaemon[]
 }
 
 export interface PrivatePluginsModule {

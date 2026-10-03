@@ -120,6 +120,30 @@ describe("buildPayload — video-analysis", () => {
     expect(result.modelIdentifier).toBe("video-analysis:gemini-3.1-pro:60s")
   })
 
+  it("(f) a post's link wired into the video handle is analyzed before the node's own link", () => {
+    const wired = "https://youtu.be/WIRED42"
+    const result = buildPayload(node({ youtubeUrl: YT }), jobId, { videoPageUrl: wired }, usageLogId)
+    expect(result.payload.youtubeUrl).toBe(wired)
+    expect(result.payload.videoUrl).toBeUndefined()
+  })
+
+  it("(g) a wired video file still wins over a wired link", () => {
+    const inputs: ResolvedInputs = { videoUrl: "https://cdn.example.com/clip.mp4", videoPageUrl: "https://youtu.be/WIRED42" }
+    const result = buildPayload(node({ youtubeUrl: YT }), jobId, inputs, usageLogId)
+    expect(result.payload.videoUrl).toBe("https://cdn.example.com/clip.mp4")
+    expect(result.payload.youtubeUrl).toBeUndefined()
+  })
+
+  it("(h) the editor's read of the TYPED link never prices a different wired link", () => {
+    const result = buildPayload(
+      node({ youtubeUrl: YT, probedYoutube: { url: YT, durationSec: 170 } }),
+      jobId,
+      { videoPageUrl: "https://youtu.be/WIRED42" },
+      usageLogId,
+    )
+    expect(result.modelIdentifier).toBe("video-analysis:gemini-3.1-pro:600s")
+  })
+
   it("forwards jobId, analysisFocus, nodeId and usageLogId in the payload", () => {
     const result = buildPayload(
       node({ youtubeUrl: YT, analysisFocus: "Focus on the camera moves." }),

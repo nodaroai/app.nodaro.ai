@@ -278,6 +278,7 @@ const map: LocaleCatalogMap = {
   "face-short-beard": { label: "Kurzer Bart", description: "Kurz getrimmter Bart" },
   "face-full-beard": { label: "Vollbart", description: "Dichter Vollbart" },
   // Skin Texture
+  "texture-natural": { label: "Natürlich", description: "Echte Poren, natürliche Unterschiede" },
   "texture-smooth": { label: "Glatt", description: "Makellose, seidig glatte Haut" },
   "texture-wrinkled": { label: "Faltig", description: "Gealterte, tief gefurchte Haut" },
   "texture-goosebumps": { label: "Gänsehaut", description: "Erhabene Gänsehaut auf der Haut" },

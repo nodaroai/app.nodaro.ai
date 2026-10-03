@@ -34,7 +34,10 @@ describe("parseNodeDefinitions", () => {
   it("returns a non-empty array", () => {
     const defs = parseNodeDefinitions(NODES_TS)
     expect(defs.length).toBeGreaterThanOrEqual(40)
-    expect(defs.length).toBeLessThan(200)
+    // A runaway-parse sanity bound (a regex that matches every object literal
+    // in nodes.ts would return thousands), not a cap on the product: the node
+    // catalog reached 200 with audio-sync (2026-09-25).
+    expect(defs.length).toBeLessThan(400)
   })
 
   it("every entry has the canonical fields", () => {

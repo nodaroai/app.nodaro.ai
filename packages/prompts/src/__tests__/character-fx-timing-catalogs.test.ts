@@ -86,8 +86,9 @@ describe("character-fx timing catalogs", () => {
     // The one constraint that matters most: these scales must never be unified
     // with the transition ones. Position and duration are worded differently
     // on purpose, so pointing character-fx at the transition rows fails here.
-    // Intensity is deliberately NOT compared: its three clauses happen to be
-    // identical today, and that is a coincidence, not a shared definition.
+    // Intensity is deliberately NOT compared: its clauses happen to mostly
+    // match, and that is a coincidence, not a shared definition (transitions'
+    // "natural" already reads differently since 2026-09-24).
     expect(CHARACTER_FX_POSITIONS.map((o) => o.promptHint)).not.toEqual(
       TRANSITION_POSITIONS.map((o) => o.promptHint),
     )

@@ -37,7 +37,7 @@ export function PortsView({ nodeId, data }: SubWorkflowViewProps) {
         {!data.referencedWorkflowId ? (
           <p className="text-sm text-muted-foreground">{t("cfgext.subwfSelectWorkflow")}</p>
         ) : (
-          <p className="text-xs font-medium truncate">{data.referencedWorkflowName || "Unnamed"}</p>
+          <p className="text-xs font-medium truncate">{data.referencedWorkflowName || t("cfgext.entUnnamed")}</p>
         )}
 
         {status === "running" && progress && (
@@ -70,12 +70,12 @@ export function PortsView({ nodeId, data }: SubWorkflowViewProps) {
           ) : (
             <div className="mt-2 cursor-pointer" onClick={() => setLightboxOpen(true)}>
               {isImage ? (
-                <CachedImage src={previewUrl} alt="Output"
+                <CachedImage src={previewUrl} alt={t("node.output")}
                   className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity"
                   thumbnail={!useFull} thumbnailWidth={320} />
               ) : isVideo ? (
                 generatedResults[activeIdx]?.thumbnailUrl ? (
-                  <CachedImage src={generatedResults[activeIdx]!.thumbnailUrl!} alt="Output"
+                  <CachedImage src={generatedResults[activeIdx]!.thumbnailUrl!} alt={t("node.output")}
                     className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity"
                     thumbnail={!useFull} thumbnailWidth={320} />
                 ) : (

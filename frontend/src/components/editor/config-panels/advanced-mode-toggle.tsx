@@ -89,7 +89,7 @@ export function AdvancedModeToggle({
         <div className="space-y-2 pt-1">
           <div>
             <Label className="text-xs text-muted-foreground">
-              {t("audiocfg.temperature")}: {(temperature ?? defaultTemperature ?? 0.7).toFixed(1)}
+              {t("audiocfg.temperature")}{t("common.labelColon")}{(temperature ?? defaultTemperature ?? 0.7).toFixed(1)}
             </Label>
             <input
               type="range"

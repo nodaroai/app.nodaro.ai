@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useStats } from "@/hooks/queries/use-stats-queries"
 import { queryKeys } from "@/lib/query-keys"
 import { cn } from "@/lib/utils"
+import { useT, tx } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
@@ -18,6 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { formatNumber } from "@/lib/i18n/format"
 
 interface StatCardProps {
   readonly label: string
@@ -59,6 +61,7 @@ export function StatsOverview({ className }: StatsOverviewProps) {
   const [scope, setScope] = useState<"user" | "platform">("user")
   const [cancelAllDialogOpen, setCancelAllDialogOpen] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const t = useT()
 
   const { data: stats, isLoading: loading, error } = useStats(scope, user?.id)
 
@@ -70,7 +73,7 @@ export function StatsOverview({ className }: StatsOverviewProps) {
       await cancelAllJobs(user.id)
       qc.invalidateQueries({ queryKey: queryKeys.stats.all })
     } catch {
-      toast.error("Failed to cancel jobs")
+      toast.error(tx("dash.failedCancelJobs"))
     } finally {
       setCancelling(false)
       setCancelAllDialogOpen(false)
@@ -80,7 +83,7 @@ export function StatsOverview({ className }: StatsOverviewProps) {
   if (error) {
     return (
       <div className={cn("text-center py-4 text-muted-foreground text-sm", className)}>
-        {error instanceof Error ? error.message : "Failed to fetch stats"}
+        {error instanceof Error ? error.message : t("dash.failedFetchStats")}
       </div>
     )
   }
@@ -104,7 +107,7 @@ export function StatsOverview({ className }: StatsOverviewProps) {
                 : "bg-muted text-muted-foreground hover:bg-muted/80"
             )}
           >
-            My Stats
+            {t("dash.myStats")}
           </button>
           <button
             type="button"
@@ -116,7 +119,7 @@ export function StatsOverview({ className }: StatsOverviewProps) {
                 : "bg-muted text-muted-foreground hover:bg-muted/80"
             )}
           >
-            Platform Stats
+            {t("dash.platformStats")}
           </button>
         </div>
       )}
@@ -127,13 +130,13 @@ export function StatsOverview({ className }: StatsOverviewProps) {
           {(stats.pending ?? 0) > 0 && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
               <Clock className="w-3 h-3" />
-              {stats.pending} pending
+              {t("dash.nPending", { n: stats.pending ?? 0 })}
             </span>
           )}
           {(stats.processing ?? 0) > 0 && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
               <Zap className="w-3 h-3" />
-              {stats.processing} processing
+              {t("dash.nProcessing", { n: stats.processing ?? 0 })}
             </span>
           )}
           {/* Cancel All button - only show on "My Stats" view */}
@@ -146,11 +149,11 @@ export function StatsOverview({ className }: StatsOverviewProps) {
               disabled={cancelling}
             >
               {cancelling ? (
-                <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                <Loader2 className="w-3 h-3 animate-spin me-1" />
               ) : (
-                <XCircle className="w-3 h-3 mr-1" />
+                <XCircle className="w-3 h-3 me-1" />
               )}
-              Cancel All
+              {t("dash.cancelAll")}
             </Button>
           )}
         </div>
@@ -158,42 +161,42 @@ export function StatsOverview({ className }: StatsOverviewProps) {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         <StatCard
-          label="Executions"
-          value={(stats?.totalExecutions ?? 0).toLocaleString()}
+          label={t("nav.executions")}
+          value={formatNumber(stats?.totalExecutions ?? 0)}
           icon={<Activity className="h-3.5 w-3.5 text-[#ff0073]" />}
           colorClass="bg-[#ff0073]/10"
           loading={loading}
         />
         <StatCard
-          label="Successful"
-          value={(stats?.successful ?? 0).toLocaleString()}
+          label={t("apps.analytics.successful")}
+          value={formatNumber(stats?.successful ?? 0)}
           icon={<CheckCircle className="h-3.5 w-3.5 text-green-500" />}
           colorClass="bg-green-500/10"
           loading={loading}
         />
         <StatCard
-          label="Failed"
-          value={(stats?.failed ?? 0).toLocaleString()}
+          label={t("common.failed")}
+          value={formatNumber(stats?.failed ?? 0)}
           icon={<XCircle className="h-3.5 w-3.5 text-red-500" />}
           colorClass="bg-red-500/10"
           loading={loading}
         />
         <StatCard
-          label="Failure Rate"
+          label={t("dash.failureRate")}
           value={`${stats?.failureRate ?? 0}%`}
           icon={<Percent className="h-3.5 w-3.5 text-orange-500" />}
           colorClass="bg-orange-500/10"
           loading={loading}
         />
         <StatCard
-          label="Avg. Image"
+          label={t("dash.avgImage")}
           value={formatTime(stats?.avgImageTime ?? null)}
           icon={<Image className="h-3.5 w-3.5 text-blue-500" />}
           colorClass="bg-blue-500/10"
           loading={loading}
         />
         <StatCard
-          label="Avg. Video"
+          label={t("dash.avgVideo")}
           value={formatTime(stats?.avgVideoTime ?? null)}
           icon={<Video className="h-3.5 w-3.5 text-purple-500" />}
           colorClass="bg-purple-500/10"
@@ -205,14 +208,15 @@ export function StatsOverview({ className }: StatsOverviewProps) {
       <AlertDialog open={cancelAllDialogOpen} onOpenChange={setCancelAllDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancel all pending jobs?</AlertDialogTitle>
+            <AlertDialogTitle>{t("dash.cancelAllTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will cancel {(stats?.pending ?? 0) + (stats?.processing ?? 0)} job{(stats?.pending ?? 0) + (stats?.processing ?? 0) !== 1 ? "s" : ""} that are currently pending or processing.
-              This action cannot be undone.
+              {(stats?.pending ?? 0) + (stats?.processing ?? 0) === 1
+                ? t("dash.cancelAllDescOne", { n: 1 })
+                : t("dash.cancelAllDescMany", { n: (stats?.pending ?? 0) + (stats?.processing ?? 0) })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={cancelling}>Keep Running</AlertDialogCancel>
+            <AlertDialogCancel disabled={cancelling}>{t("dash.keepRunning")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleCancelAll}
               disabled={cancelling}
@@ -220,11 +224,11 @@ export function StatsOverview({ className }: StatsOverviewProps) {
             >
               {cancelling ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Cancelling...
+                  <Loader2 className="w-4 h-4 animate-spin me-2" />
+                  {t("dash.cancelling")}
                 </>
               ) : (
-                "Cancel All Jobs"
+                t("dash.cancelAllJobs")
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

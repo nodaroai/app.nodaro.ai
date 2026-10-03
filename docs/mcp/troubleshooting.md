@@ -38,8 +38,10 @@ Your MCP client's `client_name` isn't on the allowlist. Either:
 ## "via MCP" trigger badge shows but I didn't use MCP
 
 A connected MCP client may have submitted a job on your behalf. Open
-`app.nodaro.ai/(dashboard)/settings/developer-apps` and review/revoke any
-unexpected app authorizations.
+**Settings → Connected apps** (`app.nodaro.ai/settings/connected-apps`),
+which lists every app and AI assistant with access to your account and when
+each was last used, and revoke any you don't recognise. Revoking ends its
+access at once.
 
 ## Why is the consent screen showing an orange warning about a "self-claimed name"?
 

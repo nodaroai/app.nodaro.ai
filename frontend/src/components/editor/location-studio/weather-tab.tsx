@@ -1,4 +1,5 @@
 import { EnvironmentalAssetTab } from "./environmental-asset-tab"
+import { useT } from "@/lib/i18n"
 import type { LocationStudioState } from "./use-location-studio"
 
 /**
@@ -27,12 +28,13 @@ interface WeatherTabProps {
 }
 
 export function WeatherTab({ studio }: WeatherTabProps) {
+  const t = useT()
   return (
     <EnvironmentalAssetTab
       studio={studio}
       bucketName="weather"
       presets={WEATHER_PRESETS}
-      iconLabel="🌦 Weather"
+      iconLabel={t("studio.weatherTabTitle")}
     />
   )
 }

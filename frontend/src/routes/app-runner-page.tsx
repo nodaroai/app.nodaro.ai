@@ -140,7 +140,7 @@ export default function AppRunnerPage() {
           <DialogTitle>{t("runner.moveToArchive")}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          {t("runner.archiveDescPre")} <Link to="/archived-runs" className="underline">{t("runner.archivedRuns")}</Link>.
+          {t("runner.archiveDescPre")}{t("common.fragmentGap")}<Link to="/archived-runs" className="underline">{t("runner.archivedRuns")}</Link>{t("common.sentenceEnd")}
         </p>
         <DialogFooter className="flex gap-2 sm:justify-end">
           <Button variant="outline" onClick={() => runSlots.setDeleteConfirmSlotId(null)} autoFocus>
@@ -207,7 +207,7 @@ export default function AppRunnerPage() {
           onCancel={cancel}
           runSlots={runSlots}
           onNewRun={user ? runSlots.handleHeaderAction : undefined}
-          newRunLabel={runSlots.newRunLabel}
+          newRunAction={runSlots.newRunAction}
           inputsReadOnly={runSlots.inputsReadOnlyValue}
           suppressOutputFallback={(runSlots.activeSlotId !== null && runSlots.activeSlotId !== ORIGINAL_SLOT_ID) || !!initialRunId}
           showFullscreenToggle
@@ -221,7 +221,7 @@ export default function AppRunnerPage() {
                 onClick={() => runSlots.setShowHistory(true)}
                 className="h-8 border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation shrink-0 md:hidden"
               >
-                <Clock className="h-4 w-4 mr-1" />
+                <Clock className="h-4 w-4 me-1" />
                 {t("runner.runs")}
               </Button>
             ) : null
@@ -250,14 +250,14 @@ export default function AppRunnerPage() {
                       )
                     }}
                   >
-                    <LinkIcon className="h-4 w-4 mr-2" />
+                    <LinkIcon className="h-4 w-4 me-2" />
                     {t("runner.copyLinkToRun")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => runSlots.handleRequestDelete(runSlots.activeSlotId!)}
                     className="text-destructive focus:text-destructive"
                   >
-                    <Trash2 className="h-4 w-4 mr-2" />
+                    <Trash2 className="h-4 w-4 me-2" />
                     {t("runner.moveToArchive")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>

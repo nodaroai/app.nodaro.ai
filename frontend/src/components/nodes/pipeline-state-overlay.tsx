@@ -1,6 +1,6 @@
 "use client"
 
-import { tx } from "@/lib/i18n"
+import { tx, useT } from "@/lib/i18n"
 import type { PipelineState } from "@nodaro/shared"
 import {
   Tooltip,
@@ -69,6 +69,7 @@ function STATE_META(): Record<PipelineState, StateMeta> {
 }
 
 export function PipelineStateOverlay({ state, isStale = false }: Props) {
+  const t = useT()
   // Renders nothing when the entity is orphaned (or unmanaged) AND not stale —
   // the canvas should look identical to a plain user-created node.
   const isManagedVisible = !!state && state !== "pipeline_orphaned"
@@ -102,11 +103,11 @@ export function PipelineStateOverlay({ state, isStale = false }: Props) {
               className="absolute -bottom-1 -right-1 px-1.5 h-4 rounded-full bg-orange-500 text-white text-[10px] leading-none flex items-center pointer-events-auto z-10"
               data-testid="pipeline-state-stale-pill"
             >
-              stale
+              {t("node.stale")}
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            An upstream entity changed — this node may need regenerating
+            {t("node.upstreamEntityChanged")}
           </TooltipContent>
         </Tooltip>
       )}

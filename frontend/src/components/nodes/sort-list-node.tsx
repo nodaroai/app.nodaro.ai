@@ -11,17 +11,19 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { SortListNodeData } from "@/types/nodes"
 import { isValidSortListConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
+import { useT, type MessageKey } from "@/lib/i18n"
 
 const ACCEPTS_IN = (t: string) => isValidSortListConnection("in", t)
 
-const SORT_TYPE_LABELS: Record<NonNullable<SortListNodeData["sortType"]>, string> = {
-  auto: "Auto",
-  text: "Text",
-  number: "Number",
-  date: "Date",
+const SORT_TYPE_LABEL_KEYS: Record<NonNullable<SortListNodeData["sortType"]>, MessageKey> = {
+  auto: "common.auto",
+  text: "field.text",
+  number: "utilcfg.sortNumber",
+  date: "utilcfg.sortDate",
 }
 
 function SortListNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SortListNodeData
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -30,10 +32,10 @@ function SortListNodeComponent({ id, data, selected }: NodeProps) {
   useAutoExecute(id, data as Record<string, unknown>)
 
   const field = nodeData.field?.trim() ?? ""
-  const fieldLabel = field === "" ? "(whole item)" : field
+  const fieldLabel = field === "" ? t("utilcfg.wholeItem") : field
   const directionArrow = nodeData.direction === "desc" ? "↓" : "↑"
   const sortType = nodeData.sortType ?? "auto"
-  const typeLabel = SORT_TYPE_LABELS[sortType]
+  const typeLabel = t(SORT_TYPE_LABEL_KEYS[sortType])
   const subtitle = `${fieldLabel} ${directionArrow} (${typeLabel})`
   const listResults = nodeData.__listResults ?? nodeData.listResults
   const itemCount = listResults?.length ?? 0
@@ -68,16 +70,16 @@ function SortListNodeComponent({ id, data, selected }: NodeProps) {
           {hasResult ? (
             <div className="w-full rounded-md bg-muted/30 p-2">
               <p className="text-xs text-foreground/80">
-                {itemCount} item{itemCount === 1 ? "" : "s"} sorted
+                {itemCount === 1 ? t("node.itemsSortedOne", { n: itemCount }) : t("node.itemsSortedMany", { n: itemCount })}
               </p>
               <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                By: {subtitle}
+                {t("node.byField", { field: subtitle })}
               </span>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
               <FileText className="w-5 h-5" />
-              <span className="text-[10px] mt-0.5">By: {subtitle}</span>
+              <span className="text-[10px] mt-0.5">{t("node.byField", { field: subtitle })}</span>
             </div>
           )}
         </div>

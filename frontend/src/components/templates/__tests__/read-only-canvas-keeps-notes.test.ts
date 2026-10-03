@@ -42,7 +42,19 @@ describe("read-only template canvas", () => {
     const source = readFileSync(join(__dirname, "..", "read-only-canvas.tsx"), "utf8")
     expect(source).toMatch(/onPaneClick=\{interactive \? onPaneClick : undefined\}/)
     expect(source).toMatch(/nodeAtPoint\(nodeRects\(instance\), point\)/)
-    expect(source).toMatch(/\{interactive && inspected && <NodeInspector/)
+    expect(source).toMatch(/\{interactive && inspected && \(?\s*<NodeInspector/)
+  })
+
+  // Framed edge to edge, a flow's outputs sat under the Clone panel and its
+  // lower lanes under the results rail (2026-09-24). The canvas preview hands
+  // the canvas its chrome, and the first frame fits into what is left.
+  it("frames the canvas preview clear of its floating chrome", () => {
+    const source = readFileSync(join(__dirname, "..", "template-canvas-preview.tsx"), "utf8")
+    expect(source).toMatch(/fitInsets=\{fitInsets\}/)
+    expect(source).toMatch(/chromeInsets\(canvas, \[topBarRef, railRef, panelRef\]/)
+    for (const ref of ["topBarRef", "railRef", "panelRef"]) expect(source).toMatch(new RegExp(`ref=\\{${ref}\\}`))
+    const canvas = readFileSync(join(__dirname, "..", "read-only-canvas.tsx"), "utf8")
+    expect(canvas).toMatch(/fitView\(\{ padding: fitViewPadding\(insets\), minZoom: 0\.02 \}\)/)
   })
 
   it("keeps the nodes themselves out of hit testing so the pane still pans from anywhere", () => {

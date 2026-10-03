@@ -3,6 +3,7 @@
 import { SelectItemWithMeta } from "@/components/ui/select"
 import { useLocalizeModelDescription } from "@/lib/i18n/labels"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useModelCreditRange } from "@/hooks/use-model-credit-range"
 import { formatCreditBadge, formatPerSecondCreditBadge } from "./model-options"
 
 export function ModelSelectOption({
@@ -38,9 +39,10 @@ export function ModelSelectOption({
   const priceId = creditId ?? value
   const baseCredits = useModelCredits(priceId)
   const perSecondCredits = useModelCredits(perSecond ? `${priceId}:15s` : priceId)
+  const range = useModelCreditRange(priceId)
   const badge = perSecond
     ? formatPerSecondCreditBadge(perSecondCredits)
-    : formatCreditBadge(priceId, baseCredits)
+    : formatCreditBadge(priceId, baseCredits, range)
 
   return (
     <SelectItemWithMeta

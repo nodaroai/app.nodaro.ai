@@ -6,7 +6,7 @@ import { Sliders } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { QuickStripOpenChangeContext } from "./node-quick-strip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { SUNO_SLIDER_META } from "@/lib/suno-sliders"
+import { SUNO_SLIDER_META, SUNO_SLIDER_LABEL_KEYS, SUNO_SLIDER_DESC_KEYS } from "@/lib/suno-sliders"
 import type { SunoGenerateData } from "@/types/nodes"
 
 /** On-node "Mix ▾" popover: Suno's 3 advanced sliders with descriptions. Shipped
@@ -29,8 +29,8 @@ export function SunoMixPopover({ nodeId }: { readonly nodeId: string }) {
       }
     >
       <PopoverTrigger
-        aria-label="Mix"
-        title="Mix"
+        aria-label={t("node.mix")}
+        title={t("node.mix")}
         className="h-6 px-1.5 inline-flex items-center gap-1 rounded-md text-[10px] text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10 [&_svg]:size-3 [&_svg]:opacity-70"
       >
         <Sliders />
@@ -45,7 +45,7 @@ export function SunoMixPopover({ nodeId }: { readonly nodeId: string }) {
           return (
             <div key={s.key} className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-medium">{s.label}</label>
+                <label className="text-xs font-medium">{t(SUNO_SLIDER_LABEL_KEYS[s.key])}</label>
                 <span className="text-xs text-muted-foreground">{val}</span>
               </div>
               <input
@@ -53,7 +53,7 @@ export function SunoMixPopover({ nodeId }: { readonly nodeId: string }) {
                 onChange={(e) => updateNodeData(nodeId, { [s.key]: parseFloat(e.target.value) } as Partial<SunoGenerateData>)}
                 className="w-full accent-[#ff0073]"
               />
-              <p className="text-[10px] leading-tight text-muted-foreground/70">{s.description}</p>
+              <p className="text-[10px] leading-tight text-muted-foreground/70">{t(SUNO_SLIDER_DESC_KEYS[s.key])}</p>
             </div>
           )
         })}

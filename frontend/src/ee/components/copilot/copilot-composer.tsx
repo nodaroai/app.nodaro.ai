@@ -8,7 +8,9 @@
  */
 import { useEffect, useRef, useState } from "react"
 import { ArrowUp, AtSign } from "lucide-react"
-import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
+import { creditUnitLabel, creditUnits } from "@/lib/credit-units"
+import { useT } from "@/lib/i18n"
 import { activeMentionQuery, insertMentionName, variantSuffix } from "@/ee/lib/copilot/mentions"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { copilotFeatureId } from "@/ee/lib/copilot/constants"
@@ -37,6 +39,7 @@ interface CopilotComposerProps {
 }
 
 export function CopilotComposer({ mentionSources, onSearchChange, fileTotal, hasMoreFiles, onLoadMoreFiles, onSend, onStop, disabled }: CopilotComposerProps) {
+  const t = useT()
   const draft = useCopilotStore((s) => s.draft)
   const mentions = useCopilotStore((s) => s.mentions)
   const setDraft = useCopilotStore((s) => s.setDraft)
@@ -168,13 +171,13 @@ export function CopilotComposer({ mentionSources, onSearchChange, fileTotal, has
             {mentions.map((mention) => (
               <span
                 key={`${mention.kind}:${mention.id}`}
-                className="inline-flex items-center gap-1.5 pl-1 pr-1.5 py-[3px] rounded-[7px] text-[11.5px] text-foreground whitespace-nowrap bg-[var(--copilot-mention)]/10 border border-[var(--copilot-mention)]/40"
+                className="inline-flex items-center gap-1.5 ps-1 pe-1.5 py-[3px] rounded-[7px] text-[11.5px] text-foreground whitespace-nowrap bg-[var(--copilot-mention)]/10 border border-[var(--copilot-mention)]/40"
               >
                 {safeThumbUrl(mention.imageUrl) ? (
                   <button
                     type="button"
-                    aria-label={S.pickerPreviewOf(mention.name)}
-                    title={S.pickerPreviewOf(mention.name)}
+                    aria-label={t(K.pickerPreviewOf, { name: mention.name })}
+                    title={t(K.pickerPreviewOf, { name: mention.name })}
                     onClick={() => setChipPreview(mention)}
                     className="inline-flex items-center gap-1.5 cursor-zoom-in"
                   >
@@ -189,7 +192,7 @@ export function CopilotComposer({ mentionSources, onSearchChange, fileTotal, has
                 )}
                 <button
                   type="button"
-                  aria-label={`Remove ${mention.name}`}
+                  aria-label={t(K.removeMention, { name: mention.name })}
                   onClick={() => removeMention(mention.id)}
                   className="w-3.5 h-3.5 leading-none text-[13px] text-[var(--copilot-muted)] hover:text-foreground"
                 >
@@ -205,7 +208,7 @@ export function CopilotComposer({ mentionSources, onSearchChange, fileTotal, has
           rows={2}
           value={draft}
           disabled={disabled}
-          placeholder={S.composerPlaceholder}
+          placeholder={t(K.composerPlaceholder)}
           // Focus never leaves the textarea while the picker is open, so the
           // combobox wiring is what tells a screen reader a list appeared and
           // which row the arrow keys are on.
@@ -238,7 +241,7 @@ export function CopilotComposer({ mentionSources, onSearchChange, fileTotal, has
             type="button"
             onClick={openPicker}
             disabled={disabled}
-            aria-label={S.mention}
+            aria-label={t(K.mention)}
             className="w-6 h-6 rounded-md border border-border text-[var(--copilot-muted)] hover:text-[var(--copilot-mention)] hover:border-[var(--copilot-strong)] flex items-center justify-center transition-colors disabled:opacity-50"
           >
             <AtSign className="w-3 h-3" strokeWidth={2} />
@@ -252,17 +255,23 @@ export function CopilotComposer({ mentionSources, onSearchChange, fileTotal, has
               actual model usage and normally lands far below it. */}
           <span
             className="text-[11px] text-[var(--copilot-dim)] truncate"
-            title={turnCeiling > 0 ? S.turnCeilingFull(turnCeiling) : undefined}
+            title={turnCeiling > 0 ? t(K.turnCeilingFull, { credits: creditUnits(turnCeiling) }) : undefined}
           >
-            {turnCeiling > 0 && <span className="tabular-nums">{S.turnCeiling(turnCeiling)} · </span>}
-            {runMode === "auto" ? S.composerHintAuto(autoRunLimit) : S.composerHintAsk}
+            {turnCeiling > 0 && (
+              <span className="tabular-nums">
+                {t(K.turnCeiling, { credits: creditUnits(turnCeiling), unit: creditUnitLabel(t(K.unitShort)) })} ·{" "}
+              </span>
+            )}
+            {runMode === "auto"
+              ? t(K.composerHintAuto, { ceiling: creditUnits(autoRunLimit) })
+              : t(K.composerHintAsk)}
           </span>
           <button
             type="button"
             onClick={streaming ? onStop : submit}
             disabled={disabled || (!streaming && draft.trim().length === 0)}
-            aria-label={streaming ? S.stop : S.send}
-            className="ml-auto w-[30px] h-[30px] rounded-[9px] bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 transition-opacity"
+            aria-label={t(streaming ? K.stop : K.send)}
+            className="ms-auto w-[30px] h-[30px] rounded-[9px] bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 transition-opacity"
           >
             {streaming ? (
               <span className="w-[9px] h-[9px] rounded-[2px] bg-current" aria-hidden />

@@ -13,6 +13,7 @@
 
 import { create } from "zustand"
 import { LANGUAGES, type LocaleId, type LocaleDirection, getLocaleDirection } from "@nodaro/shared"
+import { isOfferedLocale } from "./i18n/offered-locales"
 import { runtimeDefaultLocale } from "./runtime-config"
 import { surfaceLocaleDefault } from "./surface-selectors"
 
@@ -25,25 +26,49 @@ function isSupportedLocale(value: string | null | undefined): value is LocaleId 
 }
 
 /**
- * Resolve a BCP-47 tag to a locale we ship: an exact match, else the
- * language-only prefix ("en-US" → "en"). null if neither is supported. Shared
- * so the DEFAULT_LOCALE operator knob is exactly as forgiving as the automatic
- * browser detection it overrides.
+ * Languages whose regions write in different scripts: another region of these
+ * is a different reading experience, so it is never remapped (zh-TW and zh-HK
+ * write Traditional characters; the zh-CN we ship is Simplified).
+ */
+const SCRIPT_SPLIT_LANGUAGES: ReadonlySet<string> = new Set(["zh"])
+
+/**
+ * Resolve a BCP-47 tag to a locale we ship, in this order:
+ *   1. an exact match, ignoring letter case ("pt-br" → "pt-BR")
+ *   2. the language-only prefix ("en-US" → "en")
+ *   3. the one regional form we ship of the tag's language, for a bare tag
+ *      ("pt" → "pt-BR") and for another region ("pt-PT" → "pt-BR") — except
+ *      in a language whose regions differ in script (zh-TW is not zh-CN).
+ * null if none applies. Shared so the DEFAULT_LOCALE operator knob is exactly
+ * as forgiving as the automatic browser detection it overrides.
  */
 function matchSupportedLocale(tag: string | null | undefined): LocaleId | null {
   if (!tag) return null
-  if (isSupportedLocale(tag)) return tag
-  const prefix = tag.split("-")[0]
-  return isSupportedLocale(prefix) ? prefix : null
+  const lower = tag.toLowerCase()
+  const exact = LANGUAGES.find((l) => l.id.toLowerCase() === lower)
+  if (exact) return exact.id
+  const prefix = lower.split("-")[0]
+  if (isSupportedLocale(prefix)) return prefix
+  if (lower !== prefix && SCRIPT_SPLIT_LANGUAGES.has(prefix)) return null
+  const regional = LANGUAGES.filter((l) => l.id.toLowerCase().split("-")[0] === prefix)
+  return regional.length === 1 ? regional[0].id : null
 }
 
+/**
+ * Browser detection lands only on an OFFERED locale (one whose chrome
+ * translation is complete — see `i18n/offered-locales.ts`). A German browser
+ * must not drop a first-time visitor into a language the menu doesn't even
+ * list: they would get English menus with German picker tiles and no idea
+ * why. Explicit choices (a saved preference, the operator's DEFAULT_LOCALE)
+ * keep the lenient `matchSupportedLocale` — they asked for it by name.
+ */
 function detectBrowserLocale(): LocaleId {
   if (typeof navigator === "undefined") return "en"
-  // navigator.languages is BCP-47 ordered by user preference; first supported wins.
+  // navigator.languages is BCP-47 ordered by user preference; first offered wins.
   const candidates = (navigator.languages ?? [navigator.language ?? "en"]) as string[]
   for (const tag of candidates) {
     const m = matchSupportedLocale(tag)
-    if (m) return m
+    if (m && isOfferedLocale(m)) return m
   }
   return "en"
 }

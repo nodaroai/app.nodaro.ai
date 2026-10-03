@@ -311,4 +311,33 @@ describe("executeNode: instagram-scrape", () => {
     const last = mockUpdateNodeData.mock.calls.filter((c) => c[0] === "node_8").at(-1)?.[1]
     expect(last).toMatchObject({ lastRunOutcome: "success", generatedJson: posts, lastAppliedJobId: "job-ig" })
   })
+
+  it("a run features its first post: the saved featured index is not sent", async () => {
+    // The node resets to post 0 on completion; the saved index points into the
+    // previous run's posts, so sending it featured (and copied) another post.
+    mockInstagramScrape.mockResolvedValue({ jobId: "job-ig", status: "pending" })
+    mockPollScrapeJobOutput.mockResolvedValue({ json: [] })
+
+    await executeNode({ ...igNode, data: { ...igNode.data, featuredIndex: 3 } }, makeCtx())
+
+    expect(mockInstagramScrape.mock.calls.at(-1)?.[0]).not.toHaveProperty("featuredIndex")
+  })
+})
+
+describe("executeNode: meta-ads-scrape features its first ad", () => {
+  it("the saved featured index is not sent", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockMetaAdsScrape.mockResolvedValue({ jobId: "job-ads", status: "pending" })
+    mockPollScrapeJobOutput.mockResolvedValue({ json: [] })
+    const node = {
+      id: "node_9",
+      type: "meta-ads-scrape",
+      position: { x: 0, y: 0 },
+      data: { label: "Meta Ads", mode: "search", query: "nike", featuredIndex: 3 },
+    } as any
+
+    await executeNode(node, makeCtx())
+
+    expect(mockMetaAdsScrape.mock.calls.at(-1)?.[0]).not.toHaveProperty("featuredIndex")
+  })
 })

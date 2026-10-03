@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_VIDEO_MODELS } from "@nodaro/shared"
 import { pipelinesApi } from "@/lib/pipelines-api"
+import { useT, tx } from "@/lib/i18n"
 
 /**
  * Phase 3 — selected-clip editor. When a clip is opened in the main screen,
@@ -40,6 +41,7 @@ export function ClipEditor({
   sceneId: string
   onRegenerated?: (videoUrl: string) => void
 }) {
+  const t = useT()
   const [scene, setScene] = useState<SceneData | null>(null)
   const [shotId, setShotId] = useState<string | null>(null)
   const [keyframePrompt, setKeyframePrompt] = useState("")
@@ -80,7 +82,7 @@ export function ClipEditor({
   const regenerate = async () => {
     if (!shotId || busy) return
     setBusy(true)
-    setNote("Saving + re-animating clip…")
+    setNote(tx("pipe.cinemaSavingReanimating"))
     try {
       await pipelinesApi.editShot(pipelineId, sceneId, shotId, {
         visual_keyframe_prompt: keyframePrompt.trim() ? keyframePrompt : undefined,
@@ -89,11 +91,11 @@ export function ClipEditor({
         video_model: videoModel || undefined,
       })
       const r = await pipelinesApi.reanimateShot(pipelineId, sceneId, shotId)
-      setNote("Clip regenerated")
+      setNote(tx("pipe.cinemaClipRegenerated"))
       onRegenerated?.(r.video_url)
       window.setTimeout(() => setNote(null), 2000)
     } catch (e) {
-      setNote(e instanceof Error ? e.message : "Regenerate failed")
+      setNote(e instanceof Error ? e.message : tx("pipe.cinemaRegenerateFailed"))
     } finally {
       setBusy(false)
     }
@@ -109,13 +111,13 @@ export function ClipEditor({
     <div className="border-t border-[#1d1d1d] p-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">
-          ✦ Edit this clip
+          ✦ {t("pipe.cinemaEditThisClip")}
         </span>
         {note && <span className="font-mono text-[10px] text-[#ff0073]">{note}</span>}
       </div>
 
       <label className="block">
-        <span className={LABEL}>Keyframe prompt</span>
+        <span className={LABEL}>{t("pipe.cinemaKeyframePrompt")}</span>
         <textarea
           value={keyframePrompt}
           onChange={(e) => setKeyframePrompt(e.target.value)}
@@ -125,7 +127,7 @@ export function ClipEditor({
       </label>
 
       <label className="mt-2 block">
-        <span className={LABEL}>Motion / direction</span>
+        <span className={LABEL}>{t("pipe.cinemaMotionDirection")}</span>
         <textarea
           value={motionPrompt}
           onChange={(e) => setMotionPrompt(e.target.value)}
@@ -136,9 +138,9 @@ export function ClipEditor({
 
       <div className="mt-2 grid grid-cols-2 gap-3">
         <label className="block">
-          <span className={LABEL}>Image model</span>
+          <span className={LABEL}>{t("pipe.imageModel")}</span>
           <select value={imageModel} onChange={(e) => setImageModel(e.target.value)} className={FIELD}>
-            <option value="">Auto</option>
+            <option value="">{t("common.auto")}</option>
             {PIPELINE_PINNABLE_IMAGE_MODELS.map((m) => (
               <option key={m} value={m}>
                 {m}
@@ -147,9 +149,9 @@ export function ClipEditor({
           </select>
         </label>
         <label className="block">
-          <span className={LABEL}>Video model</span>
+          <span className={LABEL}>{t("pipe.videoModel")}</span>
           <select value={videoModel} onChange={(e) => setVideoModel(e.target.value)} className={FIELD}>
-            <option value="">Auto</option>
+            <option value="">{t("common.auto")}</option>
             {PIPELINE_PINNABLE_VIDEO_MODELS.map((m) => (
               <option key={m} value={m}>
                 {m}
@@ -160,10 +162,10 @@ export function ClipEditor({
       </div>
 
       <div className="mt-2">
-        <span className={LABEL}>Reference entities</span>
+        <span className={LABEL}>{t("pipe.cinemaReferenceEntities")}</span>
         <div className="mt-1 flex flex-wrap gap-1.5">
           {refs.length === 0 ? (
-            <span className="font-mono text-[10px] text-muted-foreground">none</span>
+            <span className="font-mono text-[10px] text-muted-foreground">{t("cfgext.injRefModeNone")}</span>
           ) : (
             refs.map((k) => (
               <span
@@ -184,7 +186,7 @@ export function ClipEditor({
           disabled={busy || !shotId}
           className="rounded-md bg-[#ff0073] px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white disabled:opacity-40"
         >
-          {busy ? "Regenerating…" : "Save & Regenerate clip"}
+          {busy ? t("cfgext.sceneRegenerating") : t("pipe.cinemaSaveRegenerateClip")}
         </button>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import type { FrameFit, FrameDelivery } from "@nodaro/shared";
+import type { FrameFit, FrameDelivery, ScriptSettings } from "@nodaro/shared";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import {
@@ -28,12 +28,13 @@ import type {
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
-  MAX_CONSECUTIVE_POLL_FAILURES,
   checkStorageError,
   type ExecutionContext,
 } from "./types";
+import { jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, RUN_START_RESET } from "./poll-job";
 import { shouldAbandonNode } from "./abandon-guard";
+import { tx } from "@/lib/i18n";
 
 /** Extract kieTaskId from output data for downstream video chaining. */
 const extractKieTaskId = (od: Record<string, unknown>) => {
@@ -504,12 +505,9 @@ export function runScriptGeneration(
   nodeId: string,
   prompt: string,
   ctx: ExecutionContext,
-  sceneCount?: number,
-  tone?: string,
-  targetDuration?: number,
-  provider?: string,
-  llmModel?: string,
-  reasoningEffort?: string,
+  /** Already normalized by `readScriptSettings`, the server's reader too. */
+  settings: ScriptSettings = {},
+  model: { provider?: string; llmModel?: string; reasoningEffort?: string } = {},
 ): Promise<string> {
   const { updateNodeData, nodes } = useWorkflowStore.getState();
   updateNodeData(nodeId, { ...RUN_START_RESET });
@@ -522,8 +520,7 @@ export function runScriptGeneration(
   );
 
   return new Promise<string>((resolve, reject) => {
-    generateScriptApi({ prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort,
-      ...advanced, userId: ctx.userId })
+    generateScriptApi({ prompt, ...settings, ...model, ...advanced, userId: ctx.userId })
       .then(({ jobId }) => {
         if (ctx.signal?.aborted) {
           // Run discarded/aborted while the create-job request was in flight.
@@ -536,8 +533,8 @@ export function runScriptGeneration(
           resolve("");
           return;
         }
-        guardedToast.info("Script generation started", {
-          description: `Job ID: ${jobId}`,
+        guardedToast.info(tx("nodeRun.scriptGenerationStarted"), {
+          description: tx("run.jobIdLine", { id: jobId }),
         });
         updateNodeData(nodeId, { currentJobId: jobId });
 
@@ -590,7 +587,7 @@ export function runScriptGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                 });
-                guardedToast.success("Script generated", {
+                guardedToast.success(tx("nodeRun.scriptGenerated"), {
                   description: script?.title,
                 });
                 resolve(script?.title || "");
@@ -602,14 +599,14 @@ export function runScriptGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                guardedToast.error("Script generation failed", {
+                guardedToast.error(tx("nodeRun.scriptGenerationFailed"), {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
@@ -618,9 +615,11 @@ export function runScriptGeneration(
                 }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
-                guardedToast.error("Failed to check script generation status");
+                guardedToast.error(tx("nodeRun.failedToCheckScriptGeneration"));
                 reject(err);
               }
             }
@@ -633,8 +632,8 @@ export function runScriptGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          guardedToast.error("Failed to start script generation", {
-            description: err instanceof Error ? err.message : "Unknown error",
+          guardedToast.error(tx("apiErr.startScriptGeneration"), {
+            description: err instanceof Error ? err.message : tx("lib.unknownError"),
           });
         }
         reject(err);
@@ -680,8 +679,8 @@ export function runLottiePlanGeneration(
           resolve("");
           return;
         }
-        guardedToast.info("Lottie generation started", {
-          description: `Job ID: ${jobId}`,
+        guardedToast.info(tx("nodeRun.lottieGenerationStarted"), {
+          description: tx("run.jobIdLine", { id: jobId }),
         });
         updateNodeData(nodeId, { currentJobId: jobId });
 
@@ -718,7 +717,7 @@ export function runLottiePlanGeneration(
                   lottieUrl: job.output_data?.lottieUrl as string | undefined,
                   currentJobId: undefined,
                 });
-                guardedToast.success("Lottie animation generated");
+                guardedToast.success(tx("nodeRun.lottieAnimationGenerated"));
                 resolve("plan-ready");
               } else if (job.status === "failed") {
                 ctx.untrackInterval(poll);
@@ -728,14 +727,14 @@ export function runLottiePlanGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                guardedToast.error("Lottie generation failed", {
+                guardedToast.error(tx("nodeRun.lottieGenerationFailed"), {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
@@ -744,9 +743,11 @@ export function runLottiePlanGeneration(
                 }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
-                guardedToast.error("Failed to check Lottie generation status");
+                guardedToast.error(tx("nodeRun.failedToCheckLottieGeneration"));
                 reject(err);
               }
             }
@@ -759,8 +760,8 @@ export function runLottiePlanGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          guardedToast.error("Failed to start Lottie generation", {
-            description: err instanceof Error ? err.message : "Unknown error",
+          guardedToast.error(tx("nodeRun.failedToStartLottieGeneration"), {
+            description: err instanceof Error ? err.message : tx("lib.unknownError"),
           });
         }
         reject(err);

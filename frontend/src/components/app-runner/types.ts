@@ -1,8 +1,32 @@
 import type { WorkflowNode } from "@/types/nodes"
 import { getNodeResult, getOutputType } from "@/lib/presentation-utils"
 import { isMultiColumnList } from "@/lib/list-loop-migration"
+import type { MessageKey } from "@/lib/i18n"
 
 export const ORIGINAL_SLOT_ID = "original"
+
+/**
+ * What the header's secondary run button does for the active slot. A mode, not
+ * a label: the button's look keys off it, so it must not depend on the
+ * language the label is shown in.
+ */
+export type NewRunAction = "new" | "clear" | "retry"
+
+const NEW_RUN_ACTION_LABEL: Record<NewRunAction, MessageKey> = {
+  new: "runner.newRun",
+  clear: "common.clear",
+  retry: "common.retry",
+}
+
+/** The dictionary key naming a new-run action; no action reads as "new". */
+export function newRunActionLabel(action: NewRunAction | undefined): MessageKey {
+  return NEW_RUN_ACTION_LABEL[action ?? "new"]
+}
+
+/** Clear and Retry reset the current slot rather than opening a new one. */
+export function isResetAction(action: NewRunAction | undefined): boolean {
+  return action === "clear" || action === "retry"
+}
 
 export interface RunSlotNodeState {
   status: "pending" | "running" | "completed" | "failed" | "skipped"

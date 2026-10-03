@@ -13,14 +13,20 @@
  *   - source C: solid GREEN + a 660 Hz tone, with a +1000 ms master offset
  * so a colour probe verifies SEGMENT ORDER, a Goertzel tone probe verifies
  * AUDIO CONTINUITY + order, and the offset source verifies the D19 sign.
+ *
+ * The multicam shapes (Phase-2 B1) live in `apply-edl-multicam.e2e.test.ts`;
+ * the fixture builders and decoders both files use, in `apply-edl-e2e-helpers.ts`.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
-import { execFileSync } from "node:child_process"
 import { basename, dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { runFfmpeg, runFfprobe, probeStreamEnds } from "../ffmpeg-utils.js"
 import type { Edl } from "@nodaro/shared"
+import {
+  ffmpegAvailable, mp3EncoderAvailable, makeSource, probeDurationSec, colourOfFrame, probeColor,
+  frameRuns, probeTone, trackDetail, ONE_FRAME,
+} from "./apply-edl-e2e-helpers.js"
 
 // Records every ffmpeg spawn applyEdl makes (and can fail one on demand), so
 // tests can pin HOW a render runs, not only what it produces.
@@ -48,6 +54,12 @@ vi.mock("../ffmpeg-utils.js", async (importOriginal) => {
     },
   }
 })
+
+// Every case here spawns real ffmpeg (building its sources, then rendering), so
+// a shared CI runner can take well over vitest's 5 s default: two cases that
+// had no limit of their own timed out in CI on an unrelated PR. One limit for
+// the file covers every case, present and future; the slow ones keep theirs.
+vi.setConfig({ testTimeout: 120_000 })
 
 // In-memory R2 for the checkpoint/resume cases. Every other case renders with
 // `checkpoint:false` and never imports storage.
@@ -78,90 +90,12 @@ vi.mock("../../../lib/storage.js", () => ({
   },
 }))
 
-const { applyEdl, resolveChunksForOutput } = await import("../apply-edl.js")
-
-function isFfmpegAvailable(): boolean {
-  try {
-    execFileSync("ffmpeg", ["-version"], { stdio: "ignore" })
-    return true
-  } catch {
-    return false
-  }
-}
-const ffmpegAvailable = isFfmpegAvailable()
-
-/** The VBR-mp3 fixture needs libmp3lame; a build without it skips that one case. */
-function isMp3EncoderAvailable(): boolean {
-  try {
-    return execFileSync("ffmpeg", ["-hide_banner", "-encoders"], { stdio: ["ignore", "pipe", "ignore"] }).toString().includes("libmp3lame")
-  } catch {
-    return false
-  }
-}
-const mp3EncoderAvailable = ffmpegAvailable && isMp3EncoderAvailable()
-
-async function makeSource(path: string, color: string, freq: number, durationSec: number): Promise<void> {
-  await runFfmpeg([
-    "-y",
-    "-f", "lavfi", "-i", `color=c=${color}:s=320x240:r=30:d=${durationSec}`,
-    "-f", "lavfi", "-i", `sine=f=${freq}:r=48000:d=${durationSec}`,
-    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
-    path,
-  ])
-}
-
-async function probeDurationSec(path: string): Promise<number> {
-  const out = await runFfprobe(["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path])
-  return parseFloat(out.trim())
-}
-
-const colourOfFrame = (c: { r: number; g: number; b: number }): string =>
-  c.r > 150 && c.g < 100 && c.b < 100 ? "red" : `?(${c.r},${c.g},${c.b})`
-
-/** Average RGB at output time `t` (scale=1:1 averages the whole frame). */
-async function probeColor(path: string, t: number): Promise<{ r: number; g: number; b: number }> {
-  const raw = join(tmpdir(), `ae-px-${Math.random().toString(36).slice(2)}.raw`)
-  await runFfmpeg(["-y", "-ss", String(t), "-i", path, "-frames:v", "1", "-vf", "scale=1:1", "-f", "rawvideo", "-pix_fmt", "rgb24", raw])
-  const buf = await fs.readFile(raw)
-  await fs.rm(raw, { force: true })
-  return { r: buf[0], g: buf[1], b: buf[2] }
-}
-
-function goertzel(samples: Float64Array, sampleRate: number, freq: number): number {
-  const k = Math.round((samples.length * freq) / sampleRate)
-  const w = (2 * Math.PI * k) / samples.length
-  const coeff = 2 * Math.cos(w)
-  let s1 = 0, s2 = 0
-  for (let i = 0; i < samples.length; i++) {
-    const s0 = samples[i] + coeff * s1 - s2
-    s2 = s1
-    s1 = s0
-  }
-  return s1 * s1 + s2 * s2 - coeff * s1 * s2
-}
-
-/** Dominant tone frequency (from a fixed set) in a 0.4 s window at output time `t`. */
-async function probeTone(path: string, t: number, candidates: number[]): Promise<number> {
-  const raw = join(tmpdir(), `ae-pcm-${Math.random().toString(36).slice(2)}.raw`)
-  await runFfmpeg(["-y", "-ss", String(t), "-t", "0.4", "-i", path, "-ac", "1", "-ar", "8000", "-f", "s16le", raw])
-  const buf = await fs.readFile(raw)
-  await fs.rm(raw, { force: true })
-  const n = Math.floor(buf.length / 2)
-  const samples = new Float64Array(n)
-  for (let i = 0; i < n; i++) samples[i] = buf.readInt16LE(i * 2) / 32768
-  let best = candidates[0]
-  let bestMag = -Infinity
-  for (const f of candidates) {
-    const mag = goertzel(samples, 8000, f)
-    if (mag > bestMag) { bestMag = mag; best = f }
-  }
-  return best
-}
+const { applyEdl, resolveChunksForOutput, chunkOutputSec } = await import("../apply-edl.js")
 
 describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
   let dir: string
   let srcA: string, srcB: string, srcC: string, srcVbr: string, srcArt: string, srcLive: string
-  let srcLowFps: string, srcV6A3: string, srcV3A6: string, srcOff15: string, srcTs: string
+  let srcLowFps: string, srcV6A3: string, srcV3A6: string, srcOff15: string, srcTs: string, srcTsJoined: string, srcTsRestart: string, srcRotated: string
   let srcCamA30: string, srcCamB24: string, srcMaster: string, srcSweep: string
   // Every successful render leaves its work dir (source copies + output) in
   // tmpdir; a failed one is cleaned by applyEdl itself. Collected and removed.
@@ -178,7 +112,7 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
     srcA = join(dir, "a.mp4"); srcB = join(dir, "b.mp4"); srcC = join(dir, "c.mp4")
     srcVbr = join(dir, "vbr.mp3"); srcArt = join(dir, "art.mp3"); srcLive = join(dir, "live.mkv")
     srcLowFps = join(dir, "lowfps.mp4"); srcV6A3 = join(dir, "v6a3.mp4"); srcV3A6 = join(dir, "v3a6.mp4")
-    srcOff15 = join(dir, "off15.mp4"); srcTs = join(dir, "cam.ts")
+    srcOff15 = join(dir, "off15.mp4"); srcTs = join(dir, "cam.ts"); srcTsJoined = join(dir, "joined.ts"); srcTsRestart = join(dir, "restart.ts"); srcRotated = join(dir, "rotated.mp4")
     srcCamA30 = join(dir, "camA30.mp4"); srcCamB24 = join(dir, "camB24.mp4"); srcMaster = join(dir, "master.m4a")
     srcSweep = join(dir, "sweep.mp4")
     await makeSource(srcA, "red", 440, 6)
@@ -230,6 +164,28 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
     // format.start_time is NOT the render's zero. The probe must SKIP it
     // (both tracks unmeasured) rather than measure against the wrong clock.
     await runFfmpeg(["-y", "-i", srcA, "-c", "copy", "-muxdelay", "0", "-output_ts_offset", "3600", "-f", "mpegts", srcTs])
+    // Three 6 s TS remuxes (red, blue, red) joined BYTE FOR BYTE — what `cat`-ed
+    // recordings, a reconnecting stream dump or joined DVD VOBs look like. The
+    // timestamps jump back at each join, so ffprobe's duration (last minus first
+    // timestamp) declares ~6 s while the render plays all 18 s straight through.
+    const tsRed = join(dir, "part-red.ts"), tsBlue = join(dir, "part-blue.ts")
+    await runFfmpeg(["-y", "-i", srcA, "-c", "copy", "-f", "mpegts", tsRed])
+    await runFfmpeg(["-y", "-i", srcB, "-c", "copy", "-f", "mpegts", tsBlue])
+    const [red, blue] = await Promise.all([fs.readFile(tsRed), fs.readFile(tsBlue)])
+    await fs.writeFile(srcTsJoined, Buffer.concat([red, blue, red]))
+    // A recording whose clock RESTARTED more than 60 s below its first
+    // timestamp (a broadcast/DVR capture, then an encoder restart at ~0):
+    // libavformat takes the drop for a 33-bit wrap and adds 2^33 ticks, so the
+    // join reads as one ~26.5 h FORWARD step and the container declares ~25 h.
+    const tsLate = join(dir, "part-late.ts")
+    await runFfmpeg(["-y", "-i", srcA, "-c", "copy", "-output_ts_offset", "3600", "-f", "mpegts", tsLate])
+    await fs.writeFile(srcTsRestart, Buffer.concat([await fs.readFile(tsLate), blue]))
+    // A 29.97 fps phone clip shot in portrait: its display-matrix side data
+    // makes ffprobe append an empty csv field ("30000/1001,"), which read as
+    // 30000 fps and laid the whole edit on a 60 fps canvas.
+    const ntsc = join(dir, "ntsc.mp4")
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=red:s=320x240:r=30000/1001:d=4", "-f", "lavfi", "-i", "sine=f=440:r=48000:d=4", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", ntsc])
+    await runFfmpeg(["-y", "-display_rotation", "90", "-i", ntsc, "-c", "copy", srcRotated])
     // A 6 s live-muxed Matroska (what a MediaRecorder writes) — no duration element.
     await runFfmpeg([
       "-y",
@@ -275,7 +231,7 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
       "-f", "lavfi", "-i", "aevalsrc=sin(2*PI*(400+100*mod(floor(t/2)\\,6))*t):s=48000:d=60",
       "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-c:a", "aac", "-shortest", srcSweep,
     ])
-  }, 120_000)
+  }, 180_000)
 
   afterAll(async () => {
     delete process.env.APPLY_EDL_FIXTURE_DIR
@@ -349,10 +305,78 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
   // stream, so format.start_time is not the render's clock. The probe must not
   // measure against it (that would refuse correct edits or pass bad ones) — it
   // marks both tracks unmeasured, so the window check skips the source.
-  it("marks an MPEG-TS source's tracks unmeasured — the window check is skipped, not made wrong", async () => {
+  it("marks an MPEG-TS source's tracks unmeasured, carrying the container's declared length as a coarse bound", async () => {
     const ends = await probeStreamEnds(srcTs)
     expect(ends.video.state).toBe("unmeasured")
     expect(ends.audio.state).toBe("unmeasured")
+    const declared = ends.video.state === "unmeasured" ? ends.video.declaredEndSec : undefined
+    expect(declared).toBeGreaterThan(5.5) // the 6 s fixture, offset by 3600 s
+    expect(declared).toBeLessThan(6.6)
+  })
+
+  // Before: a segment running past an MPEG-TS source's end was not checked and,
+  // with every read held past its source's end, rendered a frozen last frame
+  // over silence for however long the overrun was — completed and billed. Now
+  // the declared length bounds it: far past it fails the job (refunded, not
+  // retried); inside the tolerance it renders its full window.
+  it("refuses a segment running far past an MPEG-TS source's declared length; renders one inside the tolerance", async () => {
+    const sources: Edl["sources"] = [{ id: "TS", url: "https://fixtures.test/cam.ts", kind: "video" }]
+    const over: Edl = { version: 1, clock: "master", sources, segments: [{ id: "s0", inMs: 0, outMs: 90_000, video: "TS", audio: "TS" }] }
+    await expect(applyEdl({ edl: over, output: "video", quality: "final", jobId: "t-ts-over", checkpoint: false }))
+      .rejects.toThrow(/segment\[0\] "s0" ends at 90\.00s on source "TS", but that file declares only 6\.\d\ds/)
+    const inside: Edl = { version: 1, clock: "master", sources, segments: [{ id: "s0", inMs: 0, outMs: 9_000, video: "TS", audio: "TS" }] }
+    const { outputPath } = await render({ edl: inside, output: "video", quality: "final", jobId: "t-ts-inside", checkpoint: false })
+    expect(await probeDurationSec(outputPath)).toBeCloseTo(9, 0)
+  })
+
+  // A TS whose timestamps jump back DECLARES less than it plays (ffprobe's
+  // duration is last-minus-first timestamp): the byte-joined red|blue|red file
+  // declares ~6 s of 18 s. Refusing against that declaration failed a correct
+  // paid edit; the probe attaches the bound only for monotonic timestamps, so
+  // this edit renders — all of it, with the joined parts' real content.
+  it("renders a rotated 29.97 fps phone clip at its own rate, not on a 60 fps canvas", async () => {
+    const edl: Edl = {
+      version: 1, clock: "master",
+      sources: [{ id: "PH", url: "https://fixtures.test/rotated.mp4", kind: "video" }],
+      segments: [{ id: "s0", inMs: 0, outMs: 3_000, video: "PH", audio: "PH" }],
+    }
+    const { outputPath } = await render({ edl, output: "video", quality: "final", jobId: "t-rotated", checkpoint: false })
+    const out = (await runFfprobe(["-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=r_frame_rate,nb_read_packets", "-of", "csv=p=0", outputPath])).trim()
+    const [rate, packets] = out.split("\n")[0]!.split(",")
+    expect(rate).toMatch(/^(30000\/1001|2997\/100)$/)
+    expect(Number(packets)).toBeGreaterThanOrEqual(89)
+    expect(Number(packets)).toBeLessThanOrEqual(91)
+  })
+
+  it("never bounds a TS whose clock restarted (an unwrapped forward jump) by its multi-hour declared length", async () => {
+    expect(await probeDurationSec(srcTsRestart)).toBeGreaterThan(3600) // precondition: the container really over-states it
+    const ends = await probeStreamEnds(srcTsRestart)
+    expect(ends.video).toMatchObject({ state: "unmeasured", reason: expect.stringMatching(/forward by more than 10 s/) })
+    expect(ends.video).not.toHaveProperty("declaredEndSec")
+  })
+
+  it("never bounds a TS whose timestamps jump back (joined recordings) by its declared length — renders its real content", async () => {
+    expect(await probeDurationSec(srcTsJoined)).toBeLessThan(7) // precondition: the container really under-states it
+    const ends = await probeStreamEnds(srcTsJoined)
+    expect(ends.video).toMatchObject({ state: "unmeasured", reason: expect.stringMatching(/timestamps jump/) })
+    expect(ends.video).not.toHaveProperty("declaredEndSec")
+    const edl: Edl = {
+      version: 1, clock: "master",
+      sources: [{ id: "TSJ", url: "https://fixtures.test/joined.ts", kind: "video" }],
+      segments: [{ id: "s0", inMs: 0, outMs: 17_000, video: "TSJ", audio: "TSJ" }],
+    }
+    const { outputPath } = await render({ edl, output: "video", quality: "final", jobId: "t-ts-joined", checkpoint: false })
+    // The canvas is the source's own 320×240 — a TS answer repeats each stream
+    // under its program, which once read as height 1080 (a 320×1080 canvas).
+    const dims = (await runFfprobe(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0:s=x", outputPath])).trim()
+    expect(dims).toBe("320x240")
+    expect(await probeDurationSec(outputPath)).toBeCloseTo(17, 0)
+    const isBlue = (c: { r: number; g: number; b: number }) => c.b > 150 && c.r < 100 && c.g < 100
+    expect(colourOfFrame(await probeColor(outputPath, 3))).toBe("red")
+    expect(isBlue(await probeColor(outputPath, 9))).toBe(true) // the second part, not a frozen first-part frame
+    expect(colourOfFrame(await probeColor(outputPath, 15))).toBe("red")
+    expect(await probeTone(outputPath, 9, [440, 880])).toBe(880)
+    expect(await probeTone(outputPath, 15, [440, 880])).toBe(440)
   })
 
   // The window check measures each source's REAL stream end, not the length
@@ -413,18 +437,6 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
     Array.from({ length: n }, (_, k) => ({
       id: `s${k}`, inMs: k * segMs, outMs: (k + 1) * segMs, video: k % 2 === 0 ? "A" : "B",
     }))
-  const trackDetail = async (outputPath: string): Promise<{ drift: number; video: number; audio: number; vframes: string; ver: string }> => {
-    const ends = await probeStreamEnds(outputPath)
-    expect(ends.video.state).toBe("measured")
-    expect(ends.audio.state).toBe("measured")
-    const video = ends.video.state === "measured" ? ends.video.endSec : NaN
-    const audio = ends.audio.state === "measured" ? ends.audio.endSec : NaN
-    const vframes = (await runFfprobe(["-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", outputPath])).trim()
-    const ver = (await runFfmpeg(["-version"]).catch(() => "")).split("\n")[0] || "?"
-    return { drift: Math.abs(video - audio), video, audio, vframes, ver }
-  }
-  // 30 fps canvas → one frame is 1/30 s. The grid holds the drift well inside it.
-  const ONE_FRAME = 1 / 30
 
   // Exact output frames for a uniform-cut edit on the 30 fps canvas. The two real
   // guards are FRAME COUNT (a video graph that overflows on a cloud runner drops
@@ -486,7 +498,7 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
   // track nothing would, so the chunk's END is held to the grid. Chunks close at
   // hard cuts every 30 segments ([0-29] [30-59] [60-89]); the crossfade INTO
   // segment 61 sits at chunk 2's local index 1 — the one spot a crossfade
-  // renders today (a crossfade after a cut inside a chunk is Track 0.15).
+  // renders today (a crossfade after a cut inside a chunk renders too since Track 0.15).
   it("holds a crossfade chunk's end to the frame grid — no offset carried past it (Track 0.14)", async () => {
     const segments = alternatingCuts(90, 617).map((s, i) =>
       i === 61 ? { ...s, transition: { type: "crossfade" as const, durationMs: 300 } } : s,
@@ -499,11 +511,12 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
     expect(Math.abs(d.audio - totalSec), `audio end ${JSON.stringify(d)}`).toBeLessThan(ONE_FRAME)
   }, 180_000)
 
-  // Past 200 segments the audio pass renders in slices of at most 100 (one audio
-  // graph over every segment grows ~N^3 in cost and its argv passes Linux's
-  // 128 KiB limit near 800). The slices are lossless PCM, joined sample-exactly
-  // and encoded to AAC once — so the audio still ends on the true total.
-  it("a >200-cut edit renders its audio in lossless slices joined once — every frame, audio on time (Track 0.14)", async () => {
+  // The audio pass renders in slices of at most AUDIO_FILTERGRAPH_MAX_SEGMENTS
+  // (an audio graph's cost grows with segments² × the source span it decodes;
+  // 180 one-minute cuts in one graph took 88.7 min). The slices are lossless PCM,
+  // joined sample-exactly and encoded to AAC once — so the audio still ends on
+  // the true total.
+  it("a 250-cut edit renders its audio in lossless slices joined once — every frame, audio on time (Track 0.14)", async () => {
     const edl: Edl = { version: 1, clock: "master", sources: MULTICAM_SOURCES, segments: alternatingCuts(250, 200) }
     ff.calls.length = 0
     ff.atConcat.length = 0
@@ -523,6 +536,36 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
     const d = await trackDetail(outputPath)
     expect(Number(d.vframes), `frames ${JSON.stringify(d)}`).toBe(expectedFrames(250, 200))
     expect(Math.abs(d.audio - 250 * 0.2), `audio end ${JSON.stringify(d)}`).toBeLessThan(ONE_FRAME)
+  }, 240_000)
+
+  // An AUDIO render past AUDIO_FILTERGRAPH_MAX_SEGMENTS is chunked too, and its
+  // chunks are the same lossless slices: joined sample-exactly and encoded to
+  // AAC ONCE. The old path encoded AAC per chunk and stream-copy concatenated
+  // them, so every seam carried the next chunk's encoder priming and the sound
+  // ran long by it.
+  // Half an AAC frame (1024 samples at 48 kHz = 21.3 ms). Measured: the
+  // lossless join ends exactly on the total; the old per-chunk AAC + stream-copy
+  // join ended one whole AAC frame long (50.021 s) on this very edit.
+  const AUDIO_END_TOLERANCE_SEC = 0.5 * 1024 / 48_000
+  it("a chunked audio-only render joins lossless slices and encodes AAC once — no priming at the seams", async () => {
+    const edl: Edl = { version: 1, clock: "master", sources: MULTICAM_SOURCES, segments: alternatingCuts(250, 200) }
+    const plan = resolveChunksForOutput(edl.segments, "audio")
+    expect(plan.length).toBeGreaterThan(1)
+    ff.calls.length = 0
+    const { outputPath, durationMs } = await render({ edl, output: "audio", quality: "final", jobId: "t-audio-chunked", checkpoint: false })
+    expect(durationMs).toBe(50_000)
+    // Every chunk is lossless PCM; exactly ONE spawn encodes AAC — the join —
+    // and nothing stream-copies audio chunks together.
+    expect(ff.calls.filter((a) => a.includes("pcm_f32le"))).toHaveLength(plan.length)
+    const aacSpawns = ff.calls.filter((a) => a.includes("aac"))
+    expect(aacSpawns).toHaveLength(1)
+    expect(aacSpawns[0]).toContain("concat")
+    expect(ff.calls.some((a) => a.some((x, i) => x === "-c" && a[i + 1] === "copy"))).toBe(false)
+    const ends = await probeStreamEnds(outputPath)
+    expect(ends.video.state).toBe("absent")
+    expect(ends.audio.state).toBe("measured")
+    const end = ends.audio.state === "measured" ? ends.audio.endSec : NaN
+    expect(Math.abs(end - 50), `audio end ${end}`).toBeLessThan(AUDIO_END_TOLERANCE_SEC)
   }, 240_000)
 
   // Resume safety. A checkpoint is found only under a hash of the exact command
@@ -642,6 +685,151 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
     await expectCutOnTime(outputPath, 13, 0.617, "blue")
     await expectCutOnTime(outputPath, 81, 0.617, "blue")
   }, 180_000)
+
+  // Plan B2: a crossfade run past the cap is closed by cutting one of its
+  // segments in two at an invisible hard cut, the second half reading its
+  // picture from the whole segment's start (its frame phase). Forced here at 5
+  // segments per chunk, the split render must show EXACTLY the frames of the
+  // same edit rendered in one pass. The sources are FRAME COUNTERS — every
+  // frame a distinct brightness — so a tail sampled one frame off its
+  // segment's phase would differ by tens of levels, while encoding noise is a
+  // few. Every boundary sits on a whole frame except the cuts themselves
+  // (a 334 ms head = 10.02 frames), so no half-frame tie can round differently.
+  // 300 ms leaves each split head over a frame past its dissolve; 100 and
+  // 200 ms leave some heads WHOLLY inside it (review of #1630: those rendered no
+  // picture and the dissolve became a hard cut) — they must still blend.
+  it.each([300, 100, 200])("a crossfade run cut into pieces renders the same frames and sound as one pass — %i ms dissolves (B2)", async (xfadeMs) => {
+    const counter = async (name: string, lum: string, hz: number) => runFfmpeg([
+      "-y", "-f", "lavfi", "-i", `nullsrc=s=64x48:r=30:d=12,geq=lum='${lum}':cb=128:cr=128,format=yuv420p`,
+      "-f", "lavfi", "-i", `sine=f=${hz}:r=48000:d=12`,
+      "-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", join(dir, name),
+    ])
+    await counter("count37.mp4", "mod(N*37\\,256)", 440)
+    await counter("count53.mp4", "mod(N*53+100\\,256)", 880)
+    const segments: Edl["segments"] = Array.from({ length: 30 }, (_, k) => ({
+      id: `s${k}`, inMs: (k % 5) * 1000, outMs: (k % 5) * 1000 + 1000, video: k % 2 === 0 ? "A" : "B",
+      ...(k > 0 ? { transition: { type: "crossfade" as const, durationMs: xfadeMs } } : {}),
+    }))
+    const edl: Edl = {
+      version: 1,
+      clock: "master",
+      sources: [
+        { id: "A", url: "https://fixtures.test/count37.mp4", kind: "video" },
+        { id: "B", url: "https://fixtures.test/count53.mp4", kind: "video" },
+      ],
+      segments,
+    }
+    const forced = { chunkThreshold: 1, maxSegmentsPerChunk: 5 } as const
+    const plan = resolveChunksForOutput(edl.segments, "video", forced)
+    expect(plan.length).toBeGreaterThan(1)
+    expect(plan.flat().filter((s) => s.splitLeadMs).length).toBe(plan.length - 1)
+    for (const c of plan) expect(c.length).toBeLessThanOrEqual(5)
+
+    const one = await render({ edl, output: "video", quality: "final", jobId: `t-b2-one-${xfadeMs}`, checkpoint: false })
+    const split = await render({ edl, output: "video", quality: "final", jobId: `t-b2-split-${xfadeMs}`, checkpoint: false, ...forced })
+    const totalSec = 30 - 29 * (xfadeMs / 1000)
+    const [d1, d2] = [await trackDetail(one.outputPath), await trackDetail(split.outputPath)]
+    expect(Number(d1.vframes)).toBe(Math.round(totalSec * 30))
+    expect(Number(d2.vframes), `split frames ${JSON.stringify(d2)}`).toBe(Number(d1.vframes))
+    const lumaOf = async (path: string): Promise<number[]> => {
+      const raw = join(dir, `luma-${basename(path)}-${Math.random().toString(36).slice(2)}.raw`)
+      await runFfmpeg(["-y", "-i", path, "-vf", "scale=1:1,format=gray", "-f", "rawvideo", raw])
+      const buf = await fs.readFile(raw)
+      await fs.rm(raw, { force: true })
+      return [...buf]
+    }
+    const [l1, l2] = [await lumaOf(one.outputPath), await lumaOf(split.outputPath)]
+    expect(l2.length).toBe(l1.length)
+    const worst = l1.reduce((acc, v, i) => Math.max(acc, Math.abs(v - l2[i]!)), 0)
+    expect(worst, `worst per-frame brightness gap between the split and one-pass renders`).toBeLessThanOrEqual(8)
+    expect(Math.abs(d2.audio - totalSec), `split audio end ${JSON.stringify(d2)}`).toBeLessThan(ONE_FRAME)
+    // The sound at each cut's second half is still its own camera's tone.
+    for (const t of [2.2, 7.1, 12.5, 17.4]) {
+      expect(await probeTone(split.outputPath, t, [440, 880])).toBe(await probeTone(one.outputPath, t, [440, 880]))
+    }
+  }, 240_000)
+
+  // A chunk that rounds to NO picture frame (here two 5 ms slivers, 10 ms in all
+  // at 30 fps) contributes no picture in a chunked video render — its sound
+  // still plays in the continuous audio pass. Rendering it would add the one
+  // frame a degenerate render keeps and push every later picture a frame behind
+  // the sound (review round 2 of #1630: 2 frames, ~70 ms, for the rest of a render).
+  it("a chunk that rounds to no frame adds no picture — later cuts stay on the sound (B2)", async () => {
+    const segments: Edl["segments"] = [
+      { id: "s0", inMs: 0, outMs: 1000, video: "A" },
+      { id: "s1", inMs: 0, outMs: 1000, video: "B" },
+      { id: "s2", inMs: 1000, outMs: 1005, video: "A" },
+      { id: "s3", inMs: 1000, outMs: 1005, video: "B" },
+      { id: "s4", inMs: 2000, outMs: 3000, video: "A" },
+      { id: "s5", inMs: 2000, outMs: 3000, video: "B" },
+    ]
+    const edl: Edl = {
+      version: 1,
+      clock: "master",
+      sources: [
+        { id: "A", url: "https://fixtures.test/a.mp4", kind: "video" },
+        { id: "B", url: "https://fixtures.test/b.mp4", kind: "video" },
+      ],
+      segments,
+    }
+    const forced = { chunkThreshold: 1, maxSegmentsPerChunk: 2 } as const
+    expect(resolveChunksForOutput(edl.segments, "video", forced).map((c) => c.length)).toEqual([2, 2, 2])
+    const { outputPath } = await render({ edl, output: "video", quality: "final", jobId: "t-b2-sliver", checkpoint: false, ...forced })
+    const d = await trackDetail(outputPath)
+    expect(Number(d.vframes), `frames ${JSON.stringify(d)}`).toBe(Math.round(4.01 * 30))
+    expect(await frameRuns(outputPath, true)).toBe("R30 B30 R30 B30")
+    expect(Math.abs(d.audio - 4.01), `audio end ${JSON.stringify(d)}`).toBeLessThan(ONE_FRAME)
+  }, 120_000)
+
+  // The same split for SOUND: an audio render of that crossfade run, forced into
+  // 5-segment pieces (lossless slices joined, one AAC encode), must line up with
+  // the one-pass render sample for sample around every cut — lag 0, nothing
+  // dropped or doubled where a segment's two halves meet.
+  it("a crossfade run cut into pieces lines up sample-exactly with one pass at every cut (B2)", async () => {
+    const segments: Edl["segments"] = Array.from({ length: 30 }, (_, k) => ({
+      id: `s${k}`, inMs: (k % 5) * 1000, outMs: (k % 5) * 1000 + 1000, video: k % 2 === 0 ? "A" : "B",
+      ...(k > 0 ? { transition: { type: "crossfade" as const, durationMs: 300 } } : {}),
+    }))
+    const edl: Edl = {
+      version: 1,
+      clock: "master",
+      sources: [
+        { id: "A", url: "https://fixtures.test/a.mp4", kind: "video" },
+        { id: "B", url: "https://fixtures.test/b.mp4", kind: "video" },
+      ],
+      segments,
+    }
+    const forced = { chunkThreshold: 1, maxSegmentsPerChunk: 5 } as const
+    const plan = resolveChunksForOutput(edl.segments, "audio", forced)
+    const cutsAt: number[] = []
+    plan.reduce((at, c) => { cutsAt.push(at); return at + chunkOutputSec(c) }, 0)
+    cutsAt.shift() // the first chunk's start is not a cut
+    expect(cutsAt.length).toBeGreaterThan(1)
+
+    const one = await render({ edl, output: "audio", quality: "final", jobId: "t-b2-audio-one", checkpoint: false })
+    const split = await render({ edl, output: "audio", quality: "final", jobId: "t-b2-audio-split", checkpoint: false, ...forced })
+    const pcmOf = async (path: string): Promise<Float32Array> => {
+      const raw = join(dir, `pcm-${basename(path)}-${Math.random().toString(36).slice(2)}.f32`)
+      await runFfmpeg(["-y", "-i", path, "-ac", "1", "-ar", "48000", "-f", "f32le", raw])
+      const buf = await fs.readFile(raw)
+      await fs.rm(raw, { force: true })
+      return new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4)
+    }
+    const [a, b] = [await pcmOf(one.outputPath), await pcmOf(split.outputPath)]
+    expect(Math.abs(b.length - a.length)).toBeLessThanOrEqual(1024)
+    for (const t of cutsAt) {
+      const mid = Math.round(t * 48_000)
+      const win = 2_400 // ±50 ms around the cut
+      let best = { lag: 0, err: Infinity }
+      for (let lag = -8; lag <= 8; lag++) {
+        let err = 0
+        for (let i = mid - win; i < mid + win; i++) err += (a[i]! - b[i + lag]!) ** 2
+        if (err < best.err) best = { lag, err }
+      }
+      expect(best.lag, `cut at ${t.toFixed(3)} s`).toBe(0)
+      expect(Math.sqrt(best.err / (2 * win)), `cut at ${t.toFixed(3)} s rms`).toBeLessThan(0.01)
+    }
+  }, 240_000)
 
   // A crossfade whose OUTGOING side runs out: segment 30 ([18.51, 19.127] s)
   // reads camera C, which ends at 18.8 s, and crossfades into 31 (local index 1
@@ -886,6 +1074,182 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
     expect(vstreams.trim()).toBe("")
     expect(await probeTone(outputPath, 1, [440, 880])).toBe(440)
     expect(await probeTone(outputPath, 3, [440, 880])).toBe(880)
+    await fs.rm(outputPath, { force: true })
+  }, 120_000)
+
+  // Track 0.15: a hard cut joined with `concat` leaves the chain on concat's
+  // microsecond timebase, while every segment (and every xfade output) is on
+  // 1/fps — so a crossfade that FOLLOWS a cut inside one chunk handed xfade two
+  // different timebases and the render failed (all three retries). Hard cuts
+  // plus one dissolve is an ordinary edit shape.
+  it("renders cut, cut, then a crossfade — frame count, picture and the dissolve all on time (Track 0.15)", async () => {
+    const edl: Edl = {
+      version: 1,
+      clock: "master",
+      sources: [
+        { id: "A", url: "https://fixtures.test/a.mp4", kind: "video" },
+        { id: "B", url: "https://fixtures.test/b.mp4", kind: "video" },
+        { id: "C", url: "https://fixtures.test/c.mp4", kind: "video" },
+      ],
+      segments: [
+        { id: "s0", inMs: 0, outMs: 2000, video: "A", audio: "A" },
+        { id: "s1", inMs: 0, outMs: 2000, video: "B", audio: "B" },
+        { id: "s2", inMs: 0, outMs: 2000, video: "A", audio: "A" },
+        { id: "s3", inMs: 0, outMs: 2000, video: "C", audio: "C", transition: { type: "crossfade", durationMs: 500 } },
+      ],
+    }
+    // 4 × 2000 − 500 overlap = 7500 ms → 225 frames at 30 fps.
+    const { outputPath, durationMs } = await render({ edl, output: "video", quality: "final", jobId: "t-cut-xfade", checkpoint: false })
+    expect(durationMs).toBe(7500)
+    // Every frame: 60 red (s0), 60 blue (s1 — the hard cuts land exactly on
+    // frames 60 and 120), then s2 red into the 0.5 s dissolve (frames 165-180,
+    // whose early frames still read red and late ones green) and green (s3) to
+    // the end — 225 frames in all, no frame dropped at either cut.
+    const runs = await frameRuns(outputPath)
+    expect(runs.startsWith("R60 B60 R"), runs).toBe(true)
+    const tail = runs.split(" ").slice(2) // s2 red, the dissolve, s3 green
+    const lens = tail.map((r) => Number(r.slice(1)))
+    expect(tail[tail.length - 1]!.startsWith("G"), runs).toBe(true)
+    expect(lens[0]!, runs).toBeGreaterThanOrEqual(45) // pure s2 until the dissolve starts
+    expect(lens[0]!, runs).toBeLessThanOrEqual(60)
+    expect(lens[lens.length - 1]!, runs).toBeGreaterThanOrEqual(45) // pure s3 after it ends
+    expect(runs.split(" ").reduce((n, run) => n + Number(run.slice(1)), 0), runs).toBe(225)
+    await fs.rm(outputPath, { force: true })
+  }, 120_000)
+
+  // The degenerate joins a crossfade chunk must keep frame-exact (review of
+  // #1597): a bare `fps` after `concat` resampled concat's own timestamps,
+  // which are wrong next to a zero-frame sliver or a one-frame input, and
+  // dropped a real frame there — every later cut one frame early, hidden by a
+  // clone at the chunk's end. Dev renders the first shape correctly.
+  it("a crossfade, then a hard cut to a zero-frame sliver: the next cut still lands on its grid frame (Track 0.15)", async () => {
+    const sources: Edl["sources"] = [
+      { id: "A", url: "https://fixtures.test/a.mp4", kind: "video" },
+      { id: "B", url: "https://fixtures.test/b.mp4", kind: "video" },
+      { id: "C", url: "https://fixtures.test/c.mp4", kind: "video" },
+    ]
+    const edl: Edl = {
+      version: 1, clock: "master", sources,
+      segments: [
+        { id: "s0", inMs: 0, outMs: 1000, video: "A", audio: "A" },
+        { id: "s1", inMs: 0, outMs: 1000, video: "B", audio: "B", transition: { type: "crossfade", durationMs: 300 } },
+        { id: "s2", inMs: 505, outMs: 515, video: "C", audio: "C" }, // 10 ms: holds no source frame
+        { id: "s3", inMs: 0, outMs: 1000, video: "A", audio: "A" },
+      ],
+    }
+    // 1000 + 1000 − 300 + 10 + 1000 = 2710 ms → 81 frames; s3 starts at
+    // 1.71 s → frame round(51.3) = 51, so the last run is exactly 30 red.
+    const { outputPath } = await render({ edl, output: "video", quality: "final", jobId: "t-xfade-sliver", checkpoint: false })
+    const runs = await frameRuns(outputPath)
+    expect(runs.endsWith(" R30"), runs).toBe(true)
+    expect(runs.split(" ").reduce((n, run) => n + Number(run.slice(1)), 0), runs).toBe(81)
+    expect(runs, "no green frame from the sliver").not.toMatch(/G/)
+    await fs.rm(outputPath, { force: true })
+  }, 120_000)
+
+  it("a one-frame first segment, a hard cut, then a crossfade: the first frame is kept (Track 0.15)", async () => {
+    const sources: Edl["sources"] = [
+      { id: "A", url: "https://fixtures.test/a.mp4", kind: "video" },
+      { id: "B", url: "https://fixtures.test/b.mp4", kind: "video" },
+      { id: "C", url: "https://fixtures.test/c.mp4", kind: "video" },
+    ]
+    const edl: Edl = {
+      version: 1, clock: "master", sources,
+      segments: [
+        { id: "s0", inMs: 0, outMs: 30, video: "A", audio: "A" }, // one frame at 30 fps
+        { id: "s1", inMs: 0, outMs: 1000, video: "B", audio: "B" },
+        { id: "s2", inMs: 0, outMs: 1000, video: "C", audio: "C", transition: { type: "crossfade", durationMs: 300 } },
+      ],
+    }
+    const { outputPath } = await render({ edl, output: "video", quality: "final", jobId: "t-1f-first", checkpoint: false })
+    const runs = await frameRuns(outputPath)
+    expect(runs.startsWith("R1 B"), runs).toBe(true)
+    await fs.rm(outputPath, { force: true })
+  }, 120_000)
+
+  // Track 0.16: a crossfade's offset counted NOMINAL seconds while each
+  // segment's `fps` output rounds (a sliver or one-frame segment rounds UP),
+  // so after short segments the joined picture ran long and xfade cut real
+  // frames off the segment before the dissolve. Offsets are now whole frames
+  // of the accumulated picture on the global grid.
+  it("short segments before a crossfade: every segment keeps its grid frames and the dissolve starts on its frame (Track 0.16)", async () => {
+    const sources: Edl["sources"] = [
+      { id: "A", url: "https://fixtures.test/a.mp4", kind: "video" },
+      { id: "B", url: "https://fixtures.test/b.mp4", kind: "video" },
+      { id: "C", url: "https://fixtures.test/c.mp4", kind: "video" },
+    ]
+    const edl: Edl = {
+      version: 1, clock: "master", sources,
+      segments: [
+        { id: "s0", inMs: 0, outMs: 1000, video: "A", audio: "A" }, //   frames  0-30  red
+        { id: "s1", inMs: 0, outMs: 40, video: "B", audio: "B" }, //     frame  30     blue
+        { id: "s2", inMs: 0, outMs: 40, video: "C", audio: "C" }, //     frame  31     green
+        { id: "s3", inMs: 0, outMs: 1000, video: "A", audio: "A" }, //   frames 32-62  red
+        { id: "s4", inMs: 0, outMs: 1000, video: "B", audio: "B", transition: { type: "crossfade", durationMs: 300 } },
+        //  s4 starts at 1.78 s → frame 53; the dissolve spans frames 53-62; blue to frame 83
+      ],
+    }
+    const { outputPath } = await render({ edl, output: "video", quality: "final", jobId: "t-short-then-xfade", checkpoint: false })
+    const runs = await frameRuns(outputPath, true)
+    const parts = runs.split(" ")
+    expect(parts.slice(0, 3).join(" "), runs).toBe("R30 B1 G1")
+    expect(parts[3], runs).toMatch(/^R2[12]$/) // s3's 21 pure frames (+ at most the dissolve's untouched first frame)
+    expect(runs.split(" ").reduce((n, run) => n + Number(run.slice(1)), 0), runs).toBe(83)
+    expect(parts[parts.length - 1], runs).toMatch(/^B2[01]$/)
+    await fs.rm(outputPath, { force: true })
+  }, 120_000)
+
+  it("a crossfade shorter than one frame is a clean cut on the grid (Track 0.16)", async () => {
+    const sources: Edl["sources"] = [
+      { id: "A", url: "https://fixtures.test/a.mp4", kind: "video" },
+      { id: "B", url: "https://fixtures.test/b.mp4", kind: "video" },
+    ]
+    const edl: Edl = {
+      version: 1, clock: "master", sources,
+      segments: [
+        { id: "s0", inMs: 0, outMs: 1000, video: "A", audio: "A" },
+        { id: "s1", inMs: 0, outMs: 1000, video: "B", audio: "B", transition: { type: "crossfade", durationMs: 10 } },
+      ],
+    }
+    const { outputPath } = await render({ edl, output: "video", quality: "final", jobId: "t-subframe-xfade", checkpoint: false })
+    expect(await frameRuns(outputPath, true)).toBe("R30 B30")
+    await fs.rm(outputPath, { force: true })
+  }, 120_000)
+
+  it("a crossfade into a zero-frame sliver drops the sliver and cuts cleanly to the next segment (Track 0.16)", async () => {
+    const sources: Edl["sources"] = [
+      { id: "A", url: "https://fixtures.test/a.mp4", kind: "video" },
+      { id: "B", url: "https://fixtures.test/b.mp4", kind: "video" },
+      { id: "C", url: "https://fixtures.test/c.mp4", kind: "video" },
+    ]
+    const edl: Edl = {
+      version: 1, clock: "master", sources,
+      segments: [
+        { id: "s0", inMs: 0, outMs: 1000, video: "A", audio: "A" },
+        { id: "s1", inMs: 505, outMs: 515, video: "C", audio: "C", transition: { type: "crossfade", durationMs: 9 } },
+        { id: "s2", inMs: 0, outMs: 1000, video: "B", audio: "B" },
+      ],
+    }
+    const { outputPath } = await render({ edl, output: "video", quality: "final", jobId: "t-xfade-into-sliver", checkpoint: false })
+    expect(await frameRuns(outputPath, true)).toBe("R30 B30")
+    await fs.rm(outputPath, { force: true })
+  }, 120_000)
+
+  it("renders a cut then a crossfade on a fractional 29.97 fps canvas, ending exactly on the grid (Track 0.15)", async () => {
+    const src = [{ id: "N", url: "https://fixtures.test/ntsc.mp4", kind: "video" as const }]
+    const edl: Edl = {
+      version: 1, clock: "master", sources: src,
+      segments: [
+        { id: "s0", inMs: 0, outMs: 1000, video: "N", audio: "N" },
+        { id: "s1", inMs: 1000, outMs: 2000, video: "N", audio: "N" },
+        { id: "s2", inMs: 2000, outMs: 3000, video: "N", audio: "N", transition: { type: "crossfade", durationMs: 500 } },
+      ],
+    }
+    // 3000 − 500 = 2500 ms → round(2.5 × 29.97) = 75 frames.
+    const { outputPath } = await render({ edl, output: "video", quality: "final", jobId: "t-cut-xfade-ntsc", checkpoint: false })
+    const out = (await runFfprobe(["-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=r_frame_rate,nb_read_packets", "-of", "csv=p=0", outputPath])).trim().split("\n")[0]!.split(",")
+    expect(out[0]).toMatch(/^(30000\/1001|2997\/100)$/)
+    expect(Number(out[1])).toBe(75)
     await fs.rm(outputPath, { force: true })
   }, 120_000)
 

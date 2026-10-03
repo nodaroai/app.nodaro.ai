@@ -127,7 +127,7 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
                 </div>
                 <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{t("node.combined")}</div>
                 {results.length > 0 && (
-                  <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); if (activeJobId) setDeleteConfirm(activeJobId) }}><X className="w-3 h-3" /></button>
+                  <button type="button" aria-label={t("common.remove")} className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); if (activeJobId) setDeleteConfirm(activeJobId) }}><X className="w-3 h-3" /></button>
                 )}
               </div>
             )}
@@ -153,7 +153,7 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             <div className="flex justify-between text-muted-foreground">
-              <span>Transition: {nodeData.transition}</span>
+              <span>{t("node.transitionValue", { value: nodeData.transition })}</span>
             </div>
           </div>
         )}

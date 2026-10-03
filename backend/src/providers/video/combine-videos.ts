@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, runFfprobe, getVideoFps, getVideoStreamDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine, trimEdgeFrames, COMBINE_DELIVERY_CRF } from "./ffmpeg-utils.js"
 import { getSmartCutMatcher, type SmartCutMode } from "./smart-cut.js"
+import { csvFields } from "./ffprobe-csv.js"
 import { resolveXfadeName, resolveAudioCrossfadeCurve } from "@nodaro/shared"
 
 interface CombineOptions {
@@ -171,7 +172,7 @@ async function getVideoResolution(filePath: string): Promise<{ width: number; he
       "-of", "csv=p=0:s=x",
       filePath,
     ])
-    const [w, h] = output.trim().split("x").map(Number)
+    const [w, h] = csvFields(output, "x").map(Number)
     return { width: w || 1920, height: h || 1080 }
   } catch {
     return { width: 1920, height: 1080 }

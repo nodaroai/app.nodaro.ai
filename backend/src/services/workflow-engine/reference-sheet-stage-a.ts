@@ -42,6 +42,16 @@ const ROUTE: Record<EntityKind, { path: string; attachField: string }> = {
   location: { path: "/v1/generate-location-asset", attachField: "attachToLocationId" },
 }
 
+/**
+ * The model every sheet panel is generated with, named on each panel request
+ * rather than left to the routes' default. The editor asks for the same model
+ * and quotes its live price (`SHEET_PANEL_PROVIDER` in
+ * frontend/src/components/editor/reference-sheet/sheet-tab-adapter.ts), and
+ * docs/nodes/ai-image/reference-sheet.md prices sheet panels at it — change
+ * the three together.
+ */
+export const SHEET_PANEL_PROVIDER = "nano-banana"
+
 /** Generated concurrently at most this many at once (mirrors the frontend
  *  SHEET_PANEL_CONCURRENCY + spec §15 "bounded parallel"). */
 const STAGE_A_CONCURRENCY = 3
@@ -88,6 +98,7 @@ async function postGenerateAsset(
     variant: req.variant,
     name: req.name,
     userPrompt: req.userPrompt,
+    provider: SHEET_PANEL_PROVIDER,
     sourceImageUrl: req.sourceImageUrl,
     attachToColumn: req.attachToColumn,
     attachName: req.attachName,

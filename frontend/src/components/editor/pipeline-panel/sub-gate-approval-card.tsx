@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useT, tx } from "@/lib/i18n"
 
 /**
  * Phase 1C.2 — shared approve/reject state machine for Stage 7 sub-gates
@@ -67,6 +68,7 @@ export function SubGateApprovalCard({
   rejectButtonVariant = "destructive",
   children,
 }: SubGateApprovalCardProps) {
+  const t = useT()
   const [isRejectOpen, setIsRejectOpen] = useState(false)
   const [feedback, setFeedback] = useState("")
   const [inFlight, setInFlight] = useState(false)
@@ -79,7 +81,7 @@ export function SubGateApprovalCard({
     try {
       await pipelinesApi.approveSubGate(pipelineId, gate)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Approval failed")
+      setError(err instanceof Error ? err.message : tx("pipe.approvalFailed"))
     } finally {
       setInFlight(false)
     }
@@ -98,7 +100,7 @@ export function SubGateApprovalCard({
       setIsRejectOpen(false)
       setFeedback("")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Rejection failed")
+      setError(err instanceof Error ? err.message : tx("pipe.rejectionFailed"))
     } finally {
       setInFlight(false)
     }
@@ -129,7 +131,7 @@ export function SubGateApprovalCard({
             onClick={() => setIsRejectOpen(true)}
             disabled={inFlight}
           >
-            Reject
+            {t("cfgext.shmReject")}
           </Button>
           <Button onClick={handleApprove} disabled={inFlight}>
             {approveLabel}
@@ -142,8 +144,7 @@ export function SubGateApprovalCard({
           <DialogHeader>
             <DialogTitle>{rejectTitle}</DialogTitle>
             <DialogDescription>
-              The stage will fail and credits will be refunded. Optional
-              feedback helps when re-running.
+              {t("pipe.subGateRejectDesc")}
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -158,14 +159,14 @@ export function SubGateApprovalCard({
               onClick={() => setIsRejectOpen(false)}
               disabled={inFlight}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
               onClick={handleConfirmReject}
               disabled={inFlight}
             >
-              Confirm reject
+              {t("pipe.confirmReject")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -55,6 +55,7 @@ import {
   type Scene3DUnreferencedFiguresWarning,
 } from "@nodaro/prompts"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
+import { savedDataAllowed } from "./saved-data.js"
 import type { NodeExecutionState, ResolvedInputs, SimpleEdge, SimpleNode } from "./types.js"
 
 /** The slice of `PayloadBuildContext` this walk reads — structurally the same
@@ -216,7 +217,8 @@ export function collectScene3DLayoutReferences(
     if (modality !== "video" && modality !== "image") continue
     const render = scene3DRenderBehind(source, graph)
     if (!render) continue
-    const output = states[source.id]?.output ?? extractSourceNodeOutput(source) ?? extractSavedNodeOutput(source)
+    const sourceState = states[source.id]
+    const output = sourceState?.output ?? (savedDataAllowed(sourceState) ? (extractSourceNodeOutput(source) ?? extractSavedNodeOutput(source)) : undefined)
     const url = output ? getPrimaryOutput(output, source.type, edge.sourceHandle) : undefined
     if (!url || !/^https?:\/\//.test(url)) continue
     const carries: Scene3DLayoutReferenceCarrier = modality === "video" ? "clip" : "still"

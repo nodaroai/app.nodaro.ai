@@ -121,7 +121,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
                 <CachedImage
                   key={`${r.maskUrl}-${i}`}
                   src={r.imageUrl}
-                  alt={`Result ${i + 1}`}
+                  alt={t("node.resultN", { n: i + 1 })}
                   className={`w-12 h-12 object-cover rounded-lg cursor-pointer transition-all ${
                     i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                   }`}
@@ -202,7 +202,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
 
                 <CachedImage
                   src={displayUrl}
-                  alt={previewMode === "source" ? "Source image" : previewMode === "mask" ? "Mask" : "Mask overlay"}
+                  alt={previewMode === "source" ? t("node.sourceImage") : previewMode === "mask" ? t("imgcfg.maskAlt") : t("node.maskOverlayAlt")}
                   className="w-full h-full object-cover rounded-xl"
                   thumbnail
                   thumbnailWidth={320}
@@ -245,7 +245,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
                       e.stopPropagation()
                       setPreviewOpen(true)
                     }}
-                    title="Fullscreen"
+                    title={t("node.fullscreen")}
                   >
                     <Expand className="w-3.5 h-3.5" />
                   </button>
@@ -271,7 +271,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
-                      if (activeMaskUrl) copyToClipboard(activeMaskUrl, "Mask URL copied")
+                      if (activeMaskUrl) copyToClipboard(activeMaskUrl, t("node.maskUrlCopied"))
                     }}
                     title={t("node.copyMaskUrl")}
                   >
@@ -293,21 +293,21 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
                           e.stopPropagation()
                           setPreviewMode(mode)
                         }}
-                        title={`Show ${mode}`}
+                        title={t(mode === "overlay" ? "node.showOverlay" : mode === "mask" ? "node.showMask" : "node.showSource")}
                       >
-                        {mode === "overlay" ? "Overlay" : mode === "mask" ? "Mask" : "Source"}
+                        {mode === "overlay" ? t("node.previewOverlay") : mode === "mask" ? t("imgcfg.maskAlt") : t("inputcfg.source")}
                       </button>
                     ))}
                   </div>
                   <button
                     type="button"
-                    aria-label="Settings"
+                    aria-label={t("common.settings")}
                     className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
                     onClick={(e) => {
                       e.stopPropagation()
                       selectNode(isSettingsOpen ? null : id)
                     }}
-                    title="Settings"
+                    title={t("common.settings")}
                   >
                     <Settings className="w-3.5 h-3.5" />
                   </button>
@@ -319,7 +319,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
           {/* Bottom config bar — read-only summary; full editing is in the
               config panel (Task 9). Mirrors generate-image's compact bottom row. */}
           <div className="shrink-0 px-2 py-1.5 border-t border-white/5 bg-black/20 flex items-center gap-2 text-[10px]">
-            <span className="flex-1 truncate text-muted-foreground" title={nodeData.prompt || "No prompt set"}>
+            <span className="flex-1 truncate text-muted-foreground" title={nodeData.prompt || t("pro3d.noPrompt")}>
               {nodeData.prompt ? nodeData.prompt : <span className="italic opacity-60">{t("node.noPrompt")}</span>}
             </span>
             <span className="font-mono text-muted-foreground/80 shrink-0">

@@ -1,7 +1,7 @@
 ---
 node_type: video-analysis
-generated_at: 2026-09-21T19:12:09.613Z
-generated_from: 09788c987
+generated_at: 2026-09-27T12:51:23.832Z
+generated_from: c607aa02c
 ---
 
 # Video Analysis
@@ -9,7 +9,7 @@ generated_from: 09788c987
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `video-analysis`
 **Category:** processing
-**Credit cost:** `181-2081` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `181-2081` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `video`
 **Outputs (source handles):** `json`, `text`
 
@@ -22,7 +22,7 @@ generated_from: 09788c987
 - `videoUrl?: string`
 - `youtubeUrl?: string`
 - `probedYoutube?: { url: string; durationSec: number }`
-- `probedVideo?: { url: string; durationSec: number }`
+- `probedVideo?: ProbedVideoInfo`
 - `llmModel?: string`
 - `reasoningEffort?: LlmReasoningEffort`
 - `advancedMode?: boolean`

@@ -1,8 +1,9 @@
 "use client"
 
 import { memo } from "react"
+import { useT } from "@/lib/i18n"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Send } from "lucide-react"
+import { Loader2, Send } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, TEXT_HANDLE_COLOR } from "./handle-with-popover"
@@ -12,8 +13,11 @@ import type { TelegramTriggerData } from "@/types/nodes"
 const ICON = <Send className="h-4 w-4" />
 
 function TelegramTriggerNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as TelegramTriggerData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  // The editor follows a run this trigger started (follow-triggered-run.ts): the card says so while it goes.
+  const working = nodeData.executionStatus === "running"
 
   return (
     <div className="relative max-w-[220px]">
@@ -29,6 +33,7 @@ function TelegramTriggerNodeComponent({ id, data, selected }: NodeProps) {
         category="input"
         credits={0}
         selected={selected}
+        isRunning={working}
         minWidth={220}
         hideHeader
         handles={[
@@ -37,11 +42,17 @@ function TelegramTriggerNodeComponent({ id, data, selected }: NodeProps) {
       >
         <div className="p-3">
           <p className="text-sm text-muted-foreground line-clamp-2">
-            {nodeData.isActive ? "Listening for messages" : "Configure Telegram trigger..."}
+            {nodeData.isActive ? t("node.listeningForMessages") : t("node.configureTelegramTrigger")}
           </p>
           {nodeData.isActive !== undefined && (
             <p className={`text-[10px] mt-1 ${nodeData.isActive ? "text-green-500" : "text-muted-foreground"}`}>
-              {nodeData.isActive ? "Active" : "Inactive"}
+              {nodeData.isActive ? t("sched.active") : t("sched.inactive")}
+            </p>
+          )}
+          {working && (
+            <p className="flex items-center gap-1.5 text-[11px] mt-2 text-foreground" role="status">
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+              {t("tgtrig.cardHandlingMessage")}
             </p>
           )}
         </div>

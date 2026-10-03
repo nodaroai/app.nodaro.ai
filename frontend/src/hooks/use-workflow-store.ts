@@ -14,22 +14,25 @@ import { NODE_DEFINITIONS, NODE_DEF_MAP, TELEPORTER_CHANNEL_COLORS, LOOP_COL_ADD
 import { HANDLE_OUTPUT_TYPES } from "@/lib/handle-output-types"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
-import { filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge, overlayVariantIdFromHandle } from "@nodaro/shared"
+import { filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge, overlayVariantIdFromHandle, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE } from "@nodaro/shared"
 import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { NodeDoubleClickAction } from "@/lib/node-double-click-action"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
+import { videoOverlayConnectPatch } from "@/lib/video-overlay-connect"
+import { initialEdgeData } from "@/lib/video-analysis-handles"
 import { ensureNodePositions } from "@/lib/node-position"
 import { findNonOverlappingPosition, nodeRect, DEFAULT_PLACEMENT_SIZE } from "@/lib/find-free-position"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
 import { refreshEntityNodes } from "@/lib/entity-node-data"
+import { discardUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
 import { orderNodesParentFirst, localToWorld } from "@/components/editor/workflow-editor/group-coords"
 import { MAIN_TEXT_HANDLE, TEXT_PRODUCING_SOURCE_TYPES } from "@/lib/main-text-handle"
 import { resolveNodeDefaults, rememberSelection, pickRelevantFields, isNodeDefaultType, readMemory, type AdminDefault } from "@/lib/node-defaults"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { getCachedUserId } from "@/hooks/use-auth"
-import { getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
+import { getStickyLookPreviewStyle, getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
 import { getInlinePromptMode, setInlinePromptMode as persistInlinePromptMode } from "@/lib/inline-prompt-pref"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migration"
@@ -39,6 +42,7 @@ import { migratePersonNodes } from "@/lib/person-value-migration"
 import { migrateDescribeToPickerNodes } from "@/lib/describe-to-picker-migration"
 import { migratePickerSourceHandle, isTileGridPickerType } from "@/lib/picker-handles"
 import { runtimeFreecutUrl } from "@/lib/runtime-config"
+import { tx } from "@/lib/i18n"
 
 /**
  * Migrate legacy image node types to the new split types.
@@ -218,7 +222,7 @@ function getNodeOutputForPreview(
     return value ? { type: "text", value: value.trim() } : null
   }
 
-  if (t === "telegram-trigger") {
+  if (t === "telegram-trigger" || t === "telegram-account-trigger") {
     const triggerData = d.__triggerData as Record<string, unknown> | undefined
     const fields: Record<string, string> = {
       text: String((triggerData?.text ?? d.text) || ""),
@@ -227,6 +231,13 @@ function getNodeOutputForPreview(
       audioUrl: String((triggerData?.audioUrl ?? d.audioUrl) || ""),
       chatId: String((triggerData?.chatId ?? d.chatId) || ""),
       messageId: String((triggerData?.messageId ?? d.messageId) || ""),
+      senderId: String((triggerData?.senderId ?? d.senderId) || ""),
+      chatType: String((triggerData?.chatType ?? d.chatType) || ""),
+    }
+    // The account trigger's named outputs show what they carry, never the message.
+    if (t === "telegram-account-trigger" && isTelegramAccountTriggerNamedHandle(sourceHandle)) {
+      const value = telegramAccountTriggerOutputs(triggerData)[sourceHandle]
+      return value ? { type: classifyPreviewValue(t, value, sourceHandle), value } : null
     }
     const value = sourceHandle ? fields[sourceHandle] : fields.text
     return value ? { type: classifyPreviewValue(t, value, sourceHandle), value } : null
@@ -857,13 +868,15 @@ function getParallelOrderField(
 ): string | undefined {
   if (direction !== "target") return undefined
   if (!nodeType) return undefined
-  if (handleId !== "references" && handleId !== "in") return undefined
+  if (handleId !== "references" && handleId !== "in" && handleId !== "sources") return undefined
   switch (`${nodeType}:${handleId}`) {
     case "generate-image:references":   return "referenceImageOrder"
     case "combine-videos:in":           return "clipOrder"
     case "mix-audio:in":                return "trackOrder"
     case "combine-audio:in":            return "segmentOrder"
     case "image-collage:in":            return "imageOrder"
+    // audio-sync's order decides the default reference (the first source).
+    case "audio-sync:sources":          return "sourceOrder"
     // merge-video-audio is INTENTIONALLY OMITTED. Its `data.trackSettings`
     // is keyed by sourceNodeId (object), not order — the backend
     // (payload-builder.ts) and frontend runtime (execute-node.ts:4401)
@@ -911,6 +924,9 @@ export function buildDuplicatedNodeData(
   for (const dbIdField of ["characterDbId", "objectDbId", "locationDbId", "faceDbId"]) {
     if (dbIdField in d) d[dbIdField] = ""
   }
+  // A copy of a Telegram account trigger starts stopped: listening is turned
+  // on in the panel, by the trigger's owner, for each trigger.
+  if (source.type === TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE) d.isActive = false
 
   // Generate fresh UUIDs for sub-workflow port IDs and routeIds
   if (source.type === "sub-workflow-input" || source.type === "sub-workflow-output") {
@@ -1175,8 +1191,14 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   onConnect: (connection) => {
     if (get().isReadOnly) return
     set((state) => {
+      const edgeData = initialEdgeData(
+        state.nodes.find((n) => n.id === connection.source)?.type,
+        connection.sourceHandle,
+        state.nodes.find((n) => n.id === connection.target)?.type,
+        connection.targetHandle,
+      )
       let newEdges = addEdge(
-        { ...connection, id: `edge_${Date.now()}` },
+        { ...connection, id: `edge_${Date.now()}`, ...(edgeData ? { data: edgeData } : {}) },
         state.edges,
       )
 
@@ -1375,6 +1397,18 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
         }
       }
 
+      // Video Overlay (D3): a wire into a layer handle CLEARS that layer's own
+      // imageUrl — the wire replaces it, so a stored layer never carries both
+      // and disconnecting later empties the slot instead of resurfacing a
+      // hidden URL. Here, not in the panel: the panel may not be mounted.
+      const videoOverlayTarget = newNodes.find((n) => n.id === connection.target && n.type === "video-overlay")
+      if (videoOverlayTarget) {
+        const patch = videoOverlayConnectPatch(videoOverlayTarget.data as { layers?: unknown }, connection.targetHandle)
+        if (patch) {
+          newNodes = newNodes.map((n) => (n.id === videoOverlayTarget.id ? { ...n, data: { ...n.data, ...patch } } : n))
+        }
+      }
+
       // Collect node (spec §5.2.1): when a new edge connects to a Collect's
       // "in" handle, append the source node id to data.order so the Collect's
       // output preserves connection order (and the config panel reflects it).
@@ -1426,6 +1460,13 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     // resolution (which always trusts the saved data on existing nodes).
     if (definition.category === "parameter" && nodeData.displayMode === undefined) {
       nodeData.displayMode = getStickyParameterDisplayMode()
+    }
+    // Look pickers: seed the real / illustration choice from the last one the
+    // user made on this TYPE. Only types the user has switched have an entry;
+    // everything else stays absent (= real), exactly as before the choice.
+    if (definition.category === "parameter" && nodeData.previewStyle === undefined) {
+      const previewStyle = getStickyLookPreviewStyle(type)
+      if (previewStyle !== undefined) nodeData.previewStyle = previewStyle
     }
 
     // Generate fresh UUIDs for sub-workflow port IDs and routeIds
@@ -2097,6 +2138,8 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   },
 
   loadWorkflow: (id, name, nodes, edges, characterDefinitions, flowPromptTemplates, presentationSettings, viewport) => {
+    // What was set in an unsaved workflow's trigger panels never carries over.
+    discardUnsavedAccountTriggerIntents()
     nextNodeId =
       nodes.reduce((max, n) => {
         const num = parseInt(n.id.replace("node_", ""), 10)
@@ -2291,8 +2334,8 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
           const shown = typeof window !== "undefined" && window.localStorage.getItem("genimg-handles-v2-picker-toast")
           if (!shown) {
             void import("sonner").then(({ toast }) => {
-              toast.info("Generate Image picker handles split", {
-                description: "Pickers now route by family: aesthetic ones (lens, lighting, style…) on the new Look handle, subject/mood/props (person, animal, mood…) on the new Elements handle. Both tail-append to your prompt at runtime — drag a picker to either handle to use it.",
+              toast.info(tx("toastMsg.generateImagePickerHandlesSplit"), {
+                description: tx("toastMsg.pickersNowRouteByFamily"),
                 duration: 12000,
               })
             }).catch(() => {})
@@ -2492,6 +2535,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
         "combine-videos", "merge-video-audio", "add-captions", "resize-video",
         "social-media-format", "trim-video", "render-video", "speed-ramp",
         "loop-video", "fade-video", "transcode-video", "manual-edit", "video-sfx",
+        "video-overlay",
       ])
       // Suno nodes that have a typed `voice` target — used to route legacy
       // suno-voice → suno-* edges to the right slot. Matches the set of
@@ -2743,6 +2787,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   setIsWorkflowLoading: (loading) => set({ isWorkflowLoading: loading }),
 
   clearWorkflow: () => {
+    discardUnsavedAccountTriggerIntents()
     nextNodeId = 1
     set((state) => ({
       workflowId: null,
@@ -3295,7 +3340,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
               ),
             }))
           })
-          import("sonner").then(({ toast }) => toast.success("Thumbnail set"))
+          import("sonner").then(({ toast }) => toast.success(tx("toastMsg.thumbnailSet")))
         })
     })
   },

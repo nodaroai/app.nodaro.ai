@@ -187,7 +187,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                   <CachedImage
                     key={`${r.jobId}-${i}`}
                     src={r.thumbnailUrl}
-                    alt={`Result ${i + 1}`}
+                    alt={t("node.resultN", { n: i + 1 })}
                     className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
                       i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                     }`}
@@ -266,7 +266,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
               <button type="button" aria-label={t("node.removeVideo")}
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-red-600/80 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => { e.stopPropagation(); handleClear() }}
-                title="Remove">
+                title={t("common.remove")}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -277,23 +277,23 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <Upload className="w-3.5 h-3.5" />
               </button>
               <button type="button" aria-label={t("node.expandVideo")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Expand">
+                onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title={t("node.expand")}>
                 <Expand className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label="Download" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              <button type="button" aria-label={t("common.download")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   const a = document.createElement('a')
                   a.href = '/v1/image-proxy?url=' + encodeURIComponent(videoUrl) + '&download=1'
                   a.download = (nodeData.label || 'video') + '.mp4'
                   a.click()
-                }} title="Download">
+                }} title={t("common.download")}>
                 <Download className="w-3.5 h-3.5" />
               </button>
               <button type="button" aria-label={t("cfgshared.copyUrl")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
-                  copyToClipboard(videoUrl, "URL copied")
+                  copyToClipboard(videoUrl, t("node.urlCopied"))
                 }} title={t("cfgshared.copyUrl")}>
                 <Link className="w-3.5 h-3.5" />
               </button>
@@ -313,7 +313,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
             {(isUploading || nodeData.isUploading) && (
               <div className="flex flex-col items-center gap-2 py-3">
                 <Loader2 className="w-5 h-5 animate-spin text-[#38BDF8]" />
-                <p className="text-xs text-muted-foreground">Uploading...</p>
+                <p className="text-xs text-muted-foreground">{t("inputcfg.uploading")}</p>
                 <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                   <div className="h-full bg-[#38BDF8] rounded-full animate-pulse" style={{ width: "60%" }} />
                 </div>
@@ -347,7 +347,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                   onDrop={handleDrop}
                 >
                   <Upload className="w-4 h-4" />
-                  <span className="text-xs">{isDragOver ? "Drop Video" : "Choose Video"}</span>
+                  <span className="text-xs">{isDragOver ? t("node.dropVideo") : t("inputcfg.chooseVideo")}</span>
                 </button>
                 <button
                   type="button"
@@ -357,7 +357,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                     setMode("url")
                   }}
                 >
-                  or use URL
+                  {t("node.orUseUrl")}
                 </button>
               </>
             )}
@@ -388,7 +388,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                     setMode("upload")
                   }}
                 >
-                  or upload file
+                  {t("node.orUploadFile")}
                 </button>
               </>
             )}

@@ -1,6 +1,6 @@
-import type { ReactNode } from "react"
+import { createElement, type ReactNode } from "react"
 import type { WorkflowNode } from "@/types/nodes"
-import { getParameterPickerMeta } from "@/lib/picker-ui"
+import { LookPreviewStyleProvider, getParameterPickerMeta, readLookPreviewStyle } from "@/lib/picker-ui"
 
 /** Matches URLs whose extension is a known video container. Used so a node
  *  field that happens to hold a video URL (e.g. a character's starred motion
@@ -120,7 +120,8 @@ export function getNodePickerVisual(node: WorkflowNode | undefined): ReactNode |
   const data = (node.data ?? {}) as Record<string, unknown>
   const value = data[meta.valueField] as string | undefined
   if (!value || typeof value !== "string") return undefined
-  return meta.renderIcon(value)
+  // Pictured the way the node is set (real render / illustration), same as its body.
+  return createElement(LookPreviewStyleProvider, { style: readLookPreviewStyle(data), children: meta.renderIcon(value) })
 }
 
 /** A compact, render-agnostic config descriptor — the data both the canvas

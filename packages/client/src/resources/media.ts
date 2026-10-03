@@ -1,6 +1,6 @@
 import type { NodaroClient } from "../client.js"
 import { readSseStream } from "../sse.js"
-import type { OverlayAnchor, CaptionStyle, CaptionLookId, SupportedFontName, TranscribeLane } from "@nodaro/shared"
+import type { OverlayAnchor, CaptionStyle, CaptionLookId, SupportedFontName, TranscribeLane, VideoOverlayRequest } from "@nodaro/shared"
 
 /** One word-timed caption entry (one per WORD for the kinetic styles). */
 export interface CaptionEntry {
@@ -405,6 +405,26 @@ export class MediaResource {
     padColor?: string
   }): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/slideshow", { body: input })
+  }
+
+  /**
+   * Place 1–20 timed image layers over a video (`POST /v1/video-overlay`) —
+   * rendered locally (FFmpeg) in one pass, no AI; the base audio is kept
+   * untouched. Each layer has an `imageUrl`, a `start` and an optional `end`
+   * in seconds (no `end` = to the end of the video) and a placement: a
+   * `preset` (`"card"`, `"corner-badge"` with a `corner`, `"full-frame"`) or
+   * an explicit box in {@link MediaResource.imageOverlay}'s percent vocabulary
+   * (`anchor`, `x`, `y`, `width`, `height`, `fit`) — an explicit box field
+   * overrides the preset, and a layer with neither is a corner badge
+   * (bottom-right, or the `corner` it names). `outputAspect` renders onto a
+   * 16:9 / 9:16 / 1:1 / 4:5 canvas
+   * (`baseFit` cover by default; `backgroundColor` pads `contain`). Poll
+   * `jobs.get(jobId)`: the output carries `videoUrl`, `thumbnailUrl`, `width`,
+   * `height`, `durationSec` and `warnings[]` (a layer clipped or skipped at the
+   * video's end, an animated image's first frame, re-encoded audio).
+   */
+  videoOverlay(input: VideoOverlayRequest): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/video-overlay", { body: input })
   }
 
   /**

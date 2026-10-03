@@ -19,7 +19,15 @@ import {
   type CommunityCard,
 } from "@/lib/api"
 import { formatCount } from "@/lib/template-utils"
+import { tx, useT, type MessageKey } from "@/lib/i18n"
 import { ReportDialog } from "./report-dialog"
+
+const ENTITY_TYPE_LABEL_KEYS: Record<CommunityCard["entity_type"], MessageKey> = {
+  character: "assetlib.typeCharacter",
+  location: "assetlib.typeLocation",
+  object: "assetlib.typeObject",
+  creature: "assetlib.typeCreature",
+}
 
 interface CommunityPreviewModalProps {
   item: CommunityCard | null
@@ -28,6 +36,7 @@ interface CommunityPreviewModalProps {
 }
 
 export function CommunityPreviewModal({ item, open, onOpenChange }: CommunityPreviewModalProps) {
+  const t = useT()
   const qc = useQueryClient()
   const [isCloning, setIsCloning] = useState(false)
   const [isFavoriting, setIsFavoriting] = useState(false)
@@ -49,7 +58,7 @@ export function CommunityPreviewModal({ item, open, onOpenChange }: CommunityPre
     setIsCloning(true)
     try {
       await cloneCommunityListing(view.id, view.entity_type)
-      toast.success("Cloned to your library")
+      toast.success(tx("community.clonedToLibrary"))
       // Clone lands in the user's asset library (character/location/object).
       // Invalidate the whole asset tree by prefix so every project/library view refreshes.
       qc.invalidateQueries({ queryKey: ["assets"] })
@@ -57,7 +66,7 @@ export function CommunityPreviewModal({ item, open, onOpenChange }: CommunityPre
       onOpenChange(false)
     } catch (err) {
       // StorageExceededError and other API errors carry a human message via throwApiError.
-      toast.error(err instanceof Error ? err.message : "Failed to clone")
+      toast.error(err instanceof Error ? err.message : tx("community.cloneFailed"))
     } finally {
       setIsCloning(false)
     }
@@ -68,10 +77,10 @@ export function CommunityPreviewModal({ item, open, onOpenChange }: CommunityPre
     setIsFavoriting(true)
     try {
       const { favorited } = await toggleCommunityFavorite(view.id)
-      toast.success(favorited ? "Added to favorites" : "Removed from favorites")
+      toast.success(favorited ? tx("community.addedToFavorites") : tx("community.removedFromFavorites"))
       qc.invalidateQueries({ queryKey: ["community"] })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update favorite")
+      toast.error(err instanceof Error ? err.message : tx("community.favoriteFailed"))
     } finally {
       setIsFavoriting(false)
     }
@@ -94,8 +103,8 @@ export function CommunityPreviewModal({ item, open, onOpenChange }: CommunityPre
             <DialogTitle>{view.title}</DialogTitle>
             <DialogDescription>
               {view.creator_display_name
-                ? `by ${view.creator_display_name}`
-                : "Community listing"}
+                ? t("preview.by", { name: view.creator_display_name })
+                : t("community.listing")}
             </DialogDescription>
           </DialogHeader>
 
@@ -119,7 +128,7 @@ export function CommunityPreviewModal({ item, open, onOpenChange }: CommunityPre
             </div>
           ) : (
             <div className="text-sm text-muted-foreground text-center py-8">
-              No preview images available
+              {t("community.noPreviewImages")}
             </div>
           )}
 
@@ -130,15 +139,15 @@ export function CommunityPreviewModal({ item, open, onOpenChange }: CommunityPre
 
           {/* Stats */}
           <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
-            <span className="flex items-center gap-1 capitalize">{view.entity_type}</span>
+            <span className="flex items-center gap-1 capitalize">{t(ENTITY_TYPE_LABEL_KEYS[view.entity_type])}</span>
             <span className="flex items-center gap-1">
               <Copy className="h-3.5 w-3.5" />
-              {formatCount(view.clone_count)} clones
+              {t("templates.clones", { n: formatCount(view.clone_count) })}
             </span>
             {view.favorite_count > 0 && (
               <span className="flex items-center gap-1">
                 <Heart className="h-3.5 w-3.5" />
-                {formatCount(view.favorite_count)} favorites
+                {t("templates.favorites", { n: formatCount(view.favorite_count) })}
               </span>
             )}
           </div>
@@ -151,7 +160,7 @@ export function CommunityPreviewModal({ item, open, onOpenChange }: CommunityPre
                   key={tag}
                   className="text-xs px-2 py-0.5 rounded-full bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/20 font-medium"
                 >
-                  <Tag className="inline h-3 w-3 mr-0.5 -mt-px" />
+                  <Tag className="inline h-3 w-3 me-0.5 -mt-px" />
                   {tag}
                 </span>
               ))}
@@ -166,7 +175,7 @@ export function CommunityPreviewModal({ item, open, onOpenChange }: CommunityPre
               className="shrink-0"
               onClick={handleFavorite}
               disabled={isFavoriting}
-              aria-label="Toggle favorite"
+              aria-label={t("community.toggleFavorite")}
             >
               <Heart className={cn("h-4 w-4", isFavoriting && "opacity-50")} />
             </Button>
@@ -176,7 +185,7 @@ export function CommunityPreviewModal({ item, open, onOpenChange }: CommunityPre
               size="icon"
               className="shrink-0"
               onClick={() => setReportOpen(true)}
-              aria-label="Report listing"
+              aria-label={t("community.reportListing")}
             >
               <Flag className="h-4 w-4" />
             </Button>
@@ -187,11 +196,11 @@ export function CommunityPreviewModal({ item, open, onOpenChange }: CommunityPre
               disabled={isCloning}
             >
               {isCloning ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin me-2" />
               ) : (
-                <Copy className="h-4 w-4 mr-2" />
+                <Copy className="h-4 w-4 me-2" />
               )}
-              Clone to my library
+              {t("community.cloneToLibrary")}
             </Button>
           </div>
         </DialogContent>

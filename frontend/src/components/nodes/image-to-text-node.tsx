@@ -61,7 +61,7 @@ function TextPreviewModal({
                 copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000)
               }}
             >
-              {copied ? "Copied!" : "Copy"}
+              {copied ? t("common.copied") : t("common.copy")}
             </button>
             <button
               type="button"
@@ -156,14 +156,14 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
                 className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                 onClick={(e) => {
                   e.stopPropagation()
-                  copyToClipboard(activeText ?? "", "Text copied")
+                  copyToClipboard(activeText ?? "", t("node.textCopied"))
                 }}
               >
                 <Copy className="w-3 h-3" />
               </button>
               <button
                 type="button"
-                aria-label="Download"
+                aria-label={t("common.download")}
                 className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -175,7 +175,7 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
               {results.length > 0 && (
                 <button
                   type="button"
-                  aria-label="Remove"
+                  aria-label={t("common.remove")}
                   className="w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -216,7 +216,7 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
               <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
                 <button
                   type="button"
-                  aria-label={`Result ${i + 1}`}
+                  aria-label={t("node.resultN", { n: i + 1 })}
                   className={`w-8 h-8 flex items-center justify-center rounded cursor-pointer transition-opacity ${
                     i === activeIndex
                       ? "opacity-100 ring-2 ring-primary bg-primary/20"
@@ -231,7 +231,7 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
                 </button>
                 <button
                   type="button"
-                  aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                  aria-label={t("common.remove")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(i)

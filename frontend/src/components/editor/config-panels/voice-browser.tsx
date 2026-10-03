@@ -28,6 +28,7 @@ import { useVoiceClones, useDeleteVoiceClone } from "@/hooks/use-voice-clones"
 import { toast } from "sonner"
 import { useT, tx } from "@/lib/i18n"
 import type { TtsProvider } from "@nodaro/shared"
+import { formatDate } from "@/lib/i18n/format"
 
 /** Library-voice model verification, threaded so the TTS config can snap to
  *  a provider the voice IS verified for (preview-fidelity guard). Uses the
@@ -153,7 +154,7 @@ function TONE_OPTIONS(): ReadonlyArray<FilterOption> {
     { value: "hyped", label: tx("cfgext.voiceToneHyped") }, { value: "intense", label: tx("cfgext.voiceToneIntense") },
     { value: "mature", label: tx("cfgext.voiceToneMature") }, { value: "meditative", label: tx("cfgext.voiceToneMeditative") },
     { value: "modulated", label: tx("cfgext.voiceToneModulated") }, { value: "neutral", label: tx("cfgext.voiceToneNeutral") },
-    { value: "pleasant", label: tx("cfgext.voiceTonePleasant") }, { value: "professional", label: tx("cfgext.voiceCatProfessional") },
+    { value: "pleasant", label: tx("cfgext.voiceTonePleasant") }, { value: "professional", label: tx("cfgext.voiceToneProfessional") },
     { value: "raspy", label: tx("cfgext.voiceToneRaspy") }, { value: "relaxed", label: tx("cfgext.voiceToneRelaxed") },
     { value: "rough", label: tx("cfgext.voiceToneRough") }, { value: "sad", label: tx("cfgext.voiceToneSad") },
     { value: "sassy", label: tx("cfgext.voiceToneSassy") }, { value: "serious", label: tx("cfgext.voiceToneSerious") },
@@ -769,7 +770,7 @@ function MyVoicesTab({
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {t("apiTok.created", { date: new Date(clone.createdAt).toLocaleDateString() })}
+                      {t("apiTok.created", { date: formatDate(clone.createdAt) })}
                     </div>
                   </div>
                   <Button

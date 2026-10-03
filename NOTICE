@@ -67,6 +67,21 @@ text-geometry font) is MgOpen Helvetica, Copyright MAGENTA Ltd, under its
 permissive MgOpen license; the full notice is embedded in the file itself.
 
 --------------------------------------------------------------------------------
+Picker artwork
+--------------------------------------------------------------------------------
+The option pictures of the music and voice pickers are derived works of two
+MIT-licensed sets, resized and re-encoded to WebP by `tools/picker-art/build.mts`
+from the pinned commits recorded in `tools/picker-art/sources.json`:
+
+- `frontend/public/picker-art/emoji/` — Fluent Emoji, Copyright (c) Microsoft
+  Corporation (https://github.com/microsoft/fluentui-emoji).
+- `frontend/public/picker-art/flags/` — flag-icons, Copyright (c) Panayiotis
+  Lipiridis (https://github.com/lipis/flag-icons).
+
+Each folder ships the upstream license text as `LICENSE.txt`. These images are
+not covered by the Nodaro Sustainable Use License.
+
+--------------------------------------------------------------------------------
 Bundled Lottie animations  (first-party)
 --------------------------------------------------------------------------------
 The 12 animations in `backend/assets/lottie-catalog/` are first-party assets
