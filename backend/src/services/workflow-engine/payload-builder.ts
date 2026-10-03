@@ -2,7 +2,8 @@ import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import {
   pro3DRenderShotStills, assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle, clampEditPlanClipCount,
-  resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource } from "@nodaro/shared"
+  resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource,
+  CAMERA_SWITCH_CREDIT_ID, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, transcriptSpeakerLabels, type CameraSwitchNodeSettings } from "@nodaro/shared"
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
@@ -4256,6 +4257,38 @@ export function buildPayload(
         targetAspect: typeof data.targetAspect === "string" ? data.targetAspect : undefined,
         platform: typeof data.platform === "string" ? data.platform : undefined,
         reservedCreditId: creditId,
+        nodeId: node.id,
+        usageLogId,
+      })
+    }
+
+    // Camera Switch (podcast B5, decided 2026-10-03) — WHO is on screen, from
+    // who is speaking. Cloud-EXCLUSIVE + relayed; flat price. The edit and the
+    // transcript arrive stringified on their json handles. Refused HERE, before
+    // the reserve: no edit, no transcript, and a transcript with no speaker
+    // labels ("turn on speaker detection"). The speaker table is the node's,
+    // pre-filled by order for any speaker the person has not set — the same
+    // pre-fill the settings panel shows.
+    case "camera-switch": {
+      const edlRaw = resolvedInputs.edl ?? (data.edl as unknown)
+      const edl = typeof edlRaw === "string" ? parseJsonOrUndefined(edlRaw) : edlRaw
+      const transcriptRaw = resolvedInputs.transcript ?? (data.transcript as unknown)
+      const transcript = typeof transcriptRaw === "string" ? parseJsonOrUndefined(transcriptRaw) : transcriptRaw
+      if (!edl || typeof edl !== "object") throw new Error("camera-switch: connect an edit (Edit Plan's EDL) to the EDL input")
+      if (!transcript || typeof transcript !== "object") throw new Error("camera-switch: connect a transcript to the Transcript input")
+      // The route's 400 invalid_edl, checked here so nothing is reserved for an
+      // edit the plugin would refuse (a clip set, a chapters plan, an output-clock EDL).
+      const edlProblem = cameraSwitchEdlProblem(edl)
+      if (edlProblem) throw new Error(edlProblem)
+      if (transcriptSpeakerLabels(transcript).length === 0) {
+        throw new Error("camera-switch: the transcript has no speaker labels — turn on speaker detection in Transcribe so it can tell who is talking")
+      }
+      return simpleResult("camera-switch", CAMERA_SWITCH_CREDIT_ID, {
+        jobId,
+        edl,
+        transcript,
+        ...cameraSwitchSettingsPayload(data as CameraSwitchNodeSettings, edl, transcript),
+        reservedCreditId: CAMERA_SWITCH_CREDIT_ID,
         nodeId: node.id,
         usageLogId,
       })

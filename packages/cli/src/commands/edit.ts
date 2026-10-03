@@ -1,6 +1,6 @@
 import { Command } from "commander"
 import { readFileSync } from "node:fs"
-import type { Edl, Transcript, EditPlanSource, EditPlanInput, SilenceRanges, AudioSyncSource } from "@nodaro/sdk"
+import type { Edl, Transcript, EditPlanSource, EditPlanInput, SilenceRanges, AudioSyncSource, CameraSwitchInput } from "@nodaro/sdk"
 import { buildClient, handleError } from "../client.js"
 import { warn, type OutputOpts } from "../output.js"
 import { reportQueuedJob, collectVariadic } from "../util.js"
@@ -316,6 +316,64 @@ export function editCommand(): Command {
             watch: opts.watch,
             pollInterval: opts.pollInterval,
             note: `edit-plan (${opts.mode})`,
+          })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  // ── switch-cameras (podcast B5) ─────────────────────────────────────────
+  cmd
+    .command("switch-cameras")
+    .description("choose which camera shows each cut of an edit by who is speaking (Cloud edition; flat price)")
+    .requiredOption("--edl <file>", "path to ONE EDL JSON (an `edit plan` result)")
+    .requiredOption("--transcript <file>", "path to the transcript JSON WITH speaker labels (transcribe with speaker detection)")
+    .option("--speaker-map <file>", "JSON object: speaker label → EDL source id of their camera")
+    .option("--speaker-names <file>", "JSON object: speaker label → display name")
+    .option("--min-shot-ms <ms>", "shortest shot (default 2500)", (v) => parseInt(v, 10))
+    .option("--lead-ms <ms>", "cut this long before the new speaker (default 200)", (v) => parseInt(v, 10))
+    .option("--max-shot-ms <ms>", "with a wide source: break to it after this long (default 20000)", (v) => parseInt(v, 10))
+    .option("--wide-every <n>", "with a wide source: every N-th cut to the wide (default 0 = off)", (v) => parseInt(v, 10))
+    .option("--layout-hints", "suggest side-by-side / stacked layouts for crosstalk (Apply EDL renders cut-only edits)")
+    .option("--watch", "poll the job until it finishes")
+    .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
+    .option("--profile <name>")
+    .option("--json")
+    .action(
+      async (
+        opts: GlobalOpts &
+          WatchOpts & {
+            edl: string
+            transcript: string
+            speakerMap?: string
+            speakerNames?: string
+            minShotMs?: number
+            leadMs?: number
+            maxShotMs?: number
+            wideEvery?: number
+            layoutHints?: boolean
+          },
+      ) => {
+        try {
+          const client = buildClient(opts.profile)
+          const input: CameraSwitchInput = {
+            edl: readJsonFile(opts.edl) as CameraSwitchInput["edl"],
+            transcript: readJsonFile(opts.transcript) as Transcript,
+            ...(opts.speakerMap ? { speakerMap: readJsonFile(opts.speakerMap) as Record<string, string> } : {}),
+            ...(opts.speakerNames ? { speakerNames: readJsonFile(opts.speakerNames) as Record<string, string> } : {}),
+            ...(opts.minShotMs !== undefined ? { minShotMs: opts.minShotMs } : {}),
+            ...(opts.leadMs !== undefined ? { leadMs: opts.leadMs } : {}),
+            ...(opts.maxShotMs !== undefined ? { maxShotMs: opts.maxShotMs } : {}),
+            ...(opts.wideEvery !== undefined ? { wideEvery: opts.wideEvery } : {}),
+            ...(opts.layoutHints ? { layoutHints: true } : {}),
+          }
+          const result = await client.edit.cameraSwitch(input)
+          await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
+            json: opts.json,
+            watch: opts.watch,
+            pollInterval: opts.pollInterval,
+            note: "camera-switch",
           })
         } catch (err) {
           handleError(err)

@@ -149,6 +149,7 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
   "Audio Sync": "Sincronizar áudio",
   "Apply EDL": "Aplicar EDL",
   "Edit Plan": "Plano de edição",
+  "Camera Switch": "Troca de câmeras",
   "Remove Audio": "Remover áudio",
   "Mix Audio": "Mixar áudio",
   "Combine Audio": "Combinar áudio",

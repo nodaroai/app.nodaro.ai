@@ -165,6 +165,7 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "video-analysis": { ids: familyIds("video-analysis") },
   "video-audit": { ids: familyIds("video-audit") },
   "edit-plan": { ids: familyIds("edit-plan") },
+  "camera-switch": { ids: familyIds("camera-switch") },
   "content-recipe": { ids: familyIds("content-recipe") },
   "content-ideas": {
     ids: familyIds("content-ideas"),
@@ -607,6 +608,35 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "targetDurationSec", type: "number" },
         { key: "targetAspect", type: "select", options: ["16:9", "9:16", "1:1", "4:5"] },
         { key: "platform", type: "string" },
+      ],
+    },
+  },
+
+  {
+    type: "camera-switch",
+    label: "Camera Switch",
+    category: "processing",
+    // outputType: data — the switched EDL on `edl` (json) and the renamed
+    // transcript on `transcript` (json). Cloud-EXCLUSIVE (relayed); deterministic
+    // (no model); FLAT price (decided 2026-10-03, migration 448).
+    description:
+      "Choose which camera shows each cut of an edit by who is speaking. Wire an Edit Plan's EDL and a diarized transcript; emits the switched EDL for Apply Edit and the transcript with your speaker names.",
+    outputType: "data",
+    creditCost: creditBandFor("camera-switch"),
+    inputSchema: {
+      fields: [
+        // The edit (an Edit Plan EDL) and the diarized word transcript — both required.
+        { key: "edl", type: "object", required: true },
+        { key: "transcript", type: "object", required: true },
+        // Speaker label → camera source id; unset speakers are filled by order.
+        { key: "speakerMap", type: "object" },
+        // Speaker label → display name (segments + the renamed transcript).
+        { key: "speakerNames", type: "object" },
+        { key: "minShotMs", type: "number" },
+        { key: "leadMs", type: "number" },
+        { key: "maxShotMs", type: "number" },
+        { key: "wideEvery", type: "number" },
+        { key: "layoutHints", type: "boolean" },
       ],
     },
   },

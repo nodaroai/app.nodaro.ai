@@ -176,6 +176,7 @@
   "suno_separate_stems",
   "suno_style_boost",
   "suno_upload_extend",
+  "switch_cameras",
   "text_to_audio",
   "transcribe",
   "trim_audio",

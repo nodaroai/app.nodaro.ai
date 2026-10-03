@@ -29,6 +29,7 @@ import { nestedWordTimingsPreflight } from "./sub-workflow-preflight";
 import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, unwrapEditPlanOutput, withWiredSettings } from "@nodaro/shared"
 import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
+import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire } from "@nodaro/shared"
 import { collapseExpandedClones } from "./execution-graph";
@@ -1077,6 +1078,19 @@ function applyRestoredJobCompletion(
   // edit-plan: same JSON-result recovery gap — the EDL plan is the top-level
   // output_data, unwrapped onto generatedJson (clips → bare Edl[], fans out).
   // ONE unwrap rule shared with the live path + backend (unwrapEditPlanOutput).
+  // camera-switch: the { edl, transcript } pair, the same shape the live run writes.
+  if (nodeType === "camera-switch") {
+    const out = (job.output_data ?? {}) as { json?: unknown; transcript?: unknown };
+    updateNodeData(nodeId, {
+      executionStatus: "completed",
+      ...(out.json !== undefined && out.json !== null && typeof out.json === "object" ? { generatedJson: { edl: out.json, transcript: out.transcript } } : {}),
+      currentJobId: undefined,
+      currentJobProgress: undefined,
+      jobAwaitingReview: undefined,
+    });
+    toast.success(tx("run.backgroundJobCompleted"));
+    return;
+  }
   if (nodeType === "edit-plan") {
     const plan = unwrapEditPlanOutput(job.output_data);
     updateNodeData(nodeId, {
@@ -1816,6 +1830,11 @@ function syncNodeStatesToStore(
           updates.__listTotal = state.output.listResults.length;
           updates.__listCompleted = state.output.listResults.length;
         }
+        // Camera Switch: exactly its last per-clip batch (none after a single
+        // run), and its { edl, transcript } pair — the shape the canvas run and
+        // the job restore write, which the node, the transcript wire and the
+        // Apply EDL estimate read.
+        Object.assign(updates, perHandleRunFields(node.type, state.output));
         // The row-aligned twin rides along, so a node run from the canvas AFTER a
         // server-side run pairs by row exactly like that run did. Always written
         // (undefined clears a stale one from an earlier run).

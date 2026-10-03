@@ -18,7 +18,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared"
 import { applyPromptAffixes, buildSeedanceVideoEditPrompt } from "@nodaro/prompts"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
@@ -3304,6 +3304,65 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             prompt: args.instructions ? args.instructions.slice(0, 80) : `(edit plan · ${args.mode})`,
             model: args.plan_tier ?? "standard",
           },
+        })
+      },
+    )
+
+    // switch_cameras — podcast B5: an edit + a diarized transcript → the edit
+    // with each cut on the speaker's camera (flat price, Cloud). The same
+    // refusal the canvas runs: no speaker labels → refused before any charge.
+    server.registerTool(
+      "switch_cameras",
+      {
+        title: "Camera Switch",
+        description:
+          "Choose which camera shows each cut of an edit by who is speaking (multicam). Pass the `edl` " +
+          "(a plan_edit result) and the diarized `transcript` (transcribe with speaker detection); " +
+          "`speaker_map` maps each speaker label to a camera source id. The sound never changes. " +
+          "Returns a job_id; output_data.json is the switched EDL for apply_edl.",
+        inputSchema: {
+          edl: z.union([z.record(z.string(), z.unknown()), z.string()]).describe("One EDL (a plan_edit result), object or JSON string."),
+          transcript: z.union([z.record(z.string(), z.unknown()), z.string()]).describe("The word transcript with speaker labels."),
+          speaker_map: z.record(z.string(), z.string()).optional().describe("Speaker label → EDL source id of their camera."),
+          speaker_names: z.record(z.string(), z.string()).optional().describe("Speaker label → display name."),
+          min_shot_ms: z.number().int().min(CAMERA_SWITCH_BOUNDS.minShotMs.min).max(CAMERA_SWITCH_BOUNDS.minShotMs.max).optional(),
+          lead_ms: z.number().int().min(CAMERA_SWITCH_BOUNDS.leadMs.min).max(CAMERA_SWITCH_BOUNDS.leadMs.max).optional(),
+          max_shot_ms: z.number().int().min(CAMERA_SWITCH_BOUNDS.maxShotMs.min).max(CAMERA_SWITCH_BOUNDS.maxShotMs.max).optional(),
+          wide_every: z.number().int().min(CAMERA_SWITCH_BOUNDS.wideEvery.min).max(CAMERA_SWITCH_BOUNDS.wideEvery.max).optional(),
+          layout_hints: z.boolean().optional(),
+        },
+        outputSchema: JOB_OUTPUT_SCHEMA,
+        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+        _meta: uiMeta(WIDGET_URI.jobAuto),
+      },
+      async (args) => {
+        const edlProblem = cameraSwitchEdlProblem(args.edl)
+        if (edlProblem) return { content: [{ type: "text" as const, text: `switch_cameras: ${edlProblem}` }], isError: true as const }
+        if (transcriptSpeakerLabels(args.transcript).length === 0) {
+          return {
+            content: [{ type: "text" as const, text: "switch_cameras: the transcript has no speaker labels — transcribe with speaker detection on" }],
+            isError: true as const,
+          }
+        }
+        const payload: Record<string, unknown> = {
+          edl: args.edl,
+          transcript: args.transcript,
+          ...(args.speaker_map ? { speakerMap: args.speaker_map } : {}),
+          ...(args.speaker_names ? { speakerNames: cleanSpeakerNames(args.speaker_names) } : {}),
+          ...(args.min_shot_ms !== undefined ? { minShotMs: args.min_shot_ms } : {}),
+          ...(args.lead_ms !== undefined ? { leadMs: args.lead_ms } : {}),
+          ...(args.max_shot_ms !== undefined ? { maxShotMs: args.max_shot_ms } : {}),
+          ...(args.wide_every !== undefined ? { wideEvery: args.wide_every } : {}),
+          ...(args.layout_hints !== undefined ? { layoutHints: args.layout_hints } : {}),
+          mcp_client: session.clientName,
+          userId: session.userId,
+        }
+        return dispatchJob(fastify, session, {
+          url: "/v1/camera-switch",
+          payload,
+          label: "Camera switch",
+          widgetKind: "generic",
+          widgetData: { prompt: "(camera switch)", model: "camera-switch" },
         })
       },
     )

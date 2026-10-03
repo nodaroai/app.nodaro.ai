@@ -153,6 +153,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Audio Sync": "סנכרון אודיו",
   "Apply EDL": "החלת רשימת עריכה",
   "Edit Plan": "תוכנית עריכה",
+  "Camera Switch": "מחליף מצלמות",
   "Remove Audio": "הסרת אודיו",
   "Mix Audio": "מיקס אודיו",
   "Combine Audio": "שילוב אודיו",

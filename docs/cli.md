@@ -389,6 +389,8 @@ nodaro edit plan --mode tighten|clips|chapters --plan-tier economy|standard|prem
                                                          # matched weakly (set its offsetMs in --sources-file).
 
 # Organizations — only on instances that have them
+nodaro edit switch-cameras --edl <file.json> --transcript <file.json> [--speaker-map <file.json>] [--speaker-names <file.json>] [--min-shot-ms <ms>] [--lead-ms <ms>] [--max-shot-ms <ms>] [--wide-every <n>] [--layout-hints] [--watch] [--poll-interval <ms>] [--json]
+                                                         # multicam: each cut on the speaker's camera; the transcript needs speaker labels.
 nodaro org list [--json]
 nodaro org get <id> [--json]
 nodaro org create --name <name> --kind school|team [--slug <slug>] [--accept-terms] [--json]

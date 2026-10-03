@@ -51,6 +51,7 @@ const EXCLUSIVE_ROUTE_BY_JOB_TYPE: Readonly<Record<string, string>> = {
   "video-analysis": "/v1/video-analysis",
   "video-audit": "/v1/video-audit",
   "edit-plan": "/v1/edit-plan",
+  "camera-switch": "/v1/camera-switch",
 }
 
 /** Poll budgets per type. gvp/evp legitimately run an hour+; kept under the
@@ -64,6 +65,8 @@ const POLL_BUDGET_BY_JOB_TYPE: Readonly<Record<string, number>> = {
   // A multi-hour episode's plan is several windowed LLM passes — kept under the
   // orchestrator's 90-min NODE_TIMEOUT_MS, matching gvp/evp.
   "edit-plan": 85 * 60 * 1000,
+  // Deterministic: a length probe per camera plus the switch — minutes at most.
+  "camera-switch": 30 * 60 * 1000,
 }
 
 export function isNodaroExclusiveJobType(jobType: string): boolean {
@@ -77,8 +80,18 @@ async function buildCloudBody(payload: Record<string, unknown>): Promise<Record<
     ([key, value]) => !INSTANCE_ONLY_FIELDS.has(key) && !key.startsWith("__") && value !== undefined,
   )
   return Object.fromEntries(
-    await Promise.all(kept.map(async ([key, value]) => [key, await rehostIfUrlField(key, value)])),
+    await Promise.all(kept.map(async ([key, value]) => [key, key === "edl" ? await rehostEdlSources(value) : await rehostIfUrlField(key, value)])),
   )
+}
+
+/** An EDL carries its media one level down (`sources[].url`), which the
+ *  top-level walker never reaches: re-host those so the cloud can read the
+ *  cameras (camera-switch probes each one). */
+async function rehostEdlSources(edl: unknown): Promise<unknown> {
+  if (!edl || typeof edl !== "object" || Array.isArray(edl)) return edl
+  const sources = (edl as { sources?: unknown }).sources
+  if (!Array.isArray(sources)) return edl
+  return { ...(edl as Record<string, unknown>), sources: await rehostIfUrlField("sources", sources) }
 }
 
 /** Persist the CLOUD job id + kind before polling — the stall-retry contract:
@@ -148,7 +161,7 @@ export async function finalizeExclusiveCloudOutput(args: {
   // to `data.generatedJson` (`unwrapEditPlanOutput`) happens in the output
   // extractors, NOT here — output_data must stay the object shape the plugin
   // wrote (a bare Edl[] here would be corrupted into numeric keys by any spread).
-  if (jobType === "video-analysis" || jobType === "video-audit" || jobType === "edit-plan") {
+  if (jobType === "video-analysis" || jobType === "video-audit" || jobType === "edit-plan" || jobType === "camera-switch") {
     return markJobCompleted(jobId, {
       output_data: { ...output, viaNodaroCloud: true },
       provider: "nodaro",

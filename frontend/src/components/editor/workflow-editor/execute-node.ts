@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
-import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload } from "@nodaro/shared";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
@@ -111,6 +111,7 @@ import {
   startContentIdeas,
   runVideoAudit,
   editPlan,
+  cameraSwitch,
   executeReduce,
 } from "@/lib/api";
 import { applyWebScrapeFailure, applyWebScrapeResult, webScrapeRunStartPatch } from "@/components/nodes/web-scrape-run-state";
@@ -198,6 +199,7 @@ import type {
   CombineVideosData,
   ApplyEdlData,
   EditPlanNodeData,
+  CameraSwitchNodeData,
   AssembleNarratedVideoData,
   ImageCollageData,
   ImageOverlayData,
@@ -7154,6 +7156,136 @@ function executeNodeCore(
           });
           if (!checkStorageError(err, ctx)) {
             guardedToast.error(tx("apiErr.startEditPlan"), {
+              description: err instanceof Error ? err.message : tx("lib.unknownError"),
+            });
+          }
+          reject(err);
+        });
+    });
+  }
+
+  if (node.type === "camera-switch") {
+    const csData = node.data as CameraSwitchNodeData;
+    const parseMaybe = (v: unknown): unknown => {
+      if (typeof v !== "string") return v;
+      try { return JSON.parse(v); } catch { return undefined; }
+    };
+    const edl = inputs.edl !== undefined ? parseMaybe(inputs.edl) : csData.edl;
+    const transcript = inputs.transcript !== undefined ? parseMaybe(inputs.transcript) : csData.transcript;
+    if (!edl || typeof edl !== "object") {
+      toast.error(nodeRunError(csData.label, "nodeRun.cameraSwitchConnectEdl"));
+      return Promise.reject(new Error("camera-switch requires an edit"));
+    }
+    if (!transcript || typeof transcript !== "object") {
+      toast.error(nodeRunError(csData.label, "nodeRun.connectATranscriptToThe"));
+      return Promise.reject(new Error("camera-switch requires a transcript"));
+    }
+    // Refused before charging (decided 2026-10-03), the same rules the payload
+    // builder and the routes apply: one master-clock edit, speaker labels.
+    const edlProblem = cameraSwitchEdlProblem(edl);
+    if (edlProblem) {
+      toast.error(nodeRunError(csData.label, "nodeRun.cameraSwitchOneEdit"));
+      return Promise.reject(new Error(edlProblem));
+    }
+    if (transcriptSpeakerLabels(transcript).length === 0) {
+      toast.error(nodeRunError(csData.label, "nodeRun.cameraSwitchNoSpeakers"));
+      return Promise.reject(new Error("camera-switch: the transcript has no speaker labels"));
+    }
+    const settings = cameraSwitchSettingsPayload(csData, edl, transcript);
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(node.id, {
+      ...RUN_START_RESET,
+      currentJobProgress: undefined,
+      // The pair is cleared once per run — by a single run, or the batch's
+      // FIRST clip. A later clip that fails must not erase a pair an earlier
+      // clip wrote: its transcript is what every render of the batch reads.
+      ...(listIterationIndex === undefined || listIterationIndex === 0 ? { generatedJson: undefined } : {}),
+      // A single run replaces the last per-clip batch: its clips must not fan
+      // the next render out again (FAN_OUT_EACH_HANDLES). Inside a batch the
+      // list execution writes the new batch when every clip has settled.
+      ...(listIterationIndex === undefined ? { __listResults: undefined } : {}),
+    });
+    return new Promise<string>((resolve, reject) => {
+      cameraSwitch({
+        edl,
+        transcript,
+        ...settings,
+        userId: ctx.userId,
+      })
+        .then(({ jobId }) => {
+          guardedToast.info(tx("nodeRun.cameraSwitchStarted"), { description: tx("run.jobIdLine", { id: jobId }) });
+          updateNodeData(node.id, { currentJobId: jobId });
+          let pollFailures = 0;
+          const poll = ctx.trackInterval(
+            setInterval(async () => {
+              if (ctx.isWorkflowStale()) {
+                ctx.untrackInterval(poll);
+                reject(new WorkflowStaleError());
+                return;
+              }
+              try {
+                const job = await getJobStatusLeanForNode(jobId, node.id);
+                pollFailures = 0;
+                if (job.status === "completed" || job.status === "failed") {
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    ctx.untrackInterval(poll);
+                    resolve("");
+                    return;
+                  }
+                }
+                if (job.status === "completed") {
+                  ctx.untrackInterval(poll);
+                  const out = (job.output_data ?? {}) as { json?: unknown; transcript?: unknown };
+                  const pair = { edl: out.json, transcript: out.transcript };
+                  updateNodeData(node.id, {
+                    executionStatus: "completed",
+                    generatedJson: pair,
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  guardedToast.success(tx("nodeRun.cameraSwitchComplete"));
+                  resolve(out.json === undefined ? "" : JSON.stringify(out.json));
+                } else if (job.status === "failed") {
+                  ctx.untrackInterval(poll);
+                  const errMsg = job.error_message ?? "Camera switch failed";
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    errorMessage: errMsg,
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  guardedToast.error(tx("nodeRun.cameraSwitchFailed"), { description: errMsg });
+                  reject(new Error(errMsg));
+                }
+              } catch (err) {
+                pollFailures++;
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
+                  ctx.untrackInterval(poll);
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    resolve("");
+                    return;
+                  }
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
+                  });
+                  reject(err);
+                }
+              }
+            }, 2000),
+          );
+        })
+        .catch((err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            currentJobId: undefined,
+            currentJobProgress: undefined,
+          });
+          if (!checkStorageError(err, ctx)) {
+            guardedToast.error(tx("apiErr.startCameraSwitch"), {
               description: err instanceof Error ? err.message : tx("lib.unknownError"),
             });
           }

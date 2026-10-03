@@ -192,6 +192,59 @@ describe("edit-plan offsets", () => {
   })
 })
 
+// B5 (decided 2026-10-03): the relayed camera-switch refuses, before anything
+// is created or relayed, a malformed edit and a transcript with no speakers.
+describe("camera-switch", () => {
+  const edl = { version: 1, clock: "master", sources: [{ id: "camA", url: VIDEO, kind: "video" }], segments: [{ id: "s", inMs: 0, outMs: 1_000, video: "camA" }] }
+  const diarized = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 400, speaker: "speaker_0" }] }
+  const post = (body: Record<string, unknown>) =>
+    app.inject({ method: "POST", url: "/v1/camera-switch", payload: { userId: USER, ...body } })
+
+  it("relays an edit + a diarized transcript; input_data keeps sizes, not the edit or the transcript", async () => {
+    const res = await post({ edl, transcript: diarized })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.queueAdd.mock.calls[0]![0]).toBe("camera-switch")
+    const inputData = (mocks.insertJob.mock.calls[0]![1] as { input_data: Record<string, unknown> }).input_data
+    expect(inputData).not.toHaveProperty("edl")
+    expect(inputData).not.toHaveProperty("transcript")
+  })
+
+  it("refuses a transcript with no speaker labels (422 no_speakers) and creates nothing", async () => {
+    const res = await post({ edl, transcript: { version: 1, words: [{ text: "hi", startMs: 0, endMs: 400 }] } })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe("no_speakers")
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+  })
+
+  it("refuses an edit with no segments (400 invalid_edl)", async () => {
+    const res = await post({ edl: { ...edl, segments: [] }, transcript: diarized })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_edl")
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("refuses a clip set and an output-clock edit (400 invalid_edl), the plugin route's rules", async () => {
+    for (const bad of [{ clips: [edl] }, { ...edl, clock: "output" }]) {
+      const res = await post({ edl: bad, transcript: diarized })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("invalid_edl")
+    }
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  // A JSON-string edit (the docs allow it) is queued PARSED: the relay re-hosts
+  // the cameras' URLs from the object — a string hid them (review of #1749).
+  it("queues a JSON-string edit and transcript as objects", async () => {
+    const res = await post({ edl: JSON.stringify(edl), transcript: JSON.stringify(diarized) })
+    expect(res.statusCode).toBe(200)
+    const queued = mocks.queueAdd.mock.calls[0]![1] as { edl: unknown; transcript: unknown }
+    expect(queued.edl).toEqual(edl)
+    expect(queued.transcript).toEqual(diarized)
+    const inputData = (mocks.insertJob.mock.calls[0]![1] as { input_data: Record<string, unknown> }).input_data
+    expect(inputData.edlSegmentCount).toBe(1)
+  })
+})
+
 describe("probe passthrough", () => {
   it("proxies synchronously through the connection", async () => {
     const res = await app.inject({

@@ -3367,6 +3367,38 @@ export async function editPlan(params: {
 }
 
 /**
+ * camera-switch (podcast B5): an edit + a diarized transcript → the edit with
+ * each cut on the speaker's camera (and the renamed transcript). Cloud-exclusive;
+ * flat price. Refused before charging when the transcript has no speaker labels.
+ */
+export async function cameraSwitch(params: {
+  edl: unknown
+  transcript: unknown
+  speakerMap?: Record<string, string>
+  speakerNames?: Record<string, string>
+  minShotMs?: number
+  leadMs?: number
+  maxShotMs?: number
+  wideEvery?: number
+  layoutHints?: boolean
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { edl: params.edl, transcript: params.transcript }
+  if (params.speakerMap && Object.keys(params.speakerMap).length > 0) body.speakerMap = params.speakerMap
+  if (params.speakerNames && Object.keys(params.speakerNames).length > 0) body.speakerNames = params.speakerNames
+  for (const key of ["minShotMs", "leadMs", "maxShotMs", "wideEvery"] as const) {
+    if (typeof params[key] === "number") body[key] = params[key]
+  }
+  if (params.layoutHints) body.layoutHints = true
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/camera-switch", {
+    body,
+    workflowId: true,
+    label: "apiErr.startCameraSwitch",
+  })
+}
+
+/**
  * Image Overlay: base image + 1–12 layers → one composited image (local sharp).
  * Every layer position/size is in % of the base image; see ImageOverlayData.
  */

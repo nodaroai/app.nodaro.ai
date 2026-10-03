@@ -30,6 +30,8 @@
  *       and the transcribed media (the planner spans both);
  *     · Edit Plan, clips → per clip, twice the clip-length target, never more
  *       than the episode (the clip COUNT is the fan-out multiplier's job);
+ *     · Camera Switch → whatever feeds ITS edit: switching cameras never
+ *       changes an edit's length;
  *     · anything else → the 180-minute ceiling.
  */
 import { edlDurationMs, normalizeEdl, EDIT_PLAN_MAX_MINUTES } from "@nodaro/shared"
@@ -81,10 +83,23 @@ function edlMinutes(value: unknown): number | undefined {
   }
 }
 
+/** Nodes whose output EDL is their input EDL re-cut by camera, never longer
+ *  or shorter: the estimate reads through them to the edit that feeds them.
+ *  Each holds `{ edl, transcript }` on `generatedJson`. */
+const EDL_LENGTH_PRESERVING_TYPES: ReadonlySet<string> = new Set(["camera-switch"])
+
 /** The plan a producer holds on the canvas (`generatedJson` — the field the
  *  `json`/`edl` output handles read). A clips plan is a bare `Edl[]`. */
 function persistedPlanMinutes(producer: GraphNode): number | undefined {
-  const plan = dataOf(producer).generatedJson
+  const data = dataOf(producer)
+  const held = data.generatedJson
+  const unwrap = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) && "edl" in v ? (v as { edl: unknown }).edl : v)
+  // Run once per clip, it holds the batch — one switched EDL per clip — on
+  // `__listResults`; `generatedJson` is only whichever clip finished last.
+  const batch = Array.isArray(data.__listResults) && data.__listResults.length > 0 ? (data.__listResults as unknown[]) : undefined
+  const plan = EDL_LENGTH_PRESERVING_TYPES.has(producer.type ?? "")
+    ? (batch ?? (Array.isArray(held) ? held.map(unwrap) : unwrap(held)))
+    : held
   if (Array.isArray(plan)) {
     // Each clip renders in its own iteration; price the LONGEST so no single
     // iteration's reserve is under-quoted (the fan-out multiplier counts them).
@@ -130,6 +145,11 @@ function wiredEdlMinutes(
   if (!rerunIds.has(producer.id)) {
     const exact = persistedPlanMinutes(producer)
     if (exact !== undefined) return exact
+  }
+
+  if (EDL_LENGTH_PRESERVING_TYPES.has(producer.type ?? "")) {
+    const upstream = edges.find((e) => e.target === producer.id && e.targetHandle === "edl")
+    return upstream ? wiredEdlMinutes(upstream, nodes, edges, rerunIds) : EDIT_PLAN_MAX_MINUTES
   }
 
   if (producer.type === "edit-plan") {

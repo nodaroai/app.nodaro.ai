@@ -149,6 +149,7 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Audio Sync": "音声同期",
   "Apply EDL": "EDL 適用",
   "Edit Plan": "編集プラン",
+  "Camera Switch": "カメラ切り替え",
   "Remove Audio": "オーディオを削除",
   "Mix Audio": "オーディオをミックス",
   "Combine Audio": "オーディオを結合",

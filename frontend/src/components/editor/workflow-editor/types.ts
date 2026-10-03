@@ -4,7 +4,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -68,6 +68,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   // (clips·premium·180m = 1480), never-under-quote — mirrors video-analysis's
   // fallback rationale so a run never fails mid-DAG after transcribe charged.
   "edit-plan": 1480,
+  // camera-switch: flat (decided 2026-10-03, migration 448).
+  "camera-switch": 10,
   // Content Recipe / Content Ideas: the node badge and the run-level estimate
   // name the composite (contentRecipeCreditId / contentIdeasCreditId — model
   // tier, and for ideas the per-five-ideas bucket) and read it here on a cold
@@ -667,6 +669,7 @@ export const EXECUTABLE_TYPES = new Set([
   "combine-videos",
   "apply-edl",
   "edit-plan",
+  "camera-switch",
   "assemble-narrated-video",
   "image-collage",
   "image-overlay",
@@ -987,6 +990,14 @@ export const EACH_WIRE_FAN_OUT: Readonly<
  * different question (a Selector or a list transform runs ONCE over its whole
  * list), and every other graph's estimate stays exactly what it was.
  */
+/** A per-handle fan-out node (Camera Switch) that is NOT re-running renders the
+ *  batch it holds: one downstream run per item of its last batch. 0 otherwise. */
+function heldBatchFanOut(node: WorkflowNode, rerunIds: ReadonlySet<string>): number {
+  if (!Object.prototype.hasOwnProperty.call(FAN_OUT_EACH_HANDLES, node.type ?? "") || rerunIds.has(node.id)) return 0;
+  const batch = (node.data as Record<string, unknown>).__listResults;
+  return Array.isArray(batch) && batch.length > 1 ? batch.length : 0;
+}
+
 function inheritedClipFanOut(
   source: WorkflowNode,
   allNodes: WorkflowNode[],
@@ -1011,7 +1022,11 @@ function inheritedClipFanOut(
       if (n > 1) return n;
       continue;
     }
-    if (explicit !== "each") continue;
+    if ((explicit ?? defaultEdgeOutputMode(upstream.type, edge.sourceHandle)) !== "each") continue;
+    // A handle whose edge never lists (Camera Switch's transcript) fans nothing out.
+    if (!listResultsServeHandle(upstream.type, edge.sourceHandle)) continue;
+    const held = heldBatchFanOut(upstream, rerunIds);
+    if (held > 1) return held;
     const n = inheritedClipFanOut(upstream, allNodes, edges, rerunIds, visited);
     if (n > 1) return n;
   }
@@ -1032,9 +1047,7 @@ function getBaseFanOut(
 
     const edgeMode = (edge.data as Record<string, unknown> | undefined)
       ?.outputMode as string | undefined;
-    const mode =
-      edgeMode ??
-      (FAN_OUT_EACH_TYPES.has(sourceNode.type ?? "") ? "each" : "last");
+    const mode = edgeMode ?? defaultEdgeOutputMode(sourceNode.type, edge.sourceHandle);
     if (mode !== "each") continue;
 
     const edgeData = edge.data as Record<string, unknown> | undefined;
@@ -1098,9 +1111,12 @@ function getBaseFanOut(
       }
     }
 
-    // Clip Pack: an explicit "each" edge from a render that is itself fanned out
-    // per clip. Narrow by design — see `inheritedClipFanOut`.
-    if (edgeMode === "each") {
+    // Clip Pack: an "each" edge (set by hand, or a per-handle default like
+    // Camera Switch's EDL) from a node that is itself fanned out per clip.
+    // Narrow by design — see `inheritedClipFanOut`.
+    if (mode === "each" && listResultsServeHandle(sourceNode.type, edge.sourceHandle)) {
+      const held = heldBatchFanOut(sourceNode, rerunIds);
+      if (held > 1) return held;
       const inherited = inheritedClipFanOut(sourceNode, allNodes, edges, rerunIds, new Set());
       if (inherited > 1) return inherited;
     }

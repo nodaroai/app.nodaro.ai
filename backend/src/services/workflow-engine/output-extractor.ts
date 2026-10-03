@@ -16,7 +16,7 @@ import {
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
 import {
-  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest } from "@nodaro/shared"
+  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest, FAN_OUT_EACH_HANDLES } from "@nodaro/shared"
 import type { SceneData, Transcript } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/prompts"
 export { extractVideoDurationFromNode } from "@nodaro/shared"
@@ -567,6 +567,19 @@ export function coerceListItemsOverrideToRows(data: Record<string, unknown>): vo
 }
 
 /**
+ * The value one fan-out iteration adds to its node's `listResults` (what a
+ * downstream "each" edge then reads, one row per iteration): the media URL,
+ * else the text. A per-handle fan-out node (`FAN_OUT_EACH_HANDLES`) adds its
+ * PRIMARY output instead — Camera Switch's is each clip's switched EDL (JSON),
+ * which has neither, so every row used to be "" and Apply EDL rendered clip 0.
+ */
+export function fanOutIterationValue(output: NodeOutput, nodeType: string | undefined): string {
+  const perHandle = nodeType ? FAN_OUT_EACH_HANDLES[nodeType] : undefined
+  if (nodeType && perHandle) return getPrimaryOutput(output, nodeType, perHandle.primary) ?? ""
+  return output.imageUrl || output.videoUrl || output.audioUrl || output.text || ""
+}
+
+/**
  * Get the primary media URL or text from a NodeOutput, given the source node type.
  * Uses the media type sets from execution-graph.ts for consistency.
  */
@@ -805,6 +818,15 @@ export function getPrimaryOutput(
   // downstream `edl` input's normalizeEdl would treat `[edl]` as an EDL with no
   // sources/segments → validateEdl 400. Emit the FIRST clip (one valid EDL), or
   // nothing for an empty set. Mirrors the frontend extractNodeOutput branch.
+  // Camera Switch (B5): output.json is the pair { edl, transcript } — the
+  // `transcript` handle carries the renamed transcript, the `edl` handle (and
+  // the default) the switched edit. Mirrors the frontend extractNodeOutput.
+  if (sourceType === "camera-switch") {
+    const pair = output.json as { edl?: unknown; transcript?: unknown } | undefined
+    const value = sourceHandle === "transcript" ? pair?.transcript : pair?.edl
+    return value === undefined || value === null ? undefined : JSON.stringify(value)
+  }
+
   if (sourceType === "edit-plan") {
     const plan = output.json
     if (plan === undefined || plan === null) return undefined
@@ -1543,6 +1565,12 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // for the clips array, ALSO expose listResults so the fan-out has its per-item
   // list off saved state. Mirrors the analysis json branch + the live
   // buildNodeOutputFromJobData path.
+  // Camera Switch: data.generatedJson is the { edl, transcript } pair.
+  if (type === "camera-switch") {
+    const json = data.generatedJson
+    return json === undefined ? undefined : { json }
+  }
+
   if (type === "edit-plan") {
     const json = data.generatedJson
     if (json === undefined) return undefined
@@ -1780,6 +1808,14 @@ export function buildNodeOutputFromJobData(
   // for the clips array, into `output.listResults` (the live fan-out reads
   // `state.output.listResults`). ONE unwrap rule shared with every save-side site
   // (`unwrapEditPlanOutput` in @nodaro/shared) so DAG and single-node runs agree.
+  // Camera Switch: the plugin writes { json: <Edl>, transcript: <Transcript> };
+  // the node's output is the pair on `json` (one slot, two handles).
+  if (nodeType === "camera-switch") {
+    const edl = outputData.json
+    const transcript = outputData.transcript
+    if (edl !== undefined) output.json = { edl, ...(transcript !== undefined ? { transcript } : {}) }
+  }
+
   if (nodeType === "edit-plan") {
     const plan = unwrapEditPlanOutput(outputData)
     if (plan !== undefined) {

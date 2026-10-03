@@ -6,7 +6,7 @@
  */
 
 import {
-  FAN_OUT_EACH_TYPES,
+  defaultEdgeOutputMode,
   PARAMETER_NODE_TYPES,
   REPEAT_PLACEHOLDER,
   VARIABLES_HANDLE_ID,
@@ -344,7 +344,7 @@ function fanOutSource(node: InspectorNode, graph: Graph): InspectorNode | undefi
     if (!source?.type) return false
     const mode = stringValue(edge.data?.outputMode)
     if (mode !== undefined) return mode === "each"
-    return FAN_OUT_EACH_TYPES.has(source.type) || (source.type === "llm-chat" && edge.sourceHandle === "items")
+    return defaultEdgeOutputMode(source.type, edge.sourceHandle) === "each" || (source.type === "llm-chat" && edge.sourceHandle === "items")
   }
   const edge = incomingEdges(node, graph).find(drives)
   return edge ? graph.byId.get(edge.source) : undefined

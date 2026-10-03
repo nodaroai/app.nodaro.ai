@@ -160,3 +160,56 @@ it("with several wires on `edl`, prices the costliest", () => {
   expect(resolveApplyEdlEstimateMinutes(ae, [short, long, ae], [edge("a", "ae", "edl"), edge("b", "ae", "edl")], NONE)).toBe(30)
   expect(resolveApplyEdlEstimateMinutes(ae, [short, long, ae], [edge("b", "ae", "edl"), edge("a", "ae", "edl")], NONE)).toBe(30)
 })
+
+// Camera Switch re-cuts an edit by camera and never changes its length, and it
+// holds { edl, transcript } — read through it, never price the 180-min ceiling.
+describe("wired through Camera Switch (B5)", () => {
+  const graph = (csData: Record<string, unknown>, planData: Record<string, unknown> = {}) => {
+    const master = node("m", "upload-audio", { metadata: { durationSeconds: 45 * 60 } })
+    const plan = node("ep", "edit-plan", { mode: "tighten", ...planData })
+    const cs = node("cs", "camera-switch", csData)
+    const ae = node("ae", "apply-edl", {})
+    return {
+      ae,
+      nodes: [master, plan, cs, ae],
+      edges: [edge("m", "ep", "sources"), edge("ep", "cs", "edl"), edge("cs", "ae", "edl")],
+    }
+  }
+
+  it("not re-running: the switched edit it holds is exactly what renders", () => {
+    const g = graph({ generatedJson: { edl: edlOf(seg(0, 3 * 60_000)), transcript: { version: 1, words: [] } } })
+    expect(resolveApplyEdlEstimateMinutes(g.ae, g.nodes, g.edges, NONE)).toBe(3)
+  })
+
+  it("a fanned-out run holds one pair per clip: the longest prices", () => {
+    const pair = (ms: number) => ({ edl: edlOf(seg(0, ms)), transcript: { version: 1, words: [] } })
+    const g = graph({ generatedJson: [pair(60_000), pair(150_000)] })
+    expect(resolveApplyEdlEstimateMinutes(g.ae, g.nodes, g.edges, NONE)).toBe(3)
+  })
+
+  it("re-running: reads through to the Edit Plan that feeds it (the episode's length)", () => {
+    const g = graph({ generatedJson: { edl: edlOf(seg(0, 60_000)), transcript: { version: 1, words: [] } } })
+    expect(resolveApplyEdlEstimateMinutes(g.ae, g.nodes, g.edges, reruns("ep", "cs", "ae"))).toBe(45)
+  })
+
+  it("re-running with nothing on its EDL input: the ceiling", () => {
+    const g = graph({})
+    g.edges = g.edges.filter((e) => e.target !== "cs")
+    expect(resolveApplyEdlEstimateMinutes(g.ae, g.nodes, g.edges, reruns("cs", "ae"))).toBe(180)
+  })
+})
+
+describe("Camera Switch run once per clip (B5): the batch prices, not the last clip to finish", () => {
+  it("reads __listResults — the longest clip — when the switch holds a batch", () => {
+    const master = node("m", "upload-audio", { metadata: { durationSeconds: 45 * 60 } })
+    const plan = node("ep", "edit-plan", { mode: "clips" })
+    // The 2-minute clip finished last, so generatedJson holds it; the batch has a 10-minute one.
+    const cs = node("cs", "camera-switch", {
+      generatedJson: { edl: edlOf(seg(0, 2 * 60_000)), transcript: { version: 1, words: [] } },
+      __listResults: [JSON.stringify(edlOf(seg(0, 10 * 60_000))), JSON.stringify(edlOf(seg(0, 2 * 60_000))), ""],
+    })
+    const ae = node("ae", "apply-edl", {})
+    const edges = [edge("m", "ep", "sources"), edge("ep", "cs", "edl"), edge("cs", "ae", "edl")]
+    expect(resolveApplyEdlEstimateMinutes(ae, [master, plan, cs, ae], edges, NONE)).toBe(10)
+  })
+})

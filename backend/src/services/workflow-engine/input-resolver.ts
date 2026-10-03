@@ -12,7 +12,7 @@ import type {
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, savedOutputFor, ANALYSIS_PRODUCER_TYPES, type ExtractContext } from "./output-extractor.js"
 import {
-  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo } from "@nodaro/shared"
+  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
@@ -187,13 +187,16 @@ export function resolveNodeInputs(
                 ?? (savedOk ? (sourceNode.data.pickedResults as string[] | undefined) : undefined)))
         : undefined
 
-    const effectiveListResults = isLlmChatItemsEdge
+    // A handle the per-iteration results do not serve (Camera Switch's
+    // transcript beside its per-clip EDLs) reads its single value, in every mode.
+    const servesList = listResultsServeHandle(sourceNode.type, effectiveSourceHandle)
+    const effectiveListResults = isLlmChatItemsEdge || !servesList
       ? undefined
       : selectorListResults ?? listFor(sourceNode, state)
     // What a fan-out iteration indexes BY ROW: the row-aligned twin when the
     // source publishes one (Extract Field), else the list itself. Addressing by
     // position (item / item:N / range / Bundle) keeps using the public list above.
-    const rowAlignedResults = state?.output?.alignedListResults ?? effectiveListResults
+    const rowAlignedResults = servesList ? state?.output?.alignedListResults ?? effectiveListResults : undefined
 
     // Fan-in targets (collect): consume the entire upstream list as a single
     // `inputs.inputs` array regardless of edgeOutputMode — collect strategies
@@ -293,7 +296,7 @@ export function resolveNodeInputs(
 
     // During fan-out: "each" mode edges from list sources should advance per iteration
     if (!output && !rowIsEmpty && listIterationIndex != null && effectiveListResults && effectiveListResults.length > 0) {
-      const effectiveMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type) ? "each" : "last")
+      const effectiveMode = edgeOutputMode ?? defaultEdgeOutputMode(sourceNode.type, effectiveSourceHandle)
       if (effectiveMode === "each") {
         const filtered = selectListItems(
           rowAlignedResults ?? effectiveListResults,
@@ -892,7 +895,7 @@ export function getListFanOutForNode(
     // Check outputMode from edge data — only fan-out if mode is "each"
     // List/loop/split-text edges default to "each"; all other edges default to "last"
     const edgeOutputMode = edgeData?.outputMode as string | undefined
-    const outputMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type) ? "each" : "last")
+    const outputMode = edgeOutputMode ?? defaultEdgeOutputMode(sourceNode.type, edge.sourceHandle)
     if (outputMode !== "each") continue
 
     // 1. List node (also covers legacy `loop`, normalized to `list` upstream of
@@ -939,6 +942,16 @@ export function getListFanOutForNode(
         ? (state?.output?.restResults ?? (savedOk ? (data.restResults as string[] | undefined) : undefined))
         : (state?.output?.pickedResults ?? (savedOk ? (data.pickedResults as string[] | undefined) : undefined))
       if (channel && channel.length > 1) consider(edge, selectListItems(channel, selectorArg))
+      continue
+    }
+
+    // 4a. A node that ran once per upstream item (Camera Switch per clip): its
+    //     "each" handle lists THIS run's per-item results, else its last saved
+    //     batch — never its accumulated history; its other handles never list.
+    if (Object.prototype.hasOwnProperty.call(FAN_OUT_EACH_HANDLES, sourceNode.type)) {
+      if (!listResultsServeHandle(sourceNode.type, edge.sourceHandle)) continue
+      const items = listFor(sourceNode, state)
+      if (items && items.length > 1) consider(edge, selectListItems(items, selectorArg))
       continue
     }
 
@@ -1673,6 +1686,20 @@ function routeOutput(
   // a media URL for a `sources` override. Gated on targetType so these handle
   // names don't hijack same-named handles elsewhere. Mirrors the frontend
   // node-input-resolver apply-edl branch. ---
+  // --- camera-switch inputs (B5): the edit (`edl`) and the diarized
+  // `transcript`, both stringified json — routed by targetHandle before any
+  // source-type branch, like apply-edl's. Mirrors the frontend resolver. ---
+  if (targetType === "camera-switch") {
+    if (edge.targetHandle === "edl") {
+      inputs.edl = output
+      return
+    }
+    if (edge.targetHandle === "transcript") {
+      inputs.transcript = output
+      return
+    }
+  }
+
   if (targetType === "apply-edl") {
     if (edge.targetHandle === "edl") {
       inputs.edl = output

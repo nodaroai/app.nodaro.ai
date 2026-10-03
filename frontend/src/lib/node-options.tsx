@@ -67,6 +67,7 @@ import {
   ListFilter,
   ListMusic,
   ListTree,
+  SwitchCamera,
   LogIn,
   LogOut,
   MapPin,
@@ -1179,6 +1180,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Processing",
     group: "video-cut-assemble",
     keywords: ["edit plan", "edl", "tighten", "clips", "chapters", "podcast", "transcript", "cut", "plan", "shorts"],
+  },
+  {
+    type: "camera-switch",
+    label: "Camera Switch",
+    icon: <SwitchCamera className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-cut-assemble",
+    keywords: ["camera switch", "multicam", "multi-camera", "speaker", "who is talking", "podcast", "edl", "angles", "cut"],
   },
   {
     type: "assemble-narrated-video",

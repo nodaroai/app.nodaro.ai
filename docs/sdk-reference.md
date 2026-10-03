@@ -5267,6 +5267,7 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `silenceDetect(input)` | `POST /v1/silence-detect` | Keyless ffmpeg silence pass over an audio **or** video source. |
 | `audioSync(input)` | `POST /v1/audio-sync` | Keyless: measure how far apart 2–6 recordings' clocks are, from their sound. |
 | `applyEdl(input)` | `POST /v1/apply-edl` | Render an edit decision list (EDL) into a video or audio cut. |
+| `cameraSwitch(input)` | `POST /v1/camera-switch` | Multicam: put each cut of an EDL on the camera of whoever is speaking (Cloud; flat price). |
 | `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
 
@@ -5431,6 +5432,26 @@ const { jobId } = await client.edit.editPlan({
 const done = await client.jobs.getStatus(jobId)
 const plan = unwrapEditPlanOutput(done.data.output_data)  // Edl[] for clips
 ```
+
+#### `cameraSwitch(input)`
+
+```ts
+cameraSwitch(input: CameraSwitchInput): Promise<EditJobResult>
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `edl` | `Edl` | yes | One EDL — an `editPlan` result (not a clip set). |
+| `transcript` | `Transcript` | yes | The transcript WITH speaker labels. |
+| `speakerMap` | `Record<string, string>` | no | Speaker label → the EDL source id of their camera. A speaker left out uses the source whose `speakers` names them, else the `wide` source, else any camera with picture. |
+| `speakerNames` | `Record<string, string>` | no | Speaker label → display name. |
+| `minShotMs` / `leadMs` / `maxShotMs` / `wideEvery` | `number` | no | Shortest shot (2 500), cut lead (200), wide break after (20 000, with a wide source), every N-th cut to the wide (0 = off). |
+| `layoutHints` | `boolean` | no | Overlapping speech → a layout hint (default false; Apply EDL renders cut-only edits). |
+
+The finished job's `output_data.json` is the switched EDL (feed it to `applyEdl`)
+and `output_data.transcript` the transcript with `speakerNames` applied. A
+transcript with no speaker labels rejects with a `NodaroError`
+(`code: "no_speakers"`) before any request or charge. Flat price per run.
 
 #### `remapTranscript(edl, transcript)`
 

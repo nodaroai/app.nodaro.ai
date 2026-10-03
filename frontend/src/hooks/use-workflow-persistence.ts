@@ -23,6 +23,7 @@ import { createTriggerSyncTracker, syncTriggersAfterSave, type TriggerSyncTracke
 import { adoptUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
+import { perHandleRunFields } from "@/lib/per-handle-batch"
 
 /**
  * Execution statuses whose `node_states` are worth restoring onto the canvas on
@@ -476,6 +477,7 @@ export function applyBackendExecutionState(
             data.activeResultIndex = 0
           }
         }
+        Object.assign(data, perHandleRunFields(nodeType, state.output))
       }
     } else if (state.status === "running") {
       data.executionStatus = "running"
@@ -617,6 +619,7 @@ export function applyCompletedExecutionResults(
       ]
       newData.activeResultIndex = 0
     }
+    Object.assign(newData, perHandleRunFields(nodeType, state.output))
 
     return { ...node, data: newData as SceneNodeData }
   })

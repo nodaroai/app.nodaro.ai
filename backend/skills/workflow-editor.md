@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-10-01T22:35:14.386Z
-generated_from: 9efb4473c
+generated_at: 2026-10-03T19:13:21.926Z
+generated_from: 17d734b63
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -92,6 +92,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `backdrop` — Backdrop
 - `camera-format` — Camera / Film Stock
 - `camera-motion` — Camera Motion
+- `camera-switch` — Camera Switch
 - `character` — Character Asset
 - `character-fx` — Character FX
 - `character-motion` — Character Motion

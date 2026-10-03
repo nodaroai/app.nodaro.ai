@@ -1,4 +1,4 @@
-import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID } from "@nodaro/shared"
+import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, CAMERA_SWITCH_CREDIT_ID } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -468,6 +468,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // EDIT_PLAN_STATIC block above). Bare `edit-plan` + all 54 composites, written
   // to model_pricing by migration 432; the DB rows win at runtime.
   ...EDIT_PLAN_STATIC,
+  // ── Camera Switch (podcast B5) — FLAT per run (decided 2026-10-03):
+  // deterministic code plus a length probe per camera, no model. A clips
+  // fan-out runs it once per clip. Written to model_pricing by migration 448.
+  [CAMERA_SWITCH_CREDIT_ID]: 10,
   "flux-lora-character": 20,      // flux-dev-lora inference via Replicate. Internal-only id selected by payload-builder when a single trained @character is mentioned.
   "character-lora-training": 1500, // Replicate ostris/flux-dev-lora-trainer (1000 steps, one-shot). Refunded by webhook on failure/cancel.
   // ── Image Editing ──
@@ -1824,6 +1828,9 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // guard, its reservation and the payload builder use. No array → the
   // 6-source ceiling (never under-quote).
   "audio-sync": (data) => audioSyncCreditId(Array.isArray(data.sources) ? data.sources.length : Number.NaN),
+
+  // Camera Switch: flat — one id whatever the request carries.
+  "camera-switch": () => CAMERA_SWITCH_CREDIT_ID,
 }
 
 // ============================================================

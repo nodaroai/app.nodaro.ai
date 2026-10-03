@@ -19,7 +19,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { resolveEditPlanSources, describeAudioSyncOffsetIssue } from "@nodaro/shared"
+import { resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
@@ -103,6 +103,29 @@ const editPlanBody = z.object({
 }).passthrough().refine((v) => v.transcript !== undefined && v.transcript !== null, {
   message: "transcript is required",
 })
+// camera-switch (podcast B5): the edit + the diarized transcript; the cloud
+// plugin's Zod is the schema authority. Refused here like the cloud route, before
+// anything is created or relayed: no edit, and no speaker labels at all.
+const cameraSwitchBody = z.object({
+  edl: z.unknown(),
+  transcript: z.unknown(),
+}).passthrough()
+/** The plugin route's refusals, before anything is queued: one master-clock
+ *  edit (400 invalid_edl) and speaker labels (422 no_speakers). On success the
+ *  body comes back with `edl` / `transcript` PARSED — the relay re-hosts the
+ *  cameras' URLs from the object, which a JSON string would hide. */
+function refuseCameraSwitch(body: Record<string, unknown>):
+  | { refused: { status: number; code: string; message: string } }
+  | { body: Record<string, unknown> } {
+  const parse = (v: unknown) => (typeof v === "string" ? (() => { try { return JSON.parse(v) as unknown } catch { return v } })() : v)
+  const edl = parse(body.edl)
+  const problem = cameraSwitchEdlProblem(edl)
+  if (problem) return { refused: { status: 400, code: "invalid_edl", message: problem } }
+  if (transcriptSpeakerLabels(body.transcript).length === 0) {
+    return { refused: { status: 422, code: "no_speakers", message: "The transcript has no speaker labels — turn on speaker detection in Transcribe so camera-switch can tell who is talking." } }
+  }
+  return { body: { ...body, edl, transcript: parse(body.transcript) } }
+}
 const continueBody = z.object({
   fromJobId: z.string().min(1),
   fromSegment: z.number().int().min(1).optional(),
@@ -121,6 +144,12 @@ interface EnqueueArgs {
  *  instead. The full payload still rides the queue job data below. Mirrors the
  *  cloud plugin route's slimming; a no-op for every other exclusive type. */
 function slimInputData(body: Record<string, unknown>, jobType: string): Record<string, unknown> {
+  if (jobType === "camera-switch") {
+    const { edl, transcript, ...slim } = body
+    const segments = (edl as { segments?: unknown } | null | undefined)?.segments
+    const words = (transcript as { words?: unknown } | null | undefined)?.words
+    return { ...slim, edlSegmentCount: Array.isArray(segments) ? segments.length : 0, transcriptWordCount: Array.isArray(words) ? words.length : 0 }
+  }
   if (jobType !== "edit-plan") return body
   const { transcript, silence, ...slim } = body
   const words = (transcript as { words?: unknown } | null | undefined)?.words
@@ -172,6 +201,14 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
         const refused = refuseEditPlanOffsets(parsed.data as Record<string, unknown>)
         if (refused) return reply.status(422).send({ error: refused })
       }
+      if (jobType === "camera-switch") {
+        const checked = refuseCameraSwitch(parsed.data as Record<string, unknown>)
+        if ("refused" in checked) {
+          const { status, code, message } = checked.refused
+          return reply.status(status).send({ error: { code, message } })
+        }
+        return enqueueExclusive({ req, reply, jobType, body: checked.body })
+      }
       return enqueueExclusive({ req, reply, jobType, body: parsed.data as Record<string, unknown> })
     }
   // checkOnly: this file registers only when !hasCredits() (see app.ts) —
@@ -192,6 +229,7 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
   // the cloud plugin's route (the relay carries the transcript in the job payload,
   // not the HTTP body, so this only guards the direct REST POST).
   app.post("/v1/edit-plan", { ...guarded("edit-plan"), bodyLimit: 24 * 1024 * 1024 }, jobHandler("edit-plan", editPlanBody))
+  app.post("/v1/camera-switch", { ...guarded("camera-switch"), bodyLimit: 24 * 1024 * 1024 }, jobHandler("camera-switch", cameraSwitchBody))
 
   // ── video-analysis probe: synchronous passthrough ─────────────────────
   app.post("/v1/video-analysis/probe", async (req, reply) => {

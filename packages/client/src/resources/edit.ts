@@ -1,6 +1,6 @@
 import type { NodaroClient } from "../client.js"
 import { NodaroError } from "../errors.js"
-import { remapTranscriptThroughEdl, unwrapEditPlanOutput, resolveEditPlanSources, describeAudioSyncOffsetIssue } from "@nodaro/shared"
+import { remapTranscriptThroughEdl, unwrapEditPlanOutput, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels } from "@nodaro/shared"
 import type { Edl, Transcript, EditPlanMode, EditPlanTier, EdlClipSet, ChapterSet } from "@nodaro/shared"
 
 // Re-export the canonical EDL / transcript vocabulary from `@nodaro/shared`
@@ -224,6 +224,32 @@ export interface EditPlanInput {
   workflowId?: string
 }
 
+/** Input for {@link EditResource.cameraSwitch} (podcast B5). */
+export interface CameraSwitchInput {
+  /** One EDL — an `editPlan` result (`unwrapEditPlanOutput`), not a clip set. */
+  edl: Edl
+  /** The word transcript WITH speaker labels (transcribe with speaker detection). */
+  transcript: Transcript
+  /** Speaker label → the EDL source id of that speaker's camera. A speaker
+   *  left out shows the source whose `speakers` list names them, else the
+   *  `wide` camera, else any camera that filmed them. */
+  speakerMap?: Record<string, string>
+  /** Speaker label → display name (on the segments and the returned transcript). */
+  speakerNames?: Record<string, string>
+  /** The shortest shot in ms (default 2 500): a shorter turn holds the shot. */
+  minShotMs?: number
+  /** Cut this long before the new speaker starts, ms (default 200). */
+  leadMs?: number
+  /** With a `wide` source: break to it after this long on one camera, ms (default 20 000). */
+  maxShotMs?: number
+  /** With a `wide` source: every N-th cut goes to the wide (default 0 = off). */
+  wideEvery?: number
+  /** Overlapping speech → a layout hint (default false; Apply EDL renders cut-only edits). */
+  layoutHints?: boolean
+  /** Optionally associate this run with a workflow execution (display only). */
+  workflowId?: string
+}
+
 /**
  * Phase-1 editorial primitives for podcast / long-form video editing.
  *
@@ -333,6 +359,38 @@ export class EditResource {
         ...(input.targetDurationSec !== undefined ? { targetDurationSec: input.targetDurationSec } : {}),
         ...(input.targetAspect !== undefined ? { targetAspect: input.targetAspect } : {}),
         ...(input.platform !== undefined ? { platform: input.platform } : {}),
+        ...(input.workflowId !== undefined ? { workflowId: input.workflowId } : {}),
+      },
+    })
+  }
+
+  /**
+   * Camera Switch (podcast B5): choose which camera shows each cut of `edl`
+   * by who is speaking — the sound never changes. Cloud edition; a flat
+   * price. The finished job's `output_data.json` is the switched EDL (feed it
+   * to {@link applyEdl}) and `output_data.transcript` the transcript with
+   * `speakerNames` applied. A transcript with no speaker labels rejects with
+   * a {@link NodaroError} (`code: "no_speakers"`) before any request or charge.
+   */
+  cameraSwitch(input: CameraSwitchInput): Promise<EditJobResult> {
+    if (transcriptSpeakerLabels(input.transcript).length === 0) {
+      return Promise.reject(new NodaroError(
+        "cameraSwitch: the transcript has no speaker labels — transcribe with speaker detection on",
+        "no_speakers",
+        422,
+      ))
+    }
+    return this.client.request("POST", "/v1/camera-switch", {
+      body: {
+        edl: input.edl,
+        transcript: input.transcript,
+        ...(input.speakerMap !== undefined ? { speakerMap: input.speakerMap } : {}),
+        ...(input.speakerNames !== undefined ? { speakerNames: input.speakerNames } : {}),
+        ...(input.minShotMs !== undefined ? { minShotMs: input.minShotMs } : {}),
+        ...(input.leadMs !== undefined ? { leadMs: input.leadMs } : {}),
+        ...(input.maxShotMs !== undefined ? { maxShotMs: input.maxShotMs } : {}),
+        ...(input.wideEvery !== undefined ? { wideEvery: input.wideEvery } : {}),
+        ...(input.layoutHints !== undefined ? { layoutHints: input.layoutHints } : {}),
         ...(input.workflowId !== undefined ? { workflowId: input.workflowId } : {}),
       },
     })

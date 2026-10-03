@@ -246,6 +246,50 @@ export const FAN_OUT_EACH_TYPES: ReadonlySet<string> = new Set([
 ])
 
 /**
+ * Per-HANDLE "each" defaults, for a node whose outputs differ in kind: on the
+ * `each` handles an edge without an explicit `outputMode` defaults to "each",
+ * on its other handles to "last". `primary` is the handle an edge with no
+ * `sourceHandle` reads (agent-written workflow JSON often omits it).
+ *
+ * The list an "each" edge reads is the node's per-iteration results
+ * (`listResults`) — it exists only when the node itself ran once per item, so
+ * after a single run the edge degrades to the single value, exactly like a
+ * `FAN_OUT_EACH_TYPES` member with one item.
+ */
+export const FAN_OUT_EACH_HANDLES: Readonly<Record<string, { readonly each: readonly string[]; readonly primary: string }>> = {
+  // Camera Switch run once per clip (Edit Plan in clips mode): each clip's
+  // switched EDL is its own Apply EDL render. Its transcript is the same for
+  // every clip (the master clock, renamed), so that handle stays one value
+  // (decided 2026-10-04).
+  "camera-switch": { each: ["edl"], primary: "edl" },
+}
+
+/** The `outputMode` an edge has when none is set on it — the ONE rule both
+ *  engines, the credit estimate and the editor read. */
+export function defaultEdgeOutputMode(
+  sourceType: string | null | undefined,
+  sourceHandle: string | null | undefined,
+): "each" | "last" {
+  if (typeof sourceType !== "string") return "last"
+  if (FAN_OUT_EACH_TYPES.has(sourceType)) return "each"
+  const entry = FAN_OUT_EACH_HANDLES[sourceType]
+  if (!entry) return "last"
+  return entry.each.includes(sourceHandle || entry.primary) ? "each" : "last"
+}
+
+/** Whether an edge from `sourceHandle` reads the node's per-iteration results
+ *  (`listResults` — each iteration's PRIMARY output). False on the other
+ *  handles of a `FAN_OUT_EACH_HANDLES` node: Camera Switch's transcript is one
+ *  value, never the list of switched EDLs, whatever mode its edge is set to. */
+export function listResultsServeHandle(
+  sourceType: string | null | undefined,
+  sourceHandle: string | null | undefined,
+): boolean {
+  const entry = typeof sourceType === "string" ? FAN_OUT_EACH_HANDLES[sourceType] : undefined
+  return !entry || entry.each.includes(sourceHandle || entry.primary)
+}
+
+/**
  * FAN-IN targets: nodes that FOLD everything wired into them into ONE run,
  * instead of running once per upstream item. Keyed by node type; the value
  * names the target handles that fold (`"*"` = every handle). An edge into any

@@ -80,6 +80,7 @@ const EXCLUSIVES = [
   "video-analysis",
   "video-audit",
   "edit-plan",
+  "camera-switch",
 ] as const
 
 const bullJob = (data: Record<string, unknown>) =>
@@ -115,6 +116,30 @@ describe("handler registry", () => {
 })
 
 describe("relay to the cloud", () => {
+  // B5: camera-switch's media sits one level down in its edit (`edl.sources[].url`),
+  // which the top-level walker never reaches — the cloud must still read each camera.
+  it("camera-switch: the edit's source URLs are re-hosted too, at the type's wire path", async () => {
+    mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) =>
+      key === "sources" && Array.isArray(value)
+        ? value.map((s) => ({ ...(s as Record<string, unknown>), url: `https://cloud-reachable/${(s as { id: string }).id}` }))
+        : value,
+    )
+    await nodaroExclusiveRelayHandlers["camera-switch"](
+      bullJob({
+        jobId: "job-cs",
+        edl: { version: 1, clock: "master", sources: [{ id: "camA", url: "http://localhost:9000/a.mp4", kind: "video" }], segments: [] },
+        transcript: { version: 1, words: [] },
+        speakerMap: { speaker_0: "camA" },
+      }),
+      ctx,
+    )
+    expect(mocks.createCloudJob).toHaveBeenCalledWith("/v1/camera-switch", {
+      edl: { version: 1, clock: "master", sources: [{ id: "camA", url: "https://cloud-reachable/camA", kind: "video" }], segments: [] },
+      transcript: { version: 1, words: [] },
+      speakerMap: { speaker_0: "camA" },
+    })
+  })
+
   it("posts the payload at the type's wire path, stripping instance-only + __ fields and re-hosting URL fields", async () => {
     mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) =>
       key.endsWith("Url") ? `https://cloud-reachable/${key}` : value,
@@ -246,6 +271,25 @@ describe("finalizeExclusiveCloudOutput — per-type output adaptation", () => {
       provider: "nodaro",
       provider_task_id: "cloud-ep-1",
       relay_job_id: "cloud-ep-1",
+      relay_credits: null,
+    })
+    expect(mocks.uploadVideoMaybeWatermark).not.toHaveBeenCalled()
+  })
+
+  it("camera-switch (JSON producer): { json, transcript } lands verbatim + viaNodaroCloud, no media re-host", async () => {
+    const out = { json: { version: 1, clock: "master", sources: [], segments: [] }, transcript: { version: 1, words: [] } }
+    await finalizeExclusiveCloudOutput({
+      jobId: "job-cs",
+      jobType: "camera-switch",
+      cloudJob: { id: "cloud-cs-1", status: "completed", output_data: out } as never,
+      jobUserId: "user-1",
+      shouldWatermark: false,
+    })
+    expect(mocks.markJobCompleted).toHaveBeenCalledWith("job-cs", {
+      output_data: { ...out, viaNodaroCloud: true },
+      provider: "nodaro",
+      provider_task_id: "cloud-cs-1",
+      relay_job_id: "cloud-cs-1",
       relay_credits: null,
     })
     expect(mocks.uploadVideoMaybeWatermark).not.toHaveBeenCalled()

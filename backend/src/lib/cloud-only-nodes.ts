@@ -34,6 +34,7 @@ export const NODARO_EXCLUSIVE_NODE_TYPES: ReadonlySet<string> = new Set([
   "video-analysis",
   "video-audit",
   "edit-plan",
+  "camera-switch",
 ])
 
 /**

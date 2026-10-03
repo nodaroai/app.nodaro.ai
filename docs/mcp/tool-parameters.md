@@ -2555,6 +2555,22 @@ Needs `workflows:execute`.
 | `vocal_gender` | string |  | One of `male`, `female`. |
 | `use_default_params` | boolean |  | true: Suno picks style/title. Default false: yours are used. |
 
+## `switch_cameras`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `edl` | object (map of any) or string | yes | One EDL (a plan_edit result), object or JSON string. |
+| `transcript` | object (map of any) or string | yes | The word transcript with speaker labels. |
+| `speaker_map` | object (map of string) |  | Speaker label → EDL source id of their camera. |
+| `speaker_names` | object (map of string) |  | Speaker label → display name. |
+| `min_shot_ms` | integer |  | From 500 to 60000. |
+| `lead_ms` | integer |  | From 0 to 5000. |
+| `max_shot_ms` | integer |  | From 0 to 600000. |
+| `wide_every` | integer |  | From 0 to 20. |
+| `layout_hints` | boolean |  |  |
+
 ## `text_to_audio`
 
 Needs `workflows:execute`.

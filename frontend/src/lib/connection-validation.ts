@@ -568,6 +568,10 @@ export function isValidWorkflowConnection(
   }
   // apply-edl — `edl` (required) and `transcript` (optional) take json/data
   // producers; `sources` takes optional media-URL overrides (video or audio).
+  // camera-switch — `edl` and `transcript` both take json/data producers.
+  if (targetType === "camera-switch" && connection.targetHandle) {
+    return (connection.targetHandle === "edl" || connection.targetHandle === "transcript") && ACCEPTS_JSON(imageSourceType)
+  }
   if (targetType === "apply-edl" && connection.targetHandle) {
     if (connection.targetHandle === "edl" || connection.targetHandle === "transcript") return ACCEPTS_JSON(imageSourceType)
     if (connection.targetHandle === "sources") return ACCEPTS_MEDIA(imageSourceType)

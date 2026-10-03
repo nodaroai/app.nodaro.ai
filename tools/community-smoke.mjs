@@ -891,6 +891,38 @@ await check("Edit Plan is a Nodaro-exclusive: omitted from discovery, run refuse
   return "edit-plan absent from discovery + POST refused 503 nodaro_connection_required"
 })
 
+await check("Camera Switch is a Nodaro-exclusive: omitted from discovery, run refused 503 until connected", async () => {
+  // camera-switch (podcast multicam) is Nodaro-EXCLUSIVE (relayed) like
+  // edit-plan: absent from discovery on an unconnected install, and a run is
+  // refused 503 nodaro_connection_required (requireConnection runs before the
+  // body checks), never a 404 / hang / raw vendor error.
+  const types = await nodeTypes()
+  assert(
+    !types.has("camera-switch"),
+    "/v1/nodes advertises camera-switch on a keyless/unconnected install — it is Nodaro-EXCLUSIVE (relayed) and must be omitted until nodaro.ai is connected",
+  )
+  const run = await api("/v1/camera-switch", {
+    method: "POST",
+    token: ctx.token,
+    headers: { "idempotency-key": `community-smoke-camera-switch-${Date.now()}` },
+    body: {
+      edl: { version: 1, clock: "master", sources: [{ id: "a", url: "https://example.com/a.mp4", kind: "video" }], segments: [{ id: "s", inMs: 0, outMs: 1000, video: "a" }] },
+      transcript: { version: 1, words: [{ text: "hi", startMs: 0, endMs: 400, speaker: "speaker_0" }] },
+    },
+  })
+  assert(run.status === 503, `POST /v1/camera-switch expected 503, got ${run.status}: ${run.text.slice(0, 300)}`)
+  assert(
+    run.json?.error?.code === "nodaro_connection_required",
+    `expected error.code "nodaro_connection_required", got ${JSON.stringify(run.json?.error?.code)}: ${run.text.slice(0, 300)}`,
+  )
+  assert(
+    run.json?.jobId === undefined && run.json?.id === undefined,
+    `the refusal carried a job handle — a keyless camera-switch must not enqueue: ${run.text.slice(0, 200)}`,
+  )
+  assertRenderable(run.json?.error?.message, "camera-switch refusal")
+  return "camera-switch absent from discovery + POST refused 503 nodaro_connection_required"
+})
+
 await check("the Basic 3D scene nodes stay available on community", async () => {
   // Basic is NOT engine-gated: it is LLM authoring plus the platform's own
   // Three.js renderer, so a keyless install still lists it and refuses it later

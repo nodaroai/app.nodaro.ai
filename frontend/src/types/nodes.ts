@@ -5758,6 +5758,41 @@ export type EditPlanNodeData = PromptAffixFields & {
   generatedJson?: unknown
 }
 
+/** camera-switch (podcast B5, decided 2026-10-03) — WHO is on screen, from who
+ *  is speaking. Cloud-EXCLUSIVE + relayed, deterministic, flat price. Reads an
+ *  edit (`edl`, e.g. Edit Plan's) and a diarized transcript; emits the switched
+ *  edit on `edl` and the renamed transcript on `transcript`. */
+export type CameraSwitchNodeData = {
+  [key: string]: unknown
+  label: string
+  /** Speaker label (the transcriber's, e.g. "speaker_0") → the camera's SOURCE
+   *  NODE id. Unset speakers are pre-filled by order at run time; `""` = no
+   *  camera of their own (the wide, else any camera with picture). */
+  speakerMap?: Record<string, string>
+  /** Speaker label → display name (segments + the renamed transcript). */
+  speakerNames?: Record<string, string>
+  /** The shortest shot, ms (default 2 500): a shorter turn holds the shot. */
+  minShotMs?: number
+  /** Cut this long before the new speaker starts, ms (default 200). */
+  leadMs?: number
+  /** With a `wide` camera: break to it after this long on one camera, ms (default 20 000). */
+  maxShotMs?: number
+  /** With a `wide` camera: every N-th cut goes to the wide (default 0 = off). */
+  wideEvery?: number
+  /** Overlapping speech → a side-by-side / stacked layout hint (default off). */
+  layoutHints?: boolean
+  /** Optional inline edit / transcript, used when nothing is wired. */
+  edl?: unknown
+  transcript?: unknown
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  /** The result pair: { edl, transcript }. */
+  generatedJson?: { edl?: unknown; transcript?: unknown }
+}
+
 // --- Content Recipe / Content Ideas ("steal the format") ---
 
 /** A content recipe as the cloud returns it (`output_data.json`). Read
@@ -6725,6 +6760,7 @@ export type SceneNodeData =
   | VideoAnalysisNodeData
   | VideoAuditNodeData
   | EditPlanNodeData
+  | CameraSwitchNodeData
   | ContentRecipeNodeData
   | ContentIdeasNodeData
   | ListNodeData
@@ -6869,6 +6905,7 @@ export type SceneNodeType =
   | "combine-videos"
   | "apply-edl"
   | "edit-plan"
+  | "camera-switch"
   | "content-recipe"
   | "content-ideas"
   | "image-collage"
@@ -8531,6 +8568,20 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as EditPlanNodeData,
+  },
+  {
+    type: "camera-switch",
+    label: "Camera Switch",
+    category: "processing",
+    // Flat per run (decided 2026-10-03, migration 448).
+    creditCost: 10,
+    inputs: ["edl", "transcript"],
+    outputs: ["edl", "transcript"],
+    defaultData: {
+      label: "Camera Switch",
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as CameraSwitchNodeData,
   },
   {
     type: "content-recipe",

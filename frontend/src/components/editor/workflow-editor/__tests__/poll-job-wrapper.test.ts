@@ -115,7 +115,7 @@ describe("poll-loop wrapper coverage", () => {
     const expected: Record<string, number> = {
       "workflow-editor/asset-executors.ts": 5,
       // +1 audio-sync (podcast B3).
-      "workflow-editor/execute-node.ts": 13,
+      "workflow-editor/execute-node.ts": 14, // +1 camera-switch (podcast B5)
       "workflow-editor/node-executors.ts": 2,
       // pollJobWithNodeUpdate + pollImageRefineToNode (the reference-board
       // refine / region-edit lane, wrapped after it was found outside) +
