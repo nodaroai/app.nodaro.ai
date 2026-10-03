@@ -115,7 +115,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "wipe",              label: "Wipe",              category: "standard", description: "Linear wipe replaces first shot",
     promptHint: "linear wipe transition: a clean diagonal line sweeps across the frame, revealing the second shot behind it", term: "linear wipe" },
   { id: "roll-transition",   label: "Roll",              category: "standard", description: "Frame rolls 90-180°, second shot upright on landing",
-    promptHint: "the frame rolls along the camera axis with a smooth 90 to 180 degree rotation, motion-blurred during the roll, and as the rotation completes the new shot is upright and stable in frame", term: "camera roll transition" },
+    promptHint: "the picture rolls around its centre in one smooth, fast turn, blurred by the speed of the turn. The camera stays in the same spot, turning only around its lens axis. During the turn the second shot takes over, and the roll slows and stops with it level and upright. The shot ends on the second shot, level, upright and still. The roll turns one way only and stops once, with no swing back", term: "camera roll transition" },
   { id: "seamless-match",    label: "Seamless Match",    category: "standard", description: "Hidden cut disguised by matched motion and color",
     promptHint: "hidden seamless transition: the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take", term: "invisible cut" , instant: true },
   { id: "whip-pan",          label: "Whip Pan",          category: "standard", description: "Camera whips sideways into blur, next shot rides the same direction",
