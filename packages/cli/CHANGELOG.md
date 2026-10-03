@@ -1,5 +1,54 @@
 # @nodaro/cli
 
+## 1.25.0
+
+### Minor Changes
+
+- 5b8496b: - `nodaro recast estimate` / `create` / `start` take `--segment-pack scenes-max|scenes|max` in place of `--segment-sec <n>`. The API takes a pack name there, so the old option sent a number of seconds that the server rejected.
+  - The README links the command reference on nodaro.ai/docs instead of the old GitHub Pages copy.
+- 95523c6: Competitor tracking (Nodaro Cloud): `@nodaro/shared` adds the tracked-brand, scan and action-card shapes, the card `kind` vocabulary and the scan price (`competitor-scan:<n>`, one Social Search page per search). `@nodaro/sdk` adds `client.competitors` (`list`, `get`, `create`, `update`, `delete`, `cards`, `discover`, `scan`) and re-exports the types. `@nodaro/cli` adds `nodaro competitors` (`list`, `add`, `discover`, `scan`, `cards`, `show`, `update`, `remove`).
+- 17d734b: `nodaro edit plan` takes `--offsets <file>` (an `edit audio-sync` job's `output_data.json` over the same source ids) and `--transcript-source <id>`, and `--source` accepts `id=url[@kind]` to name a source the way `edit audio-sync` does.
+- df2f7b4: Saved posts, the inspiration wall: `@nodaro/shared` adds the `SavedPost` shape and the request and answer types of `/v1/saved-posts`. `@nodaro/sdk` adds `client.savedPosts` (`list`, `save`, `lookup`, `update`, `delete`) and re-exports the types. `@nodaro/cli` adds `nodaro saved-posts` (`list`, `save --file`, `update`, `delete`).
+
+### Patch Changes
+
+- e98ff5b: Advanced mode's help text now says its one-tier credit bump is capped at premium: a request already at the premium tier stays there.
+- Updated dependencies [e98ff5b]
+- Updated dependencies [8dc01f1]
+- Updated dependencies [95523c6]
+- Updated dependencies [5f14bf9]
+- Updated dependencies [17d734b]
+- Updated dependencies [17d734b]
+- Updated dependencies [3134831]
+- Updated dependencies [bac18b7]
+- Updated dependencies [ec71996]
+- Updated dependencies [10054f4]
+- Updated dependencies [086003b]
+- Updated dependencies [3e8a8dc]
+- Updated dependencies [5b8496b]
+- Updated dependencies [d1c208e]
+- Updated dependencies [5e636b4]
+- Updated dependencies [1197130]
+- Updated dependencies [df2f7b4]
+- Updated dependencies [8905992]
+- Updated dependencies [5b8496b]
+- Updated dependencies [2a61d66]
+- Updated dependencies [08c60ee]
+- Updated dependencies [10d0467]
+- Updated dependencies [fa682e5]
+- Updated dependencies [7363396]
+- Updated dependencies [00ff1cf]
+- Updated dependencies [8d1e320]
+- Updated dependencies [3bae2cb]
+- Updated dependencies [f801037]
+- Updated dependencies [9377f6e]
+- Updated dependencies [693baee]
+- Updated dependencies [f801037]
+- Updated dependencies [778de30]
+  - @nodaro/sdk@2.18.0
+  - @nodaro/shared@3.15.0
+  - @nodaro/prompts@1.28.0
+
 ## 1.24.0
 
 ### Minor Changes

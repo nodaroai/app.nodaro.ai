@@ -1,5 +1,58 @@
 # @nodaro/prompts
 
+## 1.28.0
+
+### Minor Changes
+
+- bac18b7: Generate Script reads its topic and settings the same way on every run.
+
+  - `@nodaro/shared`: `readScriptSettings(data, refMap?)` returns the scene count, tone, target duration and style guide a Generate Script node sends. It coerces rather than rejects: a number given as text becomes a whole number clamped to the accepted range, text is trimmed and cut to its limit, and an unusable value is dropped so the default applies. The limits are exported as `SCRIPT_SCENE_COUNT_RANGE`, `SCRIPT_TARGET_DURATION_RANGE`, `SCRIPT_TONE_MAX_LENGTH` and `SCRIPT_STYLE_GUIDE_MAX_LENGTH`. `NODE_MAPPABLE_FIELDS["generate-script"]` now lists `tone`, `sceneCount` and `targetLength` beside `styleGuide`.
+  - `@nodaro/prompts`: `computeScriptTopic(data, { override, wired, refMap })` returns a Generate Script node's topic: a list item, then the wired prompt, then the node's saved `prompt`, wrapped with its pre/post text.
+
+- 5e636b4: Prompt joins no longer double a closing period. A prompt typed with a final period used to come out as "no watermark.. butterfly portrait lighting" once a picker hint was appended.
+
+  - New `joinSentences(pieces)`: joins with ". ", or a single space when the piece before already ends a sentence (Latin or CJK full stop, question or exclamation mark, ellipsis). Blank pieces are dropped.
+  - New `appendPromptHints(prompt, hints)`: appends wired picker hints the way both engines fold them. The hints join as clauses, then follow the prompt as a new sentence.
+  - `joinPromptHints`, the style-section lines, `composeNegative` and `resolvePrompt`'s `appendWired` join now go through `joinSentences`. Output only changes where a piece already ended a sentence.
+
+- 2a61d66: The Motion node joins the video nodes' Settings input as a prompt clause.
+
+  - `@nodaro/shared`: `SETTINGS_HINT_SOURCES` (`["motion"]`) are settings a Settings input takes as a prompt clause rather than a field; `SETTINGS_SOURCE_TYPES` lists every setting. `isSettingsHintEdge(edge, consumerType, edges, typeOf)` tells a hint collector whether an edge brings the clause that applies (the last Motion wired), and `settingsSourceForType` finds the wired node of a kind. `SETTINGS_INPUT_CONSUMERS` for Generate Video and Generate Video Pro now include `motion`; a wired setting without a field has no `field`. `motion` leaves `HINT_EXEMPT_PARAMETER_TYPES` and joins `VIDEO_ONLY_PARAMETER_NODE_TYPES`.
+  - `@nodaro/prompts`: `getParameterPromptHint` returns Motion's clause (`subtle` / `moderate` / `dynamic`; the bare term in compact mode).
+
+- 778de30: `ownMotionHint(nodeType, data)` and `DEFAULT_OWN_MOTION`: the clause a video node's own Motion setting adds to its prompt ("dynamic motion"). Legacy Image to Video and Generate Video carry the setting, and Generate Video carries it in both modes; legacy Text to Video has none. An enabled setting with no step stored runs as `moderate`, the step the panel shows. The editor run, the prompt preview and the orchestrator all read this one rule. The editor used to skip it on Generate Video without a start frame, while workflow runs always applied it.
+
+### Patch Changes
+
+- d1c208e: Person picker: two ethnicity picks now read as one heritage phrase built from each entry's prompt text ("of mixed Slavic Eastern European and Mediterranean heritage"). They used to use the picker's short display labels, which put abbreviations such as "Mediter.", "Pacific Isl." or a bare "East" into the prompt.
+- 00ff1cf: Transition `roll-transition` gets a new description. The picture makes one smooth, fast, blurred turn around its centre, the camera turning only around its lens axis; the second shot takes over during the turn, and the roll slows and stops with it level and upright. It turns one way only and stops once, with no swing back. No other row changes.
+- 8d1e320: Transition `zoom-into-mirror` gets a new description. The camera pushes straight at a mirror in the frame; as the lens meets the glass the mirror's surface turns liquid and rings ripple out across the picture, and the camera keeps moving forward through the rippling surface into the second shot. The mirror keeps its own reflection until the lens touches the glass, and the shot ends in the second shot, still, with no ripples left. No other row changes.
+- 3bae2cb: Transition `fast-forward-day-night` gets a new description. The view stays the same with the framing locked while hours pass in seconds: light and shadows sweep across the scene, daylight warms to dusk and fades to night, lights come on, until the picture matches the end frame. `fast-forward-night-day` keeps its text. No other row changes.
+- Updated dependencies [8dc01f1]
+- Updated dependencies [95523c6]
+- Updated dependencies [5f14bf9]
+- Updated dependencies [17d734b]
+- Updated dependencies [3134831]
+- Updated dependencies [bac18b7]
+- Updated dependencies [ec71996]
+- Updated dependencies [10054f4]
+- Updated dependencies [086003b]
+- Updated dependencies [3e8a8dc]
+- Updated dependencies [5b8496b]
+- Updated dependencies [1197130]
+- Updated dependencies [df2f7b4]
+- Updated dependencies [8905992]
+- Updated dependencies [2a61d66]
+- Updated dependencies [08c60ee]
+- Updated dependencies [10d0467]
+- Updated dependencies [fa682e5]
+- Updated dependencies [7363396]
+- Updated dependencies [f801037]
+- Updated dependencies [9377f6e]
+- Updated dependencies [693baee]
+- Updated dependencies [f801037]
+  - @nodaro/shared@3.15.0
+
 ## 1.27.1
 
 ### Patch Changes

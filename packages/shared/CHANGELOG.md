@@ -1,5 +1,80 @@
 # @nodaro/shared
 
+## 3.15.0
+
+### Minor Changes
+
+- 95523c6: Competitor tracking (Nodaro Cloud): `@nodaro/shared` adds the tracked-brand, scan and action-card shapes, the card `kind` vocabulary and the scan price (`competitor-scan:<n>`, one Social Search page per search). `@nodaro/sdk` adds `client.competitors` (`list`, `get`, `create`, `update`, `delete`, `cards`, `discover`, `scan`) and re-exports the types. `@nodaro/cli` adds `nodaro competitors` (`list`, `add`, `discover`, `scan`, `cards`, `show`, `update`, `remove`).
+- 5f14bf9: Two new Cloud nodes: Content Recipe (why a post worked, as a reusable recipe) and Content Ideas (recipes plus a brand in, post ideas out, one brief per idea).
+
+  - Pricing vocabulary, so every surface quotes and bills the same id: `contentRecipeCreditId(llmModel?, reasoningEffort?)` and `contentIdeasCreditId(count, llmModel?, reasoningEffort?)`, with `CONTENT_RECIPE_IDEAS_CREDIT_IDS`. Content Ideas is charged per batch of up to five ideas: 1–5 ideas bill `content-ideas[:economy|:premium]`, 6–10 bill `content-ideas:10[:economy|:premium]`. `clampContentIdeasCount` (1–10, default 5) and the request limits (`CONTENT_RECIPE_SOURCE_MAX`, `CONTENT_IDEAS_MAX_RECIPE_INPUTS`, `CONTENT_IDEAS_BRAND_MAX`, `CONTENT_IDEAS_LANGUAGE_MAX`) are exported beside them.
+  - `LlmFeature` gains `content-recipe` and `content-ideas` (both default to `gemini-3.6-flash`).
+  - Fan-in is decided per edge: `FAN_IN_TARGETS` names the nodes that fold everything wired into them and on which handles (`reduce` on every handle, `content-ideas` on `recipes` only), read through `isFanInNodeType` and `isFanInEdge`. `FAN_OUT_EACH_TYPES` lists `content-ideas`: the node after it runs once per idea.
+  - `videoLinkPageUrl(data)` returns the page link a Video URL node was given, never its downloaded file.
+  - `EXECUTION_DATA_KEYS` lists `ideaBriefs` and `runWarnings`, the results these nodes write: never captured in a preset or a template export, and a run that writes them is not recorded in undo history.
+  - `NODE_MAPPABLE_FIELDS` lists `focus` for `content-recipe` and `brand` / `language` for `content-ideas`.
+
+- 17d734b: Add the multicam checks every edit-plan caller runs before dispatch: `applyAudioSyncOffsets(sources, result)` writes an audio-sync result's measured offsets onto a planner's `sources[].offsetMs`, re-based onto the master's clock (the `master-audio` source, else the first; a hand-set `offsetMs` wins); `resolveEditPlanSources(sources, { offsets, transcriptSourceId })` adds the master-offset and transcript-clock checks; `describeAudioSyncOffsetIssue` phrases each issue (a source not measured, a weak match under `AUDIO_SYNC_MIN_CONFIDENCE` = 0.5, an unmeasured master, a transcript made from a source off the master's clock); `editPlanTranscriptOrigin` traces a canvas transcript to the recording it was made from.
+- 3134831: Generate Image takes the Aspect Ratio and Provider nodes through its `settings` input.
+
+  - `SETTINGS_INPUT_CONSUMERS["generate-image"]` accepts `aspect-ratio` and `provider` (no duration on a still), and `NODE_MAPPABLE_FIELDS["generate-image"]` lists `aspectRatio` and `provider`. A wired Provider must name an image model, and it replaces the node's `providers` list with that one model, so a node set to several models runs once.
+  - `fitAspectRatioToModel(modelId, ratio)` returns the ratio a model renders: the catalog's own spelling of a listed ratio, else the nearest listed one (log space). `normalizeVideoRequestParams` now uses it, so its answers are unchanged.
+  - `withWiredSettings(node, nodes, edges)` returns a node as it runs (its Settings input applied), for callers that plan or price a run before resolving it.
+
+- bac18b7: Generate Script reads its topic and settings the same way on every run.
+
+  - `@nodaro/shared`: `readScriptSettings(data, refMap?)` returns the scene count, tone, target duration and style guide a Generate Script node sends. It coerces rather than rejects: a number given as text becomes a whole number clamped to the accepted range, text is trimmed and cut to its limit, and an unusable value is dropped so the default applies. The limits are exported as `SCRIPT_SCENE_COUNT_RANGE`, `SCRIPT_TARGET_DURATION_RANGE`, `SCRIPT_TONE_MAX_LENGTH` and `SCRIPT_STYLE_GUIDE_MAX_LENGTH`. `NODE_MAPPABLE_FIELDS["generate-script"]` now lists `tone`, `sceneCount` and `targetLength` beside `styleGuide`.
+  - `@nodaro/prompts`: `computeScriptTopic(data, { override, wired, refMap })` returns a Generate Script node's topic: a list item, then the wired prompt, then the node's saved `prompt`, wrapped with its pre/post text.
+
+- ec71996: Generate Video and Generate Video Pro take the Aspect Ratio, Duration and Provider nodes through one `settings` input.
+
+  - `SETTINGS_INPUT_HANDLE` (`"settings"`) and `SETTINGS_INPUT_CONSUMERS` name the input and the settings each node takes; `settingsInputAccepts`, `settingsInputFields` and `settingsProviderModels` read them.
+  - `settingsSourceForField` and `connectedSettingsSources` find the wired node for a field (the last edge of a kind wins); `resolveWiredSettings(nodeId, nodeType, data, nodes, edges)` returns the node's data as it runs, with each wired value written in and fitted to the model, plus a `problem` when a wired Provider names a model the node does not run. `applySettingsInput` is the fitting step alone, for callers that already resolved the field mappings.
+  - `snapToModelDuration(model, seconds)` returns the nearest duration the catalog lists for a model (a tie goes to the shorter one).
+  - `NODE_MAPPABLE_FIELDS` lists `aspectRatio`, `duration` and `provider` for both nodes, and the Provider node joins `PARAMETER_NODE_TYPES` (its model id is read from data; it produces no prompt hint).
+
+- 086003b: Pipelines: `approveSubGate` could never clear Stage 6's `match_cut_break_pending`. The sub-gate routes only resolve Stage 7's gates, and that gate clears one break at a time.
+
+  - `@nodaro/shared`: `ANIMATE_SUB_GATES` / `AnimateSubGateSchema` / `AnimateSubGate` are the sub-gates `POST /v1/pipelines/:id/sub-gates/:gate/{approve,reject}` resolves (`silent_cut_preview`, `dialogue_recheck`), and `MATCH_CUT_BREAK_GATE` names the one that clears per break. The routes answer the match-cut gate with a 400 `invalid_sub_gate` that names the helper route, instead of a 404 or 409.
+  - `@nodaro/sdk`: `pipelines.acceptMatchCutBreak(id, sceneId, shotId)` accepts one break (`POST /v1/pipelines/:id/entities/:sceneId/helpers/accept_match_cut_break`) and returns how many are left. `approveSubGate` now takes an `AnimateSubGate`.
+  - `@nodaro/sdk`: the entry point exports the types its resources re-export but it did not: `PipelineInput`, `PipelineStatus`, `PipelineMode`, `SubGateName`, `AnimateSubGate`, `ChatEnabledStage`, `ProposedChange` and `CommunityFullDetail`.
+
+- 3e8a8dc: Generate Music runs, and is priced, on the model it actually has.
+
+  - `DEFAULT_MUSIC_PROVIDER` (`"minimax"`) and `resolveMusicProvider(value)`: a node saved with a model it no longer offers (or the `"suno"` new nodes used to start on) runs the default model instead of failing validation.
+  - `MUSIC_CREDIT_ID` (`"generate-music"`) is the id every music run reserves on; the estimates and the node's price read it (the model id `"minimax"` is the MiniMax video model's price).
+  - `MUSIC_PROVIDER_LABELS` names each music model.
+
+- 5b8496b: `OAUTH_SCOPES` and the `OAuthScope` type: every OAuth scope a Nodaro token can carry, the list the server validates against. The server and `@nodaro/sdk` both read it, so the SDK's scope type can no longer fall behind the server (it was missing `presets:read`, `workspaces:read` and `workspaces:write`).
+
+  `RECAST_SEGMENT_PACKS` and the `RecastSegmentPack` type: the values the recast routes take for `segmentSec` (`"max"`, `"scenes-max"`, `"scenes"`), a name rather than seconds.
+
+- df2f7b4: Saved posts, the inspiration wall: `@nodaro/shared` adds the `SavedPost` shape and the request and answer types of `/v1/saved-posts`. `@nodaro/sdk` adds `client.savedPosts` (`list`, `save`, `lookup`, `update`, `delete`) and re-exports the types. `@nodaro/cli` adds `nodaro saved-posts` (`list`, `save --file`, `update`, `delete`).
+- 8905992: `SCRIPT_SCENE_COUNT_DEFAULT` (5) and `SCRIPT_TARGET_DURATION_DEFAULT` (60 seconds): what Generate Script uses when a request leaves the field out. The script generator and the MCP `generate_script` tool both read them, so the tool can say its defaults.
+- 2a61d66: The Motion node joins the video nodes' Settings input as a prompt clause.
+
+  - `@nodaro/shared`: `SETTINGS_HINT_SOURCES` (`["motion"]`) are settings a Settings input takes as a prompt clause rather than a field; `SETTINGS_SOURCE_TYPES` lists every setting. `isSettingsHintEdge(edge, consumerType, edges, typeOf)` tells a hint collector whether an edge brings the clause that applies (the last Motion wired), and `settingsSourceForType` finds the wired node of a kind. `SETTINGS_INPUT_CONSUMERS` for Generate Video and Generate Video Pro now include `motion`; a wired setting without a field has no `field`. `motion` leaves `HINT_EXEMPT_PARAMETER_TYPES` and joins `VIDEO_ONLY_PARAMETER_NODE_TYPES`.
+  - `@nodaro/prompts`: `getParameterPromptHint` returns Motion's clause (`subtle` / `moderate` / `dynamic`; the bare term in compact mode).
+
+- 08c60ee: Social Search: `socialSearchPostLink` reads the page link of the post a Social Search wire hands on (one post, or the first of a list), as Video Analysis reads it. The page price is 20 credits per page of up to 20 results (`SOCIAL_SEARCH_CREDITS_PER_PAGE`), so `social-search:1` / `:2` / `:3` cost 20 / 40 / 60.
+- 10d0467: Social Search (Nodaro Cloud): `@nodaro/shared` adds the node's vocabulary, the `SocialPost` shape every platform's results share, the `SocialSearchParams` request, its credit ids and the rule for which posts a run passes on. `@nodaro/sdk` types `nodes.run("social-search", …)` and `nodes.runAndWait("social-search", …)` (resolving `SocialSearchJobOutput`) and re-exports the post and request types.
+- 7363396: Telegram Account Trigger: named outputs (`videoLink`, `postText`, `postLink`, and the message facts) through `telegramAccountTriggerOutputs` and `isTelegramAccountTriggerNamedHandle`, and `telegramAccountListeningSignature` for the settings only a trigger's owner sets. `resolveFieldMappings` hands a wired field's source handle to the reader (`FieldEdgeSource`), so a field reads the wire's own output. A trigger's last run values (`__triggerData`) are run state and never saved; an exported account trigger never carries its switch or its account.
+- f801037: Video Analysis and AI Audit price a clip with a 3-second grace at each bucket edge: a video up to 1:03 is priced as up to a minute, up to 3:03 as up to three minutes, and so on. A part cut at 1:00 from a longer YouTube video downloads at about 1:03, because the cut lands on keyframes, and is now priced as the minute it was chosen as.
+
+  - `VIDEO_ANALYSIS_BUCKET_GRACE_SEC` (3) is the grace, read by `pickVideoAnalysisBucket`, and through it by `buildVideoAnalysisCreditId` and `buildVideoAuditCreditId`.
+  - `VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC` is now 6, the grace plus 3 seconds of measurement drift. The worker's re-check (`bucket + tolerance`) therefore never refuses a clip the grace priced into a bucket, at its true length.
+
+- 693baee: `VIDEO_CRITIC_RESERVED_CREDITS_PER_SHOT`: the credits a story-to-video pipeline reserves per shot for the Video Critic, by frame mode (20 / 30 / 40, a worst case; unused credits refund when the pipeline completes). The editor quotes them in the Generative Pipeline settings. A backend test fails when they differ from what the estimate reserves: the panel read ~2 / ~3 / ~4 after the credit re-denomination.
+
+### Patch Changes
+
+- 8dc01f1: Listed prices are now the prices a run is charged. `GET /v1/models` (`client.models.list()`), `GET /v1/nodes` (`client.nodes.list()` / `get()`) and the MCP `list_models` tool serve the same credits as the node's Run button, where they used to list the catalog's base price. The field docs say so: `PriceVariant.credits` is the catalog's list price, and the SDK's `pricing` and `creditCost` are the charged price.
+- 10054f4: `EXECUTION_DATA_KEYS` and `TRANSIENT_RUNTIME_KEYS` list `jobConnectionLost`. The editor sets it on a node while it cannot reach the server to read that node's job. The job keeps running, and the flag clears on the next status check that gets through. Like `jobAwaitingReview`, it is run state: never saved with the workflow, captured in a preset, or recorded in undo history.
+- 1197130: `EXECUTION_DATA_KEYS` gains `resultsRunId`: the id of the trigger-started run whose results a node shows. It is bookkeeping, so presets, templates and run-only patches never treat it as configuration.
+- fa682e5: `speedRampCreditId(quality)` returns Adjust Speed's price id (`speed-ramp`, or `speed-ramp:smooth` for motion-compensated interpolation). The route, the workflow run and the editor price through it.
+- 9377f6e: Video Analysis catalog: the live fast model (`gemini-3-flash-video-analysis`) is labelled "Video Analysis (Fast)" and the retired one (`gemini-3.6-flash-video-analysis`) "Video Analysis (Fast — legacy)". The two labels and descriptions were swapped, so `/v1/models` and `list_models` showed the legacy model as the fast tier.
+- f801037: `VIDEO_LINK_TOLERANT_CONSUMER_TYPES` lists `content-recipe`. A Content Recipe cites a Video URL node's page link on its `link` input and never reads the file, so a run whose only reader of a link is a Content Recipe no longer has to download the video, or choose a part of a long one, first.
+
 ## 3.14.1
 
 ### Patch Changes
