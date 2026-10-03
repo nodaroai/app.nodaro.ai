@@ -220,6 +220,29 @@ describe("executeNodeForList", () => {
     expect(lastCall[1].errorMessage).toContain("1 failed")
   })
 
+  it("names why an item failed (toasts are muted for the batch), never a cancelled item's stop", async () => {
+    let callCount = 0
+    mockExecuteNode.mockImplementation(async () => {
+      callCount++
+      if (callCount === 1) throw new Error("This post's video link has expired.")
+      throw new Error("Cancelled")
+    })
+
+    await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["a", "b"], makeCtx())
+
+    const lastCall = mockUpdateNodeData.mock.calls[mockUpdateNodeData.mock.calls.length - 1]
+    expect(lastCall[1].errorMessage).toBe("0/2 succeeded, 2 failed — This post's video link has expired.")
+  })
+
+  it("adds no reason when the failure has no words of its own", async () => {
+    mockExecuteNode.mockRejectedValue("boom")
+
+    await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["a"], makeCtx())
+
+    const lastCall = mockUpdateNodeData.mock.calls[mockUpdateNodeData.mock.calls.length - 1]
+    expect(lastCall[1].errorMessage).toBe("0/1 succeeded, 1 failed")
+  })
+
   it("stops early when workflow is stale", async () => {
     let callCount = 0
     const ctx = makeCtx({

@@ -4657,6 +4657,45 @@ export async function deleteSavedPost(id: string): Promise<void> {
   await apiJson(`/v1/saved-posts/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteSavedPost" })
 }
 
+// ---- Competitors (Cloud: tracked brands, scans, action cards) ----
+
+type TrackedCompetitor = import("@nodaro/shared").TrackedCompetitor
+
+export async function listCompetitors(): Promise<TrackedCompetitor[]> {
+  const res = await apiJson<{ data: TrackedCompetitor[] }>("/v1/competitors", { method: "GET", label: "apiErr.loadCompetitors" })
+  return res.data
+}
+
+export async function getCompetitor(id: string): Promise<import("@nodaro/shared").CompetitorDetail> {
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "GET", label: "apiErr.loadCompetitors" })
+}
+
+export async function createCompetitor(input: import("@nodaro/shared").CreateCompetitorInput): Promise<TrackedCompetitor> {
+  return apiJson("/v1/competitors", { body: { ...input }, label: "apiErr.saveCompetitor" })
+}
+
+export async function updateCompetitor(id: string, input: import("@nodaro/shared").UpdateCompetitorInput): Promise<TrackedCompetitor> {
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.saveCompetitor" })
+}
+
+export async function deleteCompetitor(id: string): Promise<void> {
+  await apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteCompetitor" })
+}
+
+export async function competitorCards(): Promise<import("@nodaro/shared").CompetitorCardsResult> {
+  return apiJson("/v1/competitors/cards", { method: "GET", label: "apiErr.loadCompetitors" })
+}
+
+export async function discoverCompetitor(website: string): Promise<import("@nodaro/shared").CompetitorDiscovery> {
+  return apiJson("/v1/competitor-discover", { body: { website }, label: "apiErr.discoverCompetitor" })
+}
+
+/** Starts a paid scan; answers with the job id at once. */
+export async function scanCompetitor(id: string): Promise<{ jobId: string }> {
+  return apiJson("/v1/competitor-scan", { body: { competitorId: id }, label: "apiErr.scanCompetitor" })
+}
+
+
 export async function sunoGenerateApi(params: {
   prompt: string
   model?: string
@@ -7361,7 +7400,9 @@ export async function streamWorkflowExecution(
       // user stopped the run, so its results land in My Library off-canvas.
       // Short-circuit before onNodeStatesChanged so the discarded states are
       // never applied, and route to onDiscarded (not onCompleted).
-      if (eventType === "execution:discarded") {
+      // A stream that joined a run already over hears a bare "done" carrying
+      // only the row's status: a discarded one is still never painted.
+      if (eventType === "execution:discarded" || (eventType === undefined && d.status === "discarded")) {
         callbacks.onDiscarded?.(d)
         return
       }
@@ -9240,6 +9281,23 @@ export async function toggleTemplateTutorialFlag(
     `/v1/admin/workflow-templates/${encodeURIComponent(templateId)}/tutorial-flag`,
     "apiErr.updateTutorialFlag",
     { method: "PATCH", body },
+  )
+}
+
+/**
+ * PATCH /v1/admin/workflow-templates/:id/listing — an admin's switches for ANY
+ * template, whoever made it. `isActive: false` turns it off everywhere (the
+ * gallery, its page, cloning, the tutorials); `isListed` takes it in or out of
+ * the gallery and leaves the tutorial tag alone.
+ */
+export async function setAdminTemplateListing(
+  templateId: string,
+  change: { isActive?: boolean; isListed?: boolean },
+): Promise<AdminWorkflowTemplateRow> {
+  return apiRequest<AdminWorkflowTemplateRow>(
+    `/v1/admin/workflow-templates/${encodeURIComponent(templateId)}/listing`,
+    "apiErr.updateTemplateListing",
+    { method: "PATCH", body: change },
   )
 }
 

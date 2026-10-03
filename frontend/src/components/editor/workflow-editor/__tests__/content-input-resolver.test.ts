@@ -186,4 +186,35 @@ describe("Video Analysis — a Social Search's posts on the video input", () => 
     const inputs = resolveNodeInputs(va, [search, va], [edge("S", "A", "text", "video")])
     expect(inputs.videoPageUrl).toBeUndefined()
   })
+
+  /** An Instagram reel whose signed video link ends at `endMs` (Meta's `oe`, hex seconds). */
+  const reel = (endMs: number) => ({
+    ...post(9),
+    id: "instagram:9",
+    platform: "instagram",
+    url: "https://www.instagram.com/reel/Dav9/",
+    media: {
+      kind: "video",
+      videoUrl: `https://scontent-sjc6-1.cdninstagram.com/o1/v/t2/clip.mp4?oh=00_sig&oe=${Math.floor(endMs / 1000).toString(16)}`,
+      durationSec: 27,
+    },
+  })
+
+  it("analyzes a post that came with its own video file from that file, never its page", () => {
+    const va = node("A", "video-analysis")
+    const live = reel(Date.now() + 2 * 24 * 3_600_000)
+    const search = node("S", "social-search", { generatedJson: [live] })
+    const inputs = resolveNodeInputs(va, [search, va], [edge("S", "A", "json", "video")])
+    expect(inputs.videoUrl).toBe(live.media.videoUrl)
+    expect(inputs.videoPageUrl).toBeUndefined()
+  })
+
+  it("flags a post whose video link has expired, and reads nothing else from it", () => {
+    const va = node("A", "video-analysis")
+    const search = node("S", "social-search", { generatedJson: [reel(Date.now() - 60_000)] })
+    const inputs = resolveNodeInputs(va, [search, va], [edge("S", "A", "json", "video")])
+    expect(inputs.socialPostVideoExpired).toBe(true)
+    expect(inputs.videoUrl).toBeUndefined()
+    expect(inputs.videoPageUrl).toBeUndefined()
+  })
 })

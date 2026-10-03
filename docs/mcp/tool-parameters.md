@@ -66,6 +66,25 @@ Needs `workflows:execute`.
 | `segments[].captions[].timestampMs` | number or null |  | At least 0. Default `null`. |
 | `segments[].captions[].confidence` | number or null |  | From 0 to 1. Default `null`. |
 
+## `add_competitor`
+
+Needs `assets:write` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `brand` | string |  | Its name; read from the website when left out. At most 100 characters. |
+| `website` | string |  | At most 500 characters. |
+| `accounts` | object |  | Handles or links: tiktok, instagram, youtube, x, linkedin (company page), meta_ads (advertiser name). |
+| `accounts.tiktok` | string |  | At most 300 characters. |
+| `accounts.instagram` | string |  | At most 300 characters. |
+| `accounts.youtube` | string |  | At most 300 characters. |
+| `accounts.x` | string |  | At most 300 characters. |
+| `accounts.linkedin` | string |  | At most 300 characters. |
+| `accounts.meta_ads` | string |  | At most 300 characters. |
+| `about_platforms` | string[] |  | Where to search posts naming it. |
+| `is_own` | boolean |  | The user's own brand. |
+| `schedule` | string |  | Default weekly. One of `off`, `weekly`, `daily`. |
+
 ## `analyze_prompt`
 
 Needs `workflows:execute`.
@@ -372,6 +391,12 @@ Needs `workflows:execute`.
 | `smart_cut_mode` | string |  | Smart-cut cut-point algorithm. Default 'best-pair'. The preroll variants differ in which side of an overlap survives: 'preroll-keep-next' favors the incoming clip, 'preroll-keep-prev' the outgoing one. Same search windows and fixed-trims fallback in every mode. One of `best-pair`, `preroll-keep-prev`, `preroll-keep-next`. |
 | `smart_cut_frames_prev` | integer |  | Smart-cut search window at each clip's END (frames, default 8). From 1 to 24. |
 | `smart_cut_frames_next` | integer |  | Smart-cut search window at each clip's START (frames, default 8). From 1 to 24. |
+
+## `competitor_cards`
+
+Needs `assets:read` · Nodaro Cloud only.
+
+No parameters.
 
 ## `continue_video_pro`
 
@@ -1587,6 +1612,12 @@ Needs `assets:read`.
 | `search` | string |  | Case-insensitive substring of the character's name. Use this when the user named a character — do not page through the list hoping to find it. From 1 to 100 characters. |
 | `limit` | integer |  | Max characters to return (default 50, max 100). From 1 to 100. |
 
+## `list_competitors`
+
+Needs `assets:read` · Nodaro Cloud only.
+
+No parameters.
+
 ## `list_components`
 
 Needs `workflows:read`.
@@ -2163,6 +2194,14 @@ Needs `assets:write` · Nodaro Cloud only.
 | `post` | object (map of any) | yes | One post exactly as social_search returned it. |
 | `note` | string |  | Why it is worth keeping. At most 2000 characters. |
 | `tags` | string[] |  | Short labels, e.g. hooks. At most 10 items. |
+
+## `scan_competitor`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `competitor_id` | string | yes |  |
 
 ## `score_studio_production`
 

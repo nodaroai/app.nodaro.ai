@@ -2572,6 +2572,72 @@ curl -s "https://app.nodaro.ai/v1/saved-posts?platform=tiktok&tag=hooks" \
 The same routes are wrapped by the SDK (`client.savedPosts`), the MCP tools
 (`save_post` / `list_saved_posts`) and the CLI (`nodaro saved-posts`).
 
+## 16c. Competitors (Nodaro Cloud)
+
+Track brands (your competitors, or your own) and get action cards: what
+happened, why it matters, what to do, each with the posts it rests on. A
+scan reads the brand's accounts and searches posts that name it, one Social
+Search page per search; see [Competitors](./features/competitors.md).
+
+| Method | Path | Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/competitors` | none | Every tracked brand: `{ data: TrackedCompetitor[] }`. |
+| `POST` | `/v1/competitors` | `{ brand, website?, accounts?, aboutPlatforms?, isOwn?, schedule? }` | Track a brand. `accounts` takes a handle or link per platform: `tiktok`, `instagram`, `youtube` (`@handle` or `youtube.com/channel/…`; an old `youtube.com/c/…` or `/user/…` link is refused), `x`, `linkedin` (company page), `meta_ads` (advertiser). A repeated `aboutPlatforms` entry counts once. `201` with the brand; `409 too_many_competitors` past 50 brands. |
+| `GET` | `/v1/competitors/:id` | none | One brand with its latest scan (posts and cards) and its scan history (counts only). |
+| `PATCH` | `/v1/competitors/:id` | any field of the above | Change it. `accounts` replaces the whole set: send every account to keep. A new `schedule` restarts its clock, so send it only to change it. While a scan of the brand runs, a change to `brand`, `accounts`, `aboutPlatforms` or `isOwn` answers `409 scan_running` (the scan was priced on them). |
+| `DELETE` | `/v1/competitors/:id` | none | Stop tracking it (its scans and cards go too). |
+| `GET` | `/v1/competitors/cards` | none | Every card from each brand's latest scan, most urgent first: `{ cards, posts }`, where `posts` holds the posts the cards rest on. |
+| `POST` | `/v1/competitor-discover` | `{ website }` | Find a brand's accounts from its website (free). Each account says whether the site linked it or it is a guess to check. |
+| `POST` | `/v1/competitor-scan` | `{ competitorId }` | Scan now. Answers `{ jobId }` at once; poll the job. |
+
+**Price.** A scan of a brand with `n` searches (`TrackedCompetitor.searches`:
+one per account, one per platform its name is searched on) costs `n`
+Social Search pages, the credit id `competitor-scan:<n>`. The scan runs the
+searches it was priced on, even if the brand changes before it starts.
+Searches that fail are not charged; if every search fails the scan fails
+and nothing is charged. Adding, reading and website lookups are free.
+
+**Schedule.** `weekly` (the default) or `daily` scans start on their own
+and are charged like a manual scan; `off` scans only on request. A scan
+that could not start (no credits, the feature not offered on your account)
+is reported on the brand as `lastScanError`.
+
+**Cards.** Each card has a `kind` (`outlier`, `launch`, `complaints`,
+`spreading`, `sound`, `mentions_up`, `pace`, `market_sound`,
+`top_in_sources`), a `priority` (1 act now, 2 opening, 3 good to know),
+`params` (the numbers to phrase it with), the ids of the posts it rests on,
+English `title` / `why` / `action`, and a `strength` from 0 to 1. The list
+comes ordered: priority, then a fixed order of kinds, then strength, across
+all your brands. Competitor scans do not produce `top_in_sources`. A scan's
+`counts.okSearches` names the searches that returned (`own:tiktok`,
+`about:reddit`); a post is new only against scans that could read its
+platform.
+
+OAuth app tokens need `assets:read` for the reads and `assets:write` for the
+writes and the website lookup; a scan spends credits, so it also needs a
+`:write` or `:execute` scope. While the tables are missing on a server the
+reads answer empty and the writes answer `503 not_available`.
+
+```bash
+# Track a brand from its website, then scan it
+curl -s -X POST https://app.nodaro.ai/v1/competitor-discover \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -d '{"website": "acme.example"}' | jq .
+curl -s -X POST https://app.nodaro.ai/v1/competitors \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -d '{"brand": "Acme", "accounts": {"tiktok": "acme", "instagram": "acme"}}' | jq '.id'
+curl -s -X POST https://app.nodaro.ai/v1/competitor-scan \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -d '{"competitorId": "<id>"}' | jq .
+
+# What to do now
+curl -s https://app.nodaro.ai/v1/competitors/cards -H "Authorization: Bearer $NODARO_TOKEN" | jq '.cards[] | {title, action}'
+```
+
+The same routes are wrapped by the SDK (`client.competitors`), the MCP tools
+(`list_competitors`, `competitor_cards`, `add_competitor`,
+`scan_competitor`) and the CLI (`nodaro competitors`).
+
 ## 17. Community
 
 The Community Library is an **admin-curated** catalog of shared characters,

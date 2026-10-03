@@ -34,6 +34,7 @@ const LATIN_OK: ReadonlySet<string> = new Set<string>([
   "cfgext.igTitle",
   "cfgext.slideKenBurns",
   "common.ok",
+  "competitors.phWebsite",
   "copilot.ceilingSuffix",
   "copilot.runProgress",
   "creature.urlPlaceholder",

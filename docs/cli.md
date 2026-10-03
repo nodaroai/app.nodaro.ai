@@ -172,6 +172,16 @@ nodaro saved-posts save --file <post.json|-> [--index <n>] [--note <text>] [--ta
 nodaro saved-posts update <id> [--note <text>] [--tag <t>]... [--clear-tags] [--json]
 nodaro saved-posts delete <id>                         # also removes the copied still
 
+# Competitors — tracked brands, their scans and action cards (Nodaro Cloud)
+nodaro competitors list [--json]
+nodaro competitors add [--brand <name>] [--website <url>] [--tiktok <h>] [--instagram <h>] [--youtube <c>] [--x <h>] [--linkedin <page>] [--meta-ads <name>] [--about <platforms>] [--schedule off|weekly|daily] [--own] [--json]
+#   --website with no account flags finds the accounts from the site first (guesses are named)
+nodaro competitors discover <website> [--json]              # free
+nodaro competitors scan <id> [--watch] [--json]             # one Social Search page per search
+nodaro competitors cards [--json]                           # what to do now
+nodaro competitors show <id> | update <id> [flags] [--clear <platforms>] | remove <id>
+#   update changes only the accounts named (the others are kept); --clear tiktok,x removes accounts
+
 # Catalog — maintain a deployment's VENDORED catalog packs (offline, file-based; no auth/client)
 nodaro catalog snapshot --in <file>                     # echo a detail=full /v1/catalogs projection + sidecars JSON
 nodaro catalog diff-upstream --baseline <f> --upstream <f> --pack <f> [--write <f>]

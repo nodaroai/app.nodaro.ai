@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 /**
  * The RUN-level word-timings refusal has to see NESTED graphs.
@@ -74,7 +74,11 @@ vi.mock("../sub-workflow-preflight", () => ({
   nestedWordTimingsPreflight: (...a: unknown[]) => mockNestedPreflight(...a),
 }))
 
-const { handleRun } = await import("../run-handlers")
+const { handleRun, detachActiveWorkflowStream } = await import("../run-handlers")
+
+// A Run started by a test leaves the module's stream slot taken; the next test
+// would meet a run "already followed" and its Run would refuse without testing anything.
+afterEach(() => detachActiveWorkflowStream())
 
 const SUB = { id: "s1", type: "sub-workflow", position: { x: 0, y: 0 }, data: { label: "Captions Route" } }
 

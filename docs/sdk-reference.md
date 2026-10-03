@@ -38,6 +38,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.library`](#clientlibrary)
   - [`client.presets`](#clientpresets)
   - [`client.savedPosts`](#clientsavedposts)
+  - [`client.competitors`](#clientcompetitors)
   - [`client.pickerCatalogs`](#clientpickercatalogs)
   - [`client.shots`](#clientshots)
   - [`client.community`](#clientcommunity)
@@ -4759,6 +4760,41 @@ remove the save and its copied still.
 
 ---
 
+### `client.competitors`
+
+Brands you track (competitors, or your own), their scans and the action
+cards read from them. Nodaro Cloud. Adding, reading and website lookups are
+free; a scan costs one Social Search page per search it runs
+(`TrackedCompetitor.searches`), and searches that fail are not charged.
+OAuth app tokens need `assets:read` / `assets:write`; a scan also needs a
+`:write` or `:execute` scope.
+
+| Method | Route | Returns |
+|---|---|---|
+| `list()` | `GET /v1/competitors` | `TrackedCompetitor[]` |
+| `get(id)` | `GET /v1/competitors/:id` | `CompetitorDetail` (latest scan with posts and cards, scan history) |
+| `create(input)` | `POST /v1/competitors` | `TrackedCompetitor` |
+| `update(id, input)` | `PATCH /v1/competitors/:id` | `TrackedCompetitor` (`accounts` replaces the whole set; `409 scan_running` for a change to what a running scan was priced on) |
+| `delete(id)` | `DELETE /v1/competitors/:id` | `void` |
+| `cards()` | `GET /v1/competitors/cards` | `CompetitorCardsResult` (`{ cards, posts }`) |
+| `discover(website)` | `POST /v1/competitor-discover` | `CompetitorDiscovery` |
+| `scan(id)` | `POST /v1/competitor-scan` | `{ jobId }` |
+
+```ts
+const found = await client.competitors.discover("acme.example")
+const brand = await client.competitors.create({
+  brand: found.brand,
+  website: found.website,
+  accounts: Object.fromEntries(Object.entries(found.accounts).map(([k, v]) => [k, v!.value])),
+})
+const { jobId } = await client.competitors.scan(brand.id)
+// …poll client.jobs.getStatus(jobId) until completed, then:
+const { cards, posts } = await client.competitors.cards()
+for (const card of cards) console.log(card.title, "→", card.action, card.evidence.map((id) => posts[id]?.url))
+```
+
+---
+
 ### `client.pickerCatalogs`
 
 Discover the valid values for **parameter-picker** nodes — the curated catalogs
@@ -5427,6 +5463,14 @@ Every type used in a public method signature is re-exported from
 - `ListSavedPostsParams` / `ListSavedPostsResult` — `list()`'s filters and page (`{ data, nextCursor }`)
 - `SavedPostsLookupResult` — `lookup()`'s answer
 - `SavedPostSource` — where a save came from: `picker`, `competitors`, `manual`, `api`
+
+### Competitors
+
+- `TrackedCompetitor` / `CompetitorDetail` — a tracked brand; with its latest scan and history
+- `CompetitorScan` / `CompetitorScanSummary` / `CompetitorScanCounts` / `CompetitorPost` — a scan, its counts and its posts (a `SocialPost` plus `role`: `own`, `about` or `market`)
+- `ActionCard` / `ActionCardKind` / `ActionCardPriority` — a card: `kind`, `priority`, `params`, `evidence` (post ids), English `title` / `why` / `action`
+- `CompetitorCardsResult` / `CompetitorDiscovery` — `cards()` and `discover()` answers
+- `CreateCompetitorInput` / `UpdateCompetitorInput` / `CompetitorAccounts` / `CompetitorAccountKey` / `CompetitorAboutPlatform` / `CompetitorSchedule` — the request shapes
 
 ### Client identity
 

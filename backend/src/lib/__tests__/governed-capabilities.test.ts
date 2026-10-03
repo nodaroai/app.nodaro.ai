@@ -144,3 +144,21 @@ describe("per-user questions (the direct-route guard and the orchestrator's door
     await expect(assertNodeAvailableForUser("web-scrape", "user-1", { actor: "rss" })).resolves.toBeUndefined()
   })
 })
+
+describe("competitor scans follow Social Search", () => {
+  function withholdSocialSearch(): void {
+    __resetAvailabilityOverridesForTests({ nodes: new Set([...GATEABLE_NODE_TYPES].filter((t) => t !== "social-search")) })
+  }
+
+  it("a scan (the route's body, any shape) is governed by the Social Search node", () => {
+    expect(governingNodeType("competitor-scan", { competitorId: "c1" })).toBe("social-search")
+  })
+
+  it("withholding Social Search withdraws scans from users, not from admins", async () => {
+    withholdSocialSearch()
+    expect(await deniedCapabilityForUser("competitor-scan", { competitorId: "c1" }, "user-1")).toBe("competitor-scan")
+    expect(await deniedCapabilityForUser("competitor-scan", { competitorId: "c1" }, "admin-1")).toBeUndefined()
+    __resetAvailabilityOverridesForTests()
+    expect(await deniedCapabilityForUser("competitor-scan", { competitorId: "c1" }, "user-1")).toBeUndefined()
+  })
+})

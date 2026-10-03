@@ -7,7 +7,7 @@
  * are charged.
  */
 import { describe, it, expect, vi } from "vitest"
-import { videoAnalysisPostDuration, type PostProbeDeps } from "../video-analysis-post-probe.js"
+import { POST_VIDEO_EXPIRED_MESSAGE, videoAnalysisPostDuration, type PostProbeDeps } from "../video-analysis-post-probe.js"
 import type { SimpleNode } from "../types.js"
 
 vi.mock("../../../lib/queue.js", () => ({ redis: { get: vi.fn(), set: vi.fn() } }))
@@ -22,6 +22,9 @@ function deps(probe: PostProbeDeps["probe"], over: Partial<PostProbeDeps> = {}):
   const store = new Map<string, string>()
   return {
     probe,
+    probeFile: vi.fn(async () => {
+      throw new Error("no file in this test")
+    }),
     cache: { get: async (key) => store.get(key) ?? null, set: async (key, value) => store.set(key, value) },
     enabled: () => true,
     ...over,
@@ -56,6 +59,51 @@ describe("videoAnalysisPostDuration", () => {
     expect(await videoAnalysisPostDuration(va({ youtubeUrl: REEL }), { videoDuration: 12 }, d)).toBeNull()
     expect(await videoAnalysisPostDuration(va({ youtubeUrl: "https://www.instagram.com/someone/" }), {}, d)).toBeNull()
     expect(await videoAnalysisPostDuration({ id: "x", type: "llm-chat", data: { youtubeUrl: REEL } }, {}, d)).toBeNull()
+    expect(probe).not.toHaveBeenCalled()
+  })
+
+  describe("a Social Search post's own video file", () => {
+    const FILE = "https://scontent-sjc6-1.cdninstagram.com/o1/v/t2/clip.mp4?oh=00_sig&oe=6AC3520E"
+    const fromPost = { videoUrl: FILE, videoFromSocialPost: true } as const
+
+    it("reads the length from the file itself, not from the post", async () => {
+      const probe = probeOf({ durationSec: 30 })
+      const probeFile = vi.fn(async () => 26.8)
+      expect(await videoAnalysisPostDuration(va({}), fromPost, deps(probe, { probeFile }))).toBe(27)
+      expect(probeFile).toHaveBeenCalledWith(FILE)
+      expect(probe).not.toHaveBeenCalled()
+    })
+
+    it("refuses a file past the ceiling, and prices one it cannot read at the ceiling", async () => {
+      await expect(videoAnalysisPostDuration(va({}), fromPost, deps(probeOf({ durationSec: 1 }), { probeFile: async () => 1200 }))).rejects.toMatchObject({
+        errorCode: "video_too_long",
+      })
+      const unreadable = vi.fn(async () => {
+        throw new Error("HTTP 403")
+      })
+      expect(await videoAnalysisPostDuration(va({}), fromPost, deps(probeOf({ durationSec: 1 }), { probeFile: unreadable }))).toBeNull()
+    })
+
+    it("answers the same file from its cache, and reads nothing where no credits are charged", async () => {
+      const probeFile = vi.fn(async () => 40)
+      const d = deps(probeOf({ durationSec: 1 }), { probeFile })
+      await videoAnalysisPostDuration(va({}), fromPost, d)
+      expect(await videoAnalysisPostDuration(va({}), fromPost, d)).toBe(40)
+      expect(probeFile).toHaveBeenCalledTimes(1)
+      const off = vi.fn(async () => 40)
+      expect(await videoAnalysisPostDuration(va({}), fromPost, deps(probeOf({ durationSec: 1 }), { probeFile: off, enabled: () => false }))).toBeNull()
+      expect(off).not.toHaveBeenCalled()
+    })
+  })
+
+  it("refuses a Social Search post whose video link has expired — by name, charged or not", async () => {
+    const probe = probeOf({ durationSec: 30 })
+    for (const enabled of [() => true, () => false]) {
+      await expect(videoAnalysisPostDuration(va({}), { socialPostVideoExpired: true }, deps(probe, { enabled }))).rejects.toMatchObject({
+        errorCode: "post_video_expired",
+        message: POST_VIDEO_EXPIRED_MESSAGE,
+      })
+    }
     expect(probe).not.toHaveBeenCalled()
   })
 

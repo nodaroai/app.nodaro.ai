@@ -12,6 +12,11 @@
  * without a length always was, and a post the worker cannot fetch fails there
  * and is refunded.
  *
+ * A Social Search post that came with its own video file is read the same way
+ * from that file (ffprobe, behind the same SSRF guard as every probed URL):
+ * the post's own claim about its length is never what prices the run. A post
+ * whose file link has expired is refused by name before anything is created.
+ *
  * Only where credits are charged (the length prices the run); answers are
  * cached for ten minutes by the post's canonical link; at most a few probes
  * run at once in one process, so a burst of triggered runs cannot fan out
@@ -21,13 +26,14 @@ import { createHash } from "node:crypto"
 import { VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC, VIDEO_ANALYSIS_MAX_DURATION_SEC } from "@nodaro/shared"
 import { hasCredits } from "../../lib/config.js"
 import { redis } from "../../lib/queue.js"
+import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
 import { probeSocialPostVideo, socialPostOf, type SocialPostMetadata } from "../../providers/video/social-post-video.js"
 import type { ResolvedInputs, SimpleNode } from "./types.js"
 
 /** A refusal the node state carries by code, with a sentence the person can act on. */
 export class VideoAnalysisPostError extends Error {
   constructor(
-    readonly errorCode: "live_stream_not_supported" | "video_too_long",
+    readonly errorCode: "live_stream_not_supported" | "video_too_long" | "post_video_expired",
     message: string,
   ) {
     super(message)
@@ -38,6 +44,8 @@ export class VideoAnalysisPostError extends Error {
 /** What the probe step reads through; the defaults are the real ones. */
 export interface PostProbeDeps {
   readonly probe: (url: string) => Promise<SocialPostMetadata>
+  /** The length of a video FILE (a Social Search post's own), in seconds. */
+  readonly probeFile: (url: string) => Promise<number>
   readonly cache: {
     get(key: string): Promise<string | null>
     set(key: string, value: string, ttlSec: number): Promise<unknown>
@@ -57,7 +65,12 @@ const redisCache: PostProbeDeps["cache"] = {
   set: (key, value, ttlSec) => redis.set(key, value, "EX", ttlSec),
 }
 
-const DEFAULT_DEPS: PostProbeDeps = { probe: probeSocialPostVideo, cache: redisCache, enabled: hasCredits }
+const DEFAULT_DEPS: PostProbeDeps = {
+  probe: probeSocialPostVideo,
+  probeFile: probeMediaDuration,
+  cache: redisCache,
+  enabled: hasCredits,
+}
 
 /** `work`, or a rejection once `ms` pass first. */
 function within<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
@@ -128,13 +141,17 @@ async function cachedRead(key: string, deps: PostProbeDeps): Promise<SocialPostM
   }
 }
 
-async function cachedProbe(url: string, deps: PostProbeDeps): Promise<SocialPostMetadata> {
+async function cachedProbe(
+  url: string,
+  deps: PostProbeDeps,
+  probe: (url: string) => Promise<SocialPostMetadata> = deps.probe,
+): Promise<SocialPostMetadata> {
   const key = `va:post-probe:${createHash("sha256").update(url).digest("hex")}`
   const hit = await cachedRead(key, deps)
   if (hit) return hit
   const pending = inFlight.get(key)
   if (pending) return pending
-  const probing = withProbeSlot(async () => (await cachedRead(key, deps)) ?? deps.probe(url))
+  const probing = withProbeSlot(async () => (await cachedRead(key, deps)) ?? probe(url))
     .then(async (meta) => {
       try {
         await within(deps.cache.set(key, JSON.stringify(meta), CACHE_TTL_SEC), CACHE_WAIT_MS, "the probe cache")
@@ -148,23 +165,62 @@ async function cachedProbe(url: string, deps: PostProbeDeps): Promise<SocialPost
   return probing
 }
 
+/** The refusal for a Social Search post whose video link has expired. */
+export const POST_VIDEO_EXPIRED_MESSAGE =
+  "This post's video link has expired (a search's video links last a few days). Run the Social Search again to get fresh ones."
+
+/** A probed length in whole seconds; a video past the ceiling is refused, free. */
+function lengthOrRefusal(durationSec: number | null): number | null {
+  if (durationSec === null) return null
+  if (durationSec > VIDEO_ANALYSIS_MAX_DURATION_SEC + VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC) {
+    throw new VideoAnalysisPostError(
+      "video_too_long",
+      `This post's video is ${Math.ceil(durationSec)} seconds long; Video Analysis reads up to ${VIDEO_ANALYSIS_MAX_DURATION_SEC}.`,
+    )
+  }
+  return Math.ceil(durationSec)
+}
+
+/** A Social Search post's own video file, by the length read from the file; null when it cannot be read (the ceiling prices it). */
+async function postFileDuration(url: string, deps: PostProbeDeps): Promise<number | null> {
+  let durationSec: number
+  try {
+    const meta = await cachedProbe(url, deps, async (fileUrl) => ({ durationSec: await deps.probeFile(fileUrl), title: null, isLive: false }))
+    if (meta.durationSec === null) return null
+    durationSec = meta.durationSec
+  } catch (err) {
+    const why = (err instanceof Error ? err.message : String(err)).split("\n")[0]
+    console.warn(`[video-analysis] social search post's video file probe failed (${why}); priced at the ceiling`)
+    return null
+  }
+  return lengthOrRefusal(durationSec)
+}
+
 /**
  * The post's length in whole seconds when Video Analysis will read a post's
- * link; null when it reads something else (a wired or typed video file, a
- * length already known, a link that is not a post), when credits are not
- * charged, or when the length cannot be read (the ceiling prices it).
+ * link or a Social Search post's own video file; null when it reads something
+ * else (another wired or typed video file, a length already known, a link
+ * that is not a post), when credits are not charged, or when the length
+ * cannot be read (the ceiling prices it). Throws a VideoAnalysisPostError for
+ * a post it refuses: live, too long, or a Social Search post whose video link
+ * has expired (on every install, charged or not).
  */
 export async function videoAnalysisPostDuration(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
   deps: PostProbeDeps = DEFAULT_DEPS,
 ): Promise<number | null> {
-  if (node.type !== "video-analysis" || !deps.enabled()) return null
+  if (node.type !== "video-analysis") return null
+  if (resolvedInputs.socialPostVideoExpired && !resolvedInputs.videoUrl && !resolvedInputs.videoPageUrl) {
+    throw new VideoAnalysisPostError("post_video_expired", POST_VIDEO_EXPIRED_MESSAGE)
+  }
+  if (!deps.enabled()) return null
   const data = node.data as Record<string, unknown>
-  // A video file wins over a link (the worker's own precedence), and a length
-  // the run already knows is the trusted one.
-  if (resolvedInputs.videoUrl || (typeof data.videoUrl === "string" && data.videoUrl !== "")) return null
+  // A length the run already knows is the trusted one.
   if (resolvedInputs.videoDuration !== undefined) return null
+  if (resolvedInputs.videoUrl && resolvedInputs.videoFromSocialPost) return postFileDuration(resolvedInputs.videoUrl, deps)
+  // Any other video file wins over a link (the worker's own precedence).
+  if (resolvedInputs.videoUrl || (typeof data.videoUrl === "string" && data.videoUrl !== "")) return null
   // The link the payload will carry: one wired into the `video` handle, else the node's own field.
   const link = (resolvedInputs.videoPageUrl ?? (typeof data.youtubeUrl === "string" ? data.youtubeUrl : "")).trim()
   const post = link ? socialPostOf(link) : null
@@ -184,12 +240,5 @@ export async function videoAnalysisPostDuration(
   if (meta.isLive) {
     throw new VideoAnalysisPostError("live_stream_not_supported", "This post is a live stream, which cannot be analyzed.")
   }
-  if (meta.durationSec === null) return null
-  if (meta.durationSec > VIDEO_ANALYSIS_MAX_DURATION_SEC + VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC) {
-    throw new VideoAnalysisPostError(
-      "video_too_long",
-      `This post's video is ${Math.ceil(meta.durationSec)} seconds long; Video Analysis reads up to ${VIDEO_ANALYSIS_MAX_DURATION_SEC}.`,
-    )
-  }
-  return Math.ceil(meta.durationSec)
+  return lengthOrRefusal(meta.durationSec)
 }

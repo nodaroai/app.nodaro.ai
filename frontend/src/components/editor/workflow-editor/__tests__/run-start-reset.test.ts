@@ -101,6 +101,9 @@ describe("run-start patches reset the whole run state", () => {
       // restorePollingForRunningJobs' backend-driven tick: the run started
       // elsewhere, and this patch mirrors orchestrator state onto the node.
       "workflow-editor/run-handlers.ts": 1,
+      // A followed Telegram run marks its trigger card as working. Not a run of
+      // the trigger: an earlier error on the card is not this run's to clear.
+      "workflow-editor/triggered-run-paint.ts": 1,
     })
   })
 

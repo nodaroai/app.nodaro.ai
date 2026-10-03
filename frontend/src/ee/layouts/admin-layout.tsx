@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, Outlet } from "react-router-dom"
 import { useGalleryReportCount } from "@/hooks/queries/use-gallery-queries"
 import { useQuery } from "@tanstack/react-query"
 import { listHeldJobs } from "@/ee/lib/review-api"
+import { ProviderAlertsBanner } from "@/ee/components/admin/provider-alerts-banner"
 import { useT } from "@/lib/i18n"
 import type { MessageKey } from "@/lib/i18n/en"
 import {
@@ -38,6 +39,7 @@ import {
   Inbox,
   ToggleRight,
   ShieldAlert,
+  LayoutTemplate,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -82,6 +84,7 @@ const ADMIN_NAV = [
   { href: "/admin/kie-credits", label: "KIE Credits", icon: Wallet },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: HeartPulse },
   { href: "/admin/stuck-pipelines", label: "Stuck Pipelines", icon: AlertTriangle },
+  { href: "/admin/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/admin/tutorial-categories", label: "Tutorial Categories", icon: FolderTree },
   { href: "/admin/tutorials", label: "Tutorials", icon: PlayCircle },
   { href: "/admin/settings", label: "Settings", icon: Settings },
@@ -422,6 +425,7 @@ export default function AdminLayout() {
             </div>
           </header>
           <main className="flex-1 overflow-auto">
+            <ProviderAlertsBanner enabled={Boolean(user?.id) && isAdmin && hasCredits()} />
             <Outlet />
           </main>
         </div>

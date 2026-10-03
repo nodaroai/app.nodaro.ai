@@ -178,7 +178,12 @@ import {
   resetNodeAccumulation,
   restorePollingForRunningJobs,
   RUN_CONFIRM_CREDITS,
+  detachActiveWorkflowStream,
 } from "../run-handlers"
+
+// A Run started by a test leaves the module's stream slot taken; the next test
+// would meet a run "already followed" and its Run would (rightly) refuse.
+afterEach(() => detachActiveWorkflowStream())
 import { getCachedCredits } from "@/ee/hooks/use-model-credits"
 
 // ---------------------------------------------------------------------------

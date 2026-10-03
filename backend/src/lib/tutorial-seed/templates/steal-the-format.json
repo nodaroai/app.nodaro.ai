@@ -2,19 +2,21 @@
   "slug": "steal-the-format",
   "name": "Steal the Format",
   "description": "Paste a post that worked and a few lines about your brand; get five post ideas built on the same format, and a ready-to-film script for the one you pick. The structure is borrowed, never the words, footage, music, faces or logos.",
-  "markdownDescription": "## Steal the Format\n\nPaste a post that worked and a few lines about your brand, and get five post ideas built on the same format, plus a ready-to-film script for the idea you pick. The ideas borrow the post's structure (its format, hook mechanic, beat order and pacing), never its words, footage, music, faces or logos.\n\n1. **Post link**: a TikTok, Reels, Shorts or YouTube link. The template starts with an example Reel; paste your own to replace it.\n2. **Your brand**: what you sell, who it is for, your tone, the goal, the call to action, and what you never do.\n3. **Video Analysis**: reads the post, its timings, words, on-screen text and sound.\n4. **Content Recipe**: explains why the post works, from the hook and the format to the beats, the call to action and the pace.\n5. **Content Ideas**: five ideas for your brand on the same structure.\n6. **Script**: a ready-to-film script for one idea, idea 1 by default. Click the wire into Script and change the number to pick another, or set it to Each for a script per idea.",
+  "markdownDescription": "## Steal the Format\n\nOne post that worked becomes a week of posts for your brand. Paste a post that worked and a few lines about your brand, and get five post ideas built on the same format, plus a ready-to-film script for the idea you pick. The ideas borrow the post's structure (its format, hook mechanic, beat order and pacing), never its words, footage, music, faces or logos.\n\n**Business use:** a brand, creator or social media manager who needs a steady flow of short-form posts. Instead of a blank page, start from a post that already performed (one of yours, or one from your niche) and get ideas that keep what made it work, adapted to your product, audience and tone. Set the last wire to Each and one run writes a script for every idea: a week of posts. The demo: a public Reel, and a creator who teaches people to turn their experience into a high-ticket digital offer.\n\n1. **Post link**: a TikTok, Reels, Shorts or YouTube link. The template starts with an example Reel; paste your own to replace it.\n2. **Your brand**: what you sell, who it is for, your tone, the goal, the call to action, and what you never do.\n3. **Video Analysis**: reads the post, its timings, words, on-screen text and sound.\n4. **Content Recipe**: explains why the post works, from the hook and the format to the beats, the call to action and the pace.\n5. **Content Ideas**: five ideas for your brand on the same structure.\n6. **Script**: a ready-to-film script for one idea, idea 1 by default. Click the wire into Script and change the number to pick another, or set it to Each for a script per idea.",
   "category": "social-creatives",
   "outputTypes": [
     "text"
   ],
   "tags": [
+    "social-creatives",
     "social",
     "short-form",
     "content-ideas",
     "hooks",
     "scripts",
     "tiktok",
-    "reels"
+    "reels",
+    "shorts"
   ],
   "complexity": "intermediate",
   "estimatedCredits": 249,
@@ -52,7 +54,7 @@
         "textColor": "#ffffff",
         "label": "How it works",
         "title": "Steal the format: how it works",
-        "text": "Paste the link of a post that worked and a few lines about your brand. You get five post ideas built on the same format, and a ready-to-film script for the one you pick.\n\n1. Post link: a TikTok, Reels, Shorts or YouTube link. The template starts with an example Reel; paste your own to replace it.\n2. Your brand: what you sell, who it is for, your tone, the goal, the call to action, and what you never do.\n3. Video Analysis: reads the post, its timings, words, on-screen text and sound.\n4. Content Recipe: explains why the post works, from the hook and the format to the beats, the call to action and the pace.\n5. Content Ideas: five ideas for your brand that reuse the structure. Never the words, footage, music, faces or logos.\n6. Script: a ready-to-film script for the idea you pick. The workflow ends here.",
+        "text": "One post that worked becomes a week of posts for your brand. Paste the link of a post that worked and a few lines about your brand. You get five post ideas built on the same format, and a ready-to-film script for the one you pick.\n\n1. Post link: a TikTok, Reels, Shorts or YouTube link. The template starts with an example Reel; paste your own to replace it.\n2. Your brand: what you sell, who it is for, your tone, the goal, the call to action, and what you never do.\n3. Video Analysis: reads the post, its timings, words, on-screen text and sound.\n4. Content Recipe: explains why the post works, from the hook and the format to the beats, the call to action and the pace.\n5. Content Ideas: five ideas for your brand that reuse the structure. Never the words, footage, music, faces or logos.\n6. Script: a ready-to-film script for the idea you pick. The workflow ends here.",
         "width": 1180,
         "height": 650
       }

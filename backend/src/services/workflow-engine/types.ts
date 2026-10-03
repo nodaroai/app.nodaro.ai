@@ -486,6 +486,13 @@ export interface ResolvedInputs {
    *  Read like the node's own link field, and before it; a wired video file
    *  still wins over both. Only an http(s) link is kept. */
   videoPageUrl?: string
+  /** video-analysis: `videoUrl` is a Social Search post's own video file. Its
+   *  length is read from the file before the reserve (video-analysis-post-probe),
+   *  never taken from the post. */
+  videoFromSocialPost?: boolean
+  /** video-analysis: the wired Social Search post's video link has expired, so
+   *  there is nothing to analyze until the search runs again. */
+  socialPostVideoExpired?: boolean
 }
 
 // ---------------------------------------------------------------------------

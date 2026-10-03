@@ -2,7 +2,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
-import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostLink } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference } from "@nodaro/shared"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
@@ -758,6 +758,10 @@ export interface FrontendResolvedInputs {
    *  like the node's own link field, and before it; a wired video file still
    *  wins over both. Mirror of backend ResolvedInputs.videoPageUrl. */
   videoPageUrl?: string;
+  /** video-analysis: the wired Social Search post's video link has expired,
+   *  so there is nothing to analyze until the search runs again. Mirror of
+   *  backend ResolvedInputs.socialPostVideoExpired. */
+  socialPostVideoExpired?: boolean;
 }
 
 /** Append an asset to the manual-edit inputAssets accumulator. */
@@ -1771,11 +1775,21 @@ export function resolveNodeInputs(
     // producer is not a link: it falls through to the file routing below.
     // (The server also lets a trigger message that carries a video FILE fall
     // through; the editor never runs a trigger.) A Social Search source hands
-    // over its posts: the link is the post's page (one post on an Each wire,
-    // the first of the list on any other). Gated on node.type. Mirror of the
-    // backend input-resolver branch.
+    // over its posts (one post on an Each wire, the first of the list on any
+    // other): a post that came with its own video file is analyzed from that
+    // file — Instagram's page gives no length, so its page cannot be priced —
+    // one without a file by its page, and one whose file link has expired is
+    // refused by name. Gated on node.type. Mirror of the backend
+    // input-resolver branch.
     if (node.type === "video-analysis" && srcEdge.targetHandle === "video" && !VIDEO_PRODUCER_TYPES.has(src.type ?? "") && !DYNAMIC_PRODUCER_TYPES.has(src.type ?? "")) {
-      const link = src.type === "social-search" ? socialSearchPostLink(output) ?? "" : output.trim();
+      if (src.type === "social-search") {
+        const video = socialSearchPostVideo(output);
+        if (video?.kind === "file") inputs.videoUrl = video.url;
+        else if (video?.kind === "page") inputs.videoPageUrl = video.url;
+        else if (video?.kind === "expired") inputs.socialPostVideoExpired = true;
+        continue;
+      }
+      const link = output.trim();
       if (/^https?:\/\/\S+$/i.test(link)) inputs.videoPageUrl = link;
       continue;
     }
@@ -3073,6 +3087,15 @@ export function resolveNodeInputs(
         // Default to prompt for text or any
         inputs.prompt = output;
       }
+    } else if (TEXT_PRODUCER_TYPES.has(src.type ?? "")) {
+      // The catch-all for text. The chain above has none, so a node the
+      // connection validator accepts as a text producer (TEXT_PRODUCER_TYPES)
+      // but without a branch of its own was silently dropped: a Prompt node fed
+      // by Content Ideas ran with no prompt, and Telegram's three nodes fed
+      // nothing either. The server routes every text source this way (backend
+      // input-resolver TEXT_SOURCE_NODE_TYPES → `inputs.prompt = output`, last
+      // wire wins); a type with a branch above never reaches this one.
+      inputs.prompt = output;
     }
   }
 

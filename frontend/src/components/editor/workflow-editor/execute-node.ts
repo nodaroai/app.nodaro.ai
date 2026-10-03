@@ -3990,6 +3990,16 @@ function executeNodeCore(
     // link wired into the `video` handle; else the link in node data. At
     // least one must be present.
     const videoUrl = inputs.videoUrl;
+    // A wired Social Search post whose video link expired is the source this
+    // run was given: refuse it by name rather than analyze the node's own
+    // link field instead. Mirrors the backend video-analysis-post-probe.
+    if (inputs.socialPostVideoExpired && !videoUrl && !inputs.videoPageUrl) {
+      // Guarded: a run over many posts reports it once, on the node.
+      const expired = nodeRunError(d.label, "nodeRun.socialPostVideoExpired");
+      useWorkflowStore.getState().updateNodeData(node.id, { executionStatus: "failed", errorMessage: expired });
+      guardedToast.error(expired);
+      return Promise.reject(new Error(expired));
+    }
     const youtubeUrl = inputs.videoPageUrl ?? (d.youtubeUrl?.trim() || undefined);
     if (!videoUrl && !youtubeUrl) {
       toast.error(nodeRunError(d.label, "nodeRun.connectAVideoOrSet"));

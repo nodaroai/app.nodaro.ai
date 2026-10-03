@@ -66,10 +66,12 @@ export function SocialPostCard({
   onRead,
 }: {
   readonly post: SocialPost
-  readonly picked: boolean
+  /** Pick mode only (with `onToggle`): the card is a checkbox. */
+  readonly picked?: boolean
   /** 1-based position among the picks, shown on the badge. */
   readonly order?: number
-  readonly onToggle: () => void
+  /** Absent: a plain card to look at (no pick). */
+  readonly onToggle?: () => void
   readonly now: number
   /** On the inspiration wall. The bookmark shows only with `onToggleSave`. */
   readonly saved?: boolean
@@ -85,20 +87,27 @@ export function SocialPostCard({
   const days = adDays(post, now)
   const variants = typeof post.extra.variants === "number" ? post.extra.variants : 1
   const portrait = post.media.aspect === "9:16"
+  const pickable = onToggle !== undefined
+  const pickProps = pickable
+    ? {
+        role: "checkbox" as const,
+        "aria-checked": picked === true,
+        tabIndex: 0,
+        onClick: onToggle,
+        onKeyDown: (e: KeyboardEvent) => {
+          if (e.key === " " || e.key === "Enter") {
+            e.preventDefault()
+            onToggle()
+          }
+        },
+      }
+    : {}
   return (
     <div
-      role="checkbox"
-      aria-checked={picked}
-      tabIndex={0}
-      onClick={onToggle}
-      onKeyDown={(e) => {
-        if (e.key === " " || e.key === "Enter") {
-          e.preventDefault()
-          onToggle()
-        }
-      }}
+      {...pickProps}
       className={cn(
-        "group flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-[var(--meta-ads-surface-2)] text-start outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-[#FF0073]",
+        "group flex flex-col overflow-hidden rounded-xl border bg-[var(--meta-ads-surface-2)] text-start outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-[#FF0073]",
+        pickable && "cursor-pointer",
         picked ? "border-[#FF0073] ring-1 ring-[#FF0073]" : "border-[var(--meta-ads-border)] hover:border-[var(--meta-ads-accent-border)]",
       )}
     >
@@ -133,15 +142,17 @@ export function SocialPostCard({
             {typeof post.media.durationSec === "number" ? `${Math.round(post.media.durationSec)}s` : ""}
           </span>
         )}
-        <span
-          className={cn(
-            "absolute end-1.5 top-1.5 flex h-6 min-w-6 items-center justify-center rounded-full border text-[11px] font-extrabold transition-colors",
-            picked ? "border-[#FF0073] bg-[#FF0073] px-1.5 text-white" : "border-white/80 bg-black/30 text-transparent group-hover:text-white/80",
-          )}
-          aria-hidden
-        >
-          {picked && order ? order : <Check className="h-3.5 w-3.5" />}
-        </span>
+        {pickable && (
+          <span
+            className={cn(
+              "absolute end-1.5 top-1.5 flex h-6 min-w-6 items-center justify-center rounded-full border text-[11px] font-extrabold transition-colors",
+              picked ? "border-[#FF0073] bg-[#FF0073] px-1.5 text-white" : "border-white/80 bg-black/30 text-transparent group-hover:text-white/80",
+            )}
+            aria-hidden
+          >
+            {picked && order ? order : <Check className="h-3.5 w-3.5" />}
+          </span>
+        )}
       </MetaAdMedia>
       <div className="flex flex-1 flex-col gap-1.5 p-2.5">
         <div className="flex items-center justify-between gap-2 text-[12px] font-bold text-[var(--meta-ads-text)]">

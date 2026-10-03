@@ -203,8 +203,8 @@ There are 14 scopes total. The canonical list is `OAUTH_SCOPES` in
 | `workflows:write` | Create and modify workflows | `POST /v1/projects/:projectId/workflows`, `POST /v1/workflows`, `PATCH /v1/workflows/:id`, `DELETE /v1/workflows/:id`, `POST /v1/workflows/import`, `POST /v1/workflows/:parentId/sub-workflows` |
 | `workflows:execute` | Run workflows on the user's behalf | `POST /v1/workflows/:id/run`; the prompt-wizard MCP tools |
 | `jobs:read` | Read job status and results | `GET /v1/jobs/status`, `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, `GET /v1/jobs`, `POST /v1/jobs/batch-status` |
-| `assets:read` | Read the user's uploaded assets | `GET /v1/saved-posts`, `POST /v1/saved-posts/lookup`; the MCP character / location / gallery read tools and `list_saved_posts` |
-| `assets:write` | Upload assets to the user's account | creating, restoring and deleting characters, creatures, objects and locations; community clones; `POST /v1/saved-posts`, `PATCH` / `DELETE /v1/saved-posts/:id`; the MCP upload / entity write tools and `save_post` |
+| `assets:read` | Read the user's uploaded assets | `GET /v1/saved-posts`, `POST /v1/saved-posts/lookup`, `GET /v1/competitors` (and `/:id`, `/cards`); the MCP character / location / gallery read tools, `list_saved_posts`, `list_competitors` and `competitor_cards` |
+| `assets:write` | Upload assets to the user's account | creating, restoring and deleting characters, creatures, objects and locations; community clones; `POST /v1/saved-posts`, `PATCH` / `DELETE /v1/saved-posts/:id`, `POST` / `PATCH` / `DELETE /v1/competitors`, `POST /v1/competitor-discover`; the MCP upload / entity write tools, `save_post` and `add_competitor` |
 | `credits:read` | See the user's credit balance | (reserved) |
 | `apps:read` | Read published apps | (reserved) |
 | `pipelines:read` | Read the user's Story-to-Video pipelines | `GET /v1/pipelines/*` |

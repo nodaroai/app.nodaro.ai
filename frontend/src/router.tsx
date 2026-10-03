@@ -35,6 +35,7 @@ const ExecutionsPage = lazy(() => import("@/app/(dashboard)/executions/page"))
 const UsagePage = lazy(() => import("@/app/(dashboard)/usage/page"))
 const ArchivedRunsPage = lazy(() => import("@/app/(dashboard)/archived-runs/page"))
 const InspirationPage = lazy(() => import("@/app/(dashboard)/inspiration/page"))
+const CompetitorsPage = lazy(() => import("@/app/(dashboard)/competitors/page"))
 const SharedWithMePage = lazy(() => import("@/app/(dashboard)/shared/page"))
 const GalleryPage = lazy(() => import("@/app/gallery/page"))
 const PricingPage = lazy(() => import("@/app/pricing/page"))
@@ -106,6 +107,7 @@ const AdminLlmModels = lazy(() => import("@/ee/app/(admin)/admin/llm-models/page
 const AdminNodeDefaults = lazy(() => import("@/ee/app/(admin)/admin/node-defaults/page"))
 const AdminAvailability = lazy(() => import("@/ee/app/(admin)/admin/availability/page"))
 const AdminTutorials = lazy(() => import("@/ee/app/(admin)/admin/tutorials/page"))
+const AdminTemplates = lazy(() => import("@/ee/app/(admin)/admin/templates/page"))
 const AdminStuckPipelines = lazy(() => import("@/ee/app/(admin)/admin/stuck-pipelines/page"))
 const AdminOrganizations = lazy(() => import("@/ee/app/(admin)/admin/organizations/page"))
 const AdminTutorialCategories = lazy(() => import("@/ee/app/(admin)/admin/tutorial-categories/page"))
@@ -155,6 +157,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
       { path: "llm-models", element: <SuspenseWrapper><AdminLlmModels /></SuspenseWrapper> },
       { path: "node-defaults", element: <SuspenseWrapper><AdminNodeDefaults /></SuspenseWrapper> },
       { path: "availability", element: <SuspenseWrapper><AdminAvailability /></SuspenseWrapper> },
+      { path: "templates", element: <SuspenseWrapper><AdminTemplates /></SuspenseWrapper> },
       { path: "tutorial-categories", element: <SuspenseWrapper><AdminTutorialCategories /></SuspenseWrapper> },
       { path: "tutorials", element: <SuspenseWrapper><AdminTutorials /></SuspenseWrapper> },
       { path: "stuck-pipelines", element: <SuspenseWrapper><AdminStuckPipelines /></SuspenseWrapper> },
@@ -390,6 +393,10 @@ export const router = createBrowserRouter([
       {
         path: "/inspiration",
         element: <SuspenseWrapper><InspirationPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/competitors",
+        element: <SuspenseWrapper><CompetitorsPage /></SuspenseWrapper>,
       },
       {
         path: "/library/locations",

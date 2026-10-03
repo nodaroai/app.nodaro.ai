@@ -5,6 +5,7 @@ import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/typ
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
+import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
 import type { LlmFeature } from "@nodaro/shared"
 /** Every node type whose output is prose/text. Used to build the compatible
  *  source list for any text-shaped field so the MappableField dropdown is
@@ -476,9 +477,11 @@ export function getModelIdentifier(
   if (nodeType === "video-analysis") {
     const probedYoutube = data.probedYoutube as { url: string; durationSec: number } | undefined
     const probedVideo = data.probedVideo as ProbedVideoInfo | undefined
-    const durationSec =
-      (probedYoutube && probedYoutube.url === data.youtubeUrl ? probedYoutube.durationSec : undefined) ??
-      probedVideo?.durationSec
+    // A Social Search's posts wired in: the longest of their videos.
+    const fromPosts = wiredSocialPostsVideoSec(node.id, edges, nodes)
+    const durationSec = fromPosts !== null
+      ? fromPosts
+      : (probedYoutube && probedYoutube.url === data.youtubeUrl ? probedYoutube.durationSec : undefined) ?? probedVideo?.durationSec
     return buildVideoAnalysisCreditId(resolveVideoAnalysisModel(data.llmModel as string | undefined), durationSec)
   }
 

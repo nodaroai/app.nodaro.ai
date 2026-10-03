@@ -41,12 +41,28 @@ Inbox mode turns a chat into an inbox for posts you want to work on: you share a
   - Exactly one of Video link and Post text has a value; the other is empty. Wire each into its own Router with the condition **is not equal to** and the value left empty, so only the branch with a value runs.
 - **Your own messages are always included** in inbox mode, so "Also my own messages" is not offered.
 - **Saved Messages works as an inbox**, but every link you save there for yourself then starts a run. A private channel of your own (for example "Nodaro inbox") keeps the two apart.
+- **Your post is marked when its run starts.** Your account adds an eyes reaction to the post you shared, so you see in Telegram that it was picked up.
+  - It marks only your own posts in the inbox chat, once per message, however many links the message has.
+  - In a public channel the channel's members see the mark too.
+  - Where the chat does not allow that reaction (some channels limit reactions; Saved Messages may need Telegram Premium for them), the post simply shows no mark. The run starts all the same.
 
 A forwarded Telegram video is read by its caption for now: the run does not receive the video file yet.
 
 ## What a triggered run executes
 
 A trigger that is **wired to something** runs only the branch behind it. A trigger **wired to nothing** runs the whole workflow. The rules are the same as the [Telegram Trigger](./telegram-trigger.md#what-a-triggered-run-executes).
+
+## Seeing a run on the canvas
+
+The same rules apply to the [Telegram Trigger](./telegram-trigger.md#seeing-a-run-on-the-canvas).
+
+- **While the flow is open:** a run a message starts shows on the nodes the way a run you start yourself does. The trigger card reads "Working on a post…", the nodes it runs show their progress, and their results stay on them when it ends. The editor looks for these runs about every 10 seconds. **Stop** on the run bar cancels that run.
+- **When you open the flow later:** the nodes show the newest message run that ended, unless you ran something in the editor since then (your own run is newer).
+- **What is never shown on the canvas:**
+  - The message itself. It stays in the run history (the **Executions** tab).
+  - A node you emptied with **Clear results** after that run.
+  - A run you stopped.
+- **A schedule or a webhook run** is not shown on the canvas. Those can fire every minute; see them in the **Executions** tab.
 
 ## Configuration
 

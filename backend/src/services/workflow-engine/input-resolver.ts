@@ -12,7 +12,7 @@ import type {
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, savedOutputFor, ANALYSIS_PRODUCER_TYPES, type ExtractContext } from "./output-extractor.js"
 import {
-  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostLink } from "@nodaro/shared"
+  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
@@ -1449,14 +1449,23 @@ function routeOutput(
   // --- Social Search: both handles are text for the target — `json` the
   // posts stringified, `text` their digest (getPrimaryOutput narrowed it by
   // handle). Into Video Analysis's `video` input the `json` output is a post
-  // to analyze by its page link: one post on an Each wire, the first of the
-  // list on any other (the digest holds no single link, so it brings none and
-  // the node's own refusal names the missing source). Mirrors the frontend
-  // node-input-resolver. ---
+  // to analyze: one post on an Each wire, the first of the list on any other.
+  // A post that came with its own video file is analyzed from that file (its
+  // length is read from the file before the reserve); one without a file, by
+  // its page link; one whose file link has expired is refused by name (the
+  // digest holds no post, so it brings nothing and the node's own refusal
+  // names the missing source). Mirrors the frontend node-input-resolver. ---
   if (srcType === "social-search") {
     if (targetType === "video-analysis" && edge.targetHandle === "video") {
-      const link = socialSearchPostLink(output)
-      if (link) inputs.videoPageUrl = link
+      const video = socialSearchPostVideo(output)
+      if (video?.kind === "file") {
+        inputs.videoUrl = video.url
+        inputs.videoFromSocialPost = true
+      } else if (video?.kind === "page") {
+        inputs.videoPageUrl = video.url
+      } else if (video?.kind === "expired") {
+        inputs.socialPostVideoExpired = true
+      }
       return
     }
     inputs.prompt = output

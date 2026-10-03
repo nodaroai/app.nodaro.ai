@@ -110,6 +110,11 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // node as "ran while the editor was closed" and paints the last run back.
   // Persisted (never transient): the reload is exactly when it is read.
   "resultsClearedAt",
+  // The id of the trigger-started run whose results this node shows (the
+  // editor paints a Telegram run onto the canvas). Bookkeeping, not a result
+  // and not config: it stops a reload from painting the same run again over
+  // edits made since. Persisted for the same reason as resultsClearedAt.
+  "resultsRunId",
   // A trigger's last run values (also in TRANSIENT_RUNTIME_KEYS: never saved).
   "__triggerData",
 ])

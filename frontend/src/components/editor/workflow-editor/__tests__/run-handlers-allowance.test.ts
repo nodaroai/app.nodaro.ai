@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest"
 
 /**
  * Track A — the canvas precheck under a deployment payer (D12, ruling R-A).
@@ -102,7 +102,11 @@ vi.mock("../node-input-resolver", () => ({
 vi.mock("../execute-node", () => ({ executeNode: (...a: unknown[]) => mockExecuteNode(...a), rejectAllManualEdits: vi.fn() }))
 vi.mock("../list-execution", () => ({ executeNodeForList: vi.fn(), expandLoopResults: vi.fn() }))
 
-import { handleRun } from "../run-handlers"
+import { detachActiveWorkflowStream, handleRun } from "../run-handlers"
+
+// A Run started by a test leaves the module's stream slot taken; the next test
+// would meet a run "already followed" and its Run would (rightly) refuse.
+afterEach(() => detachActiveWorkflowStream())
 import { BILLING_SURFACE_QUERY_KEY } from "@/lib/billing-surface"
 
 const NODE = { id: "n1", type: "generate-image", position: { x: 0, y: 0 }, data: { label: "generate-image" } }
