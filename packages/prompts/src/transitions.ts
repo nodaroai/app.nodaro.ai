@@ -203,7 +203,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "zoom-into-eye",     label: "Zoom Into Eye",        category: "portal", description: "Push into pupil, new world inside",
     promptHint: "the camera pushes into a tight macro of the subject's eye, the pupil dilates and fills the frame, and the new scene materialises from within the pupil as if the pupil itself were a portal" },
   { id: "zoom-into-mirror",  label: "Zoom Into Mirror",     category: "portal", description: "Push into mirror, scene inside reflection",
-    promptHint: "the camera pushes toward a mirror in the scene, the mirror's reflection fills the frame, and the camera passes through the mirror surface into the reflected world which becomes the new scene" },
+    promptHint: "the camera pushes straight at a mirror in the frame. As the lens meets the glass, the mirror's surface turns liquid and rings ripple out across the whole picture, and the camera keeps moving forward through the rippling surface, out the far side into the second shot. Until the lens touches the glass, the mirror keeps its own reflection. The shot ends in the second shot, still and fully resolved, with no ripples left" },
   { id: "zoom-into-screen",  label: "Zoom Into Screen",     category: "portal", description: "Push into TV/phone screen",
     promptHint: "the camera pushes toward a screen visible in the scene, such as a TV, phone or monitor, the screen's image fills the frame, and the camera passes through into that image which becomes the new scene" },
   { id: "zoom-into-book",    label: "Zoom Into Book",       category: "portal", description: "Push into book page illustration",

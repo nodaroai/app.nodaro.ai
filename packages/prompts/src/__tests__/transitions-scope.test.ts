@@ -427,6 +427,30 @@ describe("time-lapse bodies (2026-09-24 A/B at full / long: descab3 row 26)", ()
   })
 })
 
+describe("zoom-into-mirror body (2026-10-03 redraft: mirror3 D2, liquid ripple)", () => {
+  // The mirror3 D2 draft ("liquid ripple"), rated 4/5 against D1 3/5 and D3 2/5. It was tested already
+  // tidied (lower-case start, no final full stop), so it ships exactly as the take was generated (job
+  // 5821fa22): the rendered string at the tile default is byte-identical to the clause in that prompt.
+  const TERM = "zoom into mirror"
+  const BODY =
+    "the camera pushes straight at a mirror in the frame. As the lens meets the glass, the mirror's " +
+    "surface turns liquid and rings ripple out across the whole picture, and the camera keeps moving " +
+    "forward through the rippling surface, out the far side into the second shot. Until the lens touches " +
+    "the glass, the mirror keeps its own reflection. The shot ends in the second shot, still and fully " +
+    "resolved, with no ripples left"
+
+  it("renders `term (body)` at the tile-default levers", () => {
+    expect(getTransitionPromptHint("zoom-into-mirror")).toBe(BODY)
+    expect(composeTransitionHintFromConnections("zoom-into-mirror", [], [], {}, "full", { scope: "shot" })).toBe(`${TERM} (${BODY})`)
+  })
+
+  it("at middle / short / natural", () => {
+    expect(composeTransitionHintFromConnections("zoom-into-mirror", [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      `${TERM} (${BODY}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
+    )
+  })
+})
+
 describe("L1 — a cut spans nothing, so `full` adds no clause", () => {
   it.each(INSTANT_IDS)("%s + full renders no position clause", (id) => {
     const out = composeTransitionHintFromConnections(id, [], [], { position: "full", duration: "short", intensity: "natural" })
