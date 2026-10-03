@@ -388,14 +388,19 @@ describe("pipeline_pending_approvals (pipelines:read)", () => {
 // no tool exposes.
 import { CHAT_WIRED_STAGES } from "@nodaro/shared"
 describe("pipelines — descriptions derive from the stage constants", () => {
-  it("chat_pipeline_stage.stage names exactly the wired stages", async () => {
+  it("the chat tools' stage takes exactly the wired stages (an unwired one answers 501)", async () => {
     const server = buildServer()
-    registerPipelineTools({ server, session: pipelineSession(["pipelines:execute", "pipelines:approve"] as Scope[]) })
-    const tool = (await listTools(server)).find((t) => t.name === "chat_pipeline_stage")
-    const desc = ((tool?.inputSchema as { properties?: Record<string, { description?: string }> }).properties?.stage?.description) ?? ""
+    registerPipelineTools({
+      server,
+      session: pipelineSession(["pipelines:read", "pipelines:execute", "pipelines:approve"] as Scope[]),
+    })
+    const tools = await listTools(server)
     const wired = Object.entries(CHAT_WIRED_STAGES).filter(([, on]) => on).map(([k]) => k)
-    for (const w of wired) expect(desc).toContain(w)
-    expect(desc).not.toContain("Only 'script'")
+    for (const name of ["chat_pipeline_stage", "apply_chat_proposal", "get_pipeline_stage_chat"]) {
+      const tool = tools.find((t) => t.name === name)
+      const stage = (tool?.inputSchema as { properties?: Record<string, { enum?: string[] }> }).properties?.stage
+      expect(stage?.enum, name).toEqual(wired)
+    }
   })
 
   it("start_pipeline points at get_pipeline_status, not at events", async () => {

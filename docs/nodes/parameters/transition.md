@@ -68,7 +68,7 @@ The node has two input handles that accept any upstream parameter picker (Tone, 
 
 Worked example with `fast-forward-day-night`, position=`end`, duration=`medium`, intensity=`dynamic`, startState wired to `[Tone: "warm golden morning light"]`, endState wired to `[Tone: "deep blue moonlit night"]`:
 
-> *"day-to-night time-lapse (the sun visibly arcs across the sky, shadows sweep, clouds streak, sky shifts from daylight blue through golden hour to deep night, stars emerge, all while framing and camera position remain locked on the same scene), the transition occurs at the end of the clip, lasting approximately 2 seconds, with dynamic energy and assertive flourish, starting from warm golden morning light, ending at deep blue moonlit night"*
+> *"day-to-night time-lapse (the same view with framing locked while hours pass in seconds: light and shadows sweep across the scene, daylight warms to dusk and fades to night, lights come on, until the picture matches the end frame), the transition occurs at the end of the clip, lasting approximately 2 seconds, with dynamic energy and assertive flourish, starting from warm golden morning light, ending at deep blue moonlit night"*
 
 ## Inputs & Outputs
 

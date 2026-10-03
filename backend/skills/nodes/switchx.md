@@ -1,7 +1,7 @@
 ---
 node_type: switchx
-generated_at: 2026-09-21T19:12:09.301Z
-generated_from: 09788c987
+generated_at: 2026-09-27T12:51:23.336Z
+generated_from: c607aa02c
 ---
 
 # Relight & Switch
@@ -9,7 +9,7 @@ generated_from: 09788c987
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `switchx`
 **Category:** ai
-**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** `video`, `image`, `mask`, `mask-video`, `prompt`
 **Outputs (source handles):** `video`
 

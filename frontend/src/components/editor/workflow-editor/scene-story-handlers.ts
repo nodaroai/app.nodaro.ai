@@ -18,9 +18,9 @@ import {
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
-  MAX_CONSECUTIVE_POLL_FAILURES,
   type ExecutionContext,
 } from "./types";
+import { shouldStopPolling } from "./poll-connection";
 import { tx } from "@/lib/i18n";
 
 // ---------------------------------------------------------------------------
@@ -223,7 +223,10 @@ export async function handleGenerateSceneImage(
             }
           } catch (err) {
             pollFailures++;
-            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+            // No owner: a scene image is not its script node's current job, so
+            // there is no card to mark reconnecting — the scene shows its own
+            // imageStatus.
+            if (shouldStopPolling(err, pollFailures)) {
               ctx.untrackInterval(poll);
               reject(err);
             }

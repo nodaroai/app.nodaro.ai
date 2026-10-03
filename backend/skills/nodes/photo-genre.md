@@ -1,7 +1,7 @@
 ---
 node_type: photo-genre
-generated_at: 2026-09-21T19:12:09.087Z
-generated_from: 09788c987
+generated_at: 2026-09-27T12:51:23.003Z
+generated_from: c607aa02c
 ---
 
 # Photo Genre
@@ -9,7 +9,7 @@ generated_from: 09788c987
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `photo-genre`
 **Category:** parameter
-**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `out`
 

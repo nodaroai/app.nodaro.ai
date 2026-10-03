@@ -74,7 +74,9 @@ export type ModelMode =
 export interface PriceVariant {
   /** Composite identifier as it appears in `STATIC_CREDIT_COSTS`. */
   identifier: string
-  /** Credits charged at reservation. */
+  /** The catalog's list price in credits. `GET /v1/models` and the MCP
+   *  `list_models` tool serve the price a run is charged on the instance,
+   *  which may differ. */
   credits: number
   /** Short human-readable note describing this variant ("1K default", "4K", "with audio"). */
   note?: string
@@ -2282,9 +2284,9 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     kind: "video",
     modes: ["video-analysis"] as const,
     family: "Nodaro",
-    label: "Video Analysis (Fast — legacy)",
+    label: "Video Analysis (Fast)",
     series: "Video Analysis",
-    description: "Legacy fast-tier analysis model (pre-2026-07). Kept so stored raw-model configs keep running and keep pricing under their own identifier; new fast-tier runs use the current fast model.",
+    description: "Analyze a video into a structured shot list (scenes, camera, audio) — fast, economy tier. Billed per duration bucket.",
     useCases: ["video-analysis", "shot-list", "fast"],
     pricing: [
       { identifier: "video-analysis:gemini-3-flash", credits: 849, note: "10-min ceiling (no duration given)" },
@@ -2299,9 +2301,9 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     kind: "video",
     modes: ["video-analysis"] as const,
     family: "Nodaro",
-    label: "Video Analysis (Fast)",
+    label: "Video Analysis (Fast — legacy)",
     series: "Video Analysis",
-    description: "Analyze a video into a structured shot list (scenes, camera, audio) — fast, economy tier. Billed per duration bucket.",
+    description: "Legacy fast-tier analysis model (backed the fast tier from 2026-07 until 2026-07-29). Kept so stored raw-model configs keep running and keep pricing under their own identifier; new fast-tier runs use the current fast model.",
     useCases: ["video-analysis", "shot-list", "fast"],
     pricing: [
       { identifier: "video-analysis:gemini-3.6-flash", credits: 995, note: "10-min ceiling (no duration given)" },
@@ -3085,6 +3087,23 @@ function nearestAspectRatio(token: string, allowed: readonly string[]): string |
 }
 
 /**
+ * `ratio` as `modelId` renders it: the catalog's own spelling when the model
+ * lists it (any case), else the nearest ratio it lists (log space — a portrait
+ * request stays portrait). "auto" / "adaptive", an empty token, a model without
+ * a ratio list and an unknown model pass through unchanged. The ONE fitting
+ * rule: the video lane's normalizer applies it, and so does a node's Settings
+ * input for a wired Aspect Ratio (settings-input.ts), image models included.
+ */
+export function fitAspectRatioToModel(modelId: string, ratio: string): string {
+  const token = ratio.trim()
+  const allowed = MODEL_CATALOG[modelId]?.aspectRatios
+  if (!allowed?.length || token === "" || PASSTHROUGH_ASPECT_TOKENS.has(token.toLowerCase())) return token
+  const exact = allowed.find((a) => a === token) ?? allowed.find((a) => a.toLowerCase() === token.toLowerCase())
+  if (exact !== undefined) return exact
+  return nearestAspectRatio(token, allowed.filter((a) => !PASSTHROUGH_ASPECT_TOKENS.has(a.toLowerCase()))) ?? allowed[0]!
+}
+
+/**
  * Read a catalog lever off an UNVALIDATED input as a trimmed string.
  *
  * `normalizeVideoRequestParams` runs in both routes' creditGuard preHandler —
@@ -3162,18 +3181,15 @@ export function normalizeVideoRequestParams(
   if (!m) return out
 
   if (m.aspectRatios?.length && aspect && !PASSTHROUGH_ASPECT_TOKENS.has(aspect.toLowerCase())) {
-    const allowed = m.aspectRatios
-    const exact = allowed.find((a) => a === aspect) ?? allowed.find((a) => a.toLowerCase() === aspect.toLowerCase())
-    if (exact !== undefined) {
-      out.aspectRatio = exact
-    } else {
-      const next = nearestAspectRatio(aspect, allowed.filter((a) => !PASSTHROUGH_ASPECT_TOKENS.has(a.toLowerCase()))) ?? allowed[0]!
+    const next = fitAspectRatioToModel(modelId, aspect)
+    // A case-only difference is the same ratio canonicalised, not a correction.
+    if (next.toLowerCase() !== aspect.toLowerCase()) {
       out.adjustments.push({
         field: "aspectRatio", from: aspect, to: next,
-        reason: `${m.label} does not support aspect ratio "${aspect}" — using "${next}" instead. Supported: ${allowed.join(", ")}.`,
+        reason: `${m.label} does not support aspect ratio "${aspect}" — using "${next}" instead. Supported: ${m.aspectRatios.join(", ")}.`,
       })
-      out.aspectRatio = next
     }
+    out.aspectRatio = next
   }
 
   if (m.resolutions?.length && res) {

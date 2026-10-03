@@ -205,7 +205,7 @@ export async function presentationRoutes(app: FastifyInstance) {
     // Estimate credit cost from executable nodes
     const wfNodes = (workflow.nodes ?? []) as EstimateNode[]
     const wfEstimateEdges = (workflow.edges ?? []) as EstimateEdge[]
-    const estimatedCost = estimateWorkflowCredits(wfNodes, wfEstimateEdges)
+    const estimatedCost = await estimateWorkflowCredits(wfNodes, wfEstimateEdges)
 
     // Extract presentation settings from workflow settings
     const settings = (workflow.settings ?? {}) as Record<string, unknown>

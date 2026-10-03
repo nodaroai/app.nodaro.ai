@@ -128,11 +128,16 @@ export function RunsSidebar({
             className="w-full text-xs bg-background border border-border rounded px-2 py-1.5 text-foreground"
           >
             <option value="">{t("runner.latestVersionOption", { n: latestVersion })}</option>
-            {versions.map((v) => (
-              <option key={v.version} value={v.version}>
-                v{v.version}{v.version === latestVersion ? `${t("common.fragmentGap")}${t("runner.latestSuffix")}` : ""}
-              </option>
-            ))}
+            {versions.map((v) => {
+              const label = `v${v.version}`
+              return (
+                <option key={v.version} value={v.version}>
+                  {v.version === latestVersion
+                    ? t("common.qualified", { token: label, qualifier: t("runner.latestQualifier") })
+                    : label}
+                </option>
+              )
+            })}
           </select>
         </div>
       )}

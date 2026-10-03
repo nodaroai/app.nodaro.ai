@@ -98,16 +98,19 @@ export function detectVideoLinkPlatform(url: string): VideoLinkPlatform {
 /**
  * Node types that can use a Video URL node WITHOUT its downloaded file, because
  * they never read the video: `suno-cover` and `transcribe` take the node's
- * separately-fetched audio track (`downloadedAudioUrl`), and `dubbing` hands the
- * page link to a provider that fetches it itself. A run whose only consumers of
- * a link are these must not be made to download — or to choose a part of — a
- * video nobody will look at. Structural vocabulary: it mirrors those three
+ * separately-fetched audio track (`downloadedAudioUrl`), `dubbing` hands the
+ * page link to a provider that fetches it itself, and `content-recipe` cites the
+ * post's page link on its `link` input (`videoLinkPageUrl`, both resolvers) —
+ * a Video URL can reach it on no other input. A run whose only consumers of a
+ * link are these must not be made to download — or to choose a part of — a
+ * video nobody will look at. Structural vocabulary: it mirrors those
  * server-side readers; add a type here only together with its reader.
  */
 export const VIDEO_LINK_TOLERANT_CONSUMER_TYPES: ReadonlySet<string> = new Set([
   "suno-cover",
   "transcribe",
   "dubbing",
+  "content-recipe",
 ])
 
 /**
@@ -154,6 +157,15 @@ export function videoLinkDownloadedFile(data: VideoLinkNodeFields): string | und
  */
 export function resolveVideoLinkOutput(data: VideoLinkNodeFields): string | undefined {
   return videoLinkDownloadedFile(data) ?? trimmed(data.youtubeUrl)
+}
+
+/**
+ * The page link a Video URL node was given (the post's own address), never
+ * the downloaded file. Read by consumers that CITE a post rather than watch
+ * it — Content Recipe's "Source post" input stores it as the recipe's source.
+ */
+export function videoLinkPageUrl(data: VideoLinkNodeFields): string | undefined {
+  return trimmed(data.youtubeUrl)
 }
 
 /**

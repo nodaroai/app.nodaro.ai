@@ -21,7 +21,7 @@ The Character Studio "Sheet" page (shared `reference-sheet-tab.tsx`) generates a
 - **Route Zod schema** (`reference-sheet.schema.ts`): `flavour.sections[].entries` already validated; `type` is a **required** `z.enum(SHEET_TYPES)` carrier; the layout comes from `flavour.sections` (curated sections **win** over `DEFAULT_SECTIONS[type]` — `plan-generation.ts:22`). The `flavour` object is a plain `z.object` → **strips unknown keys** (so `presetId` must be added there).
 - **Angle catalog** (`entity-prompts.ts`): `headAngles` = `[front, 3/4 left, left profile, right profile, 3/4 right, above, below]` (7, **no `back`**); `bodyAngles` includes `back`. Backend angle PROMPT maps already have profiles/above/below **and head `back`** (`generate-character-asset.ts:191`). The variant gate is a runtime `.includes(CHARACTER_ASSET_VARIANTS[assetType])`, reading the same shared array.
 - **Board counts** (`BOARD_VARIANTS[character]`): expressions = 11, poses = 9, wardrobe = 3, detail = 3 (default slice = `min(4, n)` → Expr 4 / Poses 4 / Wardrobe 3 / Detail 3).
-- **Cost**: `reference-sheet:assembly = 4` (still); each missing panel = a character-asset gen with no provider override → `nano-banana = 1`. No provider selector in the sheet flow → per-panel cost is constant **1**. `presetId` does not change the credit id (keys off `outputFormat`).
+- **Cost**: `reference-sheet:assembly = 40` (still); each missing panel = a character-asset gen with no provider override → `nano-banana = 10`. No provider selector in the sheet flow → per-panel cost is constant **10**. `presetId` does not change the credit id (keys off `outputFormat`).
 - **`MultiImageLightbox`** (`components/ui/multi-image-lightbox.tsx`): props `items: {url,alt?,kind?:"image"|"video"}[]`, `startIndex`, `onClose`; ←/→/Esc; supports `kind:"video"`; z-`[100]`. **No `actions` slot today.** Root closes on backdrop click → action buttons must `e.stopPropagation()`.
 - **`ReferenceSheet`** record has NO `name`/`presetId`. The worker hardcodes **`source:"node"`** for ALL sheets (studio included) and stores the **input `flavour` verbatim**; the grid labels by `${type} · ${skin}` and does **not** filter by `source` (so never filter by `source==="studio"` — it would hide everything).
 - The character adapter's `awaitJob` only resolves a URL — it does **not** update `staged` buckets; the studio refetches the row **only on open**. (Basis for the §3 prepared-key tracking.)
@@ -111,7 +111,7 @@ UI (recomputed live as the user toggles preset/boards and as panels get prepared
 ┌ Studio · Extended ──────────────────────────────┐
 │ Full turnaround — adds above/below + 3/4 angles. │
 │ Reuses 9 existing angles · 6 missing             │
-│ ① Prepare 6 angles  ~6 cr     ② Compose  4 cr    │
+│ ① Prepare 6 angles  ~60 cr    ② Compose  40 cr   │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -122,7 +122,7 @@ UI (recomputed live as the user toggles preset/boards and as panels get prepared
 ### 4. Cost gating + edition boundary
 
 - The live-cost readout is **gated behind `hasCredits()`** (`frontend/src/lib/edition.ts`) — never renders in community/business.
-- To keep the core tab **ee-import-free**, `perPanelCost` (1) + `assemblyCost` (4) are **constants surfaced via `sheet-tab-adapter.ts`** (core), not the ee `useModelCredits` hook.
+- To keep the core tab **ee-import-free**, `perPanelCost` (10) + `assemblyCost` (40) are **constants surfaced via `sheet-tab-adapter.ts`** (core), not the ee `useModelCredits` hook.
 
 ### 5. Preset labeling (persisted, no worker change)
 

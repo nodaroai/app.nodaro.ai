@@ -67,12 +67,16 @@ jobs:
           fi
           frontend=false backend=false
           while IFS= read -r f; do
+            # First match wins. backend/ comes before the markdown rule: the
+            # generated skills (backend/skills/**/*.md) are read by backend
+            # tests, and a PR that regenerated them once skipped the suite and
+            # left a stale snapshot failing on dev (#1693).
             case "$f" in
+              backend/*|supabase/*) backend=true ;;
               docs/*|*.md) ;;                                  # affects neither suite
               .github/workflows/ci.yml|.github/actions/*) frontend=true; backend=true ;;
               .github/*) ;;                                    # other workflows: neither
               frontend/*) frontend=true ;;
-              backend/*|supabase/*) backend=true ;;
               *) frontend=true; backend=true ;;                # packages/, root, unknown: both
             esac
           done <<< "$files"
@@ -758,8 +762,14 @@ jobs:
         with:
           kind: packages
       - name: Build backend (mirrors the Dockerfile — tsc + runtime asset copy)
+        # The SAME heap the Dockerfile gives this step (4 GB), so a tree that
+        # outgrows it fails here, not in a deploy: at Node's default ceiling the
+        # build crashed with exit 134 (heap out of memory) with no type error
+        # (2026-10-03; ~2.7 GB measured).
         run: npx tsc -p tsconfig.build.json && node scripts/copy-build-assets.mjs
         working-directory: backend
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
       - name: Package verified build outputs
         run: node tools/ci-build-artifact.mjs pack backend "$RUNNER_TEMP/ci-build-backend"
       - uses: actions/upload-artifact@v5

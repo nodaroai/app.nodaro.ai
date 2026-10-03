@@ -98,6 +98,13 @@ vi.mock("../../../lib/app-settings.js", () => ({
   getAppSettings: vi.fn().mockResolvedValue({ cost_markup_percent: 0 }),
 }))
 vi.mock("../reference-sheet-stage-a.js", () => ({ ensureWorkflowSheetPanels: vi.fn() }))
+// Video Analysis reads a post link's length before it reserves (the network
+// lane in providers/video/social-post-video.ts). Here the post says no length,
+// so the node takes the ceiling path it always took.
+vi.mock("../../../providers/video/social-post-video.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../providers/video/social-post-video.js")>()),
+  probeSocialPostVideo: vi.fn(async () => ({ durationSec: null, title: null, isLive: false })),
+}))
 
 import { executeNode } from "../node-executor.js"
 import { NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../types.js"
@@ -125,7 +132,7 @@ function applyEdlNode(minutes: number, output: "video" | "audio" = "video"): Sim
   return { id: "cut", type: "apply-edl", data: { edl: edl(minutes), output, quality: "final" } }
 }
 function vaNode(): SimpleNode {
-  return { id: "va", type: "video-analysis", data: { youtubeUrl: "https://youtu.be/abc123" } }
+  return { id: "va", type: "video-analysis", data: { youtubeUrl: "https://youtu.be/dQw4w9WgXcQ" } }
 }
 function componentNode(): SimpleNode {
   return {

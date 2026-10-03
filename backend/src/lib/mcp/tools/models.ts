@@ -9,6 +9,7 @@ import { CreditsService } from "../../../ee/billing/credits.js"
 import { deploymentPayerActive, deploymentPayerId } from "../../deployment-payer.js"
 import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByKindAndFamily, type ModelCatalogEntry, type ModelKind, type ModelMode } from "@nodaro/shared"
 import { isModelDenied } from "../../surface-deny.js"
+import { loadChargedPrices, type ChargedPrices } from "../../pricing/charged-prices.js"
 import { getPromptTips, getPromptDoctrine } from "@nodaro/prompts"
 
 const creditsReadGate: ToolGate = { required: ["credits:read"] }
@@ -20,10 +21,25 @@ export interface RegisterModelsOpts {
 }
 
 /**
+ * The catalog's pricing rows at the credits a run is charged. The catalog
+ * holds base prices; `prices` is what the Run button and the reservation read,
+ * so a listed price is the price paid. A row nothing prices keeps its catalog
+ * figure.
+ */
+function chargedPricing(rows: ModelCatalogEntry["pricing"], prices: ChargedPrices): ModelCatalogEntry["pricing"] {
+  return rows.map((row) => {
+    const credits = prices.credits(row.identifier)
+    return credits === undefined || credits === row.credits ? row : { ...row, credits }
+  })
+}
+
+/**
  * Strip undefined fields so the JSON output stays compact when a model
  * doesn't expose a particular lever (e.g., audio models have no aspectRatios).
+ * `prices` comes from `loadChargedPrices()` — required, so no surface can list
+ * the catalog's base prices by forgetting it.
  */
-export function projectModel(m: ModelCatalogEntry): Record<string, unknown> {
+export function projectModel(m: ModelCatalogEntry, prices: ChargedPrices): Record<string, unknown> {
   const out: Record<string, unknown> = {
     id: m.id,
     label: m.label,
@@ -32,7 +48,7 @@ export function projectModel(m: ModelCatalogEntry): Record<string, unknown> {
     useCases: m.useCases,
     // Credit pricing is a Cloud concept — editions without a credit system
     // omit it entirely, same principle as /v1/nodes' creditCost (#714).
-    ...(hasCredits() ? { pricing: m.pricing } : {}),
+    ...(hasCredits() ? { pricing: chargedPricing(m.pricing, prices) } : {}),
   }
   if (m.featured) out.featured = true
   if (m.features?.length) out.features = m.features
@@ -107,9 +123,10 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
       // at a time — each model under ITS OWN kind, then by family (the same
       // shared envelope GET /v1/models renders; a mixed vendor appears once
       // per kind it ships, #1332).
+      const prices = await loadChargedPrices()
       const sections = groupByKindAndFamily(filtered).map(({ kind, families }) => ({
         kind,
-        families: families.map(({ family, models }) => ({ family, models: models.map(projectModel) })),
+        families: families.map(({ family, models }) => ({ family, models: models.map((m) => projectModel(m, prices)) })),
       }))
 
       // Trim recommendations to those whose target intent matches the kind

@@ -25,6 +25,27 @@ describe("resolveInitialLocale — deployment default locale (A3)", () => {
     expect(resolveInitialLocale()).toBe("de")
   })
 
+  it("matches a DEFAULT_LOCALE regardless of letter case", () => {
+    window.__NODARO_RUNTIME__ = { defaultLocale: "pt-br" }
+    expect(resolveInitialLocale()).toBe("pt-BR")
+  })
+
+  it("maps a bare language to the one regional form we ship (pt → pt-BR)", () => {
+    window.__NODARO_RUNTIME__ = { defaultLocale: "pt" }
+    expect(resolveInitialLocale()).toBe("pt-BR")
+  })
+
+  it("maps another region of a language we ship in one form (pt-PT → pt-BR)", () => {
+    window.__NODARO_RUNTIME__ = { defaultLocale: "pt-PT" }
+    expect(resolveInitialLocale()).toBe("pt-BR")
+  })
+
+  it("does not remap a region we do not ship — zh-TW is not zh-CN", () => {
+    const detected = resolveInitialLocale()
+    window.__NODARO_RUNTIME__ = { defaultLocale: "zh-TW" }
+    expect(resolveInitialLocale()).toBe(detected)
+  })
+
   it("a stored choice (localStorage) beats DEFAULT_LOCALE — never drag back a deliberate choice", () => {
     window.localStorage.setItem(KEY, "de")
     window.__NODARO_RUNTIME__ = { defaultLocale: "he" }
@@ -76,6 +97,36 @@ describe("resolveInitialLocale — browser detection lands only on offered local
   it("a Japanese browser lands on Japanese (offered)", () => {
     withBrowserLanguages(["ja-JP", "ja"], () => {
       expect(resolveInitialLocale()).toBe("ja")
+    })
+  })
+
+  it("a Korean browser lands on Korean (offered)", () => {
+    withBrowserLanguages(["ko-KR", "ko"], () => {
+      expect(resolveInitialLocale()).toBe("ko")
+    })
+  })
+
+  it("a Brazilian browser lands on Brazilian Portuguese (offered)", () => {
+    withBrowserLanguages(["pt-BR", "pt"], () => {
+      expect(resolveInitialLocale()).toBe("pt-BR")
+    })
+  })
+
+  it("a Portuguese browser from another region lands on Brazilian Portuguese through its bare tag", () => {
+    withBrowserLanguages(["pt-PT", "pt"], () => {
+      expect(resolveInitialLocale()).toBe("pt-BR")
+    })
+  })
+
+  it("a browser that lists only pt-PT lands on Brazilian Portuguese", () => {
+    withBrowserLanguages(["pt-PT"], () => {
+      expect(resolveInitialLocale()).toBe("pt-BR")
+    })
+  })
+
+  it("a Traditional Chinese browser does not land on Simplified Chinese", () => {
+    withBrowserLanguages(["zh-TW"], () => {
+      expect(resolveInitialLocale()).toBe("en")
     })
   })
 

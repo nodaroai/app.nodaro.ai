@@ -26,7 +26,9 @@ import type { RemoveAudioData } from "@/types/nodes"
 function RemoveAudioNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as RemoveAudioData
-  const credits = useModelCredits("ffmpeg", 2)
+  // The id the route reserves (its own row), not the generic "ffmpeg" one,
+  // which quoted half the charge.
+  const credits = useModelCredits("remove-audio", 20)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)

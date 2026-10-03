@@ -180,38 +180,9 @@ A single text box that accepts a friendly expression:
 
 ---
 
-## Include Previous Runs
+## Earlier Runs
 
-Normally, an edge only looks at the **latest batch** of results from the upstream node. But what if you ran a node 5 times manually over an afternoon, and now you want to use **all 5 runs** downstream?
-
-That's what the **Include previous runs** checkbox does. Turn it on, and the edge remembers everything.
-
-```
-┌──────────────────┐
-│ Generate Image   │
-│                  │     ┌─────────────┐
-│  Ran 5 times:    │     │  Combine    │
-│  [img1]          │ ──► │  Videos     │
-│  [img2]          │     │             │
-│  [img3]          │     └─────────────┘
-│  [img4]          │
-│  [img5] ← latest │
-└──────────────────┘
-  Edge pill: "all runs"  (all 5 flow through)
-```
-
-### Picking specific runs
-
-When the checkbox is on, a new text field appears — the **runs selector**. It uses the **exact same syntax** as the list selector, but it picks from *runs* instead of *items*.
-
-| You type | Result |
-|----------|--------|
-| *(empty)* | All runs pass through |
-| `1, 3, last` | Only runs 1, 3, and the last one |
-| `1..5` | Runs 1 through 5 |
-| `last-2..last` | Only the last three runs |
-
-The runs selector and the items selector work **together**. Runs are filtered first, then items. The edge pill shows both, like `runs: 1,3 → items: 2..last`.
+There is no separate switch for earlier runs. **Item**, **Each** and **Bundle** already work over the node's whole results list — every result its carousel steps through, from every run it has kept. To use only the most recent ones, give the edge a range: `last-4..last` takes the last five. To leave old results out for good, delete them on the node, or use **Clear all results** in the canvas toolbar.
 
 ---
 
@@ -236,13 +207,13 @@ You want to generate 4 image variations and then only animate your favorite.
 ```
 Generate Image (run 4 times)
        │
-  [Include previous runs: on]
-       │
     [Item: 3]                    ◄── your pick
        │
        ▼
 Image to Video
 ```
+
+**Selected** does the same once you arrow to your favorite in the carousel; **Item** keeps the pick fixed by position.
 
 ### Combine a batch into one final output
 
@@ -253,23 +224,14 @@ Generate Video ──► [All] ──► Combine Videos
    (6 clips)                  (one final video)
 ```
 
-### Run a scheduled trigger against historic data
-
-Your schedule trigger has fired 30 times (one per day). You want to regenerate the last 7 days as a weekly recap.
-
-```
-Schedule Trigger ──► [Include previous runs: last-6..last] ──► Generate Summary
-```
-
 ### Skip failed attempts
 
-Your image gen failed twice in the middle of a 10-run session. You want to exclude those.
+Your image generation failed twice in the middle of a 10-result session, so results 4 and 7 are empty. Leave them out with a list:
 
 ```
-Generate Image (10 runs, #4 and #7 failed)
+Generate Image (10 results, #4 and #7 failed)
        │
-  [Include previous runs: on]
-  [runs: 1..3, 5, 6, 8..last]       ◄── skip the bad ones
+  [Each: 1..3, 5, 6, 8..last]       ◄── skip the bad ones
        │
        ▼
 Downstream processing
@@ -285,7 +247,7 @@ New workflows should start entirely in **Selected** mode. Only switch an edge to
 
 ### One mode change at a time
 
-When an edge isn't behaving how you expect, change *one* setting, click Run, and see what happens. Ranges, lists, and "include previous runs" can stack on top of each other — changing several at once makes it hard to tell which setting fixed or broke things.
+When an edge isn't behaving how you expect, change *one* setting, click Run, and see what happens. A mode, a range and a list can combine — changing several at once makes it hard to tell which setting fixed or broke things.
 
 ### Match the mode to the downstream node's job
 
@@ -303,22 +265,19 @@ The pill label on the edge always tells you what's happening in shorthand. A qui
 | `2..last` | Range selector on Each/All |
 | `1, 3, 5..last` | List selector on Each/All |
 | `3` | Item mode, picking item 3 |
-| `all runs` | Include previous runs, no filter |
-| `runs: 1,3,last` | Include previous runs, filtered |
-| `runs: 1,3 → items: 2..last` | Both filters active |
 
 ### Keep an eye on credit estimates
 
-**Each** mode multiplies the downstream cost by the number of items. If you fan out over 50 list items into a video generation node at 20 credits each, that's 1,000 credits. The downstream node's Generate button shows the total estimate — always check it before running.
+**Each** mode multiplies the downstream cost by the number of items. If you fan out over 50 list items into a video generation node that costs 200 credits a clip, that's 10,000 credits. The downstream node's Generate button shows the total estimate — always check it before running.
 
 ### Use Item mode for reproducibility
 
 If you always want "the first image" or "the last video" regardless of how many results exist, Item mode with `1` or `last` is more reliable than guessing indexes. It also survives re-runs that change the total count.
 
-### Selected vs. Include previous runs
+### Selected vs. a range
 
 - **Selected** = "the result you've currently picked." Good for linear workflows where upstream runs once (or a few times) and you choose which output to pass along.
-- **Include previous runs** = "use the entire history of this node." Good for aggregation, recaps, or combining work from multiple sessions.
+- **Each** or **Bundle** with a range = "these results from the node's history." Good for aggregation, recaps, or combining work from several runs.
 
 ---
 
@@ -343,10 +302,8 @@ If you always want "the first image" or "the last video" regardless of how many 
 │  Note: "last" inside a range/list expression means the   │
 │  final index — different from the Selected mode above.   │
 │                                                          │
-│  Include previous runs:                                  │
-│     off     →  latest batch only                         │
-│     on      →  entire history of this node               │
-│     runs:   →  same syntax as list, but filters runs     │
+│  Item / Each / Bundle read every result the node kept,   │
+│  across runs: last-4..last = the five most recent.       │
 │                                                          │
 └──────────────────────────────────────────────────────────┘
 ```

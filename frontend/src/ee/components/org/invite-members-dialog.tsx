@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { tx, useT, type TFunction } from "@/lib/i18n"
+import { genderedWorkspaceKey, workspaceGender } from "@/ee/lib/org-vocabulary"
 import { OrgApiError, createInvitations, type InvitationDelivery, type WorkspaceView } from "@/ee/lib/orgs-api"
 
 /**
@@ -106,6 +107,7 @@ export function InviteMembersDialog({
   const parsed = useMemo(() => parseEmails(raw), [raw])
   const tooMany = parsed.valid.length > MAX_EMAILS
   const workspaceWord = vocabulary.workspace ?? t("org.workspaceWord")
+  const gender = workspaceGender(vocabulary, t)
 
   const reset = useCallback(() => {
     setRaw("")
@@ -223,10 +225,10 @@ export function InviteMembersDialog({
 
             {workspaces.length > 0 && (
               <div className="space-y-2">
-                <Label htmlFor="invite-workspace">{t("org.addToWorkspace", { workspace: workspaceWord.toLowerCase() })}</Label>
+                <Label htmlFor="invite-workspace">{t(genderedWorkspaceKey("org.addToWorkspace", gender), { workspace: workspaceWord.toLowerCase() })}</Label>
                 <Select value={workspaceId} onValueChange={setWorkspaceId} disabled={busy}>
                   <SelectTrigger id="invite-workspace">
-                    <SelectValue placeholder={t("org.noWorkspaceOrgOnly", { workspace: workspaceWord.toLowerCase() })} />
+                    <SelectValue placeholder={t(genderedWorkspaceKey("org.noWorkspaceOrgOnly", gender), { workspace: workspaceWord.toLowerCase() })} />
                   </SelectTrigger>
                   <SelectContent>
                     {workspaces.map((workspace) => (

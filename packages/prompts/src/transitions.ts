@@ -115,7 +115,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "wipe",              label: "Wipe",              category: "standard", description: "Linear wipe replaces first shot",
     promptHint: "linear wipe transition: a clean diagonal line sweeps across the frame, revealing the second shot behind it", term: "linear wipe" },
   { id: "roll-transition",   label: "Roll",              category: "standard", description: "Frame rolls 90-180°, second shot upright on landing",
-    promptHint: "the frame rolls along the camera axis with a smooth 90 to 180 degree rotation, motion-blurred during the roll, and as the rotation completes the new shot is upright and stable in frame", term: "camera roll transition" },
+    promptHint: "the picture rolls around its centre in one smooth, fast turn, blurred by the speed of the turn. The camera stays in the same spot, turning only around its lens axis. During the turn the second shot takes over, and the roll slows and stops with it level and upright. The shot ends on the second shot, level, upright and still. The roll turns one way only and stops once, with no swing back", term: "camera roll transition" },
   { id: "seamless-match",    label: "Seamless Match",    category: "standard", description: "Hidden cut disguised by matched motion and color",
     promptHint: "hidden seamless transition: the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take", term: "invisible cut" , instant: true },
   { id: "whip-pan",          label: "Whip Pan",          category: "standard", description: "Camera whips sideways into blur, next shot rides the same direction",
@@ -127,7 +127,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   // TIME — 8 entries — temporal shifts (same or related scene, different time, or memory)
   // ============================================================================
   { id: "fast-forward-day-night",  label: "Fast-Forward (Day → Night)", category: "time", description: "Time-lapse day to night same scene",
-    promptHint: "fast-forward time-lapse transition: the sun visibly arcs across the sky, shadows sweep, clouds streak, sky shifts from daylight blue through golden hour to deep night, stars emerge, all while framing and camera position remain locked on the same scene", term: "day-to-night time-lapse" },
+    promptHint: "fast-forward time-lapse transition: the same view with framing locked while hours pass in seconds: light and shadows sweep across the scene, daylight warms to dusk and fades to night, lights come on, until the picture matches the end frame", term: "day-to-night time-lapse" },
   { id: "fast-forward-night-day",  label: "Fast-Forward (Night → Day)", category: "time", description: "Time-lapse night to dawn same scene",
     promptHint: "fast-forward time-lapse transition: stars fade, the sky shifts from deep night through pre-dawn blue to golden sunrise, shadows sweep in reverse, all while framing and camera position remain locked on the same scene", term: "night-to-day time-lapse" },
   { id: "seasonal-shift",          label: "Seasonal Shift",             category: "time", description: "Same scene through changing seasons",
@@ -203,7 +203,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "zoom-into-eye",     label: "Zoom Into Eye",        category: "portal", description: "Push into pupil, new world inside",
     promptHint: "the camera pushes into a tight macro of the subject's eye, the pupil dilates and fills the frame, and the new scene materialises from within the pupil as if the pupil itself were a portal" },
   { id: "zoom-into-mirror",  label: "Zoom Into Mirror",     category: "portal", description: "Push into mirror, scene inside reflection",
-    promptHint: "the camera pushes toward a mirror in the scene, the mirror's reflection fills the frame, and the camera passes through the mirror surface into the reflected world which becomes the new scene" },
+    promptHint: "the camera pushes straight at a mirror in the frame. As the lens meets the glass, the mirror's surface turns liquid and rings ripple out across the whole picture, and the camera keeps moving forward through the rippling surface, out the far side into the second shot. Until the lens touches the glass, the mirror keeps its own reflection. The shot ends in the second shot, still and fully resolved, with no ripples left" },
   { id: "zoom-into-screen",  label: "Zoom Into Screen",     category: "portal", description: "Push into TV/phone screen",
     promptHint: "the camera pushes toward a screen visible in the scene, such as a TV, phone or monitor, the screen's image fills the frame, and the camera passes through into that image which becomes the new scene" },
   { id: "zoom-into-book",    label: "Zoom Into Book",       category: "portal", description: "Push into book page illustration",

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useEffect } from "react"
+import { resolveMusicProvider } from "@nodaro/shared"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -76,7 +77,15 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
     }
   }, [data.referenceYouTubeUrl, onUpdate])
 
-  const isMinimax = data.provider === "minimax"
+  // The model the node runs: a node saved with a model that is gone (or the
+  // "suno" new nodes used to start on) runs the default one.
+  const provider = resolveMusicProvider(data.provider)
+  // Fail-safe (Provider Enum Sync step 12b): store the model the node runs, so
+  // the dropdown, the fields below and the run agree.
+  useEffect(() => {
+    if (data.provider !== provider) onUpdate({ provider })
+  }, [data.provider]) // eslint-disable-line react-hooks/exhaustive-deps
+  const isMinimax = provider === "minimax"
   const hasReference = Boolean(data.referenceAudioUrl) || Boolean(connectedRef)
 
   return (
@@ -92,7 +101,7 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
       <div>
         <Label>{t("cfgshared.provider")}</Label>
         <Select
-          value={data.provider || "suno"}
+          value={provider}
           onValueChange={(v) => onUpdate({ provider: v as GenerateMusicData["provider"], referenceSource: "none", referenceAudioUrl: "", referenceYouTubeUrl: "" })}
         >
           <SelectTrigger aria-label={t("cfgshared.provider")}><SelectValue /></SelectTrigger>

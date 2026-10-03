@@ -19,7 +19,7 @@ There is **no "target picker" setting**. The node analyzes exactly the analyzabl
 |-------|------|---------|-------------|
 | Analyzing (read-only) | derived | — | The picker nodes currently wired to this node's output — the set that will be analyzed. Not editable; change it by wiring/unwiring pickers. |
 | Model | select | `claude-opus-5` | The vision model used for analysis. **Vision models with guaranteed structured output**: Claude Haiku 4.5 / Claude Sonnet 4.6 / Claude Sonnet 5 / Claude Opus 4.7 / Claude Opus 4.8 / Claude Opus 5 / Claude Fable 5, Gemini 3 Flash / Gemini 3.6 Flash / Gemini 3.7 Flash / Gemini 3.8 Flash / Gemini 3.1 Pro, GPT-5.4 / GPT-5.5 / GPT-5.6 Luna / GPT-5.6 Terra / GPT-5.6 Sol / GPT-6 Astra, and Grok 4.6. See [Why these models](#why-these-models). |
-| Advanced mode | `boolean` | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit tier up; the node's cost badge updates immediately. Disabled with an inline reason on non-Gemini models |
+| Advanced mode | `boolean` | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit tier up, capped at premium; the node's cost badge updates immediately. Disabled with an inline reason on non-Gemini models |
 | Extra guidance | text | `""` | Optional instructions appended to the analyzer's system prompt (e.g. "focus on the foreground subject"). Max 2000 characters. |
 
 ## Inputs & Outputs
@@ -39,6 +39,24 @@ If no LLM API key (KIE or Anthropic) is configured, the node returns `503 provid
 ## Credit Cost
 
 **Flat 10 credits per run**, regardless of how many pickers you wire or which vision model you pick — it is always one vision call. The tiered identifiers `describe-to-picker`, `describe-to-picker:economy`, and `describe-to-picker:premium` all resolve to the same flat price. Credits are reserved when the job starts, committed on success, and fully refunded if the analysis fails.
+
+## Streaming the answer (API)
+
+`POST /v1/describe-to-picker` can deliver its answer as server-sent events, so a client can show each detected trait the moment the model has written it. Send `Accept: text/event-stream` (for example `Accept: text/event-stream, application/json`). Without it, the route answers JSON exactly as before.
+
+Every failure decided before the stream opens (`400`, `401`, `402`, `500`, `502`, `503`) stays a plain HTTP response with the usual JSON error body. The stream itself is `200` with `Content-Type: text/event-stream`: one JSON object per `data:` line and a blank line between events. Comment lines (`: keepalive`) may appear; ignore them.
+
+| Event | `data` | Meaning |
+|-------|--------|---------|
+| `field` | `{ "field": "<picker>.<dimension>", "value": "<id>" }` or `"value": ["<id>", …]` | One detected trait (e.g. `person.hair-color`), sent once the model has finished writing it. At most one per trait. **Provisional**: it is the model's raw pick, which can still fail validation (an id outside the catalog, more picks than the dimension allows) and be corrected. `done` replaces them all. |
+| `done` | `{ jobId, pickerJson, gaps? }` | Exactly the JSON answer. Authoritative. |
+| `error` | `{ "code": "llm_error", "message": "…" }` | The analysis failed after the stream opened. The credits are refunded. |
+
+The stream ends after `done` or `error`; a stream that ends with neither is a failed read.
+
+- **Safety.** A streamed value never contains an id the minor-age safety floor could remove, for any subject. Such traits arrive only in `done`.
+- **Models.** Traits stream from the Claude models when the deployment has a direct Anthropic key. With any other model, the stream carries only `done`. A self-hosted install without its own LLM keys answers through its cloud connection as plain JSON, even when a stream is asked for.
+- **Billing is unchanged.** One analysis per request: committed on `done`, refunded on `error`. A client that disconnects does not stop or re-bill the analysis; the job still completes.
 
 ## Consumer flow
 

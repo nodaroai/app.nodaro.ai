@@ -30,7 +30,7 @@ Suno Add Instrumental takes an existing Suno audio track (typically one with iso
 - Adding backing music to an acapella or vocal-only track.
 - Re-instrumenting a song after separating its original instrumental.
 - Creating new arrangements of existing vocal performances.
-- Building remix workflows: Suno Generate -> Suno Separate -> Suno Add Instrumental.
+- Building remix workflows: Suno Create Music -> Suno Separate -> Suno Add Instrumental.
 - Producing alternate instrumental versions of the same vocal take.
 
 ## Tips

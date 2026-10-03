@@ -658,6 +658,7 @@ function MyAppCard({
   const origins = app.allowedOrigins ?? []
   const categoryLabel = APP_CATEGORIES.find((c) => c.value === app.category)?.label
   const categoryLabelKey = getCategoryLabelKey(app.category)
+  const runCount = app.runCount ?? app.totalRunCount ?? 0
 
   const handleAddOrigin = () => {
     const trimmed = newOrigin.trim()
@@ -739,7 +740,7 @@ function MyAppCard({
 
       {/* Stats row */}
       <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground">
-        <span>{t("apps.runs", { n: app.runCount ?? app.totalRunCount ?? 0 })}</span>
+        <span>{t(runCount === 1 ? "apps.runsOne" : "apps.runs", { n: runCount })}</span>
         {app.monetizationEnabled && hasCredits() ? (
           <span className="text-xs text-muted-foreground">
             {/* Label and figure are joined by the dictionary (no gap after a
@@ -753,7 +754,7 @@ function MyAppCard({
           // leak the per-site pass missed. The component self-gates.
           <CreditCost credits={app.estimatedCredits ?? 0} suffix={t("apps.crRunSuffix", { u: creditUnitLabel(t("credits.unitShort")) })} />
         )}
-        {app.favoriteCount > 0 && <span>{t("apps.favorites", { n: app.favoriteCount })}</span>}
+        {app.favoriteCount > 0 && <span>{t(app.favoriteCount === 1 ? "apps.favoritesOne" : "apps.favorites", { n: app.favoriteCount })}</span>}
       </div>
 
       {/* Actions */}

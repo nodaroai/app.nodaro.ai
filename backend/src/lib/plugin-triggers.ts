@@ -47,12 +47,23 @@ import { orchestrationQueue } from "./orchestration-queue.js"
 const NODE_TYPE_BY_LANE: Readonly<Record<PluginTriggerLane, string>> = {
   telegram_account: TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE,
 }
+/** What the lane's node says while it is switched on — a row fires only while its node still says it. */
+const ARMED_DATA_BY_LANE: Readonly<Record<PluginTriggerLane, Record<string, unknown>>> = {
+  telegram_account: { isActive: true },
+}
 export const PLUGIN_TRIGGER_LANES = Object.keys(NODE_TYPE_BY_LANE) as readonly PluginTriggerLane[]
 
 /** A message is small; a payload past this is a daemon bug, not a message. */
 export const MAX_TRIGGER_DATA_BYTES = 64 * 1024
 /** Fires per trigger per clock minute. */
 export const TRIGGER_FIRES_PER_MINUTE = 20
+/**
+ * Events a trigger may offer per clock minute, fired or not. An event refused
+ * only because runs are in flight does not use up the fire rate (it may be
+ * offered again), so this is what bounds the work a flood costs while the
+ * workflow is busy.
+ */
+export const TRIGGER_OFFERS_PER_MINUTE = 120
 /** Runs of one trigger's workflow that may be pending or running at once. */
 export const MAX_TRIGGER_RUNS_IN_FLIGHT = 3
 const MAX_IDEMPOTENCY_KEY_LENGTH = 200
@@ -95,7 +106,11 @@ function validateFireInput(input: PluginTriggerFireInput): void {
   }
 }
 
-/** The owner's own account, in this environment. */
+/**
+ * The owner's own account, in this environment, and still active: a paused,
+ * revoked or disabled account fires nothing — not even an event the daemon
+ * queued before the switch.
+ */
 async function accountIsOwners(accountId: string, userId: string): Promise<boolean> {
   const { data, error } = await supabase
     .from("plugin_account_secrets")
@@ -103,25 +118,53 @@ async function accountIsOwners(accountId: string, userId: string): Promise<boole
     .eq("id", accountId)
     .eq("user_id", userId)
     .eq("runtime_env", getRuntimeEnv())
+    .eq("status", "active")
     .maybeSingle()
   if (error) throw new Error(`plugin_account_secrets read failed: ${error.message}`)
   return data !== null
 }
 
-async function triggerNodeOnGraph(workflowId: string, nodeId: string, nodeType: string): Promise<boolean> {
+/**
+ * The row's node is on the stored graph AND switched on there. A write that
+ * switched it off — from any lane, the Copilot or an API token included —
+ * stops the listener at once, before any trigger sync catches up.
+ *
+ * `nodes` is jsonb, so the pattern goes as JSON text: the client sends an
+ * ARRAY given to `.contains()` as a Postgres array literal (`{…}`), which a
+ * jsonb column refuses ("invalid input syntax for type json").
+ */
+async function triggerNodeArmedOnGraph(workflowId: string, nodeId: string, lane: PluginTriggerLane): Promise<boolean> {
+  const armedNode = { id: nodeId, type: NODE_TYPE_BY_LANE[lane], data: ARMED_DATA_BY_LANE[lane] }
   const { data, error } = await supabase
     .from("workflows")
     .select("id")
     .eq("id", workflowId)
-    .contains("nodes", [{ id: nodeId, type: nodeType }])
+    .contains("nodes", JSON.stringify([armedNode]))
     .maybeSingle()
   if (error) throw new Error(`workflows read failed: ${error.message}`)
   return data !== null
 }
 
+function rateKey(triggerId: string): string {
+  return `plugin:trigger-rate:${triggerId}:${Math.floor(Date.now() / 60_000)}`
+}
+
+/** True when this minute's fire rate is already spent — a read, so a flood costs no count query. */
+async function rateSpent(triggerId: string): Promise<boolean> {
+  return Number((await redis.get(rateKey(triggerId))) ?? 0) >= TRIGGER_FIRES_PER_MINUTE
+}
+
+/** True when this event is past the trigger's offers for this minute (counted, fired or not). */
+async function overOffers(triggerId: string): Promise<boolean> {
+  const key = `plugin:trigger-offers:${triggerId}:${Math.floor(Date.now() / 60_000)}`
+  const count = await redis.incr(key)
+  if (count === 1) await redis.expire(key, 120)
+  return count > TRIGGER_OFFERS_PER_MINUTE
+}
+
 /** True when this fire is over the trigger's per-minute rate. */
 async function overRate(triggerId: string): Promise<boolean> {
-  const key = `plugin:trigger-rate:${triggerId}:${Math.floor(Date.now() / 60_000)}`
+  const key = rateKey(triggerId)
   const count = await redis.incr(key)
   if (count === 1) await redis.expire(key, 120)
   return count > TRIGGER_FIRES_PER_MINUTE
@@ -160,15 +203,23 @@ export async function firePluginTrigger(input: PluginTriggerFireInput): Promise<
   }
 
   const triggerNodeId = nodeIdOf(config)
-  if (!triggerNodeId || !(await triggerNodeOnGraph(workflowId, triggerNodeId, NODE_TYPE_BY_LANE[lane]))) {
-    // Orphaned (a write path that does not re-project): switch it off for good.
+  if (!triggerNodeId || !(await triggerNodeArmedOnGraph(workflowId, triggerNodeId, lane))) {
+    // Orphaned or switched off on the graph (a write path that does not
+    // re-project): switch it off for good. Switching the node on again in the
+    // editor re-arms it through the trigger sync.
     await supabase.from("workflow_triggers").update({ is_active: false }).eq("id", row.id)
     return { fired: false, reason: "inactive" }
   }
 
-  if ((await overRate(row.id)) || (await runsInFlight(workflowId, lane)) >= MAX_TRIGGER_RUNS_IN_FLIGHT) {
-    return { fired: false, reason: "throttled" }
+  // A flood is turned away by a read, then by its offers this minute. Then
+  // runs in flight, without using up the fire rate: an event refused only
+  // because the workflow is busy may be offered again.
+  if (await rateSpent(row.id)) return { fired: false, reason: "throttled", throttle: "rate" }
+  if (await overOffers(row.id)) return { fired: false, reason: "throttled", throttle: "rate" }
+  if ((await runsInFlight(workflowId, lane)) >= MAX_TRIGGER_RUNS_IN_FLIGHT) {
+    return { fired: false, reason: "throttled", throttle: "in_flight" }
   }
+  if (await overRate(row.id)) return { fired: false, reason: "throttled", throttle: "rate" }
 
   if (!(await canRunWorkflow(userId, workflowId))) {
     await recordTriggerFireRefusal({ workflowId, userId, triggerType: lane, triggerId: row.id })

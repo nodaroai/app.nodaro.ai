@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-09-25T12:25:30.360Z
-generated_from: ce1a2e649
+generated_at: 2026-10-01T22:35:14.386Z
+generated_from: 9efb4473c
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -104,6 +104,8 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `component` — Component
 - `composite` — Composite
 - `composition-effects` — Composition Effects
+- `content-ideas` — Content Ideas
+- `content-recipe` — Content Recipe
 - `creature` — Animal/Creature Asset
 - `deduplicate` — Remove Duplicates
 - `describe-to-picker` — Describe to Picker
@@ -201,6 +203,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `silence-detect` — Silence Detect
 - `slideshow` — Slideshow
 - `social-media-format` — Social Media Format
+- `social-search` — Social Search
 - `sort-list` — Sort List
 - `speech-to-video` — Speech to Video
 - `speed-ramp` — Adjust Speed
@@ -219,7 +222,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `suno-convert-wav` — Suno Convert WAV
 - `suno-cover` — Suno Cover
 - `suno-extend` — Suno Extend
-- `suno-generate` — Suno Generate
+- `suno-generate` — Suno Create Music
 - `suno-lyrics` — Suno Lyrics
 - `suno-mashup` — Suno Mashup
 - `suno-music-video` — Music Video

@@ -3,7 +3,7 @@
 
 ## Overview
 
-Suno Lyrics generates structured song lyrics from a descriptive prompt. The output includes both a generated title and full lyrics text, complete with Suno metatags for section markers. This node is commonly used upstream of Suno Generate to produce lyrics before song creation.
+Suno Lyrics generates structured song lyrics from a descriptive prompt. The output includes both a generated title and full lyrics text, complete with Suno metatags for section markers. This node is commonly used upstream of Suno Create Music to produce lyrics before song creation.
 
 ## Configuration
 
@@ -20,16 +20,16 @@ Suno Lyrics generates structured song lyrics from a descriptive prompt. The outp
 
 - Be specific about the theme, mood, and story in your prompt for more coherent lyrics.
 - Mention the desired song structure in the prompt (e.g., "two verses, a chorus, and a bridge") to guide the output.
-- Connect the output directly to a Suno Generate node's lyrics field for an automated lyrics-to-song pipeline.
-- Use the generated metatags (`[Verse]`, `[Chorus]`, etc.) as-is -- Suno Generate understands them natively.
+- Connect the output directly to a Suno Create Music node's lyrics field for an automated lyrics-to-song pipeline.
+- Use the generated metatags (`[Verse]`, `[Chorus]`, etc.) as-is -- Suno Create Music understands them natively.
 - Keep prompts under 1000 characters; focus on concept rather than verbatim text.
 
 ## Common Use Cases
 
-- Pre-generating lyrics before feeding them into Suno Generate.
+- Pre-generating lyrics before feeding them into Suno Create Music.
 - Brainstorming song concepts and getting structured lyrical output.
 - Creating lyrics for a specific theme or narrative (love song, protest anthem, lullaby).
-- Building a workflow: Suno Lyrics -> Suno Style Boost -> Suno Generate.
+- Building a workflow: Suno Lyrics -> Suno Style Boost -> Suno Create Music.
 - Generating multiple lyric variations by running the node with different prompts.
 
 ## Tips

@@ -154,7 +154,7 @@ function TONE_OPTIONS(): ReadonlyArray<FilterOption> {
     { value: "hyped", label: tx("cfgext.voiceToneHyped") }, { value: "intense", label: tx("cfgext.voiceToneIntense") },
     { value: "mature", label: tx("cfgext.voiceToneMature") }, { value: "meditative", label: tx("cfgext.voiceToneMeditative") },
     { value: "modulated", label: tx("cfgext.voiceToneModulated") }, { value: "neutral", label: tx("cfgext.voiceToneNeutral") },
-    { value: "pleasant", label: tx("cfgext.voiceTonePleasant") }, { value: "professional", label: tx("cfgext.voiceCatProfessional") },
+    { value: "pleasant", label: tx("cfgext.voiceTonePleasant") }, { value: "professional", label: tx("cfgext.voiceToneProfessional") },
     { value: "raspy", label: tx("cfgext.voiceToneRaspy") }, { value: "relaxed", label: tx("cfgext.voiceToneRelaxed") },
     { value: "rough", label: tx("cfgext.voiceToneRough") }, { value: "sad", label: tx("cfgext.voiceToneSad") },
     { value: "sassy", label: tx("cfgext.voiceToneSassy") }, { value: "serious", label: tx("cfgext.voiceToneSerious") },

@@ -1,5 +1,12 @@
 import { spawn } from "node:child_process"
 import { createRequire } from "node:module"
+import {
+  YtDlpHaltError,
+  remainingLimits,
+  runYtDlpCaptureWith,
+  spawnYtDlpDownloadWith,
+  type YtDlpRunLimits,
+} from "./ytdlp-process.js"
 import { promises as fs, existsSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { randomUUID } from "node:crypto"
@@ -10,10 +17,10 @@ import {
   isAllowedVideoImportUrl,
 } from "../../lib/url-validator.js"
 import { videoFormatSelector, sectionHdVideoSelector, SECTION_HD_AUDIO_SELECTOR } from "./video-format.js"
-import { COMBINE_DELIVERY_CRF } from "./ffmpeg-utils.js"
 import { ytProxyArgs, resolveAttemptChain } from "./yt-proxy.js"
 import { startProxyAuthShim } from "./proxy-auth-shim.js"
 import { ytDataApiProbe } from "./youtube-data-api.js"
+import { probeStreams, reencodeToH264 } from "./video-file-stages.js"
 
 /**
  * Shared yt-dlp video provider — the single source of the referer/UA spoof for
@@ -97,6 +104,8 @@ export const YT_SPOOF_ARGS = [
 
 /** Thrown when a URL's host is not on the relevant yt-dlp allowlist (SSRF gate). */
 export class YtUrlNotAllowedError extends Error {}
+
+export { YtDlpHaltError }
 
 /**
  * Replace the output path's extension with yt-dlp's `%(ext)s` template so the
@@ -189,13 +198,20 @@ export function buildYtDlpVideoArgs(opts: {
    * passes each chain proxy in turn. Defaults to `ytProxyArgs(url)`.
    */
   proxyArgs?: string[]
+  /** Appended as they are (the hardened social-post lane's extractor and length limits). */
+  extraArgs?: readonly string[]
+  /**
+   * Verify TLS certificates (the hardened lane): through a proxy pool, an exit
+   * node could otherwise hand ffmpeg and the model media of its own.
+   */
+  checkCertificates?: boolean
 }): string[] {
   const args = [
     opts.url,
     "--format", opts.section ? sectionFormatSelector(opts.maxHeight) : videoFormatSelector(opts.maxHeight),
     "--output", deriveOutputTemplate(opts.outPath),
     "--no-playlist",
-    "--no-check-certificates",
+    ...(opts.checkCertificates ? [] : ["--no-check-certificates"]),
     "--merge-output-format", "mp4",
     // Overwrite (implies --no-continue): proxy failover re-attempts the download
     // from a DIFFERENT IP, and the media URLs are IP-locked — resuming a `.part`
@@ -218,6 +234,7 @@ export function buildYtDlpVideoArgs(opts: {
     const mb = Math.round(opts.maxFilesizeBytes / (1024 * 1024))
     args.push("--max-filesize", `${mb}M`)
   }
+  if (opts.extraArgs) args.push(...opts.extraArgs)
   if (opts.section) {
     const start = Math.max(0, opts.section.startSec - SECTION_PAD_SEC)
     const end = opts.section.endSec + SECTION_PAD_SEC
@@ -294,7 +311,8 @@ export async function runThroughClientLadder<T>(
       }
       return result
     } catch (err) {
-      if (i === rungs.length - 1) throw err
+      // A halt (aborted, out of time, refused by the filter) is the same on every client.
+      if (i === rungs.length - 1 || err instanceof YtDlpHaltError) throw err
       const firstLine = (err instanceof Error ? err.message : String(err)).split("\n")[0]
       console.log(`[download-video] youtube client "${rung.label}" failed (${firstLine}), trying next`)
     }
@@ -307,34 +325,18 @@ export async function runThroughClientLadder<T>(
 /**
  * Run yt-dlp and resolve its stdout. Unlike the streaming download path this
  * captures full stdout and enforces an explicit `timeoutMs` (kill + reject on
- * expiry) — the metadata probe must never hang the caller. NO other yt-dlp
- * call in the codebase has a timeout; do not inherit this into the download.
+ * expiry) — the metadata probe must never hang the caller. `env` replaces the
+ * child's environment (the hardened social-post lane passes a minimal one);
+ * `totalTimeoutMs` and `signal` halt it (`YtDlpHaltError`, see ytdlp-process).
  */
-function runYtDlp(args: string[], opts: { timeoutMs: number }): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(YT_DLP_BIN, args, { stdio: ["ignore", "pipe", "pipe"] })
-    let stdout = ""
-    let stderr = ""
-    let settled = false
-    const finish = (fn: () => void) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      fn()
-    }
-    const timer = setTimeout(() => {
-      proc.kill("SIGKILL")
-      finish(() => reject(new Error(`yt-dlp timed out after ${opts.timeoutMs}ms`)))
-    }, opts.timeoutMs)
-    proc.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString() })
-    proc.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString() })
-    proc.on("error", (err) => finish(() => reject(err)))
-    proc.on("close", (code) => finish(() => {
-      if (code === 0) resolve(stdout)
-      else reject(new Error(stderr.trim().split("\n").pop() || `yt-dlp exited with code ${code}`))
-    }))
-  })
+export function runYtDlpCapture(
+  args: string[],
+  opts: YtDlpRunLimits & { timeoutMs: number; maxBytes?: number },
+): Promise<string> {
+  return runYtDlpCaptureWith(YT_DLP_BIN, args, opts)
 }
+
+const runYtDlp = runYtDlpCapture
 
 /**
  * YouTube-ONLY metadata probe. Validates the host against the NARROW
@@ -405,109 +407,7 @@ async function findDownloadedFile(outPath: string): Promise<string> {
   }
 }
 
-/**
- * What ffprobe found in the downloaded file. `null` on either field means the
- * probe itself failed, NOT that the stream is absent — callers must not treat
- * "unknown" as "missing" (that would fire a bogus silent-video warning on every
- * corrupt file).
- */
-export interface ProbedStreams {
-  videoCodec: string | null
-  hasAudio: boolean | null
-}
-
-/**
- * Probe the file's streams with ffprobe. Never rejects.
- *
- * This reports the AUDIO stream too, not just the video codec. It used to only
- * answer "is this h264?", which meant a download that arrived with no audio
- * track at all was indistinguishable from a healthy one — so a silent video was
- * uploaded, marked "completed", and only blew up steps later inside ffmpeg. The
- * download path is the last place that can still name that failure.
- */
-export function probeStreams(filePath: string): Promise<ProbedStreams> {
-  return new Promise((resolve) => {
-    const unknown: ProbedStreams = { videoCodec: null, hasAudio: null }
-    const proc = spawn("ffprobe", [
-      "-v", "error",
-      "-show_entries", "stream=codec_type,codec_name",
-      "-of", "json",
-      filePath,
-    ], { stdio: ["ignore", "pipe", "pipe"] })
-
-    // Watchdog: a corrupt download can wedge ffprobe; local probes finish in
-    // well under a second, so 30s is purely a leak guard.
-    const watchdog = setTimeout(() => proc.kill("SIGKILL"), 30_000)
-    let stdout = ""
-    proc.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString() })
-    proc.on("close", (code) => {
-      clearTimeout(watchdog)
-      if (code !== 0) return resolve(unknown)
-      try {
-        // JSON, not CSV: ffprobe emits fields in its own fixed order, not the
-        // order `-show_entries` lists them, so positional parsing is a trap.
-        const { streams } = JSON.parse(stdout) as {
-          streams?: Array<{ codec_type?: string; codec_name?: string }>
-        }
-        if (!Array.isArray(streams)) return resolve(unknown)
-        const video = streams.find((s) => s.codec_type === "video")
-        resolve({
-          videoCodec: video?.codec_name ?? null,
-          hasAudio: streams.some((s) => s.codec_type === "audio"),
-        })
-      } catch {
-        resolve(unknown)
-      }
-    })
-    proc.on("error", () => { clearTimeout(watchdog); resolve(unknown) })
-  })
-}
-
-/**
- * Re-encode to h264 mp4 for downstream compatibility. Rejects on failure.
- * Exported for testability.
- *
- * `hasAudio === false` (a DEFINITE no-audio stream) re-encodes video-only with
- * `-an`: adding `-c:a aac` to an input that has no audio makes ffmpeg abort with
- * "Error opening output files: Invalid argument" (exit 234) — the crash that
- * turned a silent YouTube download into a failed import. `null` (probe failed →
- * unknown) and `true` keep `-c:a aac`, the safe default.
- */
-export function reencodeToH264(
-  inputPath: string,
-  outputPath: string,
-  hasAudio: boolean | null,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const audioArgs = hasAudio === false ? ["-an"] : ["-c:a", "aac"]
-    const proc = spawn("ffmpeg", [
-      "-i", inputPath,
-      "-c:v", "libx264",
-      "-preset", "fast",
-      // Delivery-floor CRF (was 23 — a visible generation loss on every
-      // VP9/AV1 download this normalizes; 2026-08-02 import-quality fix).
-      "-crf", COMBINE_DELIVERY_CRF,
-      ...audioArgs,
-      "-movflags", "+faststart",
-      "-y",
-      outputPath,
-    ], { stdio: ["ignore", "ignore", "pipe"] })
-
-    // Watchdog: an ffmpeg wedged on corrupt input would leak the process and
-    // strand the download in "processing" forever. 10min matches the worker
-    // wrappers' DEFAULT_FFMPEG_TIMEOUT_MS — far above any legit re-encode.
-    const watchdog = setTimeout(() => proc.kill("SIGKILL"), 10 * 60 * 1000)
-    let stderrBuf = ""
-    proc.stderr.on("data", (chunk: Buffer) => { stderrBuf += chunk.toString() })
-    proc.on("close", (code) => {
-      clearTimeout(watchdog)
-      if (code === 0) resolve()
-      else reject(new Error(`ffmpeg re-encode exited with code ${code}: ${stderrBuf.trim().split("\n").pop()}`))
-    })
-    proc.on("error", (err) => { clearTimeout(watchdog); reject(err) })
-  })
-}
-
+export { probeStreams, reencodeToH264, type ProbedStreams } from "./video-file-stages.js"
 /**
  * One yt-dlp download attempt: spawn, parse `download:NN%` progress lines to
  * `onProgress`, capture stderr, resolve on exit 0, reject otherwise.
@@ -539,54 +439,9 @@ const DOWNLOAD_STALL_TIMEOUT_MS = 90_000
 export function spawnYtDlpDownload(
   args: string[],
   onProgress?: (pct: number) => void,
-  opts?: { idleTimeoutMs?: number },
+  opts?: YtDlpRunLimits & { idleTimeoutMs?: number },
 ): Promise<void> {
-  const idleTimeoutMs = opts?.idleTimeoutMs ?? DOWNLOAD_STALL_TIMEOUT_MS
-  return new Promise<void>((resolve, reject) => {
-    const proc = spawn(YT_DLP_BIN, args, { stdio: ["ignore", "pipe", "pipe"] })
-    let stderrBuf = ""
-    let settled = false
-    let watchdog: ReturnType<typeof setTimeout>
-    const finish = (fn: () => void) => {
-      if (settled) return
-      settled = true
-      clearTimeout(watchdog)
-      fn()
-    }
-    // Reset the idle timer on every byte of output; fire only after silence.
-    const kick = () => {
-      clearTimeout(watchdog)
-      watchdog = setTimeout(() => {
-        proc.kill("SIGKILL")
-        finish(() => reject(new Error(`yt-dlp stalled (no output for ${idleTimeoutMs / 1000}s)`)))
-      }, idleTimeoutMs)
-    }
-    kick()
-
-    proc.stdout.on("data", (chunk: Buffer) => {
-      kick()
-      const lines = chunk.toString().split("\n")
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed) continue
-        // Progress lines look like "download: 45.2%" or "download:  45.2%"
-        const match = trimmed.match(/^download:\s*([\d.]+)%/)
-        if (match) {
-          const pct = parseFloat(match[1])
-          if (!Number.isNaN(pct)) onProgress?.(pct)
-        }
-      }
-    })
-
-    proc.stderr.on("data", (chunk: Buffer) => { kick(); stderrBuf += chunk.toString() })
-    proc.on("error", (err) => finish(() => reject(err)))
-    proc.on("close", (code) =>
-      finish(() => {
-        if (code === 0) resolve()
-        else reject(new Error(stderrBuf.trim().split("\n").pop() || `yt-dlp exited with code ${code}`))
-      }),
-    )
-  })
+  return spawnYtDlpDownloadWith(YT_DLP_BIN, args, onProgress, { ...opts, idleTimeoutMs: opts?.idleTimeoutMs ?? DOWNLOAD_STALL_TIMEOUT_MS })
 }
 
 /**
@@ -714,8 +569,31 @@ export async function downloadYouTubeVideo(opts: {
   requireAudio?: boolean
   onProgress?: (pct: number) => void
   onProcessingStart?: () => void
+  /**
+   * The hardened social-post lane (`social-post-video.ts`): extra yt-dlp
+   * arguments (one platform's extractors, the length filter), a minimal child
+   * environment, one wall-clock limit across every attempt, and an abort.
+   * Whole-video downloads only.
+   */
+  hardening?: {
+    extraArgs: readonly string[]
+    env: NodeJS.ProcessEnv
+    totalTimeoutMs: number
+    signal?: AbortSignal
+  }
 }): Promise<void> {
-  const { url, outPath, maxFilesizeBytes, maxHeight, section, requireAudio, onProgress, onProcessingStart } = opts
+  const { url, outPath, maxFilesizeBytes, maxHeight, section, requireAudio, onProgress, onProcessingStart, hardening } = opts
+  if (hardening && section) throw new Error("a hardened download fetches the whole video")
+  const deadline = hardening ? Date.now() + hardening.totalTimeoutMs : undefined
+  // What is left of a hardened fetch's one deadline, for the next step — a halt
+  // (YtDlpHaltError) when the caller aborted or nothing is left, so no client,
+  // proxy or stage starts late.
+  const spawnLimits = () =>
+    hardening && deadline !== undefined ? remainingLimits(deadline, { env: hardening.env, signal: hardening.signal }) : undefined
+  const stageLimits = () => {
+    const left = spawnLimits()
+    return left ? { timeoutMs: left.totalTimeoutMs, signal: left.signal } : undefined
+  }
 
   // SSRF gate — the same social-or-direct-file admission the download-video
   // route enforces. Defense-in-depth only: for a direct-file (arbitrary) host
@@ -776,15 +654,21 @@ export async function downloadYouTubeVideo(opts: {
           )
         }
       } else {
-        const args = buildYtDlpVideoArgs({ url, outPath, maxFilesizeBytes, maxHeight, section, proxyArgs })
+        const args = buildYtDlpVideoArgs({
+          url, outPath, maxFilesizeBytes, maxHeight, section, proxyArgs,
+          extraArgs: hardening?.extraArgs,
+          checkCertificates: hardening !== undefined,
+        })
         // YouTube 429s the default (web) client on the watch page from datacenter
         // IPs, so within each proxy we still retry web → tv → android.
         await runThroughClientLadder(url, (rung) =>
-          spawnYtDlpDownload([...args, ...rung.extractorArgs], onProgress),
+          spawnYtDlpDownload([...args, ...rung.extractorArgs], onProgress, spawnLimits()),
         )
       }
       spawned = true
     } catch (err) {
+      // A halt is the same through every proxy: stop here, never spawn again.
+      if (err instanceof YtDlpHaltError) throw err
       lastError = err
       if (!isLastAttempt) {
         const firstLine = (err instanceof Error ? err.message : String(err)).split("\n")[0]
@@ -803,7 +687,7 @@ export async function downloadYouTubeVideo(opts: {
     const actualPath = await findDownloadedFile(outPath)
     const stat = await fs.stat(actualPath)
     if (stat.size === 0) throw new Error("Downloaded video file is empty")
-    const probed = await probeStreams(actualPath)
+    const probed = await probeStreams(actualPath, stageLimits())
     if (requireAudio && probed.hasAudio === false && !isLastAttempt) {
       // Discard the silent file so the next attempt starts clean (yt-dlp's
       // --force-overwrites would clobber it anyway; this keeps failure paths
@@ -840,7 +724,7 @@ export async function downloadYouTubeVideo(opts: {
   if (videoCodec !== "h264") {
     onProcessingStart?.()
     const tmpPath = join(dirname(outPath), `.reencode-${randomUUID()}.mp4`)
-    await reencodeToH264(actualPath, tmpPath, hasAudio)
+    await reencodeToH264(actualPath, tmpPath, hasAudio, stageLimits())
     await fs.unlink(actualPath).catch(() => {})
     await fs.rename(tmpPath, outPath)
   } else if (actualPath !== outPath) {

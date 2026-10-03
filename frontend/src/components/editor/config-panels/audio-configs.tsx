@@ -63,6 +63,7 @@ import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AU
 import type { AudioFxPreset } from "@nodaro/shared"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import { MappableField } from "./mappable-field"
+import { CompareModelsLink } from "@/components/editor/node-docs/compare-models-link"
 import { SunoField, isSunoFieldWired } from "./suno-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
@@ -85,6 +86,8 @@ import { WaveformAudioPlayer } from "@/components/audio-player"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
 import { buildConnectedRefsFromSources } from "./connected-refs-builder"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { hasCredits } from "@/lib/edition"
 import { useLocalizeModelDescription, useLocalizeNodeLabel, useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowEdge } from "@/types/nodes"
@@ -401,6 +404,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
 // and links back to the modal via the node card.
 export function SunoVoiceConfig({ data }: ConfigProps<SunoVoiceData>) {
   const t = useT()
+  const voiceCreateCredits = useModelCredits("suno-voice-create", 200)
   const ready = Boolean(data.voiceId) && data.status === "success"
   return (
     <div className="flex flex-col gap-3">
@@ -425,6 +429,8 @@ export function SunoVoiceConfig({ data }: ConfigProps<SunoVoiceData>) {
         {!ready && (
           <div className="text-[11px] text-muted-foreground mt-2">
             {t("audiocfg.svClickPre")}<span className="font-medium">{t("audiocfg.configureVoiceBtn")}</span>{t("audiocfg.svClickPost")}
+            {/* The live price (the charge is the "suno-voice-create" row), only where there is billing. */}
+            {hasCredits() && <>{t("common.fragmentGap")}{t("audiocfg.svCost", { n: voiceCreateCredits })}</>}
           </div>
         )}
       </div>
@@ -802,7 +808,9 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
       </MappableField>
       <div className="flex items-center gap-2">
         <input type="checkbox" id="suno-extend-customParams" checked={data.defaultParamFlag ?? true} onChange={(e) => onUpdate({ defaultParamFlag: e.target.checked })} className="accent-[#ff0073]" />
-        <label htmlFor="suno-extend-customParams" className="text-xs font-medium text-muted-foreground">{t("audiocfg.useDefaultParamsUncheck")}</label>
+        {/* Checked sends defaultParamFlag: true, which the provider reads as CUSTOM
+            mode (your style, title and continue-from), despite the flag's name. */}
+        <label htmlFor="suno-extend-customParams" className="text-xs font-medium text-muted-foreground">{t("audiocfg.extendUseMySettings")}</label>
       </div>
     </div>
   )
@@ -1451,7 +1459,8 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
       </MappableField>
       <div className="flex items-center gap-2">
         <Checkbox id="upload-extend-default" checked={data.defaultParamFlag} onCheckedChange={(v) => onUpdate({ defaultParamFlag: !!v })} />
-        <Label htmlFor="upload-extend-default" className="text-xs">{t("audiocfg.useDefaultParams")}</Label>
+        {/* Checked = defaultParamFlag: true = the provider's custom mode (see Suno Extend). */}
+        <Label htmlFor="upload-extend-default" className="text-xs">{t("audiocfg.uploadExtendUseMySettings")}</Label>
       </div>
       <MappableField field="title" label={t("audiocfg.titleOptional")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input value={data.title ?? ""} maxLength={SUNO_TITLE_MAX} onChange={(e) => onUpdate({ title: e.target.value })} placeholder={t("audiocfg.phSongTitle")} />
@@ -2245,7 +2254,10 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
         />
       </div>
       <div>
-        <Label htmlFor="vc-model">{t("field.model")}</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="vc-model">{t("field.model")}</Label>
+          <CompareModelsLink />
+        </div>
         <Select
           value={data.model || DEFAULT_VOICE_CHANGER_MODEL}
           onValueChange={(v) => onUpdate({ model: v as VoiceChangerData["model"] })}
@@ -2474,7 +2486,10 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
         )}
       </MappableField>
       <div>
-        <Label>{t("field.model")}</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label>{t("field.model")}</Label>
+          <CompareModelsLink />
+        </div>
         <Select value={data.model || "eleven_ttv_v3"} onValueChange={(v) => onUpdate({ model: v })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -2643,8 +2658,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">
-        {t("audiocfg.descRecast1")}
-        {t("audiocfg.descRecast2")}
+        {t("audiocfg.descRecast")}
       </p>
       <div>
         <Label>{t("audiocfg.addVoice")}</Label>
@@ -2695,7 +2709,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
                   onClick={() => keepAt(i)}
                   className="text-[10px] px-1 text-muted-foreground hover:text-foreground"
                 >
-                  {t("audiocfg.mergeKeepBadge")}
+                  {t("audiocfg.keepOriginalButton")}
                 </button>
               )}
               <button aria-label={t("audiocfg.moveUp")} onClick={() => move(i, -1)} className="text-xs px-1">↑</button>
@@ -2832,7 +2846,10 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
         ))}
       </div>
       <div>
-        <Label>{t("field.model")}</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label>{t("field.model")}</Label>
+          <CompareModelsLink />
+        </div>
         <Select
           value={data.model ?? DEFAULT_VOICE_CHANGER_MODEL}
           onValueChange={(v) => onUpdate({ model: v as VoiceChangerProData["model"] })}

@@ -2,7 +2,7 @@
 
 import { useT, tx } from "@/lib/i18n"
 import { useLocalizeModelDescription } from "@/lib/i18n/labels"
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { Check, ChevronsUpDown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -44,6 +44,8 @@ interface LlmModelSelectProps {
    *  e.g. describe-to-picker restricts to STRUCTURED_VISION_MODELS because its
    *  analyzer needs guaranteed schema-shaped output over an image. */
   filter?: (model: LlmModelDef) => boolean
+  /** Shown at the end of the label row, e.g. the node's "Compare models" docs link. */
+  labelAction?: ReactNode
 }
 
 /**
@@ -54,7 +56,7 @@ interface LlmModelSelectProps {
  * 17 models. Props are unchanged from the old flat Select on purpose: the six
  * consumer panels didn't have to move.
  */
-export function LlmModelSelect({ feature, value, onChange, filter }: LlmModelSelectProps) {
+export function LlmModelSelect({ feature, value, onChange, filter, labelAction }: LlmModelSelectProps) {
   const t = useT()
   const localizeDesc = useLocalizeModelDescription()
   const [open, setOpen] = useState(false)
@@ -78,7 +80,10 @@ export function LlmModelSelect({ feature, value, onChange, filter }: LlmModelSel
 
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium text-muted-foreground">{t("cfgshared.aiModel")}</label>
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-xs font-medium text-muted-foreground">{t("cfgshared.aiModel")}</label>
+        {labelAction}
+      </div>
       <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button

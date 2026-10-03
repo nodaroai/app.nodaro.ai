@@ -12,7 +12,9 @@
  * charge.
  *
  * So these tests run BOTH real paths over the same little graphs:
- *   estimate  = the public `estimateWorkflowCredits(nodes, edges)`, with the
+ *   estimate  = `CreditsService.estimateWorkflowBaseCredits(nodes, edges)` —
+ *               the public estimate's own per-node pricing, at base prices
+ *               (the markup is applied to both sides alike) — with the
  *               node's own quote read as the delta of the whole-graph total
  *               (no private helper is reached into).
  *   run       = the real `resolveNodeInputs` (what the orchestrator hands the
@@ -25,7 +27,7 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { estimateWorkflowCredits, STATIC_CREDIT_COSTS } from "../credits.js"
+import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 import { buildPayload } from "../../../services/workflow-engine/payload-builder.js"
 import { resolveNodeInputs } from "../../../services/workflow-engine/input-resolver.js"
 import type {
@@ -73,8 +75,8 @@ interface Graph {
  */
 function estimatedCaptionCredits(graph: Graph, opts: { withEdges?: boolean } = {}): number {
   const edges = opts.withEdges === false ? undefined : graph.edges
-  const withNode = estimateWorkflowCredits(graph.nodes, edges)
-  const withoutNode = estimateWorkflowCredits(graph.nodes.filter((n) => n.id !== "ac1"), edges)
+  const withNode = CreditsService.estimateWorkflowBaseCredits(graph.nodes, edges)
+  const withoutNode = CreditsService.estimateWorkflowBaseCredits(graph.nodes.filter((n) => n.id !== "ac1"), edges)
   return withNode - withoutNode
 }
 

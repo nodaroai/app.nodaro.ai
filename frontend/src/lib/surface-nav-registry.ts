@@ -63,6 +63,12 @@ export const ENTRY_BY_LINK: readonly string[] = [
   // It gets one when sharing goes live.
   "/shared",
   "/my-files",
+  // The inspiration wall (saved posts). Its sidebar entry is admin-only while
+  // Social Search is in preview; no surface NavKey hides it.
+  "/inspiration",
+  // Competitor tracking (Cloud). Admin-only sidebar entry while Social Search
+  // is in preview; no surface NavKey hides it.
+  "/competitors",
   "/library/locations",
   "/billing",
   // Track A — the deployment BILLING ACCOUNT's own page (spec §9.3).
@@ -78,6 +84,8 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "/settings/api",
   "/settings/developer-apps",
   "/settings/developer-apps/:id",
+  // Reached from the Settings page's "Connected apps" card (every edition).
+  "/settings/connected-apps",
 
   // Organizations axis — gated by org membership / hasOrganizations(), not a nav entry.
   "/join",
@@ -117,6 +125,7 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "subscriptions",
   "llm-models",
   "node-defaults",
+  "templates",
   "tutorial-categories",
   "tutorials",
   "stuck-pipelines",

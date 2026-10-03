@@ -28,6 +28,10 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // below. Without the transient half, a flip into review marks a passive tab
   // dirty and a preset captures "awaiting review".
   "jobAwaitingReview",
+  // The editor cannot reach the server to read this node's job. The job keeps
+  // running and the watch keeps polling. Pure run state, cleared by the next
+  // check that gets through, so it is ALSO in TRANSIENT_RUNTIME_KEYS below.
+  "jobConnectionLost",
   "isStreaming",
   "generatedImageUrl",
   "generatedVideoUrl",
@@ -86,12 +90,33 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   "webhookSuccess",
   "webhookStatusCode",
   "webhookResponseBody",
+  // Content Ideas: one creative brief per idea (the node's list output — kept
+  // out of __listResults, which would clone the node). And the non-fatal notes
+  // a Content Recipe / Content Ideas run returns ("read the first of 3 posts").
+  // Both are RESULTS: they persist, and a preset, a template or a run-only
+  // patch must never treat them as config.
+  "ideaBriefs",
+  "runWarnings",
+  // Social Search: every post the last search found (the picker's grid), the
+  // ids a person picked from them, and the run's non-fatal notes ("only part
+  // of the results loaded"). All RESULTS: a template, a preset or a run-only
+  // patch must never carry yesterday's posts or picks as configuration.
+  "searchResults",
+  "pickedIds",
+  "searchWarnings",
   // When the editor's "Clear results" last emptied this node (ISO time). Not a
   // result and not config: bookkeeping that tells the load-time recovery lanes
   // "this node is empty ON PURPOSE" — without it, every reload reads an empty
   // node as "ran while the editor was closed" and paints the last run back.
   // Persisted (never transient): the reload is exactly when it is read.
   "resultsClearedAt",
+  // The id of the trigger-started run whose results this node shows (the
+  // editor paints a Telegram run onto the canvas). Bookkeeping, not a result
+  // and not config: it stops a reload from painting the same run again over
+  // edits made since. Persisted for the same reason as resultsClearedAt.
+  "resultsRunId",
+  // A trigger's last run values (also in TRANSIENT_RUNTIME_KEYS: never saved).
+  "__triggerData",
 ])
 
 /**
@@ -115,6 +140,7 @@ export const TRANSIENT_RUNTIME_KEYS: ReadonlySet<string> = new Set([
   "currentJobId",
   "currentJobProgress",
   "jobAwaitingReview",
+  "jobConnectionLost",
   "isStreaming",
   "subWorkflowProgress",
   "__listTotal",
@@ -128,6 +154,10 @@ export const TRANSIENT_RUNTIME_KEYS: ReadonlySet<string> = new Set([
   // `downloadStatus` + `downloadId`; the percent is re-read from the server.
   "downloadPercent",
   "downloadPhase",
+  // A trigger's last run values, shown in the editor after a run (a webhook's
+  // body, a Telegram message and its post). Never saved: the workflow is not
+  // where a message's content is kept — runs are, under their retention.
+  "__triggerData",
 ])
 
 /**

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import {
-  VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC,
+  VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC, VIDEO_ANALYSIS_BUCKET_GRACE_SEC,
   VIDEO_ANALYSIS_BUCKET_CREDITS,
   pickVideoAnalysisBucket, buildVideoAnalysisCreditId, bucketSecondsFromCreditId,
   videoAnalysisNumWindows,
@@ -25,7 +25,14 @@ describe("video-analysis-pricing", () => {
   it("buckets and ids", () => {
     expect(VIDEO_ANALYSIS_DURATION_BUCKETS).toEqual([60, 180, 360, 600])
     expect(pickVideoAnalysisBucket(59.6)).toBe(60)
-    expect(pickVideoAnalysisBucket(60.4)).toBe(180)
+    // A part chosen as 1:00 downloads at about 1:03 (cut on keyframes): the
+    // bucket grace prices it as a minute. Past the grace, the next bucket.
+    expect(pickVideoAnalysisBucket(60.4)).toBe(60)
+    expect(pickVideoAnalysisBucket(63)).toBe(60)
+    expect(pickVideoAnalysisBucket(63.5)).toBe(180)
+    expect(pickVideoAnalysisBucket(183)).toBe(180)
+    expect(pickVideoAnalysisBucket(184)).toBe(360)
+    expect(buildVideoAnalysisCreditId("gemini-3.1-pro", 63)).toBe("video-analysis:gemini-3.1-pro:60s")
     expect(buildVideoAnalysisCreditId("gemini-3-flash", 170)).toBe("video-analysis:gemini-3-flash:180s")
     expect(buildVideoAnalysisCreditId("gemini-3.1-pro")).toBe("video-analysis:gemini-3.1-pro:600s") // unknown → ceiling
     expect(bucketSecondsFromCreditId("video-analysis:gemini-3-flash:180s")).toBe(180)
@@ -38,8 +45,18 @@ describe("video-analysis-pricing", () => {
     expect(videoAnalysisNumWindows(600)).toBe(5)
   })
 
-  it("tolerance constant is exported for the worker re-check", () => {
-    expect(VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC).toBe(3)
+  it("the worker re-check tolerates the pricing grace PLUS float drift on top of it", () => {
+    expect(VIDEO_ANALYSIS_BUCKET_GRACE_SEC).toBe(3)
+    // A clip priced into a bucket by the grace (probe says 63 s → 60 s bucket)
+    // must not then fail the worker gate on ffprobe float drift (63.4 s): the
+    // worker allows bucket + tolerance, so the tolerance must exceed the grace.
+    expect(VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC).toBe(6)
+    expect(VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC - VIDEO_ANALYSIS_BUCKET_GRACE_SEC).toBeGreaterThanOrEqual(3)
+    for (const bucket of VIDEO_ANALYSIS_DURATION_BUCKETS) {
+      const pricedAt = bucket + VIDEO_ANALYSIS_BUCKET_GRACE_SEC
+      expect(pickVideoAnalysisBucket(pricedAt)).toBe(bucket)
+      expect(pricedAt + 2 <= bucket + VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC).toBe(true)
+    }
   })
 
   it("model SSOT is capability-derived and Gemini-only today", () => {
@@ -154,17 +171,14 @@ describe("video-audit-pricing", () => {
     expect(buildVideoAuditCreditId({ analysisProvided: true, durationSec: 360 })).toBe("video-audit:360s")
     expect(buildVideoAuditCreditId({ analysisProvided: true, durationSec: 600 })).toBe("video-audit:600s")
 
-    // Tolerance/boundary edges: 60 stays in the 60s bucket (inclusive upper
-    // bound); 61/63/64 all bump straight to the next bucket (180s) — the
-    // builder has NO grace period of its own (identical cliff behavior to
-    // pickVideoAnalysisBucket / buildVideoAnalysisCreditId; any tolerance
-    // grace is a WORKER re-check concern, private to the plugin, never baked
-    // into this pure id builder).
+    // Boundary edges: the same bucket grace as pickVideoAnalysisBucket /
+    // buildVideoAnalysisCreditId (one ladder, one rule) — up to 63 s stays in
+    // the 60s bucket; 64 s moves to the next one.
     expect(buildVideoAuditCreditId({ analysisProvided: true, durationSec: 60 })).toBe("video-audit:60s")
-    expect(buildVideoAuditCreditId({ analysisProvided: true, durationSec: 61 })).toBe("video-audit:180s")
-    expect(buildVideoAuditCreditId({ analysisProvided: true, durationSec: 63 })).toBe("video-audit:180s")
+    expect(buildVideoAuditCreditId({ analysisProvided: true, durationSec: 61 })).toBe("video-audit:60s")
+    expect(buildVideoAuditCreditId({ analysisProvided: true, durationSec: 63 })).toBe("video-audit:60s")
     expect(buildVideoAuditCreditId({ analysisProvided: true, durationSec: 64 })).toBe("video-audit:180s")
-    expect(buildVideoAuditCreditId({ analysisProvided: false, durationSec: 61 })).toBe("video-audit:auto:180s")
+    expect(buildVideoAuditCreditId({ analysisProvided: false, durationSec: 61 })).toBe("video-audit:auto:60s")
 
     // No / invalid duration → 600s ceiling composite, both families — the
     // ONLY silent-ceiling path, matching buildVideoAnalysisCreditId.

@@ -1,8 +1,10 @@
 import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, MOTION_TRANSFER_PROVIDERS, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
+import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { hasCredits } from "./config.js"
+import type { ChargedPrices } from "./pricing/charged-prices.js"
 
 // ===========================================================================
 // Credit bands — DERIVED from the price table, never hand-typed
@@ -27,6 +29,9 @@ import { hasCredits } from "./config.js"
 // — the advertised band follows with no edit here. `CREDIT_BAND_SOURCES` is
 // exported so `__tests__/node-registry-credit-bands.test.ts` can prove every
 // declared band is the derivation and every named id is really priced.
+
+/** Text to Speech's advertised models: the route's ids that are catalog models. */
+const TTS_CATALOG_PROVIDERS: string[] = TTS_PROVIDERS.filter((id) => MODEL_CATALOG[id] !== undefined)
 
 /** Snapshot of the price table's keys, for the prefix scans below. */
 const STATIC_CREDIT_IDS = Object.keys(STATIC_CREDIT_COSTS)
@@ -160,6 +165,15 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "video-analysis": { ids: familyIds("video-analysis") },
   "video-audit": { ids: familyIds("video-audit") },
   "edit-plan": { ids: familyIds("edit-plan") },
+  "content-recipe": { ids: familyIds("content-recipe") },
+  "content-ideas": {
+    ids: familyIds("content-ideas"),
+    note: "Charged per batch of up to five ideas: a run of 6–10 ideas bills two batches (the `content-ideas:10` rows).",
+  },
+  "social-search": {
+    ids: familyIds("social-search"),
+    note: "Priced per page of up to 20 results: a search for 20, 40 or 60 posts bills one, two or three pages, on any platform.",
+  },
   "audio-sync": {
     ids: familyIds("audio-sync"),
     note: "Priced per source aligned to the reference: 10 × (sources − 1), 2 to 6 sources.",
@@ -217,6 +231,31 @@ function creditBandFor(type: string): number | string {
   const min = Math.min(...prices) * minUnits
   const max = Math.max(...prices) * maxUnits
   return min === max ? min : `${min}-${max}`
+}
+
+/** How Web Scrape's description names each source. A Record over the actor
+ *  ids, so a new source cannot ship without a name here. */
+const WEB_SCRAPE_SOURCE_NAMES: Readonly<Record<ScraperActorId, string>> = {
+  "content-crawler": "web pages",
+  "google-search": "Google Search",
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  rss: "RSS feeds",
+}
+
+/**
+ * Web Scrape's description, naming the sources it offers. The registry states
+ * every source; `GET /v1/nodes` passes the ones this deployment withdraws from
+ * its users (the Instagram source follows the Instagram node's availability),
+ * so the description never promises a source a user cannot pick.
+ */
+export function webScrapeDescription(withdrawn: ReadonlySet<string> = new Set()): string {
+  // The shared actor table's order, which is the order the sources are listed in.
+  const names = (Object.keys(SCRAPER_ACTOR_LABELS) as ScraperActorId[])
+    .filter((id) => !withdrawn.has(id))
+    .map((id) => WEB_SCRAPE_SOURCE_NAMES[id])
+  const list = names.length <= 2 ? names.join(" or ") : `${names.slice(0, -1).join(", ")}, or ${names[names.length - 1]}`
+  return `Fetch data from ${list} and emit structured JSON.`
 }
 
 export type NodeCategory =
@@ -438,7 +477,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     label: "Web Scrape",
     category: "input",
     // outputType: data — emits a structured JSON array via the `json` handle (creditCost auto-filled from STATIC_CREDIT_COSTS = 2).
-    description: "Fetch data from web pages, Google Search, Instagram, TikTok, or RSS feeds and emit structured JSON.",
+    description: webScrapeDescription(),
     outputType: "data",
   },
   {
@@ -456,6 +495,29 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // outputType: data — emits a JSON array of Instagram posts via the `json` handle (creditCost auto-filled from STATIC_CREDIT_COSTS).
     description: "Pull public Instagram posts (images, carousels, reels) by profile or hashtag and emit structured JSON (caption, media, likes, comments).",
     outputType: "data",
+  },
+  {
+    type: "social-search",
+    label: "Social Search",
+    category: "input",
+    // Cloud-only (a private plugin runs the search). Outputs: `json` (the
+    // posts a run passes on — a person's picks, else the first `pickTop`) and
+    // `text` (the same posts as a digest). Each post is a SocialPost.
+    description:
+      "Search TikTok, Instagram, YouTube, X, Reddit, LinkedIn or Meta's Ad Library by keyword or account and get up to 60 posts with their numbers. Pick the ones to keep in the editor; a workflow run without picks passes on the first few.",
+    outputType: "data",
+    creditCost: creditBandFor("social-search"),
+    inputSchema: {
+      fields: [
+        { key: "platform", type: "string" },
+        { key: "mode", type: "string" },
+        { key: "query", type: "string" },
+        { key: "count", type: "number" },
+        { key: "period", type: "string" },
+        { key: "sort", type: "string" },
+        { key: "pickTop", type: "number" },
+      ],
+    },
   },
   {
     type: "video-analysis",
@@ -534,6 +596,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "transcript", type: "object", required: true },
         // Optional silence ranges (json) — wire a Silence Detect node's output.
         { key: "silence", type: "object" },
+        // Optional Audio Sync result (json) — its measured offsets are written
+        // onto the sources' offsetMs before the plan runs (a hand-set offset wins).
+        { key: "offsets", type: "object" },
         // Free-text editing instructions (affix-capable).
         { key: "instructions", type: "string" },
         { key: "styleGuide", type: "string" },
@@ -769,12 +834,16 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     description: "Synthesize speech from text using ElevenLabs.",
     outputType: "audio",
     creditCost: creditBandFor("text-to-speech"),
-    providers: ["eleven_v3", "eleven_turbo_v2_5", "eleven_multilingual_v2"],
+    // The ids the route takes (`provider` on /v1/text-to-speech) and the model
+    // catalog lists — never ElevenLabs' own wire names (eleven_v3 …), which the
+    // route rejects. The legacy `elevenlabs` alias stays accepted but is not
+    // advertised: it is not a catalog model.
+    providers: TTS_CATALOG_PROVIDERS,
     inputSchema: {
       fields: [
         { key: "text", type: "text", required: true },
         { key: "voiceId", type: "text" },
-        { key: "model", type: "select", options: ["eleven_v3", "eleven_turbo_v2_5", "eleven_multilingual_v2"] },
+        { key: "provider", type: "select", options: TTS_CATALOG_PROVIDERS },
       ],
     },
   },
@@ -907,7 +976,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "voice-remix", label: "Voice Remix", category: "ai-audio", description: "Generate a voice from a natural language description and hear it speak preview text.", outputType: "audio" },
   { type: "voice-design", label: "Voice Design", category: "ai-audio", description: "Create a custom voice with full parameter controls and receive both an audio preview and a reusable voice ID.", outputType: "audio" },
   // Suno audio-track nodes (output audio) — suno-music-video is ai-video (above), suno-lyrics / suno-style-boost are ai-text (below).
-  { type: "suno-generate", label: "Suno Generate", category: "ai-audio", description: "Full song generation using Suno AI with extensive creative controls.", outputType: "audio" },
+  { type: "suno-generate", label: "Suno Create Music", category: "ai-audio", description: "Full song generation using Suno AI with extensive creative controls.", outputType: "audio" },
   { type: "suno-cover", label: "Suno Cover", category: "ai-audio", description: "Create a cover version of an existing audio track using Suno AI.", outputType: "audio" },
   { type: "suno-extend", label: "Suno Extend", category: "ai-audio", description: "Extend an existing Suno-generated track by continuing from a specified timestamp.", outputType: "audio" },
   { type: "suno-separate", label: "Suno Separate Stems", category: "ai-audio", description: "Separate vocals from instrumentals, or split a track into individual stems.", outputType: "audio" },
@@ -936,6 +1005,45 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     description: "AI-powered multi-scene script generation with cinematography details, character actions, and structured scene breakdowns.",
     outputType: "text",
     creditCost: creditBandFor("generate-script"),
+  },
+  {
+    type: "content-recipe",
+    label: "Content Recipe",
+    category: "ai-text",
+    // Cloud-only (a private plugin runs it). One structured model call over one
+    // post's material — a Video Analysis result, a scraped post, or text.
+    // Outputs: `json` (the recipe object) and `text` (the readable recipe).
+    description:
+      "Why a post worked, as a reusable recipe: the hook (what is said, written and seen in the first 3 seconds), a format label with confidence, timed beats, why it works, CTA, sound and pace. Reads a Video Analysis, a scraped post or text; wire the Video URL node into Source post to cite the link.",
+    outputType: "data",
+    creditCost: creditBandFor("content-recipe"),
+    inputSchema: {
+      fields: [
+        { key: "llmModel", type: "string" },
+        { key: "focus", type: "string" },
+        { key: "sourceUrl", type: "string" },
+      ],
+    },
+  },
+  {
+    type: "content-ideas",
+    label: "Content Ideas",
+    category: "ai-text",
+    // Cloud-only (a private plugin runs it). Folds every recipe wired into
+    // `recipes`; emits one creative brief per idea on listResults, so the node
+    // after it runs once per idea (FAN_OUT_EACH_TYPES).
+    description:
+      "Turn one or more Content Recipes plus a brand profile into concrete post ideas — hook, format, beats, shot list, why it fits the brand, and the post that inspired it. Borrows structure, never the original's words, footage, music or faces. Emits a list: the next node runs once per idea.",
+    outputType: "text",
+    creditCost: creditBandFor("content-ideas"),
+    inputSchema: {
+      fields: [
+        { key: "brand", type: "string" },
+        { key: "count", type: "number" },
+        { key: "language", type: "string" },
+        { key: "llmModel", type: "string" },
+      ],
+    },
   },
   {
     type: "image-to-text",
@@ -1429,7 +1537,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
 
   { type: "webhook-trigger", label: "Webhook Trigger", category: "trigger", description: "Trigger the workflow via HTTP POST.", outputType: "data" },
   { type: "schedule-trigger", label: "Schedule Trigger", category: "trigger", description: "Run the workflow on a schedule: a list of rules (every N minutes / hours / days / weeks / months, or a cron expression) read in a timezone. Fires only while `active` is true — a new schedule starts paused. A wired trigger runs only the branch behind it.", outputType: "data" },
-  { type: "telegram-account-trigger", label: "Telegram Account Trigger", category: "trigger", description: "Trigger the workflow when a message arrives in a chosen chat of a Telegram account you connected (Integrations → Telegram account; Cloud, preview). Listens only while switched on with an account and at least one chat. Emits the message text + chatId + messageId + senderId + chatType. Free — downstream nodes incur their own costs.", outputType: "text" },
+  { type: "telegram-account-trigger", label: "Telegram Account Trigger", category: "trigger", description: "Trigger the workflow when a message arrives in a chosen chat of a Telegram account you connected (Integrations → Telegram account; Cloud, preview). Listens only while switched on with an account and at least one chat. Emits the message text (`out`) and the post it points at: `videoLink` (a post with a video to analyze), `postText` (a post's words when it has no video) and `postLink`; chatId, messageId, senderId and chatType ride along. Inbox mode: only the owner's own shares start a run, one run per post link (up to 3) or one per forwarded post. Free — downstream nodes incur their own costs.", outputType: "text" },
   { type: "telegram-trigger", label: "Telegram Trigger", category: "trigger", description: "Trigger the workflow when a connected Telegram bot receives a message. Emits text + chatId + messageId + messageType (+ imageUrl/videoUrl/audioUrl for media). Free — downstream nodes incur their own costs.", outputType: "data" },
 
   { type: "save-to-storage", label: "Save to Storage", category: "output", description: "Persist a node output to user storage.", outputType: "none" },
@@ -1527,13 +1635,13 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "voice-delivery",  label: "Voice Delivery",  category: "parameter", description: "Pick pace + emotion + archetype for ElevenLabs Voice Design.", outputType: "text" },
 
   // ---- Text / value parameter pickers (PARAMETER_NODE_TYPES in @nodaro/shared → outputType text) ----
-  { type: "provider",     label: "Provider",     category: "parameter", description: "Select an AI provider and model (image / video / voice / script) to override the default provider on connected generation nodes.", outputType: "text", creditCost: 0 },
+  { type: "provider",     label: "Provider",     category: "parameter", description: "Choose a model (image or video) for the nodes it is wired into: its provider output sets the model of a Generate Image, Generate Video or Generate Video Pro node through that node's settings input.", outputType: "text", creditCost: 0 },
   { type: "tone",         label: "Tone",         category: "parameter", description: "Define a tone or style modifier text (e.g., \"cinematic\", \"cheerful\") to influence connected AI nodes.", outputType: "text" },
   { type: "style-guide",  label: "Style Guide",  category: "parameter", description: "Define visual style reference text for consistent aesthetics across AI generation nodes in a workflow.", outputType: "text" },
-  { type: "motion",       label: "Motion",       category: "parameter", description: "Define the motion intensity level for connected video generation nodes.", outputType: "text" },
+  { type: "motion",       label: "Motion",       category: "parameter", description: "Set how much a video moves: adds a subtle / moderate / dynamic clause to a Generate Video or Generate Video Pro prompt through that node's settings input.", outputType: "text" },
   { type: "scene-count",  label: "Scene Count",  category: "parameter", description: "Specify the number of scenes for script generation nodes.", outputType: "text" },
-  { type: "duration",     label: "Duration",     category: "parameter", description: "Set a target duration in seconds for connected video or audio generation nodes.", outputType: "text" },
-  { type: "aspect-ratio", label: "Aspect Ratio", category: "parameter", description: "Set the target aspect ratio for connected image and video generation nodes.", outputType: "text" },
+  { type: "duration",     label: "Duration",     category: "parameter", description: "Set a length in seconds: a Generate Script node's target length (its field-targetLength input) or a Generate Video / Generate Video Pro duration (their settings input).", outputType: "text" },
+  { type: "aspect-ratio", label: "Aspect Ratio", category: "parameter", description: "Set the aspect ratio of a Generate Image, Generate Video or Generate Video Pro node through its settings input.", outputType: "text" },
 
   // ---- Look family (15) — visual style, look, mood, atmosphere ----
   { type: "setting",              label: "Setting",              category: "parameter", description: "Pick a setting from 63 entries across 4 categories (indoor, urban, nature, fantastical). Emits a setting-description prompt fragment via the cinematography handle.", outputType: "text" },
@@ -1620,4 +1728,43 @@ export function getEnrichedRegistry(): NodeDescriptor[] {
 
 export function findNode(type: string): NodeDescriptor | undefined {
   return getEnrichedRegistry().find((n) => n.type === type)
+}
+
+/**
+ * A descriptor with its `creditCost` at the credits a run is charged — what
+ * `GET /v1/nodes` serves. The registry keeps the base figures derived above
+ * (gen:skills and the band guard read those, and must not depend on runtime
+ * pricing); this re-reads each one from `prices` at request time.
+ *
+ * A band keeps its derivation — the cheapest and the priciest identifier the
+ * node can reserve on — but takes each end from the charged prices, identifier
+ * by identifier, since a per-service price can reorder a band's members. A
+ * number stands for the node type's own row. Anything else ("per-minute", a
+ * node nothing prices) is served as declared.
+ */
+export function chargedDescriptor(desc: NodeDescriptor, prices: ChargedPrices): NodeDescriptor {
+  const creditCost = chargedCreditCost(desc, prices)
+  return creditCost === desc.creditCost ? desc : { ...desc, creditCost }
+}
+
+function chargedCreditCost(desc: NodeDescriptor, prices: ChargedPrices): number | string | undefined {
+  if (desc.creditCost === undefined) return undefined
+  const source = CREDIT_BAND_SOURCES[desc.type]
+  if (source) {
+    const [minUnits, maxUnits] = source.span ?? [1, 1]
+    const lows: number[] = []
+    const highs: number[] = []
+    for (const id of source.ids) {
+      const low = prices.credits(id, minUnits)
+      const high = prices.credits(id, maxUnits)
+      if (low !== undefined) lows.push(low)
+      if (high !== undefined) highs.push(high)
+    }
+    if (lows.length === 0 || highs.length === 0) return desc.creditCost
+    const min = Math.min(...lows)
+    const max = Math.max(...highs)
+    return min === max ? min : `${min}-${max}`
+  }
+  if (typeof desc.creditCost === "number") return prices.credits(desc.type) ?? desc.creditCost
+  return desc.creditCost
 }

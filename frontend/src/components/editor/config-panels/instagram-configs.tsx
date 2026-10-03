@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, type ReactNode } from "react"
-import { ExternalLink, Heart, MessageCircle } from "lucide-react"
+import { Copy, Download, ExternalLink, Heart, MessageCircle } from "lucide-react"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Slider } from "@/components/ui/slider"
@@ -22,7 +24,7 @@ import {
   type InstagramScrapeMode,
   type InstagramScrapePeriod,
 } from "@nodaro/shared"
-import { useT } from "@/lib/i18n"
+import { useT, tx } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { InstagramScrapeNodeData } from "@/types/nodes"
 import { relativeTime } from "@/components/nodes/web-scrape-run-state"
@@ -44,6 +46,7 @@ import {
 } from "@/components/nodes/instagram-scrape-run-state"
 import { MappableField } from "./mappable-field"
 import { LlmModelSelect } from "./llm-model-select"
+import { CreativeAnalysisView } from "./creative-analysis-view"
 import type { ConfigProps } from "./types"
 import { formatNumber } from "@/lib/i18n/format"
 
@@ -126,7 +129,7 @@ function InstagramConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
       </div>
 
       <div className="flex flex-col gap-2">
-        <SectionLabel>{t("cfgext.metaAdsFormat")}</SectionLabel>
+        <SectionLabel>{t("cfgext.igFormat")}</SectionLabel>
         <div className="flex flex-wrap gap-1.5">
           {META_ADS_FORMATS.map((code) => {
             const on = selectedFormats.includes(code)
@@ -136,13 +139,13 @@ function InstagramConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
             )
           })}
         </div>
-        <p className="text-[11.5px] leading-normal text-[var(--meta-ads-faint)]">{t("cfgext.metaAdsFormatHint")}</p>
+        <p className="text-[11.5px] leading-normal text-[var(--meta-ads-faint)]">{t("cfgext.igFormatHint")}</p>
       </div>
 
       <div className="flex items-start justify-between gap-3 rounded-[14px] border border-[var(--meta-ads-info-card-border)] bg-[var(--meta-ads-info-card)] px-4 py-3">
         <div className="flex flex-col gap-0.5">
           <span className="text-[13px] font-extrabold text-[var(--meta-ads-text)]">{t("cfgext.metaAdsCopyAllVideos")}</span>
-          <span className="text-[11.5px] leading-normal text-[var(--meta-ads-muted)]">{t("cfgext.metaAdsCopyAllVideosHint")}</span>
+          <span className="text-[11.5px] leading-normal text-[var(--meta-ads-muted)]">{t("cfgext.igCopyAllVideosHint")}</span>
         </div>
         <Switch checked={data.ingestAllVideos === true} onCheckedChange={(v) => onUpdate({ ingestAllVideos: v })} />
       </div>
@@ -174,68 +177,123 @@ function InstagramConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
 
 function InstagramResultsTab({ data, onUpdate }: { readonly data: InstagramScrapeNodeData; readonly onUpdate: (d: Record<string, unknown>) => void }) {
   const t = useT()
+  const [view, setView] = useState<"list" | "json">("list")
   const [openIndex, setOpenIndex] = useState(-1)
   const items = instagramScrapeItems(data.generatedJson)
   const viewFormat = typeof data.viewFormat === "string" ? data.viewFormat : "all"
   const visible = instagramVisibleIndexes(items, viewFormat)
   const formatCount = (code: string) => items.filter((p) => instagramFormat(p) === code).length
+  // The whole array a run returned — the posts with their stored media and,
+  // when the run analysed them, each post's `analysis`. Until this view it was
+  // readable only through the API.
+  const json = data.generatedJson === undefined ? "" : JSON.stringify(data.generatedJson, null, 2)
+  const sizeKb = json ? (new Blob([json]).size / 1024).toFixed(1) : "0"
+
+  if (data.generatedJson === undefined) {
+    return <p className="py-4 text-center text-xs text-muted-foreground">{t("cfgext.igNoResults")}</p>
+  }
+
+  const copyJson = () => {
+    void navigator.clipboard.writeText(json).then(
+      () => toast.success(tx("cfgext.scrapeJsonCopied")),
+      () => toast.error(tx("cfgext.scrapeCopyFailed")),
+    )
+  }
+  const downloadJson = () => {
+    const blob = new Blob([json], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "instagram-results.json"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="flex flex-col gap-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <Segmented
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "list", label: t("cfgext.scrapeViewList") },
+            { value: "json", label: t("cfgext.scrapeViewJson") },
+          ]}
+        />
+        <div className="flex items-center gap-1.5">
+          <Button variant="outline" size="sm" className="h-[30px] w-[30px] rounded-lg border-[var(--meta-ads-border)] p-0 text-[var(--meta-ads-muted)]" onClick={copyJson} title={t("cfgext.scrapeCopyJson")}>
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="outline" size="sm" className="h-[30px] w-[30px] rounded-lg border-[var(--meta-ads-border)] p-0 text-[var(--meta-ads-muted)]" onClick={downloadJson} title={t("cfgext.scrapeDownloadJson")}>
+            <Download className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between text-[11.5px] font-semibold text-[var(--meta-ads-muted)]">
         <span>{t("cfgext.igCountResults", { count: items.length })}{data.lastGoodAt ? ` · ${relativeTime(data.lastGoodAt)}` : ""}</span>
+        <span>{sizeKb} KB</span>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {(["all", ...META_ADS_FORMATS] as const).map((code) => {
-          const on = viewFormat === code
-          const key = code === "all" ? "cfgext.metaAdsFormatAll" : instagramFormatLabelKey(code)
-          const n = code === "all" ? items.length : formatCount(code)
-          return (
-            <button key={code} type="button" onClick={() => onUpdate({ viewFormat: code })} className={cn("rounded-full border px-2.5 py-1 text-[11.5px] font-bold transition-colors", on ? "border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-[#FF0073]" : "border-[var(--meta-ads-border)] text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]")}>{key ? t(key) : code} <span className="tabular-nums opacity-70">{n}</span></button>
-          )
-        })}
-      </div>
+      {view === "json" && (
+        <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/40 p-2 text-[10px]">{json}</pre>
+      )}
 
-      {visible.length === 0 && <p className="py-6 text-center text-[12px] font-semibold text-[var(--meta-ads-muted)]">{t("cfgext.metaAdsFormatNoMatch")}</p>}
+      {view === "list" && (
+        <div className="flex flex-wrap gap-1.5">
+          {(["all", ...META_ADS_FORMATS] as const).map((code) => {
+            const on = viewFormat === code
+            const key = code === "all" ? "cfgext.metaAdsFormatAll" : instagramFormatLabelKey(code)
+            const n = code === "all" ? items.length : formatCount(code)
+            return (
+              <button key={code} type="button" onClick={() => onUpdate({ viewFormat: code })} className={cn("rounded-full border px-2.5 py-1 text-[11.5px] font-bold transition-colors", on ? "border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-[#FF0073]" : "border-[var(--meta-ads-border)] text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]")}>{key ? t(key) : code} <span className="tabular-nums opacity-70">{n}</span></button>
+            )
+          })}
+        </div>
+      )}
 
-      <div className="flex max-h-[60vh] flex-col overflow-y-auto pe-1">
-        {visible.map((i) => {
-          const post = items[i]
-          const open = openIndex === i
-          const link = instagramLink(post)
-          const likes = instagramStat(post, "likesCount")
-          const comments = instagramStat(post, "commentsCount")
-          const stored = instagramStoredCreatives(post)
-          const formatKey = instagramFormatLabelKey(instagramFormat(post))
-          return (
-            <div key={typeof post.postId === "string" ? post.postId : i} className="border-b border-[var(--meta-ads-divider)] last:border-b-0">
-              <button type="button" onClick={() => { setOpenIndex(open ? -1 : i); onUpdate({ featuredIndex: i }) }} className="flex w-full items-center gap-2.5 py-2 text-start">
-                <span className="h-11 w-11 shrink-0 overflow-hidden rounded-lg"><MetaAdMedia src={instagramPreviewUrl(post)} initial={instagramInitial(post)} className="h-full w-full" initialClassName="text-[13px]" /></span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-[12.5px] font-bold text-[var(--meta-ads-text)]">@{instagramOwner(post) || "?"}</span>
-                  <span className="truncate text-[11.5px] text-[var(--meta-ads-muted)]">{[instagramTimestampLabel(post), formatKey ? t(formatKey) : ""].filter(Boolean).join(" · ")}</span>
-                </span>
-                <span className="flex shrink-0 items-center gap-2 text-[11px] font-semibold text-[var(--meta-ads-muted)]">
-                  {likes !== null && <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{formatNumber(likes)}</span>}
-                  {comments !== null && <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{formatNumber(comments)}</span>}
-                </span>
-              </button>
-              {open && (
-                <div className="mb-3 ms-[52px] me-2 flex flex-col gap-2 rounded-xl border border-[var(--meta-ads-border)] bg-[var(--meta-ads-surface-2)] p-3">
-                  {instagramCaption(post) && <p className="whitespace-pre-wrap text-[12.5px] leading-[1.55] text-[var(--meta-ads-text-2)]">{instagramCaption(post)}</p>}
-                  <div className="flex flex-wrap items-center gap-2 text-[11.5px] font-semibold text-[var(--meta-ads-muted)]">
-                    {stored.length > 0 ? stored.map((c) => (
-                      <span key={c.assetId} className="flex items-center gap-1"><SaveToLibraryButton url={c.url} type={c.kind} compact /><span>{c.kind === "video" ? t("cfgext.metaAdsOutVideo") : t("cfgext.metaAdsOutImage")}</span></span>
-                    )) : <span>{t("cfgext.metaAdsNotStored")}</span>}
-                    {link && <a href={link} target="_blank" rel="noopener noreferrer" className="ms-auto flex items-center gap-1 text-[#FF0073] hover:underline">{t("cfgext.igOpenPost")} <ExternalLink className="h-3 w-3" /></a>}
+      {view === "list" && visible.length === 0 && <p className="py-6 text-center text-[12px] font-semibold text-[var(--meta-ads-muted)]">{t("cfgext.igFormatNoMatch")}</p>}
+
+      {view === "list" && (
+        <div className="flex max-h-[60vh] flex-col overflow-y-auto pe-1">
+          {visible.map((i) => {
+            const post = items[i]
+            const open = openIndex === i
+            const link = instagramLink(post)
+            const likes = instagramStat(post, "likesCount")
+            const comments = instagramStat(post, "commentsCount")
+            const stored = instagramStoredCreatives(post)
+            const formatKey = instagramFormatLabelKey(instagramFormat(post))
+            return (
+              <div key={typeof post.postId === "string" ? post.postId : i} className="border-b border-[var(--meta-ads-divider)] last:border-b-0">
+                <button type="button" onClick={() => { setOpenIndex(open ? -1 : i); onUpdate({ featuredIndex: i }) }} className="flex w-full items-center gap-2.5 py-2 text-start">
+                  <span className="h-11 w-11 shrink-0 overflow-hidden rounded-lg"><MetaAdMedia src={instagramPreviewUrl(post)} initial={instagramInitial(post)} className="h-full w-full" initialClassName="text-[13px]" /></span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-[12.5px] font-bold text-[var(--meta-ads-text)]">@{instagramOwner(post) || "?"}</span>
+                    <span className="truncate text-[11.5px] text-[var(--meta-ads-muted)]">{[instagramTimestampLabel(post), formatKey ? t(formatKey) : ""].filter(Boolean).join(" · ")}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2 text-[11px] font-semibold text-[var(--meta-ads-muted)]">
+                    {likes !== null && <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{formatNumber(likes)}</span>}
+                    {comments !== null && <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{formatNumber(comments)}</span>}
+                  </span>
+                </button>
+                {open && (
+                  <div className="mb-3 ms-[52px] me-2 flex flex-col gap-2 rounded-xl border border-[var(--meta-ads-border)] bg-[var(--meta-ads-surface-2)] p-3">
+                    {instagramCaption(post) && <p className="whitespace-pre-wrap text-[12.5px] leading-[1.55] text-[var(--meta-ads-text-2)]">{instagramCaption(post)}</p>}
+                    <CreativeAnalysisView item={post} skippedKey="cfgext.igAnalyzeSkipped" />
+                    <div className="flex flex-wrap items-center gap-2 text-[11.5px] font-semibold text-[var(--meta-ads-muted)]">
+                      {stored.length > 0 ? stored.map((c) => (
+                        <span key={c.assetId} className="flex items-center gap-1"><SaveToLibraryButton url={c.url} type={c.kind} compact /><span>{c.kind === "video" ? t("cfgext.igOutVideo") : t("cfgext.igOutImage")}</span></span>
+                      )) : <span>{t("cfgext.metaAdsNotStored")}</span>}
+                      {link && <a href={link} target="_blank" rel="noopener noreferrer" className="ms-auto flex items-center gap-1 text-[#FF0073] hover:underline">{t("cfgext.igOpenPost")} <ExternalLink className="h-3 w-3" /></a>}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

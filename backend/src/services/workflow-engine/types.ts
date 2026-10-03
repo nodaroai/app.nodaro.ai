@@ -70,6 +70,10 @@ export interface NodeOutput {
   paramOutputs?: Record<string, string>
   /** Accumulated results from fan-out (list/loop/split-text) execution */
   listResults?: string[]
+  /** social-search: EVERY post the search found (the editor's picker grid);
+   *  `json` holds only the posts the node passes on. Lets a server-side run
+   *  repaint the node card the way the editor's own run does. */
+  searchResults?: unknown[]
   /**
    * The same list ROW-ALIGNED with the array it was cut from: one entry per
    * element, "" where the element has no value (Extract Field, List output).
@@ -202,6 +206,11 @@ export interface NodeExecutionState {
    *  while a child is legitimately under review. Cleared when the job leaves
    *  review. */
   awaitingReview?: boolean
+  /** The run built this state from the node's saved data (or its own config)
+   *  instead of running it: a source or parameter node, a node frozen with
+   *  Skip, a node outside a partial run's subset. Only then may a reader fall
+   *  back to the node's saved results — see `saved-data.ts`. */
+  fromSavedData?: true
 }
 
 /**
@@ -311,6 +320,11 @@ export interface ResolvedInputs {
    *  prompt routing. */
   negativePrompt?: string
   imageUrl?: string
+  /** face-swap: the face photo wired into its `face` handle (an image
+   *  producer's file or an entity's portrait). Its own lane, like the editor's
+   *  `faceImageUrl`, so the face never lands in `imageUrl` or
+   *  `referenceImageUrls` where the face-swap payload does not look. */
+  faceImageUrl?: string
   videoUrl?: string
   /** Upstream video duration (seconds) — used for accurate credit estimation
    *  on trim-video / loop-video. Set when the upstream node exposes a
@@ -450,12 +464,28 @@ export interface ResolvedInputs {
    *  ceiling. The builder also annotates each row with the node's per-source config
    *  (role/speakers/offsetMs/kind override) into the plugin's `sources[]`. Richer
    *  than apply-edl's positional `sources`. */
-  editPlanSources?: Array<{ nodeId: string; url: string; kind: "video" | "audio"; duration?: number }>
+  editPlanSources?: Array<{ nodeId: string; url: string; kind: "video" | "audio"; duration?: number; label?: string }>
+  /** edit-plan: audio-sync's result (stringified json) from the `offsets`
+   *  handle — the payload builder writes it onto the sources' `offsetMs`
+   *  (`applyAudioSyncOffsets`, B4). */
+  editPlanOffsets?: unknown
+  /** edit-plan: the node the transcript was made from, when the canvas shows
+   *  it (`editPlanTranscriptOrigin`) — checked against the master's clock. */
+  editPlanTranscriptOrigin?: string
   /** audio-sync: the recordings wired into the `sources` handle, in wire order,
    *  each carrying its source NODE id — which becomes the result's `sourceId`
    *  (the same id an edit plan mints as that recording's EdlSource id). The
    *  payload builder orders them by the node's `sourceOrder`. */
   audioSyncSources?: Array<{ nodeId: string; url: string }>
+  /** content-recipe: the post's own link, from a wire into the node's `link`
+   *  handle — a Video URL node's PAGE link (never its downloaded file) or a
+   *  text node's text. Cited on the recipe, never fetched. */
+  sourceLink?: string
+  /** video-analysis: a post's link from a TEXT output wired into the node's
+   *  `video` handle (the Telegram Account Trigger's Video link, a Text node).
+   *  Read like the node's own link field, and before it; a wired video file
+   *  still wins over both. Only an http(s) link is kept. */
+  videoPageUrl?: string
 }
 
 // ---------------------------------------------------------------------------

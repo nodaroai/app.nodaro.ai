@@ -17,7 +17,7 @@ The Style Guide parameter node holds a free-text visual style description that i
 - `in` -- optional upstream text input (can be used to dynamically set style guide text)
 
 **Outputs:**
-- `style_guide` -- style guide text string, consumed by downstream AI nodes
+- `style` -- style guide text. Connect it to Generate Script's **Style Guide** input; the script follows it instead of the style guide typed in its panel.
 ## Supported Providers
 
 Not applicable. This is a data-passing parameter node with no AI provider.

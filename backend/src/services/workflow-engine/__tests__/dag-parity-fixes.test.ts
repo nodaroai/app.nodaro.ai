@@ -268,9 +268,11 @@ describe("trim-video — forwards outputSilentVideo flag", () => {
 
 describe("generate-music — forwards modelVersion", () => {
   it("passes modelVersion from node data", () => {
+    // A provider-less node runs MiniMax Music, which needs a reference track.
     const n = node("m1", "generate-music", {
       prompt: "jazz",
       modelVersion: "V5",
+      referenceAudioUrl: "https://cdn.nodaro.ai/audio/ref.mp3",
     })
     const result = buildPayload(n, JOB_ID, {})
     expect(result.payload.modelVersion).toBe("V5")

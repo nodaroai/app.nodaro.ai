@@ -2,7 +2,7 @@ import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Sce
 import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError } from "../errors.js"
-import type { ConnectedReference, DescribedReference, ModelInputAdjustment } from "@nodaro/shared"
+import type { ConnectedReference, DescribedReference, ModelInputAdjustment, SocialPost, SocialPlatform, SocialSearchMode, SocialSearchParams } from "@nodaro/shared"
 import type { DirectionFields, SubjectFields } from "@nodaro/prompts"
 
 export type NodeCategory =
@@ -47,8 +47,9 @@ export interface NodeDescriptor {
   category: NodeCategory
   description: string
   outputType: OutputType
-  /** Credit cost. Number when fixed, string range like "1-8" when
-   *  model-dependent. Undefined when the node is free — or on editions
+  /** The credits a run is charged, the figure on the node's Run button.
+   *  Number when fixed, string range like "10-80" when model-dependent.
+   *  Undefined when the node is free — or on editions
    *  without a credit system (community/business omit the field entirely;
    *  it is meaningful on Cloud only). */
   creditCost?: number | string
@@ -228,6 +229,20 @@ export interface AssembleNarratedVideoParams {
  * `audioUrl`. Resolved by {@link NodesResource.runAndWait}. Extra fields may be
  * present, so the index signature is open.
  */
+/**
+ * The completed `social-search` job's `output_data`: EVERY post the search
+ * found, in the order it asked for (Social Search, Nodaro Cloud). Picking the
+ * posts a workflow passes on is an editor step; a direct caller gets them all.
+ */
+export interface SocialSearchJobOutput extends NodeJobOutput {
+  readonly json: readonly SocialPost[]
+  readonly platform: SocialPlatform
+  readonly mode: SocialSearchMode
+  readonly query: string
+  /** Non-fatal notes ("only part of the results could be loaded"). */
+  readonly warnings?: readonly string[]
+}
+
 export interface NodeJobOutput {
   /** `text-to-speech` / `generate-music` / audio nodes write here. For
    *  `audio-separation` this is the primary stem (vocals). */
@@ -254,9 +269,18 @@ export interface NodeJobOutput {
 export interface RunAndWaitOptions {
   /**
    * Abort the run/poll loop. Aborting (or passing an already-aborted signal)
-   * stops polling and rejects with {@link JobAbortedError}.
+   * stops polling and rejects with {@link JobAbortedError}, whose `jobId`
+   * names the job once it was submitted. Aborting stops the WAITING only: the
+   * job keeps running and is charged, unless {@link cancelOnAbort} is set.
    */
   readonly signal?: AbortSignal
+  /**
+   * Also cancel the job when `signal` aborts after it was submitted
+   * (`POST /v1/jobs/:id/cancel`, which refunds its credit hold). Best effort:
+   * a failed cancel still rejects with the {@link JobAbortedError}. Default
+   * `false` — aborting only stops waiting.
+   */
+  readonly cancelOnAbort?: boolean
   /** Called with each lean status the poll loop observes (running → terminal). */
   readonly onProgress?: (status: JobStatusResult) => void
   /** Poll interval in ms. Default 2000. */
@@ -359,6 +383,7 @@ export class NodesResource {
   run(type: "generate-video", params?: GenerateVideoParams): Promise<RunNodeResult>
   run(type: "text-to-video", params: TextToVideoParams): Promise<RunNodeResult>
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams): Promise<RunNodeResult>
+  run(type: "social-search", params: SocialSearchParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: string, params?: Record<string, unknown>, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: string, params: Record<string, unknown> = {}, options: RunNodeOptions = {}): Promise<RunNodeResult> {
     // `pro-3d-render` needs no special case: its route IS `/v1/pro-3d-render`,
@@ -412,6 +437,7 @@ export class NodesResource {
   runAndWait(type: "generate-video", params?: GenerateVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "text-to-video", params: TextToVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: "social-search", params: SocialSearchParams, opts?: RunAndWaitOptions): Promise<SocialSearchJobOutput>
   runAndWait<T extends string>(type: T, params?: Record<string, unknown>, opts?: RunAndWaitOptions): Promise<T extends "pro-3d-render" ? Pro3DRenderJobOutput : T extends "generate-3d-scene" | "edit-3d-scene" ? Scene3DJobOutput : NodeJobOutput>
   async runAndWait(
     type: string,
@@ -435,7 +461,7 @@ export class NodesResource {
    *
    * @param type        Node type slug, applied to every entry.
    * @param paramsList  One request body per candidate.
-   * @param opts        Shared `signal` / `onProgress` / `pollMs` / `maxMs`.
+   * @param opts        Shared `signal` / `cancelOnAbort` / `onProgress` / `pollMs` / `maxMs`.
    */
   async runMany(
     type: string,
@@ -454,11 +480,28 @@ export class NodesResource {
     )
   }
 
+  /** {@link pollUntilSettled}, plus what an abort does to the job: it keeps
+   *  running unless `cancelOnAbort` asks to cancel it too, and the rejection
+   *  always names it (an abort landing mid-sleep carries no id of its own). */
+  private async pollJob(
+    jobId: string,
+    label: string,
+    opts: RunAndWaitOptions,
+  ): Promise<NodeJobOutput> {
+    try {
+      return await this.pollUntilSettled(jobId, label, opts)
+    } catch (err) {
+      if (!(err instanceof JobAbortedError)) throw err
+      if (opts.cancelOnAbort) await this.client.jobs.cancel(jobId).catch(() => undefined)
+      throw err.jobId ? err : new JobAbortedError(err.message, jobId)
+    }
+  }
+
   /** Poll an already-kicked job id until it stops moving; resolve output_data
    *  or throw. Two non-terminal statuses end the loop: an abort, and
    *  `pending_review` (a job policy held the output for a human — see
    *  {@link JobHeldError}). */
-  private async pollJob(
+  private async pollUntilSettled(
     jobId: string,
     label: string,
     opts: RunAndWaitOptions,

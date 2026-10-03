@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react"
 import { AlertTriangle, Boxes, Eye, EyeOff, Film, Lock, Pause, Play, Unlock } from "lucide-react"
-import type { Scene3DPlanV2, Scene3DV2EditOperation } from "@nodaro/shared"
+import { SCENE3D_PRIMITIVE_MATERIAL_ROLE, type Scene3DPlanV2, type Scene3DV2EditOperation } from "@nodaro/shared"
 import type { Scene3DAssetResolver } from "@remotion-pkg/scene3d/v2/asset-resolver"
 import type { Scene3DReadinessWarning } from "@remotion-pkg/scene3d/v2/errors"
 import { Button } from "@/components/ui/button"
@@ -371,21 +371,26 @@ function EntityInspector({
           <p className="text-[10px] text-muted-foreground">{V2_TEXT.glbPlacement}</p>
         )}
 
-        {entity.materials.map((material) => (
+        {entity.materials.map((material) => {
+          // An asset's roles are its own material names (data); a primitive's
+          // single role is the reserved id, which the interface names.
+          const roleLabel = material.role === SCENE3D_PRIMITIVE_MATERIAL_ROLE ? t("scene3dcfg.primitiveSurface") : material.role
+          return (
           <div key={material.role} className="grid grid-cols-[52px_1fr] items-center gap-1">
-            <span className="text-[10px] text-muted-foreground truncate" title={material.role}>
-              {material.role}
+            <span className="text-[10px] text-muted-foreground truncate" title={roleLabel}>
+              {roleLabel}
             </span>
             <input
               type="color"
-              aria-label={t("scene3dcfg.materialColor", { name: entity.name, role: material.role })}
+              aria-label={t("scene3dcfg.materialColor", { name: entity.name, role: roleLabel })}
               value={material.color}
               disabled={!enabled || !entity.can.color}
               onChange={(e) => onEmit(buildEntityColorOperation(entity, material.role, e.target.value))}
               className="h-7 w-full rounded border border-[var(--border-primary)] bg-transparent"
             />
           </div>
-        ))}
+          )
+        })}
       </div>
     </>
   )

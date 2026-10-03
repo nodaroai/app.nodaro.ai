@@ -193,7 +193,7 @@ export function SplitTextConfig({ data, onUpdate }: { data: SplitTextData; onUpd
           className="h-7 text-xs"
           onClick={() => onUpdate({ trimWhitespace: data.trimWhitespace === false })}
         >
-          {data.trimWhitespace !== false ? t("audiocfg.normalizationOn") : t("audiocfg.normalizationOff")}
+          {data.trimWhitespace !== false ? t("common.stateOn") : t("common.stateOff")}
         </Button>
       </div>
 
@@ -205,7 +205,7 @@ export function SplitTextConfig({ data, onUpdate }: { data: SplitTextData; onUpd
           className="h-7 text-xs"
           onClick={() => onUpdate({ removeEmpty: data.removeEmpty === false })}
         >
-          {data.removeEmpty !== false ? t("audiocfg.normalizationOn") : t("audiocfg.normalizationOff")}
+          {data.removeEmpty !== false ? t("common.stateOn") : t("common.stateOff")}
         </Button>
       </div>
 
@@ -1270,7 +1270,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
         const preview = result.slice(0, 5)
         return (
           <div className="space-y-0.5">
-            <p className="text-[10px] text-muted-foreground">{t("utilcfg.firstOfItems", { shown: Math.min(5, result.length), total: result.length })}</p>
+            <p className="text-[10px] text-muted-foreground">{t(result.length === 1 ? "utilcfg.firstOfItemsOne" : "utilcfg.firstOfItems", { shown: Math.min(5, result.length), total: result.length })}</p>
             <pre className="text-[10px] font-mono bg-muted/20 rounded p-1.5 overflow-x-auto whitespace-pre-wrap break-all">
               {JSON.stringify(preview, null, 2)}
             </pre>
@@ -1856,7 +1856,7 @@ export function MergeListsConfig({ data, onUpdate }: ConfigProps<MergeListsNodeD
           className="h-7 text-xs"
           onClick={() => onUpdate({ deduplicate: !dedupeOn })}
         >
-          {dedupeOn ? t("audiocfg.normalizationOn") : t("audiocfg.normalizationOff")}
+          {dedupeOn ? t("common.stateOn") : t("common.stateOff")}
         </Button>
       </div>
 

@@ -50,8 +50,8 @@ To offer a model picker: `client.nodes.get(type)` → `data.providers`, priced
 via `client.credits.modelCosts(providers)`. Full static lists (with credit
 costs, as raw markdown an agent can fetch):
 
-- image: https://nodaroai.github.io/app.nodaro.ai/nodes/ai-image/generate-image.md
-- video: https://nodaroai.github.io/app.nodaro.ai/nodes/ai-video/generate-video.md
+- image: https://nodaro.ai/docs/nodes/image/generate-image.md
+- video: https://nodaro.ai/docs/nodes/video/generate-video.md
 
 ## UX rules (generation takes seconds-to-minutes — never block silently)
 
@@ -67,7 +67,7 @@ costs, as raw markdown an agent can fetch):
   `.available`). All errors are typed classes; see
   [references/errors.md](references/errors.md).
 - Prefer `runAndWait` over hand-rolled polling.
-- 22 resources on the client — see [references/resources.md](references/resources.md).
+- One resource per area on the client — see [references/resources.md](references/resources.md).
 - Building a third-party app acting on behalf of other Nodaro users? OAuth —
   see [references/oauth.md](references/oauth.md).
-- Full reference: https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md
+- Full reference: https://nodaro.ai/docs/developers/sdk.md

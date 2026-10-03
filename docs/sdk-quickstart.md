@@ -508,6 +508,27 @@ For a guided flow, `analyze()` returns questions you answer, then `generate()`
 builds the final prompt from those selections. See
 [SDK Reference → client.promptHelper](./sdk-reference.md#clientprompthelper).
 
+### Find posts that work, then learn from them (Social Search)
+
+On Nodaro Cloud, `social-search` finds public posts on one platform by keyword
+or account, with their numbers. Find the most viewed, then hand the best one
+to any node that reads a post:
+
+```ts
+const found = await client.nodes.runAndWait("social-search", {
+  platform: "tiktok",
+  query: "ai video ad",
+  count: 40,
+  period: "week",
+  sort: "popular",
+})
+const best = found.json[0]
+console.log(best?.url, best?.metrics.views)
+```
+
+Every post has the same shape on every platform (`SocialPost`). See
+[SDK Reference → client.nodes](./sdk-reference.md#clientnodes).
+
 ### Apply a mix to a completed Recast
 
 Revisioned Recast audio is capability-gated. Read the server-authored revision,
@@ -558,7 +579,8 @@ const referenceImageNodes = nodes.filter(n =>
 
 // Get a single descriptor by type slug:
 const { data: nanoBanana } = await client.nodes.get("generate-image")
-console.log(`Cost: ${nanoBanana.creditCost}`) // Cloud only — community and
+console.log(`Cost: ${nanoBanana.creditCost}`) // the credits a run is charged:
+// a "min-max" range for a node priced per model. Cloud only — community and
 // business installs have no credit system and omit creditCost entirely
 ```
 
@@ -590,16 +612,18 @@ to the resource type, so TypeScript autocomplete works on every field of
 
 ## 6. Browser vs Node
 
-`@nodaro/sdk` has zero dependencies and uses only `fetch` and `URL`. Both
-are global in:
+`@nodaro/sdk` needs **Node 20 or newer** (`engines.node: ">=20"`), or any
+runtime with a global `fetch` and `URL`:
 
-- Node 18 or newer
+- Node 20+
 - All modern browsers
 - React Native (built-in fetch polyfill)
 - Cloudflare Workers, Deno, Bun
 
-No fetch polyfill needed. If you're on Node 16 or older, install
-`undici` and pass `fetch: undici.fetch` (see section 7).
+It depends on two Nodaro packages, installed with it: `@nodaro/shared` (the
+wire types and model catalog) and `@nodaro/prompts` (prompt helpers).
+`@supabase/supabase-js` and `@supabase/ssr` are optional peer dependencies —
+install them only if you use `supabaseAuth` in a browser app.
 
 **CORS for browser apps:** when calling Nodaro from a browser using an OAuth
 access token, your origin must be on the developer app's `allowedOrigins`
@@ -627,7 +651,6 @@ const client = createClient({
 - **Tests** — pass a mock that returns canned `Response` objects
 - **Retries** — wrap the global fetch in a retry-on-5xx helper
 - **Telemetry** — wrap with OpenTelemetry / Datadog tracing
-- **Older Node** — pass `undici.fetch` to use undici on Node 16
 
 `timeoutMs` aborts the request via `AbortController` after the given milliseconds.
 Long-running operations like video generation should use `workflows.run()` plus

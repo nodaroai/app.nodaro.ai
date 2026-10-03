@@ -33,6 +33,7 @@ import type {
   DescribeToPickerData,
 } from "@/types/nodes"
 import { IMAGE_CRITIC_MODES, STRUCTURED_VISION_MODELS, type ImageCriticMode } from "@nodaro/shared"
+import { IMAGE_CRITIC_MODE_LABEL } from "@/lib/image-critic-mode-copy"
 import { pickerFanoutTargets } from "@nodaro/prompts"
 import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -47,6 +48,7 @@ import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-fina
 import { useFinalPromptSegments } from "./use-final-prompt-segments"
 import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import type { ConfigProps } from "./types"
+import { GENERATE_SCRIPT_FIELD_HANDLES } from "@/lib/audio-text-handles"
 
 export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode, nodes, edges, nodeId }: ConfigProps<GenerateScriptData> & { nodeId?: string }) {
   const t = useT()
@@ -107,7 +109,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
         maxTokens={data.maxTokens}
         onChange={onUpdate}
       />
-      <MappableField field="sceneCount" label={t("scriptcfg.numberOfScenes")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="sceneCount" label={t("scriptcfg.numberOfScenes")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} wiredHandleId={GENERATE_SCRIPT_FIELD_HANDLES.sceneCount}>
         <Input
           type="number"
           min={1}
@@ -116,21 +118,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           onChange={(e) => onUpdate({ sceneCount: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
         />
       </MappableField>
-      <div>
-        <Label>{t("scriptcfg.structure")}</Label>
-        <Select
-          value={data.structure}
-          onValueChange={(v) => onUpdate({ structure: v as GenerateScriptData["structure"] })}
-        >
-          <SelectTrigger aria-label={t("scriptcfg.structure")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="freeform">{t("scriptcfg.structureFreeform")}</SelectItem>
-            <SelectItem value="8-step">{t("scriptcfg.structure8Step")}</SelectItem>
-            <SelectItem value="custom">{t("cfgshared.custom")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <MappableField field="styleGuide" label={t("scriptcfg.styleGuide")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+      <MappableField field="styleGuide" label={t("scriptcfg.styleGuide")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} wiredHandleId={GENERATE_SCRIPT_FIELD_HANDLES.styleGuide} labelAction={
         <span className="inline-flex items-center gap-0.5">
           <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
           <SnippetMenuButton pool={promptSnippets} value={data.styleGuide || ""} onInsert={(v) => onUpdate({ styleGuide: v })} target="prompt" media="text" />
@@ -156,14 +144,14 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           />
         )}
       </MappableField>
-      <MappableField field="tone" label={t("scriptcfg.tone")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="tone" label={t("scriptcfg.tone")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} wiredHandleId={GENERATE_SCRIPT_FIELD_HANDLES.tone}>
         <Input
           value={data.tone}
           onChange={(e) => onUpdate({ tone: e.target.value })}
           placeholder={t("scriptcfg.phTone")}
         />
       </MappableField>
-      <MappableField field="targetLength" label={t("scriptcfg.targetLengthSeconds")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="targetLength" label={t("scriptcfg.targetLengthSeconds")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} wiredHandleId={GENERATE_SCRIPT_FIELD_HANDLES.targetLength}>
         <Input
           type="number"
           min={10}
@@ -369,7 +357,7 @@ export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeRefs, refM
           <SelectTrigger aria-label={tx("field.mode")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {IMAGE_CRITIC_MODES.map((m) => (
-              <SelectItem key={m} value={m}>{m}</SelectItem>
+              <SelectItem key={m} value={m}>{t(IMAGE_CRITIC_MODE_LABEL[m])}</SelectItem>
             ))}
           </SelectContent>
         </Select>

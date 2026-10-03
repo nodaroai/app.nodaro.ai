@@ -46,14 +46,11 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
   const activeImageUrl = activeResult?.url ?? nodeData.generatedImageUrl
   const panelCount = nodeData.panelUrls?.length ?? 0
 
-  // Flavour-aware so the Run button shows the same price the route reserves
-  // (routes/reference-sheet.ts::sheetCreditId): motion → 6cr, still → 4cr.
-  // Credit-id via the shared single source of truth; fallback NUMBER stays local.
-  const isMotionFlavour = nodeData.flavour?.outputFormat === "motion"
-  const credits = useModelCredits(
-    referenceSheetCreditId(nodeData.flavour),
-    isMotionFlavour ? 6 : 4,
-  )
+  // Flavour-aware so the Run button shows the price the route reserves
+  // (routes/reference-sheet.ts::sheetCreditId — a motion sheet's compose fee
+  // is higher than a still one's), read live via the shared credit id. No
+  // fallback figure: the strip shows no price until the live one has loaded.
+  const credits = useModelCredits(referenceSheetCreditId(nodeData.flavour))
 
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)

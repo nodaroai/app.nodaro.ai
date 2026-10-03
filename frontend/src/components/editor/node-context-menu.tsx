@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useMemo, useState } from "react"
-import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon, ZoomIn, Maximize2, UserPlus } from "lucide-react"
+import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon, ZoomIn, Maximize2, UserPlus, CircleHelp, ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
 import { useT, tx } from "@/lib/i18n"
 import { useReactFlow } from "@xyflow/react"
@@ -13,6 +13,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
 import { useAuth } from "@/hooks/use-auth"
 import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
+import { nodeDocsLinksShown, useNodeDocsUrl } from "@/lib/node-docs/node-docs"
 
 interface NodeContextMenuProps {
   readonly nodeId: string
@@ -41,6 +42,8 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   const ref = useRef<HTMLDivElement>(null)
   const [forking, setForking] = useState(false)
   const isMac = isMacPlatform()
+  const docsUrl = useNodeDocsUrl()
+  const nodeType = useMemo(() => nodes.find((n) => n.id === nodeId)?.type, [nodeId, nodes])
 
   const hasDownstream = useMemo(() => {
     return edges.some((e) => e.source === nodeId)
@@ -300,6 +303,24 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
         <Maximize2 className="h-3.5 w-3.5" />
         {t("canvas.fitContent")}
       </button>
+      {nodeType && nodeDocsLinksShown() && (
+        <>
+          <div className="my-1 border-t" />
+          {/* Closes on the next task: a link removed during its own click
+              does not navigate. */}
+          <a
+            href={docsUrl(nodeType)}
+            target="_blank"
+            rel="noopener"
+            onClick={() => window.setTimeout(onClose, 0)}
+            className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer"
+          >
+            <CircleHelp className="h-3.5 w-3.5" />
+            {t("nodeDocs.learnAboutNode")}
+            <ArrowUpRight className="ms-auto h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+          </a>
+        </>
+      )}
       <div className="my-1 border-t" />
       <button
         className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer"

@@ -1,7 +1,8 @@
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
-import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource } from "@nodaro/shared";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
+import { contentRunResultPatch } from "@/lib/content-run-output";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
@@ -104,7 +105,10 @@ import {
   webScrape,
   metaAdsScrape,
   instagramScrape,
+  socialSearch,
   startVideoAnalysis,
+  startContentRecipe,
+  startContentIdeas,
   runVideoAudit,
   editPlan,
   executeReduce,
@@ -113,12 +117,14 @@ import { applyWebScrapeFailure, applyWebScrapeResult, webScrapeRunStartPatch } f
 import { scrapeResultPatch } from "@/components/nodes/scrape-result-recovery";
 import { applyMetaAdsScrapeFailure, applyMetaAdsScrapeResult, metaAdsScrapeRunStartPatch } from "@/components/nodes/meta-ads-scrape-run-state";
 import { applyInstagramScrapeFailure, applyInstagramScrapeResult, instagramScrapeRunStartPatch } from "@/components/nodes/instagram-scrape-run-state";
-import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets } from "@nodaro/shared";
+import { applySocialSearchFailure, applySocialSearchResult, socialSearchRunStartPatch } from "@/components/nodes/social-search-run-state";
+import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets, socialSearchRequestFromNode } from "@nodaro/shared";
+import { clampContentIdeasCount, CONTENT_IDEAS_MAX_RECIPE_INPUTS } from "@nodaro/shared";
 import { tx } from "@/lib/i18n";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
   readPromptAffixes, unwrapEditPlanOutput, clampEditPlanClipCount, asEditPlanMode, asEditPlanTier, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, uiResolutionFill, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN, DEFAULT_TRANSCRIBE_NODE_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, normalizeCaptionNumericLevers } from "@nodaro/shared"
-import { applyPromptAffixes, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
+import { applyPromptAffixes, appendPromptHints, ownMotionHint, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
@@ -235,6 +241,8 @@ import type {
   VoiceDesignData,
   ForcedAlignmentData,
   VideoAnalysisNodeData,
+  ContentRecipeNodeData,
+  ContentIdeasNodeData,
   VideoAuditNodeData,
   SubWorkflowData,
   SocialMediaFormatData,
@@ -246,6 +254,7 @@ import type {
   WebScrapeNodeData,
   MetaAdsScrapeNodeData,
   InstagramScrapeNodeData,
+  SocialSearchNodeData,
   TelegramChannelFeedData,
   ExtractFieldNodeData,
   JsonProcessNodeData,
@@ -265,12 +274,12 @@ import type {
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
-  MAX_CONSECUTIVE_POLL_FAILURES,
   checkStorageError,
   updateProgressIfChanged,
   videoAuditAnalysisWired,
   type ExecutionContext,
 } from "./types";
+import { jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { iterationIdempotencyKey } from "@/lib/idempotency-key";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES, VIDEO_URL_RE } from "./execution-graph";
@@ -332,7 +341,7 @@ import {
   getUpstreamDuration,
   getCombineUpstreamDurations,
 } from "@/lib/upstream-duration";
-import { nodeRunError, nodeRunText } from "@/components/editor/workflow-editor/node-run-message";
+import { editPlanIssueText, nodeRunError, nodeRunText } from "@/components/editor/workflow-editor/node-run-message";
 
 // ---------------------------------------------------------------------------
 // Manual-edit pending promise bridge
@@ -447,7 +456,9 @@ export function buildMetaAdsScrapeParams(
     countryCode: data.countryCode,
     platforms: Array.isArray(data.platforms) ? data.platforms : undefined,
     formats: Array.isArray(data.formats) ? data.formats : undefined,
-    featuredIndex: typeof data.featuredIndex === "number" ? data.featuredIndex : undefined,
+    // No featuredIndex: a run features its FIRST result, and the node resets
+    // its featured item to 0 on completion. Sending the saved index made the
+    // route feature (and copy the video of) another item than the node shows.
     // The creative video is the expensive bytes — copied into the library
     // only when something downstream will actually consume it.
     ingestVideo: opts.videoWired === true,
@@ -1249,27 +1260,36 @@ function executeNodeCore(
     node = { ...node, data: resolvedData } as WorkflowNode
   }
 
+  // The Settings input — the same step as the orchestrator's (node-executor):
+  // snap a wired Duration to the model, refuse a wired Provider this node
+  // cannot run, before any request is sent.
+  if (SETTINGS_INPUT_CONSUMERS[node.type ?? ""]) {
+    const settings = applySettingsInput(node.type ?? "", node.id, node.data as Record<string, unknown>, edges, (id) => nodes.find((n) => n.id === id)?.type)
+    if (settings.problem) {
+      const source = nodes.find((n) => n.id === settings.problem!.sourceId)
+      const sourceLabel = ((source?.data as { label?: string } | undefined)?.label) || "Provider"
+      toast.error(nodeRunError(nodeLabel, "nodeRun.settingsProviderNotAccepted", { source: sourceLabel, value: settings.problem.value }));
+      return Promise.reject(new Error("Settings provider not accepted"));
+    }
+    node = { ...node, data: settings.data } as WorkflowNode
+  }
+
   if (node.type === "generate-script") {
-    const prompt = applyPromptAffixes(overridePrompt ?? inputs.prompt, readPromptAffixes(node.data as Record<string, unknown>), refMap) ?? "";
-    if (!prompt) {
-      toast.error(
-        nodeRunError((node.data as GenerateScriptData).label, "nodeRun.noPromptFound"),
-      );
+    // The topic and the settings go through the server's own readers, so a
+    // wired Text node and a mapped Tone or Scene Count read the same on a
+    // single-node run as on a workflow run.
+    const scriptData = node.data as GenerateScriptData;
+    const prompt = computeScriptTopic(scriptData, { override: overridePrompt, wired: inputs.prompt, refMap });
+    if (!prompt.trim()) {
+      toast.error(nodeRunError(scriptData.label, "nodeRun.noPromptFound"));
       return Promise.reject(new Error("No prompt"));
     }
-    const scriptData = node.data as GenerateScriptData;
     setUserPromptTemplate(undefined);
-    return runScriptGeneration(
-      node.id,
-      prompt,
-      ctx,
-      scriptData.sceneCount,
-      scriptData.tone || undefined,
-      scriptData.targetLength || undefined,
-      scriptData.provider || undefined,
-      scriptData.llmModel || undefined,
-      scriptData.reasoningEffort || undefined,
-    );
+    return runScriptGeneration(node.id, prompt, ctx, readScriptSettings(scriptData, refMap), {
+      provider: scriptData.provider || undefined,
+      llmModel: scriptData.llmModel || undefined,
+      reasoningEffort: scriptData.reasoningEffort || undefined,
+    });
   }
 
   if (node.type === "generate-image") {
@@ -1581,8 +1601,7 @@ function executeNodeCore(
       // identity bullet (above), so exclude them here to avoid a tail dup.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -1812,8 +1831,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -1901,8 +1919,7 @@ function executeNodeCore(
       // Bullet consumer (stamps character elements onto the ref) → exclude here.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
+        rawPrompt = appendPromptHints(rawPrompt, cinematographyHints);
       }
     }
     {
@@ -2054,8 +2071,7 @@ function executeNodeCore(
       // Bullet consumer (stamps character elements onto the ref) → exclude here.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
+        rawPrompt = appendPromptHints(rawPrompt, cinematographyHints);
       }
     }
     {
@@ -2322,8 +2338,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -2505,7 +2520,7 @@ function executeNodeCore(
                   }
                 } catch (err) {
                   pollFailures++;
-                  if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                  if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                     ctx.untrackInterval(poll);
                     if (shouldAbandonNode(node.id, jobId)) {
                       resolve("");
@@ -2513,8 +2528,10 @@ function executeNodeCore(
                     }
                     updateNodeData(node.id, {
                       executionStatus: "failed",
+                      errorMessage: jobGoneMessage(),
                       currentJobId: undefined,
                       currentJobProgress: undefined,
+                      jobConnectionLost: undefined,
                     });
                     guardedToast.error(tx("nodeRun.failedToCheckPlanningStatus"));
                     reject(err);
@@ -2705,14 +2722,19 @@ function executeNodeCore(
     // them in; a provider with no reference support keeps the legacy strip.
     const i2vProviderSupportsRefs = !!nodeProvider && hasFeature(nodeProvider, "reference-image");
     if (!i2vProviderSupportsRefs) prompt = stripVideoImageTokens(prompt)
-    // Inject motion + cinematography hints into prompt
+    // Inject motion + cinematography hints into prompt. The node's own Motion
+    // setting follows its REAL type: a Generate Video node re-typed here (the
+    // `__appendWired` marker) applies it exactly as its text-to-video twin does.
     const motionHints: string[] = [];
-    if (i2vData.motionEnabled && i2vData.motion) motionHints.push(`${i2vData.motion} motion`);
+    const i2vOwnMotion = ownMotionHint(
+      (node.data as Record<string, unknown>).__appendWired === true ? "generate-video" : "image-to-video",
+      node.data as Record<string, unknown>,
+    );
+    if (i2vOwnMotion) motionHints.push(i2vOwnMotion);
     // Bullet consumer (stamps character elements onto the video ref) → exclude here.
     const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
     for (const h of cinematographyHints) motionHints.push(h);
-    if (motionHints.length > 0 && prompt) prompt = `${prompt}. ${motionHints.join(", ")}`;
-    else if (motionHints.length > 0) prompt = motionHints.join(", ");
+    if (motionHints.length > 0) prompt = appendPromptHints(prompt, motionHints);
     {
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
       if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
@@ -2944,8 +2966,7 @@ function executeNodeCore(
       // Bullet consumer (stamps character elements onto the video ref) → exclude here.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -3098,11 +3119,19 @@ function executeNodeCore(
     let prompt: string | undefined = promptOf("text-to-video", (node.data as Record<string, unknown>).__appendWired === true);
     if (!t2vProviderSupportsRefs) prompt = stripVideoImageTokens(prompt);
     {
+      // A Generate Video node re-typed here keeps its own Motion setting — the
+      // orchestrator applies it in both modes, and the control shows in both. A
+      // legacy text-to-video node has none (`ownMotionHint` answers undefined).
+      const hints: string[] = [];
+      const t2vOwnMotion = ownMotionHint(
+        (node.data as Record<string, unknown>).__appendWired === true ? "generate-video" : "text-to-video",
+        node.data as Record<string, unknown>,
+      );
+      if (t2vOwnMotion) hints.push(t2vOwnMotion);
       // Bullet consumer (stamps character elements onto the video ref) → exclude here.
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
-      if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+      for (const h of collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true })) hints.push(h);
+      if (hints.length > 0) {
+        prompt = appendPromptHints(prompt, hints);
       }
     }
     {
@@ -3343,7 +3372,9 @@ function executeNodeCore(
     // no reference song / voice / instrumental (E006), so say so here instead
     // of spending a round trip to be told. Same refusal the route and the DAG
     // payload-builder make; this one just arrives instantly.
-    if ((d.provider || "minimax") === "minimax" && !refUrl) {
+    // The model the node runs — a saved model that is gone runs the default.
+    const musicProvider = resolveMusicProvider(d.provider);
+    if (musicProvider === "minimax" && !refUrl) {
       toast.error(nodeRunError(d.label, "nodeRun.miniMaxNeedsAReferenceSong"));
       return Promise.reject(new Error("Reference audio required"));
     }
@@ -3353,7 +3384,7 @@ function executeNodeCore(
       () =>
         generateMusicApi(
           finalPrompt,
-          d.provider || undefined,
+          musicProvider,
           d.duration || undefined,
           finalGenre || undefined,
           finalMood || undefined,
@@ -3916,7 +3947,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -3925,8 +3956,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckAlignmentStatus"));
                   reject(err);
@@ -3953,10 +3986,11 @@ function executeNodeCore(
 
   if (node.type === "video-analysis") {
     const d = node.data as VideoAnalysisNodeData;
-    // Source precedence mirrors the backend: a wired video wins; else the
-    // YouTube URL from node data. At least one must be present.
+    // Source precedence mirrors the backend: a wired video wins; else a post's
+    // link wired into the `video` handle; else the link in node data. At
+    // least one must be present.
     const videoUrl = inputs.videoUrl;
-    const youtubeUrl = d.youtubeUrl?.trim() || undefined;
+    const youtubeUrl = inputs.videoPageUrl ?? (d.youtubeUrl?.trim() || undefined);
     if (!videoUrl && !youtubeUrl) {
       toast.error(nodeRunError(d.label, "nodeRun.connectAVideoOrSet"));
       return Promise.reject(new Error("No video source"));
@@ -4042,7 +4076,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -4051,8 +4085,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckVideoAnalysis"));
                   reject(err);
@@ -4075,6 +4111,128 @@ function executeNodeCore(
           reject(err);
         });
     });
+  }
+
+  if (node.type === "content-recipe") {
+    const d = node.data as ContentRecipeNodeData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    // The material is the text on the `in` wire — or, under a fan-out, this
+    // iteration's item (one scraped post). Mirror of payload-builder.
+    const source = (overridePrompt ?? inputs.prompt ?? "").trim();
+    if (!source) {
+      toast.error(nodeRunError(d.label, "nodeRun.contentRecipeNeedsMaterial"));
+      return Promise.reject(new Error("No material"));
+    }
+    updateNodeData(node.id, {
+      ...RUN_START_RESET,
+      generatedJson: undefined,
+      generatedText: undefined,
+      runWarnings: undefined,
+      currentJobProgress: undefined,
+    });
+    setUserPromptTemplate(undefined);
+    let recipeJobId = "";
+    return startContentRecipe({
+      source,
+      // The `link` wire (a Video URL node's page link) wins over the typed link.
+      sourceUrl: inputs.sourceLink ?? (d.sourceUrl?.trim() || undefined),
+      focus: d.focus?.trim() || undefined,
+      llmModel: d.llmModel,
+      reasoningEffort: d.reasoningEffort,
+      userId: ctx.userId,
+    })
+      .then(({ jobId }) => {
+        recipeJobId = jobId;
+        updateNodeData(node.id, { currentJobId: jobId });
+        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal, budgetMs: 10 * 60_000 });
+      })
+      .then((output) => {
+        // Run discarded/replaced — the job still lands in the library, but its
+        // result must not overwrite the node.
+        if (shouldAbandonNode(node.id, recipeJobId)) return "";
+        // One mapping with the reload recovery (lib/content-run-output.ts).
+        const patch = contentRunResultPatch("content-recipe", output);
+        if (!patch) throw new Error(tx("nodeRun.contentRecipeFailed"));
+        updateNodeData(node.id, { ...patch, currentJobId: undefined, currentJobProgress: undefined });
+        guardedToast.success(tx("nodeRun.contentRecipeComplete"));
+        return patch.generatedText as string;
+      })
+      .catch((err: Error) => {
+        // Stop → the poll was aborted; the central Stop handler already restored
+        // the node, so don't overwrite it with a failure (mirrors the scrapers).
+        if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
+        if (recipeJobId && shouldAbandonNode(node.id, recipeJobId)) return "";
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err?.message || tx("nodeRun.contentRecipeFailed"),
+          currentJobId: undefined,
+          currentJobProgress: undefined,
+        });
+        if (!checkStorageError(err, ctx)) {
+          guardedToast.error(tx("nodeRun.contentRecipeFailed"), { description: err?.message });
+        }
+        throw err;
+      });
+  }
+
+  if (node.type === "content-ideas") {
+    const d = node.data as ContentIdeasNodeData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    // Every recipe wired into `recipes` arrives folded on inputs.inputs (the
+    // fan-in branch of the resolver); brand / language were resolved into data.
+    const recipes = (inputs.inputs ?? []).filter((r): r is string => typeof r === "string" && r.trim() !== "");
+    if (recipes.length === 0) {
+      toast.error(nodeRunError(d.label, "nodeRun.contentIdeasNeedsRecipe"));
+      return Promise.reject(new Error("No recipe"));
+    }
+    updateNodeData(node.id, {
+      ...RUN_START_RESET,
+      generatedJson: undefined,
+      ideaBriefs: undefined,
+      generatedText: undefined,
+      runWarnings: undefined,
+      currentJobProgress: undefined,
+    });
+    setUserPromptTemplate(undefined);
+    let ideasJobId = "";
+    return startContentIdeas({
+      recipes: recipes.slice(0, CONTENT_IDEAS_MAX_RECIPE_INPUTS),
+      brand: d.brand?.trim() || undefined,
+      count: clampContentIdeasCount(d.count),
+      language: d.language?.trim() || undefined,
+      llmModel: d.llmModel,
+      reasoningEffort: d.reasoningEffort,
+      userId: ctx.userId,
+    })
+      .then(({ jobId }) => {
+        ideasJobId = jobId;
+        updateNodeData(node.id, { currentJobId: jobId });
+        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal, budgetMs: 15 * 60_000 });
+      })
+      .then((output) => {
+        if (shouldAbandonNode(node.id, ideasJobId)) return "";
+        // One brief per idea on ideaBriefs — the list the next node runs on.
+        // Same mapping as the reload recovery (lib/content-run-output.ts).
+        const patch = contentRunResultPatch("content-ideas", output);
+        if (!patch) throw new Error(tx("nodeRun.contentIdeasFailed"));
+        updateNodeData(node.id, { ...patch, currentJobId: undefined, currentJobProgress: undefined });
+        guardedToast.success(tx("nodeRun.contentIdeasComplete", { count: (patch.ideaBriefs as string[]).length }));
+        return patch.generatedText as string;
+      })
+      .catch((err: Error) => {
+        if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
+        if (ideasJobId && shouldAbandonNode(node.id, ideasJobId)) return "";
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err?.message || tx("nodeRun.contentIdeasFailed"),
+          currentJobId: undefined,
+          currentJobProgress: undefined,
+        });
+        if (!checkStorageError(err, ctx)) {
+          guardedToast.error(tx("nodeRun.contentIdeasFailed"), { description: err?.message });
+        }
+        throw err;
+      });
   }
 
   if (node.type === "video-audit") {
@@ -4178,7 +4336,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -4187,8 +4345,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckAIAudit"));
                   reject(err);
@@ -4242,7 +4402,7 @@ function executeNodeCore(
       node.id,
       () => sunoGenerateApi({ ...result, userId: ctx.userId }),
       "generatedAudioUrl",
-      "Suno Generate",
+      "Suno Create Music",
       ctx,
       extractSunoOutputFields,
     );
@@ -4410,7 +4570,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -4419,8 +4579,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckLyricsStatus"));
                   reject(err);
@@ -4927,7 +5089,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write a failure to canvas.
@@ -4936,8 +5098,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckTranscriptionStatus"));
                   reject(err);
@@ -5260,7 +5424,9 @@ function executeNodeCore(
       count: d.count,
       period: d.period,
       formats: Array.isArray(d.formats) ? d.formats : undefined,
-      featuredIndex: typeof d.featuredIndex === "number" ? d.featuredIndex : undefined,
+      // No featuredIndex: a run features its FIRST result, and the node resets
+      // its featured item to 0 on completion. Sending the saved index made the
+      // route feature (and copy the video of) another item than the node shows.
       ingestVideo: videoWired,
       ingestAllVideos: d.ingestAllVideos === true ? true : undefined,
       analyze: d.analyze === true ? true : undefined,
@@ -5289,6 +5455,51 @@ function executeNodeCore(
         if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
         updateNodeData(node.id, applyInstagramScrapeFailure(err.message || "Scrape failed"));
         guardedToast.error(tx("nodeRun.instagramFailed", { message: err.message }));
+        throw err;
+      });
+  }
+
+  if (node.type === "social-search") {
+    const d = node.data as SocialSearchNodeData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    // ONE request builder with the workflow orchestrator: the wired text (a
+    // Text node, a List item) is the query when there is one.
+    const request = socialSearchRequestFromNode(d, inputs.prompt);
+    if (!request.query) {
+      const message = tx("social.queryNeeded");
+      updateNodeData(node.id, applySocialSearchFailure(message));
+      guardedToast.error(message);
+      throw new Error(message);
+    }
+    updateNodeData(node.id, socialSearchRunStartPatch(d));
+    setUserPromptTemplate(undefined);
+    let searchJobId = "";
+    return socialSearch(request)
+      // The search runs in a worker (an X search can take two minutes), so the
+      // route answers with a job id; poll it to completion here.
+      .then(({ jobId }) => {
+        searchJobId = jobId;
+        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal });
+      })
+      .then((output) => {
+        // The LIVE data: "how many to pass on" may have changed while it ran.
+        const live = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data as Record<string, unknown> | undefined;
+        const patch = scrapeResultPatch("social-search", output.json, searchJobId, live ?? d) ?? applySocialSearchResult(output.json, d);
+        const warnings = Array.isArray(output.warnings) ? (output.warnings as unknown[]).filter((w): w is string => typeof w === "string") : [];
+        updateNodeData(node.id, { ...patch, searchWarnings: warnings.length ? warnings : undefined });
+        const found = typeof patch.lastRunCount === "number" ? patch.lastRunCount : 0;
+        guardedToast.success(
+          found === 0 ? tx("nodeRun.socialSearchCompleted0") : found === 1 ? tx("nodeRun.socialSearchCompletedOne") : tx("nodeRun.socialSearchCompleted", { count: found }),
+        );
+        const chosen = Array.isArray(patch.generatedJson) ? patch.generatedJson : (d.generatedJson ?? []);
+        return JSON.stringify(chosen);
+      })
+      .catch((err: Error) => {
+        // Stop → the poll was aborted; the central Stop handler already restored
+        // the node, so don't overwrite it with a failure (mirrors instagram-scrape).
+        if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
+        updateNodeData(node.id, applySocialSearchFailure(err.message || tx("node.scrapeFailed")));
+        guardedToast.error(tx("nodeRun.socialSearchFailed", { message: err.message }));
         throw err;
       });
   }
@@ -5567,8 +5778,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -5717,8 +5927,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -5903,8 +6112,7 @@ function executeNodeCore(
       {
         const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
         if (cinematographyHints.length > 0) {
-          const joined = cinematographyHints.join(", ");
-          seedancePrompt = seedancePrompt ? `${seedancePrompt}. ${joined}` : joined;
+          seedancePrompt = appendPromptHints(seedancePrompt, cinematographyHints);
         }
       }
       {
@@ -5949,8 +6157,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -5996,8 +6203,7 @@ function executeNodeCore(
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
-        const joined = cinematographyHints.join(", ");
-        prompt = prompt ? `${prompt}. ${joined}` : joined;
+        prompt = appendPromptHints(prompt, cinematographyHints);
       }
     }
     {
@@ -6060,7 +6266,6 @@ function executeNodeCore(
           ctx,
           nodeId: node.id,
           label: sheetData.label ?? "Reference Sheet",
-          assemblyFee: sheetData.flavour?.outputFormat === "motion" ? 6 : 4,
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Stage A failed";
@@ -6232,7 +6437,7 @@ function executeNodeCore(
                     }
                   } catch (err) {
                     pollFailures++;
-                    if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                    if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                       ctx.untrackInterval(interval);
                       // Final verification: completion may have raced the
                       // network blip — re-fetch once before giving up.
@@ -6446,7 +6651,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     // Run discarded/replaced — don't write result/failure to canvas.
@@ -6485,9 +6690,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
-                    errorMessage: "Failed to check status — network error",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckGenerateMask"));
                   reject(err);
@@ -6822,6 +7028,23 @@ function executeNodeCore(
       toast.error(nodeRunError(epData.label, "nodeRun.connectTheRecordingSMedia"));
       return Promise.reject(new Error("edit-plan requires at least one source"));
     }
+    // B4: audio-sync's offsets (when wired), the master's own offset and the
+    // transcript's clock — checked before the POST, so a plan that would
+    // render out of sync fails before charging. The backend payload builder
+    // runs the same rule (resolveEditPlanSources).
+    const planned = resolveEditPlanSources(sources as Array<AudioSyncOffsetSource & Record<string, unknown>>, {
+      offsets: inputs.editPlanOffsets,
+      transcriptSourceId: inputs.editPlanTranscriptOrigin,
+    });
+    if (!planned.ok) {
+      const labelOf = (id: string) => orderedWired.find((w) => w.nodeId === id)?.label ?? id;
+      toast.error(nodeRunText(epData.label, planned.issues.map((i) => editPlanIssueText(i, labelOf)).join("; ")));
+      return Promise.reject(new Error(`edit-plan: ${planned.issues.map((i) => describeAudioSyncOffsetIssue(i, labelOf)).join("; ")}`));
+    }
+    // Stamp the transcript's recording so the plugin's own clock guard sees it.
+    const plannedTranscript = planned.transcriptSourceId && typeof transcript === "object"
+      ? { ...(transcript as Record<string, unknown>), sourceId: planned.transcriptSourceId }
+      : transcript;
     const mode = asEditPlanMode(epData.mode);
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, { ...RUN_START_RESET, generatedJson: undefined, currentJobProgress: undefined });
@@ -6830,9 +7053,9 @@ function executeNodeCore(
       editPlan({
         mode,
         planTier: asEditPlanTier(epData.planTier),
-        transcript,
+        transcript: plannedTranscript,
         silence,
-        sources,
+        sources: planned.sources,
         instructions: applyPromptAffixes(epData.instructions, readPromptAffixes(epData), refMap),
         styleGuide: epData.styleGuide?.trim() || undefined,
         count: mode === "clips" ? clampEditPlanClipCount(epData.count) : undefined,
@@ -6893,7 +7116,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     resolve("");
@@ -6901,8 +7124,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckEditPlan"));
                   reject(err);
@@ -7150,7 +7375,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     resolve("");
@@ -7158,8 +7383,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckSilenceDetect"));
                   reject(err);
@@ -7257,7 +7484,7 @@ function executeNodeCore(
                 }
               } catch (err) {
                 pollFailures++;
-                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
                   ctx.untrackInterval(poll);
                   if (shouldAbandonNode(node.id, jobId)) {
                     resolve("");
@@ -7265,8 +7492,10 @@ function executeNodeCore(
                   }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
+                    errorMessage: jobGoneMessage(),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobConnectionLost: undefined,
                   });
                   guardedToast.error(tx("nodeRun.failedToCheckAudioSync"));
                   reject(err);
@@ -8811,9 +9040,7 @@ function executeNodeCore(
     const augmentedData = cinematographyHints.length > 0
       ? {
           ...locData,
-          description: locData.description
-            ? `${locData.description}. ${cinematographyHints.join(", ")}`
-            : cinematographyHints.join(", "),
+          description: appendPromptHints(locData.description, cinematographyHints),
         }
       : locData;
     return runLocationGeneration(node.id, augmentedData, ctx);

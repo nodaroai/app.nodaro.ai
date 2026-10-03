@@ -177,6 +177,40 @@ describe("uploadFileToR2 — explicit video container", () => {
   })
 })
 
+// Audio follows the FILE the producer wrote: Extract Audio writes audio.mp3,
+// Trim Audio output.<chosen format>. The blanket ".wav" + audio/wav stamp served
+// every MP3 as a ".wav" download (docs rebuild, item 8).
+describe("uploadFileToR2 — audio keeps the container its file declares", () => {
+  const audioFile = (name: string) => {
+    const path = join(workDir, name)
+    writeFileSync(path, Buffer.alloc(16))
+    return path
+  }
+
+  it.each([
+    ["audio.mp3", "audios/job-a1.mp3", "audio/mpeg"],
+    ["output.aac", "audios/job-a1.aac", "audio/aac"],
+    ["output.m4a", "audios/job-a1.m4a", "audio/mp4"],
+    ["output.WAV", "audios/job-a1.wav", "audio/wav"],
+    ["output.flac", "audios/job-a1.flac", "audio/flac"],
+  ])("%s ⇒ %s served %s", async (name, key, contentType) => {
+    const url = await uploadFileToR2(audioFile(name), "job-a1", "audio", "user-1")
+    expect(url).toBe(`https://r2.test.com/${key}`)
+    expect(mocks.uploadParams).toEqual([{ Key: key, ContentType: contentType }])
+  })
+
+  it("a file with no recognised audio extension keeps the old .wav stamp", async () => {
+    const url = await uploadFileToR2(audioFile("output.bin"), "job-a2", "audio", "user-1")
+    expect(url).toBe("https://r2.test.com/audios/job-a2.wav")
+    expect(mocks.uploadParams).toEqual([{ Key: "audios/job-a2.wav", ContentType: "audio/wav" }])
+  })
+
+  it("never renames a video or image by its file name", async () => {
+    await uploadFileToR2(audioFile("clip.mp3"), "job-a3", "video", "user-1")
+    expect(mocks.uploadParams).toEqual([{ Key: "videos/job-a3.mp4", ContentType: "video/mp4" }])
+  })
+})
+
 describe("mediaObjectKey / copyRecastObject learn the container", () => {
   it("mediaObjectKey takes mov explicitly (default stays mp4)", () => {
     expect(mediaObjectKey("job-9", "video")).toBe("videos/job-9.mp4")

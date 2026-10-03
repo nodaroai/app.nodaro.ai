@@ -31,7 +31,10 @@ vi.mock("../../../lib/llm-client.js", () => ({
   llmComplete: mocks.llmComplete,
 }))
 
-vi.mock("@nodaro/shared", () => ({
+// The real package, so the generator's defaults are the shared ones the MCP
+// tool advertises (SCRIPT_SCENE_COUNT_DEFAULT / SCRIPT_TARGET_DURATION_DEFAULT).
+vi.mock("@nodaro/shared", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@nodaro/shared")>()),
   getLlmModel: mocks.getLlmModel,
   LLM_FEATURE_DEFAULTS: {
     "generate-script": "default-script-model",
@@ -159,6 +162,22 @@ describe("generateScript — user prompt construction", () => {
     const call = mocks.llmComplete.mock.calls[0][0]
     const userMsg = (call.messages[0] as { content: string }).content
     expect(userMsg).not.toContain("Tone:")
+  })
+
+  it("adds the style guide after the brief when one is given", async () => {
+    await generateScript("a journey", 3, undefined, undefined, undefined, undefined, undefined, undefined, { styleGuide: "Noir, short lines" })
+
+    const call = mocks.llmComplete.mock.calls[0][0]
+    const userMsg = (call.messages[0] as { content: string }).content
+    expect(userMsg).toMatch(/Style guide \(follow it for the writing, the visuals and the pacing\):\nNoir, short lines$/)
+  })
+
+  it("omits the style guide when there is none", async () => {
+    await generateScript("a journey", 3, undefined, undefined, undefined, undefined, undefined, undefined, { styleGuide: undefined })
+
+    const call = mocks.llmComplete.mock.calls[0][0]
+    const userMsg = (call.messages[0] as { content: string }).content
+    expect(userMsg).not.toContain("Style guide")
   })
 
   it("uses the system prompt with cinematic-script instructions", async () => {

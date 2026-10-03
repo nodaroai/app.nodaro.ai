@@ -7,9 +7,11 @@
  * renamed from `subjects` → `assets`. Legacy edge handles (`style`,
  * `cinematography`, `subjects`) are migrated on load by source type.
  */
-import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, SETTINGS_INPUT_HANDLE, settingsInputAccepts } from "@nodaro/shared"
+import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
 
-export const GENERATE_IMAGE_INPUT_HANDLES = ["prompt", "negative", "references", "assets", "elements", "look"] as const
+// + the Settings input (Aspect Ratio / Provider), one input for all.
+export const GENERATE_IMAGE_INPUT_HANDLES = ["prompt", "negative", "references", "assets", "elements", "look", SETTINGS_INPUT_HANDLE] as const
 
 export type GenerateImageInputHandle = typeof GENERATE_IMAGE_INPUT_HANDLES[number]
 
@@ -122,6 +124,11 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "telegram-account-trigger",
   // telegram-channel-feed emits the recent posts' text (generatedText).
   "telegram-channel-feed",
+  // Content Recipe's `text` handle is the readable recipe; Content Ideas emits
+  // one creative brief per idea (and the digest of all of them) — text either
+  // way, so both feed prompt/text inputs (Generate Script's topic above all).
+  "content-recipe",
+  "content-ideas",
 ])
 
 /** Source node types whose output is structured JSON that both runtimes
@@ -132,7 +139,7 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
  *  where the resolvers route by handle into media-URL arrays or verbatim
  *  text fields that a JSON blob would break. Kept apart from
  *  TEXT_PRODUCER_TYPES on purpose: that set widens every text handle at once. */
-export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set(["web-scrape", "meta-ads-scrape"])
+export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>(SCRAPE_NODE_TYPES)
 
 /** Source node types whose output image feeds References (mirrors backend
  *  `imageSourceTypes` in payload-builder.ts:1328). */
@@ -243,6 +250,8 @@ export function isValidGenerateImageConnection(
     case "style":
       // Legacy: accept any picker (pre-migration backwards compat).
       return isPickerType(sourceNodeType)
+    case SETTINGS_INPUT_HANDLE:
+      return settingsInputAccepts("generate-image", sourceNodeType)
     default:
       // Unknown handle (legacy or external) — let it through; other validators
       // may still reject. Defensive default.

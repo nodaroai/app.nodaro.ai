@@ -5,9 +5,10 @@ import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
 import { IDENTITY_TYPES, IMAGE_PRODUCER_TYPES, TEXT_PRODUCER_TYPES } from "./generate-image-handles"
 import { ACCEPTS_PARAMETER_PICKER, TARGET_HANDLE_ACCEPTS } from "./target-handle-registry"
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
-import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, VIDEO_ONLY_PARAMETER_NODE_TYPES, resolveEffectiveSourceType } from "@nodaro/shared"
-import { AUDIO_PICKER_TYPES, VOICE_PERSONA_TYPES } from "./audio-text-handles"
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, VIDEO_ONLY_PARAMETER_NODE_TYPES, SETTINGS_INPUT_HANDLE, SETTINGS_SOURCE_FIELDS, resolveEffectiveSourceType } from "@nodaro/shared"
+import { AUDIO_PICKER_TYPES, VOICE_PERSONA_TYPES, GENERATE_SCRIPT_FIELD_HANDLES } from "./audio-text-handles"
 import { ANALYSIS_PRODUCER_TYPES } from "./data-handles"
+import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
 
 // `voice` target accepts voice-persona producers (suno-voice, voice-design's
 // voiceId output) AND voice-character (a parameter picker — surfaced as
@@ -21,7 +22,7 @@ const VOICE_TARGET_TYPES: ReadonlySet<string> = new Set<string>([...VOICE_PERSON
  *  paths in sync prevents the add-node popup from suggesting targets the
  *  drop-time validator then rejects. */
 const TYPED_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set([
-  "list", "web-scrape", "meta-ads-scrape", "extract-field", "filter-list",
+  "list", ...SCRAPE_NODE_TYPES, "extract-field", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
   // silence-detect emits { version, ranges, durationMs } JSON on its `json`
   // source handle; its source-direction popover consults TARGET_HANDLE_ACCEPTS
@@ -37,11 +38,25 @@ const TYPED_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set([
   // video-audit emits the SAME payload on the same handles — including into
   // another audit's `analysis` target, which only TARGET_HANDLE_ACCEPTS knows.
   "video-audit",
+  // Content Recipe feeds Content Ideas' `recipes` target, which only
+  // TARGET_HANDLE_ACCEPTS knows; Content Ideas feeds text inputs per idea.
+  "content-recipe",
+  "content-ideas",
   // describe-to-picker emits picker JSON on its `picker-json` source handle;
   // its source-direction popover must consult TARGET_HANDLE_ACCEPTS (where the
   // analyzable pickers' `picker-json` targets are registered) so it surfaces them.
   "describe-to-picker",
+  // The Generation Settings nodes (Aspect Ratio / Duration / Provider): their
+  // only consumers are typed inputs (Settings, Generate Script's field-*), which
+  // only TARGET_HANDLE_ACCEPTS knows.
+  ...Object.keys(SETTINGS_SOURCE_FIELDS),
 ])
+
+/** The Generation Settings node whose output is `sourceHandleId` (`ratio` → "aspect-ratio"), else
+ *  undefined. Keyed on the handle alone, like identityRefSourceType below. */
+function settingsSourceTypeForHandle(sourceHandleId: string): string | undefined {
+  return Object.keys(SETTINGS_SOURCE_FIELDS).find((type) => NODE_DEF_MAP.get(type as SceneNodeType)?.outputs.includes(sourceHandleId))
+}
 
 /** The identity type whose declared ref output is `sourceHandleId` (`characterRef` → "character"), else
  *  undefined; an entity's `image` pip is excluded (resolveEffectiveSourceType remaps it). Keyed on the handle
@@ -236,6 +251,11 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   "analysis",
   // suno-generate secondary text fields (field-<key> mappable handles).
   "field-style", "field-lyrics", "field-title", "field-negativeStyle",
+  // generate-script settings inputs (Tone / Style Guide / Scene Count / Duration).
+  ...Object.values(GENERATE_SCRIPT_FIELD_HANDLES),
+  // The Settings input (Generate Video / Generate Video Pro): Aspect Ratio,
+  // Duration and Provider nodes, one handle for all.
+  SETTINGS_INPUT_HANDLE,
   //   - scene: Edit 3D Scene's upstream-plan input (accepts only the two
   //     3D-scene authoring nodes, never a Parameter picker).
   "scene",
@@ -245,6 +265,14 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   //     `transcript` (JSON) input — same handle id, no new entry needed here.
   //     Drift mirror of the registry.
   "edl", "sources",
+  //   - edit-plan typed inputs: `silence` (silence-detect ranges) and
+  //     `offsets` (audio-sync's result) accept json producers; its
+  //     `transcript` and `sources` ids are covered above.
+  "silence", "offsets",
+  //   - Content Recipe's `link` (the post's page link: Video URL or text) and
+  //     Content Ideas' `recipes` (recipe producers + text) and `field-brand`
+  //     (text only). Drift mirror of the registry.
+  "link", "recipes", "field-brand",
 ])
 /** Subset that requires consumer-type dispatch — the dev-time warning in
  *  getCompatibleNodes triggers when one of these is passed without a
@@ -273,6 +301,12 @@ const CONSUMER_TYPE_DEPENDENT_HANDLES: ReadonlySet<string> = new Set(["startStat
  *  after-effects, transcribe, etc.) — false-positive UX. */
 export const PARAMETER_ACCEPTING_HANDLE_IDS: ReadonlySet<string> = new Set([
   "startState", "endState", "target",
+  // Generate Script's settings inputs take the Tone / Style Guide / Scene
+  // Count / Duration nodes (Parameter category).
+  ...Object.values(GENERATE_SCRIPT_FIELD_HANDLES),
+  // The Settings input takes the Aspect Ratio / Duration / Provider nodes
+  // (Parameter category).
+  SETTINGS_INPUT_HANDLE,
   // Image-producer legacy `cinematography` handle accepts visual pickers
   // (camera, look, elements). The existing getCompatibleNodes branch
   // (handleId === "cinematography" || "style") routes to picker candidates;
@@ -319,7 +353,15 @@ export function getCompatibleNodes(
   // HANDLE_COMPATIBILITY which has loose entries like
   // `json: ["json","in","text","prompt"]` and would suggest media nodes
   // that the new data-handles.ts predicates then reject at drop time.
-  if (direction === "source" && consumerNodeType && TYPED_SOURCE_NODE_TYPES.has(consumerNodeType)) {
+  //
+  // Judged by what THIS handle emits: a scraper's `text` / `image` / `video`
+  // pips emit a plain text / image / video (resolveEffectiveSourceType), so
+  // only its `json` pip takes this branch — the others fall through to the
+  // media candidates, as the drop validator treats them.
+  const typedSourceType = direction === "source" && consumerNodeType
+    ? resolveEffectiveSourceType(consumerNodeType, handleId)
+    : undefined
+  if (direction === "source" && consumerNodeType && typedSourceType && TYPED_SOURCE_NODE_TYPES.has(typedSourceType)) {
     const direct: NodeOption[] = []
     const directTypes = new Set<SceneNodeType>()
     for (const option of nodeOptions) {
@@ -328,7 +370,7 @@ export function getCompatibleNodes(
       if (option.type === consumerNodeType) continue
       const entries = TARGET_HANDLE_ACCEPTS[option.type]
       if (!entries) continue
-      if (entries.some((e) => e.accepts(consumerNodeType))) {
+      if (entries.some((e) => e.accepts(typedSourceType))) {
         direct.push(option)
         directTypes.add(option.type)
       }
@@ -498,6 +540,37 @@ export function getCompatibleNodes(
     const directTypes = new Set<SceneNodeType>()
     for (const option of nodeOptions) {
       if (!TEXT_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // Generate Script's settings inputs: exactly what its validator takes (the
+  // matching Generation Settings node, plus any text for Tone / Style Guide),
+  // read from TARGET_HANDLE_ACCEPTS so the popup and the drop can't differ.
+  // Before the generic `field-` branch below, which offers text producers only.
+  if (consumerNodeType === "generate-script" && direction === "target" && handleId.startsWith("field-")) {
+    const entry = TARGET_HANDLE_ACCEPTS["generate-script"]?.find((e) => e.handleId === handleId)
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!entry?.accepts(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // The Settings input: exactly the Generation Settings nodes its consumer
+  // takes, read from TARGET_HANDLE_ACCEPTS so the popup and the drop can't
+  // differ.
+  if (handleId === SETTINGS_INPUT_HANDLE && direction === "target" && consumerNodeType) {
+    const entry = TARGET_HANDLE_ACCEPTS[consumerNodeType]?.find((e) => e.handleId === handleId)
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!entry?.accepts(option.type)) continue
       direct.push(option)
       directTypes.add(option.type)
     }
@@ -800,9 +873,11 @@ export function resolveTargetHandle(
     if (nodeType === "list") return "col_add"
     // Identity ref source → the first registry handle accepting that identity type (the
     // entries getCompatibleNodes promotes), never a phantom `in` (Character Motion / FX).
-    const identitySource = identityRefSourceType(sourceHandleId)
-    const accepting = identitySource
-      ? TARGET_HANDLE_ACCEPTS[nodeType]?.find((e) => e.accepts(identitySource))
+    // A Generation Settings node → the handle that takes it (Settings, or
+    // Generate Script's field-*), which no loose handle map knows.
+    const typedSource = identityRefSourceType(sourceHandleId) ?? settingsSourceTypeForHandle(sourceHandleId)
+    const accepting = typedSource
+      ? TARGET_HANDLE_ACCEPTS[nodeType]?.find((e) => e.accepts(typedSource))
       : undefined
     if (accepting) return accepting.handleId
     return def.inputs.find((h) => compatible.includes(h)) ?? "in"

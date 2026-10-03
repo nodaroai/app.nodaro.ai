@@ -1,5 +1,12 @@
 # @nodaro/shared
 
+## 3.14.1
+
+### Patch Changes
+
+- ed74c76: Correct the Korean picker-catalog translations. Descriptions now read as short captions instead of full sentences, and mistranslated labels and descriptions are fixed, for example ages in the Person catalog, vehicle and weapon parts, hairstyle and voice terms, and lens and exposure terms. Literal calques are replaced with the terms Korean creators use, dolly is spelled 돌리 throughout, and entries that should keep a Latin proper name do. Catalog ids and English copy are unchanged.
+- b06881d: Correct the Brazilian Portuguese picker-catalog translations. Labels now use sentence case. Mistranslated labels and descriptions are fixed, for example false friends, European Portuguese spellings, and film, lighting, music and fashion terms. Descriptions written against older English copy now match the current English. Picker tiles that still showed English now show Portuguese. Catalog ids and English copy are unchanged.
+
 ## 3.14.0
 
 ### Minor Changes

@@ -2,9 +2,9 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
-import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostLink } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference } from "@nodaro/shared"
-import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle } from "@nodaro/shared"
+import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import type {
   WorkflowNode,
@@ -20,7 +20,6 @@ import type {
 } from "@/types/nodes";
 import { loopColInputHandle, OVERLAY_HANDLE_IDS } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE, computeGroupBuckets, computeCollectBuckets } from "./execution-graph";
-import { FAN_IN_NODE_TYPES } from "./types";
 import { TEXT_PRODUCER_TYPES, IDENTITY_TYPES } from "@/lib/generate-image-handles";
 import { ANALYSIS_PRODUCER_TYPES } from "@/lib/data-handles";
 import { isVisualPickerType } from "@/lib/parameter-picker-types";
@@ -733,7 +732,13 @@ export interface FrontendResolvedInputs {
    *  the `sources` handle. Mirror of backend ResolvedInputs.silence /
    *  editPlanSources. */
   silence?: string;
-  editPlanSources?: Array<{ nodeId: string; url: string; kind: "video" | "audio"; duration?: number }>;
+  editPlanSources?: Array<{ nodeId: string; url: string; kind: "video" | "audio"; duration?: number; label?: string }>;
+  /** edit-plan: audio-sync's result (stringified json) from the `offsets`
+   *  handle. Mirror of backend ResolvedInputs.editPlanOffsets. */
+  editPlanOffsets?: string;
+  /** edit-plan: the node the transcript was made from, when the canvas shows
+   *  it. Mirror of backend ResolvedInputs.editPlanTranscriptOrigin. */
+  editPlanTranscriptOrigin?: string;
   /** audio-sync: the recordings wired into the `sources` handle, in wire
    *  order, each with its source NODE id (the result's `sourceId`). Mirror of
    *  backend ResolvedInputs.audioSyncSources. */
@@ -743,6 +748,16 @@ export interface FrontendResolvedInputs {
    *  fanned out) so the reduce strategy can fold it into a single value.
    *  Mirror of backend FrontendResolvedInputs.inputs. */
   inputs?: string[];
+  /** content-recipe: the post's own link from a wire into the `link` handle —
+   *  a Video URL node's PAGE link (never its downloaded file) or a text node's
+   *  text. Mirror of backend ResolvedInputs.sourceLink (named so it is not
+   *  read as a media URL slot). */
+  sourceLink?: string;
+  /** video-analysis: a post's link from a TEXT output wired into the `video`
+   *  handle (the Telegram Account Trigger's Video link, a Text node). Read
+   *  like the node's own link field, and before it; a wired video file still
+   *  wins over both. Mirror of backend ResolvedInputs.videoPageUrl. */
+  videoPageUrl?: string;
 }
 
 /** Append an asset to the manual-edit inputAssets accumulator. */
@@ -894,6 +909,15 @@ export function extractNodeOutputAsList(
     const splitResults = data.splitResults as string[] | undefined;
     if (splitResults && splitResults.length > 0) return splitResults;
   }
+  // Content Ideas: one brief per idea — what the next node runs once per idea
+  // on. Read before the generic `generatedJson` list, which would hand it the
+  // idea's raw JSON instead. Mirror of the backend saved-state branch.
+  if (node.type === "content-ideas") {
+    const briefs = Array.isArray(data.ideaBriefs)
+      ? (data.ideaBriefs as unknown[]).filter((b): b is string => typeof b === "string" && b.trim() !== "")
+      : [];
+    return briefs.length > 0 ? briefs : undefined;
+  }
   // Selector emits dual-output lists keyed by edge sourceHandle. The "rest"
   // handle returns the unselected remainder; any other handle (typically
   // "picked", or omitted) returns the picked items. Falls back to the in-store
@@ -992,7 +1016,7 @@ export function getListFanOutForNode(
   // running N redundant POST /v1/reduce calls (each charging credits) when a
   // user wires List → Reduce directly without an intermediate fanned-out
   // node. Mirrors backend input-resolver.ts FAN_IN_NODE_TYPES early-return.
-  if (FAN_IN_NODE_TYPES.has(node.type ?? "")) return undefined;
+  if (isFanInNodeType(node.type)) return undefined;
 
   const incomingEdges = edges.filter((e) => e.target === node.id && e.targetHandle !== VARIABLES_HANDLE_ID);
 
@@ -1270,8 +1294,9 @@ export function resolveNodeInputs(
     // fold the list into one value, they are never fanned out per-item. When
     // upstream has no list (no fan-out happened), wrap its single output as
     // `[output]` so the strategy still has something to fold. Mirrors backend
-    // input-resolver.ts FAN_IN_NODE_TYPES branch.
-    if (node.type && FAN_IN_NODE_TYPES.has(node.type)) {
+    // input-resolver.ts fan-in branch. Per EDGE: Choose Best folds every wire,
+    // Content Ideas only its `recipes` wire (FAN_IN_TARGETS in @nodaro/shared).
+    if (isFanInEdge(node.type, srcEdge.targetHandle)) {
       const edgeData = srcEdge.data as Record<string, unknown> | undefined;
       const filtered: string[] = srcListResults && srcListResults.length > 0
         ? selectListItems(srcListResults, edgeData as SelectorFields | undefined)
@@ -1465,6 +1490,13 @@ export function resolveNodeInputs(
     if (node.type === "slideshow" && src.type === "transition") {
       const pick = getParameterValue(src.data as Record<string, unknown>, "transition");
       if (pick) inputs.transition = pick;
+      continue;
+    }
+    // edit-plan's `offsets` wired but carrying no audio-sync result: record the
+    // wire ("") so the run fails rather than plan without the sync the user
+    // wired (B4). Mirror of the backend resolver.
+    if (!output && node.type === "edit-plan" && srcEdge.targetHandle === "offsets") {
+      inputs.editPlanOffsets = "";
       continue;
     }
     if (!output) continue;
@@ -1720,6 +1752,34 @@ export function resolveNodeInputs(
       continue;
     }
 
+    // content-recipe `link` handle: the post's own address, cited on the
+    // recipe and never fetched. A Video URL node is read for its PAGE link —
+    // its `video` output is the downloaded FILE, which identifies nothing.
+    // Any other source contributes its text. Gated on node.type. Mirror of
+    // the backend input-resolver branch.
+    if (node.type === "content-recipe" && srcEdge.targetHandle === "link") {
+      const link = src.type === "youtube-video" ? videoLinkPageUrl(src.data as Record<string, unknown>) : output;
+      if (typeof link === "string" && link.trim() !== "") inputs.sourceLink = link.trim();
+      continue;
+    }
+
+    // video-analysis `video` handle given a LINK: a text output (the Telegram
+    // Account Trigger's Video link, a Text node) carries a post's address,
+    // which the node fetches and analyzes — read like its own link field.
+    // Only a lone http(s) link is kept; any other text contributes nothing,
+    // so the node's own refusal names the missing source. A video or dynamic
+    // producer is not a link: it falls through to the file routing below.
+    // (The server also lets a trigger message that carries a video FILE fall
+    // through; the editor never runs a trigger.) A Social Search source hands
+    // over its posts: the link is the post's page (one post on an Each wire,
+    // the first of the list on any other). Gated on node.type. Mirror of the
+    // backend input-resolver branch.
+    if (node.type === "video-analysis" && srcEdge.targetHandle === "video" && !VIDEO_PRODUCER_TYPES.has(src.type ?? "") && !DYNAMIC_PRODUCER_TYPES.has(src.type ?? "")) {
+      const link = src.type === "social-search" ? socialSearchPostLink(output) ?? "" : output.trim();
+      if (/^https?:\/\/\S+$/i.test(link)) inputs.videoPageUrl = link;
+      continue;
+    }
+
     // apply-edl inputs: routed by targetHandle BEFORE the source-type chain
     // (else the json `edl`/`transcript` edges fall into inputs.prompt and the
     // media `sources` edges into inputs.videoUrl). `output` is the value
@@ -1750,10 +1810,19 @@ export function resolveNodeInputs(
     if (node.type === "edit-plan") {
       if (srcEdge.targetHandle === "transcript") {
         inputs.transcript = output;
+        // The recording the transcript was made from (B4) — checked against
+        // the master's clock at run. Mirror of the backend resolver.
+        const origin = editPlanTranscriptOrigin(src.id, (id) => nodes.find((n) => n.id === id)?.type, edges);
+        if (origin) inputs.editPlanTranscriptOrigin = origin;
         continue;
       }
       if (srcEdge.targetHandle === "silence") {
         inputs.silence = output;
+        continue;
+      }
+      // audio-sync's result — folded into the sources' offsetMs at run (B4).
+      if (srcEdge.targetHandle === "offsets") {
+        inputs.editPlanOffsets = output;
         continue;
       }
       if (srcEdge.targetHandle === "sources") {
@@ -1763,9 +1832,15 @@ export function resolveNodeInputs(
         // Carry the source's own duration (incl. the audio-master lane via
         // metadata.durationSeconds) for parity with the backend reserve.
         const duration = editPlanSourceDurationSec(src.data as Record<string, unknown>);
+        // The node's label names the source in an offsets error.
+        const label = (src.data as Record<string, unknown> | undefined)?.label;
         inputs.editPlanSources = [
           ...(inputs.editPlanSources ?? []),
-          { nodeId: src.id, url: output, kind, ...(duration !== undefined ? { duration } : {}) },
+          {
+            nodeId: src.id, url: output, kind,
+            ...(duration !== undefined ? { duration } : {}),
+            ...(typeof label === "string" && label ? { label } : {}),
+          },
         ];
         continue;
       }
@@ -2876,6 +2951,11 @@ export function resolveNodeInputs(
         inputs.prompt = output;
       }
     } else if (src.type === "schedule-trigger") {
+      inputs.prompt = output;
+    } else if (src.type === "social-search") {
+      // Both handles are text for the target: `json` the chosen posts
+      // stringified, `text` their digest (extractNodeOutput narrowed it by
+      // handle). Mirrors the backend input-resolver.
       inputs.prompt = output;
     } else if (src.type === "meta-ads-scrape" || src.type === "instagram-scrape") {
       // Route by the HANDLE the wire leaves: `output` is already the featured

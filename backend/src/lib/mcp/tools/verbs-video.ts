@@ -18,7 +18,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared"
 import { applyPromptAffixes, buildSeedanceVideoEditPrompt } from "@nodaro/prompts"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
@@ -3072,7 +3072,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "`get_job`; the result is `output_data.json` = `{ reference, offsets: [{ sourceId, " +
         "offsetMs, confidence, driftMsPerHour }], notes }`, where referenceMs = sourceMs + " +
         "offsetMs. Low confidence or drift is reported in `notes`, never corrected. Priced per " +
-        "source aligned to the reference.",
+        "source aligned to the reference. Feed the result to `plan_edit` as `offsets`.",
       inputSchema: {
         sources: z
           .array(z.object({
@@ -3209,8 +3209,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           "`clips` (find N short shareable clips → one EDL per clip), or `chapters` " +
           "(mark chapter boundaries with titles). Reads the transcript, never pixels. " +
           "Pass the timed `transcript` (word-level, from a transcribe step) and the media " +
-          "`sources` (1–6). Returns a job_id — poll `get_job`; the EDL plan is in the " +
-          "job's `output_data`.",
+          "`sources` (1–6). Multicam: give each source the `id` you gave `audio_sync` and pass " +
+          "its result as `offsets`; refused before any charge if a source was not measured or " +
+          "matched weakly (set its `offset_ms`). Returns a job_id — poll `get_job`; the EDL plan " +
+          "is in the job's `output_data`.",
         inputSchema: {
           mode: z.enum(EDIT_PLAN_MODES as unknown as [string, ...string[]]).describe("tighten | clips | chapters."),
           plan_tier: z.enum(EDIT_PLAN_TIERS as unknown as [string, ...string[]]).optional()
@@ -3218,12 +3220,18 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           transcript: z.record(z.string(), z.unknown()).describe("The timed word-level transcript object (from a transcribe step)."),
           silence: z.record(z.string(), z.unknown()).optional().describe("Optional silence ranges object (from a silence-detect step)."),
           sources: z.array(z.object({
+            id: z.string().min(1).max(200).optional()
+              .describe("The id you gave this recording in audio_sync (required with `offsets`)."),
             url: z.string().url().describe("Media URL for this source."),
             kind: z.enum(["video", "audio"]).optional(),
             role: z.enum(EDL_SOURCE_ROLES).optional(),
             speakers: z.array(z.string()).max(16).optional(),
             offset_ms: z.number().optional().describe("This source's origin on the master clock (masterMs = sourceMs + offsetMs)."),
           })).min(1).max(6).describe("1–6 media sources for the edit."),
+          offsets: z.union([z.record(z.string(), z.unknown()), z.string()]).optional()
+            .describe("An audio_sync job's `output_data.json` (object or JSON string)."),
+          transcript_source_id: z.string().min(1).max(200).optional()
+            .describe("The source the transcript was made from, if known."),
           instructions: z.string().max(4000).optional().describe("Free-text editing steer."),
           style_guide: z.string().max(8000).optional(),
           count: z.number().int().min(1).max(50).optional().describe("clips only: how many clips to find."),
@@ -3236,18 +3244,48 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         _meta: uiMeta(WIDGET_URI.jobAuto),
       },
       async (args) => {
+        const sources = args.sources.map((s) => ({
+          ...(s.id ? { id: s.id } : {}),
+          url: s.url,
+          ...(s.kind ? { kind: s.kind } : {}),
+          ...(s.role ? { role: s.role } : {}),
+          ...(s.speakers && s.speakers.length > 0 ? { speakers: s.speakers } : {}),
+          ...(s.offset_ms !== undefined ? { offsetMs: s.offset_ms } : {}),
+        }))
+        // B4: the same pre-dispatch check the canvas runs (resolveEditPlanSources)
+        // — offsets onto the sources, the master's clock, the transcript's clock
+        // — so a plan that would render out of sync is refused before charging.
+        if (args.offsets !== undefined && sources.some((s) => !s.id)) {
+          return {
+            content: [{ type: "text" as const, text: "plan_edit: give every source the `id` you gave audio_sync, so `offsets` can be matched to it" }],
+            isError: true as const,
+          }
+        }
+        const planned = resolveEditPlanSources(sources.map((s, i) => ({ ...s, id: s.id ?? `#${i + 1}` })), {
+          offsets: args.offsets,
+          transcriptSourceId: args.transcript_source_id,
+        })
+        if (!planned.ok) {
+          return {
+            content: [{ type: "text" as const, text: `plan_edit: ${planned.issues.map((i) => describeAudioSyncOffsetIssue(i)).join("; ")}` }],
+            isError: true as const,
+          }
+        }
+        // Sources the caller left unnamed stay unnamed (the plugin mints ids).
+        const plannedSources = planned.sources.map((s, i) => {
+          if (sources[i]!.id) return s
+          const { id: _minted, ...rest } = s
+          return rest
+        })
+        const transcript = planned.transcriptSourceId
+          ? { ...args.transcript, sourceId: planned.transcriptSourceId }
+          : args.transcript
         const payload: Record<string, unknown> = {
           mode: args.mode,
           ...(args.plan_tier ? { planTier: args.plan_tier } : {}),
-          transcript: args.transcript,
+          transcript,
           ...(args.silence ? { silence: args.silence } : {}),
-          sources: args.sources.map((s) => ({
-            url: s.url,
-            ...(s.kind ? { kind: s.kind } : {}),
-            ...(s.role ? { role: s.role } : {}),
-            ...(s.speakers && s.speakers.length > 0 ? { speakers: s.speakers } : {}),
-            ...(s.offset_ms !== undefined ? { offsetMs: s.offset_ms } : {}),
-          })),
+          sources: plannedSources,
           ...(args.instructions ? { instructions: args.instructions } : {}),
           ...(args.style_guide ? { styleGuide: args.style_guide } : {}),
           ...(args.count !== undefined ? { count: args.count } : {}),

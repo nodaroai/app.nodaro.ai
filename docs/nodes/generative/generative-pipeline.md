@@ -51,7 +51,7 @@ In `mode='guided'`, the Script stage pauses at `awaiting_approval` like manual m
   - **Suggest Branch** — when the change is structural (genre swap, protagonist replacement, removing a scene with many dependent dialogue lines), the director recommends using the Branch flow instead of inline patching.
 - **Reference integrity is enforced**: a patch that removes a cast/location/object key while it's still referenced in a scene is rejected, and a follow-up assistant turn explains what to fix. The user can iterate.
 - **Cap**: 20 user turns per pipeline. Reached the cap? Approve, branch, or switch to Manual Mode.
-- **Cost**: ~2 credits per chat turn (cached Sonnet 4.6). Reserved upfront for `mode='guided'` (40 credits over manual baseline). Unused credits refund automatically.
+- **Cost**: ~20 credits per chat turn (cached Sonnet 4.6). `mode='guided'` reserves 20 credits upfront for every turn the chat-enabled stages allow — 560 credits over the manual baseline today (20 Script turns + 8 Post-merge turns). Unused credits refund automatically.
 
 Chat is enabled at the **Script stage only in 1D.2b**. Shot List and Post-merge chat ship in 1D.2d.
 
@@ -102,7 +102,7 @@ The critic catches issues that no per-image critic can see:
 
 When the assessment is `incoherent` (severe issues), the banner surfaces a **Branch from Shot List** button so the user can re-plan from Stage 5 with the critic's findings as context.
 
-Adds ~5 credits to the pipeline budget (1 Sonnet call with N images input).
+Adds 50 credits to the pipeline budget (1 Sonnet call with N images input).
 
 ### Video Critic (Phase 1D.2c-b-ii)
 
@@ -115,11 +115,13 @@ The critic checks:
 
 **Configurable frame extraction** via `video_critic_frame_count` (set per pipeline in the editor's Generative Pipeline config):
 
-| Mode | Frames | Cost/shot |
+| Mode | Frames | Reserved per shot |
 |---|---|---|
-| `first_last` (default) | 2 (input keyframe + last-frame) | ~2 credits |
-| `first_middle_last` | 3 | ~3 credits |
-| `five_evenly` | 5 | ~4 credits |
+| `first_last` (default) | 2 (input keyframe + last-frame) | 20 credits |
+| `first_middle_last` | 3 | 30 credits |
+| `five_evenly` | 5 | 40 credits |
+
+The reservation is a worst case; what the critic calls do not use is refunded when the pipeline completes.
 
 **Failure modes:**
 - **Pass** → shot persists `video_critic_findings` + `video_critic_score` (informational warnings even on success path).
@@ -160,9 +162,9 @@ reference images and (for characters) voice-matching against the ElevenLabs cata
 ### Credits
 
 Phase 1B.1 image gen uses `nano-banana` by default (10 credits/image, tier-overridable
-in Phase 1C). Voice match is a Haiku call (~0.005 USD ≈ 0.3 credits). A typical 4-cast,
-3-object, 3-location run with default variants is ~50-80 credits beyond the Phase 1A
-30-credit Stage 1 estimate.
+in Phase 1C). Voice match is a small Haiku call (about 3 credits). A typical 4-cast,
+3-object, 3-location run with default variants is ~500-800 credits beyond the Phase 1A
+300-credit Stage 1 estimate.
 
 ## Stage 5 — Shot List (Phase 1B.2)
 
@@ -195,7 +197,7 @@ Per `@nodaro/shared/scene-node-types`:
 
 ### Credits
 
-Scene Director (Sonnet, per scene) ~5-8 credits/scene + Shot List Critic ~2 credits/scene. An 8-scene short_film adds ~50-80 credits on top of the prior stages (~30 + ~80 = ~110 credits cumulative at end of 1B.2).
+Scene Director (Sonnet, per scene) ~50-80 credits/scene + Shot List Critic ~20 credits/scene. An 8-scene short_film adds ~560-800 credits on top of the prior stages (~300 + ~800 = ~1,100 credits cumulative at end of 1B.2).
 
 ## Scene-Context Helpers (Phase 1B.3)
 
@@ -432,7 +434,7 @@ As entities materialize, the canvas runs ELK auto-layout (`elkjs`, `layered` alg
 
 ## Credits
 
-Phase 1A: ~30 credits per Stage 1 run (LLM calls only). Reserved upfront on POST;
+Phase 1A: 300 credits per Stage 1 run (LLM calls only). Reserved upfront on POST;
 refunded on cancel/failure. A future hard cap defaults to the tier ceiling and is
 overridable via `max_cost_credits` in the request body.
 
@@ -450,7 +452,7 @@ Available on **Cloud** edition only. Community + Business return 403 `edition_re
 | GET | `/v1/pipelines/:id/events` | `pipelines:read` | SSE stream |
 | GET | `/v1/pipelines/:id/stages/:stage_name` | `pipelines:read` | Fetch one stage |
 | POST | `/v1/pipelines/:id/cancel` | `pipelines:execute` | Cancel + refund |
-| GET | `/v1/pipelines/:id/pending-approvals` | `pipelines:approve` | List stages awaiting approval |
+| GET | `/v1/pipelines/:id/pending-approvals` | `pipelines:read` | List stages awaiting approval |
 | POST | `/v1/pipelines/:id/stages/:stage_name/approve` | `pipelines:approve` | Approve a stage |
 | POST | `/v1/pipelines/:id/stages/:stage_name/reject` | `pipelines:approve` | Reject + feedback |
 
@@ -476,7 +478,7 @@ When a break is detected, the SceneNode panel surfaces:
 - "Improve start frame" link (existing §6.11.3 helper)
 
 The gate clears when the last pending break is either accepted or resolved by a regen
-that produces a non-break verdict. Pricing: ~3 credits per match-cut shot (Sonnet vision
+that produces a non-break verdict. Pricing: ~30 credits per match-cut shot (Sonnet vision
 call). Only fires when `is_match_cut` is set on the shot AND a next shot exists in the
 same scene.
 

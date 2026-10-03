@@ -32,8 +32,10 @@ const JOB_ID = "job-1"
 // ---------------------------------------------------------------------------
 
 describe("generate-music — genre/mood/instrumental folded into prompt", () => {
+  // Every node here runs MiniMax Music, which needs a reference track.
   it("appends genre, mood and the instrumental tag like the route", () => {
     const n = node("m1", "generate-music", {
+      referenceAudioUrl: "https://cdn.nodaro.ai/audio/ref.mp3",
       prompt: "a jazzy tune",
       genre: "lo-fi",
       mood: "melancholic",
@@ -44,13 +46,13 @@ describe("generate-music — genre/mood/instrumental folded into prompt", () => 
   })
 
   it("leaves the prompt untouched when no music meta is set", () => {
-    const n = node("m1", "generate-music", { prompt: "a jazzy tune" })
+    const n = node("m1", "generate-music", { prompt: "a jazzy tune", referenceAudioUrl: "https://cdn.nodaro.ai/audio/ref.mp3" })
     const result = buildPayload(n, JOB_ID, {})
     expect(result.payload.prompt).toBe("a jazzy tune")
   })
 
   it("omits the instrumental tag when instrumental is false", () => {
-    const n = node("m1", "generate-music", { prompt: "a jazzy tune", genre: "lo-fi" })
+    const n = node("m1", "generate-music", { prompt: "a jazzy tune", genre: "lo-fi", referenceAudioUrl: "https://cdn.nodaro.ai/audio/ref.mp3" })
     const result = buildPayload(n, JOB_ID, {})
     expect(result.payload.prompt).toBe("a jazzy tune, lo-fi")
   })

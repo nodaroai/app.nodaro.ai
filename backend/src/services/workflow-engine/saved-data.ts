@@ -1,0 +1,92 @@
+/**
+ * A node's SAVED data — the results it holds in the stored workflow, from the
+ * editor or an earlier run — may stand in for its output in a run only when
+ * the run gives that node no output of its own on purpose: a source or
+ * parameter node (its data IS its value), a node the person froze with Skip,
+ * or a node outside a "Run from here" / "Run selected" subset — all seeded
+ * through `seededFromSavedData` — or a node with no state at all (a Group /
+ * Collect container, or a read made before the run sets up its states). A
+ * node the run will execute but has not reached yet is `pending`, so it does
+ * NOT qualify: it will have this run's output, or none.
+ *
+ * A node that RAN in this run, or that a Router GATED in this run, never falls
+ * back to saved data. The worker loads the workflow once, so `node.data` is the
+ * last save: a fallback there hands a downstream node an old result (last
+ * week's recipe to Content Ideas, an old scrape to a digest) with no sign
+ * anything is wrong.
+ *
+ * Every state the run builds FROM saved data goes through `seededFromSavedData`;
+ * a read of saved node data asks `savedDataAllowed` or goes through one of the
+ * readers below (or `savedOutputFor` in output-extractor.ts).
+ * `__tests__/saved-data-fallback-sites.test.ts` counts, per file, every call of
+ * a saved-data reader and every read of a `SAVED_RESULT_FIELDS` field off a
+ * node's data in the engine, so a new one fails the build until it is gated
+ * and listed. A count cannot tell a gated site swapped for an ungated one in
+ * the same file; the reasons in that test are the record of what was checked.
+ */
+import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro/shared"
+import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
+
+/**
+ * The fields a run writes onto a node's data as its RESULTS. Reading one off a
+ * node's `data` in the engine is reading saved data. Every member is in
+ * `EXECUTION_DATA_KEYS` (@nodaro/shared) except `splitResults`, which Split
+ * Text writes there without being listed (pinned by the sites test).
+ */
+export const SAVED_RESULT_FIELDS: ReadonlySet<string> = new Set([
+  "generatedImageUrl",
+  "generatedVideoUrl",
+  "generatedAudioUrl",
+  "generatedText",
+  "generatedScript",
+  "generatedItems",
+  "generatedResults",
+  "generatedJson",
+  "pickedResults",
+  "restResults",
+  "__pickedResults",
+  "__restResults",
+  "__listResults",
+  "__alignedListResults",
+  "outputResults",
+  "processedResult",
+  "ideaBriefs",
+  "splitResults",
+])
+
+/** A state this run builds from the node's saved data (or its own config), not from running it. */
+export function seededFromSavedData(output: NodeOutput | undefined): NodeExecutionState {
+  return { status: "completed", output, completedAt: new Date().toISOString(), fromSavedData: true }
+}
+
+/** True when the node's saved data may stand in for its output in this run. */
+export function savedDataAllowed(state: NodeExecutionState | undefined): boolean {
+  return state === undefined || state.fromSavedData === true
+}
+
+/** The node's saved results (accumulated results, else a saved JSON array), unless this run ran or gated it. */
+export function savedListFor(node: SimpleNode, state: NodeExecutionState | undefined): string[] | undefined {
+  if (!savedDataAllowed(state)) return undefined
+  const data = node.data as Record<string, unknown>
+  return extractAllGeneratedResults(data) ?? extractGeneratedJsonAsList(data)
+}
+
+/**
+ * The list a node holds in this run: its `listResults`; else, for a node this
+ * run ran, the JSON array it produced; else (only when allowed) its saved list.
+ */
+export function listFor(node: SimpleNode, state: NodeExecutionState | undefined): string[] | undefined {
+  const listResults = state?.output?.listResults
+  if (listResults !== undefined) return listResults
+  if (savedDataAllowed(state)) return savedListFor(node, state)
+  return jsonArrayItems(state?.output?.json)
+}
+
+/** A JSON array as list items, one per element (strings as they are, the rest stringified). */
+export function jsonArrayItems(json: unknown): string[] | undefined {
+  if (!Array.isArray(json) || json.length === 0) return undefined
+  const items = json
+    .filter((element) => element !== undefined && element !== null)
+    .map((element) => (typeof element === "string" ? element : JSON.stringify(element)))
+  return items.length > 0 ? items : undefined
+}

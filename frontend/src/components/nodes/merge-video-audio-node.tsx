@@ -49,7 +49,9 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
   const connectedFingerprint = useWorkflowStore((s) =>
     incomingSourcesFingerprint(s.nodes, s.edges, id, "label"),
   )
-  const credits = useModelCredits("ffmpeg", 1)
+  // The id the route reserves (its own row), not the generic "ffmpeg" one,
+  // which quoted half the charge.
+  const credits = useModelCredits("merge-video-audio", 20)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)

@@ -72,6 +72,43 @@ describe("stripExportContent — template export hygiene", () => {
     expect((outPost.data as Record<string, unknown>).text).toBe("hello")
   })
 
+  it("clears a Telegram Account Trigger's account and chats — the exporter's account, and a Saved Messages id is their Telegram id", () => {
+    const trigger: GenericNode = {
+      id: "t1",
+      type: "telegram-account-trigger",
+      data: {
+        label: "Inbox",
+        accountId: "acct-1",
+        chatIds: ["777000"],
+        chatTitles: { "777000": "Saved Messages" },
+        senderIds: ["777000"],
+        inboxMode: true,
+        keywords: ["idea"],
+        isActive: true,
+      },
+    }
+    const [out] = stripUnownedRefs([trigger])
+    const data = out.data as Record<string, unknown>
+    for (const field of ["accountId", "chatIds", "chatTitles", "senderIds"]) expect(data[field], field).toBeUndefined()
+    // The importer's own choices start from the exporter's settings.
+    expect(data.inboxMode).toBe(true)
+    expect(data.keywords).toEqual(["idea"])
+    expect(trigger.data.accountId, "input not mutated").toBe("acct-1")
+  })
+
+  it("a template carries no armed account trigger and no trigger's last run values", () => {
+    const trigger: GenericNode = {
+      id: "t1",
+      type: "telegram-account-trigger",
+      data: { label: "Inbox", isActive: true, inboxMode: true, __triggerData: { postText: "a stranger's words", senderId: "555" } },
+    }
+    const [out] = stripExportContent([trigger])
+    const data = out.data as Record<string, unknown>
+    expect(data.isActive).toBeUndefined()
+    expect(data.__triggerData).toBeUndefined()
+    expect(data.inboxMode).toBe(true)
+  })
+
   it("stripUnownedRefs alone covers the asset-bundle export, which keeps every other field", () => {
     const hook: GenericNode = {
       id: "h1",

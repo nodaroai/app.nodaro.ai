@@ -1,10 +1,19 @@
 import { readFileSync } from "node:fs"
-import { Command } from "commander"
+import { Command, Option } from "commander"
+import { RECAST_SEGMENT_PACKS, type RecastSegmentPack } from "@nodaro/shared"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, warn, type OutputOpts } from "../output.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
+}
+
+/** How the render packs scenes into parts. The API field is `segmentSec`, but it takes a name, not seconds. */
+function segmentPackOption(): Option {
+  return new Option(
+    "--segment-pack <pack>",
+    "how scenes are packed into parts: scenes-max (fewest seams), scenes (shorter parts) or max (longest parts)",
+  ).choices([...RECAST_SEGMENT_PACKS])
 }
 
 function readScript(path: string): Record<string, unknown> {
@@ -104,12 +113,12 @@ export function recastCommand(): Command {
     .requiredOption("--analysis-job <id>", "the source analysis job id")
     .option("--fidelity <f>", "render fidelity", "faithful")
     .option("--resolution <r>")
-    .option("--segment-sec <n>", "segment length in seconds", parseFloat)
+    .addOption(segmentPackOption())
     .option("--profile <name>")
     .option("--json")
     .action(
       async (
-        opts: { analysisJob: string; fidelity: string; resolution?: string; segmentSec?: number } & GlobalOpts,
+        opts: { analysisJob: string; fidelity: string; resolution?: string; segmentPack?: RecastSegmentPack } & GlobalOpts,
       ) => {
         try {
           const client = buildClient(opts.profile)
@@ -117,7 +126,7 @@ export function recastCommand(): Command {
             analysisJobId: opts.analysisJob,
             fidelity: opts.fidelity,
             resolution: opts.resolution,
-            segmentSec: opts.segmentSec,
+            segmentSec: opts.segmentPack,
           })
           if (opts.json) emit(result, opts)
           else detail(result)
@@ -135,7 +144,7 @@ export function recastCommand(): Command {
     .option("--fidelity <f>", "render fidelity", "faithful")
     .option("--rights-attested", "required for faithful renders of authored scripts")
     .option("--resolution <r>")
-    .option("--segment-sec <n>", "segment length in seconds", parseFloat)
+    .addOption(segmentPackOption())
     .option("--profile <name>")
     .option("--json")
     .action(
@@ -146,7 +155,7 @@ export function recastCommand(): Command {
           fidelity: string
           rightsAttested?: boolean
           resolution?: string
-          segmentSec?: number
+          segmentPack?: RecastSegmentPack
         } & GlobalOpts,
       ) => {
         try {
@@ -157,7 +166,7 @@ export function recastCommand(): Command {
             fidelity: opts.fidelity,
             rightsAttested: opts.rightsAttested,
             resolution: opts.resolution,
-            segmentSec: opts.segmentSec,
+            segmentSec: opts.segmentPack,
           })
           if (opts.json) emit(result, opts)
           else success(`run ${result.recastId} created (planning) — poll: nodaro recast status ${result.recastId}`)
@@ -170,13 +179,13 @@ export function recastCommand(): Command {
   cmd
     .command("start <recastId>")
     .description("start rendering a planned run (idempotent)")
-    .option("--segment-sec <n>", "segment length in seconds", parseFloat)
+    .addOption(segmentPackOption())
     .option("--profile <name>")
     .option("--json")
-    .action(async (recastId: string, opts: { segmentSec?: number } & GlobalOpts) => {
+    .action(async (recastId: string, opts: { segmentPack?: RecastSegmentPack } & GlobalOpts) => {
       try {
         const client = buildClient(opts.profile)
-        const result = await client.recast.start(recastId, { segmentSec: opts.segmentSec })
+        const result = await client.recast.start(recastId, { segmentSec: opts.segmentPack })
         if (opts.json) emit(result, opts)
         else success(`rendering${result.gvpJobId ? ` — gvp job ${result.gvpJobId}` : ""}`)
       } catch (err) {

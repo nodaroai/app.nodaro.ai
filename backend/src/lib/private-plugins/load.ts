@@ -117,6 +117,18 @@ export function getPluginServices(): PluginServices {
   return pluginServices
 }
 
+/**
+ * Publish stand-in services without loading a plugin, for a process that only
+ * ENUMERATES what core registers when a plugin is present: the MCP docs
+ * generator (gen-skills), whose Nodaro Cloud capture must see the tools
+ * production registers with the cloud plugin loaded (the workspace tools ask
+ * for `orgs`). Enumeration builds tool schemas and never runs a handler, so
+ * nothing published here is ever called. Never called on a boot path.
+ */
+export function publishStandInPluginServices(services: PluginServices): void {
+  pluginServices = services
+}
+
 function emptyResult(): LoadPrivatePluginsResult {
   // Every early return routes through here — community/business, a failed
   // load, an optional-mode skip — so clearing the published surface here is

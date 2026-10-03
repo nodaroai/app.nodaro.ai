@@ -38,11 +38,11 @@ Suno Cover takes a source audio track and generates a new cover version of it. Y
 - Reimagining a track in a completely different genre.
 - Creating instrumental or karaoke versions of existing songs.
 - Changing vocal gender on an existing track.
-- Producing style variations of a Suno Generate output.
+- Producing style variations of a Suno Create Music output.
 - Building a workflow where generated music feeds into a cover for iterative refinement.
 
 ## Tips
 
-- The source audio must be accessible via a public URL. Connect an upstream Suno Generate or upload node to provide it automatically.
+- The source audio must be accessible via a public URL. Connect an upstream Suno Create Music or upload node to provide it automatically.
 - Custom Mode unlocks fine-grained control over style interpretation.
 - Negative Style is particularly effective for covers -- use it to prevent the AI from retaining unwanted elements of the original.

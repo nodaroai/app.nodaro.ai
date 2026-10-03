@@ -29,6 +29,12 @@ const COUNT_NOUN_KEYS: Readonly<Record<WebScrapeCountNoun, MessageKey>> = {
   pages: "node.nounPages",
 }
 
+/** "12 results" as one phrase, so a language can put the number where it belongs. */
+const COUNT_PHRASE_KEYS: Readonly<Record<WebScrapeCountNoun, MessageKey>> = {
+  results: "node.resultsCount",
+  pages: "node.pagesCount",
+}
+
 const ACCEPTS_IN = (t: string) => isValidWebScrapeConnection("in", t)
 
 const HANDLES = [
@@ -206,7 +212,7 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
                 {state.kind === "success" && (
                   <span className="flex items-center gap-1.5 font-medium text-foreground">
                     <StatusDot color="#22c55e" />
-                    {state.count} {t(COUNT_NOUN_KEYS[peek.countNoun])}
+                    {t(COUNT_PHRASE_KEYS[peek.countNoun], { n: state.count })}
                   </span>
                 )}
                 {state.kind === "empty" && (

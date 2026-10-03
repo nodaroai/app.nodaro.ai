@@ -1,7 +1,7 @@
 ---
 node_type: audio-separation
-generated_at: 2026-09-22T09:36:31.088Z
-generated_from: 65b4cddf2
+generated_at: 2026-09-27T12:51:23.701Z
+generated_from: c607aa02c
 ---
 
 # Audio Separation
@@ -9,7 +9,7 @@ generated_from: 65b4cddf2
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `audio-separation`
 **Category:** ai
-**Credit cost:** `30-80` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `30-80` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `audio`
 **Outputs (source handles):** `audio`
 

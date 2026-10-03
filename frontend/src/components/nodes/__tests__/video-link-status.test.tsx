@@ -18,7 +18,7 @@ vi.mock("@/lib/video-link-ingest", () => ({
   resumeVideoLinkIngest: (...a: unknown[]) => resumeVideoLinkIngest(...a),
 }))
 
-const canvas = { isReadOnly: false }
+const canvas: { isReadOnly: boolean; nodes: unknown[]; edges: unknown[] } = { isReadOnly: false, nodes: [], edges: [] }
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: (s: typeof canvas) => unknown) => selector(canvas),
 }))
@@ -45,7 +45,15 @@ function renderStatus(data: Record<string, unknown>, variant: "card" | "panel" =
 beforeEach(() => {
   vi.clearAllMocks()
   canvas.isReadOnly = false
+  canvas.nodes = []
+  canvas.edges = []
 })
+
+/** Wire this Video URL node (n1) into a node of `type`, as the canvas would. */
+function feeds(type: string) {
+  canvas.nodes = [{ id: "n1", type: "youtube-video", data: {} }, { id: "c1", type, data: { label: "x" } }]
+  canvas.edges = [{ id: "e1", source: "n1", target: "c1", sourceHandle: "video", targetHandle: "video" }]
+}
 
 afterEach(() => {
   cleanup()
@@ -126,6 +134,53 @@ describe("VideoLinkStatus", () => {
     it("says so when the length could not be read", () => {
       renderStatus({ youtubeUrl: YT, needsRangeChoice: true, videoDurationSec: null })
       expect(screen.getByText(en("videolink.unknownLength"))).toBeInTheDocument()
+    })
+
+    // The person must not have to guess how long a part may be: when the video
+    // feeds a node with a length limit, the chooser says it, never offers a
+    // whole video that node cannot read, and refuses a longer part up front.
+    describe("feeding a node with a length limit (Video Analysis reads up to 10:00)", () => {
+      const limitLine = en("videolink.limit", { consumer: "Video Analysis", max: "10:00", cheapest: "1:00" })
+
+      it("says how long a part may be and what costs the least", () => {
+        feeds("video-analysis")
+        renderStatus(LONG)
+        expect(screen.getByText(limitLine)).toBeInTheDocument()
+      })
+
+      it("does not offer the whole video when it is longer than the node reads", () => {
+        feeds("video-analysis")
+        renderStatus(LONG)
+        expect(screen.queryByRole("button", { name: en("videolink.downloadWhole") })).toBeNull()
+      })
+
+      it("still offers the whole video when it fits", () => {
+        feeds("video-analysis")
+        renderStatus({ youtubeUrl: YT, needsRangeChoice: true, videoDurationSec: 300 })
+        expect(screen.getByRole("button", { name: en("videolink.downloadWhole") })).toBeInTheDocument()
+      })
+
+      it("refuses a part longer than the node reads — without a request", () => {
+        feeds("video-analysis")
+        renderStatus(LONG)
+        fireEvent.change(screen.getByLabelText(en("videolink.to")), { target: { value: "12:00" } })
+        fireEvent.click(screen.getByRole("button", { name: en("videolink.downloadPart") }))
+        expect(screen.getByText(en("videolink.rangeTooLong", { consumer: "Video Analysis", max: "10:00" }))).toBeInTheDocument()
+        expect(ingestVideoLink).not.toHaveBeenCalled()
+      })
+
+      it("starts on the part that costs the least", () => {
+        feeds("video-analysis")
+        renderStatus(LONG)
+        expect(screen.getByLabelText(en("videolink.to"))).toHaveValue("1:00")
+      })
+
+      it("says nothing about limits when the node after it has none", () => {
+        feeds("content-recipe")
+        renderStatus(LONG)
+        expect(screen.queryByText(limitLine)).toBeNull()
+        expect(screen.getByRole("button", { name: en("videolink.downloadWhole") })).toBeInTheDocument()
+      })
     })
   })
 

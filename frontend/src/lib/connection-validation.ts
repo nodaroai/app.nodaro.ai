@@ -52,6 +52,8 @@ import {
   ACCEPTS_ANALYSIS,
   ACCEPTS_JSON,
 } from "./data-handles"
+import { isValidContentConnection } from "./content-handles"
+import { ACCEPTS_VIDEO_OR_POST_LINK, SOCIAL_SEARCH_POSTS_HANDLE } from "./video-analysis-handles"
 import {
   isValidEditImageConnection,
   isValidModifyImageConnection,
@@ -96,6 +98,7 @@ import {
   groupHandleId,
 } from "@nodaro/shared"
 import { isVisualPickerType } from "./parameter-picker-types"
+import { isScrapeNodeType } from "./scrape-node-types"
 import { ACCEPTS_CHARACTER_REF, ACCEPTS_ENTITY_REF, ACCEPTS_LOTTIE_ASSET, ACCEPTS_PARAMETER_PICKER, ACCEPTS_PICKER_JSON } from "./target-handle-registry"
 
 const MEDIA_ONLY_HANDLES: ReadonlySet<string> = new Set([
@@ -269,10 +272,12 @@ export function isValidWorkflowConnection(
     return isAnalyzablePicker(typeOf(connection.target) ?? "") && connection.targetHandle === "picker-json"
   }
 
-  // JSON output cannot feed media-only inputs.
+  // JSON output cannot feed media-only inputs — except a Social Search's
+  // posts into Video Analysis's video, which reads each post's page link.
   if (connection.sourceHandle === "json") {
     const th = connection.targetHandle ?? ""
-    if (MEDIA_ONLY_HANDLES.has(th)) return false
+    const postsIntoAnalysis = typeOf(connection.source) === "social-search" && typeOf(connection.target) === "video-analysis" && th === "video"
+    if (MEDIA_ONLY_HANDLES.has(th) && !postsIntoAnalysis) return false
   }
 
   // Generate Image v2.1 — enforce typed-handle compatibility.
@@ -523,17 +528,26 @@ export function isValidWorkflowConnection(
     }
     return isValidLoopCoarse(imageSourceType, isVisualPickerType)
   }
-  if ((targetType === "web-scrape" || targetType === "meta-ads-scrape") && connection.targetHandle) {
+  if (isScrapeNodeType(targetType) && connection.targetHandle) {
     return isValidWebScrapeConnection(
       connection.targetHandle,
       imageSourceType,
     )
   }
-  // Video Analysis — single `video` target accepts video producers. Inline
-  // ACCEPTS_VIDEO (same predicate the handle popover uses) so drag-to-connect
-  // and the source-direction popover agree.
+  // Video Analysis — single `video` target: a video file, a post's link from
+  // a text output, or a Social Search's posts. The same predicate as the node
+  // pip and the handle popover, so drag-to-connect and the source-direction
+  // popover agree; a Social Search connects by its posts (`json`), never its
+  // digest.
   if (targetType === "video-analysis" && connection.targetHandle === "video") {
-    return ACCEPTS_VIDEO(imageSourceType)
+    if (imageSourceType === "social-search") return connection.sourceHandle === SOCIAL_SEARCH_POSTS_HANDLE
+    return ACCEPTS_VIDEO_OR_POST_LINK(imageSourceType)
+  }
+  // Content Recipe (`in` material, `link` source post) and Content Ideas
+  // (`recipes`, `field-brand`) — the same predicates as the node pips and the
+  // source-direction popovers (content-handles.ts), so the three agree.
+  if ((targetType === "content-recipe" || targetType === "content-ideas") && connection.targetHandle) {
+    return isValidContentConnection(targetType, connection.targetHandle, imageSourceType)
   }
   // AI Audit — `video` takes the clip (same predicate as video-analysis);
   // `analysis` takes a finished analysis to re-verify (leave it unwired and the
@@ -559,6 +573,14 @@ export function isValidWorkflowConnection(
     if (connection.targetHandle === "sources") return ACCEPTS_MEDIA(imageSourceType)
     return false
   }
+  // edit-plan — the json inputs (transcript, silence ranges, audio-sync
+  // offsets) take a data producer; `sources` takes the recordings.
+  if (targetType === "edit-plan" && connection.targetHandle) {
+    if (connection.targetHandle === "transcript" || connection.targetHandle === "silence" || connection.targetHandle === "offsets") return ACCEPTS_JSON(imageSourceType)
+    if (connection.targetHandle === "sources") return ACCEPTS_MEDIA(imageSourceType)
+    return false
+  }
+
   if (targetType === "extract-field" && connection.targetHandle) {
     return isValidExtractFieldConnection(
       connection.targetHandle,

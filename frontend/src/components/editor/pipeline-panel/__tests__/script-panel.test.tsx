@@ -32,6 +32,13 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 
+// The live charged price of one scene regeneration (`regenerate-scene`). The
+// panel used to print a fixed "~3 credits" that went stale ten-fold.
+const regenPrice = vi.hoisted(() => ({ credits: 30 }))
+vi.mock("@/hooks/use-model-credit-cost", () => ({
+  useModelCredits: (model: string | undefined) => (model === "regenerate-scene" ? regenPrice.credits : 0),
+}))
+
 import { ScriptPanel } from "../script-panel"
 import { pipelinesApi } from "@/lib/pipelines-api"
 
@@ -276,8 +283,20 @@ describe("ScriptPanel", () => {
     )
 
     expect(screen.getByTestId("regen-feedback-textarea")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /Regenerate · ~3 credits/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Regenerate · 30 credits/i })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument()
+  })
+
+  it("shows no price while none is known (loading, or an edition without credits)", async () => {
+    regenPrice.credits = 0
+    try {
+      renderWithClient(<ScriptPanel pipelineId="p1" plan={basePlan()} />)
+      await userEvent.click(screen.getByRole("button", { name: /Regenerate scene/i }))
+      expect(screen.getByRole("button", { name: /^Regenerate$/ })).toBeInTheDocument()
+      expect(screen.queryByText(/credits/i)).not.toBeInTheDocument()
+    } finally {
+      regenPrice.credits = 30
+    }
   })
 
   it("calls regenerateScene with the correct args on submit", async () => {
@@ -296,7 +315,7 @@ describe("ScriptPanel", () => {
       "make it more tense",
     )
     await userEvent.click(
-      screen.getByRole("button", { name: /Regenerate · ~3 credits/i }),
+      screen.getByRole("button", { name: /Regenerate · 30 credits/i }),
     )
 
     await waitFor(() => {
@@ -382,7 +401,7 @@ describe("ScriptPanel", () => {
       "tighten",
     )
     await userEvent.click(
-      screen.getByRole("button", { name: /Regenerate · ~3 credits/i }),
+      screen.getByRole("button", { name: /Regenerate · 30 credits/i }),
     )
 
     // After the API resolves, parent refreshes the plan with new scene content.

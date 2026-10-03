@@ -10,7 +10,7 @@ The Trim Audio node extracts a time range from an audio file or extracts the aud
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Audio Format | Select | MP3 | Output format: MP3, WAV, AAC |
+| Audio Format | Select | MP3 | Output format: MP3, WAV, AAC. The saved file carries the matching extension (`.mp3`, `.wav`, `.aac`). |
 | Output Silent Video | Boolean | false | Also output a muted copy of the source video |
 | Start Time | Number | — | Start position in seconds (optional) |
 | End Time | Number | — | End position in seconds (optional) |

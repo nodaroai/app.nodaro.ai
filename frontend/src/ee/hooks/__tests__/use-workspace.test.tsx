@@ -114,13 +114,14 @@ describe("useVocabulary", () => {
   it("falls back to words that name nothing a classroom when no organization is in view", () => {
     const { result } = renderHook(() => useVocabulary())
     act(() => setActiveWorkspace(null))
-    expect(result.current).toEqual(FALLBACK_VOCABULARY)
+    // The words as the fallback names them, plus the workspace word's gender.
+    expect(result.current).toEqual({ ...FALLBACK_VOCABULARY, workspace_gender: "f" })
     expect(result.current.workspace).toBe("Team")
     expect(Object.values(result.current).join(" ")).not.toMatch(/class|student|teacher/i)
   })
 
   it("falls back for an organization the caller does not belong to", () => {
     const { result } = renderHook(() => useVocabulary("10000000-0000-4000-8000-000000000099"))
-    expect(result.current).toEqual(FALLBACK_VOCABULARY)
+    expect(result.current).toEqual({ ...FALLBACK_VOCABULARY, workspace_gender: "f" })
   })
 })

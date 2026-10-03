@@ -24,7 +24,8 @@ import type { ExtractAudioData } from "@/types/nodes"
 function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as ExtractAudioData
-  const credits = useModelCredits("ffmpeg", 1)
+  // The id its route reserves (its own row), not the generic "ffmpeg" one.
+  const credits = useModelCredits("extract-audio", 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

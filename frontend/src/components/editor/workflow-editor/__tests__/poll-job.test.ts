@@ -147,8 +147,8 @@ describe("pollJobToCompletion", () => {
     await expect(promise).rejects.toThrow("Workflow changed during execution")
   })
 
-  it("rejects after MAX_CONSECUTIVE_POLL_FAILURES consecutive errors", async () => {
-    mockGetJobStatusLean.mockRejectedValue(new Error("Network error"))
+  it("rejects after MAX_CONSECUTIVE_POLL_FAILURES consecutive answers that the job is gone", async () => {
+    mockGetJobStatusLean.mockRejectedValue(Object.assign(new Error("Job not found"), { status: 404 }))
 
     const ctx = makeCtx()
     const promise = pollJobToCompletion("job-1", ctx)
@@ -159,7 +159,25 @@ describe("pollJobToCompletion", () => {
     await vi.advanceTimersByTimeAsync(2000)
     await vi.advanceTimersByTimeAsync(2000)
 
-    await expect(promise).rejects.toThrow("Network error")
+    await expect(promise).rejects.toThrow("Job not found")
+  })
+
+  it("keeps polling through a lost connection and resolves when the job completes", async () => {
+    let callCount = 0
+    mockGetJobStatusLean.mockImplementation(async () => {
+      callCount++
+      if (callCount <= 10) throw new TypeError("Failed to fetch")
+      return { status: "completed", output_data: { imageUrl: "late" } }
+    })
+
+    const promise = pollJobToCompletion("job-1", makeCtx())
+    let settled = false
+    promise.then(() => { settled = true }, () => { settled = true })
+
+    await vi.advanceTimersByTimeAsync(20_000) // 10 failed checks, far past 3
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(2000)
+    await expect(promise).resolves.toBe("late")
   })
 
   it("resets failure count on successful poll", async () => {
@@ -730,7 +748,8 @@ describe("pollJobWithNodeUpdate — stale failure state across runs", () => {
 
   it("a stale policy-block hint does not survive into the next run's GIVE-UP failure", async () => {
     const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
-    mockGetJobStatusLean.mockRejectedValue(new Error("network"))
+    // Only a job the server says is gone ends the watch (poll-connection.ts).
+    mockGetJobStatusLean.mockRejectedValue(Object.assign(new Error("Job not found"), { status: 404 }))
     mockNodes.push({ id: "n1", data: { ...STALE } })
 
     const promise = pollJobWithNodeUpdate("n1", apiCall, "generatedImageUrl", "Image", makeCtx())
@@ -739,7 +758,7 @@ describe("pollJobWithNodeUpdate — stale failure state across runs", () => {
     await vi.advanceTimersByTimeAsync(2000)
     await vi.advanceTimersByTimeAsync(2000)
     await vi.advanceTimersByTimeAsync(2000)
-    await expect(promise).rejects.toThrow("network")
+    await expect(promise).rejects.toThrow("Job not found")
 
     const data = mockNodes.find((n) => n.id === "n1")!.data
     expect(data.errorHint).toBeUndefined()
@@ -760,6 +779,91 @@ describe("pollJobWithNodeUpdate — stale failure state across runs", () => {
     expect(start!.errorHint).toBeUndefined()
     expect("errorMessage" in start!).toBe(true)
     expect(start!.errorMessage).toBeUndefined()
+  })
+})
+
+// ===========================================================================
+// Losing the status endpoint is not a failed generation (prod 2026-09-27: a
+// GPT Image job completed and was billed while its node showed "Failed" with
+// no message; a reload recovered the image).
+// ===========================================================================
+
+describe("pollJobWithNodeUpdate — a lost connection is not a failed job", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    mockNodes.length = 0
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("keeps the job through a run of failed status checks and lands its result", async () => {
+    const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
+    const offline = new TypeError("Failed to fetch")
+    mockGetJobStatusLean
+      .mockResolvedValueOnce({ status: "processing", progress: 10 })
+      // More consecutive failures than the give-up threshold (3 in this file).
+      .mockRejectedValueOnce(offline)
+      .mockRejectedValueOnce(offline)
+      .mockRejectedValueOnce(offline)
+      .mockRejectedValueOnce(offline)
+      .mockRejectedValueOnce(offline)
+      .mockResolvedValue({ status: "completed", output_data: { imageUrl: "https://cdn.example.com/late.png" } })
+    mockNodes.push({ id: "n1", data: { generatedResults: [] } })
+
+    const promise = pollJobWithNodeUpdate("n1", apiCall, "generatedImageUrl", "Image", makeCtx())
+    promise.catch(() => {})
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
+
+    const data = mockNodes.find((n) => n.id === "n1")!.data
+    expect(data.executionStatus).toBe("completed")
+    expect(data.generatedImageUrl).toBe("https://cdn.example.com/late.png")
+    await expect(promise).resolves.toBe("https://cdn.example.com/late.png")
+  })
+
+  it("shows the node reconnecting past the threshold, and clears it on the next check that gets through", async () => {
+    const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
+    const offline = new TypeError("Failed to fetch")
+    mockGetJobStatusLean
+      .mockRejectedValueOnce(offline)
+      .mockRejectedValueOnce(offline)
+      .mockRejectedValueOnce(offline)
+      .mockResolvedValue({ status: "processing", progress: 40 })
+    mockNodes.push({ id: "n1", data: {} })
+
+    const promise = pollJobWithNodeUpdate("n1", apiCall, "generatedImageUrl", "Image", makeCtx())
+    promise.catch(() => {})
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(3 * 2000)
+
+    const node = () => mockNodes.find((n) => n.id === "n1")!.data
+    expect(node().executionStatus).toBe("running")
+    expect(node().currentJobId).toBe("j1")
+    expect(node().jobConnectionLost).toBe(true)
+    expect(mockToastError).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(node().jobConnectionLost).toBeUndefined()
+    expect(node().executionStatus).toBe("running")
+  })
+
+  it("a job the server says is gone still ends the run, and the node says why", async () => {
+    const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
+    mockGetJobStatusLean.mockRejectedValue(Object.assign(new Error("Job not found"), { status: 404 }))
+    mockNodes.push({ id: "n1", data: {} })
+
+    const promise = pollJobWithNodeUpdate("n1", apiCall, "generatedImageUrl", "Image", makeCtx())
+    promise.catch(() => {})
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(3 * 2000)
+    await expect(promise).rejects.toThrow("Job not found")
+
+    const data = mockNodes.find((n) => n.id === "n1")!.data
+    expect(data.executionStatus).toBe("failed")
+    expect(data.errorMessage).toMatch(/can't be found/)
+    expect(data.currentJobId).toBeUndefined()
   })
 })
 

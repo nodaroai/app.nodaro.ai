@@ -193,8 +193,9 @@ actual gate, so any valid Nodaro scope may be requested at authorize-time.
 
 ## 4. Scope vocabulary
 
-There are 11 scopes total. The canonical list lives in
-[`backend/src/lib/scopes.ts`](https://github.com/nodaroai/app.nodaro.ai/blob/main/backend/src/lib/scopes.ts).
+There are 14 scopes total. The canonical list is `OAUTH_SCOPES` in
+[`packages/shared/src/oauth-scopes.ts`](https://github.com/nodaroai/app.nodaro.ai/blob/main/packages/shared/src/oauth-scopes.ts)
+— the server validates against it and `@nodaro/sdk` types `DeveloperAppScope` from it.
 
 | Scope | What it grants | Routes gated today |
 |-------|----------------|--------------------|
@@ -202,19 +203,23 @@ There are 11 scopes total. The canonical list lives in
 | `workflows:write` | Create and modify workflows | `POST /v1/projects/:projectId/workflows`, `POST /v1/workflows`, `PATCH /v1/workflows/:id`, `DELETE /v1/workflows/:id`, `POST /v1/workflows/import`, `POST /v1/workflows/:parentId/sub-workflows` |
 | `workflows:execute` | Run workflows on the user's behalf | `POST /v1/workflows/:id/run`; the prompt-wizard MCP tools |
 | `jobs:read` | Read job status and results | `GET /v1/jobs/status`, `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, `GET /v1/jobs`, `POST /v1/jobs/batch-status` |
-| `assets:read` | Read the user's uploaded assets | (reserved) |
-| `assets:write` | Upload assets to the user's account | (reserved) |
+| `assets:read` | Read the user's uploaded assets | `GET /v1/saved-posts`, `POST /v1/saved-posts/lookup`, `GET /v1/competitors` (and `/:id`, `/cards`); the MCP character / location / gallery read tools, `list_saved_posts`, `list_competitors` and `competitor_cards` |
+| `assets:write` | Upload assets to the user's account | creating, restoring and deleting characters, creatures, objects and locations; community clones; `POST /v1/saved-posts`, `PATCH` / `DELETE /v1/saved-posts/:id`, `POST` / `PATCH` / `DELETE /v1/competitors`, `POST /v1/competitor-discover`; the MCP upload / entity write tools, `save_post` and `add_competitor` |
 | `credits:read` | See the user's credit balance | (reserved) |
 | `apps:read` | Read published apps | (reserved) |
 | `pipelines:read` | Read the user's Story-to-Video pipelines | `GET /v1/pipelines/*` |
 | `pipelines:execute` | Run / branch pipeline stages | `POST /v1/pipelines/:id/branch` and run routes |
 | `pipelines:approve` | Approve pipeline stage output | pipeline approval routes; the scene-helper routes (`POST /v1/pipelines/:id/entities/:sceneId/helpers/*`) |
+| `presets:read` | Read the user's saved node presets | `GET /v1/node-presets`, `GET /v1/node-presets/factory`, `GET /v1/node-preset-groups`; the MCP `list_node_presets` / `get_node_preset` tools |
+| `workspaces:read` | See the workspaces the user belongs to | the MCP `list_workspaces` tool |
+| `workspaces:write` | Choose which workspace the app works in | the MCP `select_workspace` tool |
 
 > **Honest disclosure:** most scopes gate real routes today —
 > `workflows:read`, `workflows:write`, `workflows:execute`, `jobs:read`,
-> and the three `pipelines:*` scopes. Only four are reserved names that
-> future routes will gate: `assets:read`, `assets:write`, `credits:read`,
-> and `apps:read`. Request scopes only if you actually intend to use them —
+> the three `pipelines:*` scopes, `assets:read`, `assets:write`, `presets:read`
+> and the two `workspaces:*` scopes. Only two are reserved names that future
+> routes will gate: `credits:read` and `apps:read`. The two
+> `workspaces:*` scopes are never added to a grant made before they existed. Request scopes only if you actually intend to use them —
 > minimal scope sets earn user trust.
 
 The exact scope description shown to the user on the consent screen is
@@ -519,10 +524,21 @@ curl -X POST https://nodaro.example.com/v1/oauth/revoke \
 Server-side, this sets `revoked_at` on the token row. Subsequent API
 calls with the revoked token return HTTP 401.
 
-**Users can also revoke from the Nodaro UI** at
-`/settings/developer-apps` (the "Authorized apps" section lists every
-app they've granted access to and offers a per-app revoke button).
-Treat 401 errors as "the user revoked" → re-prompt for consent.
+**Users can also revoke from the Nodaro UI**, under **Settings →
+Connected apps** (`/settings/connected-apps`). It lists every app and AI
+assistant (MCP client) with access to their account — its kind, when it
+was connected, when it was last used and the scopes it holds — with a
+revoke button on each. Revoking there ends the grant and every token
+issued under it at once. Treat 401 errors as "the user revoked" →
+re-prompt for consent.
+
+The screen reads two routes, for a signed-in browser session only (an
+app token cannot list or revoke the grants it lives under):
+
+| Method | Path | Returns |
+|--------|------|---------|
+| `GET` | `/v1/me/connected-apps` | `{ apps: [{ authorizationId, name, kind, homepageUrl, scopes, connectedAt, lastUsedAt }] }` — `kind` is `user` (a developer app), `first_party_mcp`, `dynamic_mcp` (an MCP client that registered itself; it chose its own name) or `community_instance` (a self-hosted install) |
+| `POST` | `/v1/me/connected-apps/:authorizationId/revoke` | `{ ok: true }`; 404 when the grant is not the caller's or is already revoked |
 
 When to call `revoke()` from your code:
 

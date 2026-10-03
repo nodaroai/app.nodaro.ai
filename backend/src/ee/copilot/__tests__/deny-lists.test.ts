@@ -88,6 +88,9 @@ describe("denied node types (derived from the executors)", () => {
     "webhook-output": ["url"],
     "meta-ads-scrape": ["mode", "pageUrls", "query", "advertisers"],
     "youtube-video": ["youtubeUrl", "downloadedVideoUrl", "downloadedFromUrl"],
+    // Social Search builds its request through socialSearchRequestFromNode
+    // (packages/shared/src/social-search.ts).
+    "social-search": ["platform", "mode", "query", "subreddit"],
   }
   const NO_HANDLER: ReadonlySet<string> = new Set(["rss-feed"])
 
@@ -131,6 +134,7 @@ describe("denied node types (derived from the executors)", () => {
       "rss-feed",
       "telegram-channel-feed",
       "youtube-video",
+      "social-search",
     ]) {
       expect(isDeniedNodeType(type), `${type} must be denied`).toBe(true)
     }

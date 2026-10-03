@@ -33,8 +33,8 @@ Fixed per run (reserved tier, not metered):
 
 | Quality | Credits |
 |---------|---------|
-| Auto / Fast | **3** |
-| Best | **8** |
+| Auto / Fast | **30** |
+| Best | **80** |
 
 ## Best Practices
 

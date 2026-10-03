@@ -6,7 +6,8 @@ import { X, ChevronDown } from "lucide-react"
 import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useClickOutside } from "@/hooks/use-click-outside"
-import { useT } from "@/lib/i18n"
+import { useT, type MessageKey } from "@/lib/i18n"
+import type { UnusedPromptReason } from "@/lib/unused-prompt-edges"
 import { parseListExpression, describeEdgeBehavior, type SelectorMode } from "@nodaro/shared"
 import type { CSSProperties } from "react"
 import { useEdgeInsertAnimation } from "./workflow-editor/use-edge-insert-animation"
@@ -33,13 +34,22 @@ type AnimatedFlowEdgeData = {
    *  dashed/grayed stroke styling. Set by `workflow-canvas.tsx`'s edge
    *  enricher; the source of truth is `getHandleConnectionLimit`. */
   disabledByProvider?: boolean
-  /** True when this edge feeds a `prompt` handle but the consumer's prompt
-   *  text contains no `{Label}` reference to the source — i.e. the connection
-   *  is wired but has no effect at execution. Renders the same inert
-   *  (gray + dashed + dimmed) style as `disabledByProvider`, plus a hover
-   *  tooltip. Stamped onto edge `data` by `workflow-canvas.tsx` from
+  /** True when this edge feeds a `prompt` handle but has no effect at
+   *  execution. Renders the same inert (gray + dashed + dimmed) style as
+   *  `disabledByProvider`, plus a hover tooltip naming `unusedPromptReason`.
+   *  Both are stamped onto edge `data` by `workflow-canvas.tsx` from
    *  `computeUnusedPromptEdges`. */
   unusedPromptRef?: boolean
+  /** Why the wire does nothing — picks the hover tooltip. */
+  unusedPromptReason?: UnusedPromptReason
+}
+
+/** The tooltip for each reason a prompt wire does nothing. Typed on the reason
+ *  union, so a new reason without its sentence fails tsc. */
+const UNUSED_PROMPT_TOOLTIP: Record<UnusedPromptReason, MessageKey> = {
+  "not-referenced": "canvas.edgeUnusedPromptRef",
+  "inject-off": "canvas.edgeUnusedInjectOff",
+  replaced: "canvas.edgeUnusedReplaced",
 }
 
 type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
@@ -300,7 +310,7 @@ function AnimatedFlowEdgeComponent({
           strokeWidth={12}
           style={{ pointerEvents: "stroke" }}
         >
-          <title>{t("canvas.edgeUnusedPromptRef")}</title>
+          <title>{t(UNUSED_PROMPT_TOOLTIP[edgeData?.unusedPromptReason ?? "not-referenced"], { setting: t("cfgshared.injectPrompt") })}</title>
         </path>
       )}
 

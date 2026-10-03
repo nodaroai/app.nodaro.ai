@@ -1,4 +1,5 @@
 import { createContext, useMemo, useState, type ReactNode } from "react"
+import { useT } from "@/lib/i18n"
 import { DEFAULT_STUDIO_ACCENT_ACTIVE, type StudioNavConfig, type StudioPageDef } from "./types"
 
 /**
@@ -25,6 +26,7 @@ interface StudioShellProps<S, J> {
 }
 
 export function StudioShell<S, J>({ config, state, jobs, hasCredits, header, activeKey, onActiveKeyChange, defaultActiveKey }: StudioShellProps<S, J>) {
+  const t = useT()
   // Compute visibility ONCE per (config, hasCredits) change. StudioShell re-renders
   // on every staged-state keystroke, so memoizing here removes the per-keystroke
   // re-filter that previously ran both here and again per-group in the sidebar JSX.
@@ -60,7 +62,7 @@ export function StudioShell<S, J>({ config, state, jobs, hasCredits, header, act
             {visibleGroups.map(({ group, pages }) => (
               <div key={group.label}>
                 <div className="px-3.5 pb-1.5 pt-2.5 text-[9px] uppercase tracking-widest text-slate-700 font-semibold">
-                  {group.label}
+                  {t(group.label)}
                 </div>
                 {pages.map((p) => (
                   <SideBtn key={p.key} def={p} active={active === p.key} accentActive={accentActive} badge={renderBadge(p, state)} onClick={() => setActive(p.key)} />
@@ -87,6 +89,7 @@ function renderBadge<S, J>(def: StudioPageDef<S, J>, state: S): string | number 
 }
 
 function SideBtn<S, J>({ def, active, accentActive, badge, onClick }: { def: StudioPageDef<S, J>; active: boolean; accentActive: string; badge?: string | number; onClick: () => void }) {
+  const t = useT()
   return (
     <button
       onClick={onClick}
@@ -95,7 +98,7 @@ function SideBtn<S, J>({ def, active, accentActive, badge, onClick }: { def: Stu
       }`}
     >
       <span className="w-4 text-center">{def.icon}</span>
-      {def.label}
+      {t(def.label)}
       {badge !== undefined && <span className="ms-auto text-[9px] bg-[#1e293b] rounded-full px-1.5">{badge}</span>}
     </button>
   )

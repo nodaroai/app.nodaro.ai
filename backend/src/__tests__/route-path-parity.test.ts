@@ -247,6 +247,26 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   "/v1/telegram-accounts/login/:p",
   "/v1/telegram-accounts/login/:p/code",
   "/v1/telegram-accounts/login/:p/password",
+  // Content Recipe and Content Ideas are Cloud-only nodes (CLOUD_ONLY_NODE_TYPES,
+  // no relay): their routes are registered at runtime by the cloud-plugins
+  // `registerRoutes()` and deliberately absent from core — the prompts and
+  // handlers are the plugin's. Off Cloud the pickers hide both nodes and the
+  // workflow routes refuse a graph holding them, so nothing calls these there.
+  "/v1/content-recipe",
+  "/v1/content-ideas",
+  // Social Search is a Cloud-only node (CLOUD_ONLY_NODE_TYPES, no relay): its
+  // route is registered at runtime by the cloud-plugins `registerRoutes()` and
+  // deliberately absent from core. Off Cloud the pickers hide the node and the
+  // workflow routes refuse a graph holding it, so nothing calls it there.
+  "/v1/social-search",
+  // Competitor tracking: every route is the cloud-plugins `competitors`
+  // plugin's (registered at runtime, deliberately absent from core). Off Cloud
+  // the page is not offered and nothing calls them.
+  "/v1/competitors",
+  "/v1/competitors/:p",
+  "/v1/competitors/cards",
+  "/v1/competitor-scan",
+  "/v1/competitor-discover",
 ])
 
 // ---------------------------------------------------------------------------

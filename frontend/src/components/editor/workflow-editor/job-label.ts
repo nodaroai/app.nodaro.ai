@@ -25,6 +25,8 @@ const JOB_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
   "Text-to-video generation": "jobLabel.textToVideoGeneration",
   "Text-to-speech generation": "jobLabel.textToSpeechGeneration",
   "Combine videos": "jobLabel.combineVideos",
+  "Scene generation": "jobLabel.sceneGeneration",
+  "Scene edit": "jobLabel.sceneEdit",
 }
 
 /** Whether `label` has a translation of its own (a job label, not a node label). */

@@ -1,6 +1,6 @@
 import { projectDubbingCreditOverride } from "../../lib/dubbing-pricing.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
-import { assertCanvasExecutionAllowed, imageOverlayCredits } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS } from "@nodaro/shared"
 /**
  * Node executor — dispatches node execution based on type category.
  *
@@ -29,6 +29,7 @@ import { buildNodeOutputFromJobData } from "./output-extractor.js"
 import { retainedOutputOfFailedJob } from "./failed-node-output.js"
 import { readNodeCursor, writeNodeCursor } from "./node-cursor.js"
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings.js"
+import { videoAnalysisPostDuration } from "./video-analysis-post-probe.js"
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
@@ -281,6 +282,8 @@ export function extractUserPromptTemplate(node: SimpleNode): string | undefined 
       return pick("query", "pageUrls")
     case "instagram-scrape":
       return pick("targets")
+    case "social-search":
+      return pick("query")
 
     // --- Social posts ---
     case "instagram-post":
@@ -401,6 +404,25 @@ export async function executeNode(
       edges,
     )
     node = { ...node, data: resolvedData }
+  }
+
+  // The Settings input (Generation Settings nodes wired into one handle): the
+  // resolver above wrote each wired value into its field; this snaps a wired
+  // Duration to a length the model renders and refuses a wired Provider the
+  // node cannot run — before any job row or reservation exists.
+  if (SETTINGS_INPUT_CONSUMERS[node.type]) {
+    const settings = applySettingsInput(node.type, node.id, node.data, edges, (id) => allNodes.find((n) => n.id === id)?.type)
+    if (settings.problem) {
+      const source = allNodes.find((n) => n.id === settings.problem!.sourceId)
+      const sourceLabel = ((source?.data as { label?: string } | undefined)?.label) || "Provider"
+      const err = new Error(
+        `settings_provider_not_accepted: the ${sourceLabel} node wired into Settings is set to "${settings.problem.value}", ` +
+          `which this node cannot run. Choose one of this node's models in the ${sourceLabel} node.`,
+      ) as Error & { code?: string }
+      err.code = "settings_provider_not_accepted"
+      throw err
+    }
+    node = { ...node, data: settings.data }
   }
 
   // Component nodes (published apps executed as sub-executions).
@@ -1106,7 +1128,10 @@ export function buildSyncHttpBody(
         countryCode: data.countryCode,
         platforms: Array.isArray(data.platforms) ? data.platforms : undefined,
         formats: Array.isArray(data.formats) ? data.formats : undefined,
-        featuredIndex: typeof data.featuredIndex === "number" ? data.featuredIndex : undefined,
+        // No featuredIndex: a run features its FIRST result. The saved index
+        // points into the previous run's results, and the editor resets it to
+        // 0 on every completion — sending it featured (and copied the video
+        // of) a different item than the node then shows.
         // Copy every ad's video (the expensive bytes) — opt-in node setting,
         // independent of the featured-video-when-wired rule below.
         ingestAllVideos: data.ingestAllVideos === true ? true : undefined,
@@ -1131,7 +1156,10 @@ export function buildSyncHttpBody(
         count: data.count,
         period: data.period,
         formats: Array.isArray(data.formats) ? data.formats : undefined,
-        featuredIndex: typeof data.featuredIndex === "number" ? data.featuredIndex : undefined,
+        // No featuredIndex: a run features its FIRST result. The saved index
+        // points into the previous run's results, and the editor resets it to
+        // 0 on every completion — sending it featured (and copied the video
+        // of) a different item than the node then shows.
         ingestAllVideos: data.ingestAllVideos === true ? true : undefined,
         analyze: data.analyze === true ? true : undefined,
         analysisModel: typeof data.analysisModel === "string" && data.analysisModel ? data.analysisModel : undefined,
@@ -1502,6 +1530,12 @@ async function executeWorkerNode(
       )
     }
   }
+
+  // 0b. Video Analysis given a post's LINK (from a trigger, a mapping or the
+  // field): its length before any row or reservation, so the run is priced by
+  // the post's own bucket, and a live or over-long post is refused for free.
+  const postDurationSec = await videoAnalysisPostDuration(node, resolvedInputs)
+  if (postDurationSec !== null) resolvedInputs = { ...resolvedInputs, videoDuration: postDurationSec }
 
   // 1. Create placeholder job record (we need the jobId for payload building).
   // `node_id` is recorded in `input_data` so the reconcile cron can map a

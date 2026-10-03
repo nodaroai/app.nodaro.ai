@@ -539,10 +539,55 @@ describe("preview↔run parity — video", () => {
     expect(previewPrompt).toBe(runPrompt)
   })
 
+  it("(h2) generate-video, no frame → t2v: the node's own Motion still lands, in run AND preview", async () => {
+    // The Motion control shows with or without a start frame, and the
+    // orchestrator's generate-video case applies it in both modes. The editor
+    // used to drop it here (only the i2v branch folded it), so a workflow run and
+    // an editor run of the same node sent different prompts.
+    const genVidNode = makeNode("generate-video", {
+      prompt: "a lighthouse in a storm",
+      provider: "seedance-2",
+      motion: "dynamic",
+      motionEnabled: true,
+    })
+    mockNodes = [genVidNode]
+    mockEdges = []
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(genVidNode as any, makeCtx())
+
+    expect(mockRunTextToVideoGeneration).toHaveBeenCalledTimes(1)
+    const runPrompt = mockRunTextToVideoGeneration.mock.calls[0][1] as string
+    const previewPrompt = assembleVideoPrompt("generate-video", assemblerArgs(genVidNode))
+
+    expect(runPrompt).toContain("a lighthouse in a storm. dynamic motion")
+    expect(previewPrompt).toBe(runPrompt)
+  })
+
+  it("(h3) a legacy text-to-video node has no own Motion: nothing is folded in run or preview", async () => {
+    const t2vNode = makeNode("text-to-video", {
+      prompt: "a lighthouse in a storm",
+      provider: "seedance-2",
+      motion: "dynamic",
+      motionEnabled: true,
+    })
+    mockNodes = [t2vNode]
+    mockEdges = []
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(t2vNode as any, makeCtx())
+
+    const runPrompt = mockRunTextToVideoGeneration.mock.calls[0][1] as string
+    expect(runPrompt).not.toContain("motion")
+    expect(assembleVideoPrompt("text-to-video", assemblerArgs(t2vNode))).toBe(runPrompt)
+  })
+
   it("(i) generate-video, start frame → i2v: run folds motion + resolves {image:1}, preview matches (parity)", async () => {
-    // A wired START frame flips the unified node to image-to-video — the i2v branch
-    // folds the motion hint (t2v does NOT), so this case guards the mode detection,
-    // not just token resolution.
+    // A wired START frame flips the unified node to image-to-video — this case
+    // guards the mode detection, not just token resolution (the node's own
+    // Motion folds in both modes, see (h2)).
     const frameNode = { id: "frame-img", type: "upload-image", position: { x: 0, y: 0 }, data: { label: "Frame" } }
     const genVidNode = makeNode("generate-video", {
       prompt: "circle {image:1:object}",

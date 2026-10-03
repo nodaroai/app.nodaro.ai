@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import {
   Loader2, Globe, Lock, RotateCcw, FileText, Save, Info,
   Pencil, X, Download, Upload, Key, ChevronRight, LayoutList,
-  Plus, Trash2, Sparkles, Braces, KeyRound,
+  Plus, Trash2, Sparkles, Braces, KeyRound, Plug,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -401,6 +401,24 @@ export default function SettingsPage() {
         </Link>
       )}
 
+      {/* Connected apps — every edition: OAuth apps and AI assistants (MCP)
+          reach an account on community installs too. */}
+      <Link
+        to="/settings/connected-apps"
+        className="mt-6 flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-6 hover:bg-muted/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <Plug className="h-5 w-5 text-muted-foreground" />
+          <div>
+            <h2 className="text-base font-semibold">{t("settings.connectedApps")}</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {t("settings.connectedAppsDesc")}
+            </p>
+          </div>
+        </div>
+        <ChevronRight className={cn("h-5 w-5 text-muted-foreground", isRtl && "rotate-180")} />
+      </Link>
+
       {/* Provider keys — self-hosted editions manage them under Integrations
           (next to the nodaro.ai connection); this is the pointer for anyone
           who looks here first. Cloud has no keys to manage. */}
@@ -518,10 +536,11 @@ export default function SettingsPage() {
             </SelectTrigger>
             <SelectContent>
               {/* Each label shows the mode applied to itself, so the list is its
-                  own preview — no need to open the editor to see the difference. */}
-              <SelectItem value="raw">{t("dash.varSampleRaw")}</SelectItem>
-              <SelectItem value="annotated">{t("dash.varSampleAnnotated")}</SelectItem>
-              <SelectItem value="resolved">{t("dash.varSampleResolved")}</SelectItem>
+                  own preview — no need to open the editor to see the difference.
+                  The braces are the variable syntax; the name and value are words. */}
+              <SelectItem value="raw">{`{${t("dash.varSampleName")}}`}</SelectItem>
+              <SelectItem value="annotated">{`{${t("dash.varSampleName")}: ${t("dash.varSampleValue")}}`}</SelectItem>
+              <SelectItem value="resolved">{t("dash.varSampleValue")}</SelectItem>
             </SelectContent>
           </Select>
         </div>

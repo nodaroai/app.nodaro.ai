@@ -52,6 +52,7 @@ import {
   buildSaveCharacterPayloadFromExport,
   buildSaveObjectPayloadFromExport,
   buildSaveLocationPayloadFromExport,
+  injectableNodes,
 } from "./editor-toolbar-inject-helpers"
 import { createClient } from "@/lib/supabase"
 import { ensureNodePositions } from "@/lib/node-position"
@@ -205,7 +206,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       const copied = report?.rehosted
         ? t(report.rehosted === 1 ? "editor.mediaCopiedOne" : "editor.mediaCopiedMany", { n: report.rehosted })
         : ""
-      toast.success((assetCount > 0 ? t("editor.importedWithAssetsCount", { n: assetCount }) : t("editor.importedPlain")) + copied)
+      toast.success((assetCount > 0 ? t(assetCount === 1 ? "editor.importedWithAssetsCountOne" : "editor.importedWithAssetsCount", { n: assetCount }) : t("editor.importedPlain")) + copied)
       // Media this instance could not fetch stays as-is and those nodes will
       // not run until it is re-uploaded here (#866).
       const unreachable = report?.unreachable ?? []
@@ -242,7 +243,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
     }
     setImporting(true)
     try {
-      let nodesToImport = [...data.nodes]
+      let nodesToImport = injectableNodes(data.nodes)
       const assetIdMap: Record<string, string> = {}
 
       if (data.assets) {
@@ -368,9 +369,15 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       }
 
       const assetCount = Object.keys(assetIdMap).length
+      const n = nodesToImport.length
+      // Each count is a whole phrase ("1 node" / "3 nodes"), so every language
+      // words a sentence with two counts without agreeing with either number.
       toast.success(assetCount > 0
-        ? t("editor.addedNodesWithAssets", { n: nodesToImport.length, a: assetCount })
-        : t("editor.addedNodes", { n: nodesToImport.length }))
+        ? t("editor.addedNodesAndAssets", {
+            nodes: t(n === 1 ? "addnode.nodeCountOne" : "addnode.nodeCountMany", { n }),
+            assets: t(assetCount === 1 ? "editor.assetCountOne" : "editor.assetCountMany", { n: assetCount }),
+          })
+        : t(n === 1 ? "editor.addedNodesOne" : "editor.addedNodes", { n }))
     } catch (err) {
       toast.error(t("editor.importFailed", { error: err instanceof Error ? err.message : "Unknown error" }))
     } finally {
@@ -494,7 +501,10 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
                 <AlertDialogTitle>{t("editor.importWorkflow")}</AlertDialogTitle>
                 <AlertDialogDescription>
                   {pendingImportData.name ? `"${pendingImportData.name}" — ` : ""}
-                  {t("editor.importCounts", { nodes: pendingImportData.nodes.length, edges: pendingImportData.edges.length })}
+                  {[
+                    t(pendingImportData.nodes.length === 1 ? "addnode.nodeCountOne" : "addnode.nodeCountMany", { n: pendingImportData.nodes.length }),
+                    t(pendingImportData.edges.length === 1 ? "editor.connectionCountOne" : "editor.connectionCountMany", { n: pendingImportData.edges.length }),
+                  ].join(t("common.listComma"))}
                   {pendingImportData.assets ? ` ${t("editor.plusAssets")}` : ""}
                 </AlertDialogDescription>
               </AlertDialogHeader>

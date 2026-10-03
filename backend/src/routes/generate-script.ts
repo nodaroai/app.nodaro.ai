@@ -9,7 +9,7 @@ import { resolveScriptModelId } from "../providers/script/script-generator.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { SCRIPT_PROVIDERS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_TEXT_INPUT_MAX } from "@nodaro/shared"
+import { SCRIPT_PROVIDERS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_TEXT_INPUT_MAX, SCRIPT_SCENE_COUNT_RANGE, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -18,9 +18,12 @@ const generateScriptBody = z.object({
   // context, so the old flat 10000 falsely blocked long source material.
   prompt: z.string().min(1).max(LLM_TEXT_INPUT_MAX),
   userPrompt: z.string().max(LLM_TEXT_INPUT_MAX).optional(),
-  sceneCount: z.number().int().min(1).max(20).optional(),
-  tone: z.string().max(200).optional(),
-  targetDuration: z.number().int().min(5).max(600).optional(),
+  // Limits shared with readScriptSettings, which clamps a workflow run's values
+  // into these same ranges before they reach the worker.
+  sceneCount: z.number().int().min(SCRIPT_SCENE_COUNT_RANGE.min).max(SCRIPT_SCENE_COUNT_RANGE.max).optional(),
+  tone: z.string().max(SCRIPT_TONE_MAX_LENGTH).optional(),
+  targetDuration: z.number().int().min(SCRIPT_TARGET_DURATION_RANGE.min).max(SCRIPT_TARGET_DURATION_RANGE.max).optional(),
+  styleGuide: z.string().max(SCRIPT_STYLE_GUIDE_MAX_LENGTH).optional(),
   provider: z.enum(SCRIPT_PROVIDERS).optional(),
   userId: z.string().uuid().optional(),
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
@@ -37,7 +40,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort } = parsed.data
+    const { prompt, sceneCount, tone, targetDuration, styleGuide, provider, llmModel, reasoningEffort } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -78,6 +81,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       sceneCount,
       tone,
       targetDuration,
+      styleGuide,
       provider,
       llmModel,
       reasoningEffort,

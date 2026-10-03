@@ -388,10 +388,15 @@ describe("the Telegram ACCOUNT lane", () => {
     expect(normalizeTelegramAccountConfig({ accountId: "acc-1", isActive: true, chatIds: ["  "] })).toBeNull()
   })
 
+  it("never listens on an account id that is not written exactly — the panel reads a padded one as no account of the owner's", () => {
+    expect(normalizeTelegramAccountConfig({ accountId: " acc-1 ", isActive: true, chatIds: ["-1001"] })).toBeNull()
+    expect(normalizeTelegramAccountConfig({ accountId: "acc-1\n", isActive: true, chatIds: ["-1001"] })).toBeNull()
+  })
+
   it("emits every filter, trimmed and de-duplicated, so a cleared filter never survives on the row", () => {
     expect(
       normalizeTelegramAccountConfig({
-        accountId: " acc-1 ",
+        accountId: "acc-1",
         isActive: true,
         chatIds: ["-1001", " -1001 ", "@news", "", 7],
         keywords: ["launch"],
@@ -403,6 +408,17 @@ describe("the Telegram ACCOUNT lane", () => {
       senderIds: [],
       messageTypeFilters: [],
       keywords: ["launch"],
+      includeOutgoing: false,
+      inboxMode: false,
+    })
+  })
+
+  it("inbox mode is projected as set — the connector that understands it listens to the owner's own messages", () => {
+    expect(
+      normalizeTelegramAccountConfig({ accountId: "acc-1", isActive: true, chatIds: ["777"], inboxMode: true, includeOutgoing: false }),
+    ).toMatchObject({ inboxMode: true, includeOutgoing: false })
+    expect(normalizeTelegramAccountConfig({ accountId: "acc-1", isActive: true, chatIds: ["777"], inboxMode: "yes" })).toMatchObject({
+      inboxMode: false,
       includeOutgoing: false,
     })
   })
@@ -417,7 +433,7 @@ describe("the Telegram ACCOUNT lane", () => {
       {
         nodeId: "ta1",
         type: "telegram_account",
-        config: { accountId: "acc-1", chatIds: ["-1001"], senderIds: [], messageTypeFilters: [], keywords: [], includeOutgoing: false },
+        config: { accountId: "acc-1", chatIds: ["-1001"], senderIds: [], messageTypeFilters: [], keywords: [], includeOutgoing: false, inboxMode: false },
         isActive: true,
       },
     ])

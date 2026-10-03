@@ -14,14 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  getProviders,
-  getProviderLabel,
-  getModels,
-  getFirstProvider,
-  getFirstModel,
-  type ProviderCategory,
-} from "@/lib/providers-config"
+import { useEffect } from "react"
+import { PROVIDER_NODE_CATEGORIES, PROVIDER_NODE_CATEGORY_IDS, isProviderNodeCategory, validProviderSelection } from "@/lib/provider-node-models"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
+import { ModelSearchSelect } from "./model-search-select"
+import { withoutDeniedModels } from "./model-options"
 import type {
   ToneData,
   StyleGuideData,
@@ -150,62 +147,44 @@ export function StyleGuideConfig({ data, onUpdate }: ConfigProps<StyleGuideData>
 
 export function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
   const t = useT()
-  const category = data.category as ProviderCategory
-  const providers = getProviders(category)
-  const models = getModels(category, data.provider)
+  // Re-render when the deployment's model availability arrives (withoutDeniedModels).
+  useSurfaceAvailability()
+  const { category, provider } = validProviderSelection(data)
+
+  // Fail-safe (Provider Enum Sync step 12b): a node saved before the Provider
+  // offered real models holds a vendor name ("pika") or a category no node
+  // reads ("voice"); move it to a pair the lists below offer.
+  useEffect(() => {
+    if (data.category !== category || data.provider !== provider) onUpdate({ category, provider })
+  }, [data.category, data.provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col gap-3">
       <div>
         <Label>{t("apps.categoryLabel")}</Label>
         <Select
-          value={data.category}
+          value={category}
           onValueChange={(v) => {
-            const cat = v as ProviderCategory
-            const firstProvider = getFirstProvider(cat)
-            const firstModel = getFirstModel(cat, firstProvider)
-            onUpdate({ category: cat, provider: firstProvider, model: firstModel })
+            if (isProviderNodeCategory(v)) onUpdate({ category: v, provider: PROVIDER_NODE_CATEGORIES[v].defaultModel })
           }}
         >
           <SelectTrigger aria-label={t("apps.categoryLabel")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="image">{t("common.image")}</SelectItem>
-            <SelectItem value="video">{t("common.video")}</SelectItem>
-            <SelectItem value="voice">{t("field.voice")}</SelectItem>
-            <SelectItem value="script">{t("node.script")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label>{t("field.provider")}</Label>
-        <Select
-          value={data.provider}
-          onValueChange={(v) => {
-            const firstModel = getFirstModel(category, v)
-            onUpdate({ provider: v, model: firstModel })
-          }}
-        >
-          <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {providers.map((p) => (
-              <SelectItem key={p} value={p}>{getProviderLabel(category, p)}</SelectItem>
+            {PROVIDER_NODE_CATEGORY_IDS.map((id) => (
+              <SelectItem key={id} value={id}>{t(PROVIDER_NODE_CATEGORIES[id].label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
       <div>
         <Label>{t("field.model")}</Label>
-        <Select
-          value={data.model}
-          onValueChange={(v) => onUpdate({ model: v })}
-        >
-          <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {models.map((m) => (
-              <SelectItem key={m} value={m}>{m}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ModelSearchSelect
+          value={provider}
+          onChange={(v) => onUpdate({ provider: v })}
+          options={withoutDeniedModels(PROVIDER_NODE_CATEGORIES[category].models)}
+          ariaLabel={t("field.model")}
+        />
+        <p className="mt-1.5 text-xs text-muted-foreground">{t("paramcfg.providerSettingsHint")}</p>
       </div>
     </div>
   )

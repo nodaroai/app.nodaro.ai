@@ -9,9 +9,9 @@ import { shouldAbandonNode } from "./abandon-guard";
 import { isInputWarningCode } from "@/lib/input-warning-codes";
 import { tx } from "@/lib/i18n";
 import { localizeJobLabel } from "./job-label";
+import { clearJobConnectionLost, jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import {
   WorkflowStaleError,
-  MAX_CONSECUTIVE_POLL_FAILURES,
   checkStorageError,
   updateProgressIfChanged,
   updateRecoveringIfChanged,
@@ -36,11 +36,16 @@ import {
  * Clearing on a non-held tick is also half of the stale-overlay fix; the other
  * half is `jobAwaitingReview: undefined` on every terminal patch, plus the
  * overlay's own `executionStatus === "running"` gate.
+ *
+ * The same one-place reasoning covers `jobConnectionLost`: every loop's failed
+ * check goes through `shouldStopPolling` (poll-connection.ts), which raises the
+ * flag, and the first check that gets through clears it here.
  */
 export async function getJobStatusLeanForNode(jobId: string, nodeId: string) {
   const job = await getJobStatusLean(jobId); // raw-status-ok: this IS the wrapper
   const { updateNodeData } = useWorkflowStore.getState();
   updateAwaitingReviewIfChanged(nodeId, job.status === "pending_review", updateNodeData);
+  clearJobConnectionLost({ nodeId, jobId });
   return job;
 }
 
@@ -77,10 +82,10 @@ export async function pollScrapeJobOutput(
       // The wrapper (not the raw read) so a job HELD for review paints
       // BaseNode's "Awaiting review" overlay instead of a bare spinner.
       job = await getJobStatusLeanForNode(jobId, nodeId);
-    } catch {
+    } catch (err) {
       transientFailures += 1;
-      if (transientFailures > MAX_CONSECUTIVE_POLL_FAILURES) {
-        throw new Error("Lost connection to the scrape job");
+      if (shouldStopPolling(err, transientFailures, { nodeId, jobId })) {
+        throw new Error(jobGoneMessage());
       }
       continue;
     }
@@ -171,6 +176,8 @@ export const RUN_START_RESET = {
   currentJobProgress: 0,
   // Re-running after a hold must not flash the previous run's overlay.
   jobAwaitingReview: undefined,
+  // Nor the previous run's "Reconnecting…" badge.
+  jobConnectionLost: undefined,
 } as const;
 
 export function pollJobToCompletion(
@@ -201,7 +208,7 @@ export function pollJobToCompletion(
           }
         } catch (err) {
           pollFailures++;
-          if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+          if (shouldStopPolling(err, pollFailures)) {
             ctx.untrackInterval(poll);
             // Final verification: the job may have completed while polling was failing
             try {
@@ -464,7 +471,7 @@ export function pollJobWithNodeUpdate(
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure onto the
@@ -490,12 +497,14 @@ export function pollJobWithNodeUpdate(
                 } catch { /* final check also failed */ }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
+                  errorMessage: jobGoneMessage(),
                   // Defence in depth beside the run-start reset: giving up is a
                   // different failure than any earlier policy block.
                   errorHint: undefined,
                   currentJobId: undefined,
                   currentJobProgress: undefined,
                   jobAwaitingReview: undefined,
+                  jobConnectionLost: undefined,
                 });
                 guardedToast.error(tx("nodeRun.failedToCheckStatus", { label: localizeJobLabel(label) }));
                 reject(err);
@@ -667,14 +676,22 @@ export function pollImageRefineToNode(
             }
           } catch (err) {
             pollFailures++;
-            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+            if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
               clearInterval(poll);
+              // The node has moved on to another run: that run's card is not
+              // this job's to fail.
+              if (shouldAbandonNode(nodeId, jobId)) {
+                resolve("");
+                return;
+              }
               updateNodeData(nodeId, {
                 executionStatus: "failed",
+                errorMessage: jobGoneMessage(),
                 errorHint: undefined,
                 currentJobId: undefined,
                 currentJobProgress: undefined,
                 jobAwaitingReview: undefined,
+                jobConnectionLost: undefined,
               });
               guardedToast.error(tx("nodeRun.failedToCheckStatus", { label: localizeJobLabel(label) }));
               reject(err);

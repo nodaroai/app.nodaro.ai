@@ -146,11 +146,11 @@ This is exposed via `client.workflows.run` if the param is supported — check t
 LLM-backed feature routes accept an optional `reasoningEffort` field in the
 request body — `"none" | "low" | "medium" | "high" | "xhigh" | "max"`,
 model-dependent (see the model table in the
-[model selector](https://nodaroai.github.io/app.nodaro.ai/nodes/ai-text/llm-chat.md#model-selector)
-section of the Generate Text node docs). Omit it for the vendor default
+[Models](https://nodaro.ai/docs/node/llm-chat#models)
+section of the Prompt node docs). Omit it for the vendor default
 ("Auto"). `xhigh` and `max` bill one tier up (economy → standard, standard →
 premium); see the
-[Reasoning effort](https://nodaroai.github.io/app.nodaro.ai/nodes/ai-text/llm-chat.md#reasoning-effort)
+[Credits](https://nodaro.ai/docs/node/llm-chat#credits)
 section for the exact rule. Workflow/canvas LLM nodes carry the same field on
 their node `data`, and `client.promptHelper.*` accepts it directly in its
 request body.
@@ -182,7 +182,7 @@ reasoningEffort=<level>` on `nodaro nodes run <type>`.
 
 ## When NOT to use the SDK
 
-- **SSE / streaming endpoints** (e.g. the Generate Text node's `/v1/llm-chat/generate-stream`, or the legacy back-compat `/v1/ai-writer/generate-stream`): the SDK doesn't yet expose SSE. Use the project's `streamRequest` helper or raw fetch with a `ReadableStream`.
+- **Token-streaming endpoints** (e.g. the Prompt node's `/v1/llm-chat/generate-stream`, or the legacy back-compat `/v1/ai-writer/generate-stream`): the SDK has no method for these (it streams only `client.media.downloadVideoProgress` and `client.copilot.stream`). Use the project's `streamRequest` helper or raw fetch with a `ReadableStream`.
 
 For all other cases — including single-node single-shot routes — the SDK is the right tool. `client.nodes.run(type, params)` calls `POST /v1/<type>` directly without needing a workflow, and `client.nodes.runAndWait(type, params)` polls to completion for you:
 
@@ -221,6 +221,6 @@ These match the wire shapes (e.g., `Job` uses snake_case `created_at` because th
 
 ## Reference
 
-- Full SDK reference: https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md
-- Quickstart with end-to-end examples: https://nodaroai.github.io/app.nodaro.ai/sdk-quickstart.md
+- Full SDK reference: https://nodaro.ai/docs/developers/sdk.md (every resource: https://nodaro.ai/docs/developers/sdk/client.md)
+- Quickstart with end-to-end examples: https://nodaro.ai/docs/developers/sdk#make-your-first-call
 - Source: `packages/client/src/` in the repo

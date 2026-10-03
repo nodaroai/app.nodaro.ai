@@ -550,7 +550,9 @@ describe("POST /v1/generate-video — the subject channel", () => {
     // derived from the rendered clauses, not hand-tuned, so catalog rewording
     // moves the case instead of breaking it. Ends on a period: `joinPromptHints`
     // trims the body, and a trailing space would silently buy back the overflow.
-    const probe = "x"
+    // The probe ends on a period too, because the join after a closing period
+    // is a single space (no "..") and the fold is measured with that join.
+    const probe = "x."
     const foldChars =
       (composeVideoPromptText(probe, undefined, undefined, { subject }) as string).length
       - probe.length

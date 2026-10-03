@@ -29,4 +29,4 @@ The Combine Audio node joins connected audio tracks sequentially — they play o
 
 ## Pricing
 
-Costs **1 credit** per run.
+Costs **10 credits** per run.

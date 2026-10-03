@@ -7,7 +7,7 @@ import { executeNode } from "./execute-node"
 import { getListFanOutForNode } from "./node-input-resolver"
 import { executeNodeForList } from "./list-execution"
 import { RUN_START_RESET } from "./poll-job"
-import { planFanOut } from "@nodaro/shared"
+import { planFanOut, withWiredSettings } from "@nodaro/shared"
 import { SUB_WORKFLOW_MAX_DEPTH as MAX_DEPTH, loadSubWorkflowRouteGraph, subWorkflowRouteKey } from "./sub-workflow-route-graph"
 import { wordTimingsPreflight } from "./add-captions-preflight"
 import { nestedWordTimingsPreflight } from "./sub-workflow-preflight"
@@ -171,7 +171,8 @@ export async function executeSubWorkflow(
           const expanded = planFanOut(
             getListFanOutForNode(subNode, latestNodes, latestEdges),
             subNode.type ?? "",
-            subNode.data as Record<string, unknown>,
+            // As it runs: a wired Provider makes a several-model image run one model.
+            withWiredSettings(subNode, latestNodes, latestEdges).data as Record<string, unknown>,
           )
 
           if (expanded) {

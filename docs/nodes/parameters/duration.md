@@ -1,5 +1,5 @@
 # Duration
-> Set a target duration in seconds for connected video or audio generation nodes.
+> Set a length in seconds for a script or a video.
 
 ## Overview
 
@@ -17,7 +17,12 @@ The Duration parameter node provides a numeric value (in seconds) that controls 
 - `in` -- optional upstream input (rarely used; Duration is typically a root parameter node)
 
 **Outputs:**
-- `duration` -- numeric duration value in seconds, consumed by downstream generation nodes
+- `duration` -- numeric duration value in seconds. Connect it to:
+  - Generate Script's **Duration** input, to set the script's target length (clamped to 5–600 seconds);
+  - the **Settings** input of [Generate Video](../ai-video/generate-video.md#settings-input), to set the video's duration: it runs as the nearest length the model renders (a tie goes to the shorter one), and the run is priced at that length — 60 runs as 15 s on Seedance 2;
+  - the **Settings** input of [Generate Video Pro](../ai-video/generate-video-pro.md), to set the total length to stitch (clamped to that node's range).
+
+  Audio generation nodes don't take this connection.
 ## Supported Providers
 
 Not applicable. This is a data-passing parameter node with no AI provider.
@@ -25,7 +30,7 @@ Not applicable. This is a data-passing parameter node with no AI provider.
 ## Best Practices
 
 - Set duration to match your intended output format: 15s for social media reels, 30-60s for short-form content, 60-180s for explainer videos.
-- Be aware that video generation providers have fixed duration options (e.g., Kling supports 5s or 10s, VEO3 is always 8s). The Duration value is used as a target, and the closest supported duration is selected.
+- Video models render a fixed set of lengths (VEO 3.1: 4, 6 or 8 seconds). On Generate Video the Duration value is a target, and the closest length the model renders is used.
 - For Generate Script, the duration influences how many scenes are generated and how long each scene's suggested duration is.
 
 ## Common Use Cases

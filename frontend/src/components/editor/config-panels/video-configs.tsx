@@ -48,7 +48,7 @@ import type {
 import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, EVP_PROVIDERS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip, withoutDeniedModels } from "./model-options"
 import { isAutoVideoDuration, isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_LEGACY_MODELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier, VIDEO_AUDIT_BUCKET_CREDITS, LLM_MODELS, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, GVP_ANCHOR_CHOICES, uiResolutionFill, uiDurationFill, type GvpAnchorChoice } from "@nodaro/shared"
 import type { ReferenceSource, ConnectedReference } from "@nodaro/shared"
-import { resolveSeedance2Inputs } from "@nodaro/prompts"
+import { DEFAULT_OWN_MOTION, resolveSeedance2Inputs } from "@nodaro/prompts"
 import { probeVideoAnalysis } from "@/lib/api"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import { PromptLengthCounter } from "./prompt-length-counter"
@@ -937,7 +937,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         {data.motionEnabled && (
           <MappableField field="motion" label={t("field.motion")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
-              value={data.motion || "moderate"}
+              value={data.motion || DEFAULT_OWN_MOTION}
               onValueChange={(v) => onUpdate({ motion: v as ImageToVideoData["motion"] })}
             >
               <SelectTrigger aria-label={t("field.motion")}><SelectValue /></SelectTrigger>
@@ -3446,7 +3446,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         {data.motionEnabled && (
           <MappableField field="motion" label={t("field.motion")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
-              value={data.motion || "moderate"}
+              value={data.motion || DEFAULT_OWN_MOTION}
               onValueChange={(v) => onUpdate({ motion: v as ImageToVideoData["motion"] })}
             >
               <SelectTrigger aria-label={t("field.motion")}><SelectValue /></SelectTrigger>

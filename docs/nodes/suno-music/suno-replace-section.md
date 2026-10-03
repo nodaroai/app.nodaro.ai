@@ -44,6 +44,6 @@ Suno Replace Section targets a precise time range within an existing Suno track 
 ## Tips
 
 - The replaced interval (End − Start) must be 6–60 seconds; the timestamps themselves are unrestricted.
-- Both Task ID and Audio ID are resolved automatically when connected to an upstream Suno node — a live connection overrides manual values. Copy them from a Suno Generate node (shown under its player) to edit a track from an earlier session.
+- Both Task ID and Audio ID are resolved automatically when connected to an upstream Suno node — a live connection overrides manual values. Copy them from a Suno Create Music node (shown under its player) to edit a track from an earlier session.
 - The Tags field is required by the backend validation -- always provide at least basic genre tags.
 - This is one of the most cost-efficient Suno nodes, making it ideal for iterative refinement workflows.

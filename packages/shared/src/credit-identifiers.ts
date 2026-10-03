@@ -653,6 +653,16 @@ export const SUNO_SELECT_OPERATIONS = [
 ] as const
 
 /**
+ * Adjust Speed's price id: motion-compensated ("smooth") interpolation is its
+ * own, dearer tier. The route, the workflow run, and the editor's badge and
+ * run estimate all price through this, so none of them can quote the fast tier
+ * for a smooth run.
+ */
+export function speedRampCreditId(quality: unknown): "speed-ramp" | "speed-ramp:smooth" {
+  return quality === "smooth" ? "speed-ramp:smooth" : "speed-ramp"
+}
+
+/**
  * OUR Nodaro credit key for a Suno operation, given the model version and the
  * operation (which is also the node type and the BullMQ job name).
  *

@@ -380,6 +380,21 @@ describe("POST /v1/pipelines/:id/sub-gates/:gate/approve", () => {
     await app.close()
   })
 
+  // Stage 6's gate clears per break through the scene helper, never here. It
+  // used to pass validation and then 404/409 on the Stage 7 lookup.
+  it("refuses match_cut_break_pending with a 400 naming the route that clears it", async () => {
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/sub-gates/match_cut_break_pending/approve`,
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_sub_gate")
+    expect(res.json().error.message).toContain("helpers/accept_match_cut_break")
+    expect(enqueuePipelineRun).not.toHaveBeenCalled()
+    await app.close()
+  })
+
   it("returns 404 stage_not_found when no animate_audio_edit stage exists", async () => {
     const app = await makeApp()
     const res = await app.inject({
@@ -530,6 +545,19 @@ describe("POST /v1/pipelines/:id/sub-gates/:gate/reject", () => {
     await app.close()
   })
 
+  it("refuses match_cut_break_pending with a 400 naming the route that clears it", async () => {
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/sub-gates/match_cut_break_pending/reject`,
+      payload: {},
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toContain("helpers/accept_match_cut_break")
+    expect(refundPipelineCredits).not.toHaveBeenCalled()
+    await app.close()
+  })
+
   it("returns 404 not_found when the pipeline belongs to another user", async () => {
     const app = await makeApp()
     const res = await app.inject({
@@ -563,6 +591,25 @@ describe("POST /v1/pipelines/:id/sub-gates/:gate/reject", () => {
       url: `/v1/pipelines/${PIPELINE_ID}/sub-gates/silent_cut_preview/reject`,
       payload: {},
     })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+})
+
+// Listing what waits for approval is a read. The OAuth consent screen, the SDK
+// and the MCP tool all put it under `pipelines:read`; the route alone asked for
+// `pipelines:approve`, so an app granted read got a 403 here.
+describe("GET /v1/pipelines/:id/pending-approvals — scope", () => {
+  it("lets an app granted pipelines:read through the scope gate", async () => {
+    const app = await makeApp({ appAuth: true, scopes: ["pipelines:read"] })
+    const res = await app.inject({ method: "GET", url: `/v1/pipelines/${PIPELINE_ID}/pending-approvals` })
+    expect(res.statusCode).not.toBe(403)
+    await app.close()
+  })
+
+  it("refuses an app without pipelines:read", async () => {
+    const app = await makeApp({ appAuth: true, scopes: ["pipelines:approve"] })
+    const res = await app.inject({ method: "GET", url: `/v1/pipelines/${PIPELINE_ID}/pending-approvals` })
     expect(res.statusCode).toBe(403)
     await app.close()
   })

@@ -3,7 +3,7 @@
 
 ## Overview
 
-Suno Voice is a **setup-time** node — it does not execute as part of a workflow run. Instead, you configure it once via a 3-step modal that walks you through KIE.ai's `/voice/validate` → `/voice/generate` flow. Once setup completes, the node stores a `voiceId` and emits it at workflow runtime as the `personaId` input to Suno Generate / Suno Cover / Suno Extend, so any music those nodes produce sings in your custom voice.
+Suno Voice is a **setup-time** node — it does not execute as part of a workflow run. Instead, you configure it once via a 3-step modal that walks you through KIE.ai's `/voice/validate` → `/voice/generate` flow. Once setup completes, the node stores a `voiceId` and emits it at workflow runtime as the `personaId` input to Suno Create Music / Suno Cover / Suno Extend, so any music those nodes produce sings in your custom voice.
 
 The validation phrase is generated server-side per submission, so the verification recording cannot be prepared ahead of time — you must record yourself reading the exact phrase the server returns in Step 2.
 
@@ -15,7 +15,7 @@ The 3-step modal opens when you click **Configure Voice** on the node card.
 2. **Read & record** — the modal displays a short phrase like *"Harmonies fill the air with joyful melodies tonight"*. Record yourself singing or speaking it, then upload the recording. Use the **Regenerate phrase** button if you want a different one.
 3. **Voice details** — fill in voice name, optional style ("Pop, female vocal"), description, and singer skill level. Click **Create voice** to call `/api/v1/voice/generate` and poll `/api/v1/voice/record-info` for the final `voiceId`.
 
-The 20-credit charge is reserved when you click **Create voice** in Step 3, committed on success, and refunded on failure or timeout.
+The voice-creation charge is reserved when you click **Create voice** in Step 3, committed on success, and refunded on failure or timeout.
 
 ## Configuration
 
@@ -34,16 +34,16 @@ The 20-credit charge is reserved when you click **Create voice** in Step 3, comm
 ## Inputs & outputs
 
 - **Inputs:** none. All configuration happens in the modal.
-- **Outputs:** `voicePersona` — a structured payload `{ voiceId, voiceName, style, personaId, personaModel: "voice_persona" }`. Wire this output into a Suno Generate / Suno Cover / Suno Extend node's `in` handle; the workflow editor's input resolver maps `voiceId` → `personaId` automatically.
+- **Outputs:** `voicePersona` — a structured payload `{ voiceId, voiceName, style, personaId, personaModel: "voice_persona" }`. Wire this output into a Suno Create Music / Suno Cover / Suno Extend node's `in` handle; the workflow editor's input resolver maps `voiceId` → `personaId` automatically.
 
 ## Credits
 
 | Step | Cost |
 |------|------|
 | `/voice/validate`, `/voice/validate-info`, `/voice/regenerate` | **0** credits |
-| **`/voice/generate`** (Step 3 "Create voice") | **20** credits |
+| **`/voice/generate`** (Step 3 "Create voice") | One-time charge. The current price is shown on the node, in the setup window and on the **Create voice** button. |
 
-The 20-credit charge covers KIE's validate + generate calls combined. KIE.ai does not publish per-call pricing for this flow, so the value is a conservative one-time default and may be tuned later via the `model_pricing` table.
+It is the only charge in the flow: validating and re-recording the phrase are free.
 
 Credits are reserved on `POST /v1/suno/voice/generate` and committed by the polling endpoint (`GET /v1/suno/voice/record-info`) when KIE reports `status="success"`. On `status="fail"`, credits are refunded to the original pools.
 
@@ -57,7 +57,7 @@ Credits are reserved on `POST /v1/suno/voice/generate` and committed by the poll
 
 ## Common use cases
 
-- Create a custom singing voice from a personal vocal sample and use it as the singer on Suno Generate.
+- Create a custom singing voice from a personal vocal sample and use it as the singer on Suno Create Music.
 - Build a small library of voice personas for a podcast, ad campaign, or game soundtrack.
 - A/B test the same lyrics across multiple custom voices.
 
@@ -70,6 +70,6 @@ Credits are reserved on `POST /v1/suno/voice/generate` and committed by the poll
 
 ## Related nodes
 
-- [Suno Generate](./suno-generate.md) — accepts `personaId` to apply the persona to a freshly generated song.
+- [Suno Create Music](./suno-generate.md) — accepts `personaId` to apply the persona to a freshly generated song.
 - [Suno Cover](./suno-cover.md) — applies the persona to a cover of an existing track.
 - [Suno Extend](./suno-extend.md) — extends a previously generated track using the persona.

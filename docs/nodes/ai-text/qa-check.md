@@ -29,7 +29,7 @@ The QA Check node sends upstream text to an LLM (default Gemini 3.6 Flash) and a
 | Check Type | Select | `content` | Evaluation dimension (content / quality / consistency / safety) |
 | Threshold | Number | `0.7` | Score at or above which `approved` is `true` |
 | Model | Select | Gemini 3.6 Flash | LLM used for the evaluation |
-| Advanced mode | `boolean` | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit tier up; the node's cost badge updates immediately. Disabled with an inline reason on non-Gemini models |
+| Advanced mode | `boolean` | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit tier up, capped at premium; the node's cost badge updates immediately. Disabled with an inline reason on non-Gemini models |
 
 ## Inputs & Outputs
 
@@ -39,4 +39,4 @@ The QA Check node sends upstream text to an LLM (default Gemini 3.6 Flash) and a
 
 ## Pricing
 
-Costs **1 credit** per check, regardless of the LLM tier selected.
+Costs **1 credit** per check on the default (economy) tier; **10 credits** on the standard or premium tier.

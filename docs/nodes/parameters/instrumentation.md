@@ -1,6 +1,6 @@
 # Instrumentation
 
-A parameter-picker that emits an instrumentation prompt-hint to feed Suno Generate, Generate Music (MiniMax), and Text to Audio. Also controls MiniMax's `instrumental` flag when the vocal presence includes `instrumental`.
+A parameter-picker that emits an instrumentation prompt-hint to feed Suno Create Music, Generate Music (MiniMax), and Text to Audio. Also controls MiniMax's `instrumental` flag when the vocal presence includes `instrumental`.
 
 The Instruments section shows a horizontal tab row across instrument families (Drums, Percussion, Keys, Synth, Guitar, Bass, Brass, Woodwinds, Strings, World, Middle Eastern) — taxonomy aligned with [Splice](https://splice.com/sounds/instruments), with Middle Eastern added for Kamancheh / Ney / Santur.
 
@@ -35,7 +35,7 @@ For non-MiniMax providers, the entire composed hint folds into `prompt` with no 
 ## Connecting
 
 Wire to:
-- **Suno Generate** `audio-style` handle — composed text appended to `style` (in customMode) or `prompt` (otherwise).
+- **Suno Create Music** `audio-style` handle — composed text appended to `style` (in customMode) or `prompt` (otherwise).
 - **Generate Music** `audio-style` handle — composed text appended to `prompt`; when provider=minimax and `vocalPresence` includes `instrumental`, also sets the typed `instrumental: true` flag.
 - **Text to Audio** `audio-style` handle — appended to `prompt`.
 - **Text Prompt / Combine Text** `in` handle — direct text wiring.

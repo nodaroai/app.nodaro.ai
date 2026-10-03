@@ -136,10 +136,11 @@ describe("section builders", () => {
   })
 
   it("drops a family whose every node is filtered out (the Community case)", () => {
-    // Video · ANALYZE is exactly this: both members are Cloud-only.
-    const community = NODE_OPTIONS.filter(
-      (o) => o.type !== "video-analysis" && o.type !== "video-audit",
-    )
+    // Filter out every member of Video · ANALYZE (read from the registry, so a
+    // node joining the family cannot keep it alive here).
+    const analyze = new Set<string>(familyById("video-analyze")?.types ?? [])
+    expect(analyze.size).toBeGreaterThan(0)
+    const community = NODE_OPTIONS.filter((o) => !analyze.has(o.type))
     const ids = tabSections(community, "video").map((s) => s.id)
     expect(ids).not.toContain("video-analyze")
     expect(tabSections(NODE_OPTIONS, "video").map((s) => s.id)).toContain("video-analyze")

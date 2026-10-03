@@ -7,6 +7,7 @@ import type { ExecutionContext } from "./types"
 import type { FrontendResolvedInputs } from "./node-input-resolver"
 import { shouldAbandonNode } from "./abandon-guard"
 import { RUN_START_RESET } from "./poll-job"
+import { clearJobConnectionLost, jobGoneMessage, shouldStopPolling } from "./poll-connection"
 import { ComponentWaitDeadline } from "./component-wait"
 import { tx } from "@/lib/i18n"
 
@@ -110,11 +111,27 @@ export async function executeComponent(
     const startTime = Date.now()
     const deadline = new ComponentWaitDeadline(jobId)
     let lastProgress = -1
+    let pollFailures = 0
 
     while (!(await deadline.reached(Date.now() - startTime))) {
       if (ctx.isWorkflowStale()) throw new Error("Workflow changed during execution")
 
-      const job = await getJobStatusLean(jobId)
+      // A check that cannot reach the server is not the component failing: it
+      // used to be, on the FIRST network blip. The shared rule ends the wait
+      // only for a job the server says is gone (poll-connection.ts).
+      let job: Awaited<ReturnType<typeof getJobStatusLean>>
+      try {
+        job = await getJobStatusLean(jobId)
+      } catch (err) {
+        pollFailures++
+        if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
+          throw new Error(jobGoneMessage())
+        }
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
+        continue
+      }
+      pollFailures = 0
+      clearJobConnectionLost({ nodeId: node.id, jobId })
 
       if (
         (job.status === "completed" || job.status === "failed") &&
@@ -192,6 +209,7 @@ export async function executeComponent(
       errorMessage: err instanceof Error ? err.message : "Unknown error",
       currentJobId: undefined,
       currentJobProgress: undefined,
+      jobConnectionLost: undefined,
     })
     throw err
   }

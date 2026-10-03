@@ -24,26 +24,26 @@ export const CHARACTER_STUDIO_NAV: StudioNavConfig<S, J> = {
   // shell's previous hardcoded active styling).
   accentActiveClassName: DEFAULT_STUDIO_ACCENT_ACTIVE,
   groups: [
-    { label: "Resources", pages: [
-      { key: "references", label: "References", icon: "📷", Component: ReferencesPage },
-      { key: "pickers", label: "Pickers", icon: "🎚", Component: PickersPage },
-      { key: "lora", label: "LoRA", icon: "🧬", Component: LoraPage, visible: (c) => c.hasCredits },
+    { label: "studioNav.resources", pages: [
+      { key: "references", label: "studioNav.references", icon: "📷", Component: ReferencesPage },
+      { key: "pickers", label: "studioNav.pickers", icon: "🎚", Component: PickersPage },
+      { key: "lora", label: "studioNav.lora", icon: "🧬", Component: LoraPage, visible: (c) => c.hasCredits },
     ] },
-    { label: "Identity", pages: [
-      { key: "profile", label: "Profile", icon: "👤", Component: ProfilePage },
-      { key: "appearance", label: "Appearance", icon: "🧭", Component: AppearancePage },
+    { label: "studioNav.identity", pages: [
+      { key: "profile", label: "studioNav.profile", icon: "👤", Component: ProfilePage },
+      { key: "appearance", label: "studioNav.appearance", icon: "🧭", Component: AppearancePage },
     ] },
-    { label: "Visuals", pages: [
-      { key: "expressions", label: "Expressions", icon: "😄", Component: ExpressionsPage, badge: (s) => ({ kind: "count", value: s.staged.expressions.length }) },
-      { key: "poses", label: "Poses", icon: "🧍", Component: PosesPage, badge: (s) => ({ kind: "count", value: s.staged.poses.length }) },
-      { key: "motions", label: "Motions", icon: "🏃", Component: MotionsPage, badge: (s) => ({ kind: "count", value: s.staged.motions.length }) },
-      { key: "emotion-videos", label: "Emotion videos", icon: "🎭", Component: EmotionVideosPage, badge: (s) => ({ kind: "count", value: Object.values(s.staged.referenceVideosByVariant ?? {}).reduce((n, urls) => n + (urls?.length ?? 0), 0) }) },
-      { key: "sheet", label: "Sheet", icon: "📋", Component: SheetPage, badge: (s) => ({ kind: "count", value: s.staged.sheets?.length ?? 0 }) },
-      { key: "board", label: "Board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: characterBoardItems(s.staged as unknown as Record<string, unknown>).length }) },
+    { label: "studioNav.visuals", pages: [
+      { key: "expressions", label: "studioNav.expressions", icon: "😄", Component: ExpressionsPage, badge: (s) => ({ kind: "count", value: s.staged.expressions.length }) },
+      { key: "poses", label: "studioNav.poses", icon: "🧍", Component: PosesPage, badge: (s) => ({ kind: "count", value: s.staged.poses.length }) },
+      { key: "motions", label: "studioNav.motions", icon: "🏃", Component: MotionsPage, badge: (s) => ({ kind: "count", value: s.staged.motions.length }) },
+      { key: "emotion-videos", label: "studioNav.emotionVideos", icon: "🎭", Component: EmotionVideosPage, badge: (s) => ({ kind: "count", value: Object.values(s.staged.referenceVideosByVariant ?? {}).reduce((n, urls) => n + (urls?.length ?? 0), 0) }) },
+      { key: "sheet", label: "studioNav.sheet", icon: "📋", Component: SheetPage, badge: (s) => ({ kind: "count", value: s.staged.sheets?.length ?? 0 }) },
+      { key: "board", label: "studioNav.board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: characterBoardItems(s.staged as unknown as Record<string, unknown>).length }) },
     ] },
-    { label: "Character", pages: [
-      { key: "voice", label: "Voice", icon: "🎤", Component: VoicePage, badge: (s) => (s.staged.voice ? { kind: "check" } : null) },
-      { key: "personality", label: "Personality", icon: "🧠", Component: PersonalityPage, badge: (s) => (s.staged.personality ? { kind: "check" } : null) },
+    { label: "studioNav.character", pages: [
+      { key: "voice", label: "studioNav.voice", icon: "🎤", Component: VoicePage, badge: (s) => (s.staged.voice ? { kind: "check" } : null) },
+      { key: "personality", label: "studioNav.personality", icon: "🧠", Component: PersonalityPage, badge: (s) => (s.staged.personality ? { kind: "check" } : null) },
     ] },
   ],
 }

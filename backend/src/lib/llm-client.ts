@@ -745,27 +745,142 @@ export async function llmCompleteStructured<T>(
   schema: ZodType<T>,
   opts?: { schemaName?: string; maxRetries?: number },
 ): Promise<StructuredLlmOutput<T>> {
+  return runStructuredAttempts(req, schema, opts, (attemptReq) => llmComplete(attemptReq))
+}
+
+export interface StructuredStreamOptions {
+  schemaName?: string
+  maxRetries?: number
+  /**
+   * Receives each raw fragment of the tool input as the model writes it,
+   * plus the SDK's best-effort parse of everything so far. That snapshot
+   * closes an open string, so it cannot tell a finished value from a prefix;
+   * parse the fragments (`incremental-json.ts`) to know.
+   *
+   * Only the FIRST attempt streams, and only where forced-tool output can
+   * stream: a model with `anthropic-tool` structured output and a direct
+   * lane, on a call no `requireLane` pins elsewhere. Otherwise it is never
+   * called and the answer arrives one-shot. A throw from it is logged and
+   * stops the forwarding; it never fails the call.
+   */
+  onToolJson?: (partialJson: string, jsonSnapshot: unknown) => void
+  /** Aborts the streamed attempt. */
+  signal?: AbortSignal
+}
+
+/**
+ * {@link llmCompleteStructured}, with the first attempt's tool input streamed
+ * to `onToolJson` as the model writes it, so a caller can show each finished
+ * value before the answer is done.
+ *
+ * Everything that makes the answer trustworthy is shared with
+ * llmCompleteStructured rather than restated: the same validation, the same
+ * correction retries (one-shot, since streaming a retry would re-show values
+ * the caller already has), the same usage and cost summed over every attempt,
+ * the same cap-stop rule. Streamed values are PROVISIONAL; the returned
+ * output is the answer.
+ *
+ * The streamed attempt always goes to the direct Anthropic SDK (a streamed
+ * forced-tool reply is not parsed on the KIE lane, the rule `llmStream`
+ * applies too), with the body the one-shot direct call sends. If it fails
+ * before a single fragment arrived, that attempt is served one-shot on the
+ * model's normal lanes instead, exactly as the non-streamed call would have
+ * been. Once anything has streamed, a failure surfaces: re-asking would pay
+ * twice.
+ */
+export async function llmStreamStructured<T>(
+  req: LlmRequest,
+  schema: ZodType<T>,
+  opts?: StructuredStreamOptions,
+): Promise<StructuredLlmOutput<T>> {
+  const model = resolveModel(req)
+  assertInlineVideoLane(req)
+  const onToolJson = opts?.onToolJson
+  if (!onToolJson || !canStreamStructured(model, req)) {
+    return runStructuredAttempts(req, schema, opts, (attemptReq) => llmComplete(attemptReq))
+  }
+  const forward = guardToolJsonCallback(model.id, onToolJson)
+  return runStructuredAttempts(req, schema, opts, (attemptReq, attempt) =>
+    attempt === 0 ? streamStructuredAttempt(model, attemptReq, forward, opts?.signal) : llmComplete(attemptReq),
+  )
+}
+
+/** Forced-tool output streams only on the direct Anthropic lane: the model
+ *  speaks `anthropic-tool`, names a direct model, the key is set, and no
+ *  `requireLane` pins the call elsewhere. */
+function canStreamStructured(model: LlmModelDef, req: LlmRequest): boolean {
+  return (
+    req.requireLane === undefined &&
+    model.structuredOutputMode === "anthropic-tool" &&
+    Boolean(model.directFallbackModel) &&
+    Boolean(config.ANTHROPIC_API_KEY)
+  )
+}
+
+/** A broken consumer must never fail a paid call: its first throw is logged
+ *  and ends the forwarding. */
+function guardToolJsonCallback(
+  modelId: string,
+  onToolJson: (partialJson: string, jsonSnapshot: unknown) => void,
+): (partialJson: string, jsonSnapshot: unknown) => void {
+  let live = true
+  return (partialJson, jsonSnapshot) => {
+    if (!live) return
+    try {
+      onToolJson(partialJson, jsonSnapshot)
+    } catch (err) {
+      live = false
+      console.warn(
+        `[llm-structured-stream] ${modelId}: onToolJson threw, forwarding stopped (the call continues) — ` +
+          String(err).slice(0, 200),
+      )
+    }
+  }
+}
+
+/**
+ * The first, streamed attempt. Its lanes are the one-shot path's pair for a
+ * Claude model (`llmComplete`): the direct SDK, then KIE, one each, so the
+ * call stays within `LLM_MAX_LANES_PER_CALL`. KIE is asked only when the
+ * stream cost nothing: it failed before `message_start` (a started stream
+ * throws a usage-carrying `LlmStreamResponseError`, a cap stop included), and
+ * the caller did not cancel it.
+ */
+async function streamStructuredAttempt(
+  model: LlmModelDef,
+  req: LlmRequest,
+  onToolJson: (partialJson: string, jsonSnapshot: unknown) => void,
+  signal?: AbortSignal,
+): Promise<LlmResponse> {
+  if (!req.jsonSchema) return llmComplete(req)
+  try {
+    return await streamAnthropicStructured(model, req, req.jsonSchema, onToolJson, signal)
+  } catch (err) {
+    const kie = kieFallback(model, req)
+    if (!kie || err instanceof LlmStreamResponseError || signal?.aborted) throw err
+    warnLaneFallback({ modelId: model.id, primary: "direct-anthropic stream", fallback: "kie" }, err)
+    return kie()
+  }
+}
+
+/**
+ * The validation loop both structured entry points share: build the JSON
+ * schema, ask (through `callAttempt`), parse, Zod-validate, and on failure
+ * ask again with a correction turn, summing usage over every attempt.
+ */
+async function runStructuredAttempts<T>(
+  req: LlmRequest,
+  schema: ZodType<T>,
+  opts: { schemaName?: string; maxRetries?: number } | undefined,
+  callAttempt: (attemptReq: LlmRequest, attempt: number) => Promise<LlmResponse>,
+): Promise<StructuredLlmOutput<T>> {
   const schemaName = opts?.schemaName ?? "result"
   const retries = Math.max(0, opts?.maxRetries ?? 2)
-  // Draft-7 keeps Anthropic's tool input_schema happy; strip the $schema marker.
-  // io:"input" mirrors zod-to-json-schema's semantics (defaulted fields optional).
-  const jsonSchema = restrictObjectSchemas(
-    z.toJSONSchema(schema, { target: "draft-7", unrepresentable: "any", io: "input" }) as Record<string, unknown>,
-  )
-  delete jsonSchema.$schema
+  const jsonSchema = structuredJsonSchema(schema)
 
   let messages = req.messages
   let lastError = ""
-  // Accumulate usage across ALL attempts: a retried call really is billed for
-  // every attempt (each re-sends the prompt — incl. multimodal refs), so the
-  // returned cost must reflect the full spend, not just the winning attempt.
-  // Otherwise jobs.provider_cost under-reports vs the real KIE/Anthropic bill
-  // and the credit-anomaly / "actual" audit drifts negative.
-  let inTokens = 0
-  let outTokens = 0
-  let cost = 0
-  let costSeen = false
-  let usageComplete = true
+  let spend = NO_SPEND
   for (let attempt = 0; attempt <= retries; attempt++) {
     let resp: LlmResponse
     try {
@@ -776,49 +891,103 @@ export async function llmCompleteStructured<T>(
       // answer and cost nothing, so refusing to re-dial it buys the caller no protection and
       // costs it the whole job. `retryStreamOnError` is that separate lever and travels
       // verbatim.
-      resp = await llmComplete({ ...req, messages,
-        jsonSchema: { name: schemaName, schema: jsonSchema } })
+      resp = await callAttempt({ ...req, messages,
+        jsonSchema: { name: schemaName, schema: jsonSchema } }, attempt)
     } catch (error) {
-      const terminalUsage = error instanceof LlmStreamResponseError ? error.usage : undefined
-      throw new StructuredLlmError(error instanceof Error ? error.message : "Structured completion failed", {
-        inputTokens: inTokens + (terminalUsage?.inputTokens ?? 0),
-        outputTokens: outTokens + (terminalUsage?.outputTokens ?? 0),
-        providerCost: costSeen || terminalUsage?.providerCost !== undefined
-          ? cost + (terminalUsage?.providerCost ?? 0) : undefined,
-        complete: usageComplete && terminalUsage?.complete === true,
-      }, { cause: error })
+      throw failureWithSpend(spend, error)
     }
-    usageComplete = usageComplete && resp.usage !== undefined && resp.providerCost !== undefined
-    inTokens += resp.usage?.inputTokens ?? 0
-    outTokens += resp.usage?.outputTokens ?? 0
-    if (resp.providerCost != null) { cost += resp.providerCost; costSeen = true }
-
-    let parsedJson: unknown
-    try {
-      parsedJson = JSON.parse(extractJsonFromAIResponse(resp.text))
-    } catch {
-      lastError = "Output was not valid JSON."
-      messages = withCorrection(messages, resp.text, lastError)
-      continue
+    spend = addSpend(spend, resp)
+    const answer = parseStructuredAnswer(schema, resp.text)
+    if (answer.ok) {
+      const usage = spendUsage(spend)
+      return { output: answer.data, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
+        providerCost: usage.providerCost, usageComplete: usage.complete }
     }
-
-    const result = schema.safeParse(parsedJson)
-    if (result.success) {
-      return {
-        output: result.data,
-        inputTokens: inTokens,
-        outputTokens: outTokens,
-        providerCost: costSeen ? cost : undefined,
-        usageComplete,
-      }
-    }
-    lastError = result.error.issues.slice(0, 8).map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ")
+    lastError = answer.error
     messages = withCorrection(messages, resp.text, lastError)
   }
-  throw new StructuredLlmError(`llm-structured: validation failed after ${retries + 1} attempt(s): ${lastError}`, {
-    inputTokens: inTokens, outputTokens: outTokens,
-    providerCost: costSeen ? cost : undefined, complete: usageComplete,
-  })
+  throw new StructuredLlmError(`llm-structured: validation failed after ${retries + 1} attempt(s): ${lastError}`, spendUsage(spend))
+}
+
+/** The forced output's JSON Schema. */
+function structuredJsonSchema(schema: ZodType): Record<string, unknown> {
+  // Draft-7 keeps Anthropic's tool input_schema happy; strip the $schema marker.
+  // io:"input" mirrors zod-to-json-schema's semantics (defaulted fields optional).
+  const jsonSchema = restrictObjectSchemas(
+    z.toJSONSchema(schema, { target: "draft-7", unrepresentable: "any", io: "input" }) as Record<string, unknown>,
+  )
+  delete jsonSchema.$schema
+  return jsonSchema
+}
+
+/**
+ * What one structured call has spent so far.
+ *
+ * Accumulate usage across ALL attempts: a retried call really is billed for
+ * every attempt (each re-sends the prompt — incl. multimodal refs), so the
+ * returned cost must reflect the full spend, not just the winning attempt.
+ * Otherwise jobs.provider_cost under-reports vs the real KIE/Anthropic bill
+ * and the credit-anomaly / "actual" audit drifts negative.
+ */
+interface StructuredSpend {
+  inputTokens: number
+  outputTokens: number
+  cost: number
+  costSeen: boolean
+  /** Every attempt reported both token usage and cost. */
+  complete: boolean
+}
+
+const NO_SPEND: StructuredSpend = { inputTokens: 0, outputTokens: 0, cost: 0, costSeen: false, complete: true }
+
+function addSpend(spend: StructuredSpend, resp: LlmResponse): StructuredSpend {
+  return {
+    inputTokens: spend.inputTokens + (resp.usage?.inputTokens ?? 0),
+    outputTokens: spend.outputTokens + (resp.usage?.outputTokens ?? 0),
+    cost: spend.cost + (resp.providerCost ?? 0),
+    costSeen: spend.costSeen || resp.providerCost != null,
+    complete: spend.complete && resp.usage !== undefined && resp.providerCost !== undefined,
+  }
+}
+
+function spendUsage(spend: StructuredSpend): StructuredLlmError["usage"] {
+  return {
+    inputTokens: spend.inputTokens,
+    outputTokens: spend.outputTokens,
+    providerCost: spend.costSeen ? spend.cost : undefined,
+    complete: spend.complete,
+  }
+}
+
+/** An attempt that threw ends the call; the usage it reported (if any) joins the total. */
+function failureWithSpend(spend: StructuredSpend, error: unknown): StructuredLlmError {
+  const terminalUsage = error instanceof LlmStreamResponseError ? error.usage : undefined
+  return new StructuredLlmError(error instanceof Error ? error.message : "Structured completion failed", {
+    inputTokens: spend.inputTokens + (terminalUsage?.inputTokens ?? 0),
+    outputTokens: spend.outputTokens + (terminalUsage?.outputTokens ?? 0),
+    providerCost: spend.costSeen || terminalUsage?.providerCost !== undefined
+      ? spend.cost + (terminalUsage?.providerCost ?? 0) : undefined,
+    complete: spend.complete && terminalUsage?.complete === true,
+  }, { cause: error })
+}
+
+/** Parse and validate one attempt's answer: its data, or the error to feed back. */
+function parseStructuredAnswer<T>(
+  schema: ZodType<T>,
+  text: string,
+): { ok: true; data: T } | { ok: false; error: string } {
+  let parsedJson: unknown
+  try {
+    parsedJson = JSON.parse(extractJsonFromAIResponse(text))
+  } catch {
+    return { ok: false, error: "Output was not valid JSON." }
+  }
+  const result = schema.safeParse(parsedJson)
+  if (result.success) return { ok: true, data: result.data }
+  return {
+    ok: false,
+    error: result.error.issues.slice(0, 8).map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; "),
+  }
 }
 
 /**
@@ -1634,47 +1803,82 @@ async function callKieResponsesCollapsed(model: LlmModelDef, req: LlmRequest): P
 // Direct Anthropic SDK fallback
 // ---------------------------------------------------------------------------
 
+/**
+ * The ONE request body the direct Anthropic lane sends for forced single-tool
+ * structured output, shared by the one-shot call and the stream
+ * ({@link llmStreamStructured}) so the two can never ask differently.
+ *
+ * Temperature is intentionally omitted: newer Anthropic models (e.g.
+ * opus-4.7) reject it.
+ */
+function anthropicStructuredRequest(
+  model: LlmModelDef,
+  req: LlmRequest,
+  jsonSchema: NonNullable<LlmRequest["jsonSchema"]>,
+): { body: Record<string, unknown>; options: { timeout: number }; maxTokens: number } {
+  const { eff, maxTokens } = deriveParams(model, req)
+  return {
+    body: {
+      model: model.directFallbackModel!,
+      max_tokens: maxTokens,
+      system: req.system,
+      messages: buildAnthropicMessages(req),
+      tools: [{
+        name: jsonSchema.name,
+        description: "Emit the structured result.",
+        input_schema: jsonSchema.schema as Anthropic.Messages.Tool.InputSchema,
+      }],
+      tool_choice: { type: "tool", name: jsonSchema.name },
+      ...(eff !== undefined ? { thinking: { type: "adaptive" as const }, output_config: { effort: eff } } : {}),
+    },
+    options: { timeout: effectiveTimeout(req) },
+    maxTokens,
+  }
+}
+
+/** The forced tool's input, serialized as `text` so the rest of the pipeline
+ *  (and llmCompleteStructured) treats it like any JSON completion. Anthropic's
+ *  own API served it, so it is costed on the direct band, not KIE's.
+ *
+ *  A streamed call passes the tool input's raw JSON (`streamedJson`): the
+ *  stream's final message carries the SDK's partial-JSON parse of it, which
+ *  misreads numbers (`1e-3` comes back as 13), so the bytes the model wrote
+ *  are the answer. A forced tool with an empty input streams no bytes; the
+ *  final message's input is read then, as the one-shot call reads it. */
+function anthropicToolResponse(
+  model: LlmModelDef,
+  message: Pick<Anthropic.Messages.Message, "content" | "usage" | "stop_reason">,
+  maxTokens: number,
+  streamedJson?: string,
+): LlmResponse {
+  const toolUse = message.content.find(
+    (b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use",
+  )
+  const usage = { inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }
+  return buildResponse(
+    model,
+    streamedJson || (toolUse ? JSON.stringify(toolUse.input) : ""),
+    { stopReason: message.stop_reason, cap: maxTokens },
+    usage,
+    undefined,
+    "direct",
+  )
+}
+
 async function callAnthropicDirect(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
   const anthropic = getAnthropicClient()
-  const { eff, temperature, maxTokens } = deriveParams(model, req)
 
-  // Forced single-tool structured output: guaranteed schema-shaped JSON. We
-  // return the tool input serialized as `text` so the rest of the pipeline
-  // (and llmCompleteStructured) treats it like any JSON completion. Temperature
-  // is intentionally omitted — newer Anthropic models (e.g. opus-4.7) reject it.
+  // Forced single-tool structured output: guaranteed schema-shaped JSON.
   if (req.jsonSchema && model.structuredOutputMode === "anthropic-tool") {
-    const toolName = req.jsonSchema.name
+    const { body, options, maxTokens } = anthropicStructuredRequest(model, req, req.jsonSchema)
     const response = await anthropic.messages.create(
-      {
-        model: model.directFallbackModel!,
-        max_tokens: maxTokens,
-        system: req.system,
-        messages: buildAnthropicMessages(req),
-        tools: [{
-          name: toolName,
-          description: "Emit the structured result.",
-          input_schema: req.jsonSchema.schema as Anthropic.Messages.Tool.InputSchema,
-        }],
-        tool_choice: { type: "tool", name: toolName },
-        ...(eff !== undefined ? { thinking: { type: "adaptive" as const }, output_config: { effort: eff } } : {}),
-      } as unknown as Anthropic.Messages.MessageCreateParamsNonStreaming,
-      { timeout: effectiveTimeout(req) },
+      body as unknown as Anthropic.Messages.MessageCreateParamsNonStreaming,
+      options,
     )
-    const toolUse = response.content.find(
-      (b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use",
-    )
-    const usage = { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }
-    // Anthropic's own API served this — cost it on the direct band, not KIE's.
-    return buildResponse(
-      model,
-      toolUse ? JSON.stringify(toolUse.input) : "",
-      { stopReason: response.stop_reason, cap: maxTokens },
-      usage,
-      undefined,
-      "direct",
-    )
+    return anthropicToolResponse(model, response, maxTokens)
   }
 
+  const { eff, temperature, maxTokens } = deriveParams(model, req)
   const response = await anthropic.messages.create(
     {
       model: model.directFallbackModel!,
@@ -1737,6 +1941,91 @@ async function streamAnthropicDirect(
     undefined,
     "direct",
   )
+}
+
+/**
+ * A forced-tool structured answer, streamed on the direct Anthropic lane:
+ * each raw `input_json_delta` fragment reaches `onToolJson` as the model
+ * writes it. The request is {@link anthropicStructuredRequest}'s — the one-shot
+ * call's body, byte for byte — and the response is built the same way, so
+ * usage, cost band and the cap-stop rule are unchanged. With adaptive thinking
+ * on, the thinking finishes before the first fragment arrives.
+ *
+ * Fragments are read from the raw `streamEvent`s, not the SDK's `inputJson`
+ * event, which fires only when its partial parse of the input is truthy: the
+ * caller's parser and the answer (`anthropicToolResponse`) read every byte.
+ *
+ * The SDK's `timeout` bounds only the wait for response headers, so the
+ * stream gets the one-shot call's whole-call budget here. A failure after
+ * `message_start` (the request was accepted and its input billed) is thrown
+ * as a usage-carrying {@link LlmStreamResponseError}, so it is never re-asked
+ * and the job can record what it cost.
+ */
+async function streamAnthropicStructured(
+  model: LlmModelDef,
+  req: LlmRequest,
+  jsonSchema: NonNullable<LlmRequest["jsonSchema"]>,
+  onToolJson: (partialJson: string, jsonSnapshot: unknown) => void,
+  signal?: AbortSignal,
+): Promise<LlmResponse> {
+  const anthropic = getAnthropicClient()
+  const { body, options, maxTokens } = anthropicStructuredRequest(model, req, jsonSchema)
+  const stream = anthropic.messages.stream(
+    body as unknown as Anthropic.Messages.MessageCreateParamsStreaming,
+    options,
+  )
+  let timedOut = false
+  const deadline = setTimeout(() => {
+    timedOut = true
+    stream.abort()
+  }, options.timeout)
+  const abort = (): void => stream.abort()
+  if (signal?.aborted) abort()
+  else signal?.addEventListener("abort", abort, { once: true })
+
+  let started: Anthropic.Messages.Message | undefined
+  let toolJson = ""
+  stream.on("streamEvent", (event, snapshot) => {
+    started = snapshot
+    if (event.type !== "content_block_delta" || event.delta.type !== "input_json_delta") return
+    toolJson += event.delta.partial_json
+    const block = snapshot.content[event.index]
+    onToolJson(event.delta.partial_json, block?.type === "tool_use" ? block.input : undefined)
+  })
+
+  let finalMessage: Anthropic.Messages.Message
+  try {
+    finalMessage = await stream.finalMessage()
+  } catch (err) {
+    const failure = timedOut
+      ? new Error(`llm-client: ${model.id} structured stream exceeded its ${options.timeout} ms budget`, { cause: err })
+      : err
+    if (!started) throw failure
+    throw startedStreamFailure(model, failure, started.usage)
+  } finally {
+    clearTimeout(deadline)
+    signal?.removeEventListener("abort", abort)
+  }
+  return anthropicToolResponse(model, finalMessage, maxTokens, toolJson)
+}
+
+/** A streamed call that failed after the provider accepted (and billed) it:
+ *  the usage the stream reported so far rides the error. */
+function startedStreamFailure(
+  model: LlmModelDef,
+  err: unknown,
+  usage: Anthropic.Messages.Usage,
+): LlmStreamResponseError {
+  const inputTokens = usage.input_tokens
+  const outputTokens = usage.output_tokens
+  const failure = new LlmStreamResponseError(err instanceof Error ? err.message : String(err), {
+    inputTokens,
+    outputTokens,
+    providerCost: calculateLlmCost(model, { inputTokens, outputTokens }, "direct"),
+    complete: false,
+  })
+  failure.cause = err
+  return failure
 }
 
 // ---------------------------------------------------------------------------

@@ -51,6 +51,7 @@ import { planRevisionId } from "@/lib/scene3d/plan-view"
 import { isScrapeNodeType, scrapeJobNeedsApplying, scrapeResultPatch } from "@/components/nodes/scrape-result-recovery"
 import { settledBeforeClear } from "@/lib/results-cleared"
 import { videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
+import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
 import type { GeneratedResult, Scene3DRevisionEntry, WorkflowNode } from "@/types/nodes"
 
 /** The single-entry nodeState a completed single-node job carries (backend
@@ -385,7 +386,7 @@ export function buildCompletedResultPatch(
   // Scrapers: the result is `output_data.json` too, written through the live
   // run's own patch so the card, the counts and the kept-last-good contract are
   // identical however the result arrived.
-  if (nodeType && isScrapeNodeType(nodeType)) return scrapeResultPatch(nodeType, output.json, jobId)
+  if (nodeType && isScrapeNodeType(nodeType)) return scrapeResultPatch(nodeType, output.json, jobId, nodeData)
   // audio-sync: its offsets are `output_data.json` → `data.generatedJson`, not a
   // media URL (type-gated like the analysis branch above).
   if (nodeType === "audio-sync") {
@@ -403,6 +404,10 @@ export function buildCompletedResultPatch(
     if (plan === undefined || plan === null || typeof plan !== "object") return null
     return { executionStatus: "completed", generatedJson: plan }
   }
+  // Content Recipe / Content Ideas: a recipe object or the ideas (with one
+  // brief per idea — the list the next node runs on). The SAME mapping the live
+  // run writes, so a recovered node looks and feeds downstream identically.
+  if (isContentNodeType(nodeType)) return contentRunResultPatch(nodeType, output)
   const videoUrl = typeof output.videoUrl === "string" ? output.videoUrl : undefined
   const imageUrl = typeof output.imageUrl === "string" ? output.imageUrl : undefined
   const audioUrl = typeof output.audioUrl === "string" ? output.audioUrl : undefined

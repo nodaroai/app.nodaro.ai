@@ -3226,6 +3226,7 @@ export async function generateScriptApi(params: {
   sceneCount?: number
   tone?: string
   targetDuration?: number
+  styleGuide?: string
   provider?: string
   llmModel?: string
   reasoningEffort?: string
@@ -4425,6 +4426,60 @@ export async function startVideoAnalysis(params: {
 }
 
 /**
+ * Content Recipe (cloud) — one post's material in (a Video Analysis result, a
+ * scraped post, a caption or transcript), a queued recipe job out. Poll the
+ * job; its output_data is { json: recipe, text, model, warnings? }.
+ */
+export async function startContentRecipe(params: {
+  source: string
+  sourceUrl?: string
+  focus?: string
+  llmModel?: string
+  reasoningEffort?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { source: params.source }
+  if (params.sourceUrl) body.sourceUrl = params.sourceUrl
+  if (params.focus) body.focus = params.focus
+  if (params.llmModel) body.llmModel = params.llmModel
+  if (params.reasoningEffort) body.reasoningEffort = params.reasoningEffort
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/content-recipe", {
+    body,
+    workflowId: true,
+    label: "apiErr.startContentRecipe",
+  })
+}
+
+/**
+ * Content Ideas (cloud) — recipes + a brand profile in, a queued ideas job
+ * out. Poll the job; its output_data is { json: ideas, text, listResults:
+ * one brief per idea, model, warnings? }.
+ */
+export async function startContentIdeas(params: {
+  recipes: string[]
+  brand?: string
+  count?: number
+  language?: string
+  llmModel?: string
+  reasoningEffort?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { recipes: params.recipes }
+  if (params.brand) body.brand = params.brand
+  if (params.count !== undefined) body.count = params.count
+  if (params.language) body.language = params.language
+  if (params.llmModel) body.llmModel = params.llmModel
+  if (params.reasoningEffort) body.reasoningEffort = params.reasoningEffort
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/content-ideas", {
+    body,
+    workflowId: true,
+    label: "apiErr.startContentIdeas",
+  })
+}
+
+/**
  * AI Audit (`video-audit`) — re-watches a clip against a finished analysis and
  * returns the corrected analysis plus a disclosure report.
  *
@@ -4551,6 +4606,95 @@ export async function instagramScrape(params: {
 }): Promise<{ jobId: string; json: unknown; text?: string; imageUrl?: string; videoUrl?: string; mediaStorage?: unknown; analysis?: unknown }> {
   return apiJson("/v1/instagram-scrape", { body: params, workflowId: true, label: "apiErr.instagramScrapeFailed" })
 }
+
+/**
+ * Social Search (Cloud): one platform, one keyword or account. Answers with a
+ * job id at once; the search runs in a worker (an X search can take two
+ * minutes), so poll the job for `output_data.json`, every post found.
+ */
+export async function socialSearch(
+  params: import("@nodaro/shared").SocialSearchParams,
+): Promise<{ jobId: string }> {
+  return apiJson("/v1/social-search", { body: { ...params }, workflowId: true, label: "apiErr.socialSearchFailed" })
+}
+
+// ---- Saved posts (the inspiration wall) ----
+
+type SavedPost = import("@nodaro/shared").SavedPost
+
+export async function listSavedPosts(
+  params: import("@nodaro/shared").ListSavedPostsParams = {},
+): Promise<import("@nodaro/shared").ListSavedPostsResult> {
+  const qs = new URLSearchParams()
+  if (params.platform) qs.set("platform", params.platform)
+  if (params.tag) qs.set("tag", params.tag)
+  if (params.q) qs.set("q", params.q)
+  if (params.cursor) qs.set("cursor", params.cursor)
+  if (params.limit) qs.set("limit", String(params.limit))
+  const query = qs.toString()
+  return apiJson(`/v1/saved-posts${query ? `?${query}` : ""}`, { method: "GET", label: "apiErr.loadSavedPosts" })
+}
+
+/** Which of these posts (`SocialPost.id`) the caller saved, as postId -> save id. */
+export async function lookupSavedPosts(postIds: readonly string[]): Promise<ReadonlyMap<string, string>> {
+  if (postIds.length === 0) return new Map()
+  const res = await apiJson<import("@nodaro/shared").SavedPostsLookupResult>("/v1/saved-posts/lookup", {
+    body: { postIds: [...postIds] },
+    label: "apiErr.loadSavedPosts",
+  })
+  return new Map(res.saved.map((s) => [s.postId, s.id]))
+}
+
+export async function savePost(input: import("@nodaro/shared").SavePostInput): Promise<SavedPost> {
+  return apiJson("/v1/saved-posts", { body: { ...input }, label: "apiErr.savePost" })
+}
+
+export async function updateSavedPost(id: string, input: import("@nodaro/shared").UpdateSavedPostInput): Promise<SavedPost> {
+  return apiJson(`/v1/saved-posts/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.updateSavedPost" })
+}
+
+export async function deleteSavedPost(id: string): Promise<void> {
+  await apiJson(`/v1/saved-posts/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteSavedPost" })
+}
+
+// ---- Competitors (Cloud: tracked brands, scans, action cards) ----
+
+type TrackedCompetitor = import("@nodaro/shared").TrackedCompetitor
+
+export async function listCompetitors(): Promise<TrackedCompetitor[]> {
+  const res = await apiJson<{ data: TrackedCompetitor[] }>("/v1/competitors", { method: "GET", label: "apiErr.loadCompetitors" })
+  return res.data
+}
+
+export async function getCompetitor(id: string): Promise<import("@nodaro/shared").CompetitorDetail> {
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "GET", label: "apiErr.loadCompetitors" })
+}
+
+export async function createCompetitor(input: import("@nodaro/shared").CreateCompetitorInput): Promise<TrackedCompetitor> {
+  return apiJson("/v1/competitors", { body: { ...input }, label: "apiErr.saveCompetitor" })
+}
+
+export async function updateCompetitor(id: string, input: import("@nodaro/shared").UpdateCompetitorInput): Promise<TrackedCompetitor> {
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.saveCompetitor" })
+}
+
+export async function deleteCompetitor(id: string): Promise<void> {
+  await apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteCompetitor" })
+}
+
+export async function competitorCards(): Promise<import("@nodaro/shared").CompetitorCardsResult> {
+  return apiJson("/v1/competitors/cards", { method: "GET", label: "apiErr.loadCompetitors" })
+}
+
+export async function discoverCompetitor(website: string): Promise<import("@nodaro/shared").CompetitorDiscovery> {
+  return apiJson("/v1/competitor-discover", { body: { website }, label: "apiErr.discoverCompetitor" })
+}
+
+/** Starts a paid scan; answers with the job id at once. */
+export async function scanCompetitor(id: string): Promise<{ jobId: string }> {
+  return apiJson("/v1/competitor-scan", { body: { competitorId: id }, label: "apiErr.scanCompetitor" })
+}
+
 
 export async function sunoGenerateApi(params: {
   prompt: string
@@ -7026,7 +7170,7 @@ export interface WorkflowExecution {
   id: string
   workflowId: string
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'stopping' | 'discarded'
-  triggerType: 'manual' | 'webhook' | 'schedule' | 'single-node' | 'app_run' | 'mcp'
+  triggerType: 'manual' | 'webhook' | 'schedule' | 'telegram' | 'telegram_account' | 'api' | 'single-node' | 'app_run' | 'mcp'
   /** MCP client name (e.g. "Claude", "Cursor") when the execution was triggered via the MCP server. */
   mcpClient?: string | null
   triggerData?: Record<string, unknown>
@@ -7256,7 +7400,9 @@ export async function streamWorkflowExecution(
       // user stopped the run, so its results land in My Library off-canvas.
       // Short-circuit before onNodeStatesChanged so the discarded states are
       // never applied, and route to onDiscarded (not onCompleted).
-      if (eventType === "execution:discarded") {
+      // A stream that joined a run already over hears a bare "done" carrying
+      // only the row's status: a discarded one is still never painted.
+      if (eventType === "execution:discarded" || (eventType === undefined && d.status === "discarded")) {
         callbacks.onDiscarded?.(d)
         return
       }
@@ -7355,10 +7501,12 @@ export async function listWorkflowTriggers(workflowId: string): Promise<Workflow
 export async function syncWorkflowTriggers(
   workflowId: string,
   vouchNodeIds: ReadonlyArray<string> = [],
+  /** Account triggers this editor session changed, each with the listening settings it set. */
+  accountNodes: ReadonlyArray<{ readonly id: string; readonly settings: string }> = [],
 ): Promise<{ data: { synced: boolean; created: number; updated: number; removed: number; reason?: string } }> {
   return apiRequest(`/v1/workflows/${encodeURIComponent(workflowId)}/sync-triggers`, "apiErr.syncTriggers", {
     method: "POST",
-    body: { vouchNodeIds: [...vouchNodeIds] },
+    body: { vouchNodeIds: [...vouchNodeIds], accountNodes: accountNodes.map((n) => ({ id: n.id, settings: n.settings })) },
   })
 }
 
@@ -7599,6 +7747,30 @@ export async function getSharedExecutionStatus(
 // ---------------------------------------------------------------------------
 // API Tokens
 // ---------------------------------------------------------------------------
+
+/** An app the user let into their account through OAuth (`GET /v1/me/connected-apps`). */
+export interface ConnectedApp {
+  authorizationId: string
+  /** The app's name. An MCP client that registered itself (`dynamic_mcp`) chose it. */
+  name: string | null
+  kind: "user" | "first_party_mcp" | "dynamic_mcp" | "community_instance" | (string & {})
+  homepageUrl: string | null
+  scopes: string[]
+  connectedAt: string
+  lastUsedAt: string | null
+}
+
+/** Every app with access to the user's account. Browser sessions only. */
+export async function listConnectedApps(): Promise<{ apps: ConnectedApp[] }> {
+  return apiRequest("/v1/me/connected-apps", "apiErr.listConnectedApps")
+}
+
+/** End an app's access: its grant and every token issued under it. */
+export async function revokeConnectedApp(authorizationId: string): Promise<{ ok: true }> {
+  return apiRequest(`/v1/me/connected-apps/${encodeURIComponent(authorizationId)}/revoke`, "apiErr.revokeConnectedApp", {
+    method: "POST",
+  })
+}
 
 export interface ApiToken {
   id: string
@@ -9112,6 +9284,23 @@ export async function toggleTemplateTutorialFlag(
   )
 }
 
+/**
+ * PATCH /v1/admin/workflow-templates/:id/listing — an admin's switches for ANY
+ * template, whoever made it. `isActive: false` turns it off everywhere (the
+ * gallery, its page, cloning, the tutorials); `isListed` takes it in or out of
+ * the gallery and leaves the tutorial tag alone.
+ */
+export async function setAdminTemplateListing(
+  templateId: string,
+  change: { isActive?: boolean; isListed?: boolean },
+): Promise<AdminWorkflowTemplateRow> {
+  return apiRequest<AdminWorkflowTemplateRow>(
+    `/v1/admin/workflow-templates/${encodeURIComponent(templateId)}/listing`,
+    "apiErr.updateTemplateListing",
+    { method: "PATCH", body: change },
+  )
+}
+
 // --- Execution stats (progress bar estimation) ---
 
 export interface ExecutionEstimate {
@@ -9417,6 +9606,8 @@ export interface TelegramChatSummary {
   readonly lastMessageAt?: string
   /** No message in 30+ days. */
   readonly dormant: boolean
+  /** The account's own Saved Messages (the panel shows its name in the interface language). */
+  readonly isSelf?: boolean
 }
 
 export function listTelegramAccountChats(accountId: string): Promise<{ chats: TelegramChatSummary[] }> {

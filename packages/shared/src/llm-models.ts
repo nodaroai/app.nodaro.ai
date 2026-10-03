@@ -734,6 +734,12 @@ export type LlmFeature =
   // In-app Workflow Copilot turns (backend agent loop; metered, reservation
   // ceiling under `STATIC_CREDIT_COSTS["workflow-copilot"]`).
   | "workflow-copilot"
+  // "Steal the format": Content Recipe (why a post worked, one structured
+  // call over its analysis) and Content Ideas (recipes + brand → ideas, a
+  // call per five ideas). Cloud-only; the implementation is a private plugin.
+  // Ideas are priced per batch of five — see content-recipe-ideas.ts.
+  | "content-recipe"
+  | "content-ideas"
 
 /** Engine-dependent LlmFeature for the motion-graphics node (design §8: every credit-id site must branch on engine). */
 export function motionGraphicsFeature(engine?: string): LlmFeature {
@@ -764,6 +770,11 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   "image-critic": "claude-sonnet-4.6",
   "pick-best-llm": "claude-sonnet-4.6",
   "workflow-copilot": "claude-sonnet-5",
+  // Both economy on purpose — measured: ten ideas in Hebrew took ~1 min here
+  // and ~3.5 min (two calls) on claude-sonnet-4.6. The private plugin keeps
+  // the same two defaults for API callers that omit the model.
+  "content-recipe": "gemini-3.6-flash",
+  "content-ideas": "gemini-3.6-flash",
 }
 
 /**

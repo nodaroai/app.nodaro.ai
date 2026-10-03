@@ -2,7 +2,7 @@ import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
   // Aperture — labels are technical units (f/1.2 etc.), kept as-is
-  "aperture-f1-2": { description: "Profundidade de campo mínima, bokeh dos sonhos" },
+  "aperture-f1-2": { description: "Profundidade de campo mínima, bokeh onírico" },
   "aperture-f1-4": { description: "Isolamento agressivo do sujeito" },
   "aperture-f1-8": { description: "Separação clássica de retrato" },
   "aperture-f2-8": { description: "Sujeito nítido, fundo desfocado" },
@@ -13,11 +13,11 @@ const map: LocaleCatalogMap = {
   "aperture-f16": { description: "Hiperfocal, estrelinhas no sol" },
 
   // Shutter speed — units kept as-is, fragment after slash translated
-  "shutter-1-30": { label: "1/30 (tremido na mão)", description: "Toque de movimento na câmera na mão" },
+  "shutter-1-30": { label: "1/30 (tremido na mão)", description: "Leve movimento de câmera na mão" },
   "shutter-1-60": { description: "Velocidade padrão do dia a dia" },
   "shutter-1-200": { description: "Nítido na maioria dos sujeitos" },
   "shutter-1-500": { description: "Nítido em ações rápidas" },
-  "shutter-1-1000": { label: "1/1000 (congelar ação)", description: "Esportes/animais selvagens congelados" },
+  "shutter-1-1000": { label: "1/1000 (congelar ação)", description: "Ação congelada em esportes e vida selvagem" },
   "shutter-long-1s": { label: "Longa exposição (1s)", description: "Riscos e rastros de movimento" },
 
   // ISO — units in English, descriptors translated

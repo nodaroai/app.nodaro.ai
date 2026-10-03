@@ -121,7 +121,7 @@ here for each one anyway.
 | `FRONTEND_SUPABASE_URL` | `""` (bundled: derived `PUBLIC_URL/supabase`) | Supabase URL the **browser** uses — written into `/config.js` at boot; set it when auth lives on a managed Supabase project |
 | `DEFAULT_LOCALE` | `""` (browser detection) | The locale a fresh visitor starts in — e.g. `he`, `ar`, `de`, `fr`, `es`, `hi`, `ja`, `ko`, `pt-BR`, `ru`, `zh-CN`, `en`. Written into `/config.js` at boot; a user's own saved choice always wins, and an unset/blank/unrecognised value falls back to the visitor's browser language. Restart to apply |
 | `NODARO_TUTORIAL_PACKS` | `""` (built-in tutorials only) | Business / self-host — comma-separated directories of extra tutorial packs (each: a `manifest.json` + one `*.json` per tutorial), mounted read-only into the container. Additive; a malformed pack is skipped and logged, never corrupting the built-in tutorials. Restart to apply. See [tutorials.md](./tutorials.md) for the pack format |
-| `NODARO_SEED_MARKETPLACE_TEMPLATES` | off | Cloud only — `true` (or `1`) also seeds the built-in **marketplace** templates (the podcast editing workflows) under the system account so they appear in the marketplace (`GET /v1/templates/browse`). Off by default: on Cloud the seeder otherwise makes no database write at all. INSERT-if-missing and idempotent — a reboot is a no-op and an admin's later edits are never overwritten. Community / Business already seed the full built-in set, so the flag is inert there. Restart to apply |
+| `NODARO_SEED_MARKETPLACE_TEMPLATES` | off | Cloud only — `true` (or `1`) also seeds the built-in **marketplace** templates (the podcast editing workflows) under the system account so they appear in the marketplace (`GET /v1/templates/browse`). Off by default: on Cloud the seeder otherwise makes no database write at all. INSERT-if-missing and idempotent — a reboot is a no-op and an admin's later edits (**Admin → Templates** turns any template on or off, and in or out of the gallery) are never overwritten. Community / Business already seed the full built-in set, so the flag is inert there. Restart to apply |
 | `NODARO_UPDATE_CHECK` | on | `off` disables the update check entirely — no request leaves the install, `GET /v1/version` answers with the running version only and the sidebar shows it as plain text. For air-gapped installs. Restart to apply |
 | `NODARO_UPDATE_CHECK_TOKEN` | `""` (anonymous) | Optional GitHub token for the update check's two reads of the public release list. It needs **no scopes** — its only job is to take the reads off the anonymous quota, which GitHub counts per outbound address (60 an hour). An install with its own address never needs it; a hosted deployment that shares its outbound address with other tenants can find that quota spent by strangers, and then the version label falls back to the built-in one and the release notes stay empty until a retry gets through. The log line `[update-check] … read failed: HTTP 403 (rate limit: 0 of 60 left…)` is the sign. Sent to `api.github.com` only, never logged. Restart to apply |
 | `EDITION` | `community` | `community` · `business` · `cloud` — see §5 |
@@ -1146,6 +1146,18 @@ request from them, so enabling it is a per-environment decision rather
 than a side effect of deploying. It also needs the recast plugin loaded —
 on an edition without it the route 404s and the cron disables itself
 after one logged warning.
+
+**Scheduled competitor scans never run (Cloud).** A tracked brand's
+weekly or daily scan is started by a one-minute tick that asks the
+competitors plugin which brands are due. It is **off by default** for the
+same reason as the recast driver (a scheduled scan spends the owner's
+credits); enable it with `COMPETITOR_SCAN_CRON_ENABLED=true` on the API
+service and confirm `[competitor-scans] started` in the boot log. Scans
+started from the page ("Scan now") do not need it. When two environments
+share one database (a staging and a production deployment), enable it on
+**one** of them, the production one: either environment's tick claims every
+user's due brands, so a staging tick would run production users' paid
+scans on pre-release code.
 
 If you're still stuck, file an issue with the Docker logs at
 <https://github.com/nodaroai/app.nodaro.ai/issues>.

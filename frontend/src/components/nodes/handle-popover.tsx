@@ -27,6 +27,7 @@ import { focusNodeInViewport } from "@/lib/focus-node-in-viewport"
 import { collectTargetCandidates, isValidWorkflowConnection, resolveEffectiveSourceType } from "@/lib/connection-validation"
 import { optimizedImageUrl } from "@/lib/image"
 import { getHandleConnectionLimit, seedance2ImagePoolSlotsConsumed } from "@/lib/handle-limits"
+import { withWiredSettings } from "@nodaro/shared"
 import { TARGET_HANDLE_ACCEPTS, getTargetHandlesAccepting } from "@/lib/target-handle-registry"
 import { isTileGridPickerType } from "@/lib/picker-handles"
 import { Workflow } from "lucide-react"
@@ -476,8 +477,11 @@ export function HandlePopover({
   // graph-unaware). No-op for every other handle/provider —
   // `seedance2ImagePoolSlotsConsumed` only sums the frame + asset handles, and
   // the cap fn only applies it for the folding families.
+  // The limit of the model the node RUNS: a Provider wired into its Settings
+  // input sets it, so the caps follow that model rather than the stored one.
+  const consumerAsRun = consumerNode ? withWiredSettings(consumerNode as WorkflowNode, nodes, edges) : undefined
   const handleLimit = direction === "target"
-    ? getHandleConnectionLimit(consumerNode as WorkflowNode | undefined, handleId, {
+    ? getHandleConnectionLimit(consumerAsRun, handleId, {
         seedance2ImagePoolConsumed:
           handleId === "imageReferences"
             ? seedance2ImagePoolSlotsConsumed(edges, nodeId)

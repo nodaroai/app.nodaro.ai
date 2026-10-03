@@ -1244,6 +1244,34 @@ export const MUSIC_PROVIDERS = [
 ] as const
 export type MusicProvider = typeof MUSIC_PROVIDERS[number]
 
+/** The model a Generate Music node runs when its data names none it offers. */
+export const DEFAULT_MUSIC_PROVIDER: MusicProvider = "minimax"
+
+/** Each music model's name as the node shows it. The catalog's "minimax" is the
+ *  MiniMax VIDEO model, so its label cannot stand in. */
+export const MUSIC_PROVIDER_LABELS: Readonly<Record<MusicProvider, string>> = {
+  minimax: "MiniMax Music",
+}
+
+/**
+ * The credit id every Generate Music run reserves on — the route's guard and
+ * the orchestrator's payload both use it, whatever the model. The estimates
+ * and the node's price read it too: the model id would price the MiniMax VIDEO
+ * model that shares the name ("minimax").
+ */
+export const MUSIC_CREDIT_ID = "generate-music"
+
+/**
+ * The music model a Generate Music node runs: its `provider` when the node
+ * offers it, else the default. Nodes saved with a model that is gone ("suno",
+ * "musicgen", "lyria", "bark" — or the "suno" new nodes started on) run the
+ * default instead of failing validation. Coerces rather than rejects, like
+ * `normalizeModelInput`: the only model to fall back to is the one there is.
+ */
+export function resolveMusicProvider(value: unknown): MusicProvider {
+  return (MUSIC_PROVIDERS as readonly unknown[]).includes(value) ? (value as MusicProvider) : DEFAULT_MUSIC_PROVIDER
+}
+
 /**
  * Transcription providers a caller may name — on `/v1/transcribe`, the SDK/CLI
  * and the canvas Transcribe node. All three lanes are served on cloud again

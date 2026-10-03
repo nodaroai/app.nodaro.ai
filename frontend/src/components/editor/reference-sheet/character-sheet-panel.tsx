@@ -1,18 +1,20 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { SHEET_PRESETS, ALA_CARTE_BOARDS, SHEET_SKINS, SHEET_ASPECTS, MAX_PANELS_PER_SHEET, estimateSheetCost, type ReferenceSheet, type SheetAspect, type SheetFlavour, type SheetPresetId, type SheetPreset, type SheetSection, type SheetSkin } from "@nodaro/shared"
+import { SHEET_PRESETS, ALA_CARTE_BOARDS, SHEET_SKINS, SHEET_ASPECTS, MAX_PANELS_PER_SHEET, estimateSheetCost, referenceSheetCreditId, type ReferenceSheet, type SheetAspect, type SheetFlavour, type SheetPresetId, type SheetPreset, type SheetSection, type SheetSkin } from "@nodaro/shared"
 import { generateReferenceSheet, getJobStatusLean } from "@/lib/api"
 import { useT, tx } from "@/lib/i18n"
 import { hasCredits } from "@/lib/edition"
-import type { SheetTabAdapter } from "./sheet-tab-adapter"
+import { creditUnits } from "@/lib/credit-units"
+import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { SHEET_PANEL_PROVIDER, type SheetTabAdapter } from "./sheet-tab-adapter"
 import { SheetGallery } from "./sheet-gallery"
 
 /**
  * Character-only Sheet panel: named, explained, live-costed presets
  * (Studio·Main / Studio·Extended) + optional à-la-carte boards, then a two-step
  * ① Prepare angles → ② Compose flow. Curated panel subsets ride the shared
- * `entries` field; cost is the existing per-angle + assembly price, gated behind
- * hasCredits(). Object/Location keep the classic chip UI (see reference-sheet-tab).
+ * `entries` field; cost is the live charged price of a panel and of composing,
+ * gated behind hasCredits(). Object/Location keep the classic chip UI (see reference-sheet-tab).
  */
 
 const SHEET_POLL_MS = 2000
@@ -72,18 +74,24 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
   }, [preset, boards])
 
   const flavour: SheetFlavour = { outputFormat: "still", withText, showLabels, aspect, background: "grey", presetId, sections }
-  const cost = estimateSheetCost("character", sections, flavour, mergedBuckets, name, adapter.perPanelCost, adapter.assemblyCost)
+  // Live charged prices of one panel and of composing (0 until loaded, and on
+  // builds without credits). The cost readouts show only once both are known,
+  // so a pending lookup never reads as a price of 0.
+  const panelPrice = useModelCredits(SHEET_PANEL_PROVIDER)
+  const composePrice = useModelCredits(referenceSheetCreditId(flavour))
+  const priced = hc && panelPrice > 0 && composePrice > 0
+  const cost = estimateSheetCost("character", sections, flavour, mergedBuckets, name, panelPrice, composePrice)
 
   /** Base cost of a preset (no boards) — shown on each card. */
   function baseCost(p: SheetPreset) {
-    return estimateSheetCost("character", p.baseSections, { ...flavour, sections: p.baseSections }, mergedBuckets, name, adapter.perPanelCost, adapter.assemblyCost)
+    return estimateSheetCost("character", p.baseSections, { ...flavour, sections: p.baseSections }, mergedBuckets, name, panelPrice, composePrice)
   }
 
   /** Would toggling board `id` ON push the plan past MAX_PANELS? */
   function wouldOverflow(id: string): boolean {
     if (boards.has(id)) return false
     const next = [...preset.baseSections, ...ALA_CARTE_BOARDS.filter((b) => boards.has(b.id) || b.id === id).map((b) => b.section)]
-    const e = estimateSheetCost("character", next.map((s) => ({ ...s })), flavour, mergedBuckets, name, adapter.perPanelCost, adapter.assemblyCost)
+    const e = estimateSheetCost("character", next.map((s) => ({ ...s })), flavour, mergedBuckets, name, panelPrice, composePrice)
     return e.overflow || e.present + e.missing.length > MAX_PANELS_PER_SHEET
   }
 
@@ -111,7 +119,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
       // "timed out" (a lie) or an empty panel that never fills.
       if (job.status === "pending_review") throw new Error(tx("sheet.panelAwaitingReview"))
       if (job.status === "failed" || job.status === "cancelled") {
-        throw new Error(job.error_message ?? tx("entity.sheetStatusFallback", { status: job.status }))
+        throw new Error(job.error_message ?? tx(job.status === "cancelled" ? "entity.sheetCancelledFallback" : "entity.sheetFailedFallback"))
       }
     }
     throw new Error(tx("entity.sheetTimedOut"))
@@ -176,7 +184,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {SHEET_PRESETS.map((p) => {
             const active = p.id === presetId
-            const bc = hc ? baseCost(p) : null
+            const bc = priced ? baseCost(p) : null
             return (
               <button
                 key={p.id}
@@ -191,8 +199,8 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
                 {bc && (
                   <div className="text-[10px] text-slate-500 mt-1.5">
                     {bc.present > 0
-                      ? t("entity.sheetCostWithReuse", { present: bc.present, missing: bc.missing.length, total: bc.total })
-                      : t("entity.sheetCost", { missing: bc.missing.length, total: bc.total })}
+                      ? t("entity.sheetCostWithReuse", { present: bc.present, missing: bc.missing.length, total: creditUnits(bc.total) })
+                      : t("entity.sheetCost", { missing: bc.missing.length, total: creditUnits(bc.total) })}
                   </div>
                 )}
               </button>
@@ -256,11 +264,11 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
 
       {/* Cost + two-step actions */}
       {!sourceImageUrl && <div className="text-[11px] text-amber-300">{t("entity.approveMainImageFirst")}</div>}
-      {hc && sourceImageUrl && (
+      {hc && sourceImageUrl && (cost.overflow || priced) && (
         <div className="text-[11px] text-slate-400">
           {cost.overflow
             ? <span className="text-amber-300">{t("entity.tooManyPanels")}</span>
-            : <>{t("entity.sheetCostBreakdown", { present: cost.present, missing: cost.missing.length, prepareCost: cost.prepareCost, assemblyCost: cost.assemblyCost })}</>}
+            : <>{t("entity.sheetCostBreakdown", { present: cost.present, missing: cost.missing.length, prepareCost: creditUnits(cost.prepareCost), assemblyCost: creditUnits(cost.assemblyCost) })}</>}
         </div>
       )}
       <div className="flex flex-wrap items-center gap-3">

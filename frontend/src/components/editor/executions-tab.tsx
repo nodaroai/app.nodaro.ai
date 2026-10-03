@@ -2,7 +2,7 @@ import React, { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, ChevronDown, ChevronRight as ChevronRightIcon, Coins, Activity } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { listWorkflowExecutions, cancelWorkflowExecution, stopWorkflowExecution, getJobs, getJobStatus, type WorkflowExecution, type Job } from "@/lib/api"
+import { cancelWorkflowExecution, stopWorkflowExecution, getJobs, getJobStatus, type WorkflowExecution, type Job } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { toast } from "sonner"
 import { useT, tx } from "@/lib/i18n"
@@ -26,6 +26,7 @@ import {
   formatNodeType,
   type NodeState,
 } from "./execution-utils"
+import { executionsPageQuery } from "./executions-query"
 
 interface ExecutionsTabProps {
   readonly className?: string
@@ -68,8 +69,7 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
   }
 
   const { data, isLoading: loading, error } = useQuery({
-    queryKey: ["workflow-executions", workflowId, cursor],
-    queryFn: () => listWorkflowExecutions(workflowId!, { limit: 20, cursor }),
+    ...executionsPageQuery(workflowId ?? "", cursor),
     enabled: !!workflowId,
     refetchInterval: 10_000,
   })

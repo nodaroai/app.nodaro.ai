@@ -20,6 +20,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { accessAtLeast, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/surface-deny.js"
+import { VALID_OUTPUT_TYPES, publishBodySchema } from "../lib/template-publish-schema.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -31,7 +32,6 @@ import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/su
 // filter matches them too (templateCategoryStoredValues) until migration 423
 // has rewritten them.
 
-const VALID_OUTPUT_TYPES = ["image", "video", "audio", "text"] as const
 const VALID_COMPLEXITIES = ["simple", "intermediate", "advanced"] as const
 
 // Listing channels stored in workflow_templates.listed_in[].
@@ -220,21 +220,9 @@ function toBrowseCard(row: Record<string, unknown>) {
 // Zod Schemas
 // ---------------------------------------------------------------------------
 
-const publishBodySchema = z.object({
-  workflowId: z.string().uuid(),
-  name: z.string().min(1).max(100),
-  description: z.string().max(500).optional(),
-  markdownDescription: z.string().max(5000).optional(),
-  slug: z.string().min(1).max(50).optional(),
-  category: z.enum(TEMPLATE_CATEGORIES).optional(),
-  outputTypes: z.array(z.enum(VALID_OUTPUT_TYPES)).max(4).optional(),
-  tags: z.array(z.string().max(30)).max(10).optional(),
-  previewMediaUrl: z.string().url().optional(),
-  previewMediaType: z.enum(["image", "video"]).optional(),
-  // Creator-facing back-compat boolean — toggles only the 'marketplace' tag.
-  // The 'tutorial' tag is admin-only and managed via the tutorial-flag endpoint.
-  isListed: z.boolean().optional(),
-})
+// publishBodySchema (the "Publish as template" form) lives in
+// lib/template-publish-schema.ts, where a first-party template's gallery copy
+// is checked against it.
 
 const updateBodySchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -470,7 +458,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const providersUsed = extractProviders(nodes)
     const nodeCount = nodes.length
     const complexity = calculateComplexity(nodes, edges)
-    const estimatedCredits = estimateWorkflowCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[])
+    const estimatedCredits = await estimateWorkflowCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[])
     const snapshotNodes = nodes
 
     // Resolve the source URL for the template preview with priority:

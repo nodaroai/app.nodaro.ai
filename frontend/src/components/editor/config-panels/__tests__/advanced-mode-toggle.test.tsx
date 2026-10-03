@@ -101,6 +101,6 @@ describe("cost disclosure", () => {
   it("says the tier bump out loud before the user opts in", () => {
     setup({ modelId: "gemini-3.6-flash" })
     // A silent price increase reads as a billing bug.
-    expect(screen.getByText(/one credit tier more/i)).toBeInTheDocument()
+    expect(screen.getByText(/one credit tier more, capped at premium/i)).toBeInTheDocument()
   })
 })

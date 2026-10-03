@@ -1,4 +1,16 @@
+import { stripUnownedRefs, type GenericNode } from "@nodaro/shared"
 import type { DbCharacter, DbObject, DbLocation } from "@/lib/api"
+
+/**
+ * Nodes injected into the open canvas from a file or the clipboard land
+ * without the references only their exporter owns — a stored credential, a
+ * connected social account, a Telegram account and its chats — exactly as an
+ * export leaves them. The person picks their own, so an injected Telegram
+ * account trigger never arrives listening to anything.
+ */
+export function injectableNodes<T extends GenericNode>(nodes: readonly T[]): T[] {
+  return stripUnownedRefs([...nodes]) as T[]
+}
 
 /**
  * Build the {@link saveLocation} payload used by `handleInject()` in

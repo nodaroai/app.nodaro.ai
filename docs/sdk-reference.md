@@ -37,6 +37,8 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.uploads`](#clientuploads)
   - [`client.library`](#clientlibrary)
   - [`client.presets`](#clientpresets)
+  - [`client.savedPosts`](#clientsavedposts)
+  - [`client.competitors`](#clientcompetitors)
   - [`client.pickerCatalogs`](#clientpickercatalogs)
   - [`client.shots`](#clientshots)
   - [`client.community`](#clientcommunity)
@@ -1117,7 +1119,11 @@ resolveGate(recastId: string, input: ResolveRecastGateInput): Promise<Record<str
 ```
 
 `create` requires `workflowId` (an existing workflow you own) and
-`analysisJobId`; quote with `estimate` first — creating buys the plan. On
+`analysisJobId`; quote with `estimate` first — creating buys the plan.
+`segmentSec` (on `estimate`, `create` and `start`) names how the render packs
+scenes into parts — a name, not seconds (`RecastSegmentPack`, the values
+exported as `RECAST_SEGMENT_PACKS`): `"scenes-max"` (Long, the fewest seams),
+`"scenes"` (Short) or `"max"` (the longest parts the model allows). On
 interactive runs the platform advances every non-gate step server-side; poll
 `get()` and answer pending gates (`cast` / `sheet` / `anchors` / `music`) with
 `resolveGate` — the pick itself is free. Gates only open for gate kinds the
@@ -1546,7 +1552,7 @@ Fetches one descriptor by its type slug (e.g. `"generate-image"`,
 
 ```ts
 const { data } = await client.nodes.get("generate-image")
-console.log(data.providers, data.creditCost) // creditCost: Cloud only
+console.log(data.providers, data.creditCost) // creditCost: the charged price, Cloud only
 ```
 
 #### `run(type, params?)`
@@ -1569,7 +1575,7 @@ without a `jobId` field.
 ```ts
 const result = await client.nodes.run("generate-image", {
   prompt: "a snow leopard in the mountains",
-  provider: "recraft",
+  provider: "nano-banana-pro",
 })
 if ("jobId" in result) {
   const { data: job } = await client.jobs.get(result.jobId)
@@ -1785,7 +1791,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > only), which runs the request on the provider's own API rather than through
 > the aggregator. That is the only lane where `temperature`, `maxTokens` and the
 > full reasoning-effort range actually take effect — on the default lane those
-> levers are not reliably honoured. It bills **one credit tier up**, and this
+> levers are not reliably honoured. It bills **one credit tier up** (capped at premium), and this
 > bump is independent of the effort bump above. A model with no direct lane
 > returns `400 advanced_mode_unsupported`. Canvas LLM nodes carry the same field
 > on their node `data` (`advancedMode?: boolean`), and the CLI exposes it as
@@ -1848,7 +1854,8 @@ Resolves the job's typed `output_data` (`NodeJobOutput`) on `completed`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `signal` | `AbortSignal` | — | Abort the poll loop; rejects with `JobAbortedError`. |
+| `signal` | `AbortSignal` | — | Abort the poll loop; rejects with `JobAbortedError` (its `jobId` names the job once submitted). Aborting stops the **waiting** only — the job keeps running and is charged unless `cancelOnAbort` is set. |
+| `cancelOnAbort` | `boolean` | `false` | Also cancel the submitted job when `signal` aborts (`POST /v1/jobs/:id/cancel`, which refunds its hold). Best effort: a failed cancel still rejects with the `JobAbortedError`. |
 | `onProgress` | `(status: JobStatusResult) => void` | — | Called with each lean status observed. |
 | `pollMs` | `number` | `2000` | Poll interval in ms. |
 | `maxMs` | `number` | `900_000` | Wall-clock cap before `JobTimeoutError`. |
@@ -1857,7 +1864,7 @@ Throws (all typed, catchable by `instanceof`):
 - `InsufficientCreditsError` / `StorageExceededError` — surfaced by `run()` before any poll.
 - `JobFailedError` — terminal `failed`/`cancelled` (carries `error_message` + `jobId`).
 - `JobTimeoutError` — `maxMs` deadline exceeded.
-- `JobAbortedError` — `signal` fired.
+- `JobAbortedError` — `signal` fired. The job itself keeps running unless `cancelOnAbort` is set; to stop it later, `jobs.cancel(err.jobId)`.
 - `JobHeldError` — the job entered `pending_review` (`code = "job_held"`, carries `jobId`; see
   [Errors](#class-jobhelderror-extends-nodaroerror)). Only on
   deployments that register a job policy. It does NOT cancel the job: the
@@ -1884,9 +1891,28 @@ Throws (all typed, catchable by `instanceof`):
 ```ts
 const output = await client.nodes.runAndWait("generate-image", {
   prompt: "a snow leopard in the mountains",
-  provider: "recraft",
+  provider: "nano-banana-pro",
 })
 console.log(output.imageUrl)
+```
+
+**Social Search** (`social-search`, Nodaro Cloud) is typed end to end: the
+params are `SocialSearchParams` and the resolved output is
+`SocialSearchJobOutput` — every post the search found (`json`, an array of
+`SocialPost`), plus `platform`, `mode`, `query` and any `warnings`. Priced
+per page of 20 results (20 / 40 / 60).
+
+```ts
+const found = await client.nodes.runAndWait("social-search", {
+  platform: "youtube",
+  query: "product demo",
+  count: 20,
+  period: "month",
+  sort: "popular",
+})
+for (const post of found.json) {
+  console.log(post.url, post.metrics.views, post.author.handle)
+}
 ```
 
 #### `runMany(type, paramsList, opts?)`
@@ -1927,8 +1953,9 @@ list(opts?: { kind?: "image" | "video" | "audio"; mode?: string; family?: string
 
 `GET /v1/models` → the model catalog grouped by kind and vendor family:
 capability sheets (`modes`, `features`, `aspectRatios`, `resolutions`,
-`durations`), per-variant credit `pricing` (Cloud only — editions without a
-credit system omit the field), compact `promptTips`, and the
+`durations`), per-variant credit `pricing` — the credits a run is charged
+(Cloud only — editions without a credit system omit the field), compact
+`promptTips`, and the
 `doctrineCovered` truth flag — `true` only when a sourced per-family prompt
 doctrine exists for the model, so "vendor doctrine" badges can never
 overclaim. The same projection the MCP `list_models` tool serves, so the two
@@ -2870,7 +2897,8 @@ Start a new pipeline (headless film generation) — the programmatic equivalent
 of the studio's "Create film". In Auto mode the engine self-advances to
 completion; poll `get()` for status and `getTimeline()` for the assembled
 output. In manual/guided mode, drive it with `pendingApprovals()` +
-`approveStage()` / `approveSubGate()`. Requires `pipelines:execute` scope.
+`approveStage()` / `approveSubGate()` / `acceptMatchCutBreak()`. Requires
+`pipelines:execute` scope.
 
 ```ts
 const { id } = await client.pipelines.create({ /* PipelineInput */ })
@@ -2961,14 +2989,35 @@ await client.pipelines.rejectStage(id, "script", "Make the story darker and more
 #### `approveSubGate(id, gate)`
 
 ```ts
-approveSubGate(id: string, gate: SubGateName): Promise<{ ok: true; gate: SubGateName; resumed_at: string }>
+approveSubGate(id: string, gate: AnimateSubGate): Promise<{ ok: true; gate: AnimateSubGate; resumed_at: string }>
 ```
 
-Approve a Stage-7 sub-gate (`dialogue_recheck` / `silent_cut`) so the
-orchestrator resumes from the next sub-step. Requires `pipelines:approve`.
+Approve a Stage 7 (`animate_audio_edit`) sub-gate — `silent_cut_preview` or
+`dialogue_recheck` (`AnimateSubGate`, the values are `ANIMATE_SUB_GATES` in
+`@nodaro/shared`) — so the orchestrator resumes from the next sub-step.
+Stage 6's `match_cut_break_pending` is not approved here: the route answers
+400 `invalid_sub_gate`, and each break is accepted with
+`acceptMatchCutBreak()`. Requires `pipelines:approve`.
 
 ```ts
 await client.pipelines.approveSubGate(id, "dialogue_recheck")
+```
+
+#### `acceptMatchCutBreak(id, sceneId, shotId)`
+
+```ts
+acceptMatchCutBreak(id: string, sceneId: string, shotId: string): Promise<{ ok: true; pendingRemaining: number }>
+```
+
+Accept one match-cut break that Stage 6 (`scene_images`) flagged. While any
+break is pending, the stage pauses at the `match_cut_break_pending` sub-gate,
+and its output (`getStage(id, "scene_images")`) lists the pending shot ids
+under `match_cut_break_pending`. `sceneId` is the scene entity that holds the
+shot. Accepting the last break resumes the stage; `pendingRemaining` says how
+many are left. Requires `pipelines:approve`.
+
+```ts
+await client.pipelines.acceptMatchCutBreak(id, sceneId, "shot-2")
 ```
 
 #### `getStage(id, stage)`
@@ -4552,8 +4601,8 @@ instead of failing the whole batch.
 | `errors` | `string[]` | Identifiers where the lookup itself failed. |
 
 ```ts
-const { data, missing } = await client.credits.modelCosts(["recraft:v3", "kling:v2.1"])
-console.log(data["recraft:v3"])  // e.g. 2
+const { data, missing } = await client.credits.modelCosts(["nano-banana-pro", "seedance-2-fast"])
+console.log(data["nano-banana-pro"])  // its credit price
 if (missing.length) console.warn("No price for:", missing)
 ```
 
@@ -4647,6 +4696,101 @@ listFactory(nodeType: string): Promise<FactoryPresetsResult>
 ```ts
 const { data } = await client.presets.listFactory("generate-video")
 const orbit = data.find((p) => p.id === "generate-video/orbit-360")
+```
+
+---
+
+### `client.savedPosts`
+
+The inspiration wall: save a post you found (a Social Search result) with a
+note and tags, list and filter your saves, change or remove them. A save keeps
+a snapshot of the post and a copy of its still in your storage. OAuth app
+tokens need `assets:read` for the reads and `assets:write` for the writes
+(no-op for user/API-key auth).
+
+#### `list(params?)`
+
+```ts
+list(params?: ListSavedPostsParams): Promise<ListSavedPostsResult>
+```
+
+`GET /v1/saved-posts` → your saves, newest first. Filter by `platform`, `tag`
+or words `q` (in the note, the post's text or its title); page with `cursor`
+(the previous page's `nextCursor`) and `limit` (1-100, default 40).
+
+```ts
+let page = await client.savedPosts.list({ tag: "hooks" })
+for (const save of page.data) console.log(save.url, save.note)
+while (page.nextCursor) page = await client.savedPosts.list({ tag: "hooks", cursor: page.nextCursor })
+```
+
+#### `save(input)`
+
+```ts
+save(input: SavePostInput): Promise<SavedPost>
+```
+
+`POST /v1/saved-posts` → save a post (`input.post` is a `SocialPost`, exactly
+as Social Search returns it), with an optional `note` and `tags`. Saving a post
+that is already saved updates its note and tags and returns the existing save.
+
+```ts
+const run = await client.nodes.runAndWait("social-search", { platform: "tiktok", query: "meal prep" })
+const save = await client.savedPosts.save({ post: run.json[0], note: "strong opener", tags: ["hooks"] })
+```
+
+#### `lookup(postIds)`
+
+```ts
+lookup(postIds: readonly string[]): Promise<SavedPostsLookupResult>
+```
+
+`POST /v1/saved-posts/lookup` → which of these posts (`SocialPost.id`, up to
+200) you saved: `{ saved: [{ postId, id }] }`.
+
+#### `update(id, input)` / `delete(id)`
+
+```ts
+update(id: string, input: UpdateSavedPostInput): Promise<SavedPost>
+delete(id: string): Promise<void>
+```
+
+`PATCH` / `DELETE /v1/saved-posts/:id` → change a save's note or tags, or
+remove the save and its copied still.
+
+---
+
+### `client.competitors`
+
+Brands you track (competitors, or your own), their scans and the action
+cards read from them. Nodaro Cloud. Adding, reading and website lookups are
+free; a scan costs one Social Search page per search it runs
+(`TrackedCompetitor.searches`), and searches that fail are not charged.
+OAuth app tokens need `assets:read` / `assets:write`; a scan also needs a
+`:write` or `:execute` scope.
+
+| Method | Route | Returns |
+|---|---|---|
+| `list()` | `GET /v1/competitors` | `TrackedCompetitor[]` |
+| `get(id)` | `GET /v1/competitors/:id` | `CompetitorDetail` (latest scan with posts and cards, scan history) |
+| `create(input)` | `POST /v1/competitors` | `TrackedCompetitor` |
+| `update(id, input)` | `PATCH /v1/competitors/:id` | `TrackedCompetitor` (`accounts` replaces the whole set; `409 scan_running` for a change to what a running scan was priced on) |
+| `delete(id)` | `DELETE /v1/competitors/:id` | `void` |
+| `cards()` | `GET /v1/competitors/cards` | `CompetitorCardsResult` (`{ cards, posts }`) |
+| `discover(website)` | `POST /v1/competitor-discover` | `CompetitorDiscovery` |
+| `scan(id)` | `POST /v1/competitor-scan` | `{ jobId }` |
+
+```ts
+const found = await client.competitors.discover("acme.example")
+const brand = await client.competitors.create({
+  brand: found.brand,
+  website: found.website,
+  accounts: Object.fromEntries(Object.entries(found.accounts).map(([k, v]) => [k, v!.value])),
+})
+const { jobId } = await client.competitors.scan(brand.id)
+// …poll client.jobs.getStatus(jobId) until completed, then:
+const { cards, posts } = await client.competitors.cards()
+for (const card of cards) console.log(card.title, "→", card.action, card.evidence.map((id) => posts[id]?.url))
 ```
 
 ---
@@ -4891,6 +5035,16 @@ get(slug: string): Promise<{ data: CommunityCard }>
 ```ts
 const { data: listing } = await client.community.get("detective-mara")
 ```
+
+#### `getFull(slug)`
+
+```ts
+getFull(slug: string): Promise<{ data: CommunityFullDetail }>
+```
+
+`GET /v1/community/detail/:slug/full` → the full read-only detail: the card
+plus the stored public snapshot (assets, voice and text) needed to render the
+whole listing.
 
 #### `favorites()`
 
@@ -5223,8 +5377,10 @@ editPlan(input: EditPlanInput): Promise<EditJobResult>
 | `mode` | `EditPlanMode` | yes | `"tighten"` \| `"clips"` \| `"chapters"`. |
 | `planTier` | `EditPlanTier` | yes | `"economy"` \| `"standard"` \| `"premium"` — affects quality and the credit bucket. |
 | `transcript` | `Transcript` | yes | The timed transcript driving the plan. |
-| `sources` | `EditPlanSource[]` | yes | 1–6 media sources. Each: `{ id, url, kind: "video" \| "audio", role?, speakers?, offsetMs? }`. |
+| `sources` | `EditPlanSource[]` | yes | 1–6 media sources. Each: `{ id, url, kind: "video" \| "audio", role?, speakers?, offsetMs? }`. A source's own `offsetMs` wins over a measured one. |
 | `silence` | `SilenceRanges` | no | The silence-detect job's `output_data.json` — pass the whole object (an input without `ranges` is silently ignored). |
+| `offsets` | `AudioSyncResult \| string` | no | Multicam: an `audioSync` job's `output_data.json`, measured over the **same source ids**. Each source's offset is written onto its `offsetMs` before the request, re-based onto the master's clock (the `master-audio` source, else the first). |
+| `transcriptSourceId` | `string` | no | The id of the source the transcript was made from, when you know it. |
 | `instructions` | `string` | no | Free-text editing steer. |
 | `styleGuide` | `string` | no | Style-guide text. |
 | `count` | `number` | no | `"clips"` mode: how many clips to cut. |
@@ -5232,6 +5388,31 @@ editPlan(input: EditPlanInput): Promise<EditJobResult>
 | `targetAspect` | `"16:9" \| "9:16" \| "1:1" \| "4:5"` | no | Clip aspect. |
 | `platform` | `string` | no | Target platform hint. |
 | `workflowId` | `string` | no | Execution-history display. |
+
+`editPlan` rejects **before any request or charge** — a `NodaroError` with
+`code: "edit_plan_sources"` naming the source — when the master has a non-zero
+`offsetMs`, a source's `offsetMs` is not a number, or `transcriptSourceId`
+names a source that is off the master's clock; and, with `offsets`, when a
+source was not measured, matched weakly (confidence below 0.5: set its
+`offsetMs` by hand), or the master was not measured. The same checks run as pure functions in `@nodaro/shared`
+(`resolveEditPlanSources`, `applyAudioSyncOffsets`). Each cut goes on the first
+camera that has picture for it; a stretch no camera filmed is dropped from the
+plan as `no-picture`.
+
+```ts
+const sync = (await client.jobs.getStatus(syncJobId)).data.output_data.json
+const { jobId } = await client.edit.editPlan({
+  mode: "tighten",
+  planTier: "standard",
+  transcript,                                   // made from the mic
+  sources: [
+    { id: "mic", url: micUrl, kind: "audio", role: "master-audio" },
+    { id: "camA", url: camAUrl, kind: "video" },   // same ids as the audioSync request
+  ],
+  offsets: sync,
+  transcriptSourceId: "mic",
+})
+```
 
 Read the finished job's `output_data` with `unwrapEditPlanOutput` — it returns
 an `Edl` (`tighten`), a bare `Edl[]` (`clips`, unwrapped from `EdlClipSet`), or a
@@ -5267,6 +5448,29 @@ regions and clipping straddlers. The same remap `applyEdl` performs server-side.
 
 Every type used in a public method signature is re-exported from
 `@nodaro/sdk`. Import them with `import type { ... }`.
+
+### Social Search
+
+- `SocialSearchParams` — the `nodes.run("social-search", …)` body: `{ platform, query, mode?, count?, period?, sort?, region?, country?, activeOnly?, subreddit?, videoKind? }`
+- `SocialSearchJobOutput` — what `nodes.runAndWait("social-search", …)` resolves: `{ json: SocialPost[], platform, mode, query, warnings? }`
+- `SocialPost` / `SocialPostAuthor` / `SocialPostMetrics` / `SocialPostMedia` — one post, the same shape on every platform
+- `SocialPlatform` / `SocialSearchMode` / `SocialSearchPeriod` / `SocialSearchSort` / `SocialSearchCount` / `SocialSearchVideoKind` — the vocabularies
+
+### Saved posts
+
+- `SavedPost` — one save: `{ id, postId, platform, url, post, thumbnailUrl, note, tags, source, createdAt, updatedAt }`
+- `SavePostInput` / `UpdateSavedPostInput` — the `save()` / `update()` bodies
+- `ListSavedPostsParams` / `ListSavedPostsResult` — `list()`'s filters and page (`{ data, nextCursor }`)
+- `SavedPostsLookupResult` — `lookup()`'s answer
+- `SavedPostSource` — where a save came from: `picker`, `competitors`, `manual`, `api`
+
+### Competitors
+
+- `TrackedCompetitor` / `CompetitorDetail` — a tracked brand; with its latest scan and history
+- `CompetitorScan` / `CompetitorScanSummary` / `CompetitorScanCounts` / `CompetitorPost` — a scan, its counts and its posts (a `SocialPost` plus `role`: `own`, `about` or `market`)
+- `ActionCard` / `ActionCardKind` / `ActionCardPriority` — a card: `kind`, `priority`, `params`, `evidence` (post ids), English `title` / `why` / `action`
+- `CompetitorCardsResult` / `CompetitorDiscovery` — `cards()` and `discover()` answers
+- `CreateCompetitorInput` / `UpdateCompetitorInput` / `CompetitorAccounts` / `CompetitorAccountKey` / `CompetitorAboutPlatform` / `CompetitorSchedule` — the request shapes
 
 ### Client identity
 
@@ -5404,7 +5608,7 @@ not two.
 ### Pipelines
 
 - `PipelineRecord` — pipeline state: `{ id, status, current_stage, spent_credits, reserved_credits, upfront_credit_estimate, branched_from_pipeline_id, branched_from_stage, mode, failure_reason, current_progress_message }`
-- `PipelineStatus`, `PipelineMode`, `PipelineStageName`, `SubGateName`, `ChatEnabledStage` — re-exported from `@nodaro/shared`
+- `PipelineInput`, `PipelineStatus`, `PipelineMode`, `PipelineStageName`, `SubGateName`, `AnimateSubGate`, `ChatEnabledStage`, `ProposedChange` — re-exported from `@nodaro/shared`
 - `PipelineInput` — body for `create()`, re-exported from `@nodaro/shared`
 - `PendingApproval` — `{ stage_name: PipelineStageName; output: unknown }`
 - `PipelineTimeline` — `{ fps, width, height, scenes, musicUrl?, narrationUrl?, animateProgress? }`
@@ -5467,7 +5671,7 @@ not two.
 ### Developer apps
 
 - `DeveloperApp` — app record (without secret)
-- `DeveloperAppScope` — union of valid scope strings
+- `DeveloperAppScope` — union of valid scope strings (the server's list, `OAUTH_SCOPES` in `@nodaro/shared`)
 - `DeveloperAppStatus` — `"active" | "suspended" | "pending_review"`
 - `CreateDeveloperAppInput`, `UpdateDeveloperAppInput`
 - `CreateDeveloperAppResult` — `DeveloperApp & { clientSecret }`
@@ -5493,7 +5697,7 @@ not two.
 
 ### Community
 
-- `CommunityCard` — a public community listing (shared character/location/object)
+- `CommunityCard` — a public community listing (shared character/location/object); `CommunityFullDetail` — the card plus its public snapshot (`getFull`)
 - `CommunityEntityType` — `"character" | "location" | "object"`
 - `CommunitySort` — `"newest" | "popular"`
 - `CommunityReportReason` — accepted `report()` reasons

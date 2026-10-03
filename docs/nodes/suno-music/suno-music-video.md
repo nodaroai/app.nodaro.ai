@@ -19,7 +19,7 @@ Suno Music Video creates a visual music video to accompany a Suno-generated audi
 ## Best Practices
 
 - Ensure the upstream Suno node has completed successfully before running this node, as it requires valid task and audio IDs.
-- Use descriptive prompts and style tags in the upstream Suno Generate node -- the music video AI uses the track's metadata to inform visual choices.
+- Use descriptive prompts and style tags in the upstream Suno Create Music node -- the music video AI uses the track's metadata to inform visual choices.
 - This node produces video output (not audio), so downstream connections should accept video input.
 - Combine with video processing nodes (resize, trim, add captions) for further refinement.
 
@@ -28,7 +28,7 @@ Suno Music Video creates a visual music video to accompany a Suno-generated audi
 - Generating a quick visual accompaniment for a Suno-generated song.
 - Creating social media content by pairing generated music with auto-generated visuals.
 - Producing music video drafts for review before professional production.
-- Building end-to-end music pipelines: Suno Lyrics -> Suno Generate -> Suno Music Video.
+- Building end-to-end music pipelines: Suno Lyrics -> Suno Create Music -> Suno Music Video.
 
 ## Tips
 

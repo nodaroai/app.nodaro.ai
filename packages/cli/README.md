@@ -175,11 +175,13 @@ nodaro audio combine --segment <url> --segment "<url>@12-95" --watch
 #   locations / objects — Location & Object Studio CRUD + motion
 #   prompt      — the prompt wizard (analyze / generate / wizard)
 #   presets     — node presets (factory + your own)
+#   saved-posts — the inspiration wall: posts saved from Social Search
+#   competitors — tracked brands, their scans and action cards (Cloud)
 #   community   — shared characters/locations/objects: browse, clone, favorites
 ```
 
 The authoritative per-flag reference for every command group is the
-[CLI reference](https://nodaroai.github.io/app.nodaro.ai/cli.html) — this README
+[CLI reference](https://nodaro.ai/docs/developers/cli/commands) — this README
 shows the shape, not every option.
 
 ### Three ways to run something

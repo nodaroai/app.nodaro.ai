@@ -1,5 +1,11 @@
 import { injectUpstream } from "./inject-upstream.js"
 
+/** A live wire into a field's handle: which node, and which of its outputs. */
+export interface FieldEdgeSource {
+  readonly sourceNodeId: string
+  readonly sourceHandle?: string | null
+}
+
 /**
  * Resolve fieldMappings + {} injection for all text fields on a node.
  *
@@ -19,23 +25,27 @@ import { injectUpstream } from "./inject-upstream.js"
  * from NodeExecutionState.output. Same pattern as ancestor-refs.ts.
  *
  * `edgeSourceForField` is optional: when omitted, behaviour is identical to
- * the prior fieldMappings-only resolver (existing callers stay valid).
+ * the prior fieldMappings-only resolver (existing callers stay valid). When
+ * it names the wire's source HANDLE too, the value is that handle's output —
+ * a Router's route, a trigger's named output — not the source's primary one.
  */
 export function resolveFieldMappings(
   data: Record<string, unknown>,
   upstreamText: string | undefined,
   mappableFieldNames: ReadonlyArray<string>,
-  getSourceOutput: (sourceNodeId: string) => string | undefined,
-  edgeSourceForField?: (field: string) => string | undefined,
+  getSourceOutput: (sourceNodeId: string, sourceHandle?: string | null) => string | undefined,
+  edgeSourceForField?: (field: string) => FieldEdgeSource | string | undefined,
 ): Record<string, unknown> {
   const fm = data.fieldMappings as Record<string, { sourceNodeId: string }> | undefined
   const resolved = { ...data }
 
   for (const field of mappableFieldNames) {
-    const sourceNodeId = edgeSourceForField?.(field) ?? fm?.[field]?.sourceNodeId
+    const wired = edgeSourceForField?.(field)
+    const edge: FieldEdgeSource | undefined = typeof wired === "string" ? { sourceNodeId: wired } : wired
+    const sourceNodeId = edge?.sourceNodeId ?? fm?.[field]?.sourceNodeId
 
     if (sourceNodeId) {
-      const output = getSourceOutput(sourceNodeId)
+      const output = getSourceOutput(sourceNodeId, edge?.sourceHandle)
       if (output != null) resolved[field] = output
     } else {
       const current = resolved[field]

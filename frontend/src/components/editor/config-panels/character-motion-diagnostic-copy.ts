@@ -21,7 +21,7 @@ export function formatCharacterMotionDiagnostic(
     case "retired": return [t("motionReview.diagnostic.retired", { motion }), entry?.replacementId ? t("motionReview.diagnostic.replacement", { motion: label(entry.replacementId) }) : ""].filter(Boolean).join(t("common.fragmentGap"))
     case "pace": return t("motionReview.diagnostic.pace", { motion })
     case "requirements": return [
-      t("motionReview.diagnostic.requirements", { motion, requirements: entry?.requires?.join(", ") ?? "" }),
+      t("motionReview.diagnostic.requirements", { motion, requirements: entry?.requires?.join(t("common.listComma")) ?? "" }),
       entry?.twoPerson || entry?.counterpart
         ? bindings.partnerNames?.length ? t("motionReview.diagnostic.partnerReference", { names: bindings.partnerNames.join(t("common.listComma")) }) : t("motionReview.diagnostic.partnerFallback")
         : t("motionReview.diagnostic.sceneRequirements"),

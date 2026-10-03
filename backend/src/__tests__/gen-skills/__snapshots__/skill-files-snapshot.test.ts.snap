@@ -73,8 +73,8 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`reference_order\`",
   "node-data-shape": "**Type:** \`generate-image\`
 **Category:** ai
-**Credit cost:** \`2-620\` per \`GET /v1/nodes\` — the live price is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`).
-**Inputs (target handles):** \`prompt\`, \`negative\`, \`references\`, \`assets\`, \`elements\`, \`look\`
+**Credit cost:** \`2-620\` at list price — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's charged figure.
+**Inputs (target handles):** \`prompt\`, \`negative\`, \`references\`, \`assets\`, \`elements\`, \`look\`, \`settings\`
 **Outputs (source handles):** \`image\`
 
 **Required data fields:**
@@ -159,7 +159,7 @@ exports[`per-node skill file snapshots > generate-music.md auto-gen blocks match
   "data": {
     "label": "Generate Music",
     "prompt": "",
-    "provider": "suno",
+    "provider": "minimax",
     "duration": 8,
     "genre": "",
     "mood": "",
@@ -184,10 +184,12 @@ exports[`per-node skill file snapshots > generate-music.md auto-gen blocks match
 - \`lyrics\`
 - \`title\`
 - \`genre\`
-- \`mood\`",
+- \`mood\`
+- \`reference_audio_url\`
+- \`reference_audio_asset_id\`",
   "node-data-shape": "**Type:** \`generate-music\`
 **Category:** ai
-**Credit cost:** \`180\` per \`GET /v1/nodes\` — the live price is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`).
+**Credit cost:** \`180\` at list price — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's charged figure.
 **Inputs (target handles):** \`prompt\`, \`ref-audio\`, \`audio-style\`
 **Outputs (source handles):** \`audio\`
 
@@ -221,7 +223,7 @@ exports[`per-node skill file snapshots > generate-music.md auto-gen blocks match
 {
   "label": "Generate Music",
   "prompt": "",
-  "provider": "suno",
+  "provider": "minimax",
   "duration": 8,
   "genre": "",
   "mood": "",
@@ -252,7 +254,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
   "data": {
     "label": "Generate Video",
     "provider": "seedance-2-fast",
-    "duration": 5,
+    "duration": 4,
     "prompt": "",
     "negativePrompt": "",
     "fieldMappings": {}
@@ -281,8 +283,8 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`reference_audio_urls\`",
   "node-data-shape": "**Type:** \`generate-video\`
 **Category:** ai
-**Credit cost:** \`10-8550\` per \`GET /v1/nodes\` — the live price is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`).
-**Inputs (target handles):** \`prompt\`, \`negative\`, \`startFrame\`, \`endFrame\`, \`imageReferences\`, \`videoReferences\`, \`audio\`, \`audioReferences\`, \`assets\`, \`elements\`, \`look\`
+**Credit cost:** \`10-8550\` at list price — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's charged figure.
+**Inputs (target handles):** \`prompt\`, \`negative\`, \`startFrame\`, \`endFrame\`, \`imageReferences\`, \`videoReferences\`, \`audio\`, \`audioReferences\`, \`assets\`, \`elements\`, \`look\`, \`settings\`
 **Outputs (source handles):** \`video\`
 
 **Required data fields:**
@@ -351,7 +353,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 {
   "label": "Generate Video",
   "provider": "seedance-2-fast",
-  "duration": 5,
+  "duration": 4,
   "prompt": "",
   "negativePrompt": "",
   "fieldMappings": {}
@@ -700,7 +702,7 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
 - \`reference_order\`",
   "node-data-shape": "**Type:** \`image-to-video\`
 **Category:** ai
-**Credit cost:** \`30-8550\` per \`GET /v1/nodes\` — the live price is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`).
+**Credit cost:** \`30-8550\` at list price — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's charged figure.
 **Inputs (target handles):** \`startFrame\`, \`endFrame\`, \`audio\`
 **Outputs (source handles):** \`video\`
 
@@ -1108,7 +1110,7 @@ exports[`per-node skill file snapshots > trim-video.md auto-gen blocks match sna
 - \`silent\`",
   "node-data-shape": "**Type:** \`trim-video\`
 **Category:** processing
-**Credit cost:** \`10\` per \`GET /v1/nodes\` — the live price is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`).
+**Credit cost:** \`10\` at list price — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's charged figure.
 **Inputs (target handles):** \`in\`
 **Outputs (source handles):** \`video\`
 

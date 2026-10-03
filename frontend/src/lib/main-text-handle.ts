@@ -42,7 +42,11 @@ export const MAIN_TEXT_HANDLE: Readonly<Record<string, ReadonlyArray<MainTextHan
   "text-to-audio": [{ handle: "prompt", field: "prompt" }],
   "generate-music": [{ handle: "prompt", field: "prompt" }],
   "video-to-video": [{ handle: "prompt", field: "prompt" }],
-  "generate-script": [{ handle: "prompt", field: "prompt" }],
+  // generate-script is deliberately absent: its `prompt` field has no editor, so
+  // an auto-filled `{Label}` was a placeholder nobody could see. It hid the
+  // wired node from the editor's resolver (a wired Text then failed with "No
+  // prompt found") and made a wired Tone the script's topic. The wire alone
+  // carries the topic now (computeScriptTopic).
   "extend-video": [{ handle: "prompt", field: "prompt" }],
   "llm-chat": [
     { handle: "prompt", field: "userInput" },

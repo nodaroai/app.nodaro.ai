@@ -1,3 +1,4 @@
+import type { MessageKey } from "@/lib/i18n"
 import type { ComponentType } from "react"
 
 /** Props every studio page receives. `S` is the entity studio-state type
@@ -27,7 +28,8 @@ export function stagedLen<S extends { stagedData: unknown }>(
 
 export interface StudioPageDef<S = unknown, J = unknown> {
   key: string
-  label: string
+  /** Dictionary key of the sidebar caption. */
+  label: MessageKey
   icon: string
   Component: ComponentType<StudioPageProps<S, J>>
   /** Optional badge derived from current state. */
@@ -41,7 +43,8 @@ export interface StudioVisibilityCtx {
 }
 
 export interface StudioGroupDef<S = unknown, J = unknown> {
-  label: string
+  /** Dictionary key of the group heading. */
+  label: MessageKey
   pages: StudioPageDef<S, J>[]
 }
 

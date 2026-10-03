@@ -23,7 +23,8 @@ import type { TranscodeVideoData } from "@/types/nodes"
 function TranscodeVideoNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as TranscodeVideoData
-  const credits = useModelCredits("ffmpeg", 1)
+  // The id its route reserves (its own row), not the generic "ffmpeg" one.
+  const credits = useModelCredits("transcode-video", 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)

@@ -158,6 +158,14 @@ function byMode<T>(mode: PickerHintMode, full: T, compact: T): T {
   return mode === "compact" ? compact : full
 }
 
+/** How much a shot moves (the Motion node's three steps), as the clause it
+ *  adds to a video prompt; the compact form is the bare term. */
+const MOTION_INTENSITY_HINTS: Readonly<Record<string, { readonly full: string; readonly compact: string }>> = {
+  subtle: { full: "subtle, gentle motion with slow, minimal movement", compact: "subtle motion" },
+  moderate: { full: "moderate, natural motion at an even pace", compact: "moderate motion" },
+  dynamic: { full: "dynamic, energetic motion with fast, pronounced movement", compact: "dynamic motion" },
+}
+
 /**
  * Dispatch by parameter-node type to its prompt-hint string. For camera-motion,
  * pass `ctx` to include the composed start/end clauses; otherwise only the
@@ -409,6 +417,12 @@ function resolveBaseHint(
       return withCustomText(data, byMode(mode, getCompositionEffectPromptHint, getCompositionEffectTerm)(asStr(data.compositionEffect)))
     case "post-process-effects":
       return withCustomText(data, buildPostProcessHints(data.postProcess, mode).join(", "))
+    // Motion intensity: a Generation Settings node that a video node's
+    // Settings input takes as a prompt fragment (video only).
+    case "motion": {
+      const hint = MOTION_INTENSITY_HINTS[asStr(data.motion)]
+      return hint ? byMode(mode, hint.full, hint.compact) : ""
+    }
 
     // Free text authored by the user, not catalog copy — there is no shorter
     // professional form to swap in, so these are identical in both modes.

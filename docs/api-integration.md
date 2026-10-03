@@ -663,8 +663,16 @@ re-project a workflow (`{ data: { synced, created, updated, removed } }`).
 Its optional body `{ vouchNodeIds: [...] }` names the trigger nodes the
 caller just added; only an owner's own browser session can vouch, and only
 those rows count as the owner's own runs for a plain stored credential.
+Likewise `accountNodes: [{ id, settings }]` names the Telegram Account
+Triggers the owner's editor changed, each with the listening settings it set
+(`telegramAccountListeningSignature` in `@nodaro/shared`): only the owner's
+own browser session can name them, and one is armed, widened or re-pointed
+only while the stored node still says exactly that. Any other save made as
+the owner (a token, a connected app, MCP) can switch an account trigger off,
+never on.
 Inspect a workflow's triggers with `GET /v1/workflows/<id>/triggers`; pause
-or resume one with `PATCH /v1/workflow-triggers/<id>`. Triggers you create directly with
+or resume one with `PATCH /v1/workflow-triggers/<id>` (a Telegram Account
+Trigger's row can only be paused there: it is started in the editor). Triggers you create directly with
 `POST /v1/workflow-triggers` are not managed by any node, so saving the
 workflow never changes or removes them.
 
@@ -1193,7 +1201,7 @@ node type the server has registered without hard-coding a list.
 | `GET` | `/v1/nodes/:type` | Return a single descriptor by node type string. 404 `not_found` when the type doesn't exist. |
 
 `NodeDescriptor` fields (subset): `type`, `label`, `category`,
-`outputType`, `creditCost` (static credit cost when known — Cloud only; community and business installs have no credit system and omit the field), `inputSchema`
+`outputType`, `creditCost` (the credits a run is charged, the same figure as the node's Run button: one number for a flat price, a `"min-max"` range for a node priced per model or setting — Cloud only; community and business installs have no credit system and omit the field), `inputSchema`
 (JSON Schema for the node's config fields), `providers` (supported
 provider slugs), `capabilities` (feature flags the node exposes). Nodes
 with per-model constraints carry additional discovery fields —
@@ -1210,8 +1218,11 @@ forward-compatible.
 Every AI prompt node also lists `promptPrefix` and `promptSuffix` (`text`) in
 `inputSchema` — see [Prompt pre & post text](./prompt-pre-post-text.md).
 
-Neither endpoint requires authentication; they expose only static
-registry metadata. No scopes required.
+Neither endpoint requires authentication; they expose only registry
+metadata and prices. No scopes required. Both describe what a USER of the
+instance can use: a node the deployment withholds from users is absent, and
+Web Scrape's description leaves out any source it withdraws (its Instagram
+source follows the Instagram node's availability).
 
 ### Model catalog
 
@@ -1221,8 +1232,9 @@ minutes (`Cache-Control: public, max-age=300`). Returns
 `{ sections, recommendations, totalModels }`: models grouped by kind
 (`image` / `video` / `audio`) and vendor family, each with capability
 sheets (`modes`, `features`, `aspectRatios`, `resolutions`, `durations`),
-per-variant credit `pricing` (Cloud only — like `creditCost` on
-`/v1/nodes`, editions without a credit system omit it), compact
+per-variant credit `pricing` — the credits a run is charged, the price
+`GET /v1/credits/model-cost` returns for that variant (Cloud only — like
+`creditCost` on `/v1/nodes`, editions without a credit system omit it), compact
 `promptTips`, and the
 `doctrineCovered` truth flag (`true` only when a sourced per-family prompt
 doctrine exists — gate "vendor doctrine" badges on it; never overclaim).
@@ -1963,7 +1975,7 @@ symmetric**: `maxTokens` applies on every call — a deliberate departure from
 the LLM routes that put both levers behind the Advanced-mode gate —
 while `temperature` is **silently ignored** unless you also send
 `advancedMode: true`. Advanced mode pins the call to the vendor's own API,
-where those levers take effect, and therefore bills **one credit tier up**;
+where those levers take effect, and therefore bills **one credit tier up** (capped at premium);
 asking for it on a model with no direct lane is a 400
 `advanced_mode_unsupported`. The call is
 **synchronous and a single call may run several minutes**: each attempt is
@@ -2194,7 +2206,7 @@ has started a long render it waits `waitLimitMs`; when a long render is still to
 {"provider":"gemini-omni-flash","resolution":"720p","duration":12,"renderMethod":"keyframes","segmentMode":"short"}
 ```
 
-The response is `{ "data": { "credits": 660, "upperBound": true } }` in an example configuration with a 660-credit reservation. Read the live response for current prices. For Short/Long, `upperBound` identifies the pre-plan reservation limit; settlement follows the actual plan. A plan-only estimate covers the planning fee and returns `upperBound: false`.
+The response is `{ "data": { "credits": 760, "upperBound": true } }` in an example configuration with a 760-credit reservation. Read the live response for current prices. For Short/Long, `upperBound` identifies the pre-plan reservation limit; settlement follows the actual plan. A plan-only estimate covers the planning fee and returns `upperBound: false`.
 
 `segmentMode` accepts `short`, `long`, or `max` and cannot be combined with numeric `preferredSegmentSec` or explicit `segmentDurations`. Short/Long first assign complete actions to source spans. A plan-only result’s `sourceSegmentDurations` and `planCheckpoint` can be passed back as `sourceSegmentDurations` and `seedPlan` with the same mode and generation settings. See [Generate Video Pro](nodes/ai-video/generate-video-pro.md#how-segmentation-works).
 
@@ -2364,7 +2376,7 @@ orchestrator.
 
 **Response (201):** `{ pipelineId: string, clonedStages: string[], clonedEntities: number }`
 
-**Errors:** 400 (pipeline_not_completed, invalid_stage) · 404 (pipeline_not_found) · 403 (forbidden) · 401 (unauthorized)
+**Errors:** 400 (pipeline_not_completed, invalid_stage) · 404 (pipeline_not_found, also for a pipeline that is not yours) · 401 (unauthorized)
 
 **Scope (OAuth):** `pipelines:execute`
 
@@ -2500,6 +2512,131 @@ curl -s -X POST "https://app.nodaro.ai/v1/node-presets/favorites" \
 curl -s -X DELETE "https://app.nodaro.ai/v1/node-presets/favorites?nodeType=generate-image&presetId=generate-image%2Fcharacter-board" \
   -H "Authorization: Bearer $NODARO_TOKEN" | jq .
 ```
+
+## 16b. Saved posts (inspiration wall)
+
+Save a post you found (a [Social Search](./nodes/input/social-search.md) result)
+with a note and tags, then come back to it on the **Inspiration** page or feed
+it into a workflow. A save keeps a snapshot of the post, because links and
+numbers on the platform change, and the post's still is copied into your
+storage so the wall outlives the platform's expiring image links. The copy
+counts toward your storage and stays out of the media picker. One save per
+post: saving the same post again updates its note and tags.
+
+| Method | Path | Query / Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/saved-posts` | `platform`, `tag`, `q`, `cursor`, `limit` (1-100, default 40) | Your saves, newest first. Returns `{ data: SavedPost[], nextCursor }`. |
+| `POST` | `/v1/saved-posts` | body `{ post, note?, tags?, source? }` | Save a post (`post` is a `SocialPost`, exactly as Social Search returns it). `201` with the new save; `200` with the existing save when the post was already saved. |
+| `POST` | `/v1/saved-posts/lookup` | body `{ postIds }` (up to 200) | Which of these posts you saved. Returns `{ saved: [{ postId, id }] }`. |
+| `PATCH` | `/v1/saved-posts/:id` | body `{ note?, tags? }` | Change a save's note or tags. |
+| `DELETE` | `/v1/saved-posts/:id` | none | Remove a save and its copied still. Returns `{ success: true }`. |
+
+Tags are stored lower-case without a leading `#`: at most 10 per save, 40
+characters each. A comma in any script splits a tag (`"hooks, openers"` is two
+tags), and braces, quotes and backslashes are removed. A note is up to 2,000
+characters. `q` finds words in the note, the post's text and its title.
+`nextCursor` is an opaque token; pass it back as `?cursor=` for the next page
+(`null` on the last page). A cursor the list did not give out is refused with
+`400 invalid_cursor`.
+
+The post is checked before it is stored. A post without an id, a supported
+platform, an `http(s)` link, an author (`handle` and `name`) or text is refused
+with `400`; any other field of the wrong kind (a count that is not a number, a
+link that is not `http(s)`) is dropped. A post snapshot over 64 KB is refused
+with `413 post_too_large`.
+
+`thumbnailUrl` is the copied still, or `null` when there is none (the copy
+failed, or it was cleaned up under the account's
+[media retention](#8b-pay-as-you-go-accounts)); the post's own
+`media.thumbnailUrl` is then the only, expiring, link. Saving the post again
+copies the still again.
+
+OAuth app tokens need `assets:read` for the reads and `assets:write` for the
+writes (no-op for user / API-key auth: you own the resources). Saving is
+limited to 30 requests a minute per token (`429`). On a server that does not
+have saved posts yet, the reads answer empty and the writes answer
+`503 not_available`.
+
+```bash
+# Save one post from a Social Search run (post.json holds that post)
+curl -s -X POST https://app.nodaro.ai/v1/saved-posts \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --slurpfile p post.json '{post: $p[0], note: "strong hook", tags: ["hooks"]}')" | jq .
+
+# Your saved TikTok posts tagged "hooks"
+curl -s "https://app.nodaro.ai/v1/saved-posts?platform=tiktok&tag=hooks" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | {url, note}'
+```
+
+The same routes are wrapped by the SDK (`client.savedPosts`), the MCP tools
+(`save_post` / `list_saved_posts`) and the CLI (`nodaro saved-posts`).
+
+## 16c. Competitors (Nodaro Cloud)
+
+Track brands (your competitors, or your own) and get action cards: what
+happened, why it matters, what to do, each with the posts it rests on. A
+scan reads the brand's accounts and searches posts that name it, one Social
+Search page per search; see [Competitors](./features/competitors.md).
+
+| Method | Path | Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/competitors` | none | Every tracked brand: `{ data: TrackedCompetitor[] }`. |
+| `POST` | `/v1/competitors` | `{ brand, website?, accounts?, aboutPlatforms?, isOwn?, schedule? }` | Track a brand. `accounts` takes a handle or link per platform: `tiktok`, `instagram`, `youtube` (`@handle` or `youtube.com/channel/…`; an old `youtube.com/c/…` or `/user/…` link is refused), `x`, `linkedin` (company page), `meta_ads` (advertiser). A repeated `aboutPlatforms` entry counts once. `201` with the brand; `409 too_many_competitors` past 50 brands. |
+| `GET` | `/v1/competitors/:id` | none | One brand with its latest scan (posts and cards) and its scan history (counts only). |
+| `PATCH` | `/v1/competitors/:id` | any field of the above | Change it. `accounts` replaces the whole set: send every account to keep. A new `schedule` restarts its clock, so send it only to change it. While a scan of the brand runs, a change to `brand`, `accounts`, `aboutPlatforms` or `isOwn` answers `409 scan_running` (the scan was priced on them). |
+| `DELETE` | `/v1/competitors/:id` | none | Stop tracking it (its scans and cards go too). |
+| `GET` | `/v1/competitors/cards` | none | Every card from each brand's latest scan, most urgent first: `{ cards, posts }`, where `posts` holds the posts the cards rest on. |
+| `POST` | `/v1/competitor-discover` | `{ website }` | Find a brand's accounts from its website (free). Each account says whether the site linked it or it is a guess to check. |
+| `POST` | `/v1/competitor-scan` | `{ competitorId }` | Scan now. Answers `{ jobId }` at once; poll the job. |
+
+**Price.** A scan of a brand with `n` searches (`TrackedCompetitor.searches`:
+one per account, one per platform its name is searched on) costs `n`
+Social Search pages, the credit id `competitor-scan:<n>`. The scan runs the
+searches it was priced on, even if the brand changes before it starts.
+Searches that fail are not charged; if every search fails the scan fails
+and nothing is charged. Adding, reading and website lookups are free.
+
+**Schedule.** `weekly` (the default) or `daily` scans start on their own
+and are charged like a manual scan; `off` scans only on request. A scan
+that could not start (no credits, the feature not offered on your account)
+is reported on the brand as `lastScanError`.
+
+**Cards.** Each card has a `kind` (`outlier`, `launch`, `complaints`,
+`spreading`, `sound`, `mentions_up`, `pace`, `market_sound`,
+`top_in_sources`), a `priority` (1 act now, 2 opening, 3 good to know),
+`params` (the numbers to phrase it with), the ids of the posts it rests on,
+English `title` / `why` / `action`, and a `strength` from 0 to 1. The list
+comes ordered: priority, then a fixed order of kinds, then strength, across
+all your brands. Competitor scans do not produce `top_in_sources`. A scan's
+`counts.okSearches` names the searches that returned (`own:tiktok`,
+`about:reddit`); a post is new only against scans that could read its
+platform.
+
+OAuth app tokens need `assets:read` for the reads and `assets:write` for the
+writes and the website lookup; a scan spends credits, so it also needs a
+`:write` or `:execute` scope. While the tables are missing on a server the
+reads answer empty and the writes answer `503 not_available`.
+
+```bash
+# Track a brand from its website, then scan it
+curl -s -X POST https://app.nodaro.ai/v1/competitor-discover \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -d '{"website": "acme.example"}' | jq .
+curl -s -X POST https://app.nodaro.ai/v1/competitors \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -d '{"brand": "Acme", "accounts": {"tiktok": "acme", "instagram": "acme"}}' | jq '.id'
+curl -s -X POST https://app.nodaro.ai/v1/competitor-scan \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -d '{"competitorId": "<id>"}' | jq .
+
+# What to do now
+curl -s https://app.nodaro.ai/v1/competitors/cards -H "Authorization: Bearer $NODARO_TOKEN" | jq '.cards[] | {title, action}'
+```
+
+The same routes are wrapped by the SDK (`client.competitors`), the MCP tools
+(`list_competitors`, `competitor_cards`, `add_competitor`,
+`scan_competitor`) and the CLI (`nodaro competitors`).
 
 ## 17. Community
 
@@ -2799,7 +2936,7 @@ Connect flows are popup-based and meant for the web app; publishing is available
 | `POST` | `/v1/social/telegram/connect` | Connect Telegram by pasting a bot token (`{ botToken }`). |
 | `POST` | `/v1/social/connect/custom` | Connect a `custom_fields` network (`{ platform, fields }`) — Bluesky, Dev.to, Hashnode, Medium, WordPress, Lemmy. Field specs come from `GET /v1/social/providers` (`customFields`); the credential is validated against the network before saving. |
 | `POST` | `/v1/social/publish` | Publish now (`{ platform, action, connectionId?, caption?, mediaUrl? \| mediaItems?, … }`) → job. 10 credits. Retry semantics differ by failure: `503 publish_retryable` means nothing was posted and the identical request is safe to re-send, while `500 publish_failed` means the outcome is unknown — re-sending it can duplicate the post. |
-| `POST` | `/v1/social/scheduled-posts` | Schedule a publish (`{ connectionId, action, scheduledAt, caption?, media?: [{type, r2Key \| url}], … }`). Media must be assets hosted on this deployment (stable refs — resolved to fresh URLs at publish time; foreign URLs are rejected). 1 credit, charged at publish. |
+| `POST` | `/v1/social/scheduled-posts` | Schedule a publish (`{ connectionId, action, scheduledAt, caption?, media?: [{type, r2Key \| url}], … }`). Media must be assets hosted on this deployment (stable refs — resolved to fresh URLs at publish time; foreign URLs are rejected). 10 credits, charged at publish. |
 | `GET` | `/v1/social/scheduled-posts?from=&to=&status=` | List the caller's scheduled posts (calendar range). |
 | `PATCH` | `/v1/social/scheduled-posts/:id` | Edit while still `queued`/`draft` (`409 not_editable` once publishing). |
 | `DELETE` | `/v1/social/scheduled-posts/:id` | Cancel a queued post (soft — history retained). |

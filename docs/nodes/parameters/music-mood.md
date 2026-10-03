@@ -1,6 +1,6 @@
 # Music Mood
 
-A parameter-picker that emits a music-mood prompt-hint to feed Suno Generate, Generate Music (MiniMax), and Text to Audio.
+A parameter-picker that emits a music-mood prompt-hint to feed Suno Create Music, Generate Music (MiniMax), and Text to Audio.
 
 ## Configuration
 
@@ -28,7 +28,7 @@ When only one sub-field is set, the bare hint is emitted. When no sub-fields are
 ## Connecting
 
 Wire to:
-- **Suno Generate** `audio-style` handle — composed text appended to `style` (in customMode) or `prompt` (otherwise).
+- **Suno Create Music** `audio-style` handle — composed text appended to `style` (in customMode) or `prompt` (otherwise).
 - **Generate Music** `audio-style` handle — when provider=minimax, populates the typed `mood` field; otherwise appended to `prompt`.
 - **Text to Audio** `audio-style` handle — appended to `prompt`.
 - **Text Prompt / Combine Text** `in` handle — direct text wiring.

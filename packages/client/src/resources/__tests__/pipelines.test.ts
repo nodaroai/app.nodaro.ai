@@ -394,6 +394,18 @@ describe("pipelines resource", () => {
     expect(r.gate).toBe("dialogue_recheck")
   })
 
+  it("acceptMatchCutBreak POSTs the shot to the scene's accept_match_cut_break helper", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ ok: true, pendingRemaining: 1 }))
+    const c = ctrlClient(fetchMock)
+    const r = await c.pipelines.acceptMatchCutBreak("p1", "scene-3", "shot-2")
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://api.example.com/v1/pipelines/p1/entities/scene-3/helpers/accept_match_cut_break",
+    )
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ shotId: "shot-2" })
+    expect(r.pendingRemaining).toBe(1)
+  })
+
   it("getTimeline GETs the assembled timeline", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(
       mockOk({ fps: 30, width: 1280, height: 720, scenes: [] }),

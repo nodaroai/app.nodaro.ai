@@ -25,4 +25,4 @@ Remove Background strips the background from a source image and returns a transp
 
 ## Pricing
 
-Costs **1 credit** per image (Recraft background removal).
+Costs **3 credits** per image (Recraft background removal).

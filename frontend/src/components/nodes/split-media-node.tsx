@@ -21,7 +21,9 @@ const ACCEPTS_AUDIO = (t: string) => isValidSplitMediaConnection("audio", t)
 function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as SplitMediaData
-  const credits = useModelCredits("ffmpeg", 2)
+  // The id the route reserves (its own row), not the generic "ffmpeg" one,
+  // which quoted half the charge.
+  const credits = useModelCredits("split-media", 20)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

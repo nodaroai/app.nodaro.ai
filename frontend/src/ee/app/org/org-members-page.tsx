@@ -47,7 +47,7 @@ export default function OrgMembersPage() {
 
   const membership = organizations.find((o) => o.slug === slug) ?? null
   const orgId = membership?.id ?? ""
-  const vocabulary = useOrgVocabulary(membership?.vocabulary)
+  const vocabulary = useOrgVocabulary(membership?.vocabulary, membership?.settings?.vocabulary_overrides)
   const isOwner = membership?.role === "owner"
   const canManage = isOwner || membership?.role === "admin"
 

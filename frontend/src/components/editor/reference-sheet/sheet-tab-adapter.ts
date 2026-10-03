@@ -33,6 +33,19 @@ import {
  * safety. The `any` is contained to THIS file — the component consumes the
  * narrow `SheetTabAdapter` interface only.
  */
+
+/**
+ * The model every sheet panel is generated with, sent on each panel request
+ * below rather than left to the routes' default. It is also the id a panel is
+ * charged under (the panel routes price the requested model, and this one has
+ * no quality or resolution levers), so the cost the sheet quotes is read as
+ * this id's live price. Workflow runs ask for the same model
+ * (`SHEET_PANEL_PROVIDER` in backend/src/services/workflow-engine/reference-sheet-stage-a.ts),
+ * and docs/nodes/ai-image/reference-sheet.md prices sheet panels at it —
+ * change the three together.
+ */
+export const SHEET_PANEL_PROVIDER = "nano-banana"
+
 export interface SheetTabAdapter {
   entityKind: EntityKind
   /** The staged entity data (character: studio.staged; object/location: studio.stagedData). */
@@ -52,17 +65,11 @@ export interface SheetTabAdapter {
   awaitJob: (jobs: any, jobId: string, assetType: string, name: string) => Promise<string> // eslint-disable-line @typescript-eslint/no-explicit-any
   /** Set a sheet url as the node thumbnail (per-canvas-node defaultAssetUrl). */
   setThumbnail: (studio: any, url: string, name: string) => void // eslint-disable-line @typescript-eslint/no-explicit-any
-  /** Credits per generated panel (nano-banana default) — for the hasCredits()-gated cost readout. */
-  perPanelCost: number
-  /** Flat credits to compose a still sheet (reference-sheet:assembly). */
-  assemblyCost: number
 }
 
 export const SHEET_TAB_ADAPTERS: Record<EntityKind, SheetTabAdapter> = {
   character: {
     entityKind: "character",
-    perPanelCost: 1,
-    assemblyCost: 4,
     getStaged: (s) => s.staged,
     ensureSaved: (s) => s.ensureSaved(),
     bucketsByColumn: (st) => ({
@@ -71,7 +78,7 @@ export const SHEET_TAB_ADAPTERS: Record<EntityKind, SheetTabAdapter> = {
     }),
     generateAsset: (dbId, r) =>
       generateCharacterAsset({
-        assetType: r.assetType as never, variant: r.variant, name: r.name, userPrompt: r.userPrompt,
+        assetType: r.assetType as never, variant: r.variant, name: r.name, userPrompt: r.userPrompt, provider: SHEET_PANEL_PROVIDER,
         sourceImageUrl: r.sourceImageUrl, attachToCharacterId: dbId, attachToColumn: r.attachToColumn as never, attachName: r.attachName,
       }),
     // Await via the same getJobStatusLean poll loop as object/location — NOT the
@@ -88,14 +95,12 @@ export const SHEET_TAB_ADAPTERS: Record<EntityKind, SheetTabAdapter> = {
   },
   object: {
     entityKind: "object",
-    perPanelCost: 1,
-    assemblyCost: 4,
     getStaged: (s) => s.stagedData,
     ensureSaved: (s) => s.ensureSavedBeforeGen(),
     bucketsByColumn: (st) => ({ angles: st.angles, materials: st.materials, variations: st.variations, detail_closeups: st.detailCloseups }),
     generateAsset: (dbId, r) =>
       generateObjectAsset({
-        assetType: r.assetType as never, variant: r.variant, name: r.name, userPrompt: r.userPrompt,
+        assetType: r.assetType as never, variant: r.variant, name: r.name, userPrompt: r.userPrompt, provider: SHEET_PANEL_PROVIDER,
         sourceImageUrl: r.sourceImageUrl ?? "", attachToObjectId: dbId, attachToColumn: r.attachToColumn as never, attachName: r.attachName,
       }),
     awaitJob: (jobs, jobId, _assetType, name) => awaitViaPoll(jobs, jobId, name),
@@ -103,8 +108,6 @@ export const SHEET_TAB_ADAPTERS: Record<EntityKind, SheetTabAdapter> = {
   },
   location: {
     entityKind: "location",
-    perPanelCost: 1,
-    assemblyCost: 4,
     getStaged: (s) => s.stagedData,
     ensureSaved: (s) => s.ensureSavedBeforeGen(),
     bucketsByColumn: (st) => ({ angles: st.angles, time_of_day: st.timeOfDay, weather: st.weather, seasons: st.seasons, lighting: st.lighting, detail_closeups: st.detailCloseups }),
@@ -115,7 +118,7 @@ export const SHEET_TAB_ADAPTERS: Record<EntityKind, SheetTabAdapter> = {
         // sheet path only; the Location Studio's environmental tabs call
         // generateLocationAsset directly and intentionally omit sourceImageUrl
         // when Style Lock is OFF (text-only) — that toggle is unaffected.
-        assetType: r.assetType as never, variant: r.variant, name: r.name, userPrompt: r.userPrompt,
+        assetType: r.assetType as never, variant: r.variant, name: r.name, userPrompt: r.userPrompt, provider: SHEET_PANEL_PROVIDER,
         sourceImageUrl: r.sourceImageUrl, attachToLocationId: dbId, attachToColumn: r.attachToColumn as never, attachName: r.attachName,
       }),
     awaitJob: (jobs, jobId, _assetType, name) => awaitViaPoll(jobs, jobId, name),

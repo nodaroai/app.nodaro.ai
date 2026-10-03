@@ -1,7 +1,7 @@
 ---
 node_type: schedule-trigger
-generated_at: 2026-09-22T10:35:19.615Z
-generated_from: 641a12488
+generated_at: 2026-09-27T12:51:22.400Z
+generated_from: c607aa02c
 ---
 
 # Schedule Trigger
@@ -9,7 +9,7 @@ generated_from: 641a12488
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `schedule-trigger`
 **Category:** input
-**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** (none)
 **Outputs (source handles):** `payload`
 

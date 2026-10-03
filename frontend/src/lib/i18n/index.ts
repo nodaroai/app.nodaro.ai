@@ -19,6 +19,7 @@ export {
 } from "./offered-locales"
 
 export { formatDate, formatDateTime, formatNumber, formatTime, uiLocale } from "./format"
+export { interpolateNodes } from "./interpolate-nodes"
 
 /** Locale ids that have a registered chrome dict (empty or not). */
 export function registeredChromeLocales(): LocaleId[] {
@@ -34,6 +35,16 @@ function interpolate(template: string, vars?: Record<string, string | number>): 
 }
 
 export type TFunction = (key: MessageKey, vars?: Record<string, string | number>) => string
+
+/**
+ * The label of a known id — `labels` maps each id to its message key — or the
+ * id itself when the table does not know it (a value from an older or newer
+ * plan). Type the table as `Record<TheUnion, MessageKey>` so a new id without a
+ * label fails tsc.
+ */
+export function labelOf<K extends string>(labels: Readonly<Record<K, MessageKey>>, id: string, t: TFunction): string {
+  return Object.hasOwn(labels, id) ? t(labels[id as K]) : id
+}
 
 /** Resolve a message for a given locale (pure — for tests + non-hook callers). */
 export function translate(locale: LocaleId, key: MessageKey, vars?: Record<string, string | number>): string {
@@ -77,7 +88,7 @@ export function formatRelative(iso: string): string {
   const d = Math.floor(hr / 24)
   if (d < 30) return tx("time.dayAgo", { n: d })
   const mo = Math.floor(d / 30)
-  return tx("time.moAgo", { n: mo })
+  return tx(mo === 1 ? "time.moAgoOne" : "time.moAgo", { n: mo })
 }
 
 export type { MessageKey, ChromeDict }

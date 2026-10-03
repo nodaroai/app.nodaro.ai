@@ -1,7 +1,7 @@
 ---
 node_type: generate-music
-generated_at: 2026-09-21T19:12:09.355Z
-generated_from: 09788c987
+generated_at: 2026-09-28T23:06:56.298Z
+generated_from: ec71996de
 ---
 
 # generate-music
@@ -9,7 +9,7 @@ generated_from: 09788c987
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `generate-music`
 **Category:** ai
-**Credit cost:** `180` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `180` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `prompt`, `ref-audio`, `audio-style`
 **Outputs (source handles):** `audio`
 
@@ -43,7 +43,7 @@ generated_from: 09788c987
 {
   "label": "Generate Music",
   "prompt": "",
-  "provider": "suno",
+  "provider": "minimax",
   "duration": 8,
   "genre": "",
   "mood": "",
@@ -71,6 +71,8 @@ generated_from: 09788c987
 - `title`
 - `genre`
 - `mood`
+- `reference_audio_url`
+- `reference_audio_asset_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use
@@ -96,7 +98,7 @@ Single soundtrack for the assembled video — after all video shots are approved
   "data": {
     "label": "Generate Music",
     "prompt": "",
-    "provider": "suno",
+    "provider": "minimax",
     "duration": 8,
     "genre": "",
     "mood": "",

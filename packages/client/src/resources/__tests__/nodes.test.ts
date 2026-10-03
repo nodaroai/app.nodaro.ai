@@ -76,6 +76,26 @@ describe("nodes resource", () => {
   })
 })
 
+describe("social-search", () => {
+  it("POSTs the typed search to /v1/social-search and resolves every post found", async () => {
+    const post = {
+      id: "tiktok:1", platform: "tiktok", url: "https://www.tiktok.com/@a/video/1", text: "hi",
+      author: { handle: "a", name: "A" }, metrics: { views: 10 }, media: { kind: "video" }, hashtags: [], extra: {},
+    }
+    const fetchMock = runThenStatuses({ jobId: "job-1" }, [
+      { status: "completed", output_data: { json: [post], platform: "tiktok", mode: "keyword", query: "ai ads" } },
+    ])
+    const c = client(fetchMock)
+    const output = await c.nodes.runAndWait("social-search", { platform: "tiktok", query: "ai ads", count: 40 })
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/social-search")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ platform: "tiktok", query: "ai ads", count: 40 })
+    // Typed: the posts arrive as SocialPost[].
+    expect(output.json[0]!.metrics.views).toBe(10)
+    expect(output.query).toBe("ai ads")
+  })
+})
+
 describe("nodes.runAndWait", () => {
   it("polls running → completed and resolves typed output_data", async () => {
     vi.useFakeTimers()
@@ -205,6 +225,53 @@ describe("nodes.runAndWait", () => {
     // Advancing further must not trigger any more fetches.
     await vi.advanceTimersByTimeAsync(10_000)
     expect(fetchMock.mock.calls.length).toBe(callsBeforeAbort)
+  })
+
+  // Aborting stops the WAITING; the job keeps running (and is charged) unless
+  // the caller asks to cancel it too. Either way the rejection names the job.
+  it("an abort mid-poll names the job and does not cancel it by default", async () => {
+    vi.useFakeTimers()
+    const ac = new AbortController()
+    const fetchMock = runThenStatuses({ jobId: "job-1" }, [{ status: "running" as JobStatus }])
+    const c = client(fetchMock)
+    const promise = c.nodes.runAndWait("generate-video", {}, { pollMs: 2000, signal: ac.signal }).catch((e) => e)
+    await vi.advanceTimersByTimeAsync(100)
+    ac.abort()
+    const err = await promise
+    expect(err).toBeInstanceOf(JobAbortedError)
+    expect((err as JobAbortedError).jobId).toBe("job-1")
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/cancel"))).toBe(false)
+  })
+
+  it("cancelOnAbort cancels the submitted job when the signal aborts", async () => {
+    vi.useFakeTimers()
+    const ac = new AbortController()
+    const fetchMock = runThenStatuses({ jobId: "job-1" }, [{ status: "running" as JobStatus }])
+    const c = client(fetchMock)
+    const promise = c.nodes
+      .runAndWait("generate-video", {}, { pollMs: 2000, signal: ac.signal, cancelOnAbort: true })
+      .catch((e) => e)
+    await vi.advanceTimersByTimeAsync(100)
+    ac.abort()
+    expect(await promise).toBeInstanceOf(JobAbortedError)
+    const cancel = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/v1/jobs/job-1/cancel"))
+    expect(cancel?.[1].method).toBe("POST")
+  })
+
+  it("cancelOnAbort still rejects with the abort when the cancel fails", async () => {
+    vi.useFakeTimers()
+    const ac = new AbortController()
+    const statuses = runThenStatuses({ jobId: "job-1" }, [{ status: "running" as JobStatus }])
+    const fetchMock = vi.fn((url: string, init: { method: string }) =>
+      String(url).endsWith("/cancel") ? mockErr(500, { error: { code: "internal_error", message: "x" } }) : statuses(url, init as never),
+    ) as unknown as FetchMock
+    const c = client(fetchMock)
+    const promise = c.nodes
+      .runAndWait("generate-video", {}, { pollMs: 2000, signal: ac.signal, cancelOnAbort: true })
+      .catch((e) => e)
+    await vi.advanceTimersByTimeAsync(100)
+    ac.abort()
+    expect(await promise).toBeInstanceOf(JobAbortedError)
   })
 
   it("throws JobTimeoutError once maxMs is exceeded without a terminal status", async () => {
