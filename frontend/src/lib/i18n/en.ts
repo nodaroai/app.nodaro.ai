@@ -10691,6 +10691,7 @@ export const en = {
   "nodeRun.noVoiceDescriptionProvided": "no voice description provided",
   "nodeRun.noTranscriptProvided": "no transcript provided",
   "nodeRun.connectAVideoOrSet": "connect a video or set a YouTube URL",
+  "nodeRun.socialPostVideoExpired": "this post's video link has expired (a search's video links last a few days). Run the Social Search again to get fresh ones",
   "nodeRun.connectAVideoToAudit": "connect a video to audit",
   "nodeRun.theConnectedAnalysisHasNo": "the connected analysis has no result yet — run it first, or disconnect it to let this node analyse the clip itself",
   "nodeRun.noSourceAudioURLFound": "no source audio URL found",

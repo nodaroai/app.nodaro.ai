@@ -10398,6 +10398,7 @@ export const ko: ChromeDict = {
   "nodeRun.noVoiceDescriptionProvided": "보이스 설명이 입력되지 않았습니다.",
   "nodeRun.noTranscriptProvided": "녹취록이 입력되지 않았습니다.",
   "nodeRun.connectAVideoOrSet": "동영상을 연결하거나 YouTube URL을 설정하세요.",
+  "nodeRun.socialPostVideoExpired": "이 게시물의 동영상 링크가 만료되었습니다(검색의 동영상 링크는 며칠 동안만 유효합니다). SNS 검색을 다시 실행해 새 링크를 받으세요.",
   "nodeRun.connectAVideoToAudit": "검수할 동영상을 연결하세요.",
   "nodeRun.theConnectedAnalysisHasNo": "연결된 분석에 아직 결과가 없습니다. 먼저 분석을 실행하거나, 연결을 해제해 이 노드가 클립을 직접 분석하게 하세요.",
   "nodeRun.noSourceAudioURLFound": "원본 오디오 URL이 없습니다.",

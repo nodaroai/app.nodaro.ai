@@ -3,6 +3,7 @@ import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
+import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
 import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
@@ -553,9 +554,12 @@ export function estimateNodeCredits(
     // window only exists for the moment between rewire and the hook's re-probe.
     const probed = node.data.probedYoutube as { url: string; durationSec: number } | undefined
     const probedWired = node.data.probedVideo as ProbedVideoInfo | undefined
-    const durationSec =
-      (probed && probed.url === node.data.youtubeUrl ? probed.durationSec : undefined) ??
-      probedWired?.durationSec
+    // A Social Search's posts wired in: the longest of their videos (each post
+    // is charged by its own) — never a `probedVideo` left from an earlier wire.
+    const fromPosts = wiredSocialPostsVideoSec(node.id ?? "", edges, nodes)
+    const durationSec = fromPosts !== null
+      ? fromPosts
+      : (probed && probed.url === node.data.youtubeUrl ? probed.durationSec : undefined) ?? probedWired?.durationSec
     const bucketSec = bucketSecondsFromCreditId(buildVideoAnalysisCreditId(model, durationSec))
     // The $-derived formula moved to the private @nodaroai/cloud-plugins formula (output published as VIDEO_ANALYSIS_BUCKET_CREDITS)
     // (S5) — look up the precomputed credit table instead of computing it here.

@@ -64,6 +64,25 @@ describe("getModelIdentifier — video-analysis", () => {
     expect(getModelIdentifier(node)).toBe("video-analysis:mixed:600s")
   })
 
+  it("prices a Social Search's posts by the longest of their videos — not a probe left from an earlier wire", () => {
+    const post = (n: number, durationSec: number) => ({
+      id: `instagram:${n}`,
+      platform: "instagram",
+      url: `https://www.instagram.com/reel/D${n}/`,
+      text: "",
+      author: { handle: "a", name: "A" },
+      metrics: {},
+      media: { kind: "video", durationSec },
+      hashtags: [],
+      extra: {},
+    })
+    const node = vaNode({ llmModel: "pro", probedVideo: { url: "https://cdn.example/old.mp4", durationSec: 500 } })
+    const search = { id: "search", type: "social-search", position: { x: 0, y: 0 }, data: { generatedJson: [post(1, 27), post(2, 90)] } } as unknown as WorkflowNode
+    const edges = [{ id: "e", source: "search", target: "va-1", sourceHandle: "json", targetHandle: "video", data: { outputMode: "each" } }] as unknown as Parameters<typeof getModelIdentifier>[1]
+    expect(getModelIdentifier(node, edges, [search, node])).toBe(buildVideoAnalysisCreditId(resolveVideoAnalysisModel("pro"), 90))
+    expect(getModelIdentifier(node, edges, [search, node])).toMatch(/:180s$/)
+  })
+
   it("agrees with the node badge for the default tier (and is never the bare id)", () => {
     const node = vaNode({})
     const id = getModelIdentifier(node)

@@ -10404,6 +10404,7 @@ export const ja: ChromeDict = {
   "nodeRun.noVoiceDescriptionProvided": "ボイスの説明が入力されていません。",
   "nodeRun.noTranscriptProvided": "文字起こしが入力されていません。",
   "nodeRun.connectAVideoOrSet": "動画を接続するか、YouTube の URL を設定してください。",
+  "nodeRun.socialPostVideoExpired": "この投稿の動画リンクは期限切れです（検索の動画リンクは数日で失効します）。SNS 検索をもう一度実行して新しいリンクを取得してください。",
   "nodeRun.connectAVideoToAudit": "監査する動画を接続してください。",
   "nodeRun.theConnectedAnalysisHasNo": "接続された分析にはまだ結果がありません。先にその分析を実行するか、接続を外してこのノードでクリップを直接分析してください。",
   "nodeRun.noSourceAudioURLFound": "元のオーディオの URL がありません。",

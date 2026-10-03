@@ -10614,6 +10614,7 @@ export const he: ChromeDict = {
   "nodeRun.noVoiceDescriptionProvided": "לא הוזן תיאור קול",
   "nodeRun.noTranscriptProvided": "לא הוזן תמלול",
   "nodeRun.connectAVideoOrSet": "חברו וידאו או הגדירו כתובת YouTube",
+  "nodeRun.socialPostVideoExpired": "קישור הווידאו של הפוסט פג (קישורי הווידאו של חיפוש תקפים כמה ימים). הריצו שוב את החיפוש ברשתות כדי לקבל קישורים חדשים",
   "nodeRun.connectAVideoToAudit": "חברו וידאו לביקורת",
   "nodeRun.theConnectedAnalysisHasNo": "לניתוח המחובר אין עדיין תוצאה — הריצו אותו קודם, או נתקו אותו כדי שהרכיב הזה ינתח את הקליפ בעצמו",
   "nodeRun.noSourceAudioURLFound": "לא נמצאה כתובת לאודיו המקור",

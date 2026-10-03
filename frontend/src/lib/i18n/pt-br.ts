@@ -10398,6 +10398,7 @@ export const ptBR: ChromeDict = {
   "nodeRun.noVoiceDescriptionProvided": "nenhuma descrição de voz informada",
   "nodeRun.noTranscriptProvided": "nenhuma transcrição informada",
   "nodeRun.connectAVideoOrSet": "conecte um vídeo ou defina uma URL do YouTube",
+  "nodeRun.socialPostVideoExpired": "o link do vídeo deste post expirou (os links de vídeo de uma busca duram alguns dias). Execute a Busca em redes sociais de novo para obter links novos",
   "nodeRun.connectAVideoToAudit": "conecte um vídeo para auditar",
   "nodeRun.theConnectedAnalysisHasNo": "a análise conectada ainda não tem resultado — execute-a primeiro ou desconecte-a para que este nó analise o clipe por conta própria",
   "nodeRun.noSourceAudioURLFound": "nenhuma URL de áudio de origem encontrada",

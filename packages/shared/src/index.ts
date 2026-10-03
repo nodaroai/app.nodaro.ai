@@ -861,6 +861,10 @@ export {
   socialSearchPages,
   socialSearchRequestFromNode,
   socialSearchPostLink,
+  socialSearchPostVideo,
+  signedLinkExpiresAt,
+  socialPostsLongestVideoSec,
+  SOCIAL_POST_VIDEO_LINK_MARGIN_MS,
   socialSearchCreditId,
   socialSearchCreditIdFromNode,
   socialSearchPickTop,
@@ -879,6 +883,7 @@ export {
   type SocialPostMetrics,
   type SocialPostMedia,
   type SocialSearchParams,
+  type SocialSearchPostVideo,
 } from "./social-search.js"
 
 export {

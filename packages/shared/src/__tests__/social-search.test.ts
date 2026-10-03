@@ -11,6 +11,10 @@ import {
   socialPostsFrom,
   socialSearchCreditId,
   socialSearchPostLink,
+  socialSearchPostVideo,
+  signedLinkExpiresAt,
+  socialPostsLongestVideoSec,
+  SOCIAL_POST_VIDEO_LINK_MARGIN_MS,
   socialSearchCreditIdFromNode,
   socialSearchMode,
   socialSearchPickTop,
@@ -158,5 +162,62 @@ describe("socialSearchPostLink", () => {
     expect(socialSearchPostLink("[]")).toBeUndefined()
     expect(socialSearchPostLink(JSON.stringify(post("javascript:alert(1)")))).toBeUndefined()
     expect(socialSearchPostLink(JSON.stringify(post(7)))).toBeUndefined()
+  })
+})
+
+describe("the video a post hands Video Analysis", () => {
+  const NOW = Date.parse("2026-10-04T00:00:00Z")
+  const hexSeconds = (ms: number) => Math.floor(ms / 1000).toString(16).toUpperCase()
+  const igFile = (endMs: number) => `https://scontent-sjc6-1.cdninstagram.com/o1/v/t2/f2/m86/clip.mp4?_nc_cat=1&oh=00_sig&oe=${hexSeconds(endMs)}`
+  const reel = (videoUrl?: string, durationSec?: number) =>
+    post("1", { id: "instagram:1", platform: "instagram", url: "https://www.instagram.com/reel/Dav1/", media: { kind: "video", videoUrl, durationSec } })
+
+  it("reads the post's own video file while its signed link is valid", () => {
+    const file = igFile(NOW + 2 * 24 * 3_600_000)
+    expect(socialSearchPostVideo(JSON.stringify(reel(file, 27)), NOW)).toEqual({ kind: "file", url: file })
+    // The first post of a list (a wire that is not in Each mode).
+    expect(socialSearchPostVideo(JSON.stringify([reel(file), post("2")]), NOW)).toEqual({ kind: "file", url: file })
+  })
+
+  it("reports an expired file (or one about to expire) instead of reading the post's page", () => {
+    expect(socialSearchPostVideo(JSON.stringify(reel(igFile(NOW - 60_000))), NOW)).toEqual({ kind: "expired" })
+    expect(socialSearchPostVideo(JSON.stringify(reel(igFile(NOW + SOCIAL_POST_VIDEO_LINK_MARGIN_MS - 60_000))), NOW)).toEqual({ kind: "expired" })
+  })
+
+  it("falls back to the post's page when no file came with it", () => {
+    expect(socialSearchPostVideo(JSON.stringify(post("7")), NOW)).toEqual({ kind: "page", url: "https://www.tiktok.com/@maker/video/7" })
+  })
+
+  it("reads nothing from a digest, an empty list, or something that is not a post", () => {
+    expect(socialSearchPostVideo("1. @a: something https://x.com/a/status/1", NOW)).toBeUndefined()
+    expect(socialSearchPostVideo("[]", NOW)).toBeUndefined()
+    expect(socialSearchPostVideo(JSON.stringify({ url: "https://www.tiktok.com/@a/video/1" }), NOW)).toBeUndefined()
+    expect(socialSearchPostVideo(JSON.stringify(post("1", { url: "javascript:alert(1)" })), NOW)).toBeUndefined()
+  })
+
+  it("reads each platform's link end, and none from a link that does not expire", () => {
+    expect(signedLinkExpiresAt("https://scontent.cdninstagram.com/v.mp4?oe=6AC3520E")).toBe(0x6ac3520e * 1000)
+    expect(signedLinkExpiresAt("https://v16-webapp.tiktok.com/v.mp4?x-expires=1791100000&x-signature=s")).toBe(1_791_100_000_000)
+    expect(signedLinkExpiresAt("https://d1.cloudfront.net/v.mp4?Expires=1791100000&Signature=s")).toBe(1_791_100_000_000)
+    expect(signedLinkExpiresAt("https://dms.licdn.com/playlist/vid/v.mp4?e=1791100000&v=beta&t=s")).toBe(1_791_100_000_000)
+    // `e` means an end only on LinkedIn's media host.
+    expect(signedLinkExpiresAt("https://cdn.example.com/v.mp4?e=1791100000")).toBeUndefined()
+    expect(signedLinkExpiresAt("https://video.twimg.com/ext_tw_video/1/pu/vid/720x1280/a.mp4?tag=12")).toBeUndefined()
+    expect(signedLinkExpiresAt("not a link")).toBeUndefined()
+  })
+})
+
+describe("the length Video Analysis quotes for the posts", () => {
+  const clip = (id: string, durationSec?: number) => post(id, { media: { kind: "video", durationSec } })
+
+  it("is the longest video's", () => {
+    expect(socialPostsLongestVideoSec([clip("1", 27), clip("2", 90), clip("3", 24)])).toBe(90)
+  })
+
+  it("leaves out posts without a video, and is unknown when a video's length is", () => {
+    expect(socialPostsLongestVideoSec([clip("1", 27), post("2", { media: { kind: "image" } })])).toBe(27)
+    expect(socialPostsLongestVideoSec([clip("1", 27), clip("2")])).toBeUndefined()
+    expect(socialPostsLongestVideoSec([post("2", { media: { kind: "text" } })])).toBeUndefined()
+    expect(socialPostsLongestVideoSec([])).toBeUndefined()
   })
 })

@@ -13,6 +13,16 @@ import { REPEAT_PLACEHOLDER, decodeProviderItem, settledWithLimit, fanOutTextFee
 import { setSuppressToasts, RUN_START_RESET } from "./poll-job";
 
 /**
+ * What one failed item says, for the node's summary: its error's own words.
+ * Nothing for an item stopped because another failed first (the batch
+ * cancels the rest), so the summary names the failure that mattered.
+ */
+function failureReason(reason: unknown): string | undefined {
+  const message = reason instanceof Error ? reason.message.trim() : "";
+  return message && message !== "Cancelled" && message !== "Execution cancelled" ? message : undefined;
+}
+
+/**
  * Execute a node once for each item in the list. Results are accumulated
  * and stored as __listResults on the node for later clone expansion.
  *
@@ -115,11 +125,14 @@ export async function executeNodeForList(
 
     // Assemble results in original index order
     const results: string[] = new Array(items.length).fill("");
+    // Toasts are muted for the batch, so the node's summary has to say why.
+    let firstReason: string | undefined;
     for (const entry of settled) {
       if (entry.status === "fulfilled") {
         results[entry.value.index] = entry.value.value;
       } else {
         failedCount++;
+        firstReason ??= failureReason(entry.reason);
         // Cancel remaining on first non-cancellation failure
         if (!cancelRef.cancelled) {
           cancelRef.cancelled = true;
@@ -156,7 +169,7 @@ export async function executeNodeForList(
       __listRunning: false,
       errorMessage:
         failedCount > 0
-          ? `${completedCount}/${items.length} succeeded, ${failedCount} failed`
+          ? `${completedCount}/${items.length} succeeded, ${failedCount} failed${firstReason ? ` — ${firstReason}` : ""}`
           : undefined,
     });
   } finally {
