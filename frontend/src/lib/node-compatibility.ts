@@ -265,6 +265,10 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   //     `transcript` (JSON) input — same handle id, no new entry needed here.
   //     Drift mirror of the registry.
   "edl", "sources",
+  //   - edit-plan typed inputs: `silence` (silence-detect ranges) and
+  //     `offsets` (audio-sync's result) accept json producers; its
+  //     `transcript` and `sources` ids are covered above.
+  "silence", "offsets",
   //   - Content Recipe's `link` (the post's page link: Video URL or text) and
   //     Content Ideas' `recipes` (recipe producers + text) and `field-brand`
   //     (text only). Drift mirror of the registry.

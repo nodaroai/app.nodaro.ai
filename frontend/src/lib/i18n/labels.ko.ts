@@ -225,6 +225,8 @@ const HANDLE_LABELS_KO: Record<string, string> = {
   "EDL": "EDL",
   "Transcript": "녹취록",
   "Sources": "소스",
+  "Silence": "무음 구간",
+  "Offsets (Audio Sync)": "오프셋(오디오 동기화)",
   "Cinematography": "촬영 기법",
   "Inputs": "입력",
   "Input": "입력",

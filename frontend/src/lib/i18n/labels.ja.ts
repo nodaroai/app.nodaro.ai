@@ -225,6 +225,8 @@ const HANDLE_LABELS_JA: Record<string, string> = {
   "EDL": "EDL",
   "Transcript": "文字起こし",
   "Sources": "ソース",
+  "Silence": "無音",
+  "Offsets (Audio Sync)": "オフセット（音声同期）",
   "Cinematography": "撮影技法",
   "Inputs": "入力",
   "Input": "入力",

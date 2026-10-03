@@ -762,8 +762,14 @@ jobs:
         with:
           kind: packages
       - name: Build backend (mirrors the Dockerfile — tsc + runtime asset copy)
+        # The SAME heap the Dockerfile gives this step (4 GB), so a tree that
+        # outgrows it fails here, not in a deploy: at Node's default ceiling the
+        # build crashed with exit 134 (heap out of memory) with no type error
+        # (2026-10-03; ~2.7 GB measured).
         run: npx tsc -p tsconfig.build.json && node scripts/copy-build-assets.mjs
         working-directory: backend
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
       - name: Package verified build outputs
         run: node tools/ci-build-artifact.mjs pack backend "$RUNNER_TEMP/ci-build-backend"
       - uses: actions/upload-artifact@v5

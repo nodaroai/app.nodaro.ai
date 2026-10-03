@@ -225,6 +225,8 @@ const HANDLE_LABELS_PT_BR: Record<string, string> = {
   "EDL": "EDL",
   "Transcript": "Transcrição",
   "Sources": "Origens",
+  "Silence": "Silêncio",
+  "Offsets (Audio Sync)": "Deslocamentos (Sincronizar áudio)",
   "Cinematography": "Cinematografia",
   "Inputs": "Entradas",
   "Input": "Entrada",

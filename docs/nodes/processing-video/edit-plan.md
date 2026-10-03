@@ -22,7 +22,8 @@ Because the plan is just data, an agent or you can decide *what* the edit is; th
 |--------|------|----------|-------------|
 | Transcript | json | **Yes** | The timed, word-level transcript. Wire it from a Transcribe node's `json` output. |
 | Silence | json | No | Silence ranges from a Silence Detect node — helps the tighten pass cut dead air precisely. |
-| Sources | video/audio | **Yes** | The media the edit draws from (1–6). Each connected source becomes an EDL source; annotate role / speakers / offset per source in the config panel. |
+| Offsets (Audio Sync) | json | No | Multicam: an [Audio Sync](../processing-audio/audio-sync.md) node's Offsets output. Each source's measured offset is applied before the plan runs — see [Multicam](#multicam-recordings-on-different-clocks). |
+| Sources | video/audio | **Yes** | The media the edit draws from (1–6). Each connected source becomes an EDL source; set each one's role and offset in the config panel. |
 
 ## Outputs
 
@@ -42,6 +43,8 @@ Because the plan is just data, an agent or you can decide *what* the edit is; th
 | Clips: target length (s) | Number | -- | **Clips mode only.** Target clip length in seconds (5–180). |
 | Target aspect | Select | -- | Intended delivery aspect (`16:9`, `9:16`, `1:1`, `4:5`) — informs clip framing. |
 | Platform | Text | -- | Intended platform hint (informs pacing and length). |
+| Sources: role | Select (per source) | auto | `master audio`, `camera`, `wide`, `screen`. The plan follows the **master's clock**: the source marked *master audio*, otherwise the first source in the list. |
+| Sources: offset (s) | Number (per source) | -- | Seconds this recording started **after** the master (negative = before). Leave empty to use Audio Sync's measurement when its Offsets are connected (otherwise 0). A value you type always wins over a measured one. The master's own offset must be 0. |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the instructions at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Credit Cost
@@ -69,6 +72,31 @@ The cost on the node, the **Run** button and the run-confirm dialog is an **esti
 - **A source with no recorded length** — a direct audio link, or a Reference Audio node extracted before lengths were recorded — estimates at the **largest bucket (180 minutes)**. Re-extracting a YouTube source records its length.
 
 The estimate never borrows a length from the wired transcript: a transcript on the canvas is from the *previous* run, and after you swap in a longer episode it would under-quote the new one. When the length is unknown the estimate deliberately over-quotes instead — it is what the balance check before a run compares against, so a run is refused up front rather than failing partway after earlier nodes were charged. Whatever the estimate showed, what you are **charged is always checked against the recording's real duration**: the server measures the master itself before it reserves, and a run whose master cannot be measured is refused and refunded rather than charged on a guess.
+
+## Multicam: recordings on different clocks
+
+When a conversation is recorded on several devices — a mic recorder plus one or more cameras — each file starts at a different moment. Wire every recording into both an [Audio Sync](../processing-audio/audio-sync.md) node and Edit Plan's **Sources**, and Audio Sync's **Offsets** output into Edit Plan's **Offsets** input. Use the **same upstream nodes** in both: offsets are matched to sources by node.
+
+Before the plan runs, each source's measured offset is written onto it, lined up to the **master's clock** (the *master audio* source, else the first source). Audio Sync's reference does not need to be the master: the offsets are re-based onto it. The plan is timed on the master's clock, so the cuts do not move. Apply EDL then reads each camera at the right moment.
+
+Edit Plan **stops before charging**, rather than planning a cut that would be out of sync, when:
+
+- a source was **not measured** by Audio Sync — wire it into Audio Sync, or set its offset by hand (`0` if it started with the master);
+- a source's match is **weak** (confidence below 0.5, including a camera with no usable sound) — set its offset by hand;
+- the **master** was not measured (or measured weakly) while another source uses a measured offset;
+- the master has a hand-set offset other than 0;
+- the **transcript was made from a recording that is off the master's clock** — transcribe the master, or mark that recording as master audio (the canvas traces a Transcribe node back to the recording it was fed, including through Extract Audio);
+- the Offsets input is wired but Audio Sync produced no result.
+
+A hand-set offset always wins, so it is the fix for any single source audio could not line up.
+
+**Which camera each cut shows.** Each cut goes on the **first camera, in source order, that has picture for all of it**. A cut that no single camera covers is split where cameras start and stop. A gap of up to half a second right after a camera stops, which no other camera filmed, is held on that camera's last frame. A stretch that **no camera filmed** (a camera started after the mic, or stopped before it) is left out of the plan and listed in its dropped cuts with the reason `no-picture` — so Apply EDL never gets a cut it cannot render. In Clips mode, a clip at least half filmed keeps its filmed part; a clip filmed less than half is left out and the next-best filmed clip takes its place. Edit Plan measures each camera's length for this before planning, and stops before charging when no camera has picture anywhere in the recording (usually an offset in the wrong units or sign).
+
+**Sound.** Every cut keeps the sound of the plan's clock — the *master audio* source, or the first source — whichever camera it shows, so the soundtrack never switches mics at a camera change. (Past the end of the clock recording, should the plan run longer, a cut keeps its camera's own sound.) Chapters mode shows no picture, so cameras are not measured for it.
+
+## API
+
+`POST /v1/edit-plan` with `{ mode, planTier, transcript, sources: [{ id?, url, kind?, role?, speakers?, offsetMs? }], … }` — source ids up to 200 characters. Each source carries its own `offsetMs`: apply an Audio Sync result to the sources first. The [SDK](../../sdk-reference.md) (`client.edit.editPlan({ offsets })`), the [CLI](../../cli.md) (`nodaro edit plan --offsets`) and MCP (`plan_edit` with `offsets`) do that for you, with the checks above. The route itself refuses, before measuring or charging, a raw `offsets` field (`422 offsets_not_applied`) and an offset on the master or on the transcript's own source (`422 master_offset`).
 
 ## Common Use Cases
 

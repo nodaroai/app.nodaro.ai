@@ -441,6 +441,14 @@ const SOCIAL_SEARCH_TOOL_BYTES = 3_121
 // under the 8_192 B per-tool budget, and the list keeps the 46 B of headroom
 // it had before.
 const SAVED_POST_TOOLS_BYTES = 1_847
+// RAISED 2026-10-03 by plan_edit's multicam path (podcast B4) and nothing
+// else: three new arguments (`sources[].id`, `offsets`, `transcript_source_id`)
+// and one sentence each on plan_edit and audio_sync saying how the two
+// connect. No tool was added, so the fixture does NOT move. measured by this
+// suite: 379_338 total − 378_637 base = 701 B, which keeps the 46 B of headroom
+// the list had before. The multicam rules themselves live in the edit-plan
+// docs, not the description.
+const PLAN_EDIT_OFFSETS_BYTES = 701
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -480,7 +488,8 @@ export const TOOL_WIRE_BUDGET = {
     GENERATE_MUSIC_REFERENCE_BYTES +
     DOCS_REVIEW_WORDING_BYTES +
     SOCIAL_SEARCH_TOOL_BYTES +
-    SAVED_POST_TOOLS_BYTES,
+    SAVED_POST_TOOLS_BYTES +
+    PLAN_EDIT_OFFSETS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

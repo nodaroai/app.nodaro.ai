@@ -1527,6 +1527,75 @@ describe("audio_sync verb", () => {
   })
 })
 
+// B4 (decided 2026-09-25): plan_edit takes audio_sync's result and writes it
+// onto the sources before dispatch — refused, before any charge, when it
+// would render out of sync.
+describe("plan_edit verb — audio_sync offsets", () => {
+  const transcript = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 500 }] }
+  const sources = [
+    { id: "mic", url: "https://a/mic.m4a", kind: "audio", role: "master-audio" },
+    { id: "camA", url: "https://a/camA.mp4", kind: "video" },
+  ]
+  const sync = (confidence: number) => ({
+    version: 1,
+    reference: "mic",
+    offsets: [
+      { sourceId: "mic", offsetMs: 0, confidence: 1, driftMsPerHour: 0 },
+      { sourceId: "camA", offsetMs: 2_000, confidence, driftMsPerHour: 0 },
+    ],
+    notes: [],
+  })
+
+  it("writes the measured offsets onto the sources (and stamps the transcript's source); `offsets` is never sent", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "j-ep" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "plan_edit", { mode: "tighten", transcript, sources, offsets: sync(0.9), transcript_source_id: "mic" })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.sources).toEqual([sources[0], { ...sources[1], offsetMs: 2_000 }])
+    expect(received.body && "offsets" in received.body).toBe(false)
+    expect((received.body?.transcript as { sourceId?: string }).sourceId).toBe("mic")
+  })
+
+  it("accepts the result as a JSON string too", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "j-ep2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "plan_edit", { mode: "tighten", transcript, sources, offsets: JSON.stringify(sync(0.9)) })
+    expect((received.body?.sources as Array<{ offsetMs?: number }>)[1]!.offsetMs).toBe(2_000)
+  })
+
+  it("refuses a weak match before dispatch — nothing is charged", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "never" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "plan_edit", { mode: "tighten", transcript, sources, offsets: sync(0.2) })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toMatch(/audio-sync's match for \\"camA\\" is too weak to trust/)
+    expect(received.body).toBeUndefined()
+  })
+
+  it("refuses offsets when a source has no id to match them by", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "never" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "plan_edit", {
+      mode: "tighten", transcript, sources: [sources[0], { url: "https://a/camA.mp4" }], offsets: sync(0.9),
+    })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toMatch(/give every source the `id` you gave audio_sync/)
+    expect(received.body).toBeUndefined()
+  })
+
+  it("without offsets, unnamed sources stay unnamed (the plugin mints their ids)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "j-ep3" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "plan_edit", { mode: "tighten", transcript, sources: [{ url: "https://a/ep.mp4" }] })
+    expect(received.body?.sources).toEqual([{ url: "https://a/ep.mp4" }])
+  })
+})
+
 describe("apply_edl verb", () => {
   const validEdl = {
     version: 1,

@@ -1,5 +1,6 @@
 import type { NodaroClient } from "../client.js"
-import { remapTranscriptThroughEdl, unwrapEditPlanOutput } from "@nodaro/shared"
+import { NodaroError } from "../errors.js"
+import { remapTranscriptThroughEdl, unwrapEditPlanOutput, resolveEditPlanSources, describeAudioSyncOffsetIssue } from "@nodaro/shared"
 import type { Edl, Transcript, EditPlanMode, EditPlanTier, EdlClipSet, ChapterSet } from "@nodaro/shared"
 
 // Re-export the canonical EDL / transcript vocabulary from `@nodaro/shared`
@@ -159,7 +160,10 @@ export interface EditPlanSource {
   role?: "master-audio" | "camera" | "wide" | "screen"
   /** Speaker labels present in this source. */
   speakers?: string[]
-  /** This source's origin on the master clock (masterMs = sourceMs + offsetMs). */
+  /**
+   * This source's origin on the master clock (masterMs = sourceMs + offsetMs).
+   * Set by hand, it wins over a measured offset from `offsets`.
+   */
   offsetMs?: number
 }
 
@@ -187,6 +191,23 @@ export interface EditPlanInput {
   silence?: SilenceRanges
   /** The recording's media sources (1–6). */
   sources: EditPlanSource[]
+  /**
+   * Multicam: an {@link AudioSyncResult} (the audio-sync job's
+   * `output_data.json`) measured over these same source ids. Each source's
+   * measured offset is written onto its `offsetMs` BEFORE the request, on the
+   * master's clock (the `master-audio` source, else the first) — a source's
+   * own `offsetMs` wins. `editPlan` rejects with a {@link NodaroError}
+   * (`code: "edit_plan_sources"`), before any request or charge, when a
+   * source was not measured or matched weakly (confidence < 0.5 — set its
+   * `offsetMs` by hand), or the master was not measured.
+   */
+  offsets?: AudioSyncResult | string
+  /**
+   * The id of the source the transcript was made from, when you know it. The
+   * plan follows the master's clock, so a transcript made from a source that
+   * is off it is rejected the same way.
+   */
+  transcriptSourceId?: string
   /** Free-text editing steer. */
   instructions?: string
   /** Style-guide text applied to the plan. */
@@ -286,12 +307,25 @@ export class EditResource {
    * on nodaro.ai it runs directly.
    */
   editPlan(input: EditPlanInput): Promise<EditJobResult> {
+    // The same pre-dispatch check the canvas and MCP run (B4): the server never
+    // sees `offsets` — they are written onto the sources here.
+    const planned = resolveEditPlanSources(input.sources, {
+      offsets: input.offsets,
+      transcriptSourceId: input.transcriptSourceId,
+    })
+    if (!planned.ok) {
+      const message = planned.issues.map((issue) => describeAudioSyncOffsetIssue(issue)).join("; ")
+      return Promise.reject(new NodaroError(`editPlan: ${message}`, "edit_plan_sources", 400))
+    }
+    const transcript = planned.transcriptSourceId
+      ? { ...input.transcript, sourceId: planned.transcriptSourceId }
+      : input.transcript
     return this.client.request("POST", "/v1/edit-plan", {
       body: {
         mode: input.mode,
         planTier: input.planTier,
-        transcript: input.transcript,
-        sources: input.sources,
+        transcript,
+        sources: planned.sources,
         ...(input.silence !== undefined ? { silence: input.silence } : {}),
         ...(input.instructions !== undefined ? { instructions: input.instructions } : {}),
         ...(input.styleGuide !== undefined ? { styleGuide: input.styleGuide } : {}),

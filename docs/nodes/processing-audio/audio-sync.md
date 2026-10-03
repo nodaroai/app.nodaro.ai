@@ -102,7 +102,7 @@ On the canvas, the price follows the number of recordings wired into **Sources**
 - Recordings must share some sound (at least 2 seconds of overlap). A recording with none gets a `notes` line and confidence `0`.
 - The reference must have sound — it is the clock everything is measured on. A reference without an audio track fails the run with a message naming it; any other source without one just gets its own `confidence` `0` row.
 - Drift is reported, not corrected.
-- A recording is fetched in full on its first run, up to 64 GB and up to an hour, as long as it keeps arriving at about 2 Mbit/s or faster (slower than that for a whole minute, and the fetch is abandoned). Later runs reuse the prepared audio.
+- A recording is fetched in full on its first run, up to 64 GB and up to an hour. After its first two minutes it must keep arriving at about 2 Mbit/s or faster — a whole minute slower than that and the fetch is abandoned. Later runs reuse the prepared audio.
 
 ## API
 
@@ -110,7 +110,8 @@ On the canvas, the price follows the number of recordings wired into **Sources**
 
 ## Best Practices
 
-- Make the master microphone the reference (wire it first, or pick it): its offsets then drop straight into the EDL, where the master's clock is the timeline.
+- To cut the recordings together, wire this node's **Offsets** output into an [Edit Plan](../processing-video/edit-plan.md) node's **Offsets** input, with the same recordings wired into its Sources. Edit Plan writes each offset onto its source, re-based onto its own master's clock — so any recording can be the reference here — and stops before charging if a recording it uses was not measured or matched weakly. See [Multicam](../processing-video/edit-plan.md#multicam-recordings-on-different-clocks).
+- Making the master microphone the reference (wire it first, or pick it) keeps the numbers easy to read: its offsets are then exactly the values the EDL takes.
 - Check any recording with low confidence by ear. It usually means that recording barely heard the conversation (a muted camera, a distant wide shot in a loud room).
 - For long episodes, read the drift notes. More than a frame of drift means lip sync slides over the episode, even though the start lines up.
 

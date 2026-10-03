@@ -43,6 +43,7 @@ export const NON_PROMPT_TEXT_LANES: Readonly<Record<string, "*" | readonly strin
   transcript: ["add-captions", "apply-edl", "edit-plan"],
   edl: ["apply-edl"],
   silence: ["edit-plan"],
+  offsets: ["edit-plan"],
   qrText: ["image-overlay"],
   transition: ["slideshow"],
   // Content Recipe's `link` carries the post's address (inputs.sourceLink), not

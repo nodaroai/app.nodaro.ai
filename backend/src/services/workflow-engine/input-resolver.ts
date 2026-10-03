@@ -15,7 +15,7 @@ import {
   pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
-import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle } from "@nodaro/shared"
+import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { jsonArrayItems, listFor, savedDataAllowed } from "./saved-data.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -417,6 +417,14 @@ export function resolveNodeInputs(
     // skip. `text-prompt` is both a parameter type and a text source, so the
     // text-source carve-out keeps it routing into `inputs.prompt`.
     if (PARAMETER_NODE_TYPES.has(sourceNode.type) && !TEXT_SOURCE_NODE_TYPES.has(sourceNode.type)) continue
+
+    // edit-plan's `offsets` wired but carrying no audio-sync result: record the
+    // wire (null) so the payload builder fails the run rather than plan without
+    // the sync the user wired (B4).
+    if (!output && targetNode.type === "edit-plan" && edge.targetHandle === "offsets") {
+      inputs.editPlanOffsets = null
+      continue
+    }
 
     if (!output) continue
 
@@ -1586,10 +1594,21 @@ function routeOutput(
   if (targetType === "edit-plan") {
     if (edge.targetHandle === "transcript") {
       inputs.transcript = output
+      // The recording the transcript was made from (B4): the plan follows the
+      // master's clock, so the payload builder refuses a transcript made from
+      // an offset camera.
+      const origin = editPlanTranscriptOrigin(src.id, (id) => allNodes.find((n) => n.id === id)?.type, allEdges)
+      if (origin) inputs.editPlanTranscriptOrigin = origin
       return
     }
     if (edge.targetHandle === "silence") {
       inputs.silence = output
+      return
+    }
+    // audio-sync's result (stringified json) — folded into the sources'
+    // offsetMs by the payload builder (B4).
+    if (edge.targetHandle === "offsets") {
+      inputs.editPlanOffsets = output
       return
     }
     if (edge.targetHandle === "sources") {
@@ -1600,9 +1619,15 @@ function routeOutput(
       // editPlanSourceDurationSec adds the AUDIO lane (metadata.durationSeconds) —
       // a podcast's upload-audio master has its length there ONLY.
       const duration = editPlanSourceDurationSec(src.data as Record<string, unknown>)
+      // The node's label names the source in an offsets error.
+      const label = (src.data as Record<string, unknown> | undefined)?.label
       inputs.editPlanSources = [
         ...(inputs.editPlanSources ?? []),
-        { nodeId: src.id, url: output, kind, ...(duration !== undefined ? { duration } : {}) },
+        {
+          nodeId: src.id, url: output, kind,
+          ...(duration !== undefined ? { duration } : {}),
+          ...(typeof label === "string" && label ? { label } : {}),
+        },
       ]
       return
     }

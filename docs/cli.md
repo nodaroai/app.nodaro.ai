@@ -372,7 +372,11 @@ nodaro edit audio-sync (--source <[id=]url> ... | --sources-file <file.json>) [-
                                                          # output_data.json = { reference, offsets: [{ sourceId, offsetMs, confidence,
                                                          # driftMsPerHour }], notes } with referenceMs = sourceMs + offsetMs.
 nodaro edit apply-edl --edl <file.json> [--transcript <file.json>] [--source <url> ...] [--output video|audio] [--quality proxy|final] [--crossfade-ms <ms>] [--watch] [--poll-interval <ms>] [--json]
-nodaro edit plan --mode tighten|clips|chapters --plan-tier economy|standard|premium --transcript <file.json> (--source <url[@audio|@video]> ... | --sources-file <file.json>) [--silence <file.json>] [--instructions <text>] [--style-guide <text>] [--count <n>] [--target-duration-sec <n>] [--target-aspect 16:9|9:16|1:1|4:5] [--platform <name>] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit plan --mode tighten|clips|chapters --plan-tier economy|standard|premium --transcript <file.json> (--source <[id=]url[@audio|@video]> ... | --sources-file <file.json>) [--silence <file.json>] [--offsets <file.json>] [--transcript-source <id>] [--instructions <text>] [--style-guide <text>] [--count <n>] [--target-duration-sec <n>] [--target-aspect 16:9|9:16|1:1|4:5] [--platform <name>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # multicam: --offsets = an audio-sync job's output_data.json over the SAME
+                                                         # source ids (both commands default to source-1, source-2, …); each source's
+                                                         # offset is applied before the request — refused if one was not measured or
+                                                         # matched weakly (set its offsetMs in --sources-file).
 
 # Organizations — only on instances that have them
 nodaro org list [--json]

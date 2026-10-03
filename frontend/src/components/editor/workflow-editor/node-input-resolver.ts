@@ -4,7 +4,7 @@ import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference } from "@nodaro/shared"
-import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle } from "@nodaro/shared"
+import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import type {
   WorkflowNode,
@@ -732,7 +732,13 @@ export interface FrontendResolvedInputs {
    *  the `sources` handle. Mirror of backend ResolvedInputs.silence /
    *  editPlanSources. */
   silence?: string;
-  editPlanSources?: Array<{ nodeId: string; url: string; kind: "video" | "audio"; duration?: number }>;
+  editPlanSources?: Array<{ nodeId: string; url: string; kind: "video" | "audio"; duration?: number; label?: string }>;
+  /** edit-plan: audio-sync's result (stringified json) from the `offsets`
+   *  handle. Mirror of backend ResolvedInputs.editPlanOffsets. */
+  editPlanOffsets?: string;
+  /** edit-plan: the node the transcript was made from, when the canvas shows
+   *  it. Mirror of backend ResolvedInputs.editPlanTranscriptOrigin. */
+  editPlanTranscriptOrigin?: string;
   /** audio-sync: the recordings wired into the `sources` handle, in wire
    *  order, each with its source NODE id (the result's `sourceId`). Mirror of
    *  backend ResolvedInputs.audioSyncSources. */
@@ -1486,6 +1492,13 @@ export function resolveNodeInputs(
       if (pick) inputs.transition = pick;
       continue;
     }
+    // edit-plan's `offsets` wired but carrying no audio-sync result: record the
+    // wire ("") so the run fails rather than plan without the sync the user
+    // wired (B4). Mirror of the backend resolver.
+    if (!output && node.type === "edit-plan" && srcEdge.targetHandle === "offsets") {
+      inputs.editPlanOffsets = "";
+      continue;
+    }
     if (!output) continue;
 
     // Image Collage accumulates EVERY connected image into imageUrls[] — the
@@ -1795,10 +1808,19 @@ export function resolveNodeInputs(
     if (node.type === "edit-plan") {
       if (srcEdge.targetHandle === "transcript") {
         inputs.transcript = output;
+        // The recording the transcript was made from (B4) — checked against
+        // the master's clock at run. Mirror of the backend resolver.
+        const origin = editPlanTranscriptOrigin(src.id, (id) => nodes.find((n) => n.id === id)?.type, edges);
+        if (origin) inputs.editPlanTranscriptOrigin = origin;
         continue;
       }
       if (srcEdge.targetHandle === "silence") {
         inputs.silence = output;
+        continue;
+      }
+      // audio-sync's result — folded into the sources' offsetMs at run (B4).
+      if (srcEdge.targetHandle === "offsets") {
+        inputs.editPlanOffsets = output;
         continue;
       }
       if (srcEdge.targetHandle === "sources") {
@@ -1808,9 +1830,15 @@ export function resolveNodeInputs(
         // Carry the source's own duration (incl. the audio-master lane via
         // metadata.durationSeconds) for parity with the backend reserve.
         const duration = editPlanSourceDurationSec(src.data as Record<string, unknown>);
+        // The node's label names the source in an offsets error.
+        const label = (src.data as Record<string, unknown> | undefined)?.label;
         inputs.editPlanSources = [
           ...(inputs.editPlanSources ?? []),
-          { nodeId: src.id, url: output, kind, ...(duration !== undefined ? { duration } : {}) },
+          {
+            nodeId: src.id, url: output, kind,
+            ...(duration !== undefined ? { duration } : {}),
+            ...(typeof label === "string" && label ? { label } : {}),
+          },
         ];
         continue;
       }

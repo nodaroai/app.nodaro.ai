@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
-import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource } from "@nodaro/shared";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
@@ -341,7 +341,7 @@ import {
   getUpstreamDuration,
   getCombineUpstreamDurations,
 } from "@/lib/upstream-duration";
-import { nodeRunError, nodeRunText } from "@/components/editor/workflow-editor/node-run-message";
+import { editPlanIssueText, nodeRunError, nodeRunText } from "@/components/editor/workflow-editor/node-run-message";
 
 // ---------------------------------------------------------------------------
 // Manual-edit pending promise bridge
@@ -7028,6 +7028,23 @@ function executeNodeCore(
       toast.error(nodeRunError(epData.label, "nodeRun.connectTheRecordingSMedia"));
       return Promise.reject(new Error("edit-plan requires at least one source"));
     }
+    // B4: audio-sync's offsets (when wired), the master's own offset and the
+    // transcript's clock — checked before the POST, so a plan that would
+    // render out of sync fails before charging. The backend payload builder
+    // runs the same rule (resolveEditPlanSources).
+    const planned = resolveEditPlanSources(sources as Array<AudioSyncOffsetSource & Record<string, unknown>>, {
+      offsets: inputs.editPlanOffsets,
+      transcriptSourceId: inputs.editPlanTranscriptOrigin,
+    });
+    if (!planned.ok) {
+      const labelOf = (id: string) => orderedWired.find((w) => w.nodeId === id)?.label ?? id;
+      toast.error(nodeRunText(epData.label, planned.issues.map((i) => editPlanIssueText(i, labelOf)).join("; ")));
+      return Promise.reject(new Error(`edit-plan: ${planned.issues.map((i) => describeAudioSyncOffsetIssue(i, labelOf)).join("; ")}`));
+    }
+    // Stamp the transcript's recording so the plugin's own clock guard sees it.
+    const plannedTranscript = planned.transcriptSourceId && typeof transcript === "object"
+      ? { ...(transcript as Record<string, unknown>), sourceId: planned.transcriptSourceId }
+      : transcript;
     const mode = asEditPlanMode(epData.mode);
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, { ...RUN_START_RESET, generatedJson: undefined, currentJobProgress: undefined });
@@ -7036,9 +7053,9 @@ function executeNodeCore(
       editPlan({
         mode,
         planTier: asEditPlanTier(epData.planTier),
-        transcript,
+        transcript: plannedTranscript,
         silence,
-        sources,
+        sources: planned.sources,
         instructions: applyPromptAffixes(epData.instructions, readPromptAffixes(epData), refMap),
         styleGuide: epData.styleGuide?.trim() || undefined,
         count: mode === "clips" ? clampEditPlanClipCount(epData.count) : undefined,

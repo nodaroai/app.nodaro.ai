@@ -1,7 +1,8 @@
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import {
-  pro3DRenderShotStills, assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle, clampEditPlanClipCount } from "@nodaro/shared"
+  pro3DRenderShotStills, assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle, clampEditPlanClipCount,
+  resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource } from "@nodaro/shared"
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
@@ -4202,6 +4203,22 @@ export function buildPayload(
       if (sources.length === 0) {
         throw new Error("edit-plan: connect the recording's media to the Sources input")
       }
+      // B4 (decided 2026-09-25): audio-sync's offsets (when wired) onto the
+      // sources, the master's own offset, and the transcript's clock — checked
+      // HERE, before the reserve, so a plan that would render out of sync fails
+      // before charging. One rule for every caller: resolveEditPlanSources.
+      const planned = resolveEditPlanSources(sources as Array<AudioSyncOffsetSource & Record<string, unknown>>, {
+        offsets: resolvedInputs.editPlanOffsets,
+        transcriptSourceId: resolvedInputs.editPlanTranscriptOrigin,
+      })
+      if (!planned.ok) {
+        const labelOf = (id: string) => wired.find((w) => w.nodeId === id)?.label ?? id
+        throw new Error(`edit-plan: ${planned.issues.map((i) => describeAudioSyncOffsetIssue(i, labelOf)).join("; ")}`)
+      }
+      // Stamp the transcript's recording so the plugin's own clock guard sees it.
+      const plannedTranscript = planned.transcriptSourceId && typeof transcript === "object"
+        ? { ...(transcript as Record<string, unknown>), sourceId: planned.transcriptSourceId }
+        : transcript
       // Reserve on the MASTER source's duration: the declared role:"master-audio"
       // source, else the first source (mirrors the plugin's masterProbeSource).
       // `masterRow.duration` is populated by input-resolver from the source node's
@@ -4227,9 +4244,9 @@ export function buildPayload(
         jobId,
         mode,
         planTier: tier,
-        transcript,
+        transcript: plannedTranscript,
         silence,
-        sources,
+        sources: planned.sources,
         instructions: applyPromptAffixes(data.instructions as string | undefined, readPromptAffixes(data), refMap),
         styleGuide: typeof data.styleGuide === "string" ? data.styleGuide : undefined,
         // Clamped to the request schema's own [1, 50]: the orchestrated path

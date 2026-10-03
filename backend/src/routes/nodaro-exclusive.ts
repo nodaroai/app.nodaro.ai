@@ -19,6 +19,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
+import { resolveEditPlanSources, describeAudioSyncOffsetIssue } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
@@ -67,6 +68,35 @@ const auditBody = z.object({ videoUrl: safeUrlSchema }).passthrough()
 // passes through. `planTier` (NOT `tier` — the relay strips a field named
 // `tier`) and the clips-only levers are validated cloud-side.
 const editPlanSourceRow = z.object({ url: safeUrlSchema }).passthrough()
+
+/**
+ * B4 (decided 2026-09-25): the relayed edit-plan takes each source's offset on
+ * `sources[].offsetMs` only. Before anything is created or relayed, refuse —
+ * the same codes the cloud route answers — a raw `offsets` field (the cloud
+ * schema would strip it and plan the cameras unsynced) and an offset on the
+ * plan's own clock (the master, or the transcript's own source). One rule:
+ * `resolveEditPlanSources` with no offsets runs exactly those clock checks.
+ */
+function refuseEditPlanOffsets(body: Record<string, unknown>): { code: string; message: string } | null {
+  if (body.offsets !== undefined) {
+    return {
+      code: "offsets_not_applied",
+      message: "edit-plan takes each source's offset on sources[].offsetMs — apply the audio-sync result to the sources first (the SDK's editPlan({ offsets }) and MCP plan_edit do it for you).",
+    }
+  }
+  const rows = (Array.isArray(body.sources) ? body.sources : []) as Array<Record<string, unknown>>
+  const sources = rows.map((r, i) => ({
+    id: typeof r.id === "string" && r.id ? r.id : `#${i + 1}`,
+    ...(typeof r.role === "string" ? { role: r.role } : {}),
+    ...(typeof r.offsetMs === "number" ? { offsetMs: r.offsetMs } : {}),
+  }))
+  const transcriptSourceId = (body.transcript as { sourceId?: unknown } | null | undefined)?.sourceId
+  const checked = resolveEditPlanSources(sources, {
+    ...(typeof transcriptSourceId === "string" ? { transcriptSourceId } : {}),
+  })
+  if (checked.ok) return null
+  return { code: "master_offset", message: checked.issues.map((i) => describeAudioSyncOffsetIssue(i)).join("; ") }
+}
 const editPlanBody = z.object({
   transcript: z.unknown(),
   sources: z.array(editPlanSourceRow).min(1).max(6),
@@ -137,6 +167,10 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
       const parsed = schema.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
+      }
+      if (jobType === "edit-plan") {
+        const refused = refuseEditPlanOffsets(parsed.data as Record<string, unknown>)
+        if (refused) return reply.status(422).send({ error: refused })
       }
       return enqueueExclusive({ req, reply, jobType, body: parsed.data as Record<string, unknown> })
     }

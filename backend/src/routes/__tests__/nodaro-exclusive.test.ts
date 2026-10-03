@@ -153,6 +153,45 @@ describe("enqueue", () => {
   })
 })
 
+// B4 (decided 2026-09-25): the relayed edit-plan takes offsets on
+// sources[].offsetMs only — refused, with the cloud route's own codes, before
+// anything is created or relayed.
+describe("edit-plan offsets", () => {
+  const transcript = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 500 }] }
+  const mic = { id: "mic", url: "https://example.com/mic.m4a", kind: "audio", role: "master-audio" }
+  const cam = { id: "cam", url: VIDEO, kind: "video" }
+  const post = (body: Record<string, unknown>) =>
+    app.inject({ method: "POST", url: "/v1/edit-plan", payload: { mode: "tighten", planTier: "standard", transcript, userId: USER, ...body } })
+
+  it("refuses a raw `offsets` field — the cloud schema would strip it and plan the cameras unsynced", async () => {
+    const res = await post({ sources: [mic, cam], offsets: { reference: "mic", offsets: [] } })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe("offsets_not_applied")
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("refuses an offset on the master", async () => {
+    const res = await post({ sources: [{ ...mic, offsetMs: 40 }, cam] })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe("master_offset")
+    expect(res.json().error.message).toMatch(/"mic" is the master/)
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("refuses an offset on the source the transcript was made from", async () => {
+    const res = await post({ sources: [mic, { ...cam, offsetMs: 2_000 }], transcript: { ...transcript, sourceId: "cam" } })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.message).toMatch(/the transcript was made from "cam"/)
+  })
+
+  it("relays camera offsets as given", async () => {
+    const res = await post({ sources: [mic, { ...cam, offsetMs: 2_000 }] })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.queueAdd.mock.calls[0]![1].sources[1].offsetMs).toBe(2_000)
+  })
+})
+
 describe("probe passthrough", () => {
   it("proxies synchronously through the connection", async () => {
     const res = await app.inject({

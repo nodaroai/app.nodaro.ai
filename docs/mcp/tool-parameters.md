@@ -1896,11 +1896,14 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `transcript` | object (map of any) | yes | The timed word-level transcript object (from a transcribe step). |
 | `silence` | object (map of any) |  | Optional silence ranges object (from a silence-detect step). |
 | `sources` | object[] | yes | 1–6 media sources for the edit. From 1 to 6 items. |
+| `sources[].id` | string |  | The id you gave this recording in audio_sync (required with `offsets`). From 1 to 200 characters. |
 | `sources[].url` | string (URL) | yes | Media URL for this source. |
 | `sources[].kind` | string |  | One of `video`, `audio`. |
 | `sources[].role` | string |  | One of `master-audio`, `camera`, `wide`, `screen`. |
 | `sources[].speakers` | string[] |  | At most 16 items. |
 | `sources[].offset_ms` | number |  | This source's origin on the master clock (masterMs = sourceMs + offsetMs). |
+| `offsets` | object (map of any) or string |  | An audio_sync job's `output_data.json` (object or JSON string). |
+| `transcript_source_id` | string |  | The source the transcript was made from, if known. From 1 to 200 characters. |
 | `instructions` | string |  | Free-text editing steer. At most 4000 characters. |
 | `style_guide` | string |  | At most 8000 characters. |
 | `count` | integer |  | clips only: how many clips to find. From 1 to 50. |

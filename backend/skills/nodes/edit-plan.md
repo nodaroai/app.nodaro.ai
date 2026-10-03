@@ -1,7 +1,7 @@
 ---
 node_type: edit-plan
-generated_at: 2026-09-27T12:51:23.919Z
-generated_from: c607aa02c
+generated_at: 2026-10-03T16:24:17.498Z
+generated_from: d7ba00fa2
 ---
 
 # Edit Plan
@@ -10,7 +10,7 @@ generated_from: c607aa02c
 **Type:** `edit-plan`
 **Category:** processing
 **Credit cost:** `30-1480` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
-**Inputs (target handles):** `transcript`, `silence`, `sources`
+**Inputs (target handles):** `transcript`, `silence`, `offsets`, `sources`
 **Outputs (source handles):** `edl`
 
 **Required data fields:**

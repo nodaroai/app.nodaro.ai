@@ -464,7 +464,14 @@ export interface ResolvedInputs {
    *  ceiling. The builder also annotates each row with the node's per-source config
    *  (role/speakers/offsetMs/kind override) into the plugin's `sources[]`. Richer
    *  than apply-edl's positional `sources`. */
-  editPlanSources?: Array<{ nodeId: string; url: string; kind: "video" | "audio"; duration?: number }>
+  editPlanSources?: Array<{ nodeId: string; url: string; kind: "video" | "audio"; duration?: number; label?: string }>
+  /** edit-plan: audio-sync's result (stringified json) from the `offsets`
+   *  handle — the payload builder writes it onto the sources' `offsetMs`
+   *  (`applyAudioSyncOffsets`, B4). */
+  editPlanOffsets?: unknown
+  /** edit-plan: the node the transcript was made from, when the canvas shows
+   *  it (`editPlanTranscriptOrigin`) — checked against the master's clock. */
+  editPlanTranscriptOrigin?: string
   /** audio-sync: the recordings wired into the `sources` handle, in wire order,
    *  each carrying its source NODE id — which becomes the result's `sourceId`
    *  (the same id an edit plan mints as that recording's EdlSource id). The

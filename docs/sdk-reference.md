@@ -5341,8 +5341,10 @@ editPlan(input: EditPlanInput): Promise<EditJobResult>
 | `mode` | `EditPlanMode` | yes | `"tighten"` \| `"clips"` \| `"chapters"`. |
 | `planTier` | `EditPlanTier` | yes | `"economy"` \| `"standard"` \| `"premium"` — affects quality and the credit bucket. |
 | `transcript` | `Transcript` | yes | The timed transcript driving the plan. |
-| `sources` | `EditPlanSource[]` | yes | 1–6 media sources. Each: `{ id, url, kind: "video" \| "audio", role?, speakers?, offsetMs? }`. |
+| `sources` | `EditPlanSource[]` | yes | 1–6 media sources. Each: `{ id, url, kind: "video" \| "audio", role?, speakers?, offsetMs? }`. A source's own `offsetMs` wins over a measured one. |
 | `silence` | `SilenceRanges` | no | The silence-detect job's `output_data.json` — pass the whole object (an input without `ranges` is silently ignored). |
+| `offsets` | `AudioSyncResult \| string` | no | Multicam: an `audioSync` job's `output_data.json`, measured over the **same source ids**. Each source's offset is written onto its `offsetMs` before the request, re-based onto the master's clock (the `master-audio` source, else the first). |
+| `transcriptSourceId` | `string` | no | The id of the source the transcript was made from, when you know it. |
 | `instructions` | `string` | no | Free-text editing steer. |
 | `styleGuide` | `string` | no | Style-guide text. |
 | `count` | `number` | no | `"clips"` mode: how many clips to cut. |
@@ -5350,6 +5352,31 @@ editPlan(input: EditPlanInput): Promise<EditJobResult>
 | `targetAspect` | `"16:9" \| "9:16" \| "1:1" \| "4:5"` | no | Clip aspect. |
 | `platform` | `string` | no | Target platform hint. |
 | `workflowId` | `string` | no | Execution-history display. |
+
+`editPlan` rejects **before any request or charge** — a `NodaroError` with
+`code: "edit_plan_sources"` naming the source — when the master has a non-zero
+`offsetMs`, a source's `offsetMs` is not a number, or `transcriptSourceId`
+names a source that is off the master's clock; and, with `offsets`, when a
+source was not measured, matched weakly (confidence below 0.5: set its
+`offsetMs` by hand), or the master was not measured. The same checks run as pure functions in `@nodaro/shared`
+(`resolveEditPlanSources`, `applyAudioSyncOffsets`). Each cut goes on the first
+camera that has picture for it; a stretch no camera filmed is dropped from the
+plan as `no-picture`.
+
+```ts
+const sync = (await client.jobs.getStatus(syncJobId)).data.output_data.json
+const { jobId } = await client.edit.editPlan({
+  mode: "tighten",
+  planTier: "standard",
+  transcript,                                   // made from the mic
+  sources: [
+    { id: "mic", url: micUrl, kind: "audio", role: "master-audio" },
+    { id: "camA", url: camAUrl, kind: "video" },   // same ids as the audioSync request
+  ],
+  offsets: sync,
+  transcriptSourceId: "mic",
+})
+```
 
 Read the finished job's `output_data` with `unwrapEditPlanOutput` — it returns
 an `Edl` (`tighten`), a bare `Edl[]` (`clips`, unwrapped from `EdlClipSet`), or a

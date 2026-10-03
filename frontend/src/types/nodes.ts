@@ -8514,7 +8514,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // per-run cost is dynamic (buildEditPlanCreditId → mode × tier × duration
     // bucket) and PROVISIONAL until the launch probe.
     creditCost: 240,
-    inputs: ["transcript", "silence", "sources"],
+    inputs: ["transcript", "silence", "offsets", "sources"],
     outputs: ["edl"],
     defaultData: {
       label: "Edit Plan",

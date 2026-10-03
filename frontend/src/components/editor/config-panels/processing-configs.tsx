@@ -900,6 +900,39 @@ export function ApplyEdlConfig({ data, onUpdate }: ConfigProps<ApplyEdlData>) {
 
 const EDIT_PLAN_ROLES = ["auto", "master-audio", "camera", "wide", "screen"] as const
 
+/** A source's hand-set offset, in seconds (stored as `offsetMs`). A draft is
+ *  kept while typing ("-", "1.") and committed on blur / Enter; empty clears
+ *  it, so Audio Sync's measurement applies. */
+function EditPlanOffsetInput({ offsetMs, onCommit, ariaLabel, placeholder }: {
+  offsetMs: number | undefined
+  onCommit: (seconds: number | undefined) => void
+  ariaLabel: string
+  placeholder: string
+}) {
+  const shown = typeof offsetMs === "number" ? String(offsetMs / 1000) : ""
+  const [draft, setDraft] = useState(shown)
+  useEffect(() => setDraft(shown), [shown])
+  const commit = () => {
+    const secs = draft.trim() === "" ? undefined : Number(draft)
+    if (secs === undefined) onCommit(undefined)
+    else if (Number.isFinite(secs)) onCommit(secs)
+    else setDraft(shown)
+  }
+  return (
+    <Input
+      type="text"
+      inputMode="decimal"
+      aria-label={ariaLabel}
+      placeholder={placeholder}
+      className="h-7 w-20 text-xs"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") commit() }}
+    />
+  )
+}
+
 export function EditPlanConfig({ data, onUpdate, sources }: ConfigProps<EditPlanNodeData>) {
   const t = useT()
   const mode = data.mode ?? "tighten"
@@ -917,6 +950,20 @@ export function EditPlanConfig({ data, onUpdate, sources }: ConfigProps<EditPlan
       else next[nodeId] = rest
     } else {
       next[nodeId] = { ...existing, role: role as EditPlanSourceConfig["role"] }
+    }
+    onUpdate({ sourceConfig: next })
+  }
+
+  // A hand-set offset always wins over Audio Sync's measurement (B4).
+  const setSourceOffset = (nodeId: string, seconds: number | undefined) => {
+    const next: Record<string, EditPlanSourceConfig> = { ...sourceConfig }
+    const existing = next[nodeId] ?? {}
+    if (seconds === undefined) {
+      const { offsetMs: _drop, ...rest } = existing
+      if (Object.keys(rest).length === 0) delete next[nodeId]
+      else next[nodeId] = rest
+    } else {
+      next[nodeId] = { ...existing, offsetMs: Math.round(seconds * 1000) }
     }
     onUpdate({ sourceConfig: next })
   }
@@ -1022,19 +1069,30 @@ export function EditPlanConfig({ data, onUpdate, sources }: ConfigProps<EditPlan
           mediaType="any"
           emptyMessage={t("proccfg.editPlanSourcesEmpty")}
           renderRowExtra={(entry) => (
-            <Select
-              value={sourceConfig[entry.id]?.role ?? "auto"}
-              onValueChange={(v) => setSourceRole(entry.id, v)}
-            >
-              <SelectTrigger aria-label={t("proccfg.editPlanRoleAria")} className="h-7 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {EDIT_PLAN_ROLES.map((r) => (
-                  <SelectItem key={r} value={r}>{t(`proccfg.editPlanRole.${r}` as MessageKey)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1.5">
+              <Select
+                value={sourceConfig[entry.id]?.role ?? "auto"}
+                onValueChange={(v) => setSourceRole(entry.id, v)}
+              >
+                <SelectTrigger aria-label={t("proccfg.editPlanRoleAria")} className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {EDIT_PLAN_ROLES.map((r) => (
+                    <SelectItem key={r} value={r}>{t(`proccfg.editPlanRole.${r}` as MessageKey)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <EditPlanOffsetInput
+                offsetMs={sourceConfig[entry.id]?.offsetMs}
+                onCommit={(secs) => setSourceOffset(entry.id, secs)}
+                ariaLabel={t("proccfg.editPlanOffsetAria")}
+                placeholder={t("proccfg.editPlanOffsetPlaceholder")}
+              />
+            </div>
           )}
         />
+        {mediaSources.length > 0 && (
+          <p className="text-[11px] text-muted-foreground">{t("proccfg.editPlanOffsetHint")}</p>
+        )}
       </div>
     </div>
   )

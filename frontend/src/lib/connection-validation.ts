@@ -568,6 +568,14 @@ export function isValidWorkflowConnection(
     if (connection.targetHandle === "sources") return ACCEPTS_MEDIA(imageSourceType)
     return false
   }
+  // edit-plan — the json inputs (transcript, silence ranges, audio-sync
+  // offsets) take a data producer; `sources` takes the recordings.
+  if (targetType === "edit-plan" && connection.targetHandle) {
+    if (connection.targetHandle === "transcript" || connection.targetHandle === "silence" || connection.targetHandle === "offsets") return ACCEPTS_JSON(imageSourceType)
+    if (connection.targetHandle === "sources") return ACCEPTS_MEDIA(imageSourceType)
+    return false
+  }
+
   if (targetType === "extract-field" && connection.targetHandle) {
     return isValidExtractFieldConnection(
       connection.targetHandle,

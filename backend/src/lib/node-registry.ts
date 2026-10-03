@@ -596,6 +596,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "transcript", type: "object", required: true },
         // Optional silence ranges (json) — wire a Silence Detect node's output.
         { key: "silence", type: "object" },
+        // Optional Audio Sync result (json) — its measured offsets are written
+        // onto the sources' offsetMs before the plan runs (a hand-set offset wins).
+        { key: "offsets", type: "object" },
         // Free-text editing instructions (affix-capable).
         { key: "instructions", type: "string" },
         { key: "styleGuide", type: "string" },

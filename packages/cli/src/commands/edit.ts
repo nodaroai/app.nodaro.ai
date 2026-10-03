@@ -36,20 +36,25 @@ function readJsonFile(path: string): unknown {
 }
 
 /**
- * Parse one `--source <url[@kind]>` spec into an `EditPlanSource`. `@audio` /
- * `@video` after the URL sets the medium (default video); the id is minted from
- * the row's position so the plan gets a stable `EdlSource` id. Full control over
- * roles / speakers / offsets is available via `--sources-file`.
+ * Parse one `--source <[id=]url[@kind]>` spec into an `EditPlanSource`.
+ * `@audio` / `@video` after the URL sets the medium (default video). `id=`
+ * before the URL names the source — use the id you gave `edit audio-sync` so
+ * `--offsets` matches it; without it the id is minted from the row's position
+ * (`source-1`, `source-2`, …, the same ids `edit audio-sync` mints). Full
+ * control over roles / speakers / offsets is available via `--sources-file`.
  */
 function parseSourceSpec(spec: string, index: number): EditPlanSource {
-  const at = spec.lastIndexOf("@")
+  const named = /^([^=\s]{1,200})=(https?:\/\/.+)$/.exec(spec)
+  const id = named ? named[1]! : `source-${index + 1}`
+  const rest = named ? named[2]! : spec
+  const at = rest.lastIndexOf("@")
   if (at > 0) {
-    const suffix = spec.slice(at + 1)
+    const suffix = rest.slice(at + 1)
     if (suffix === "audio" || suffix === "video") {
-      return { id: `source-${index + 1}`, url: spec.slice(0, at), kind: suffix }
+      return { id, url: rest.slice(0, at), kind: suffix }
     }
   }
-  return { id: `source-${index + 1}`, url: spec, kind: "video" }
+  return { id, url: rest, kind: "video" }
 }
 
 /**
@@ -219,10 +224,15 @@ export function editCommand(): Command {
     .option("--silence <file>", "optional silence JSON — the silence-detect job's output_data.json ({ version, ranges, durationMs })")
     .option(
       "--source <url>",
-      "a media source as url or url@audio / url@video (repeatable); id + kind are minted",
+      "a media source as [id=]url[@audio|@video] (repeatable); id defaults to source-N, kind to video",
       collectVariadic,
     )
     .option("--sources-file <file>", "JSON array of full EditPlanSource rows (overrides --source)")
+    .option(
+      "--offsets <file>",
+      "multicam: an audio-sync result JSON (the job's output_data.json) over the same source ids — each source's measured offset is applied before the request",
+    )
+    .option("--transcript-source <id>", "the id of the source the transcript was made from (refused if it is off the master's clock)")
     .option("--instructions <text>", "free-text editing steer")
     .option("--style-guide <text>", "style guide applied to the plan")
     .option("--count <n>", "clips mode: how many clips to cut", (v) => parseInt(v, 10))
@@ -243,6 +253,8 @@ export function editCommand(): Command {
             silence?: string
             source?: string[]
             sourcesFile?: string
+            offsets?: string
+            transcriptSource?: string
             instructions?: string
             styleGuide?: string
             count?: number
@@ -289,6 +301,8 @@ export function editCommand(): Command {
             transcript: readJsonFile(opts.transcript) as Transcript,
             sources,
             ...(opts.silence ? { silence: readJsonFile(opts.silence) as SilenceRanges } : {}),
+            ...(opts.offsets ? { offsets: readJsonFile(opts.offsets) as EditPlanInput["offsets"] } : {}),
+            ...(opts.transcriptSource ? { transcriptSourceId: opts.transcriptSource } : {}),
             ...(opts.instructions !== undefined ? { instructions: opts.instructions } : {}),
             ...(opts.styleGuide !== undefined ? { styleGuide: opts.styleGuide } : {}),
             ...(opts.count !== undefined ? { count: opts.count } : {}),

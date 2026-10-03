@@ -233,6 +233,8 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "EDL": "רשימת עריכה",
   "Transcript": "תמלול",
   "Sources": "מקורות",
+  "Silence": "שקט",
+  "Offsets (Audio Sync)": "היסטים (סנכרון אודיו)",
   "Cinematography": "צילום קולנועי",
   "Inputs": "קלטים",
   "Input": "קלט",

@@ -374,6 +374,14 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
     { handleId: "sources", label: "Sources", accepts: ACCEPTS_MEDIA },
   ],
+  // edit-plan: a required Transcript (json), optional silence ranges (json),
+  // optional audio-sync offsets (json) and the wired media sources.
+  "edit-plan":          [
+    { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
+    { handleId: "silence", label: "Silence", accepts: ACCEPTS_JSON },
+    { handleId: "offsets", label: "Offsets (Audio Sync)", accepts: ACCEPTS_JSON },
+    { handleId: "sources", label: "Sources", accepts: ACCEPTS_MEDIA },
+  ],
   "extract-frame":      [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   "loop-video":         [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   "resize-video":       [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
