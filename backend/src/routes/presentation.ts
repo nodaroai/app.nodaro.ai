@@ -10,6 +10,7 @@
 import crypto from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { stripStudioTakeVoiceRecords } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
@@ -214,7 +215,8 @@ export async function presentationRoutes(app: FastifyInstance) {
     return reply.send({
       workflowId: workflow.id,
       name: workflow.name,
-      nodes: workflow.nodes,
+      // A take's voice record is the owner's (studio ruling T42).
+      nodes: isOwner ? workflow.nodes : stripStudioTakeVoiceRecords(workflow.nodes),
       edges: workflow.edges,
       isOwner,
       estimatedCost,
