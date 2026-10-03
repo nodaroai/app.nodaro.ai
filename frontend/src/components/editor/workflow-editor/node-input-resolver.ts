@@ -3073,6 +3073,15 @@ export function resolveNodeInputs(
         // Default to prompt for text or any
         inputs.prompt = output;
       }
+    } else if (TEXT_PRODUCER_TYPES.has(src.type ?? "")) {
+      // The catch-all for text. The chain above has none, so a node the
+      // connection validator accepts as a text producer (TEXT_PRODUCER_TYPES)
+      // but without a branch of its own was silently dropped: a Prompt node fed
+      // by Content Ideas ran with no prompt, and Telegram's three nodes fed
+      // nothing either. The server routes every text source this way (backend
+      // input-resolver TEXT_SOURCE_NODE_TYPES → `inputs.prompt = output`, last
+      // wire wins); a type with a branch above never reaches this one.
+      inputs.prompt = output;
     }
   }
 
