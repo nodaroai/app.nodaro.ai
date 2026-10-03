@@ -38,6 +38,7 @@ import {
   Inbox,
   ToggleRight,
   ShieldAlert,
+  LayoutTemplate,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -82,6 +83,7 @@ const ADMIN_NAV = [
   { href: "/admin/kie-credits", label: "KIE Credits", icon: Wallet },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: HeartPulse },
   { href: "/admin/stuck-pipelines", label: "Stuck Pipelines", icon: AlertTriangle },
+  { href: "/admin/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/admin/tutorial-categories", label: "Tutorial Categories", icon: FolderTree },
   { href: "/admin/tutorials", label: "Tutorials", icon: PlayCircle },
   { href: "/admin/settings", label: "Settings", icon: Settings },

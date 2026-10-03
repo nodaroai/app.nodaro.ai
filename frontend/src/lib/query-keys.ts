@@ -348,6 +348,12 @@ export const queryKeys = {
         params.listed ?? "",
         params.cursor ?? "",
       ] as const,
+    /** Admin → Templates (an infinite list). Under "workflow-templates" so every
+     *  invalidation of the admin template lists refreshes it too; the object
+     *  segment keeps it apart from workflowTemplatesAll's positional strings. */
+    templatesPages: () => ["admin", "workflow-templates", { page: "templates" }] as const,
+    templatesPage: (filters: { search: string; listed: string }) =>
+      ["admin", "workflow-templates", { page: "templates", ...filters }] as const,
     nodeDefaults: () => ["admin", "node-defaults"] as const,
     clientApps: () => ["admin", "client-apps"] as const,
   },

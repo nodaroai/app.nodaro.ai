@@ -10515,6 +10515,7 @@ export const he: ChromeDict = {
   "apiErr.deleteCategory": "מחיקת הקטגוריה נכשלה",
   "apiErr.listTemplates": "טעינת רשימת התבניות נכשלה",
   "apiErr.updateTutorialFlag": "עדכון סימון המדריך נכשל",
+  "apiErr.updateTemplateListing": "עדכון התבנית נכשל",
   "apiErr.estimateVideoCredits": "חישוב אומדן הקרדיטים לווידאו נכשל",
   "apiErr.loadCredentials": "טעינת מפתחות הגישה נכשלה",
   "apiErr.saveTheCredential": "שמירת מפתח הגישה נכשלה",

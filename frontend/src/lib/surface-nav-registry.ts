@@ -125,6 +125,7 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "subscriptions",
   "llm-models",
   "node-defaults",
+  "templates",
   "tutorial-categories",
   "tutorials",
   "stuck-pipelines",

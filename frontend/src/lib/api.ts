@@ -9284,6 +9284,23 @@ export async function toggleTemplateTutorialFlag(
   )
 }
 
+/**
+ * PATCH /v1/admin/workflow-templates/:id/listing — an admin's switches for ANY
+ * template, whoever made it. `isActive: false` turns it off everywhere (the
+ * gallery, its page, cloning, the tutorials); `isListed` takes it in or out of
+ * the gallery and leaves the tutorial tag alone.
+ */
+export async function setAdminTemplateListing(
+  templateId: string,
+  change: { isActive?: boolean; isListed?: boolean },
+): Promise<AdminWorkflowTemplateRow> {
+  return apiRequest<AdminWorkflowTemplateRow>(
+    `/v1/admin/workflow-templates/${encodeURIComponent(templateId)}/listing`,
+    "apiErr.updateTemplateListing",
+    { method: "PATCH", body: change },
+  )
+}
+
 // --- Execution stats (progress bar estimation) ---
 
 export interface ExecutionEstimate {
