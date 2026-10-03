@@ -121,6 +121,9 @@ const GOVERNED_CAPABILITIES: ReadonlyMap<
   string,
   (data: Readonly<Record<string, unknown>>) => { governedBy: string; label: string } | undefined
 > = new Map([
+  // A competitor scan is Social Search run once per account and per platform:
+  // withholding the node withholds the scans (manual and scheduled) too.
+  ["competitor-scan", (_data: Readonly<Record<string, unknown>>) => ({ governedBy: "social-search", label: "competitor-scan" })],
   [
     "web-scrape",
     (data) => {

@@ -1147,6 +1147,18 @@ than a side effect of deploying. It also needs the recast plugin loaded —
 on an edition without it the route 404s and the cron disables itself
 after one logged warning.
 
+**Scheduled competitor scans never run (Cloud).** A tracked brand's
+weekly or daily scan is started by a one-minute tick that asks the
+competitors plugin which brands are due. It is **off by default** for the
+same reason as the recast driver (a scheduled scan spends the owner's
+credits); enable it with `COMPETITOR_SCAN_CRON_ENABLED=true` on the API
+service and confirm `[competitor-scans] started` in the boot log. Scans
+started from the page ("Scan now") do not need it. When two environments
+share one database (a staging and a production deployment), enable it on
+**one** of them, the production one: either environment's tick claims every
+user's due brands, so a staging tick would run production users' paid
+scans on pre-release code.
+
 If you're still stuck, file an issue with the Docker logs at
 <https://github.com/nodaroai/app.nodaro.ai/issues>.
 

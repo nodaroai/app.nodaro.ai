@@ -50,6 +50,7 @@ const LATIN_OK: ReadonlySet<string> = new Set<string>([
   "apps.previewMediaPlaceholder",
   "apps.url",
   "audiocfg.idPrefix",
+  "competitors.phWebsite",
   "creature.urlPlaceholder",
   "credits.unitShort",
   "credits.unitShortLower",

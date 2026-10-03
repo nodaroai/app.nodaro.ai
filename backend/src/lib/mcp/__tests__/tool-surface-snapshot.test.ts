@@ -449,6 +449,14 @@ const SAVED_POST_TOOLS_BYTES = 1_847
 // the list had before. The multicam rules themselves live in the edit-plan
 // docs, not the description.
 const PLAN_EDIT_OFFSETS_BYTES = 701
+// RAISED 2026-10-02 by list_competitors, competitor_cards, add_competitor and
+// scan_competitor and nothing else — four NEW cloud-only tools (competitor
+// tracking), registered beside social_search inside the hasCredits() block,
+// gated by assets:read / assets:write / workflows:execute, so cloud/all names
+// them and the community sets and the scope-less sets do not. measured by
+// this suite: 382_349 total − 379_338 base = 3_011 B, each far under the
+// 8_192 B per-tool budget, and the list keeps the 46 B of headroom it had.
+const COMPETITOR_TOOLS_BYTES = 3_011
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -489,7 +497,8 @@ export const TOOL_WIRE_BUDGET = {
     DOCS_REVIEW_WORDING_BYTES +
     SOCIAL_SEARCH_TOOL_BYTES +
     SAVED_POST_TOOLS_BYTES +
-    PLAN_EDIT_OFFSETS_BYTES,
+    PLAN_EDIT_OFFSETS_BYTES +
+    COMPETITOR_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

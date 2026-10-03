@@ -898,6 +898,39 @@ export {
   type SavedPostsLookupResult,
 } from "./saved-posts.js"
 
+export {
+  COMPETITOR_ACCOUNT_KEYS,
+  COMPETITOR_ABOUT_PLATFORMS,
+  COMPETITOR_DEFAULT_ABOUT_PLATFORMS,
+  COMPETITOR_SCHEDULES,
+  COMPETITOR_SCAN_MAX_SEARCHES,
+  COMPETITOR_SCAN_NODE_TYPE,
+  COMPETITORS_MAX,
+  ACTION_CARD_KINDS,
+  COMPETITOR_SCAN_CREDIT_COSTS,
+  competitorScanSearches,
+  competitorScanCreditId,
+  competitorScanCredits,
+  isCompetitorAboutPlatform,
+  type CompetitorAccountKey,
+  type CompetitorAboutPlatform,
+  type CompetitorSchedule,
+  type CompetitorAccounts,
+  type TrackedCompetitor,
+  type ActionCardKind,
+  type ActionCardPriority,
+  type ActionCard,
+  type CompetitorPost,
+  type CompetitorScanCounts,
+  type CompetitorScanSummary,
+  type CompetitorScan,
+  type CompetitorDetail,
+  type CompetitorCardsResult,
+  type CompetitorDiscovery,
+  type CreateCompetitorInput,
+  type UpdateCompetitorInput,
+} from "./competitors.js"
+
 export { VARIABLES_HANDLE_ID, buildConditionVariables } from "./condition-variables.js"
 
 export { extractAllGeneratedResults, extractGeneratedJsonAsList, spreadJsonArrayIfSingleton } from "./generated-results.js"

@@ -11,6 +11,7 @@ import { SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 import { seedTutorialTemplates } from "./lib/tutorial-seed/index.js"
 import { startScheduledPostsCron, stopScheduledPostsCron } from "./lib/scheduled-posts-cron.js"
 import { startRecastDriverCron, stopRecastDriverCron } from "./lib/recast-driver-cron.js"
+import { startCompetitorScanCron, stopCompetitorScanCron } from "./lib/competitor-scan-cron.js"
 import { createSocialPublishWorker } from "./workers/social-publish-worker.js"
 import {
   startWorkflowExecutionsReconcileCron,
@@ -110,6 +111,10 @@ async function main() {
   // Recast's server-side driver — see recast-driver-cron.ts. OFF by default;
   // it spends credits, so it is enabled deliberately per environment.
   startRecastDriverCron(app)
+
+  // Scheduled competitor scans — see competitor-scan-cron.ts. OFF by default
+  // for the same reason: a scheduled scan spends the owner's credits.
+  startCompetitorScanCron(app)
 
   // Backstop reaper for orphaned community-listing blobs (multi-user editions)
   if (isMultiUser()) startCommunityReaperCron()
@@ -215,6 +220,7 @@ async function main() {
       stopScheduleCron()
       stopScheduledPostsCron()
       stopRecastDriverCron()
+      stopCompetitorScanCron()
       stopWorkflowExecutionsReconcileCron()
       stopPipelinesReconcileCron()
       await orchestratorWorker.close()

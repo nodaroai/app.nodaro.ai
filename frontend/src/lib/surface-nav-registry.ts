@@ -66,6 +66,9 @@ export const ENTRY_BY_LINK: readonly string[] = [
   // The inspiration wall (saved posts). Its sidebar entry is admin-only while
   // Social Search is in preview; no surface NavKey hides it.
   "/inspiration",
+  // Competitor tracking (Cloud). Admin-only sidebar entry while Social Search
+  // is in preview; no surface NavKey hides it.
+  "/competitors",
   "/library/locations",
   "/billing",
   // Track A — the deployment BILLING ACCOUNT's own page (spec §9.3).

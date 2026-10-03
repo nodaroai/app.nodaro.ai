@@ -302,6 +302,7 @@ import { nodaroExclusiveRoutes } from "./routes/nodaro-exclusive.js"
 import { providerKeysRoutes } from "./routes/provider-keys.js"
 import { openapiRoutes } from "./routes/openapi.js"
 import { registerAuthHook } from "./middleware/auth.js"
+import { registerPluginRouteScopeHook } from "./lib/plugin-route-scopes.js"
 import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-guard.js"
 import { registerOrgsContextHook } from "./lib/orgs-context.js"
 import { registerBillingContextHook } from "./lib/billing-context.js"
@@ -481,6 +482,8 @@ export async function buildApp() {
   })
 
   registerAuthHook(app)
+  // App-token scopes for routes a private plugin serves (it cannot see the grant).
+  registerPluginRouteScopeHook(app)
   registerSequenceExecutionGuard(app)
 
   // Workspace context — AFTER the auth hook, which is what resolves the

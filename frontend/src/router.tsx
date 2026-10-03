@@ -35,6 +35,7 @@ const ExecutionsPage = lazy(() => import("@/app/(dashboard)/executions/page"))
 const UsagePage = lazy(() => import("@/app/(dashboard)/usage/page"))
 const ArchivedRunsPage = lazy(() => import("@/app/(dashboard)/archived-runs/page"))
 const InspirationPage = lazy(() => import("@/app/(dashboard)/inspiration/page"))
+const CompetitorsPage = lazy(() => import("@/app/(dashboard)/competitors/page"))
 const SharedWithMePage = lazy(() => import("@/app/(dashboard)/shared/page"))
 const GalleryPage = lazy(() => import("@/app/gallery/page"))
 const PricingPage = lazy(() => import("@/app/pricing/page"))
@@ -390,6 +391,10 @@ export const router = createBrowserRouter([
       {
         path: "/inspiration",
         element: <SuspenseWrapper><InspirationPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/competitors",
+        element: <SuspenseWrapper><CompetitorsPage /></SuspenseWrapper>,
       },
       {
         path: "/library/locations",

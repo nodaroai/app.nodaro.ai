@@ -4657,6 +4657,45 @@ export async function deleteSavedPost(id: string): Promise<void> {
   await apiJson(`/v1/saved-posts/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteSavedPost" })
 }
 
+// ---- Competitors (Cloud: tracked brands, scans, action cards) ----
+
+type TrackedCompetitor = import("@nodaro/shared").TrackedCompetitor
+
+export async function listCompetitors(): Promise<TrackedCompetitor[]> {
+  const res = await apiJson<{ data: TrackedCompetitor[] }>("/v1/competitors", { method: "GET", label: "apiErr.loadCompetitors" })
+  return res.data
+}
+
+export async function getCompetitor(id: string): Promise<import("@nodaro/shared").CompetitorDetail> {
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "GET", label: "apiErr.loadCompetitors" })
+}
+
+export async function createCompetitor(input: import("@nodaro/shared").CreateCompetitorInput): Promise<TrackedCompetitor> {
+  return apiJson("/v1/competitors", { body: { ...input }, label: "apiErr.saveCompetitor" })
+}
+
+export async function updateCompetitor(id: string, input: import("@nodaro/shared").UpdateCompetitorInput): Promise<TrackedCompetitor> {
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.saveCompetitor" })
+}
+
+export async function deleteCompetitor(id: string): Promise<void> {
+  await apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteCompetitor" })
+}
+
+export async function competitorCards(): Promise<import("@nodaro/shared").CompetitorCardsResult> {
+  return apiJson("/v1/competitors/cards", { method: "GET", label: "apiErr.loadCompetitors" })
+}
+
+export async function discoverCompetitor(website: string): Promise<import("@nodaro/shared").CompetitorDiscovery> {
+  return apiJson("/v1/competitor-discover", { body: { website }, label: "apiErr.discoverCompetitor" })
+}
+
+/** Starts a paid scan; answers with the job id at once. */
+export async function scanCompetitor(id: string): Promise<{ jobId: string }> {
+  return apiJson("/v1/competitor-scan", { body: { competitorId: id }, label: "apiErr.scanCompetitor" })
+}
+
+
 export async function sunoGenerateApi(params: {
   prompt: string
   model?: string

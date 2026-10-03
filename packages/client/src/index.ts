@@ -67,7 +67,25 @@ export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter,
   UpdateSavedPostInput,
   ListSavedPostsParams,
   ListSavedPostsResult,
-  SavedPostsLookupResult } from "@nodaro/shared"
+  SavedPostsLookupResult,
+  // Competitors (`client.competitors`): tracked brands, scans and action cards.
+  TrackedCompetitor,
+  CompetitorDetail,
+  CompetitorScan,
+  CompetitorScanSummary,
+  CompetitorScanCounts,
+  CompetitorPost,
+  CompetitorCardsResult,
+  CompetitorDiscovery,
+  CompetitorAccounts,
+  CompetitorAccountKey,
+  CompetitorAboutPlatform,
+  CompetitorSchedule,
+  CreateCompetitorInput,
+  UpdateCompetitorInput,
+  ActionCard,
+  ActionCardKind,
+  ActionCardPriority } from "@nodaro/shared"
 // `unwrapEditPlanOutput` (value) — the sanctioned way to read an edit-plan job's
 // `output_data` (normalizes clips → bare `Edl[]` and strips `viaNodaroCloud`).
 export { unwrapEditPlanOutput } from "@nodaro/shared"
@@ -99,6 +117,7 @@ export { UploadsResource } from "./resources/uploads.js"
 export { LibraryResource } from "./resources/library.js"
 export { PresetsResource } from "./resources/node-presets.js"
 export { SavedPostsResource } from "./resources/saved-posts.js"
+export { CompetitorsResource } from "./resources/competitors.js"
 export { CommunityResource } from "./resources/community.js"
 export { PickerCatalogsResource } from "./resources/picker-catalogs.js"
 export {

@@ -46,6 +46,14 @@ export const queryKeys = {
     lookup: (postIds: readonly string[]) => ["savedPosts", "lookup", postIds.join("|")] as const,
   },
 
+  // Competitors (Cloud; per-user)
+  competitors: {
+    all: ["competitors"] as const,
+    list: () => ["competitors", "list"] as const,
+    detail: (id: string) => ["competitors", "detail", id] as const,
+    cards: () => ["competitors", "cards"] as const,
+  },
+
   // Node presets
   nodePresets: {
     all: ["nodePresets"] as const,
