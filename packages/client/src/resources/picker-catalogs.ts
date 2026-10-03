@@ -24,6 +24,13 @@ export interface PickerOption {
   /** Authored Character Motion prerequisites and sequence state. Missing means unknown. */
   motion?: CharacterMotionMetadata
   /**
+   * Per-option parameters — node-data fields that apply only while THIS option
+   * is picked (the Transition catalog's `wipe` → `wipeDirection`). Same shape
+   * as a catalog's `dimensions`, at both detail levels; `auto` leads each list
+   * and means "send nothing". Absent on every other option.
+   */
+  params?: PickerDimension[]
+  /**
    * Absolute URL of the option's picture — a photo, 3D emoji, flag or (Nodaro
    * Cloud only) rendered look preview — on the installation's own host, or the
    * Nodaro CDN for look previews. Absent when the option has no picture. Use it

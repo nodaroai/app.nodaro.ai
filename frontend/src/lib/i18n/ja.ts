@@ -2315,6 +2315,8 @@ export const ja: ChromeDict = {
   "paramcfg.eGPauseGatherComposure": "例：間を置き、落ち着きを取り戻す",
   "paramcfg.eGTrailOff": "例：語尾が消え入るように",
   "paramcfg.tone": "トーン",
+  "paramcfg.transitionDefaultLook": "デフォルトの見た目",
+  "paramcfg.transitionDefaultLookHint": "各トランジションはそれぞれのデフォルトの見た目を保ちます",
   "paramcfg.eGDramaticPlayfulDark": "例：ドラマチック、遊び心のある、ダーク",
   "paramcfg.styleDescription": "スタイルの説明",
   "paramcfg.eGStudioGhibliWatercolor": "例：スタジオジブリ風の水彩…",

@@ -65,6 +65,211 @@ export interface Transition {
    * anti-blend instruction that made the model render a true single-frame cut.
    */
   readonly instant?: boolean
+  /**
+   * PER-ROW OPTIONS — extra choices that only mean something for THIS
+   * transition (a wipe's direction), each written into the row's own hint.
+   *
+   * Unlike the timing scales (every row has a position), an option is declared
+   * by the row that reads it, so it never appears beside a transition it would
+   * not change. The row authors `promptTemplate` — its hint with one
+   * `{<field>}` token per option — and `promptHint` is DERIVED from it with
+   * every option on its `auto` choice (see `withOptionSlots`), so a reader of
+   * the plain `promptHint` (the picker catalog, the analyzer, a catalog pack)
+   * always sees a finished sentence and never a token.
+   *
+   * The choice's `phrase` is what fills the token, so the row BODY and the
+   * option WORDING are separate: a reworded body keeps its options as long as
+   * it keeps the token. `transition-options.test.ts` pins that every template
+   * carries exactly one token per option and no other.
+   */
+  readonly options?: ReadonlyArray<TransitionOption>
+  /** The hint with a `{<field>}` token per `options` entry — see `options`. */
+  readonly promptTemplate?: string
+}
+
+/**
+ * One choice of a per-row option. `auto` leads every option and is the choice
+ * `promptHint` is written with: picking it (or picking nothing) sends no value.
+ */
+export interface TransitionOptionChoice {
+  readonly id: string
+  readonly label: string
+  readonly description: string
+  /** The words that fill the row template's `{<field>}` token. */
+  readonly phrase: string
+  /** The compact term for the choice ("left to right"); `""` on `auto`. */
+  readonly term: string
+}
+
+/** A per-row option (see `Transition.options`). */
+export interface TransitionOption {
+  /** The node-data field the chosen id is stored under — also the template
+   *  token's name (`{wipeDirection}`). Unique within a row; SHARED across rows
+   *  only where the rows mean the same kind of setting (`style`, see
+   *  `TRANSITION_STYLE_FIELD`) — each row still declares its own choices, and
+   *  a value is read only by the row that declares it. */
+  readonly field: string
+  readonly label: string
+  /** `auto` first. */
+  readonly choices: ReadonlyArray<TransitionOptionChoice>
+}
+
+/**
+ * The chosen option ids, keyed by `TransitionOption.field`
+ * (`{ wipeDirection: "left-to-right" }`). One flat record for a whole pick: a
+ * row reads only the fields it declares, so the other row of a two-pick, or a
+ * value left behind by an earlier pick, changes nothing.
+ */
+export type TransitionOptionValues = Readonly<Record<string, string | undefined>>
+
+/**
+ * The wipe's direction. The phrase is the edge AND its travel, so the row's
+ * body is free to change around it (`a clean {wipeDirection}, revealing …`).
+ * `auto` names no orientation at all — a straight edge — and is what a pick
+ * with no direction has always meant.
+ */
+export const WIPE_DIRECTION: TransitionOption = {
+  field: "wipeDirection",
+  label: "Direction",
+  choices: [
+    { id: "auto", label: "Auto", description: "Let the model choose the direction", term: "",
+      phrase: "straight edge sweeps across the frame" },
+    { id: "left-to-right", label: "Left → Right", description: "A vertical edge travels from the left side to the right", term: "left to right",
+      phrase: "vertical edge sweeps across the frame from left to right" },
+    { id: "right-to-left", label: "Right → Left", description: "A vertical edge travels from the right side to the left", term: "right to left",
+      phrase: "vertical edge sweeps across the frame from right to left" },
+    { id: "top-to-bottom", label: "Top → Bottom", description: "A horizontal edge travels down from the top", term: "top to bottom",
+      phrase: "horizontal edge sweeps down the frame from top to bottom" },
+    { id: "bottom-to-top", label: "Bottom → Top", description: "A horizontal edge travels up from the bottom", term: "bottom to top",
+      phrase: "horizontal edge sweeps up the frame from bottom to top" },
+    { id: "top-left-to-bottom-right", label: "Top-left → Bottom-right", description: "A diagonal edge travels from the top-left corner to the bottom-right", term: "top-left to bottom-right",
+      phrase: "diagonal edge sweeps across the frame from the top-left corner to the bottom-right corner" },
+    { id: "top-right-to-bottom-left", label: "Top-right → Bottom-left", description: "A diagonal edge travels from the top-right corner to the bottom-left", term: "top-right to bottom-left",
+      phrase: "diagonal edge sweeps across the frame from the top-right corner to the bottom-left corner" },
+  ],
+}
+
+/**
+ * STYLE — a row's alternative LOOKS, each a complete description.
+ *
+ * A styled row's `promptTemplate` is the single token `{style}`, so choosing a
+ * style swaps the row's whole body, not a phrase inside it. The field is SHARED
+ * by every styled row (one document key, `style`), but each row declares its
+ * own choices, and every choice id but `auto` carries the row's id as a prefix
+ * (`debris-shower-light-sweep`), so a stored style can never mean something on
+ * another row: re-pointing the pick drops it, and a row reads a foreign id as
+ * its default.
+ *
+ * `auto` is the row's DEFAULT look — labelled with that look's name
+ * ("Full cover (default)"), never "Auto", because it is a specific look and not
+ * "the model decides". Picking it stores nothing, so a pick with no style (every
+ * pick made before styles existed) reads as the default.
+ *
+ * Every body below is the text a tested A/B take was generated from (tidied:
+ * first letter lower-cased, final full stop dropped). `term` is `""` on every
+ * choice: the row's own term leads the compact rendering whatever the style.
+ */
+function rowStyle(
+  row: string,
+  choices: ReadonlyArray<{ readonly slug?: string; readonly label: string; readonly description: string; readonly phrase: string }>,
+): TransitionOption {
+  return {
+    field: TRANSITION_STYLE_FIELD,
+    label: "Style",
+    choices: choices.map((c, i) => ({
+      id: i === 0 ? "auto" : `${row}-${c.slug}`,
+      label: i === 0 ? `${c.label} (default)` : c.label,
+      description: c.description,
+      phrase: c.phrase,
+      term: "",
+    })),
+  }
+}
+
+/** The shared node-data field every styled row stores its look under. */
+export const TRANSITION_STYLE_FIELD = "style"
+
+export const DEBRIS_SHOWER_STYLE: TransitionOption = rowStyle("debris-shower", [
+  { label: "Full cover", description: "Debris fills the whole screen, then blows past to reveal the next scene",
+    phrase: "a dense shower of loose leaves, paper scraps and dust whips across the frame from one side, close to the lens, thick enough to hide the whole picture. The camera stays where it is and the framing does not change. As the last of the debris blows past the far edge, the second shot is revealed behind it. The shot ends on the second shot, clear and fully resolved, with no debris left. The debris passes in front of the picture in one direction, and the second shot appears only once it has passed" },
+  { slug: "light-sweep", label: "Light sweep", description: "A quick scatter of debris crosses the screen; the scene has changed behind it",
+    phrase: "a shower of debris — leaves, papers, dust — sweeps across the frame in front of the camera, and once the debris clears the scene behind has changed" },
+])
+
+export const GARDEN_BLOOM_STYLE: TransitionOption = rowStyle("garden-bloom", [
+  { label: "Grow & part", description: "Flowers and vines grow over the picture, then part like curtains on the next scene",
+    phrase: "lush flowers and vines rapidly grow and bloom outward from the edges of the frame, the foliage spreads to overtake the entire image, then parts open like curtains to reveal the new scene behind" },
+  { slug: "hedge-doors", label: "Hedge doors", description: "Leafy panels close over the picture, then slide apart to the sides",
+    phrase: "vines and flowers grow rapidly inward from the edges of the frame, blooming as they spread, until leaves and blossoms cover the whole picture. The camera stays where it is and the framing does not change. The foliage then splits down the middle and draws apart toward the side edges, opening onto the second shot behind it. The shot ends on the second shot, clear and fully resolved, with no leaves or flowers left. The plants grow over the front of the picture, and the first shot stays unchanged until they cover it completely" },
+])
+
+export const SMOKE_PUFF_STYLE: TransitionOption = rowStyle("smoke-puff", [
+  { label: "Engulf", description: "Smoke billows up around the subject, and the new subject appears inside it",
+    phrase: "the subject vanishes in a soft puff of smoke that billows outward and fills the frame, the smoke then clears to reveal the new subject in the new scene" },
+  { slug: "full-cover", label: "Full cover", description: "Smoke from the subject fills the whole screen, then clears on the next scene",
+    phrase: "the first subject vanishes in a sudden soft puff of smoke that billows outward from where it stood until the smoke fills the frame. The camera stays where it is and the framing does not change. The smoke thins and clears from the centre outward, revealing the second shot with the second subject at the same place in the frame. The shot ends on the second shot, clear and fully resolved, with no smoke left. The smoke comes only from where the first subject was" },
+])
+
+export const SAKURA_PETALS_STYLE: TransitionOption = rowStyle("sakura-petals", [
+  { label: "Swirling veil", description: "A swirl of pink petals veils the picture, then drifts past",
+    phrase: "a dense storm of cherry blossom petals swirls in from one side and fills the frame in soft pink motion, the petals cluster to fully veil the image, then drift past to reveal the new scene" },
+  { slug: "side-sweep", label: "Side sweep", description: "Petals sweep across from one side and leave by the other, uncovering the next scene",
+    phrase: "a dense storm of pink cherry blossom petals swirls in from one side of the frame, close to the lens, and thickens until the petals veil the whole picture. The camera stays where it is and the framing does not change. The petals keep drifting the same way and thin out, revealing the second shot behind them. The shot ends on the second shot, clear and fully resolved, with no petals left. The petals fly across the front of the picture in one direction, and the first shot stays unchanged until they hide it completely" },
+])
+
+export const AURORA_SWEEP_STYLE: TransitionOption = rowStyle("aurora-sweep", [
+  { label: "Sky glow", description: "Aurora light glows over the scene, then fades to reveal the next one",
+    phrase: "a luminous curtain of green and violet aurora light ripples across the whole frame, and its bright bands veil the first shot. The camera stays where it is and the framing does not change. As the bands fade, the second shot is revealed behind them. The shot ends on the second shot, clear and fully resolved, with no aurora light left. The aurora glows over the front of the picture, and the second shot appears only as it fades" },
+  { slug: "veil", label: "Veil", description: "Aurora curtains drop over the whole picture, then fade to reveal the next scene",
+    phrase: "a luminous green and violet aurora curtain ripples across the entire frame, the bright bands obscure the first scene, and as the aurora dissipates the second scene resolves in the clear sky" },
+])
+
+export const SAND_STORM_STYLE: TransitionOption = rowStyle("sand-storm", [
+  { label: "Full cover", description: "A wall of sand hides the whole picture, then clears on the next scene",
+    phrase: "a wall of opaque, swirling ochre sand sweeps in from one side of the frame and surges across it until the whole picture is hidden in dust. The camera stays where it is and the framing does not change. The dust then thins and sinks away toward the lower edge of the frame, revealing the second shot behind it. The shot ends on the second shot, clear and fully resolved, with no dust left. The first shot stays as it is until the sand covers it completely, and the second shot appears only as the dust clears" },
+  { slug: "light-sweep", label: "Light sweep", description: "A streak of blown sand crosses the screen with the next scene already behind it",
+    phrase: "a narrow streak of blown sand races across the frame close to the lens in one direction. The first shot stays clear ahead of the streak and the second shot is already clear behind it. The camera stays where it is and the framing does not change. The shot ends on the second shot, fully resolved, with no sand left" },
+])
+
+export const WHITE_FLASH_STYLE: TransitionOption = rowStyle("white-flash", [
+  { label: "Flash", description: "A camera flash pops the picture to white, holds, then fades down on the next scene",
+    phrase: "a bright camera-flash bloom fills the whole frame with pure white. The camera stays where it is and the framing does not change. The white holds for a clear beat, then fades down to reveal the second shot. The shot ends on the second shot, fully resolved, with no white haze left. The first shot is gone once the frame is white, and the second shot appears only out of the white" },
+  { slug: "overexposure", label: "Overexposure", description: "The picture blooms to white and resolves into the next scene",
+    phrase: "a bright camera-flash bloom fills the frame with pure white, holds for a fraction of a second, then resolves into the new scene" },
+])
+
+const optionToken = (field: string): string => `{${field}}`
+
+/**
+ * Fill a template's option tokens: each option's chosen choice when `values`
+ * names one of its ids, its `auto` choice otherwise (an unknown id included).
+ */
+function fillOptionSlots(
+  template: string,
+  options: ReadonlyArray<TransitionOption>,
+  values?: TransitionOptionValues,
+): string {
+  let out = template
+  for (const option of options) {
+    const picked = values?.[option.field]
+    const choice =
+      option.choices.find((c) => c.id === picked) ?? option.choices[0]
+    out = out.split(optionToken(option.field)).join(choice?.phrase ?? "")
+  }
+  return out
+}
+
+/**
+ * Author a row that has options: the row is written with its `promptTemplate`,
+ * and its `promptHint` is the template on every `auto` choice.
+ */
+function withOptionSlots(
+  row: Omit<Transition, "promptHint"> & {
+    readonly promptTemplate: string
+    readonly options: ReadonlyArray<TransitionOption>
+  },
+): Transition {
+  return { ...row, promptHint: fillOptionSlots(row.promptTemplate, row.options) }
 }
 
 /**
@@ -112,8 +317,9 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "smash cut: an abrupt jarring transition between two visually or tonally contrasting shots with no fade, on a beat" , instant: true },
   { id: "iris",              label: "Iris",              category: "standard", description: "Circular iris closes, then opens on second",
     promptHint: "iris transition: a circular vignette closes inward over the first shot until the frame is black, then opens outward to reveal the second shot", term: "iris wipe" },
-  { id: "wipe",              label: "Wipe",              category: "standard", description: "Linear wipe replaces first shot",
-    promptHint: "linear wipe transition: a clean diagonal line sweeps across the frame, revealing the second shot behind it", term: "linear wipe" },
+  withOptionSlots({ id: "wipe", label: "Wipe",              category: "standard", description: "Linear wipe replaces first shot",
+    promptTemplate: "linear wipe transition: a clean {wipeDirection}, revealing the second shot behind it", term: "linear wipe",
+    options: [WIPE_DIRECTION] }),
   { id: "roll-transition",   label: "Roll",              category: "standard", description: "Frame rolls 90-180°, second shot upright on landing",
     promptHint: "the picture rolls around its centre in one smooth, fast turn, blurred by the speed of the turn. The camera stays in the same spot, turning only around its lens axis. During the turn the second shot takes over, and the roll slows and stops with it level and upright. The shot ends on the second shot, level, upright and still. The roll turns one way only and stops once, with no swing back", term: "camera roll transition" },
   { id: "seamless-match",    label: "Seamless Match",    category: "standard", description: "Hidden cut disguised by matched motion and color",
@@ -154,24 +360,29 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "the subject crumbles into fine sand that is swept away by a gust of wind in a swirling vortex, then the sand particles converge and re-form into the new subject" },
   { id: "fire-burnup",       label: "Burn-Up",            category: "element", description: "Subject burns to embers, embers reform",
     promptHint: "the subject ignites and burns from edges inward into glowing embers and ash, the embers swirl through the frame and re-ignite into the new subject", term: "burn to embers and reform" },
-  { id: "smoke-puff",        label: "Smoke Puff",         category: "element", description: "Subject vanishes in smoke, reappears",
-    promptHint: "the subject vanishes in a soft puff of smoke that billows outward and fills the frame, the smoke then clears to reveal the new subject in the new scene" },
+  withOptionSlots({ id: "smoke-puff",        label: "Smoke Puff",         category: "element", description: "Subject vanishes in smoke, reappears",
+    promptTemplate: "{style}",
+    options: [SMOKE_PUFF_STYLE] }),
   { id: "magic-sparkles",    label: "Magic Sparkles",     category: "element", description: "Particle dissolve à la Avengers / apparition",
     promptHint: "the subject disintegrates into a cloud of glowing golden sparkles that scatter outward, then the sparkles converge from across the frame and re-coalesce into the new subject" },
   { id: "lightning-flash",   label: "Lightning Strike",   category: "element", description: "Lightning strikes, scene changes in flash",
     promptHint: "a brilliant jagged bolt of lightning cracks across the frame and its flash turns the whole picture white. The camera stays where it is and the framing does not change. As the flash dies away, the second shot is revealed in its place. The shot ends on the second shot, fully resolved, with no bolt or flash left. The change happens inside the flash, and the second shot appears only as the white fades" },
   { id: "ink-splash",        label: "Ink Splash",         category: "element", description: "Ink splashes across, scene changes",
     promptHint: "black ink splashes across the frame in expanding tendrils that fully cover the image, then the ink retracts inward and pulls back to reveal the new scene" },
-  { id: "sand-storm",        label: "Sand Storm",         category: "element", description: "Sand storm engulfs the frame, scene changes inside",
-    promptHint: "a wall of opaque, swirling ochre sand sweeps in from one side of the frame and surges across it until the whole picture is hidden in dust. The camera stays where it is and the framing does not change. The dust then thins and sinks away toward the lower edge of the frame, revealing the second shot behind it. The shot ends on the second shot, clear and fully resolved, with no dust left. The first shot stays as it is until the sand covers it completely, and the second shot appears only as the dust clears" },
+  withOptionSlots({ id: "sand-storm",        label: "Sand Storm",         category: "element", description: "Sand storm engulfs the frame, scene changes inside",
+    promptTemplate: "{style}",
+    options: [SAND_STORM_STYLE] }),
   { id: "paint-splash",      label: "Paint Splash",       category: "element", description: "Vivid paint splash covers, retracts into new scene",
     promptHint: "vivid splashes of coloured paint fly across the frame in arcing streaks and pile over one another until the whole picture is covered in wet paint. The camera stays where it is and the framing does not change. The paint then gathers toward the centre of the frame and shrinks to nothing, uncovering the second shot from the edges inward. The shot ends on the second shot, clean and fully resolved, with no paint left. The paint lies on the surface of the picture itself, and the second shot appears only where the paint has gone" },
-  { id: "aurora-sweep",      label: "Aurora Sweep",       category: "element", description: "Aurora curtain sweeps across, scene changes behind",
-    promptHint: "a luminous curtain of green and violet aurora light ripples across the whole frame, and its bright bands veil the first shot. The camera stays where it is and the framing does not change. As the bands fade, the second shot is revealed behind them. The shot ends on the second shot, clear and fully resolved, with no aurora light left. The aurora glows over the front of the picture, and the second shot appears only as it fades" },
-  { id: "sakura-petals",     label: "Sakura Storm",       category: "element", description: "Cherry blossom petals storm across the frame",
-    promptHint: "a dense storm of cherry blossom petals swirls in from one side and fills the frame in soft pink motion, the petals cluster to fully veil the image, then drift past to reveal the new scene", term: "cherry blossom petal storm" },
-  { id: "garden-bloom",      label: "Garden Bloom",       category: "element", description: "Flowers bloom outward, parting to reveal new scene",
-    promptHint: "lush flowers and vines rapidly grow and bloom outward from the edges of the frame, the foliage spreads to overtake the entire image, then parts open like curtains to reveal the new scene behind" },
+  withOptionSlots({ id: "aurora-sweep",      label: "Aurora Sweep",       category: "element", description: "Aurora curtain sweeps across, scene changes behind",
+    promptTemplate: "{style}",
+    options: [AURORA_SWEEP_STYLE] }),
+  withOptionSlots({ id: "sakura-petals",     label: "Sakura Storm",       category: "element", description: "Cherry blossom petals storm across the frame",
+    promptTemplate: "{style}", term: "cherry blossom petal storm",
+    options: [SAKURA_PETALS_STYLE] }),
+  withOptionSlots({ id: "garden-bloom",      label: "Garden Bloom",       category: "element", description: "Flowers bloom outward, parting to reveal new scene",
+    promptTemplate: "{style}",
+    options: [GARDEN_BLOOM_STYLE] }),
   { id: "powder-burst",      label: "Powder Burst",       category: "element", description: "Colored powder bursts across frame and clears",
     promptHint: "a burst of vivid colored powder explodes from the center of the frame in slow motion, the cloud of pigment expands to fill the image, then drifts apart and settles to reveal the second scene" },
 
@@ -234,8 +445,9 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "a flash at the exact centre of the frame bursts into a sharp, bright ring that races past every edge in a moment, trailing a smear of motion blur behind its rim and warping the picture as it goes. The camera stays where it is and the picture stays level. The second shot shows only inside the ring and the first only outside it, with the bright ring as the one hard border and no blending anywhere" },
   { id: "punch-into-camera", label: "Punch Into Camera",  category: "physics", description: "Fist strikes camera, scene changes",
     promptHint: "a fist or object swings rapidly toward the camera and strikes the lens with motion blur and impact frames, and the moment of impact reveals the new scene" },
-  { id: "debris-shower",     label: "Debris Shower",      category: "physics", description: "Debris flies past, scene changes behind",
-    promptHint: "a shower of debris — leaves, papers, dust — sweeps across the frame in front of the camera, and once the debris clears the scene behind has changed" },
+  withOptionSlots({ id: "debris-shower",     label: "Debris Shower",      category: "physics", description: "Debris flies past, scene changes behind",
+    promptTemplate: "{style}",
+    options: [DEBRIS_SHOWER_STYLE] }),
   { id: "gravity-flip",      label: "Gravity Flip",       category: "physics", description: "Gravity inverts, camera rotates 180",
     promptHint: "gravity inverts and the camera rotates a full 180 degrees as objects and the subject reorient to the new down, settling into the new scene oriented correctly" },
   { id: "building-explosion", label: "Building Explosion", category: "physics", description: "Structure detonates, scene shifts through smoke",
@@ -252,8 +464,9 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   // ============================================================================
   // LIGHT — 8 entries — flash and lens FX
   // ============================================================================
-  { id: "white-flash",       label: "White Flash",        category: "light", description: "Frame blooms to white",
-    promptHint: "a bright camera-flash bloom fills the frame with pure white, holds for a fraction of a second, then resolves into the new scene" },
+  withOptionSlots({ id: "white-flash",       label: "White Flash",        category: "light", description: "Frame blooms to white",
+    promptTemplate: "{style}",
+    options: [WHITE_FLASH_STYLE] }),
   { id: "lens-flare-swipe",  label: "Lens Flare Swipe",   category: "light", description: "Anamorphic lens flare swipes",
     promptHint: "a horizontal anamorphic lens flare sweeps across the frame from one side to the other, and as it crosses the frame the scene behind it has changed to the new setting" },
   { id: "light-streak",      label: "Light Streak",       category: "light", description: "Light streak wipes across",
@@ -319,8 +532,54 @@ export function getTransitionLabel(id: string | undefined | null, fallback?: str
   return (id ?? "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-export function getTransitionPromptHint(id: string | undefined | null): string {
-  return getTransition(id)?.promptHint ?? ""
+/**
+ * The row's hint. With `values`, a row that declares `options` is written with
+ * the chosen choices in its template (an absent or unknown choice reads as
+ * `auto`, which IS `promptHint`); every other row ignores them.
+ *
+ * A catalog pack that REWROTE the row's hint owns its words: its text has no
+ * token to fill, so it is returned as written and the options add nothing.
+ */
+export function getTransitionPromptHint(
+  id: string | undefined | null,
+  values?: TransitionOptionValues,
+): string {
+  const t = getTransition(id)
+  if (!t) return ""
+  if (!values || !t.promptTemplate || !t.options?.length) return t.promptHint
+  if (t.promptHint !== fillOptionSlots(t.promptTemplate, t.options)) return t.promptHint
+  return fillOptionSlots(t.promptTemplate, t.options, values)
+}
+
+/** The per-row options a transition declares (`[]` for most rows, an unknown
+ *  id and `auto`). Reads through `getTransition`, like every other getter. */
+export function getTransitionOptions(
+  id: string | undefined | null,
+): ReadonlyArray<TransitionOption> {
+  return getTransition(id)?.options ?? []
+}
+
+/** Every option field any row declares, in catalog order — what a node-data
+ *  reader collects into `TransitionOptionValues`. */
+export const TRANSITION_OPTION_FIELDS: ReadonlyArray<string> = Array.from(
+  new Set(TRANSITIONS.flatMap((t) => (t.options ?? []).map((o) => o.field))),
+)
+
+/**
+ * Collect `TransitionOptionValues` from a node-data-shaped record: every
+ * declared option field whose value is a non-empty string. Validation against
+ * a row's choices happens at render (an unknown id reads as `auto`).
+ */
+export function readTransitionOptionValues(
+  data: Readonly<Record<string, unknown>> | undefined | null,
+): TransitionOptionValues | undefined {
+  if (!data) return undefined
+  const out: Record<string, string> = {}
+  for (const field of TRANSITION_OPTION_FIELDS) {
+    const v = data[field]
+    if (typeof v === "string" && v.length > 0) out[field] = v
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 /**
@@ -385,8 +644,8 @@ const normalizePhrase = (s: string): string => s.trim().toLowerCase().replace(/\
  * any comma-separated item that merely restates the term dropped (`none`'s
  * "no transition, hard cut, instantaneous switch …" loses its "hard cut").
  */
-function transitionHintBody(id: string, term: string): string {
-  const hint = getTransitionPromptHint(id).replace(LEADING_LABEL, "").trim()
+function transitionHintBody(id: string, term: string, values?: TransitionOptionValues): string {
+  const hint = getTransitionPromptHint(id, values).replace(LEADING_LABEL, "").trim()
   const t = normalizePhrase(term)
   return hint
     .split(/,\s*/)
@@ -403,10 +662,10 @@ function transitionHintBody(id: string, term: string): string {
  * `; INSTANT_CUT_CLAUSE` inside the parentheses. A row whose hint is just its
  * term (or empty) renders as the term alone; an unknown id or "auto" as "".
  */
-function transitionFragment(id: string, withCutClause: boolean): string {
+function transitionFragment(id: string, withCutClause: boolean, values?: TransitionOptionValues): string {
   const term = getTransitionTerm(id)
   if (!term) return ""
-  const inner = [transitionHintBody(id, term), withCutClause ? INSTANT_CUT_CLAUSE : ""]
+  const inner = [transitionHintBody(id, term, values), withCutClause ? INSTANT_CUT_CLAUSE : ""]
     .filter((part) => part.length > 0)
     .join("; ")
   return inner.length > 0 && normalizePhrase(inner) !== normalizePhrase(term)
@@ -436,16 +695,21 @@ function transitionFragment(id: string, withCutClause: boolean): string {
  * Studio's transition clauses) and the direction registry's `transition` row
  * (the server fold of `direction.transition`), so both paths word a transition
  * identically.
+ *
+ * `values` are the per-row option choices (`TransitionOptionValues`) — a wipe's
+ * direction. The direction registry passes none, so a `direction.transition`
+ * wipe reads as `auto`.
  */
 export function renderTransitionBases(
   ids: ReadonlyArray<string>,
   _mode: PickerHintMode = "full",
+  values?: TransitionOptionValues,
 ): string[] {
   // Only ids that contribute a fragment count — a no-op "auto" beside a cut
   // must not make the pick look non-instant.
   const picked = ids.filter((id) => getTransitionTerm(id).length > 0)
   const instant = isInstantTransition(picked)
-  return picked.map((id, i) => transitionFragment(id, instant && i === 0))
+  return picked.map((id, i) => transitionFragment(id, instant && i === 0, values))
 }
 
 // ---------------------------------------------------------------------------
@@ -528,6 +792,9 @@ export type TransitionHintScope = "clip" | "shot"
 
 export interface TransitionHintOptions {
   readonly scope?: TransitionHintScope
+  /** The per-row option choices (a wipe's `wipeDirection`) — see
+   *  `Transition.options`. Absent, every row reads as `auto`. */
+  readonly optionValues?: TransitionOptionValues
 }
 
 /**
@@ -571,7 +838,9 @@ const INTENSITY_CLAUSES = clausesOf(TRANSITION_INTENSITIES)
  * @param options `scope: "shot"` when the hint is folded into one shot's time
  *   window of a multi-shot prompt — the position clause then says "of this
  *   shot" instead of "of the clip" (and `full`, on a non-cut, "spans this
- *   entire shot"). Omitted, the wording is the clip's.
+ *   entire shot"). Omitted, the wording is the clip's. `optionValues` are the
+ *   per-row option choices (a wipe's direction), written into the row's own
+ *   description; omitted, every row reads as `auto`.
  */
 export function composeTransitionHintFromConnections(
   transitionId: string | ReadonlyArray<string> | undefined,
@@ -584,7 +853,7 @@ export function composeTransitionHintFromConnections(
   const ids = Array.isArray(transitionId)
     ? Array.from(new Set(transitionId)).slice(0, 2)
     : transitionId ? [transitionId] : []
-  const baseHints = renderTransitionBases(ids, mode)
+  const baseHints = renderTransitionBases(ids, mode, options?.optionValues)
   if (baseHints.length === 0) return ""
   // Same "contributes a fragment" filter `renderTransitionBases` applies.
   const instant = isInstantTransition(ids.filter((id) => getTransitionTerm(id).length > 0))

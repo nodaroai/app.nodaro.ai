@@ -2253,6 +2253,8 @@ export const ko: ChromeDict = {
   "paramcfg.eGPauseGatherComposure": "예: 잠시 멈추고 마음을 가다듬으며",
   "paramcfg.eGTrailOff": "예: 말끝을 흐리며",
   "paramcfg.tone": "톤",
+  "paramcfg.transitionDefaultLook": "기본 룩",
+  "paramcfg.transitionDefaultLookHint": "각 트랜지션은 자체 기본 룩을 유지합니다",
   "paramcfg.eGDramaticPlayfulDark": "예: 극적인, 장난스러운, 어두운",
   "paramcfg.styleDescription": "스타일 설명",
   "paramcfg.eGStudioGhibliWatercolor": "예: 스튜디오 지브리풍 수채화…",

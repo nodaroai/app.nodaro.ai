@@ -21,6 +21,8 @@ generated_from: c607aa02c
 - `position?: TransitionPosition`
 - `duration?: TransitionDuration`
 - `intensity?: TransitionIntensity`
+- `wipeDirection?: string`
+- `style?: string`
 - `preText?: string`
 - `postText?: string`
 - `hintMode?: "full" | "compact"`
