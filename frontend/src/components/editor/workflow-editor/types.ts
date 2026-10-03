@@ -3,7 +3,7 @@ import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -939,11 +939,39 @@ function contentIdeasFanOut(
  * under-quotes and lets a run pass the balance precheck it cannot finish, so
  * `__tests__/cost-multiplier.test.ts` fails the build for any such producer.
  */
+/**
+ * Downstream executions one Social Search fans out on an Each wire: one per
+ * post it passes on. Not re-running, or picks kept → the posts it holds now
+ * (exact). Running a fresh search → the first `pickTop` posts (default 5), the
+ * number a run without picks passes on.
+ */
+function socialSearchFanOut(
+  data: Record<string, unknown>,
+  reruns: boolean,
+  selector?: SelectorFields,
+): number {
+  const held = socialPostsFrom(data.generatedJson).length;
+  const posts = (!reruns || isSocialSearchPickFrozen("social-search", data)) && held > 0 ? held : socialSearchPickTop(data.pickTop);
+  const kept = fanOutCount(Array.from({ length: posts }, (_, i) => String(i + 1)), selector);
+  return kept > 0 ? kept : 1;
+}
+
 export const PRODUCER_FAN_OUT: Readonly<
   Record<string, (data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields) => number>
 > = {
   "edit-plan": editPlanClipFanOut,
   "content-ideas": contentIdeasFanOut,
+};
+
+/**
+ * Producers NOT in FAN_OUT_EACH_TYPES (a wire from them passes the whole list
+ * by default) whose wire, once set to Each, runs the next node once per item
+ * they emit. Sized the same way as PRODUCER_FAN_OUT.
+ */
+export const EACH_WIRE_FAN_OUT: Readonly<
+  Record<string, (data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields) => number>
+> = {
+  "social-search": socialSearchFanOut,
 };
 
 /**
@@ -1011,7 +1039,7 @@ function getBaseFanOut(
     // A fan-out producer (Edit Plan in `clips` mode, Content Ideas): one
     // downstream execution per item it emits. It is in FAN_OUT_EACH_TYPES but
     // has no `items`/`rows` for the list reads below — see PRODUCER_FAN_OUT.
-    const producer = PRODUCER_FAN_OUT[sourceNode.type ?? ""];
+    const producer = PRODUCER_FAN_OUT[sourceNode.type ?? ""] ?? EACH_WIRE_FAN_OUT[sourceNode.type ?? ""];
     if (producer) {
       const n = producer(sourceNode.data as Record<string, unknown>, rerunIds.has(sourceNode.id), selector);
       if (n > 1) return n;

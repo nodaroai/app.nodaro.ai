@@ -15,7 +15,7 @@ vi.mock("@/components/editor/config-panels/helpers", () => ({
 }))
 
 import { FAN_OUT_EACH_TYPES } from "@nodaro/shared"
-import { getCostMultiplier, getFanOutMultiplier, getOutputMinuteUnits, NO_RERUNS, PRODUCER_FAN_OUT } from "../types"
+import { EACH_WIRE_FAN_OUT, getCostMultiplier, getFanOutMultiplier, getOutputMinuteUnits, NO_RERUNS, PRODUCER_FAN_OUT } from "../types"
 import { estimateRunCredits } from "../estimate-run-credits"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
@@ -265,5 +265,29 @@ describe("every estimate loop multiplies by getCostMultiplier", () => {
       if (readFileSync(file, "utf8").includes("getFanOutMultiplier")) offenders.push(rel)
     }
     expect(offenders, `use getCostMultiplier (fan-out × per-minute units) in:\n${offenders.join("\n")}`).toEqual([])
+  })
+})
+
+describe("a Social Search wire set to Each", () => {
+  const post = (i: number) => ({ id: `instagram:${i}`, platform: "instagram", url: `https://www.instagram.com/reel/${i}/`, text: "", author: { handle: "a", name: "A" }, metrics: {}, media: { kind: "video" }, hashtags: [], extra: {} })
+  const va = n("va", "video-analysis", {})
+
+  it("prices the next node once per post the search holds", () => {
+    const search = n("s", "social-search", { generatedJson: [post(1), post(2)], keepPicks: true })
+    const nodes = [search, va]
+    expect(getCostMultiplier(va, nodes, [e("s", "va", "video", "each")], ids(va))).toBe(2)
+    expect(getCostMultiplier(va, nodes, [e("s", "va", "video", "each")], ids(search, va))).toBe(2)
+  })
+
+  it("prices a fresh search by the posts a run passes on, and a plain wire once", () => {
+    const search = n("s", "social-search", { generatedJson: [post(1), post(2)], pickTop: 3 })
+    const nodes = [search, va]
+    expect(getCostMultiplier(va, nodes, [e("s", "va", "video", "each")], ids(search, va))).toBe(3)
+    expect(getCostMultiplier(va, nodes, [e("s", "va", "video")], ids(va))).toBe(1)
+  })
+
+  it("is sized outside the default fan-out list", () => {
+    expect(FAN_OUT_EACH_TYPES.has("social-search")).toBe(false)
+    expect("social-search" in EACH_WIRE_FAN_OUT).toBe(true)
   })
 })
