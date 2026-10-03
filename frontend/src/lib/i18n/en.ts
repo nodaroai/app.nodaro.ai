@@ -10298,7 +10298,7 @@ export const en = {
   "tgtrig.cardHandling": "Working on a post…",
   "tgtrig.cardHandlingMessage": "Working on a message…",
   "tgtrig.inboxMode": "Inbox mode",
-  "tgtrig.inboxModeHint": "Only your own shares start a run: a post link (one run per link) or a forwarded post. Every other message is ignored. Your own messages are always included.",
+  "tgtrig.inboxModeHint": "Only your own shares start a run: a post link (one run per link) or a forwarded post. Every other message is ignored. Your own messages are always included. When a run starts for your post, your account adds an eyes reaction to it, so you can see it was picked up.",
   "tgtrig.savedMessages": "Saved Messages",
   "tgtrig.selectedChats": "Selected chats",
   "tgtrig.unknownChat": "Chat {id} (not in your recent chats)",

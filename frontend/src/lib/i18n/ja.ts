@@ -10008,7 +10008,7 @@ export const ja: ChromeDict = {
   "tgtrig.cardHandling": "投稿を処理しています…",
   "tgtrig.cardHandlingMessage": "メッセージを処理しています…",
   "tgtrig.inboxMode": "受信箱モード",
-  "tgtrig.inboxModeHint": "自分が共有したものだけで実行します。投稿のリンク（リンクごとに 1 回）または転送した投稿です。その他のメッセージは無視されます。自分のメッセージは常に含まれます。",
+  "tgtrig.inboxModeHint": "自分が共有したものだけで実行します。投稿のリンク（リンクごとに 1 回）または転送した投稿です。その他のメッセージは無視されます。自分のメッセージは常に含まれます。 投稿で実行が始まると、あなたのアカウントがその投稿に目のリアクションを付けるので、受け付けられたことがわかります。",
   "tgtrig.savedMessages": "保存済みメッセージ",
   "tgtrig.selectedChats": "選択したチャット",
   "tgtrig.unknownChat": "チャット {id}（最近のチャットにありません）",

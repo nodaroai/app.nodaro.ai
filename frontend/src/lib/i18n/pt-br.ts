@@ -10008,7 +10008,7 @@ export const ptBR: ChromeDict = {
   "tgtrig.cardHandling": "Processando um post…",
   "tgtrig.cardHandlingMessage": "Processando uma mensagem…",
   "tgtrig.inboxMode": "Modo caixa de entrada",
-  "tgtrig.inboxModeHint": "Só o que você compartilha inicia uma execução: o link de um post (uma execução por link) ou um post encaminhado. As outras mensagens são ignoradas. Suas próprias mensagens sempre entram.",
+  "tgtrig.inboxModeHint": "Só o que você compartilha inicia uma execução: o link de um post (uma execução por link) ou um post encaminhado. As outras mensagens são ignoradas. Suas próprias mensagens sempre entram. Quando uma execução começa pelo seu post, sua conta reage a ele com os olhos, para você ver que ele foi recebido.",
   "tgtrig.savedMessages": "Mensagens salvas",
   "tgtrig.selectedChats": "Chats selecionados",
   "tgtrig.unknownChat": "Chat {id} (fora dos seus chats recentes)",

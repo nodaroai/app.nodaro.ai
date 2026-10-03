@@ -10008,7 +10008,7 @@ export const ko: ChromeDict = {
   "tgtrig.cardHandling": "게시물을 처리하는 중…",
   "tgtrig.cardHandlingMessage": "메시지를 처리하는 중…",
   "tgtrig.inboxMode": "인박스 모드",
-  "tgtrig.inboxModeHint": "내가 공유한 것만 실행합니다. 게시물 링크(링크마다 1회) 또는 전달한 게시물입니다. 다른 메시지는 무시됩니다. 내 메시지는 항상 포함됩니다.",
+  "tgtrig.inboxModeHint": "내가 공유한 것만 실행합니다. 게시물 링크(링크마다 1회) 또는 전달한 게시물입니다. 다른 메시지는 무시됩니다. 내 메시지는 항상 포함됩니다. 게시물로 실행이 시작되면 내 계정이 그 게시물에 눈 리액션을 달아, 접수된 것을 알 수 있습니다.",
   "tgtrig.savedMessages": "저장된 메시지",
   "tgtrig.selectedChats": "선택한 채팅",
   "tgtrig.unknownChat": "채팅 {id} (최근 채팅에 없음)",
