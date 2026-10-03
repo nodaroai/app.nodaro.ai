@@ -1,0 +1,5 @@
+---
+"@nodaro/prompts": patch
+---
+
+Three cut transitions get new descriptions. `snap-to-black`: the first shot cuts straight to full black on a single frame, the frame stays black for a single beat, and the second shot cuts in at full brightness on a single frame. `jump-match`: the subject launches into a jump and the picture cuts to the new place at the height of the leap, the camera following the arc at the same speed and the subject at the same place in the frame, then the jump carries on and the subject lands in the new place. `match-cut`: the last picture of the first shot and the first picture of the second share one shape at the same place and size in the frame, and on the next frame everything around the shape has changed while the shape stays put, with no flash frame or zoom between them. Each still ends with the same anti-blend sentence. The other cut rows (`none`, `smash-cut`, `jump-cut`, `seamless-match`, `action-relay`) keep their text, and no label, picker description or lever wording changes.

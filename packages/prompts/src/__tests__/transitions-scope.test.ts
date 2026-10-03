@@ -20,9 +20,12 @@ const INSTANT_IDS = TRANSITIONS.filter((t) => t.instant).map((t) => t.id)
 const NON_INSTANT_IDS = TRANSITIONS.filter((t) => !t.instant && t.id !== "auto").map((t) => t.id)
 const FULL_CLAUSE = "the transition spans the entire clip"
 const FULL_SHOT_CLAUSE = "the transition spans this entire shot"
-const MATCH_CUT_BASE =
-  "match cut (the final composition of the first shot matches the opening composition of the second shot " +
-  "in shape, color, and motion, so the cut feels like a visual rhyme; " + INSTANT_CUT_CLAUSE + ")"
+const MATCH_CUT_BODY =
+  "the last picture of the first shot and the first picture of the second share one shape, at the same " +
+  "place and the same size in the frame. The camera holds that shape in place across the cut. On the ne" +
+  "xt frame everything around the shape has changed while the shape itself stays put. The shot ends on " +
+  "the second shot, fully resolved, with no flash frame or zoom between the two"
+const MATCH_CUT_BASE = `match cut (${MATCH_CUT_BODY}; ${INSTANT_CUT_CLAUSE})`
 
 describe("approved row bodies", () => {
   it("aging", () => {
@@ -448,6 +451,93 @@ describe("zoom-into-mirror body (2026-10-03 redraft: mirror3 D2, liquid ripple)"
     expect(composeTransitionHintFromConnections("zoom-into-mirror", [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
       `${TERM} (${BODY}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
     )
+  })
+})
+
+describe("F8 cut bodies (2026-10-03 A/B: F8 arm B on snap-to-black, jump-match and match-cut)", () => {
+  // Arm B, the F8 draft with the ship tidy (first letter lower-cased; the drafts carry no final full stop, so
+  // the anti-blend sentence reads on after the body). Each is byte-identical to the body inside the prompt of
+  // the take it was rated on: snap-to-black 03-B-t2 (2bcc8b81), jump-match 04-B-t1 (b9027a0a), match-cut
+  // 07-B (4c6e3ecd). snap-to-black and match-cut keep their "<label>:" heading, which the renderer strips;
+  // jump-match never had one. None of the three bodies contains a colon, so the heading guard in
+  // transitions-instant.test.ts cannot match them, and no comma item equals its row's term. All three are
+  // cuts: the cut sentence rides inside the parentheses, and duration and intensity are dropped.
+  const ROWS = [
+    {
+      id: "snap-to-black",
+      term: "snap to black",
+      heading: "snap to black: ",
+      body:
+        "the first shot cuts straight to full black on a single frame. The camera holds its framing right up " +
+        "to the cut. The frame stays pure black for a single beat, then the second shot cuts in at full brigh" +
+        "tness on a single frame. The shot ends on the second shot, fully resolved",
+    },
+    {
+      id: "jump-match",
+      term: "match cut on a jump",
+      heading: "",
+      body:
+        "the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The" +
+        " camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stay" +
+        "s at the same place in the frame. In the second shot the same jump carries on without a break, and t" +
+        "he subject comes down and lands in the new place. The shot ends on the subject landed in the second " +
+        "shot, fully resolved",
+    },
+    {
+      id: "match-cut",
+      term: "match cut",
+      heading: "match cut: ",
+      body:
+        "the last picture of the first shot and the first picture of the second share one shape, at the same " +
+        "place and the same size in the frame. The camera holds that shape in place across the cut. On the ne" +
+        "xt frame everything around the shape has changed while the shape itself stays put. The shot ends on " +
+        "the second shot, fully resolved, with no flash frame or zoom between the two",
+    },
+  ] as const
+
+  it.each(ROWS)("$id: the catalog hint carries the new body (heading kept where the row had one)", ({ id, heading, body }) => {
+    expect(getTransitionPromptHint(id)).toBe(heading + body)
+  })
+
+  it.each(ROWS)("$id renders `term (body; cut sentence)` at the tile-default levers", ({ id, term, body }) => {
+    const clause = `${term} (${body}; ${INSTANT_CUT_CLAUSE})`
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "full", { scope: "shot" })).toBe(clause)
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "compact", { scope: "shot" })).toBe(clause)
+    expect(composeTransitionHintFromConnections(id, [], [])).toBe(clause)
+  })
+
+  it.each(ROWS)("$id at middle / short / natural keeps only the position", ({ id, term, body }) => {
+    const levers = { position: "middle", duration: "short", intensity: "natural" } as const
+    expect(composeTransitionHintFromConnections(id, [], [], levers)).toBe(
+      `${term} (${body}; ${INSTANT_CUT_CLAUSE}), the transition occurs in the middle of the clip`,
+    )
+    expect(composeTransitionHintFromConnections(id, [], [], levers, "full", { scope: "shot" })).toBe(
+      `${term} (${body}; ${INSTANT_CUT_CLAUSE}), the transition occurs in the middle of this shot`,
+    )
+  })
+
+  // The other F8 rows keep today's text.
+  const KEPT: Record<string, string> = {
+    "none":
+      "no transition, hard cut, instantaneous switch from first shot to second shot",
+    "smash-cut":
+      "smash cut: an abrupt jarring transition between two visually or tonally contrasting shots with no fa" +
+      "de, on a beat",
+    "jump-cut":
+      "jump cut: the framing, lens, and camera position stay identical across the cut while time skips abru" +
+      "ptly forward, so the subject snaps to a new position inside what still reads as one continuous shot",
+    "seamless-match":
+      "hidden seamless transition: the camera motion, color palette, and on-screen motion at the end of the" +
+      " first shot continue exactly across the cut into the second shot, so the boundary is invisible and t" +
+      "he two shots feel like one unbroken take",
+    "action-relay":
+      "match cut on action: the subject exits the frame on a committed action — a stride, a throw, a turn —" +
+      " and enters the new scene on the same beat continuing that movement at matched speed and direction, " +
+      "so the action carries unbroken across the cut",
+  }
+
+  it.each(Object.entries(KEPT))("%s keeps today's text", (id, hint) => {
+    expect(getTransitionPromptHint(id)).toBe(hint)
   })
 })
 
