@@ -575,6 +575,21 @@ describe("GET /v1/public/workflows/:id", () => {
     expect(res.json().data.settings).toEqual({ studio: { shared: true, version: 3, shots: [{ id: "s1" }] } })
     expect(res.body).not.toContain("an unsent")
   })
+
+  it("an ordinary shared production's public read carries no take's voice record (T42)", async () => {
+    mockPublicRead({
+      ...DB_WORKFLOW_FULL,
+      nodes: [{ id: "generate-video-s1", type: "generate-video", data: { prompt: "Abi speaks", generatedResults: [
+        { url: "https://r2/a.mp4", revoiceTo: { orderedVoices: [{ voiceId: "voice-owner-abi" }] }, voiceMode: "character" },
+      ] } }],
+      settings: { studio: { shared: true, version: 3 } },
+    })
+    const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}` })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.nodes[0].data.generatedResults).toEqual([{ url: "https://r2/a.mp4" }])
+    expect(res.body).not.toContain("voice-owner-abi")
+    expect(res.body).not.toContain("voiceMode")
+  })
 })
 
 // ---------------------------------------------------------------------------

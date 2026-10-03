@@ -490,7 +490,11 @@ Fetches a publicly-shared workflow by id (`GET /v1/public/workflows/:id`) — th
 unauthenticated share-by-link read. Returns the workflow's nodes/edges/settings
 ONLY when the workflow is opted into sharing server-side
 (`settings.studio.shared === true`); otherwise throws `NotFoundError`.
-No auth required — the SDK omits the bearer when no token exists.
+No auth required — the SDK omits the bearer when no token exists. A studio
+production comes back without its owner's working state: the recycle bin, the
+runs in flight, the empty media slots and the unsaved editor draft are left out
+of `settings.studio`, and each finished take's voice record (`revoiceTo` /
+`voiceMode`) is left off the nodes' `data.generatedResults` rows.
 
 ```ts
 const { data: wf } = await client.workflows.getPublic(workflowId)

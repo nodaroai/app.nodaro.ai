@@ -4,7 +4,7 @@ import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../lib/cloud-
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { findDeniedNodeTypesForUser } from "../lib/availability-viewer.js"
 import { z } from "zod"
-import { stripExportContent, stripStudioDraftSettings, stripUnownedRefs, stripTransientRuntimeData, normalizeVideoOverlayNodes, validateSubWorkflowRoutes, WORKFLOW_VISIBILITIES, type WorkflowExport } from "@nodaro/shared"
+import { stripExportContent, stripStudioDraftWorkflow, stripUnownedRefs, stripTransientRuntimeData, normalizeVideoOverlayNodes, validateSubWorkflowRoutes, WORKFLOW_VISIBILITIES, type WorkflowExport } from "@nodaro/shared"
 import { publicWorkflowProjection } from "../lib/public-workflow-projection.js"
 import { supabase } from "../lib/supabase.js"
 import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../lib/default-project.js"
@@ -1298,14 +1298,15 @@ export async function workflowRoutes(app: FastifyInstance) {
     // ask a second question about a workflow it just received, and so the two
     // answers cannot disagree with each other.
     //
-    // A `view` reader was shown the work, not its owner's unsubmitted drafts
-    // or runs in flight — the studio's empty media slots and per-scene run
-    // markers (studio rulings T11 / T22). `view` only: an `edit` collaborator's
-    // editor saves `settings` back whole, so hiding them from that reader would
-    // erase the owner's on their next save.
+    // A `view` reader was shown the work, not its owner's unsubmitted drafts,
+    // runs in flight or voice plans — the studio's empty media slots and
+    // per-scene run markers (studio rulings T11 / T22), a finished take's voice
+    // record on the graph's result rows (T42), and the same things in the bin.
+    // `view` only: an `edit` collaborator's editor saves the graph back whole,
+    // so hiding them from that reader would erase the owner's on their next save.
     const full = toWorkflowFull(loaded.row)
-    const settings = loaded.access === "view" ? stripStudioDraftSettings(full.settings) : full.settings
-    return { data: { ...full, settings, access: loaded.access } }
+    const shown = loaded.access === "view" ? stripStudioDraftWorkflow(full) : full
+    return { data: { ...shown, access: loaded.access } }
   })
 
   // Public (share-by-link) read — NO auth (listed in auth.ts PUBLIC_ROUTES).
@@ -1984,12 +1985,13 @@ export async function workflowRoutes(app: FastifyInstance) {
       req, reply, userId, params.id, "view", WORKFLOW_FULL_COLS, "Failed to export workflow",
     )
     if (!loaded.ok) return
-    const wf = loaded.row
     // Same rule as `GET /v1/workflows/:id`: a `view` reader exports the work,
-    // never its owner's unsubmitted drafts or runs in flight — the studio's
-    // empty media slots and per-scene run markers (studio rulings T11 / T22).
-    // `edit` and `own` export the settings raw.
-    const settings = loaded.access === "view" ? stripStudioDraftSettings(wf.settings) : wf.settings
+    // never its owner's unsubmitted drafts, runs in flight or voice plans —
+    // the studio's empty media slots and per-scene run markers (studio rulings
+    // T11 / T22) and a take's voice record (T42). `edit` and `own` export the
+    // graph raw.
+    const wf = loaded.access === "view" ? stripStudioDraftWorkflow(loaded.row) : loaded.row
+    const settings = wf.settings
 
     const rawNodes = asObjectArray(wf.nodes)
     const result: WorkflowExport = {
