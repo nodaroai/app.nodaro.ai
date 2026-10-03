@@ -1,8 +1,8 @@
 {
   "slug": "steal-the-format",
   "name": "Steal the Format",
-  "description": "Paste a post that worked and a few lines about your brand; get five post ideas built on the same format, each with a short script. The structure is borrowed, never the words, footage, music, faces or logos.",
-  "markdownDescription": "## Steal the Format\n\nPaste a post that worked and a few lines about your brand, and get five post ideas built on the same format, each with a short script. The ideas borrow the post's structure (its format, hook mechanic, beat order and pacing), never its words, footage, music, faces or logos.\n\n1. **Post link**: a TikTok, Reels, Shorts or YouTube link. Paste it into the Video URL node and run once its download has finished.\n2. **Your brand**: what you sell, who it is for, your tone, and what you never do.\n3. **Video Analysis**: reads the post, its timings, words, on-screen text and sound.\n4. **Content Recipe**: explains why the post works, from the hook and the format to the beats, the call to action and the pace.\n5. **Content Ideas**: five ideas for your brand on the same structure.\n6. **Scripts**: one short script per idea. The workflow ends at the scripts.",
+  "description": "Paste a post that worked and a few lines about your brand; get five post ideas built on the same format, and a ready-to-film script for the one you pick. The structure is borrowed, never the words, footage, music, faces or logos.",
+  "markdownDescription": "## Steal the Format\n\nPaste a post that worked and a few lines about your brand, and get five post ideas built on the same format, plus a ready-to-film script for the idea you pick. The ideas borrow the post's structure (its format, hook mechanic, beat order and pacing), never its words, footage, music, faces or logos.\n\n1. **Post link**: a TikTok, Reels, Shorts or YouTube link. The template starts with an example Reel; paste your own to replace it.\n2. **Your brand**: what you sell, who it is for, your tone, the goal, the call to action, and what you never do.\n3. **Video Analysis**: reads the post, its timings, words, on-screen text and sound.\n4. **Content Recipe**: explains why the post works, from the hook and the format to the beats, the call to action and the pace.\n5. **Content Ideas**: five ideas for your brand on the same structure.\n6. **Script**: a ready-to-film script for one idea, idea 1 by default. Click the wire into Script and change the number to pick another, or set it to Each for a script per idea.",
   "category": "social-creatives",
   "outputTypes": [
     "text"
@@ -17,14 +17,14 @@
     "reels"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 282,
+  "estimatedCredits": 249,
   "nodeTypesUsed": [
     "youtube-video",
     "text-prompt",
     "video-analysis",
     "content-recipe",
     "content-ideas",
-    "generate-script",
+    "llm-chat",
     "sticky-note"
   ],
   "providersUsed": [
@@ -52,7 +52,7 @@
         "textColor": "#ffffff",
         "label": "How it works",
         "title": "Steal the format: how it works",
-        "text": "Paste the link of a post that worked and a few lines about your brand. You get five post ideas built on the same format, each with a short script.\n\n1. Post link: a TikTok, Reels, Shorts or YouTube link. Paste it into the Video URL node and run once its download has finished.\n2. Your brand: what you sell, who it is for, your tone, and what you never do.\n3. Video Analysis: reads the post, its timings, words, on-screen text and sound.\n4. Content Recipe: explains why the post works, from the hook and the format to the beats, the call to action and the pace.\n5. Content Ideas: five ideas for your brand that reuse the structure. Never the words, footage, music, faces or logos.\n6. Scripts: one short script per idea. The workflow ends here.",
+        "text": "Paste the link of a post that worked and a few lines about your brand. You get five post ideas built on the same format, and a ready-to-film script for the one you pick.\n\n1. Post link: a TikTok, Reels, Shorts or YouTube link. The template starts with an example Reel; paste your own to replace it.\n2. Your brand: what you sell, who it is for, your tone, the goal, the call to action, and what you never do.\n3. Video Analysis: reads the post, its timings, words, on-screen text and sound.\n4. Content Recipe: explains why the post works, from the hook and the format to the beats, the call to action and the pace.\n5. Content Ideas: five ideas for your brand that reuse the structure. Never the words, footage, music, faces or logos.\n6. Script: a ready-to-film script for the idea you pick. The workflow ends here.",
         "width": 1180,
         "height": 650
       }
@@ -73,7 +73,7 @@
         "textColor": "#ffffff",
         "label": "Step 1",
         "title": "1 · Post link",
-        "text": "Paste the link of one post that performed: TikTok, Instagram Reels, YouTube Shorts or YouTube. The Video URL node downloads the post as soon as the link lands; run the workflow once the download has finished. A post up to a minute costs the least to analyze. A longer YouTube video asks you to pick a part in the node first: up to 10 minutes, the first minute is usually enough.",
+        "text": "Paste the link of one post that performed: TikTok, Instagram Reels, YouTube Shorts or YouTube. The template starts with an example Reel; paste your own link to replace it. The video downloads when the link lands, or when you run. A post up to a minute costs the least to analyze; a longer YouTube video asks you to pick a part first (up to 10 minutes).",
         "width": 640,
         "height": 270
       }
@@ -94,7 +94,7 @@
         "textColor": "#ffffff",
         "label": "Step 2",
         "title": "2 · Your brand",
-        "text": "A few plain lines: what you sell, who it is for, your tone, an offer, and what the brand never does. The ideas are only as specific as this text, and they are written in its language.",
+        "text": "A few plain lines: what you sell, who it is for, your tone, the goal of the video, the call to action, and what the brand never does. The ideas are only as specific as this text, and they are written in its language.",
         "width": 640,
         "height": 270
       }
@@ -178,7 +178,7 @@
         "textColor": "#ffffff",
         "label": "Step 6",
         "title": "6 · Scripts",
-        "text": "Runs once per idea: one short script each, scene by scene, with the spoken lines and what to show. The workflow stops at the scripts. Film them, or wire them into your video nodes.",
+        "text": "Writes a ready-to-film script for ONE idea: idea 1 by default. To pick another, click the wire from Content Ideas into Script and change the number (3 = the third idea). Set it to Each to get a script for every idea. The workflow stops at the script.",
         "width": 640,
         "height": 270
       }
@@ -192,8 +192,8 @@
       },
       "data": {
         "label": "Post link",
-        "youtubeUrl": "",
-        "videoId": "",
+        "youtubeUrl": "https://www.instagram.com/reel/Db3a6tuB5NP/",
+        "videoId": "Db3a6tuB5NP",
         "title": "",
         "thumbnailUrl": ""
       }
@@ -207,7 +207,7 @@
       },
       "data": {
         "label": "Your brand",
-        "text": "Brand: QUILLO, a two-person ceramics studio selling hand-thrown mugs online. Product: the Quillo mug, speckled glaze, 350 ml, dishwasher-safe, every one slightly different. Audience: people who make their morning coffee a small ritual, 25 to 40, often working from home. Tone: warm, a little dry, never salesy. Offer: free shipping on two mugs. Never: countdown timers, fake urgency, or making fun of other brands.",
+        "text": "Brand: A creator teaching people how to turn their personal experience, skills, and knowledge into a high-ticket digital offer. Product: a step-by-step AI method that interviews you, identifies what you can sell, finds the right audience, structures the offer, validates a $3K–$10K price point, and builds the positioning and messaging. Audience: people with real experience or expertise who want to create and sell a digital course, program, consulting offer, service, or community but do not know what to package or how to position it. Tone: direct, confident, intriguing, simple, slightly provocative, never corporate. Goal: create a 30-second viral-style video inspired by the reference video’s structure, showing how ordinary knowledge can be turned into a valuable digital offer, then revealing that AI can help build the offer. CTA: ask viewers to comment a specific keyword to receive the full prompt by DM. Never: copy the original creator’s exact wording, footage, identity, branding, or make fabricated income claims.",
         "width": 420,
         "height": 260,
         "variables": {}
@@ -270,22 +270,20 @@
     },
     {
       "id": "script",
-      "type": "generate-script",
+      "type": "llm-chat",
       "position": {
         "x": 3700,
         "y": 1280
       },
       "data": {
         "label": "Script",
-        "provider": "gemini",
-        "model": "gemini-2.5-flash",
         "llmModel": "gemini-3.6-flash",
-        "sceneCount": 5,
-        "styleGuide": "Short vertical social video (9:16). Open on the idea's hook in the first second. Keep the idea's beat order. Spoken lines short and natural; on-screen text where the idea calls for it.",
-        "structure": "freeform",
-        "tone": "",
-        "targetLength": 30,
-        "fieldMappings": {}
+        "systemPrompt": "You write scripts for short vertical social videos (9:16, about 30 seconds). You receive one post idea: its hook, format, beats, shot list and call to action. Turn it into one ready-to-film script.\n- Open on the idea's hook line in the first second, and keep the idea's beat order.\n- Write numbered scenes. For each: the time range, what we see, the spoken line or voice-over, and any on-screen text.\n- End on the idea's call to action.\n- Plain text, in the language of the idea. No preamble, no notes, no alternatives.",
+        "userInput": "",
+        "temperature": 0.7,
+        "maxTokens": 2048,
+        "fieldMappings": {},
+        "templateId": "custom"
       },
       "width": 480,
       "height": 600,
@@ -333,7 +331,11 @@
       "source": "ideas",
       "target": "script",
       "sourceHandle": "ideas",
-      "targetHandle": "prompt"
+      "targetHandle": "prompt",
+      "data": {
+        "outputMode": "item",
+        "itemIndex": "1"
+      }
     }
   ],
   "settings": {
