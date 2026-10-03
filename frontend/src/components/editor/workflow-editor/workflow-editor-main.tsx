@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "rea
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
 import { RUN_BUTTON_GLASS_CLASS } from "@/lib/run-button-style";
 import { useNavigate } from "react-router-dom";
-import { isExpandedClone, filterCloneNodes, getOutputType } from "@nodaro/shared"
+import { isExpandedClone, filterCloneNodes, getOutputType, isProjectedTriggerNodeType } from "@nodaro/shared"
 import { ReactFlowProvider } from "@xyflow/react";
 import {
   Play,
@@ -27,6 +27,8 @@ import { EditorErrorBoundary } from "../editor-error-boundary";
 import { UnsavedChangesDialog } from "../unsaved-changes-dialog";
 import { NavigateWithGuardContext } from "@/hooks/use-navigate-with-guard";
 import { ExecutionsTab } from "../executions-tab";
+import { useTriggeredRunNotices } from "./use-triggered-run-notices";
+import { useRunFocus } from "./use-run-focus";
 import { ExecutionStatusBar } from "../execution-status-bar";
 import { CostTab } from "../cost-tab";
 import { SubWorkflowBreadcrumb } from "../sub-workflow-breadcrumb";
@@ -150,6 +152,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const [activeTab, setActiveTab] = useState<"editor" | "present" | "executions" | "cost">(
     "editor",
   );
+  // A run a trigger started (a Telegram post, a webhook, a schedule): a notice, and View opens it.
+  const noticeWorkflowId = useWorkflowStore((s) => s.workflowId);
+  const [runFocus, setRunFocus] = useRunFocus(activeTab, noticeWorkflowId);
+  const hasTriggerNode = useWorkflowStore((s) => s.nodes.some((n) => isProjectedTriggerNodeType(n.type)));
+  const viewTriggeredRun = useCallback((executionId: string | null, openResult: boolean) => {
+    setActiveTab("executions");
+    setRunFocus({ executionId, openResult, at: Date.now() });
+  }, [setRunFocus]);
+  useTriggeredRunNotices(noticeWorkflowId, hasTriggerNode, viewTriggeredRun);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   // Confirm dialog for the fallback single-node discard control. Holds the
   // action to run on confirm (or null when closed); mirrors run-node-button.tsx.
@@ -1493,7 +1504,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
         {activeTab === "executions" && (
           <div className="absolute inset-0">
-            <ExecutionsTab className="h-full" workflowId={useWorkflowStore.getState().workflowId} />
+            <ExecutionsTab className="h-full" workflowId={useWorkflowStore.getState().workflowId} focus={runFocus} />
           </div>
         )}
 

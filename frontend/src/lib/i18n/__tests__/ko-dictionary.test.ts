@@ -55,6 +55,7 @@ const LATIN_OK: ReadonlySet<string> = new Set<string>([
   "credits.unitShortLower",
   "creds.secretPh",
   "field.fps",
+  "lib.triggerApi",
   "lib.triggerWebhook",
   "node.lottieJson",
   "out.json",

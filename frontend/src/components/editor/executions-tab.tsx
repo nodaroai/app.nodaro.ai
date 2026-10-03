@@ -1,8 +1,8 @@
-import React, { useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, ChevronDown, ChevronRight as ChevronRightIcon, Coins, Activity } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { listWorkflowExecutions, cancelWorkflowExecution, stopWorkflowExecution, getJobs, getJobStatus, type WorkflowExecution, type Job } from "@/lib/api"
+import { cancelWorkflowExecution, stopWorkflowExecution, getJobs, getJobStatus, type WorkflowExecution, type Job } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { toast } from "sonner"
 import { useT, tx } from "@/lib/i18n"
@@ -26,19 +26,36 @@ import {
   formatNodeType,
   type NodeState,
 } from "./execution-utils"
+import { pickResultNode, runEndOf } from "./workflow-editor/triggered-run-notices"
+import { executionsPageQuery } from "./executions-query"
+
+/**
+ * A run to open, from the editor's run notices: `executionId` null is the
+ * list itself; `openResult` also opens the ended run's result; `at` lets a
+ * second View of the same run open it again.
+ */
+export interface ExecutionsTabFocus {
+  readonly executionId: string | null
+  readonly openResult: boolean
+  readonly at: number
+}
 
 interface ExecutionsTabProps {
   readonly className?: string
   readonly workflowId?: string | null
+  /** Opens the first page with this run expanded and, when asked, its result shown once the list has it ended. */
+  readonly focus?: ExecutionsTabFocus | null
 }
 
-export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps) {
+export function ExecutionsTab({ className = "", workflowId, focus }: ExecutionsTabProps) {
   const qc = useQueryClient()
   const t = useT()
   const isRtl = useAppDir() === "rtl"
   const [cursor, setCursor] = useState<string | undefined>()
   const [prevCursors, setPrevCursors] = useState<string[]>([])
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(focus?.executionId ?? null)
+  /** The focused run whose result opens once the list shows it ended. */
+  const resultToOpenRef = useRef<string | null>(focus?.openResult ? focus.executionId : null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [selectedNodeInfo, setSelectedNodeInfo] = useState<{ nodeId: string; state: NodeState } | null>(null)
@@ -68,13 +85,37 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
   }
 
   const { data, isLoading: loading, error } = useQuery({
-    queryKey: ["workflow-executions", workflowId, cursor],
-    queryFn: () => listWorkflowExecutions(workflowId!, { limit: 20, cursor }),
+    ...executionsPageQuery(workflowId ?? "", cursor),
     enabled: !!workflowId,
     refetchInterval: 10_000,
   })
   const executions = data?.data ?? []
   const nextCursor = data?.nextCursor ?? null
+
+  // A View from a run notice: back to the first page (new runs are on it), that
+  // run expanded, and the list fetched afresh — the notice may know of the
+  // run's end before the copy this tab last polled does.
+  useEffect(() => {
+    if (!focus) return
+    setCursor(undefined)
+    setPrevCursors([])
+    setExpandedId(focus.executionId)
+    resultToOpenRef.current = focus.openResult ? focus.executionId : null
+    if (workflowId) void qc.invalidateQueries({ queryKey: ["workflow-executions", workflowId] })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus])
+
+  // ...and once the list shows that run ended, its result opens, as the notice promised.
+  useEffect(() => {
+    const id = resultToOpenRef.current
+    const exec = id ? data?.data.find((e) => e.id === id) : undefined
+    if (!exec || runEndOf(exec.status) === null) return
+    resultToOpenRef.current = null
+    const result = pickResultNode((exec.nodeStates ?? {}) as Record<string, NodeState>, exec.status)
+    if (result) handleNodeClick(result.nodeId, result.state)
+    // handleNodeClick only sets this component's selection state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, focus])
 
   const handleRefresh = () => {
     setCursor(undefined)

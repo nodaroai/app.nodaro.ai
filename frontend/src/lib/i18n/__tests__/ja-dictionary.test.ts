@@ -45,6 +45,7 @@ const LATIN_OK: ReadonlySet<string> = new Set<string>([
   "editor.copilotTitle",
   "field.fps",
   "integ.tabSocial",
+  "lib.triggerApi",
   "lib.triggerWebhook",
   "mcp.title",
   "misc.sourceApi",
