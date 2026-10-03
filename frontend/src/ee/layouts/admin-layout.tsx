@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, Outlet } from "react-router-dom"
 import { useGalleryReportCount } from "@/hooks/queries/use-gallery-queries"
 import { useQuery } from "@tanstack/react-query"
 import { listHeldJobs } from "@/ee/lib/review-api"
+import { ProviderAlertsBanner } from "@/ee/components/admin/provider-alerts-banner"
 import { useT } from "@/lib/i18n"
 import type { MessageKey } from "@/lib/i18n/en"
 import {
@@ -424,6 +425,7 @@ export default function AdminLayout() {
             </div>
           </header>
           <main className="flex-1 overflow-auto">
+            <ProviderAlertsBanner enabled={Boolean(user?.id) && isAdmin && hasCredits()} />
             <Outlet />
           </main>
         </div>
