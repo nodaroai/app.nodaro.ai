@@ -10,6 +10,7 @@ import {
   socialPostsDigest,
   socialPostsFrom,
   socialSearchCreditId,
+  socialSearchPostLink,
   socialSearchCreditIdFromNode,
   socialSearchMode,
   socialSearchPickTop,
@@ -141,5 +142,21 @@ describe("reading posts back", () => {
       "1. @maker · 2026-09-30 · 1200 views\n   Hello world\n   https://www.tiktok.com/@maker/video/1\n\n" +
       "2. r/aivideo · 40 points\n   A thread\n   https://www.tiktok.com/@maker/video/2",
     )
+  })
+})
+
+describe("socialSearchPostLink", () => {
+  const post = (url: unknown) => ({ id: "reddit:1", platform: "reddit", url, text: "", author: { handle: "a", name: "A" } })
+
+  it("reads one post (an Each wire) and the first of a list (any other wire)", () => {
+    expect(socialSearchPostLink(JSON.stringify(post("https://www.reddit.com/r/x/comments/1/")))).toBe("https://www.reddit.com/r/x/comments/1/")
+    expect(socialSearchPostLink(JSON.stringify([post("https://www.tiktok.com/@a/video/1"), post("https://www.tiktok.com/@a/video/2")]))).toBe("https://www.tiktok.com/@a/video/1")
+  })
+
+  it("reads no link from a digest, an empty list, or a post without an http(s) link", () => {
+    expect(socialSearchPostLink("1. @a: something https://x.com/a/status/1")).toBeUndefined()
+    expect(socialSearchPostLink("[]")).toBeUndefined()
+    expect(socialSearchPostLink(JSON.stringify(post("javascript:alert(1)")))).toBeUndefined()
+    expect(socialSearchPostLink(JSON.stringify(post(7)))).toBeUndefined()
   })
 })

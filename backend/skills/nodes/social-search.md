@@ -9,7 +9,7 @@ generated_from: 9efb4473c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `social-search`
 **Category:** input
-**Credit cost:** `10-30` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `20-60` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `json`, `text`
 
@@ -79,8 +79,10 @@ an admin preview until it opens to everyone). Set `platform`
 posts it passes on, as an array — and `text`, the same posts as a digest. A
 person picks posts in the editor; a workflow run without picks passes on the
 first `pickTop` (default 5). Wire `json` into Content Recipe with the edge in
-**Each** mode to run once per post. Video Analysis takes a post by its link:
-put Extract Field (`url`) between them, with the edge into it in **Each** mode.
+**Each** mode to run once per post. Wire `json` into Video Analysis's `video`
+input to analyze each post by its page link, with the edge in **Each** mode (a
+wire made in the editor starts that way; on any other mode the first post is
+analyzed). The `text` digest does not connect there.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->

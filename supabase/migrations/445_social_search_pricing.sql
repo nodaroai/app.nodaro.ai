@@ -8,7 +8,7 @@
 -- mirrors STATIC_CREDIT_COSTS in backend/src/ee/billing/credits.ts.
 --
 -- ON CONFLICT DO NOTHING: an administrator's retune survives re-application.
-INSERT INTO model_pricing (model_identifier, credit_cost) VALUES ('social-search', 10) ON CONFLICT (model_identifier) DO NOTHING;
-INSERT INTO model_pricing (model_identifier, credit_cost) VALUES ('social-search:1', 10) ON CONFLICT (model_identifier) DO NOTHING;
-INSERT INTO model_pricing (model_identifier, credit_cost) VALUES ('social-search:2', 20) ON CONFLICT (model_identifier) DO NOTHING;
-INSERT INTO model_pricing (model_identifier, credit_cost) VALUES ('social-search:3', 30) ON CONFLICT (model_identifier) DO NOTHING;
+INSERT INTO model_pricing (model_identifier, credit_cost) VALUES ('social-search', 20) ON CONFLICT (model_identifier) DO NOTHING;
+INSERT INTO model_pricing (model_identifier, credit_cost) VALUES ('social-search:1', 20) ON CONFLICT (model_identifier) DO NOTHING;
+INSERT INTO model_pricing (model_identifier, credit_cost) VALUES ('social-search:2', 40) ON CONFLICT (model_identifier) DO NOTHING;
+INSERT INTO model_pricing (model_identifier, credit_cost) VALUES ('social-search:3', 60) ON CONFLICT (model_identifier) DO NOTHING;

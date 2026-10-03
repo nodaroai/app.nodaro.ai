@@ -17,6 +17,7 @@ import { ACCEPTS_MEDIA } from "@/lib/ffmpeg-handles"
 import { ACCEPTS_JSON, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { buildEditPlanCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared"
 import { useT } from "@/lib/i18n"
+import { copyToClipboard } from "@/lib/utils"
 import type { EditPlanNodeData } from "@/types/nodes"
 
 function ResultTreeModal({
@@ -44,7 +45,7 @@ function ResultTreeModal({
             <button
               type="button"
               className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80 transition-colors"
-              onClick={() => navigator.clipboard.writeText(JSON.stringify(plan, null, 2))}
+              onClick={() => copyToClipboard(JSON.stringify(plan, null, 2), t("node.dataCopied"))}
             >
               {t("cfgext.scrapeCopyJson")}
             </button>
@@ -163,7 +164,7 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
                   className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
-                    navigator.clipboard.writeText(JSON.stringify(plan, null, 2))
+                    copyToClipboard(JSON.stringify(plan, null, 2), t("node.dataCopied"))
                   }}
                 >
                   <Copy className="w-3 h-3" />

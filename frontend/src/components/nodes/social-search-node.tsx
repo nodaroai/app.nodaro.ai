@@ -4,12 +4,11 @@ import { useT } from "@/lib/i18n"
 import { memo, useEffect, useState, type MouseEvent, type ReactNode } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Braces, Lock, ScanSearch, Search, Type } from "lucide-react"
-import { socialSearchMode, socialSearchPlatform } from "@nodaro/shared"
+import { socialSearchMode, socialSearchPlatform, type SocialPost } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover } from "./handle-with-popover"
-import { MetaAdMedia } from "./meta-ad-media"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useScrapeNodeCredits } from "./use-scrape-node-credits"
 import type { SocialSearchNodeData } from "@/types/nodes"
@@ -19,6 +18,8 @@ import { elapsedLabel, relativeTime } from "./web-scrape-run-state"
 import { deriveSocialSearchCardState, socialSearchChosen, socialSearchResults } from "./social-search-run-state"
 import { SOCIAL_PLATFORM_META, choiceLine, socialModeLabel } from "@/components/research/social-platforms"
 import { SocialPostPicker } from "@/components/research/social-post-picker"
+import { SocialPostPreview } from "@/components/research/social-post-preview"
+import { SocialPostTile } from "@/components/research/social-post-tile"
 
 const ACCEPTS_IN = (t: string) => isValidWebScrapeConnection("in", t)
 const WIDTH = 400
@@ -61,6 +62,7 @@ function SocialSearchNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [reading, setReading] = useState<SocialPost | null>(null)
 
   const platform = socialSearchPlatform(nodeData.platform)
   const mode = socialSearchMode(platform, nodeData.mode)
@@ -146,12 +148,7 @@ function SocialSearchNodeComponent({ id, data, selected }: NodeProps) {
             <div className={cn("flex flex-col gap-2.5", state.kind === "success" && state.stale ? "opacity-60" : "")}>
               <div className="grid grid-cols-3 gap-1.5">
                 {chosen.slice(0, MAX_THUMBS).map((post) => (
-                  <MetaAdMedia
-                    key={post.id}
-                    src={post.media.thumbnailUrl ?? post.author.avatarUrl ?? null}
-                    initial={(post.author.handle || post.author.name || "?").charAt(0).toUpperCase()}
-                    className="aspect-[3/4] w-full rounded-lg"
-                  />
+                  <SocialPostTile key={post.id} post={post} onRead={setReading} />
                 ))}
               </div>
               <div className="flex items-center gap-2 text-[11.5px] font-semibold text-[var(--meta-ads-muted)]">
@@ -189,6 +186,7 @@ function SocialSearchNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="social-search" handleId="json" type="source" position={Position.Right} label="JSON" color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="24px" />
       <HandleWithPopover nodeId={id} nodeType="social-search" handleId="text" type="source" position={Position.Right} label={t("social.outText")} color={DATA_HANDLE_COLORS.text} icon={<Type />} side="right" top="52px" />
       <SocialPostPicker data={nodeData} open={pickerOpen} onOpenChange={setPickerOpen} onApply={(patch) => updateNodeData(id, patch)} />
+      <SocialPostPreview post={reading} onOpenChange={(open) => !open && setReading(null)} />
     </div>
   )
 }

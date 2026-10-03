@@ -6,7 +6,9 @@
 
 Social Search finds public posts on one platform and returns them in one shape, whatever the platform: the link, who posted it, when, the words, the still and (where the platform gives one) the video, and the numbers — views, likes, comments, shares, saves, or a Reddit score. Meta ads also carry how long the ad has run, how many versions it has, its call to action and where it links.
 
-After a search, open **Pick posts** on the node to browse the results as cards and pick the posts this node passes on, in the order you want them. With no picks, the node passes on the first few (5 by default). Wire the `json` output into Content Recipe, a List or Extract Field; set the wire to **Each** to run the next node once per post. To analyze each post's video, take its link with Extract Field (field `url`) and wire that into Video Analysis's video input.
+After a search, open **Pick posts** on the node to browse the results as cards and pick the posts this node passes on, in the order you want them. With no picks, the node passes on the first few (5 by default). Wire the `json` output into Content Recipe, Video Analysis, a List or Extract Field; set the wire to **Each** to run the next node once per post. Video Analysis analyzes each post by its link, and a new wire into its video input starts in Each mode, so every post the search passes on is analyzed.
+
+Click a post on the node, or **Read** on a card in **Pick posts**, to read the whole post: who posted it and when, every word, its numbers, and its link to open or copy.
 
 The bookmark on each card saves the post to [Inspiration](../../features/inspiration.md), your wall of saved posts with notes and tags. Saving does not pick the post.
 
@@ -88,9 +90,9 @@ Charged per page of results, the same on every platform:
 
 | Results | Credits |
 |---------|---------|
-| 20 posts | 10 CR |
-| 40 posts | 20 CR |
-| 60 posts | 30 CR |
+| 20 posts | 20 CR |
+| 40 posts | 40 CR |
+| 60 posts | 60 CR |
 
 These are list prices: the node's Run button, and `GET /v1/models` / the MCP `list_models` tool, show the price your instance charges. A search that fails is refunded.
 

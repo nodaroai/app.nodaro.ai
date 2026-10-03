@@ -20,6 +20,7 @@ import type { VariableDisplayMode } from "@/components/editor/config-panels/type
 import type { NodeDoubleClickAction } from "@/lib/node-double-click-action"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
 import { videoOverlayConnectPatch } from "@/lib/video-overlay-connect"
+import { initialEdgeData } from "@/lib/video-analysis-handles"
 import { ensureNodePositions } from "@/lib/node-position"
 import { findNonOverlappingPosition, nodeRect, DEFAULT_PLACEMENT_SIZE } from "@/lib/find-free-position"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
@@ -1190,8 +1191,14 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   onConnect: (connection) => {
     if (get().isReadOnly) return
     set((state) => {
+      const edgeData = initialEdgeData(
+        state.nodes.find((n) => n.id === connection.source)?.type,
+        connection.sourceHandle,
+        state.nodes.find((n) => n.id === connection.target)?.type,
+        connection.targetHandle,
+      )
       let newEdges = addEdge(
-        { ...connection, id: `edge_${Date.now()}` },
+        { ...connection, id: `edge_${Date.now()}`, ...(edgeData ? { data: edgeData } : {}) },
         state.edges,
       )
 

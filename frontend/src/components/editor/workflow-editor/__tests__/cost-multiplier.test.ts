@@ -185,11 +185,18 @@ describe("estimateRunCredits — the shipped Steal the Format template", () => {
   const TEMPLATE = resolve(__dirname, "../../../../../../backend/src/lib/tutorial-seed/templates/steal-the-format.json")
   const doc = JSON.parse(readFileSync(TEMPLATE, "utf8")) as { nodes: WorkflowNode[]; edges: WorkflowEdge[] }
 
-  it("whole run: the script node is priced once per idea", () => {
-    const script = doc.nodes.find((x) => x.type === "generate-script")!
-    const ideas = doc.nodes.find((x) => x.type === "content-ideas")!
+  it("whole run: the script node is priced for the one idea its wire picks", () => {
+    const script = doc.nodes.find((x) => x.data && (x.data as { label?: string }).label === "Script")!
     const runs = ids(...doc.nodes.filter((x) => x.type !== "sticky-note"))
-    expect(getCostMultiplier(script, doc.nodes, doc.edges, runs)).toBe((ideas.data as { count: number }).count)
+    expect(getCostMultiplier(script, doc.nodes, doc.edges, runs)).toBe(1)
+  })
+
+  it("set back to Each, the same wire prices one script per idea", () => {
+    const script = doc.nodes.find((x) => x.data && (x.data as { label?: string }).label === "Script")!
+    const ideas = doc.nodes.find((x) => x.type === "content-ideas")!
+    const each = doc.edges.map((e) => (e.target === script.id ? { ...e, data: { outputMode: "each" } } : e)) as WorkflowEdge[]
+    const runs = ids(...doc.nodes.filter((x) => x.type !== "sticky-note"))
+    expect(getCostMultiplier(script, doc.nodes, each, runs)).toBe((ideas.data as { count: number }).count)
   })
 })
 
