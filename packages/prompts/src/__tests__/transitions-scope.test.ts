@@ -603,6 +603,64 @@ describe("F9 time bodies (2026-10-03 A/B at full / long: F9 arm B on seasonal-sh
   })
 })
 
+describe("F7 glitch and light bodies (2026-10-03 A/B: F7 arm B on channel-flip, display-wipe and color-invert)", () => {
+  // Arm B, the F7 draft with the ship tidy (first letter lower-cased, final full stop dropped). Each is
+  // byte-identical to the body inside the prompt of the take it was rated on: channel-flip 01-B (7f7829ec),
+  // display-wipe 03-B (c66d59bc) and color-invert 04-B (18d66f83), all at the tile-default levers. None of the
+  // three rows has a heading, none of the bodies contains a colon (so the heading guard in
+  // transitions-instant.test.ts has nothing to match), and no comma item equals its row's term. The other F7
+  // rows keep today's text.
+  const ROWS = [
+    {
+      id: "channel-flip",
+      term: "tv channel flip with static",
+      body:
+        "the whole picture breaks into a brief burst of black-and-white static, the image jumping and tearing" +
+        " as if the channel were being changed. The camera stays where it is and the framing does not change." +
+        " The static clears as quickly as it came, and the second shot snaps in, steady, like the next channe" +
+        "l. The shot ends on the second shot, clean and fully resolved, with no static left. The static cover" +
+        "s the whole frame, so the picture itself is what changes channel",
+    },
+    {
+      id: "display-wipe",
+      term: "compress into a screen and expand out",
+      body:
+        "the whole first shot shrinks toward the centre of the frame into a small glowing rectangle, then col" +
+        "lapses to a bright line and a dot as if its power were cut. The camera stays where it is and the fra" +
+        "ming does not change. From the dot a line snaps open and widens into a rectangle showing the second " +
+        "shot, which grows until it fills the frame. The shot ends on the second shot, full frame and fully r" +
+        "esolved, with no border or scanlines left. The picture itself shrinks and grows on a black field, wi" +
+        "th the camera holding still throughout",
+    },
+    {
+      id: "color-invert",
+      term: "color invert flash",
+      body:
+        "the colours of the whole picture turn to their photographic negative in an instant. The camera stays" +
+        " where it is and the framing does not change. The negative holds for a single beat, and when the col" +
+        "ours snap back to normal the second shot is in place. The shot ends on the second shot in natural co" +
+        "lour, fully resolved. The change of shot happens while the picture is in negative, and the picture s" +
+        "tays upright and in place throughout",
+    },
+  ] as const
+
+  it.each(ROWS)("$id: the catalog hint is the B body", ({ id, body }) => {
+    expect(getTransitionPromptHint(id)).toBe(body)
+  })
+
+  it.each(ROWS)("$id renders `term (body)` at the tile-default levers", ({ id, term, body }) => {
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "full", { scope: "shot" })).toBe(`${term} (${body})`)
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "compact", { scope: "shot" })).toBe(`${term} (${body})`)
+    expect(composeTransitionHintFromConnections(id, [], [])).toBe(`${term} (${body})`)
+  })
+
+  it.each(ROWS)("$id at middle / short / natural", ({ id, term, body }) => {
+    expect(composeTransitionHintFromConnections(id, [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      `${term} (${body}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
+    )
+  })
+})
+
 describe("L1 — a cut spans nothing, so `full` adds no clause", () => {
   it.each(INSTANT_IDS)("%s + full renders no position clause", (id) => {
     const out = composeTransitionHintFromConnections(id, [], [], { position: "full", duration: "short", intensity: "natural" })
