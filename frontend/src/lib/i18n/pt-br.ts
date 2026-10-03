@@ -2253,6 +2253,8 @@ export const ptBR: ChromeDict = {
   "paramcfg.eGPauseGatherComposure": "ex.: pausa, recupera a compostura",
   "paramcfg.eGTrailOff": "ex.: a voz vai sumindo",
   "paramcfg.tone": "Tom",
+  "paramcfg.transitionDefaultLook": "Visual padrão",
+  "paramcfg.transitionDefaultLookHint": "Cada transição mantém seu próprio visual padrão",
   "paramcfg.eGDramaticPlayfulDark": "ex.: dramático, divertido, sombrio",
   "paramcfg.styleDescription": "Descrição do estilo",
   "paramcfg.eGStudioGhibliWatercolor": "ex.: aquarela no estilo Studio Ghibli…",
