@@ -14,7 +14,7 @@ The Image Critic node uses a vision-language model to evaluate an image against 
 | Threshold | number 0-1 | `0.7` | `approved = score >= threshold`. Below the threshold, the `rejected` handle fires instead. |
 | Prompt | text | `""` | Required for `prompt-adherence` and `all` modes. Can be wired via the `prompt` input edge -- the edge wins when present. |
 | LLM model | select | Claude Sonnet 4.6 | Any vision-capable model. Pricing varies by tier (10 / 5 / 20 credits for economy / standard / premium). |
-| Advanced mode | boolean | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply. Bills one credit tier up; disabled with an inline reason on non-Gemini models |
+| Advanced mode | boolean | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply. Bills one credit tier up, capped at premium; disabled with an inline reason on non-Gemini models |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
@@ -46,9 +46,9 @@ Any vision-capable LLM configured in the editor. The default is Claude Sonnet 4.
 
 | LLM tier | Credits per call |
 |----------|-----------------|
-| Economy (Gemini Flash, Claude Haiku) | 1 |
-| Standard (Claude Sonnet 4.6, GPT-5.2) -- default | 1 |
-| Premium (Claude Opus 4.6, GPT-5.4, Gemini Pro) | 2 |
+| Economy (Gemini Flash, Claude Haiku) | 10 |
+| Standard (Claude Sonnet 4.6, GPT-5.2) -- default | 5 |
+| Premium (Claude Opus 4.6, GPT-5.4, Gemini Pro) | 20 |
 
 The `all` mode does NOT multiply the cost -- every dimension is scored in a single VLM call.
 

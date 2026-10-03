@@ -48,9 +48,9 @@ follow. Do not guess a default for any of them except language:
 
 0. **Method** — if the user did not explicitly choose, present both options with the
    cost/speed tradeoff and WAIT for their choice: (a) animated footage (this recipe,
-   ~45cr per 10s block ≈ 270cr/min of video, slower, illustrated scenes) vs (b) motion
+   ~450cr per 10s block ≈ 2700cr/min of video, slower, illustrated scenes) vs (b) motion
    graphics (`start_video_director`, typography + shapes revealing on the voiceover,
-   a fixed ~20cr total via `create_explainer` / ~11cr driving the tools directly,
+   a fixed ~200cr total via `create_explainer` / ~110cr driving the tools directly,
    length-independent, fast). If they pick (b), STOP and call `start_video_director`
    instead of continuing this recipe.
 1. **Duration** in minutes, 1–10. This fixes the block count: **N = minutes × 6** blocks
@@ -74,7 +74,7 @@ entirely user-supplied.
 
 ## Phase 1 — The style key (ONE image + a MANDATORY quality gate)
 
-Generate exactly one reference image with `generate_image` (≈5cr). It is either an
+Generate exactly one reference image with `generate_image` (≈20cr). It is either an
 abstract **style swatch** (the render style, palette, line grammar, and finish shown on a
 representative composition) or, in mascot mode, the mascot rendered in that exact style.
 Follow the non-photoreal STYLE-descriptor guidance in `references/prompts.md`.
@@ -91,7 +91,7 @@ against these swatch criteria:
 - **Exact palette** — the intended colors are present and saturated as described.
 
 If the key fails ANY criterion, regenerate it until it passes. This is not optional: one
-extra ≈5cr image beats N bad ≈45cr clips. (Root-caused from the 2026-07-02 AC-explainer
+extra ≈20cr image beats N bad ≈450cr clips. (Root-caused from the 2026-07-02 AC-explainer
 comparison: same prompt, different key → visibly different clip quality.)
 
 ## Phase 2 — Narration (N labeled blocks)
@@ -117,7 +117,7 @@ style key attached. The block-prompt template + richness rule live in
 `model: "gemini-omni-video"`, `duration: 10`, `resolution: "720p"`, the chosen aspect
 ratio, and the **style key attached as the reference image** (via `connected_references`
 — the wired-reference shape; only image-reference-capable models attach it, and
-gemini-omni does). This collapses keyframe + animate into one call per block. Cost anchor: **45cr/block** (`gemini-omni-video:10`), i.e. 270cr of clips per
+gemini-omni does). This collapses keyframe + animate into one call per block. Cost anchor: **450cr/block** (`gemini-omni-video:10`), i.e. 2700cr of clips per
 output minute. **`gemini-omni-video` output is SILENT on Nodaro** — the voice carries
 the block alone; do not rely on clip audio.
 

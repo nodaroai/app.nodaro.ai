@@ -92,6 +92,226 @@ export function mergeEdlSourceOffsets(
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+//  B4 — audio-sync offsets onto a planner's sources
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Below this, a measured offset is not trusted (audio-sync's own
+ *  "check it by ear" line). */
+export const AUDIO_SYNC_MIN_CONFIDENCE = 0.5
+
+/** One source row as a planner (edit-plan) sends it. */
+export interface AudioSyncOffsetSource {
+  readonly id: string
+  readonly role?: string
+  /** Set = a hand-set offset, which always wins over a measured one. */
+  readonly offsetMs?: number
+}
+
+/** Why measured offsets could not be applied. Every code names the source to
+ *  fix, so a caller can phrase it with its own label (`describeAudioSyncOffsetIssue`). */
+export type AudioSyncOffsetIssue =
+  | { readonly code: "not-audio-sync" }
+  | { readonly code: "invalid-offset"; readonly sourceId: string }
+  | { readonly code: "anchor-offset"; readonly sourceId: string; readonly offsetMs: number }
+  | { readonly code: "anchor-unmeasured"; readonly sourceId: string }
+  | { readonly code: "weak-match"; readonly sourceId: string; readonly confidence: number; readonly anchor: boolean }
+  | { readonly code: "unmeasured"; readonly sourceId: string }
+
+export type AudioSyncOffsetsResult<S> =
+  | {
+      readonly ok: true
+      /** The sources, with the measured offsets written onto `offsetMs`. */
+      readonly sources: S[]
+      /** The source whose clock the offsets are anchored to. */
+      readonly anchor?: string
+      /** Source ids that took a measured offset. */
+      readonly applied: readonly string[]
+    }
+  | { readonly ok: false; readonly issues: readonly AudioSyncOffsetIssue[] }
+
+interface SyncRow { readonly offsetMs: number; readonly confidence: number }
+
+/** audio-sync's result (an object, or the JSON string a canvas handle carries)
+ *  → its rows by source id, the reference included; null when it is not one. */
+function readAudioSyncRows(sync: unknown): Map<string, SyncRow> | null {
+  let value = sync
+  if (typeof value === "string") {
+    try { value = JSON.parse(value) } catch { return null }
+  }
+  if (!value || typeof value !== "object") return null
+  const { reference, offsets } = value as { reference?: unknown; offsets?: unknown }
+  if (!Array.isArray(offsets)) return null
+  const rows = new Map<string, SyncRow>()
+  for (const row of offsets) {
+    if (!row || typeof row !== "object") return null
+    const { sourceId, offsetMs, confidence } = row as Record<string, unknown>
+    if (typeof sourceId !== "string" || !isFiniteNumber(offsetMs)) return null
+    if (!rows.has(sourceId)) rows.set(sourceId, { offsetMs, confidence: isFiniteNumber(confidence) ? confidence : 0 })
+  }
+  // The reference is measured by definition (its own offset is 0).
+  if (typeof reference === "string" && reference && !rows.has(reference)) rows.set(reference, { offsetMs: 0, confidence: 1 })
+  return rows
+}
+
+const handSet = (s: AudioSyncOffsetSource): boolean => isFiniteNumber(s.offsetMs)
+
+/** The source whose clock a planner's plan is on: the `master-audio` source,
+ *  else the first (edit-plan's `masterProbeSource`). */
+function plannerClockSource<S extends AudioSyncOffsetSource>(sources: readonly S[]): S | undefined {
+  return sources.find((s) => s.role === "master-audio") ?? sources[0]
+}
+
+/** B4 — audio-sync's measured offsets → a planner's `sources[].offsetMs`
+ *  (decided 2026-09-25). The planner makes its plan on its MASTER's clock:
+ *  the `master-audio` source, else its first source (edit-plan's own rule) —
+ *  the ANCHOR. Every other source gets `offsetMs = measured(s) − measured(anchor)`
+ *  (D19 via `mergeEdlSourceOffsets`), so audio-sync's reference need not be the
+ *  master. Never out of sync silently — each of these is an issue instead:
+ *   - a source with a hand-set `offsetMs` keeps it (it always wins);
+ *   - a source audio-sync did not measure → "unmeasured";
+ *   - a measured source under `AUDIO_SYNC_MIN_CONFIDENCE` → "weak-match";
+ *   - the anchor unmeasured / weak, when any source needs it → "anchor-…";
+ *   - a hand-set non-zero offset on the anchor → "anchor-offset" (its clock is the plan's).
+ *  Rows for sources the planner does not have are ignored. Pure; never throws. */
+export function applyAudioSyncOffsets<S extends AudioSyncOffsetSource>(
+  sources: readonly S[],
+  sync: unknown,
+): AudioSyncOffsetsResult<S> {
+  const rows = readAudioSyncRows(sync)
+  if (!rows) return { ok: false, issues: [{ code: "not-audio-sync" }] }
+  const list = Array.isArray(sources) ? sources.filter((s): s is S => !!s && typeof s === "object") : []
+  const anchor = plannerClockSource(list)
+  if (!anchor) return { ok: true, sources: [...list], applied: [] }
+
+  const issues: AudioSyncOffsetIssue[] = []
+  // A hand-set offset that is not a number (a "500" from a JSON file) would
+  // otherwise be read as absent, or summed as a string.
+  for (const s of list) if (s.offsetMs !== undefined && !handSet(s)) issues.push({ code: "invalid-offset", sourceId: s.id })
+  if (handSet(anchor) && anchor.offsetMs !== 0) {
+    issues.push({ code: "anchor-offset", sourceId: anchor.id, offsetMs: anchor.offsetMs! })
+  }
+  const measured: Record<string, number> = {}
+  for (const s of list) {
+    if (s.id === anchor.id || handSet(s)) continue
+    const row = rows.get(s.id)
+    if (!row) issues.push({ code: "unmeasured", sourceId: s.id })
+    else if (!(row.confidence >= AUDIO_SYNC_MIN_CONFIDENCE)) issues.push({ code: "weak-match", sourceId: s.id, confidence: row.confidence, anchor: false })
+    else measured[s.id] = row.offsetMs
+  }
+  // The anchor's own measurement is the rebase point — needed only when some
+  // source takes a measured offset.
+  if (Object.keys(measured).length > 0) {
+    const row = rows.get(anchor.id)
+    if (!row) issues.push({ code: "anchor-unmeasured", sourceId: anchor.id })
+    else if (!(row.confidence >= AUDIO_SYNC_MIN_CONFIDENCE)) issues.push({ code: "weak-match", sourceId: anchor.id, confidence: row.confidence, anchor: true })
+    else measured[anchor.id] = row.offsetMs
+  }
+  if (issues.length > 0) return { ok: false, issues }
+  if (Object.keys(measured).length === 0) return { ok: true, sources: [...list], anchor: anchor.id, applied: [] }
+
+  // One arithmetic implementation: the D19 anchored SET.
+  const pseudo = { version: 1, clock: "master", sources: list, segments: [] } as unknown as Edl
+  const merged = mergeEdlSourceOffsets(pseudo, measured, { anchor: anchor.id })
+  const byId = new Map(merged.edl.sources.map((s) => [s.id, s.offsetMs]))
+  const applied = new Set(merged.applied)
+  return {
+    ok: true,
+    sources: list.map((s) => (applied.has(s.id) ? { ...s, offsetMs: byId.get(s.id)! } : s)),
+    anchor: anchor.id,
+    applied: merged.applied,
+  }
+}
+
+/** Why edit-plan's sources cannot be planned as given: an audio-sync issue,
+ *  or a transcript made from a recording that is off the plan's clock. */
+export type EditPlanSourceIssue =
+  | AudioSyncOffsetIssue
+  | { readonly code: "transcript-off-clock"; readonly sourceId: string; readonly masterId: string; readonly offsetMs: number }
+
+/** B4 — the ONE check every edit-plan caller runs before dispatch (the
+ *  orchestrator, the editor, MCP, the SDK), so a plan that would render out of
+ *  sync fails before charging (decided 2026-09-25):
+ *   - `offsets` given (audio-sync's result; null/"" when wired but empty) →
+ *     `applyAudioSyncOffsets`;
+ *   - the master's own offset must be 0 (the plan follows its clock);
+ *   - `transcriptSourceId` (the recording the transcript was made from, when
+ *     known) must be on the master's clock: the master itself, or a source
+ *     whose offset is 0. Unknown → assumed the master's.
+ *  `transcriptSourceId` is echoed back only when it names one of the sources,
+ *  for the caller to stamp on the transcript. Pure; never throws. */
+export function resolveEditPlanSources<S extends AudioSyncOffsetSource>(
+  sources: readonly S[],
+  opts: { readonly offsets?: unknown; readonly transcriptSourceId?: string } = {},
+):
+  | { readonly ok: true; readonly sources: S[]; readonly transcriptSourceId?: string }
+  | { readonly ok: false; readonly issues: readonly EditPlanSourceIssue[] } {
+  const list = Array.isArray(sources) ? sources.filter((s): s is S => !!s && typeof s === "object") : []
+  const anchor = plannerClockSource(list)
+  const issues: EditPlanSourceIssue[] = []
+  let planned: S[] = [...list]
+  if (opts.offsets !== undefined) {
+    const synced = applyAudioSyncOffsets(list, opts.offsets)
+    if (synced.ok) planned = synced.sources
+    else issues.push(...synced.issues)
+  } else {
+    for (const s of list) if (s.offsetMs !== undefined && !handSet(s)) issues.push({ code: "invalid-offset", sourceId: s.id })
+    if (anchor && handSet(anchor) && anchor.offsetMs !== 0) {
+      issues.push({ code: "anchor-offset", sourceId: anchor.id, offsetMs: anchor.offsetMs! })
+    }
+  }
+  const spoken = opts.transcriptSourceId ? planned.find((s) => s.id === opts.transcriptSourceId) : undefined
+  if (spoken && anchor && spoken.id !== anchor.id && handSet(spoken) && spoken.offsetMs !== 0) {
+    issues.push({ code: "transcript-off-clock", sourceId: spoken.id, masterId: anchor.id, offsetMs: spoken.offsetMs! })
+  }
+  if (issues.length > 0) return { ok: false, issues }
+  return { ok: true, sources: planned, ...(spoken ? { transcriptSourceId: spoken.id } : {}) }
+}
+
+/** The recording a transcript was made from, traced on a canvas: the node
+ *  feeding the transcribing node, through clock-preserving hops (extract-audio).
+ *  Undefined when the producer is not a transcriber or the trace is ambiguous
+ *  (more than one upstream) — the caller then assumes the master's clock. */
+export function editPlanTranscriptOrigin(
+  producerId: string,
+  typeOf: (nodeId: string) => string | undefined,
+  edges: ReadonlyArray<{ readonly source: string; readonly target: string }>,
+): string | undefined {
+  if (typeOf(producerId) !== "transcribe") return undefined
+  let current = producerId
+  for (let hop = 0; hop < 4; hop++) {
+    const upstream = [...new Set(edges.filter((e) => e.target === current).map((e) => e.source))]
+    if (upstream.length !== 1) return undefined
+    const up = upstream[0]!
+    if (typeOf(up) !== "extract-audio") return up
+    current = up
+  }
+  return undefined
+}
+
+/** A plain-language line for one issue; `labelOf` turns a source id into the
+ *  name the user sees (a canvas node's label, say). */
+export function describeAudioSyncOffsetIssue(issue: EditPlanSourceIssue, labelOf: (sourceId: string) => string = (id) => id): string {
+  switch (issue.code) {
+    case "transcript-off-clock":
+      return `the transcript was made from "${labelOf(issue.sourceId)}", which is ${issue.offsetMs} ms off the master "${labelOf(issue.masterId)}" — the plan follows the master's clock, so transcribe "${labelOf(issue.masterId)}", or mark "${labelOf(issue.sourceId)}" as master audio`
+    case "not-audio-sync":
+      return "the offsets carry no Audio Sync result — pass its job's output_data.json (on the canvas: connect Audio Sync's Offsets output and run it)"
+    case "invalid-offset":
+      return `the offset set on "${labelOf(issue.sourceId)}" is not a number of milliseconds`
+    case "anchor-offset":
+      return `"${labelOf(issue.sourceId)}" is the master (the plan follows its clock), so its offset must be 0, not ${issue.offsetMs} ms`
+    case "anchor-unmeasured":
+      return `audio-sync did not measure "${labelOf(issue.sourceId)}", the master the other sources are timed against — add it to audio-sync's sources`
+    case "weak-match":
+      return issue.anchor
+        ? `audio-sync's match for "${labelOf(issue.sourceId)}", the master the other sources are timed against, is too weak to trust (confidence ${issue.confidence}; ${AUDIO_SYNC_MIN_CONFIDENCE} needed) — set the other sources' offsets by hand, or mark a better-recorded source as master audio`
+        : `audio-sync's match for "${labelOf(issue.sourceId)}" is too weak to trust (confidence ${issue.confidence}; ${AUDIO_SYNC_MIN_CONFIDENCE} needed) — set its offset by hand`
+    case "unmeasured":
+      return `"${labelOf(issue.sourceId)}" was not measured by audio-sync — wire it into audio-sync, or set its offset by hand (0 if it started with the master)`
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 //  D20 — slot resolution
 // ─────────────────────────────────────────────────────────────────────────
 

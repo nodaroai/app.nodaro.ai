@@ -30,6 +30,7 @@ import {
   isNotFoundError,
 } from "../api"
 import { useLocaleStore } from "@/lib/locale-store"
+import { translate } from "@/lib/i18n"
 import { en } from "@/lib/i18n/en"
 import { he } from "@/lib/i18n/he"
 
@@ -550,6 +551,43 @@ describe("throwApiError dispatch (via editImage)", () => {
     await expect(editImage("http://img.png")).rejects.toThrow(
       "Failed to start image editing",
     )
+  })
+})
+
+/**
+ * In another interface language the server's English gives way to the
+ * dictionary: the action's headline, then a translated reason when the code
+ * has a fixed meaning, or the server's own detail when it does not.
+ */
+describe("throwApiError in the interface language (Hebrew)", () => {
+  const headline = translate("he", "apiErr.startImageEditing")
+  const withReason = (reason: string) => translate("he", "apiErr.withReason", { context: headline, reason })
+
+  beforeEach(() => useLocaleStore.setState({ locale: "he" }))
+  afterEach(() => useLocaleStore.setState({ locale: "en" }))
+
+  it("translates the reason of a fixed-meaning code and keeps the code and the server's words", async () => {
+    vi.stubGlobal("fetch", mockFetchError(404, { error: { code: "not_found", message: "Workflow not found" } }))
+    const err = await editImage("http://img.png").catch((e: unknown) => e)
+    expect((err as Error).message).toBe(withReason(translate("he", "apiErr.reason.notFound")))
+    expect((err as { code?: string }).code).toBe("not_found")
+    expect((err as { serverMessage?: string }).serverMessage).toBe("Workflow not found")
+  })
+
+  it("keeps a detail the code cannot carry after the translated headline", async () => {
+    vi.stubGlobal("fetch", mockFetchError(400, { error: { code: "validation_error", message: "No file provided" } }))
+    await expect(editImage("http://img.png")).rejects.toThrow(withReason("No file provided"))
+  })
+
+  it("shows the translated headline alone when the server sent no message", async () => {
+    vi.stubGlobal("fetch", mockFetchUnparseable(502))
+    await expect(editImage("http://img.png")).rejects.toThrow(headline)
+    expect(headline).not.toBe(en["apiErr.startImageEditing"])
+  })
+
+  it("gives a refusal with its own sentence that sentence, not the server's English", async () => {
+    vi.stubGlobal("fetch", mockFetchError(409, { error: { code: "name_taken", message: "Name already in use." } }))
+    await expect(editImage("http://img.png")).rejects.toThrow(he["apiErr.nameTaken"])
   })
 })
 

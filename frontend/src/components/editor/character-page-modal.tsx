@@ -20,6 +20,7 @@ import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { entityGenderLabel, entityStyleLabel } from "@/lib/entity-profile-labels"
 import type { CharacterNodeData, CharacterAssetItem } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
 import { CharacterAssetVideoGrid } from "@/components/editor/character-asset-video-grid"
@@ -638,7 +639,7 @@ centered composition, high quality, single character`
                 {data.characterName || t("entity.unnamedCharacter")}
               </h2>
               <p className="text-sm text-muted-foreground">
-                {data.style ?? "realistic"} | {data.gender ?? "other"}
+                {entityStyleLabel(data.style, t)} | {entityGenderLabel(data.gender, t)}
                 {data.baseOutfit ? ` | ${data.baseOutfit}` : ""}
               </p>
             </div>

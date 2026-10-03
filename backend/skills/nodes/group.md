@@ -1,7 +1,7 @@
 ---
 node_type: group
-generated_at: 2026-09-21T19:12:10.475Z
-generated_from: 09788c987
+generated_at: 2026-09-27T12:51:25.339Z
+generated_from: c607aa02c
 ---
 
 # Group
@@ -9,7 +9,7 @@ generated_from: 09788c987
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `group`
 **Category:** utility
-**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** (none)
 **Outputs (source handles):** (none)
 

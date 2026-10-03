@@ -30,12 +30,29 @@ export interface PickerOption {
    * and means "send nothing". Absent on every other option.
    */
   params?: PickerDimension[]
+  /**
+   * Absolute URL of the option's picture — a photo, 3D emoji, flag or (Nodaro
+   * Cloud only) rendered look preview — on the installation's own host, or the
+   * Nodaro CDN for look previews. Absent when the option has no picture. Use it
+   * as given: file names carry a content hash, so it can be cached for good.
+   */
+  imageUrl?: string
 }
 
 export interface PickerDimension {
   field: string
   label: string
   options: PickerOption[]
+}
+
+/** A topic a multi-dim catalog's settings are grouped under in the editor (person, styling). */
+export interface PickerCatalogSection {
+  /** English topic name, e.g. "Identity", "Beauty & Hair". */
+  label: string
+  /** Node-data fields of the settings in this topic, in display order. */
+  fields: string[]
+  /** Absolute URL of the topic's round picture. Absent when it has none. */
+  imageUrl?: string
 }
 
 export interface PickerCatalog {
@@ -57,6 +74,8 @@ export interface PickerCatalog {
    *  fields beside its main picker (transition position/duration/intensity). */
   dimensions?: PickerDimension[]
   detail?: "compact" | "full"
+  /** person and styling: the topics their settings are grouped under, in order, each with its picture. */
+  sections?: PickerCatalogSection[]
 }
 
 export interface PickerCatalogSummary {
@@ -67,10 +86,12 @@ export interface PickerCatalogSummary {
   valueField?: string
   fields?: string[]
   optionCount: number
+  /** How many of those options carry an `imageUrl` (0 = no pictures). Absent from servers that predate pictures. */
+  imageCount?: number
 }
 
 export interface GetPickerCatalogOptions {
-  /** "compact" (default) = id, label, category, term, icon; "full" additionally includes description + promptHint. */
+  /** "compact" (default) = id, label, category, term, icon, imageUrl; "full" additionally includes description + promptHint. */
   detail?: "compact" | "full"
   /** single-dim: filter to one category. */
   category?: string

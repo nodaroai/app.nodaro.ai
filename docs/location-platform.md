@@ -770,10 +770,10 @@ generation routes:
   table.
 - `POST /v1/locations/:id/approve-main-image` — currently free; the LLM
   caption is uncharged.
-- `POST /v1/locations/:id/llm-caption` — currently free; same as above.
+- `POST /v1/locations/:id/llm-caption` — 7 credits per call (the `prompt-helper` price).
 
 Pricing is fetched from the `model_pricing` table at runtime; the static
-fallback in `STATIC_CREDIT_COSTS` lists `"location": 2` as the default
+fallback in `STATIC_CREDIT_COSTS` lists `"location": 20` as the default
 identifier when an image provider isn't supplied. See the
 [Architecture](./architecture.md) doc for the full credit-flow walkthrough.
 

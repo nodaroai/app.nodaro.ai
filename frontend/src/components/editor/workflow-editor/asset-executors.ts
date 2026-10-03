@@ -28,13 +28,32 @@ import type {
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
-  MAX_CONSECUTIVE_POLL_FAILURES,
   checkStorageError,
   type ExecutionContext,
 } from "./types";
+import { jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { pollJobToCompletion, guardedToast, getJobStatusLeanForNode, RUN_START_RESET } from "./poll-job";
 import { shouldAbandonNode } from "./abandon-guard";
 import { resolveCharacterAssets } from "./node-input-resolver";
+import { tx, type MessageKey } from "@/lib/i18n";
+
+type EntityAssetType = "expressions" | "poses" | "lighting" | "angles" | "materials" | "variations" | "timeOfDay" | "weather";
+
+/** An entity asset kind's name for the progress toasts ("Generating poses... 2/6"). */
+const ASSET_TYPE_LABEL_KEYS: Record<EntityAssetType, MessageKey> = {
+  expressions: "nodeRun.assetExpressions",
+  poses: "creature.bucketPoses",
+  lighting: "studio.bucketLighting",
+  angles: "studio.bucketAngles",
+  materials: "studio.bucketMaterials",
+  variations: "studio.bucketVariations",
+  timeOfDay: "nodeRun.assetTimeOfDay",
+  weather: "nodeRun.assetWeather",
+};
+
+function assetTypeLabel(assetType: EntityAssetType): string {
+  return tx(ASSET_TYPE_LABEL_KEYS[assetType]);
+}
 
 // --- Character/Face/Object/Location generation ---
 
@@ -79,8 +98,8 @@ export function runCharacterGeneration(
           resolve("");
           return;
         }
-        guardedToast.info("Character generation started", {
-          description: `Job ID: ${jobId}`,
+        guardedToast.info(tx("nodeRun.characterGenerationStarted"), {
+          description: tx("run.jobIdLine", { id: jobId }),
         });
         updateNodeData(nodeId, { currentJobId: jobId });
 
@@ -126,7 +145,7 @@ export function runCharacterGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                 });
-                guardedToast.success("Character portrait generated");
+                guardedToast.success(tx("nodeRun.characterPortraitGenerated"));
 
                 const supabase = createClient();
                 const {
@@ -167,30 +186,27 @@ export function runCharacterGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                guardedToast.error("Character generation failed", {
+                guardedToast.error(tx("nodeRun.characterGenerationFailed"), {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
                   resolve("");
                   return;
                 }
-                const errMsg =
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to check job status";
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
-                  errorMessage: errMsg,
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
-                guardedToast.error("Failed to check job status");
+                guardedToast.error(tx("nodeRun.failedToCheckJobStatus"));
                 reject(err);
               }
             }
@@ -205,7 +221,7 @@ export function runCharacterGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          guardedToast.error("Failed to start character generation", {
+          guardedToast.error(tx("apiErr.startCharacterGeneration"), {
             description: errMsg,
           });
         }
@@ -259,8 +275,8 @@ export function runFaceGeneration(
           resolve("");
           return;
         }
-        guardedToast.info("Face headshot generation started", {
-          description: `Job ID: ${jobId}`,
+        guardedToast.info(tx("nodeRun.faceHeadshotGenerationStarted"), {
+          description: tx("run.jobIdLine", { id: jobId }),
         });
         updateNodeData(nodeId, { currentJobId: jobId });
 
@@ -306,7 +322,7 @@ export function runFaceGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                 });
-                guardedToast.success("Face headshot generated");
+                guardedToast.success(tx("nodeRun.faceHeadshotGenerated"));
 
                 const supabase = createClient();
                 const {
@@ -338,30 +354,27 @@ export function runFaceGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                guardedToast.error("Face headshot generation failed", {
+                guardedToast.error(tx("nodeRun.faceHeadshotGenerationFailed"), {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
                   resolve("");
                   return;
                 }
-                const errMsg =
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to check job status";
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
-                  errorMessage: errMsg,
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
-                guardedToast.error("Failed to check job status");
+                guardedToast.error(tx("nodeRun.failedToCheckJobStatus"));
                 reject(err);
               }
             }
@@ -376,7 +389,7 @@ export function runFaceGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          guardedToast.error("Failed to start face headshot generation", {
+          guardedToast.error(tx("apiErr.startFaceHeadshotGeneration"), {
             description: errMsg,
           });
         }
@@ -450,8 +463,8 @@ export function runObjectGeneration(
           resolve("");
           return;
         }
-        guardedToast.info("Object generation started", {
-          description: `Job ID: ${jobId}`,
+        guardedToast.info(tx("nodeRun.objectGenerationStarted"), {
+          description: tx("run.jobIdLine", { id: jobId }),
         });
         updateNodeData(nodeId, { currentJobId: jobId });
 
@@ -497,7 +510,7 @@ export function runObjectGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                 });
-                guardedToast.success("Object image generated");
+                guardedToast.success(tx("nodeRun.objectImageGenerated"));
 
                 const supabaseObj = createClient();
                 const {
@@ -533,30 +546,27 @@ export function runObjectGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                guardedToast.error("Object generation failed", {
+                guardedToast.error(tx("nodeRun.objectGenerationFailed"), {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
                   resolve("");
                   return;
                 }
-                const errMsg =
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to check job status";
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
-                  errorMessage: errMsg,
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
-                guardedToast.error("Failed to check job status");
+                guardedToast.error(tx("nodeRun.failedToCheckJobStatus"));
                 reject(err);
               }
             }
@@ -571,7 +581,7 @@ export function runObjectGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          guardedToast.error("Failed to start object generation", {
+          guardedToast.error(tx("apiErr.startObjectGeneration"), {
             description: errMsg,
           });
         }
@@ -645,8 +655,8 @@ export function runCreatureGeneration(
           resolve("");
           return;
         }
-        guardedToast.info("Creature generation started", {
-          description: `Job ID: ${jobId}`,
+        guardedToast.info(tx("nodeRun.creatureGenerationStarted"), {
+          description: tx("run.jobIdLine", { id: jobId }),
         });
         updateNodeData(nodeId, { currentJobId: jobId });
 
@@ -692,7 +702,7 @@ export function runCreatureGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                 });
-                guardedToast.success("Creature image generated");
+                guardedToast.success(tx("nodeRun.creatureImageGenerated"));
 
                 const supabaseCreature = createClient();
                 const {
@@ -729,30 +739,27 @@ export function runCreatureGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                guardedToast.error("Creature generation failed", {
+                guardedToast.error(tx("nodeRun.creatureGenerationFailed"), {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
                   resolve("");
                   return;
                 }
-                const errMsg =
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to check job status";
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
-                  errorMessage: errMsg,
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
-                guardedToast.error("Failed to check job status");
+                guardedToast.error(tx("nodeRun.failedToCheckJobStatus"));
                 reject(err);
               }
             }
@@ -767,7 +774,7 @@ export function runCreatureGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          guardedToast.error("Failed to start creature generation", {
+          guardedToast.error(tx("apiErr.startCreatureGeneration"), {
             description: errMsg,
           });
         }
@@ -815,8 +822,8 @@ export function runLocationGeneration(
           resolve("");
           return;
         }
-        guardedToast.info("Location generation started", {
-          description: `Job ID: ${jobId}`,
+        guardedToast.info(tx("nodeRun.locationGenerationStarted"), {
+          description: tx("run.jobIdLine", { id: jobId }),
         });
         updateNodeData(nodeId, { currentJobId: jobId });
 
@@ -862,7 +869,7 @@ export function runLocationGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                 });
-                guardedToast.success("Location image generated");
+                guardedToast.success(tx("nodeRun.locationImageGenerated"));
 
                 const supabaseLoc = createClient();
                 const {
@@ -898,14 +905,14 @@ export function runLocationGeneration(
                   errorMessage: errMsg,
                   currentJobId: undefined,
                 });
-                guardedToast.error("Location generation failed", {
+                guardedToast.error(tx("nodeRun.locationGenerationFailed"), {
                   description: errMsg,
                 });
                 reject(new Error(errMsg));
               }
             } catch (err) {
               pollFailures++;
-              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
                 ctx.untrackInterval(poll);
                 if (shouldAbandonNode(nodeId, jobId)) {
                   // Run discarded/replaced — don't write a failure to the canvas.
@@ -914,9 +921,11 @@ export function runLocationGeneration(
                 }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
+                  errorMessage: jobGoneMessage(),
                   currentJobId: undefined,
+                  jobConnectionLost: undefined,
                 });
-                guardedToast.error("Failed to check job status");
+                guardedToast.error(tx("nodeRun.failedToCheckJobStatus"));
                 reject(err);
               }
             }
@@ -929,8 +938,8 @@ export function runLocationGeneration(
           currentJobId: undefined,
         });
         if (!checkStorageError(err, ctx)) {
-          guardedToast.error("Failed to start location generation", {
-            description: err instanceof Error ? err.message : "Unknown error",
+          guardedToast.error(tx("apiErr.startLocationGeneration"), {
+            description: err instanceof Error ? err.message : tx("lib.unknownError"),
           });
         }
         reject(err);
@@ -1006,7 +1015,7 @@ export async function handleGenerateCharacterAsset(
   if (!node) return;
   const data = node.data as CharacterNodeData;
   if (!data.characterName) {
-    toast.error("Set a character name first");
+    toast.error(tx("nodeRun.setACharacterNameFirst"));
     return;
   }
   const activeResult = (data.generatedResults ?? [])[
@@ -1014,7 +1023,7 @@ export async function handleGenerateCharacterAsset(
   ];
   const portraitUrl = activeResult?.url ?? data.sourceImageUrl;
   if (!portraitUrl) {
-    toast.error("Generate or upload a main portrait first");
+    toast.error(tx("entity.mainPortraitFirst"));
     return;
   }
 
@@ -1045,7 +1054,7 @@ export async function handleGenerateCharacterAsset(
       const variant = config.variants[i];
       const variantName = config.names[i];
       guardedToast.info(
-        `Generating ${assetType}... ${i + 1}/${config.variants.length} (${variantName})`,
+        tx("nodeRun.generating", { assetType: assetTypeLabel(assetType), current: i + 1, total: config.variants.length, variant: variantName }),
       );
 
       const { jobId } = await generateCharacterAsset({
@@ -1069,7 +1078,7 @@ export async function handleGenerateCharacterAsset(
     }
 
     updateNodeData(nodeId, { [statusKey]: "completed" });
-    guardedToast.success(`${assetType} generated: ${results.length} images`);
+    guardedToast.success(tx("nodeRun.generatedImages", { assetType: assetTypeLabel(assetType), count: results.length }));
 
     const latestNode = useWorkflowStore
       .getState()
@@ -1107,9 +1116,9 @@ export async function handleGenerateCharacterAsset(
     if (err instanceof WorkflowStaleError) return;
     updateNodeData(nodeId, { [statusKey]: "failed" });
     guardedToast.error(
-      `Failed to generate ${assetType} (${results.length}/${config.variants.length} completed)`,
+      tx("nodeRun.failedToGenerateCompleted", { assetType: assetTypeLabel(assetType), count: results.length, total: config.variants.length }),
       {
-        description: err instanceof Error ? err.message : "Unknown error",
+        description: err instanceof Error ? err.message : tx("lib.unknownError"),
       },
     );
   }
@@ -1125,7 +1134,7 @@ export async function handleGenerateObjectAsset(
   if (!node) return;
   const data = node.data as ObjectNodeData;
   if (!data.objectName) {
-    toast.error("Set an object name first");
+    toast.error(tx("nodeRun.setAnObjectNameFirst"));
     return;
   }
   const activeResult = (data.generatedResults ?? [])[
@@ -1133,7 +1142,7 @@ export async function handleGenerateObjectAsset(
   ];
   const imageUrl = activeResult?.url ?? data.sourceImageUrl;
   if (!imageUrl) {
-    toast.error("Generate or upload a main image first");
+    toast.error(tx("entity.mainImageFirst"));
     return;
   }
 
@@ -1162,7 +1171,7 @@ export async function handleGenerateObjectAsset(
       const variant = config.variants[i];
       const variantName = config.names[i];
       guardedToast.info(
-        `Generating ${assetType}... ${i + 1}/${config.variants.length} (${variantName})`,
+        tx("nodeRun.generating", { assetType: assetTypeLabel(assetType), current: i + 1, total: config.variants.length, variant: variantName }),
       );
 
       const { jobId } = await generateObjectAsset({
@@ -1184,7 +1193,7 @@ export async function handleGenerateObjectAsset(
     }
 
     updateNodeData(nodeId, { [statusKey]: "completed" });
-    guardedToast.success(`${assetType} generated: ${results.length} images`);
+    guardedToast.success(tx("nodeRun.generatedImages", { assetType: assetTypeLabel(assetType), count: results.length }));
 
     const latestNode = useWorkflowStore
       .getState()
@@ -1218,9 +1227,9 @@ export async function handleGenerateObjectAsset(
     if (err instanceof WorkflowStaleError) return;
     updateNodeData(nodeId, { [statusKey]: "failed" });
     guardedToast.error(
-      `Failed to generate ${assetType} (${results.length}/${config.variants.length} completed)`,
+      tx("nodeRun.failedToGenerateCompleted", { assetType: assetTypeLabel(assetType), count: results.length, total: config.variants.length }),
       {
-        description: err instanceof Error ? err.message : "Unknown error",
+        description: err instanceof Error ? err.message : tx("lib.unknownError"),
       },
     );
   }
@@ -1236,7 +1245,7 @@ export async function handleGenerateLocationAsset(
   if (!node) return;
   const data = node.data as LocationNodeData;
   if (!data.locationName) {
-    toast.error("Set a location name first");
+    toast.error(tx("nodeRun.setALocationNameFirst"));
     return;
   }
   const activeResult = (data.generatedResults ?? [])[
@@ -1244,7 +1253,7 @@ export async function handleGenerateLocationAsset(
   ];
   const imageUrl = activeResult?.url ?? data.sourceImageUrl;
   if (!imageUrl) {
-    toast.error("Generate or upload a main image first");
+    toast.error(tx("entity.mainImageFirst"));
     return;
   }
 
@@ -1273,7 +1282,7 @@ export async function handleGenerateLocationAsset(
       const variant = config.variants[i];
       const variantName = config.names[i];
       guardedToast.info(
-        `Generating ${assetType}... ${i + 1}/${config.variants.length} (${variantName})`,
+        tx("nodeRun.generating", { assetType: assetTypeLabel(assetType), current: i + 1, total: config.variants.length, variant: variantName }),
       );
 
       const { jobId } = await generateLocationAsset({
@@ -1295,7 +1304,7 @@ export async function handleGenerateLocationAsset(
     }
 
     updateNodeData(nodeId, { [statusKey]: "completed" });
-    guardedToast.success(`${assetType} generated: ${results.length} images`);
+    guardedToast.success(tx("nodeRun.generatedImages", { assetType: assetTypeLabel(assetType), count: results.length }));
 
     const latestNode = useWorkflowStore
       .getState()
@@ -1329,9 +1338,9 @@ export async function handleGenerateLocationAsset(
     if (err instanceof WorkflowStaleError) return;
     updateNodeData(nodeId, { [statusKey]: "failed" });
     guardedToast.error(
-      `Failed to generate ${assetType} (${results.length}/${config.variants.length} completed)`,
+      tx("nodeRun.failedToGenerateCompleted", { assetType: assetTypeLabel(assetType), count: results.length, total: config.variants.length }),
       {
-        description: err instanceof Error ? err.message : "Unknown error",
+        description: err instanceof Error ? err.message : tx("lib.unknownError"),
       },
     );
   }

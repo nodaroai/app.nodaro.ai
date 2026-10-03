@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from "react"
 import { VoiceBrowser } from "../config-panels/voice-browser"
 import { textToSpeech, lipSyncApi, voiceDesignApi, getJobStatusLean } from "@/lib/api"
 import type { CharacterVoice } from "@/types/nodes"
-import { useT, tx } from "@/lib/i18n"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
+
+/** The voice source's caption beside the chosen voice. */
+const VOICE_TYPE_KEYS: Record<"premade" | "custom" | "library", MessageKey> = {
+  premade: "voice.type.premade",
+  custom: "voice.type.custom",
+  library: "voice.type.library",
+}
 
 type Mode = "browse" | "design"
 
@@ -168,7 +175,7 @@ export function VoiceResource({ voice: v, onVoiceChange, sourceImageUrl }: Voice
       {v?.voiceId && (
         <div className="border border-[#1e293b] rounded p-3 space-y-2">
           <div className="text-[12px] text-slate-200">
-            {v.voiceName} <span className="text-[10px] text-slate-500">· {v.voiceType ?? "premade"}</span>
+            {v.voiceName} <span className="text-[10px] text-slate-500">· {t(VOICE_TYPE_KEYS[v.voiceType ?? "premade"])}</span>
           </div>
           {v.previewUrl && <audio src={v.previewUrl} controls className="w-full h-8" />}
           <textarea

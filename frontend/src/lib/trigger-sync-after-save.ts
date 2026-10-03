@@ -1,5 +1,8 @@
-import { PROJECTED_TRIGGER_NODE_TYPES } from "@nodaro/shared"
+import { PROJECTED_TRIGGER_NODE_TYPES, TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE, telegramAccountListeningSignature } from "@nodaro/shared"
 import { syncWorkflowTriggers } from "@/lib/api"
+import { accountTriggerIntents, consumeAccountTriggerIntents } from "@/lib/account-trigger-intent"
+import { queryClient } from "@/lib/query-client"
+import { queryKeys } from "@/lib/query-keys"
 
 /**
  * After a save, the editor asks the server to project trigger nodes onto real
@@ -28,6 +31,17 @@ import { syncWorkflowTriggers } from "@/lib/api"
  *   what that save added is remembered too, because a later save's stored
  *   graph already contains it and would otherwise erase the vouch.
  *
+ * - the account triggers it names as CHANGED — the only ones the server lets
+ *   arm, widen or re-point a Telegram account listener — are the ones the
+ *   owner set in this session's settings panel (account-trigger-intent.ts),
+ *   while the graph being saved still says exactly what was set there. A
+ *   change that reached the canvas any other way (realtime, a rebase, paste,
+ *   duplicate, an import, a preset, undo) is never named, however the graphs
+ *   compare. Each is named WITH those settings, and the server arms it only
+ *   while the stored node still says exactly that — so a write that lands
+ *   between this save and the sync, or before a retry, is never armed in the
+ *   owner's name.
+ *
  * The second half of the anti-laundering invariant lives in the save itself:
  * a foreign write bumps the workflow's version, so the owner's next save
  * either conflicts or rebases and adopts the foreign node into the saved
@@ -40,9 +54,11 @@ type Graph = ReadonlyArray<NodeLike> | null | undefined
 export interface TriggerFingerprint {
   readonly signature: string
   readonly ids: ReadonlySet<string>
+  /** Telegram account triggers only: node id → its listening settings (`telegramAccountListeningSignature`). */
+  readonly accountSettings: ReadonlyMap<string, string>
 }
 
-export const NO_TRIGGERS: TriggerFingerprint = { signature: "", ids: new Set() }
+export const NO_TRIGGERS: TriggerFingerprint = { signature: "", ids: new Set(), accountSettings: new Map() }
 
 /** The server refuses a longer list; a graph with that many trigger nodes is not a real one. */
 const MAX_VOUCHED_IDS = 200
@@ -58,7 +74,16 @@ export function triggerFingerprint(nodes: Graph): TriggerFingerprint {
     .map((n) => [n.id as string, n.type as string, n.data ?? null] as const)
     .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
   if (triggers.length === 0) return NO_TRIGGERS
-  return { signature: JSON.stringify(triggers), ids: new Set(triggers.map((t) => t[0])) }
+  const accountSettings = new Map(
+    triggers.filter((t) => t[1] === TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE).map((t) => [t[0], telegramAccountListeningSignature(t[2])] as const),
+  )
+  return { signature: JSON.stringify(triggers), ids: new Set(triggers.map((t) => t[0])), accountSettings }
+}
+
+/** An account trigger this session changed, and the listening settings it set. */
+export interface ChangedAccountTrigger {
+  readonly id: string
+  readonly settings: string
 }
 
 export type TriggerSyncOutcome = "skipped" | "synced" | "failed" | "deferred"
@@ -78,7 +103,14 @@ export interface TriggerSyncTracker {
 }
 
 export function createTriggerSyncTracker(): TriggerSyncTracker {
-  return { lastSynced: null, pendingVouch: new Set(), inFlightVouch: new Set(), pendingRetry: false, inFlight: false, deferred: null }
+  return {
+    lastSynced: null,
+    pendingVouch: new Set(),
+    inFlightVouch: new Set(),
+    pendingRetry: false,
+    inFlight: false,
+    deferred: null,
+  }
 }
 
 /**
@@ -102,8 +134,21 @@ export async function syncTriggersAfterSave(
   const stored = triggerFingerprint(nodesBefore)
   const agreed = tracker.lastSynced ?? stored
   const after = triggerFingerprint(nodesAfter)
+  // What this save changed is judged against the stored graph it started
+  // from; a caller that does not know it falls back on what the server last
+  // agreed to.
+  const baseline = nodesBefore == null ? agreed : stored
+  // What the owner set in this session's panel, while the graph still says it.
+  const accountNodes: ChangedAccountTrigger[] = [...accountTriggerIntents(workflowId)]
+    .filter(([id, settings]) => after.accountSettings.get(id) === settings)
+    .slice(0, MAX_VOUCHED_IDS)
+    .map(([id, settings]) => ({ id, settings }))
 
-  const unchanged = agreed.signature === after.signature && !tracker.pendingRetry
+  // Nothing to project only when this save changed no trigger AND the server
+  // last agreed to exactly this: a trigger switched elsewhere, adopted from
+  // realtime (not a save, so this tracker never heard of it) and switched
+  // back here, must still reach the server.
+  const unchanged = agreed.signature === after.signature && baseline.signature === after.signature && !tracker.pendingRetry
   // The first sync of a workflow that carries triggers is never skipped: its
   // nodes may have no rows at all (a graph saved before the editor projected).
   const firstOpenWithTriggers = tracker.lastSynced === null && after.signature !== ""
@@ -127,12 +172,17 @@ export async function syncTriggersAfterSave(
   tracker.inFlightVouch = new Set(vouchNodeIds)
   let refusalReason: string | undefined
   try {
-    const result = await syncWorkflowTriggers(workflowId, vouchNodeIds)
+    const result = await syncWorkflowTriggers(workflowId, vouchNodeIds, accountNodes)
     if (!result.data.synced) {
       refusalReason = result.data.reason
       throw new Error("sync refused")
     }
     tracker.lastSynced = after
+    // What this sync named is now the server's: never name it again.
+    consumeAccountTriggerIntents(workflowId, accountNodes)
+    // The rows changed: a Webhook Trigger's URL (read from its row) appears
+    // in the editor as soon as the save that created it lands.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.workflows.triggers(workflowId) })
     // Confirmed: what this sync vouched for. Anything a save added WHILE it
     // was in flight is still pending, for the chained run.
     tracker.pendingVouch = new Set([...tracker.pendingVouch].filter((id) => !tracker.inFlightVouch.has(id)))

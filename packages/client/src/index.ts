@@ -47,7 +47,27 @@ export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter,
   EditPlanMode,
   EditPlanTier,
   EdlClipSet,
-  ChapterSet } from "@nodaro/shared"
+  ChapterSet,
+  // Social Search (`nodes.run("social-search", …)`): the request and the post shape.
+  SocialSearchParams,
+  SocialPost,
+  SocialPostAuthor,
+  SocialPostMetrics,
+  SocialPostMedia,
+  SocialPlatform,
+  SocialSearchMode,
+  SocialSearchPeriod,
+  SocialSearchSort,
+  SocialSearchCount,
+  SocialSearchVideoKind,
+  // Saved posts (`client.savedPosts`): the inspiration wall.
+  SavedPost,
+  SavedPostSource,
+  SavePostInput,
+  UpdateSavedPostInput,
+  ListSavedPostsParams,
+  ListSavedPostsResult,
+  SavedPostsLookupResult } from "@nodaro/shared"
 // `unwrapEditPlanOutput` (value) — the sanctioned way to read an edit-plan job's
 // `output_data` (normalizes clips → bare `Edl[]` and strips `viaNodaroCloud`).
 export { unwrapEditPlanOutput } from "@nodaro/shared"
@@ -78,6 +98,7 @@ export { CreditsResource } from "./resources/credits.js"
 export { UploadsResource } from "./resources/uploads.js"
 export { LibraryResource } from "./resources/library.js"
 export { PresetsResource } from "./resources/node-presets.js"
+export { SavedPostsResource } from "./resources/saved-posts.js"
 export { CommunityResource } from "./resources/community.js"
 export { PickerCatalogsResource } from "./resources/picker-catalogs.js"
 export {
@@ -85,6 +106,8 @@ export {
   type ProjectedCatalog,
   type ProjectedCatalogOption,
   type ProjectedCatalogDimension,
+  type ProjectedCatalogSection,
+  type CatalogsListResponse,
 } from "./resources/catalogs.js"
 export { ModelsResource, type ModelSummary, type ModelsListResult, type ListModelsOptions } from "./resources/models.js"
 export {
@@ -101,6 +124,7 @@ export {
   type RecastScriptValidationError,
   type RecastScriptImportResult,
   type CreateRecastInput,
+  type RecastSegmentPack,
   type EstimateRecastInput,
   type RecastEstimate,
   type RecastRunSnapshot,
@@ -117,6 +141,8 @@ export {
   type RecastRescoreResponse,
   type ResolveRecastGateInput,
 } from "./resources/recast.js"
+// The values `segmentSec` takes, for a caller that offers them as choices.
+export { RECAST_SEGMENT_PACKS } from "@nodaro/shared"
 export {
   StudioResource,
   StudioProductionsResource,
@@ -164,6 +190,7 @@ export type {
   PickerDimension,
   PickerCatalog,
   PickerCatalogSummary,
+  PickerCatalogSection,
   GetPickerCatalogOptions,
 } from "./resources/picker-catalogs.js"
 
@@ -262,6 +289,7 @@ export type {
   RunNodeResult,
   RunNodeAdjustment,
   NodeJobOutput,
+  SocialSearchJobOutput,
   RunAndWaitOptions,
   RunManyResult,
   StructuredReferenceParams,
@@ -395,7 +423,16 @@ export type {
   ChatStageResult,
   ApplyChatProposalResult,
 } from "./resources/pipelines.js"
-export type { PipelineStageName } from "./resources/pipelines.js"
+export type {
+  PipelineStageName,
+  PipelineInput,
+  PipelineStatus,
+  PipelineMode,
+  SubGateName,
+  AnimateSubGate,
+  ChatEnabledStage,
+  ProposedChange,
+} from "./resources/pipelines.js"
 
 export type {
   ReduceStrategyId,
@@ -457,6 +494,7 @@ export type {
 
 export type {
   CommunityCard,
+  CommunityFullDetail,
   CommunityEntityType,
   CommunitySort,
   CommunityReportReason,
@@ -574,3 +612,20 @@ export type {
   CopilotWiredAsset,
   CopilotMemorySavedFrameData,
 } from "./resources/copilot.js"
+
+// Types that appear in public method signatures — the entry point exports every
+// type the resource modules export (guarded by __tests__/public-types.test.ts).
+export type { CreatureVoice } from "./resources/creatures.js"
+export type { GenerateLocationMotionInput } from "./resources/locations.js"
+export type { ModelFamilyGroup } from "./resources/models.js"
+export type { ReferenceCaptionParams, AssembleNarratedVideoParams, RunNodeOptions } from "./resources/nodes.js"
+export type { TextToPickerParams, TextToPickerResult } from "./resources/picker-catalogs.js"
+export type { PipelineRecord, PendingApproval, PipelineTimeline } from "./resources/pipelines.js"
+export type {
+  Pro3DRenderParams,
+  Pro3DRenderRunParams,
+  Pro3DRenderQuote,
+  Pro3DRenderRunOptions,
+  Pro3DRenderJobOutput,
+} from "./resources/scene3d-types.js"
+export type { Collaborator, AddCollaboratorInput, SharedWorkflow, DroppedCollaborator } from "./resources/workflows.js"

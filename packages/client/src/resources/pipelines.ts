@@ -1,5 +1,5 @@
 import type { NodaroClient } from "../client.js"
-import type { PipelineInput, PipelineStageName, PipelineStatus, PipelineMode, SubGateName, ChatEnabledStage, ProposedChange } from "@nodaro/shared"
+import type { PipelineInput, PipelineStageName, PipelineStatus, PipelineMode, SubGateName, AnimateSubGate, ChatEnabledStage, ProposedChange } from "@nodaro/shared"
 
 export type {
   PipelineInput,
@@ -7,6 +7,7 @@ export type {
   PipelineStatus,
   PipelineMode,
   SubGateName,
+  AnimateSubGate,
   ChatEnabledStage,
   ProposedChange,
 }
@@ -124,7 +125,7 @@ export class PipelinesResource {
    * self-advances to completion; poll {@link get} for status and
    * {@link getTimeline} for the assembled output. In manual/guided mode, drive
    * it with {@link pendingApprovals} + {@link approveStage} /
-   * {@link approveSubGate}.
+   * {@link approveSubGate} / {@link acceptMatchCutBreak}.
    *
    * Requires `pipelines:execute` scope. Returns the new pipeline id.
    */
@@ -207,17 +208,38 @@ export class PipelinesResource {
   }
 
   /**
-   * Approve a Stage-7 sub-gate (`dialogue_recheck` / `silent_cut`) so the
-   * orchestrator resumes from the next sub-step. Requires `pipelines:approve`.
+   * Approve a Stage 7 (`animate_audio_edit`) sub-gate — `silent_cut_preview`
+   * or `dialogue_recheck` — so the orchestrator resumes from the next
+   * sub-step. Stage 6's `match_cut_break_pending` is not approved here: accept
+   * each break with {@link acceptMatchCutBreak}. Requires `pipelines:approve`.
    */
   approveSubGate(
     id: string,
-    gate: SubGateName,
-  ): Promise<{ ok: true; gate: SubGateName; resumed_at: string }> {
+    gate: AnimateSubGate,
+  ): Promise<{ ok: true; gate: AnimateSubGate; resumed_at: string }> {
     return this.client.request(
       "POST",
       `/v1/pipelines/${encodeURIComponent(id)}/sub-gates/${encodeURIComponent(gate)}/approve`,
       { body: {} },
+    )
+  }
+
+  /**
+   * Accept one match-cut break Stage 6 (`scene_images`) flagged. While any
+   * break is pending, the stage pauses at the `match_cut_break_pending`
+   * sub-gate, and its output lists the pending shot ids; accepting the last
+   * one resumes the stage. `sceneId` is the scene entity that holds the shot.
+   * Requires `pipelines:approve`.
+   */
+  acceptMatchCutBreak(
+    id: string,
+    sceneId: string,
+    shotId: string,
+  ): Promise<{ ok: true; pendingRemaining: number }> {
+    return this.client.request(
+      "POST",
+      `/v1/pipelines/${encodeURIComponent(id)}/entities/${encodeURIComponent(sceneId)}/helpers/accept_match_cut_break`,
+      { body: { shotId } },
     )
   }
 

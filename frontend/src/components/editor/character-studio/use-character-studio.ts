@@ -5,6 +5,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { CharacterNameTakenError, getCharacter, getCharacters, saveCharacter } from "@/lib/api"
 import { mergeCharacterDetailIntoNodeData } from "@/lib/character-node-data"
 import type { CharacterNodeData } from "@/types/nodes"
+import { tx } from "@/lib/i18n"
 
 /**
  * Character Studio state — no Save button, no dirty machinery.
@@ -464,7 +465,7 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
         if (e.existingId) {
           const adoptedName = stagedRef.current?.characterName?.trim()
           const dbId = await adoptCharacter(e.existingId)
-          toast.success(adoptedName ? `Loaded your existing "${adoptedName}".` : "Loaded your existing character.")
+          toast.success(adoptedName ? tx("toastMsg.loadedYourExisting", { name: adoptedName }) : tx("toastMsg.loadedYourExistingCharacter"))
           return dbId
         }
         toast.error(e.message)

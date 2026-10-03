@@ -86,7 +86,7 @@ export function GenerateVideoResultInfo({
   if (resolution) rows.push({ label: t("field.resolution"), value: resolution })
   if (durationLabel) rows.push({ label: t("field.duration"), value: durationLabel })
   if (typeof recordedAudio === "boolean")
-    rows.push({ label: t("field.audio"), value: recordedAudio ? t("node.on") : t("node.off") })
+    rows.push({ label: t("field.audio"), value: recordedAudio ? t("common.stateOn") : t("common.stateOff") })
 
   const audioIcon =
     typeof recordedAudio === "boolean" ? (

@@ -18,10 +18,14 @@ import { reconcileWorkflowTriggers, type GraphNode } from "../../workflow-trigge
  * and a plain stored credential must not travel on a schedule it minted.
  * Best-effort: the save has landed; a failure is a log line, not an error.
  */
-async function projectTriggers(workflowId: string, ownerId: string, nodes: unknown): Promise<void> {
+async function projectTriggers(workflowId: string, ownerId: string, callerId: string, nodes: unknown): Promise<void> {
   if (!Array.isArray(nodes)) return
-  // MCP tools only reach the session user's own workflows, so the saver is the owner.
-  const result = await reconcileWorkflowTriggers({ workflowId, userId: ownerId, nodes: nodes as readonly GraphNode[], ownerActing: true })
+  // An MCP client acting AS the owner is not the owner at the keyboard: it can
+  // switch an account trigger off, never arm, widen or re-point one (it names
+  // no `accountNodes`). A workspace member writing someone else's workflow
+  // leaves that lane as stored. Every other lane projects.
+  const ownerIdentity = callerId === ownerId
+  const result = await reconcileWorkflowTriggers({ workflowId, userId: ownerId, nodes: nodes as readonly GraphNode[], ownerActing: ownerIdentity })
   if (result.error) console.warn(`[mcp] workflow trigger sync failed for ${workflowId}: ${result.error}`)
 }
 import { mcpInject } from "../internal-request.js"
@@ -360,7 +364,7 @@ export function registerWorkflows({
           .single()
         if (error || !data) return err(`Error: ${error?.message ?? "Failed to create workflow"}`)
         const row = data as Record<string, unknown>
-        await projectTriggers(row.id as string, session.userId, storedNodes)
+        await projectTriggers(row.id as string, session.userId, session.userId, storedNodes)
         return ok(
           `Created workflow "${row.name as string}" (id ${row.id as string}) in the mcp project.`,
           { id: row.id, name: row.name },
@@ -664,7 +668,7 @@ export function registerWorkflows({
           // Rows belong to the workflow's OWNER (the cron re-checks the owner's
           // access on every fire), which in a workspace may not be the caller.
           const ownerId = typeof (data as { user_id?: unknown }).user_id === "string" ? (data as { user_id: string }).user_id : session.userId
-          await projectTriggers(args.workflow_id, ownerId, updates.nodes)
+          await projectTriggers(args.workflow_id, ownerId, session.userId, updates.nodes)
         }
         if (!data) {
           // 0 rows matched. Distinguish a stale-version conflict from a genuine
@@ -805,7 +809,7 @@ export function registerWorkflows({
           return err(`Error: ${wfError?.message ?? "Failed to create workflow"}`)
         }
         const row = newWorkflow as Record<string, unknown>
-        await projectTriggers(row.id as string, session.userId, importedNodes)
+        await projectTriggers(row.id as string, session.userId, session.userId, importedNodes)
 
         const mediaNotes = [
           importReport.rehosted > 0 ? `${importReport.rehosted} media file(s) copied onto this instance.` : "",

@@ -11,6 +11,7 @@ export const queryKeys = {
     all: ["credits"] as const,
     balance: (userId: string) => ["credits", "balance", userId] as const,
     modelCost: (model: string) => ["credits", "model-cost", model] as const,
+    modelRanges: () => ["credits", "model-ranges"] as const,
   },
 
   // Billing
@@ -35,6 +36,14 @@ export const queryKeys = {
   userSettings: {
     all: ["user-settings"] as const,
     detail: (userId: string) => ["user-settings", userId] as const,
+  },
+
+  // Saved posts (the inspiration wall; per-user)
+  savedPosts: {
+    all: ["savedPosts"] as const,
+    list: (filters: { platform?: string; tag?: string; q?: string }) =>
+      ["savedPosts", "list", filters.platform ?? "", filters.tag ?? "", filters.q ?? ""] as const,
+    lookup: (postIds: readonly string[]) => ["savedPosts", "lookup", postIds.join("|")] as const,
   },
 
   // Node presets
@@ -160,6 +169,8 @@ export const queryKeys = {
     // its branch returns before any scoping runs. Keying it would split a
     // cache that cannot differ and refetch on every switch for nothing.
     listStudioAll: () => ["workflows", "list", "studio", "all"] as const,
+    /** A workflow's trigger rows (`GET /v1/workflows/:id/triggers`). */
+    triggers: (workflowId: string) => ["workflows", "triggers", workflowId] as const,
   },
 
   // Client-app registry (which SDK apps exist, whose workflows are user-facing).
@@ -194,6 +205,12 @@ export const queryKeys = {
     all: ["executions"] as const,
     list: (params: { status?: string; viewAll?: boolean; cursor?: string }) =>
       ["executions", "list", params.status ?? "", String(params.viewAll ?? false), params.cursor ?? ""] as const,
+  },
+
+  // Apps with OAuth access to the user's account
+  connectedApps: {
+    all: ["connected-apps"] as const,
+    list: () => ["connected-apps", "list"] as const,
   },
 
   // API Tokens

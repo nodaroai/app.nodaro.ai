@@ -23,6 +23,7 @@ import {
   Type,
   Minus,
   Film,
+  SlidersHorizontal,
 } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
@@ -39,9 +40,11 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { isValidGenerateVideoConnection } from "@/lib/generate-video-handles"
+import { useWiredSettings } from "@/hooks/use-wired-settings"
+import { SettingsChips } from "./settings-chips"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
-import { buildVideoCreditModelIdentifier, applyDefaultVideoSelection } from "@nodaro/shared"
+import { buildVideoCreditModelIdentifier, applyDefaultVideoSelection, SETTINGS_INPUT_HANDLE } from "@nodaro/shared"
 import { copyToClipboard, computeDeleteResultUpdates } from "@/lib/utils"
 import type { GenerateVideoNodeData, GeneratedResult, WorkflowNode } from "@/types/nodes"
 
@@ -61,6 +64,7 @@ const ACCEPTS_AUDIO_REFS      = (t: string) => isValidGenerateVideoConnection("a
 const ACCEPTS_ASSETS          = (t: string) => isValidGenerateVideoConnection("assets", t, isPickerType)
 const ACCEPTS_LOOK            = (t: string) => isValidGenerateVideoConnection("look", t, isPickerType)
 const ACCEPTS_ELEMENTS        = (t: string) => isValidGenerateVideoConnection("elements", t, isPickerType)
+const ACCEPTS_SETTINGS        = (t: string) => isValidGenerateVideoConnection(SETTINGS_INPUT_HANDLE, t, isPickerType)
 
 // Grouped vertical positions: 28px within a cluster; 40px between clusters.
 // Anchored 24px from the BOTTOM of the node, mirroring the output pip's 24px
@@ -71,6 +75,7 @@ const ACCEPTS_ELEMENTS        = (t: string) => isValidGenerateVideoConnection("e
 //   Image:   start(92) → end(120) → imgRefs(148) → vidRefs(176)   (gap 40 → 92)
 //   Audio:   audio(216) → audioRefs(244)                          (gap 40 → 216)
 //   Pickers: assets(284) → elements(312) → look(340)              (gap 40 → 284)
+//   Settings: settings(380)                                        (gap 40 → 380)
 //
 // Stored as bottom-inset pixel offsets and routed through the per-node
 // `handleTop(px)` helper so inline mode can add the prompt-chrome height
@@ -87,6 +92,7 @@ const HANDLE_OFFSET = {
   assets: 284,
   elements: 312,
   look: 340,
+  settings: 380,
 } as const
 
 function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
@@ -116,14 +122,19 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? (nodeData.generatedVideoUrl as string | undefined)
   const activeThumbnail = activeResult?.thumbnailUrl
+  // What the node runs with once its Settings input is read (the wired Aspect
+  // Ratio / Duration / Provider) — its chips, run strip and price all read it,
+  // the same resolution the run engines apply.
+  const settings = useWiredSettings(id, "generate-video", nodeData as Record<string, unknown>)
+  const runData = settings.data as GenerateVideoNodeData
   // A provider-less node is what the routes and the orchestrator will run under
   // `applyDefaultVideoSelection`, NOT "kling" — the hardcoded fallback made this
   // pill quote a different model than both the run total (getModelIdentifier)
   // and the reserve. Same authority everywhere, so a node written straight into
   // workflow JSON without a provider shows the price it will actually be charged.
   const providerSelection = applyDefaultVideoSelection({
-    provider: nodeData.provider as string | undefined,
-    duration: nodeData.duration as number | string | undefined,
+    provider: runData.provider as string | undefined,
+    duration: runData.duration as number | string | undefined,
   })
   const provider = providerSelection.provider
   const playState = (nodeData.videoPlayState as "loop" | "paused" | "stopped" | undefined) ?? "loop"
@@ -137,10 +148,10 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   const creditIdentifier = buildVideoCreditModelIdentifier(
     provider,
     providerSelection.duration,
-    nodeData.sound as boolean | undefined,
+    runData.sound as boolean | undefined,
     "image-to-video",
-    (nodeData.videoSize as string | undefined) ?? (nodeData.mode as string | undefined),
-    nodeData.resolution as string | undefined,
+    (runData.videoSize as string | undefined) ?? (runData.mode as string | undefined),
+    runData.resolution as string | undefined,
     Array.isArray(nodeData.referenceVideoUrls) && (nodeData.referenceVideoUrls as unknown[]).length > 0,
   )
   const credits = useModelCredits(creditIdentifier, 25)
@@ -193,6 +204,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
       { id: "assets",          type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.assets),          left: "-29px" }, external: true },
       { id: "look",            type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.look),            left: "-29px" }, external: true },
       { id: "elements",        type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.elements),        left: "-29px" }, external: true },
+      { id: SETTINGS_INPUT_HANDLE, type: "target" as const, position: Position.Left, customStyle: { top: handleTop(HANDLE_OFFSET.settings), left: "-29px" }, external: true },
       { id: "video",           type: "source" as const, position: Position.Right, customStyle: { top: "24px",                     right: "-29px" }, external: true },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -417,8 +429,8 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
         className={!showInline && activeUrl ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
         // Shared video-node sizing: 16:9 @ VIDEO_NODE_MIN_HEIGHT (≈654×368) when
-        // idle, snaps to the real result aspect once a result loads. (368 also
-        // satisfies this node's 11-pip handle stack.)
+        // idle, snaps to the real result aspect once a result loads. BaseNode
+        // grows it to fit the 12-pip handle stack (handleMinHeight).
         {...videoNodeSizing(mediaAspectRatio)}
         onChromeHeightChange={setChromeHeight}
         handles={handles}
@@ -426,6 +438,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
           <GenerateVideoQuickToolbar
             nodeId={id}
             data={nodeData}
+            settings={settings}
             credits={credits}
             isRunning={status === "running"}
             onAnyOpenChange={setToolbarDropdownOpen}
@@ -480,11 +493,17 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             result-hover controls still reveal. */}
         <div className="relative w-full h-full group/video">
           {renderPreview()}
+          {/* The wired settings, always visible; over a result they give way
+              to its hover controls. */}
+          <SettingsChips
+            view={settings}
+            className={`absolute top-2 left-2 z-10 max-w-[calc(100%-16px)] transition-opacity ${activeUrl ? "group-hover/video:opacity-0 group-hover/video:pointer-events-none" : ""}`}
+          />
         </div>
       </BaseNode>
 
-      {/* 11 typed input pips + 1 output pip — bottom-up clusters:
-          text → image → audio → pickers. Colors mirror the source node's
+      {/* 12 typed input pips + 1 output pip — bottom-up clusters:
+          text → image → audio → pickers → settings. Colors mirror the source node's
           category color so the wire endpoint reads as the source's brand:
             prompt   → brand pink   (#ff0073, text producers)
             negative → red          (negation)
@@ -492,7 +511,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             imgRefs/vidRefs → emerald/purple (images vs videos)
             audio/audioRefs → yellow (audio family)
             assets   → character pink (identity entities)
-            look/elements → indigo (parameter pickers) */}
+            look/elements/settings → indigo (parameter nodes) */}
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="prompt"          type="target" position={Position.Left}  label="Prompt"      color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top={handleTop(HANDLE_OFFSET.prompt)}          accepts={ACCEPTS_PROMPT} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="negative"        type="target" position={Position.Left}  label="Negative"    color={HANDLE_COLORS.negative} icon={<Minus />}     side="left"  top={handleTop(HANDLE_OFFSET.negative)}        accepts={ACCEPTS_NEGATIVE} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="startFrame"      type="target" position={Position.Left}  label="Start Frame" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top={handleTop(HANDLE_OFFSET.startFrame)}      accepts={ACCEPTS_STARTFRAME} disabled={disabledHandles.has("startFrame")} />
@@ -504,6 +523,8 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="assets"          type="target" position={Position.Left}  label="Assets"      color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top={handleTop(HANDLE_OFFSET.assets)}          orderMatters accepts={ACCEPTS_ASSETS} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="look"            type="target" position={Position.Left}  label="Look"        color={HANDLE_COLORS.look} icon={<Aperture />}  side="left"  top={handleTop(HANDLE_OFFSET.look)}            accepts={ACCEPTS_LOOK} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="elements"        type="target" position={Position.Left}  label="Elements"    color={HANDLE_COLORS.look} icon={<Sparkles />}  side="left"  top={handleTop(HANDLE_OFFSET.elements)}        accepts={ACCEPTS_ELEMENTS} />
+      {/* Settings: the Aspect Ratio / Duration / Provider nodes, one input for all; the node lists what is wired as chips. */}
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId={SETTINGS_INPUT_HANDLE}   type="target" position={Position.Left}  label="Settings"    color={HANDLE_COLORS.look} icon={<SlidersHorizontal />} side="left" top={handleTop(HANDLE_OFFSET.settings)} accepts={ACCEPTS_SETTINGS} />
       {/* Output pip — video. Shares Film + purple (videoReferences color) for type identification. */}
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="video"           type="source" position={Position.Right} label="Video"       color={HANDLE_COLORS.video} icon={<Film />}      side="right" top="24px" />
 

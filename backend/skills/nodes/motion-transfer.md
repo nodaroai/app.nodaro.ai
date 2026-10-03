@@ -1,7 +1,7 @@
 ---
 node_type: motion-transfer
-generated_at: 2026-09-22T09:36:31.616Z
-generated_from: 65b4cddf2
+generated_at: 2026-09-27T12:51:24.681Z
+generated_from: c607aa02c
 ---
 
 # Motion Transfer
@@ -9,7 +9,7 @@ generated_from: 65b4cddf2
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `motion-transfer`
 **Category:** ai
-**Credit cost:** `80-1500` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `80-1500` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `image`, `video`, `prompt`, `negative`, `assets`
 **Outputs (source handles):** `out`
 

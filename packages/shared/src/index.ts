@@ -88,6 +88,10 @@ export {
   TTS_PROVIDERS,
   TEXT_TO_AUDIO_PROVIDERS,
   MUSIC_PROVIDERS,
+  DEFAULT_MUSIC_PROVIDER,
+  MUSIC_PROVIDER_LABELS,
+  MUSIC_CREDIT_ID,
+  resolveMusicProvider,
   TRANSCRIBE_PROVIDERS,
   TRANSCRIBE_LANES,
   TRANSCRIBE_PROVIDER_CAPABILITIES,
@@ -269,6 +273,7 @@ export {
   seedanceVideoEditCreditId,
   pricedVideoSelection,
   buildMotionCreditModelIdentifier,
+  speedRampCreditId,
   sunoCreditType,
   SUNO_VERSION_CREDIT_KEYS,
   SUNO_VERSION_PRICED_OPERATIONS,
@@ -642,6 +647,44 @@ export {
 } from "./node-default-mappings.js"
 
 export { NODE_MAPPABLE_FIELDS, SUNO_FIELD_HANDLE_FIELDS, fieldKeyFromHandle } from "./node-mappable-fields.js"
+export { OAUTH_SCOPES, type OAuthScope } from "./oauth-scopes.js"
+export { RECAST_SEGMENT_PACKS, type RecastSegmentPack } from "./recast-segment-packs.js"
+export {
+  SETTINGS_INPUT_HANDLE,
+  SETTINGS_SOURCE_FIELDS,
+  SETTINGS_INPUT_CONSUMERS,
+  isSettingsSourceType,
+  settingsInputAccepts,
+  settingsInputFields,
+  settingsSourceForField,
+  settingsSourceForType,
+  isSettingsHintEdge,
+  isSettingsHintSource,
+  SETTINGS_HINT_SOURCES,
+  SETTINGS_SOURCE_TYPES,
+  connectedSettingsSources,
+  settingsProviderModels,
+  snapToModelDuration,
+  applySettingsInput,
+  resolveWiredSettings,
+  withWiredSettings,
+  type SettingsInputProblem,
+  type WiredSetting,
+  type SettingsSourceType,
+  type SettingsFieldSourceType,
+  type SettingsHintSourceType,
+  type SettingsField,
+} from "./settings-input.js"
+export {
+  readScriptSettings,
+  SCRIPT_SCENE_COUNT_RANGE,
+  SCRIPT_SCENE_COUNT_DEFAULT,
+  SCRIPT_TARGET_DURATION_RANGE,
+  SCRIPT_TARGET_DURATION_DEFAULT,
+  SCRIPT_TONE_MAX_LENGTH,
+  SCRIPT_STYLE_GUIDE_MAX_LENGTH,
+  type ScriptSettings,
+} from "./script-settings.js"
 export {
   SCHEDULE_TRIGGER_NODE_TYPE,
   WEBHOOK_TRIGGER_NODE_TYPE,
@@ -650,6 +693,16 @@ export {
   PROJECTED_TRIGGER_NODE_TYPES,
   isProjectedTriggerNodeType,
 } from "./trigger-node-types.js"
+export {
+  TELEGRAM_ACCOUNT_TRIGGER_MESSAGE_HANDLE,
+  TELEGRAM_ACCOUNT_TRIGGER_POST_FIELDS,
+  TELEGRAM_ACCOUNT_TRIGGER_MESSAGE_FIELDS,
+  TELEGRAM_ACCOUNT_TRIGGER_OUTPUT_HANDLES,
+  isTelegramAccountTriggerNamedHandle,
+  telegramAccountTriggerOutputs,
+  telegramAccountListeningSignature,
+  type TelegramAccountTriggerPostField,
+} from "./telegram-account-trigger.js"
 
 export { buildFeedMaps, nodeFeedsAnything, type FeedNode, type FeedEdge, type FeedMaps } from "./trigger-feeds.js"
 
@@ -782,6 +835,68 @@ export {
   type InstagramNodeQuoteFields,
 } from "./instagram-scrape.js"
 
+export {
+  SOCIAL_SEARCH_NODE_TYPE,
+  SOCIAL_PLATFORMS,
+  SOCIAL_SEARCH_MODES,
+  SOCIAL_SEARCH_PLATFORM_MODES,
+  SOCIAL_SEARCH_PERIODS,
+  SOCIAL_SEARCH_SORTS,
+  SOCIAL_SEARCH_COUNTS,
+  SOCIAL_SEARCH_VIDEO_KINDS,
+  SOCIAL_SEARCH_PAGED_MODES,
+  socialSearchMaxCount,
+  socialSearchEffectiveCount,
+  socialSearchRegion,
+  socialSearchCountry,
+  SOCIAL_SEARCH_DEFAULT_PICK_TOP,
+  SOCIAL_SEARCH_MAX_QUERY_LENGTH,
+  SOCIAL_SEARCH_CREDITS_PER_PAGE,
+  SOCIAL_SEARCH_CREDIT_COSTS,
+  isSocialPost,
+  socialPostsFrom,
+  socialSearchPlatform,
+  socialSearchMode,
+  socialSearchCount,
+  socialSearchPages,
+  socialSearchRequestFromNode,
+  socialSearchCreditId,
+  socialSearchCreditIdFromNode,
+  socialSearchPickTop,
+  pickSocialPosts,
+  isSocialSearchPickFrozen,
+  socialPostDigestLine,
+  socialPostsDigest,
+  type SocialPlatform,
+  type SocialSearchMode,
+  type SocialSearchPeriod,
+  type SocialSearchSort,
+  type SocialSearchCount,
+  type SocialSearchVideoKind,
+  type SocialPost,
+  type SocialPostAuthor,
+  type SocialPostMetrics,
+  type SocialPostMedia,
+  type SocialSearchParams,
+} from "./social-search.js"
+
+export {
+  SAVED_POST_SOURCES,
+  SAVED_POST_NOTE_MAX,
+  SAVED_POST_MAX_TAGS,
+  SAVED_POST_TAG_MAX,
+  SAVED_POSTS_PAGE_MAX,
+  SAVED_POSTS_LOOKUP_MAX,
+  normalizeSavedPostTags,
+  type SavedPostSource,
+  type SavedPost,
+  type SavePostInput,
+  type UpdateSavedPostInput,
+  type ListSavedPostsParams,
+  type ListSavedPostsResult,
+  type SavedPostsLookupResult,
+} from "./saved-posts.js"
+
 export { VARIABLES_HANDLE_ID, buildConditionVariables } from "./condition-variables.js"
 
 export { extractAllGeneratedResults, extractGeneratedJsonAsList, spreadJsonArrayIfSingleton } from "./generated-results.js"
@@ -808,7 +923,7 @@ export {
 export type { LottieOverlayCatalogEntry } from "./lottie-overlay-catalog.js"
 
 
-export { resolveFieldMappings, resolveLocationFields } from "./resolve-field-mappings.js"
+export { resolveFieldMappings, resolveLocationFields, type FieldEdgeSource } from "./resolve-field-mappings.js"
 
 export { resolveNodeRefs, parseNodeRef, canonicalVarName, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, REF_HANDLE_CATEGORY, REFERENCE_HANDLE_MAP, referenceModalityForHandle, FRAME_TARGET_HANDLES, countRefModalityEdges, REF_TOKEN_NAMESPACE_PREFIXES, classifyRefToken, unresolvedRefTokens } from "./node-refs.js"
 export type { RefCandidate, ReferenceModality, RefModalityEdge, RefTokenKind } from "./node-refs.js"
@@ -915,6 +1030,7 @@ export {
   buildModelMenu,
   normalizeModelInput,
   normalizeVideoRequestParams,
+  fitAspectRatioToModel,
   defaultResolutionFor,
 } from "./model-catalog.js"
 export type {
@@ -1147,6 +1263,9 @@ export {
   AUDIO_PRODUCER_TYPES,
   DYNAMIC_PRODUCER_TYPES,
   FAN_OUT_EACH_TYPES,
+  FAN_IN_TARGETS,
+  isFanInNodeType,
+  isFanInEdge,
 } from "./producer-types.js"
 
 export { SUNO_TRACK_SOURCE_TYPES } from "./suno-track-sources.js"
@@ -1163,6 +1282,7 @@ export {
   detectVideoLinkPlatform,
   videoLinkDownloadedFile,
   resolveVideoLinkOutput,
+  videoLinkPageUrl,
   videoLinkNeedsDownload,
 } from "./video-link.js"
 export type { VideoLinkPlatform, VideoLinkNodeFields } from "./video-link.js"
@@ -1247,6 +1367,9 @@ export * from "./video-analysis.js"
 // Also hosts video-audit's sibling pricing (VIDEO_AUDIT_BUCKET_CREDITS +
 // buildVideoAuditCreditId / videoAuditCreditsForBucket / bucketSecondsFromAuditCreditId).
 export * from "./video-analysis-pricing.js"
+
+// --- Content Recipe / Content Ideas pricing (credit ids + the per-five-ideas rule) ---
+export * from "./content-recipe-ideas.js"
 
 // --- Unified video node UI-default fills (panel snap == strip == DAG payload) ---
 export * from "./video-ui-defaults.js"

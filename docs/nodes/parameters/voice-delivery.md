@@ -28,7 +28,7 @@ Wire to:
 - **Voice Design** (ElevenLabs) `audio-style` handle — composed text appended to the `voiceDescription` field. The dialogue `text` field is never touched.
 - **Text Prompt / Combine Text** `in` handle — direct text wiring.
 
-Suno Generate, Generate Music, and Text to Audio are music-side consumers and ignore Voice Delivery with a soft warning rendered on the consumer node. Use the Music nodes (Music Genre / Music Mood / Instrumentation) for those instead.
+Suno Create Music, Generate Music, and Text to Audio are music-side consumers and ignore Voice Delivery with a soft warning rendered on the consumer node. Use the Music nodes (Music Genre / Music Mood / Instrumentation) for those instead.
 
 ## Pricing
 

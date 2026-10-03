@@ -6,7 +6,7 @@ import { Layers } from "lucide-react"
 import { getMaterial, getMaterialLabel } from "@nodaro/prompts"
 import { pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
-import { MaterialPreview } from "@/lib/picker-ui"
+import { CharacterArt, MaterialPreview } from "@/lib/picker-ui"
 import type { MaterialData } from "@/types/nodes"
 
 function MaterialNodeComponent({ id, data, selected }: NodeProps) {
@@ -27,7 +27,14 @@ function MaterialNodeComponent({ id, data, selected }: NodeProps) {
           {getMaterialLabel(extraId)}
         </p>
       ))}
-      <MaterialPreview materialId={primaryId} className="w-full aspect-[16/9]" />
+      {/* The same photo the picker tile shows; the drawn swatch when there is none. */}
+      <CharacterArt
+        family="materials"
+        id={primaryId}
+        className="aspect-[16/9] rounded-lg"
+        position="50% 50%"
+        fallback={<MaterialPreview materialId={primaryId} className="w-full aspect-[16/9]" />}
+      />
       {description && extraIds.length === 0 && (
         <p className="text-muted-foreground text-[11px] leading-snug">
           {description}

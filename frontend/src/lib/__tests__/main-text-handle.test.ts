@@ -5,7 +5,7 @@ import { TARGET_HANDLE_ACCEPTS } from "../target-handle-registry"
 
 /**
  * Types that intentionally produce NO prompt hint (pure runtime parameters —
- * counts, durations, aspect ratios, legacy motion intensity). Spelled out as
+ * counts, durations, aspect ratios, a model id). Spelled out as
  * literals here — not imported from the implementation — so this test pins
  * the contract instead of echoing whatever the source derives.
  *
@@ -13,7 +13,7 @@ import { TARGET_HANDLE_ACCEPTS } from "../target-handle-registry"
  * packages/prompts/src/parameter-prompt-hint.ts and the HINT_EXEMPT set in
  * packages/prompts/src/__tests__/parameter-registry-sync.test.ts.
  */
-const HINT_EXEMPT = ["motion", "scene-count", "duration", "aspect-ratio"] as const
+const HINT_EXEMPT = ["scene-count", "duration", "aspect-ratio", "provider"] as const
 
 describe("TEXT_PRODUCING_SOURCE_TYPES ↔ PARAMETER_NODE_TYPES", () => {
   // Every hint-capable parameter type must be text-producing, or wiring it

@@ -14,6 +14,7 @@ export * from "./identity-lock.js"
 export * from "./reference-rules.js"
 export * from "./term.js"
 export * from "./parameter-prompt-hint.js"
+export * from "./video-own-motion.js"
 export * from "./entity-prompts.js"
 export * from "./brand-tokens.js"
 export * from "./described-references.js"
@@ -99,3 +100,6 @@ export * from "./character-motion-diagnostics.js"
 
 // --- Per-ad creative analysis for the social scraper nodes ---
 export * from "./ad-creative-analysis.js"
+
+// --- Picker art: option pictures + topic icons (editor and API) ---
+export * from "./picker-art/index.js"

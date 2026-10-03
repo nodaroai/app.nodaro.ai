@@ -2,7 +2,7 @@ import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
   // -------------------- Hip Hop / R&B --------------------
-  "hip-hop": { label: "힙합", description: "리드미컬한 가창, 샘플링되거나 프로그래밍된 비트" },
+  "hip-hop": { label: "힙합", description: "리드미컬한 랩, 샘플링하거나 프로그래밍한 비트" },
   "trap": { label: "트랩", description: "트랩" },
   "boom-bap": { label: "붐뱁", description: "붐뱁 힙합" },
   "lo-fi-hip-hop": { label: "로파이 힙합", description: "로파이 힙합" },
@@ -33,19 +33,19 @@ const map: LocaleCatalogMap = {
   "new-jack-swing": { label: "뉴 잭 스윙", description: "뉴 잭 스윙" },
   "future-soul": { label: "퓨처 소울", description: "퓨처 소울" },
 
-  "soul": { label: "소울", description: "감성적인 보컬, 가스펠 뿌리, 빈티지 R&B" },
+  "soul": { label: "소울", description: "감성적인 보컬, 가스펠에 뿌리를 둔 빈티지 R&B" },
   "motown": { label: "모타운", description: "모타운 소울" },
   "northern-soul": { label: "노던 소울", description: "노던 소울" },
   "southern-soul": { label: "서던 소울", description: "서던 소울" },
   "psychedelic-soul": { label: "사이키델릭 소울", description: "사이키델릭 소울" },
 
-  "funk": { label: "펑크", description: "싱코페이션된 베이스, 타악기적인 그루브" },
+  "funk": { label: "펑크", description: "싱코페이션이 살아 있는 베이스, 퍼커시브한 그루브" },
   "p-funk": { label: "P-펑크", description: "P-펑크" },
   "g-funk": { label: "G-펑크", description: "G-펑크" },
   "electro-funk": { label: "일렉트로 펑크", description: "일렉트로 펑크" },
   "jazz-funk": { label: "재즈 펑크", description: "재즈 펑크" },
 
-  "lofi": { label: "로파이", description: "따뜻한 테이프 잡음, 부드러운 비트, 향수 어린" },
+  "lofi": { label: "로파이", description: "따뜻한 테이프 잡음, 부드러운 비트, 향수 어린 감성" },
   "lofi-beats": { label: "비트", description: "로파이 비트" },
   "lofi-jazz": { label: "재즈", description: "로파이 재즈" },
   "chillhop": { label: "칠합", description: "칠합" },
@@ -64,7 +64,7 @@ const map: LocaleCatalogMap = {
   "jungle": { label: "정글", description: "정글" },
   "dubstep": { label: "덥스텝", description: "덥스텝" },
   "future-bass": { label: "퓨처 베이스", description: "퓨처 베이스" },
-  "trap-edm": { label: "트랩 (EDM)", description: "트랩 EDM" },
+  "trap-edm": { label: "트랩(EDM)", description: "트랩 EDM" },
   "synthwave": { label: "신스웨이브", description: "신스웨이브" },
   "outrun": { label: "아웃런", description: "아웃런 신스웨이브" },
   "vaporwave": { label: "베이퍼웨이브", description: "베이퍼웨이브" },
@@ -78,18 +78,18 @@ const map: LocaleCatalogMap = {
   "footwork": { label: "풋워크", description: "풋워크" },
   "indie-electronic": { label: "인디 일렉트로닉", description: "인디 일렉트로닉" },
 
-  "industrial": { label: "인더스트리얼", description: "거친 일렉트로닉, 기계적 질감, 거슬리는" },
+  "industrial": { label: "인더스트리얼", description: "거친 일렉트로닉, 기계적인 질감, 귀를 긁는 사운드" },
   "ebm": { label: "EBM", description: "일렉트로닉 보디 뮤직" },
   "industrial-metal": { label: "인더스트리얼 메탈", description: "인더스트리얼 메탈" },
   "noise": { label: "노이즈", description: "노이즈 인더스트리얼" },
 
-  "ambient-genre": { label: "앰비언트", description: "분위기 있는, 느리게 진화, 종종 비트 없음" },
+  "ambient-genre": { label: "앰비언트", description: "공간감 있는 분위기, 느리게 변화하는 전개, 비트가 없는 경우가 많음" },
   "dark-ambient": { label: "다크 앰비언트", description: "다크 앰비언트" },
-  "drone": { label: "드론", description: "드론" },
+  "drone": { label: "드론", description: "드론 뮤직" },
   "new-age": { label: "뉴에이지", description: "뉴에이지 앰비언트" },
   "space-music": { label: "스페이스", description: "스페이스 앰비언트" },
 
-  "experimental": { label: "실험적", description: "장르를 넘어선, 아방가르드, 추상적" },
+  "experimental": { label: "실험적", description: "장르를 넘나드는 아방가르드, 추상적인 사운드" },
   "musique-concrete": { label: "구체 음악", description: "구체 음악" },
   "noise-music": { label: "노이즈", description: "노이즈 음악" },
   "free-improv": { label: "프리 임프로비제이션", description: "프리 임프로비제이션" },
@@ -121,8 +121,8 @@ const map: LocaleCatalogMap = {
   "power-pop": { label: "파워 팝", description: "파워 팝" },
   "bedroom-pop": { label: "베드룸 팝", description: "베드룸 팝" },
 
-  "anime": { label: "애니메 / J-Rock", description: "일본 애니메이션 사운드트랙과 J-Rock" },
-  "anime-opening": { label: "오프닝", description: "애니메 오프닝" },
+  "anime": { label: "애니메이션 / J-Rock", description: "일본 애니메이션 사운드트랙과 J-Rock" },
+  "anime-opening": { label: "오프닝", description: "애니메이션 오프닝" },
   "j-rock": { label: "J-Rock", description: "J-rock" },
   "city-pop": { label: "시티팝", description: "시티팝" },
 
@@ -134,7 +134,7 @@ const map: LocaleCatalogMap = {
   "punk-rock": { label: "펑크 록", description: "펑크 록" },
   "alt-rock": { label: "얼터너티브", description: "얼터너티브 록" },
   "psychedelic-rock": { label: "사이키델릭", description: "사이키델릭 록" },
-  "garage-rock": { label: "개라지", description: "개라지 록" },
+  "garage-rock": { label: "개러지", description: "개러지 록" },
   "surf-rock": { label: "서프", description: "서프 록" },
   "prog-rock": { label: "프로그레시브", description: "프로그레시브 록" },
   "post-rock": { label: "포스트록", description: "포스트록" },
@@ -143,7 +143,7 @@ const map: LocaleCatalogMap = {
   "stoner-rock": { label: "스토너", description: "스토너 록" },
   "emo": { label: "이모", description: "이모" },
 
-  "punk": { label: "펑크", description: "빠르고, 공격적, DIY 카운터컬처" },
+  "punk": { label: "펑크", description: "빠르고 공격적인 DIY 반문화" },
   "hardcore-punk": { label: "하드코어", description: "하드코어 펑크" },
   "post-punk": { label: "포스트 펑크", description: "포스트 펑크" },
   "pop-punk": { label: "팝 펑크", description: "팝 펑크" },
@@ -165,7 +165,7 @@ const map: LocaleCatalogMap = {
   "symphonic-metal": { label: "심포닉", description: "심포닉 메탈" },
 
   // -------------------- Acoustic / Roots --------------------
-  "jazz": { label: "재즈", description: "즉흥, 스윙 리듬, 복잡한 화성" },
+  "jazz": { label: "재즈", description: "즉흥 연주, 스윙 리듬, 복잡한 화성" },
   "bebop": { label: "비밥", description: "비밥" },
   "smooth-jazz": { label: "스무스 재즈", description: "스무스 재즈" },
   "fusion": { label: "퓨전", description: "재즈 퓨전" },
@@ -178,7 +178,7 @@ const map: LocaleCatalogMap = {
   "nu-jazz": { label: "누재즈", description: "누재즈" },
   "acid-jazz": { label: "애시드 재즈", description: "애시드 재즈" },
 
-  "blues": { label: "블루스", description: "12마디 형식, 표현력 있는 보컬, 벤드 노트" },
+  "blues": { label: "블루스", description: "12마디 형식, 표현력 있는 보컬, 벤딩 음" },
   "delta-blues": { label: "델타 블루스", description: "델타 블루스" },
   "chicago-blues": { label: "시카고 블루스", description: "시카고 블루스" },
   "electric-blues": { label: "일렉트릭 블루스", description: "일렉트릭 블루스" },
@@ -191,7 +191,7 @@ const map: LocaleCatalogMap = {
   "alt-country": { label: "얼트 컨트리", description: "얼트 컨트리" },
   "country-rock": { label: "컨트리 록", description: "컨트리 록" },
   "americana": { label: "아메리카나", description: "아메리카나" },
-  "honky-tonk": { label: "혼키 통크", description: "혼키 통크" },
+  "honky-tonk": { label: "홍키 통크", description: "홍키 통크" },
   "bluegrass": { label: "블루그래스", description: "블루그래스" },
 
   "folk": { label: "포크", description: "어쿠스틱, 전통 악기" },
@@ -202,7 +202,7 @@ const map: LocaleCatalogMap = {
   "folk-rock": { label: "포크 록", description: "포크 록" },
   "anti-folk": { label: "안티 포크", description: "안티 포크" },
 
-  "gospel": { label: "가스펠", description: "기독교 헌신, 합창, 종종 피아노 주도" },
+  "gospel": { label: "가스펠", description: "기독교 예배 음악, 합창, 주로 피아노 중심" },
   "traditional-gospel": { label: "전통", description: "전통 가스펠" },
   "contemporary-gospel": { label: "컨템포러리", description: "컨템포러리 가스펠" },
   "urban-gospel": { label: "어반", description: "어반 가스펠" },
@@ -242,7 +242,7 @@ const map: LocaleCatalogMap = {
   "middle-eastern": { label: "중동", description: "중동" },
   "celtic": { label: "켈틱", description: "켈틱" },
   "gamelan": { label: "가믈란", description: "가믈란" },
-  "throat-singing": { label: "후두 가창", description: "후두 가창" },
+  "throat-singing": { label: "배음 창법", description: "배음 창법(목노래)" },
 
   // -------------------- Cinematic / Score --------------------
   "classical": { label: "클래식", description: "오케스트라, 전통 서양 예술 음악" },
@@ -252,11 +252,11 @@ const map: LocaleCatalogMap = {
   "minimalist-classical": { label: "미니멀리스트", description: "미니멀리스트 클래식" },
   "choral": { label: "합창", description: "합창 클래식" },
   "chamber-music": { label: "실내악", description: "실내악" },
-  "opera": { label: "오페라", description: "오페라적" },
+  "opera": { label: "오페라", description: "오페라풍" },
   "early-music": { label: "고음악", description: "고음악" },
 
-  "cinematic": { label: "영화적", description: "스코어 스타일, 환기적, 무드 주도" },
-  "epic-orchestral": { label: "장대한 오케스트라", description: "장대한 오케스트라 영화적" },
+  "cinematic": { label: "시네마틱", description: "스코어 스타일, 감정을 자아내는, 분위기 중심" },
+  "epic-orchestral": { label: "장대한 오케스트라", description: "장대한 오케스트라 시네마틱 음악" },
   "minimalist-score": { label: "미니멀리스트 스코어", description: "미니멀리스트 영화 스코어" },
   "trailer-music": { label: "트레일러", description: "트레일러 영화 음악" },
   "score-action": { label: "액션", description: "액션 영화 스코어" },
@@ -264,19 +264,19 @@ const map: LocaleCatalogMap = {
   "score-romance": { label: "로맨스", description: "로맨스 영화 스코어" },
   "score-sci-fi": { label: "SF", description: "SF 영화 스코어" },
   "score-fantasy": { label: "판타지", description: "판타지 영화 스코어" },
-  "score-noir": { label: "누아르", description: "누아르 영화적" },
+  "score-noir": { label: "누아르", description: "누아르풍 영화 음악" },
   "score-documentary": { label: "다큐멘터리", description: "다큐멘터리 스코어" },
 
   "video-game": { label: "비디오 게임", description: "게임 스코어 스타일 — 칩튠, 오케스트라, 일렉트로닉" },
   "chiptune": { label: "칩튠", description: "칩튠" },
   "8bit": { label: "8비트", description: "8비트" },
   "16bit": { label: "16비트", description: "16비트" },
-  "vgm-orchestral": { label: "오케스트라 VGM", description: "오케스트라 비디오 게임" },
-  "vgm-synth": { label: "신스 VGM", description: "신스 비디오 게임" },
+  "vgm-orchestral": { label: "오케스트라 VGM", description: "오케스트라 게임 음악" },
+  "vgm-synth": { label: "신스 VGM", description: "신스 게임 음악" },
 
-  "holiday": { label: "휴일", description: "계절 — 크리스마스, 축제, 전통적" },
+  "holiday": { label: "홀리데이", description: "시즌 음악 — 크리스마스, 축제 분위기, 전통적" },
   "christmas": { label: "크리스마스", description: "크리스마스" },
-  "winter": { label: "겨울", description: "겨울 휴일" },
+  "winter": { label: "겨울", description: "겨울 홀리데이" },
   "festive": { label: "축제", description: "축제" },
 
   "children": { label: "어린이", description: "어린이 음악 — 함께 부르기, 자장가, 교육적" },
@@ -287,7 +287,7 @@ const map: LocaleCatalogMap = {
   // -------------------- Eras --------------------
   "1920s": { description: "광란의 20년대, 재즈 시대" },
   "1930s": { description: "빅밴드, 스윙" },
-  "1940s": { description: "전시, 비밥의 출현" },
+  "1940s": { description: "전쟁 시기, 비밥의 등장" },
   "1950s": { description: "초기 로큰롤, 두왑" },
   "1960s": { description: "브리티시 인베이전, 모타운" },
   "1970s": { description: "디스코, 프로그 록, 펑크" },
@@ -296,7 +296,7 @@ const map: LocaleCatalogMap = {
   "2000s": { description: "팝펑크, R&B 부활" },
   "2010s": { description: "EDM 주류화, 스트리밍 시대" },
   "modern": { label: "현대", description: "2020년대 이후 컨템포러리" },
-  "futurist": { label: "퓨처리스트", description: "SF, 다른 세계의" },
+  "futurist": { label: "미래", description: "SF, 다른 세계 같은" },
 }
 
 export default map

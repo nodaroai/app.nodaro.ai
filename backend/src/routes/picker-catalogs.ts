@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { getPickerCatalog, summarizePickerCatalogs, projectPickerCatalog } from "@nodaro/prompts"
+import { pickerImageOptions } from "../lib/picker-images.js"
 
 const nodeTypeParams = z.object({ nodeType: z.string().min(1).max(64) })
 const projectionQuery = z.object({
@@ -10,9 +11,10 @@ const projectionQuery = z.object({
 })
 
 export async function pickerCatalogsRoutes(app: FastifyInstance) {
-  // Directory of every parameter-picker catalog (no option payloads).
+  // Directory of every parameter-picker catalog (no option payloads; each row
+  // says how many of its options carry an imageUrl).
   app.get("/v1/picker-catalogs", async (_req, reply) =>
-    reply.header("Cache-Control", "public, max-age=300").send({ data: summarizePickerCatalogs() }),
+    reply.header("Cache-Control", "public, max-age=300").send({ data: summarizePickerCatalogs({ images: pickerImageOptions() }) }),
   )
 
   // One picker's catalog of valid values; compact by default.
@@ -33,6 +35,6 @@ export async function pickerCatalogsRoutes(app: FastifyInstance) {
     }
     return reply
       .header("Cache-Control", "public, max-age=300")
-      .send({ data: projectPickerCatalog(catalog, query.data) })
+      .send({ data: projectPickerCatalog(catalog, { ...query.data, images: pickerImageOptions() }) })
   })
 }

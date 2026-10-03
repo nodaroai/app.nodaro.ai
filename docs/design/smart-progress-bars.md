@@ -68,7 +68,7 @@ Different node types store model/config under different field names. A `buildSta
 | Music (suno) | `"suno"` | `""` | `""` | `inputData.duration` or 0 |
 | LLM (ai-writer, generate-script) | `inputData.llmModel` or `"llm"` | `""` | `""` | 0 |
 | Upscale (topaz) | `inputData.provider` | `""` | `inputData.scale` or `""` | 0 |
-| FFmpeg processing | Skip — not tracked (0 credits, near-instant) | — | — | — |
+| FFmpeg processing | Skip — not tracked (10–30 credits, near-instant) | — | — | — |
 | Inline (combine-text, split-text) | Skip — not tracked | — | — | — |
 
 The `model_identifier` should align with the credit system identifiers where possible (e.g., `"flux"`, `"veo-3"`, `"gpt-image"`).

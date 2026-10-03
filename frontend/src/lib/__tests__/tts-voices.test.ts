@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { TTS_VOICES, getVoiceName } from "../tts-voices"
+import { TTS_VOICES, getVoiceName, ttsVoiceLabel } from "../tts-voices"
+import { useLocaleStore } from "@/lib/locale-store"
 
 describe("TTS_VOICES", () => {
   it("has at least 10 voices", () => {
@@ -18,9 +19,19 @@ describe("TTS_VOICES", () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it("every name includes a gender indicator", () => {
+  it("every label names the voice's gender and accent", () => {
     for (const voice of TTS_VOICES) {
-      expect(voice.name).toMatch(/\(Female|Male|Non-binary/)
+      expect(ttsVoiceLabel(voice)).toMatch(/^[^(]+ \((Female|Male|Non-binary), [A-Z][A-Za-z-]+\)$/)
+    }
+  })
+
+  it("labels the voice in the interface language, keeping its name", () => {
+    const rachel = TTS_VOICES.find((v) => v.id === "Rachel")!
+    useLocaleStore.setState({ locale: "he" })
+    try {
+      expect(ttsVoiceLabel(rachel)).toMatch(/^Rachel \([\u0590-\u05FF]/)
+    } finally {
+      useLocaleStore.setState({ locale: "en" })
     }
   })
 

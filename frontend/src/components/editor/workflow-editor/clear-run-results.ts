@@ -200,7 +200,7 @@ const ZERO_IS_EMPTY: ReadonlySet<string> = new Set([
   "__restTotal",
   "__upstreamCount",
 ])
-const FALSE_IS_EMPTY: ReadonlySet<string> = new Set(["isStreaming", "jobAwaitingReview", "jobRecovering", "__listRunning"])
+const FALSE_IS_EMPTY: ReadonlySet<string> = new Set(["isStreaming", "jobAwaitingReview", "jobConnectionLost", "jobRecovering", "__listRunning"])
 const IDLE_IS_EMPTY: ReadonlySet<string> = new Set(["executionStatus", "videoExecutionStatus"])
 
 export type ClearScope = "results" | "run-state" | "none"

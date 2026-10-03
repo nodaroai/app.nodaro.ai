@@ -1,10 +1,13 @@
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import {
-  pro3DRenderShotStills, assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle, clampEditPlanClipCount } from "@nodaro/shared"
+  pro3DRenderShotStills, assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle, clampEditPlanClipCount,
+  resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource } from "@nodaro/shared"
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
+import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
+import { socialSearchRequestFromNode, socialSearchCreditId, socialSearchPickTop } from "@nodaro/shared"
 /**
  * Build BullMQ job payloads for each node type from node data + resolved inputs.
  * Returns { jobName, queueName, payload } for worker-queued nodes.
@@ -15,8 +18,8 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
-import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, sunoCreditType, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, seedanceVideoEditCreditId, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, newScene3DRevisionId, resolveScene3DAuthoringEngine, scene3DPlanSchema, PRO3D_RENDER_CREDIT_ID, PRO3D_RENDER_DEFAULT_ENGINE, buildPro3DRenderSource, pro3DRenderTimingOverrides, renderVideoCreditId, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES, normalizeTranscript, captionRoutesToRemotion, normalizeCaptionNumericLevers, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, transcriptDurationSec, DEFAULT_TRANSCRIBE_NODE_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, type Scene3DPlan } from "@nodaro/shared"
-import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, buildSeedanceVideoEditPrompt, applyPromptAffixes, composeVideoPromptText, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
+import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, sunoCreditType, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, readScriptSettings, speedRampCreditId, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, seedanceVideoEditCreditId, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, newScene3DRevisionId, resolveScene3DAuthoringEngine, scene3DPlanSchema, PRO3D_RENDER_CREDIT_ID, PRO3D_RENDER_DEFAULT_ENGINE, buildPro3DRenderSource, pro3DRenderTimingOverrides, renderVideoCreditId, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES, normalizeTranscript, captionRoutesToRemotion, normalizeCaptionNumericLevers, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, transcriptDurationSec, DEFAULT_TRANSCRIBE_NODE_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, resolveMusicProvider, MUSIC_CREDIT_ID, isSettingsHintEdge, type Scene3DPlan } from "@nodaro/shared"
+import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, appendPromptHints, joinSentences, computeScriptTopic, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, buildSeedanceVideoEditPrompt, applyPromptAffixes, composeVideoPromptText, ownMotionHint, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
 import { labelRefHintContext } from "./label-ref-hint-context.js"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
@@ -38,7 +41,8 @@ import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-m
 import { buildEffectiveEdl, validateEffectiveEdl } from "../../lib/apply-edl-plan.js"
 import { audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES } from "../../providers/audio/audio-sync-budget.js"
-import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
+import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput, savedOutputFor } from "./output-extractor.js"
+import { savedDataAllowed } from "./saved-data.js"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
@@ -129,12 +133,12 @@ export interface RequiredMediaInput {
  * merge-video-audio rows).
  *
  * ONE ROW PER NODE, ONE OR MORE REQUIREMENTS. A row is a single requirement or
- * an array of them (AND: every entry must be satisfied). The five two-input
+ * an array of them (AND: every entry must be satisfied). The six two-input
  * nodes (merge-video-audio, still-to-video, speech-to-video, motion-transfer,
- * lip-sync) carry both halves, mirroring the frontend, which refuses both.
- * face-swap deliberately stays single: its face half reads only
- * `data.faceImageUrl` (no resolved-input lane), so guarding it would refuse a
- * wired handle — that is the audit-dag wiring gap, ticketed separately.
+ * lip-sync, face-swap) carry both halves, mirroring the frontend, which refuses
+ * both. face-swap's face half reads the resolver's own `faceImageUrl` lane (the
+ * wired `face` handle), so a graph with no face is refused here instead of
+ * crashing at the provider.
  *
  * KEYS ARE READ FROM THE CASE. Every `anyOf` key below is a source the matching
  * case actually consults, INCLUDING its non-media alternatives (`youtubeUrl`,
@@ -169,6 +173,10 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
     { anyOf: ["imageUrl", "videoUrl"], kind: "image", noun: "a portrait image or a video" },
     { anyOf: ["audioUrl"], kind: "audio", noun: "an audio track" },
   ],
+  "face-swap": [
+    { anyOf: ["faceImageUrl"], kind: "image", noun: "a face image" },
+    { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  ],
 
   // --- Video in ---
   // BOTH halves. The audio half names the two keys the case actually reads
@@ -195,7 +203,6 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   "switchx": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "video-sfx": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "video-retake": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
-  "face-swap": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "combine-videos": { anyOf: ["videoUrls", "videoUrlsWithSourceIds"], kind: "video", noun: "at least one video" },
   "assemble-narrated-video": { anyOf: ["videoUrls"], kind: "video", noun: "at least one video" },
   "split-media": { anyOf: ["videoUrl", "audioUrl"], kind: "video", noun: "a video or audio input" },
@@ -203,8 +210,9 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   // Non-media alternative: an upstream VEO/Runway task id runs without a URL.
   "video-upscale": { anyOf: ["videoUrl", "kieTaskId"], kind: "video", noun: "a video (or an upstream VEO task)" },
   "extend-video": { anyOf: ["videoUrl", "kieTaskId"], kind: "video", noun: "a video (or an upstream VEO/Runway task)" },
-  // Non-media alternative: the node's own YouTube URL.
-  "video-analysis": { anyOf: ["videoUrl", "youtubeUrl"], kind: "video", noun: "a video or a YouTube URL" },
+  // Non-media alternatives: a post's link wired into the `video` handle, or the
+  // node's own link field.
+  "video-analysis": { anyOf: ["videoUrl", "videoPageUrl", "youtubeUrl"], kind: "video", noun: "a video, or a link to a post's video" },
 
   // --- Audio in ---
   "audio-isolation": { anyOf: ["audioUrl"], kind: "audio", noun: "an audio track" },
@@ -557,12 +565,12 @@ function keepSeedance2MentionsAsRefs(
 // Ancestor reference image collection — delegates to shared implementation
 // ---------------------------------------------------------------------------
 
-/** Get image URL from execution state, falling back to saved node data (matches frontend). */
+/** Get image URL from execution state, falling back to saved node data (matches frontend) — only for a node this run did not run or gate. */
 function getNodeImageUrl(
   node: SimpleNode,
   nodeStates: Record<string, NodeExecutionState>,
 ): string | undefined {
-  return nodeStates[node.id]?.output?.imageUrl ?? extractSavedNodeOutput(node)?.imageUrl
+  return nodeStates[node.id]?.output?.imageUrl ?? savedOutputFor(node, nodeStates[node.id])?.imageUrl
 }
 
 function collectAncestorRefs(
@@ -1795,7 +1803,8 @@ function extractListItems(
   if (node.type === "split-text") {
     const state = states[node.id]
     if (state?.output?.splitResults) return state.output.splitResults
-    return (data.splitResults as string[] | undefined) ?? []
+    // A Split Text this run ran or gated never hands over its saved split.
+    return (savedDataAllowed(state) ? (data.splitResults as string[] | undefined) : undefined) ?? []
   }
   return []
 }
@@ -1915,7 +1924,8 @@ export function buildNodeRefMap(
         // editor passes it there; every other type stays context-free.
         output = getParameterPromptHint(node, labelRefHintContext(node, nodes, edges)) || undefined
       } else {
-        const saved = extractSavedNodeOutput(node)
+        // A node this run ran or gated has no saved stand-in (saved-data.ts).
+        const saved = savedOutputFor(node, state)
         if (saved) {
           output = saved.text ?? saved.imageUrl ?? saved.videoUrl ?? saved.audioUrl
             ?? (saved.json !== undefined && saved.json !== null ? JSON.stringify(saved.json) : undefined)
@@ -2034,9 +2044,12 @@ function collectCinematographyHints(
   // BY HANDLE: injectLook === false drops the Look family (look / cinematography
   // / style); injectElements === false drops the `elements` handle + character-
   // borne elements. Default ON for both (undefined/true).
-  const consumerData = nodes.find((n) => n.id === consumerNodeId)?.data as
+  const consumerNode = nodes.find((n) => n.id === consumerNodeId)
+  const consumerData = consumerNode?.data as
     | { injectLook?: boolean; injectElements?: boolean; prompt?: string; negativePrompt?: string }
     | undefined
+  const consumerType = consumerNode?.type ?? ""
+  const typeOf = (id: string) => nodes.find((n) => n.id === id)?.type
   const lookOff = consumerData?.injectLook === false
   const elementsOff = consumerData?.injectElements === false
   // Used-as-variable suppression (mirror of FE): a source placed explicitly via
@@ -2047,8 +2060,10 @@ function collectCinematographyHints(
   for (const edge of edges) {
     if (edge.target !== consumerNodeId) continue
     // v2.1: accept `cinematography` / `style` / `look` / `elements` — all four
-    // route hints through this same collector at runtime.
+    // route hints through this same collector at runtime — plus a prompt-clause
+    // setting (Motion) in the Settings input, which joins the Look family.
     if (
+      !isSettingsHintEdge(edge, consumerType, edges, typeOf) &&
       edge.targetHandle !== "cinematography" &&
       edge.targetHandle !== "style" &&
       edge.targetHandle !== "look" &&
@@ -2229,8 +2244,7 @@ function composeVideoPrompt(args: {
   const cinematographyHints = collectCinematographyHints(args.nodeId, args.buildCtx, { excludeCharacterElements: true })
   for (const h of cinematographyHints) hints.push(h)
   if (hints.length > 0) {
-    const joined = hints.join(", ")
-    p = p ? `${p}. ${joined}` : joined
+    p = appendPromptHints(p, hints)
   }
   const identityClause = collectIdentityLockClause(args.nodeId, args.buildCtx)
   if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
@@ -2512,8 +2526,7 @@ export function buildPayload(
         // Bullet consumer (stamps character elements onto the ref) → exclude here.
         const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
         if (cinematographyHints.length > 0) {
-          const joined = cinematographyHints.join(", ")
-          rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
+          rawPrompt = appendPromptHints(rawPrompt, cinematographyHints)
         }
       }
       {
@@ -2844,8 +2857,7 @@ export function buildPayload(
       {
         const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
         if (cinematographyHints.length > 0) {
-          const joined = cinematographyHints.join(", ")
-          editPrompt = editPrompt ? `${editPrompt}. ${joined}` : joined
+          editPrompt = appendPromptHints(editPrompt, cinematographyHints)
         }
       }
       {
@@ -2955,8 +2967,7 @@ export function buildPayload(
         // Bullet consumer (stamps character elements onto the ref) → exclude here.
         const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
         if (cinematographyHints.length > 0) {
-          const joined = cinematographyHints.join(", ")
-          rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
+          rawPrompt = appendPromptHints(rawPrompt, cinematographyHints)
         }
       }
       {
@@ -3118,8 +3129,7 @@ export function buildPayload(
           // Bullet consumer (stamps character elements onto the ref) → exclude here.
           const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
           if (cinematographyHints.length > 0) {
-            const joined = cinematographyHints.join(", ")
-            editPrompt = editPrompt ? `${editPrompt}. ${joined}` : joined
+            editPrompt = appendPromptHints(editPrompt, cinematographyHints)
           }
         }
         {
@@ -3193,8 +3203,7 @@ export function buildPayload(
           // Bullet consumer (stamps character elements onto the ref) → exclude here.
           const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
           if (cinematographyHints.length > 0) {
-            const joined = cinematographyHints.join(", ")
-            rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
+            rawPrompt = appendPromptHints(rawPrompt, cinematographyHints)
           }
         }
         {
@@ -3340,7 +3349,7 @@ export function buildPayload(
         rawPrompt: i2vRawPrompt,
         nodeId: node.id,
         buildCtx,
-        motionHint: data.motionEnabled && data.motion ? `${data.motion} motion` : undefined,
+        motionHint: ownMotionHint("image-to-video", data),
         // Node-data cinematic direction / structured ids (P4b). Narrow-read:
         // `data` is untrusted persisted JSON. A generate-video node re-typed to
         // i2v by the FE lands in THIS case's frontend twin, so the legacy
@@ -3526,7 +3535,7 @@ export function buildPayload(
       // `referenceImageUrls`, merged with whatever upstream already provided.
       const t2vRawPrompt = promptFor("text-to-video")
       // Node-data cinematic direction / structured ids (P4b) — see the i2v case.
-      let t2vPrompt = composeVideoPrompt({ rawPrompt: t2vRawPrompt, nodeId: node.id, buildCtx, ...readNodeDirectionLevers(data) })
+      let t2vPrompt = composeVideoPrompt({ rawPrompt: t2vRawPrompt, motionHint: ownMotionHint("text-to-video", data), nodeId: node.id, buildCtx, ...readNodeDirectionLevers(data) })
       // `{image:N}` token resolution — see i2v note. Same gate + edge counts.
       const t2vSupportsRefs = !!provider && hasFeature(provider, "reference-image")
       // Plain image-refs LEAD the unified @image_N numbering (D5) — computed BEFORE
@@ -3795,9 +3804,7 @@ export function buildPayload(
       // inline picker) → upstream wire. composeVideoPrompt appends cinematography
       // hints + optional motion-hint + identity-lock.
       const rawPrompt = promptFor("generate-video", true)
-      const motionHint = data.motionEnabled && typeof data.motion === "string" && data.motion
-        ? `${data.motion} motion`
-        : undefined
+      const motionHint = ownMotionHint("generate-video", data)
       let composedPrompt = composeVideoPrompt({ rawPrompt, motionHint, nodeId: node.id, buildCtx, ...gvDirectionLevers })
 
       // Mention resolution + ref-image merging (mirrors i2v case). Extras /
@@ -4004,6 +4011,30 @@ export function buildPayload(
       }
     }
 
+    case "social-search": {
+      // Cloud-only: the private plugin runs the search. The orchestrated twin
+      // of POST /v1/social-search — same job name, same request — built by the
+      // ONE builder the editor's run uses. The query is the wired text when
+      // there is one (a Text node, a List item under a fan-out), else the
+      // node's own field. How many posts to pass on rides along untouched: the
+      // plugin echoes it onto the job's output, where buildNodeOutputFromJobData
+      // applies the picking rule. A person's picks are NOT sent: they belong to
+      // the search they were picked from, and this run searches again (a node
+      // that keeps its picks is frozen and never reaches this case) — the same
+      // rule as the editor's run.
+      const request = socialSearchRequestFromNode(data, resolvedInputs.overridePrompt ?? resolvedInputs.prompt)
+      if (!request.query) {
+        throw new Error("social-search: type a keyword or an account, or connect a text to the node's input")
+      }
+      return simpleResult("social-search", socialSearchCreditId(request.count ?? 20), {
+        jobId,
+        usageLogId,
+        request,
+        pick: { top: socialSearchPickTop(data.pickTop) },
+        nodeId: node.id,
+      })
+    }
+
     case "video-analysis": {
       // Duration-bucketed pricing is a client-writable billing input, so the
       // reserved credit id is derived from the SAME 3-step resolution the route
@@ -4014,8 +4045,10 @@ export function buildPayload(
       //   3. unknown → <model>:600s ceiling  — the only silent-ceiling path
       // videoUrl wins over youtubeUrl (mirrors the video-analysis route, now in
       // @nodaroai/cloud-plugins), so a wired/config clip nulls youtubeUrl downstream.
+      // The link itself: a post's link wired into the `video` handle, else the
+      // node's own field.
       const videoUrl = resolvedInputs.videoUrl ?? (data.videoUrl as string | undefined)
-      const youtubeUrl = videoUrl ? undefined : (data.youtubeUrl as string | undefined)
+      const youtubeUrl = videoUrl ? undefined : (resolvedInputs.videoPageUrl ?? (data.youtubeUrl as string | undefined))
       const probed = data.probedYoutube as { url: string; durationSec: number } | undefined
       const durationSec =
         resolvedInputs.videoDuration ??
@@ -4048,6 +4081,63 @@ export function buildPayload(
         // no execution context and the worker consumes neither field.
         nodeId: node.id,
         usageLogId,
+      })
+    }
+
+    case "content-recipe": {
+      // Cloud-only: the private plugin runs it. The orchestrated twin of POST
+      // /v1/content-recipe — same job name, same payload — so the route's
+      // validation is repeated here (the plugin handler re-checks it too). The
+      // material is the text on the `in` wire: a Video Analysis result's JSON,
+      // a scraped post, a caption or transcript — or, under a fan-out, the
+      // current item. The post link comes from the `link` wire, else the typed
+      // field; it is cited, never fetched.
+      const source = (resolvedInputs.overridePrompt ?? resolvedInputs.prompt ?? "").trim()
+      if (!source) {
+        throw new Error("content-recipe: connect a Video Analysis, a post or some text to the node's input")
+      }
+      const llmModel = effectiveContentModel("content-recipe", data.llmModel)
+      const reasoningEffort = typeof data.reasoningEffort === "string" ? data.reasoningEffort : undefined
+      const typedLink = typeof data.sourceUrl === "string" && data.sourceUrl.trim() ? data.sourceUrl.trim() : undefined
+      const focus = typeof data.focus === "string" && data.focus.trim() ? data.focus.trim().slice(0, 2_000) : undefined
+      return simpleResult("content-recipe", contentRecipeCreditId(llmModel, reasoningEffort), {
+        jobId,
+        usageLogId,
+        source: source.slice(0, CONTENT_RECIPE_SOURCE_MAX),
+        sourceUrl: resolvedInputs.sourceLink ?? typedLink,
+        focus,
+        llmModel,
+        reasoningEffort,
+        nodeId: node.id,
+      })
+    }
+
+    case "content-ideas": {
+      // Cloud-only, like content-recipe. Every recipe wired into `recipes` —
+      // several Content Recipe nodes and/or one that ran once per post —
+      // arrives folded on inputs.inputs (FAN_IN_TARGETS). The brand and the
+      // language are fields (a `field-brand` wire was resolved into data).
+      const recipes = (resolvedInputs.inputs ?? [])
+        .filter((r): r is string => typeof r === "string" && r.trim() !== "")
+        .slice(0, CONTENT_IDEAS_MAX_RECIPE_INPUTS)
+      if (recipes.length === 0) {
+        throw new Error("content-ideas: connect at least one Content Recipe to the Recipes input")
+      }
+      const count = clampContentIdeasCount(data.count)
+      const llmModel = effectiveContentModel("content-ideas", data.llmModel)
+      const reasoningEffort = typeof data.reasoningEffort === "string" ? data.reasoningEffort : undefined
+      const brand = typeof data.brand === "string" && data.brand.trim() ? data.brand.trim().slice(0, CONTENT_IDEAS_BRAND_MAX) : undefined
+      const language = typeof data.language === "string" && data.language.trim() ? data.language.trim().slice(0, CONTENT_IDEAS_LANGUAGE_MAX) : undefined
+      return simpleResult("content-ideas", contentIdeasCreditId(count, llmModel, reasoningEffort), {
+        jobId,
+        usageLogId,
+        recipes,
+        brand,
+        count,
+        language,
+        llmModel,
+        reasoningEffort,
+        nodeId: node.id,
       })
     }
 
@@ -4113,6 +4203,22 @@ export function buildPayload(
       if (sources.length === 0) {
         throw new Error("edit-plan: connect the recording's media to the Sources input")
       }
+      // B4 (decided 2026-09-25): audio-sync's offsets (when wired) onto the
+      // sources, the master's own offset, and the transcript's clock — checked
+      // HERE, before the reserve, so a plan that would render out of sync fails
+      // before charging. One rule for every caller: resolveEditPlanSources.
+      const planned = resolveEditPlanSources(sources as Array<AudioSyncOffsetSource & Record<string, unknown>>, {
+        offsets: resolvedInputs.editPlanOffsets,
+        transcriptSourceId: resolvedInputs.editPlanTranscriptOrigin,
+      })
+      if (!planned.ok) {
+        const labelOf = (id: string) => wired.find((w) => w.nodeId === id)?.label ?? id
+        throw new Error(`edit-plan: ${planned.issues.map((i) => describeAudioSyncOffsetIssue(i, labelOf)).join("; ")}`)
+      }
+      // Stamp the transcript's recording so the plugin's own clock guard sees it.
+      const plannedTranscript = planned.transcriptSourceId && typeof transcript === "object"
+        ? { ...(transcript as Record<string, unknown>), sourceId: planned.transcriptSourceId }
+        : transcript
       // Reserve on the MASTER source's duration: the declared role:"master-audio"
       // source, else the first source (mirrors the plugin's masterProbeSource).
       // `masterRow.duration` is populated by input-resolver from the source node's
@@ -4138,9 +4244,9 @@ export function buildPayload(
         jobId,
         mode,
         planTier: tier,
-        transcript,
+        transcript: plannedTranscript,
         silence,
-        sources,
+        sources: planned.sources,
         instructions: applyPromptAffixes(data.instructions as string | undefined, readPromptAffixes(data), refMap),
         styleGuide: typeof data.styleGuide === "string" ? data.styleGuide : undefined,
         // Clamped to the request schema's own [1, 50]: the orchestrated path
@@ -4272,8 +4378,7 @@ export function buildPayload(
           // Bullet consumer (stamps character elements onto the video ref) → exclude here.
           const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeCharacterElements: true })
           if (cinematographyHints.length > 0) {
-            const joined = cinematographyHints.join(", ")
-            p = p ? `${p}. ${joined}` : joined
+            p = appendPromptHints(p, cinematographyHints)
           }
         }
         const identityClause = collectIdentityLockClause(node.id, buildCtx)
@@ -4438,7 +4543,7 @@ export function buildPayload(
         modelIdentifier: "roop-face-swap",
         payload: {
           jobId,
-          faceImageUrl: data.faceImageUrl,
+          faceImageUrl: resolvedInputs.faceImageUrl || data.faceImageUrl,
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
           provider: (data.provider as string) ?? "roop",
           usageLogId,
@@ -4526,8 +4631,7 @@ export function buildPayload(
             {
               const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
               if (cinematographyHints.length > 0) {
-                const joined = cinematographyHints.join(", ")
-                p = p ? `${p}. ${joined}` : joined
+                p = appendPromptHints(p, cinematographyHints)
               }
             }
             const identityClause = collectIdentityLockClause(node.id, buildCtx)
@@ -4753,8 +4857,7 @@ export function buildPayload(
         {
           const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
           if (cinematographyHints.length > 0) {
-            const joined = cinematographyHints.join(", ")
-            p = p ? `${p}. ${joined}` : joined
+            p = appendPromptHints(p, cinematographyHints)
           }
         }
         const identityClause = collectIdentityLockClause(node.id, buildCtx)
@@ -4921,7 +5024,9 @@ export function buildPayload(
     }
 
     case "generate-music": {
-      const provider = (data.provider as string) ?? "musicgen"
+      // The model the node runs: a saved model that is gone ("suno",
+      // "musicgen", …) runs the default instead of failing in the worker.
+      const provider = resolveMusicProvider(data.provider)
       const audioStyle = collectAudioStyleHints(node, "generate-music", buildCtx)
       const userPrompt = promptFor("generate-music")
       const composed = truncateForField(audioStyle.text, userPrompt, 2000)
@@ -4958,7 +5063,7 @@ export function buildPayload(
       return {
         jobName: "generate-music",
         queueName: "video-generation",
-        modelIdentifier: "generate-music",
+        modelIdentifier: MUSIC_CREDIT_ID,
         payload: {
           jobId,
           prompt: enrichedMusicPrompt,
@@ -6102,9 +6207,9 @@ export function buildPayload(
           ramps: data.ramps,
           usageLogId,
         },
-        // Motion-compensated interpolation (minterpolate) costs more; mirror the
-        // route's buildSpeedRampCreditId so DAG runs reserve the same tier.
-        data.quality === "smooth" ? "speed-ramp:smooth" : "speed-ramp",
+        // Motion-compensated interpolation (minterpolate) costs more; the same
+        // shared id as the route, so DAG runs reserve the same tier.
+        speedRampCreditId(data.quality),
       )
 
     case "loop-video":
@@ -6604,11 +6709,7 @@ export function buildPayload(
       const provider = (data.provider as string) ?? "nano-banana"
       const name = (data.name as string | undefined) ?? ""
       const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
-      const cineSuffix = cinematographyHints.length > 0 ? cinematographyHints.join(", ") : ""
-      const baseDescription = (data.description as string | undefined) ?? ""
-      const augmentedDescription = cineSuffix
-        ? (baseDescription ? `${baseDescription}. ${cineSuffix}` : cineSuffix)
-        : (baseDescription || undefined)
+      const augmentedDescription = appendPromptHints(data.description as string | undefined, cinematographyHints) || undefined
       const entityPrompt = name
         ? buildLocationPrompt({
             name,
@@ -6650,9 +6751,7 @@ export function buildPayload(
       try {
         const sceneStylePrompt = buildScenePrompt(data as unknown as SceneData, charDefs as CharacterDef[])
         const upstreamPrompt = resolvedInputs.prompt ?? ""
-        scenePrompt = upstreamPrompt
-          ? `${upstreamPrompt}. ${sceneStylePrompt}`
-          : sceneStylePrompt
+        scenePrompt = joinSentences([upstreamPrompt, sceneStylePrompt])
 
         // Append character description templates (matches frontend charDescs logic).
         // buildScenePrompt adds compositional info (name + mood + action);
@@ -6708,16 +6807,23 @@ export function buildPayload(
       // single-node route) and rides along in the payload for the worker.
       const scriptLlmModel = data.llmModel as string | undefined
       const scriptEffort = data.reasoningEffort as string | undefined
+      // Same topic and settings readers as the editor's single-node run.
+      const topic = computeScriptTopic(data, { override: resolvedInputs.overridePrompt, wired: resolvedInputs.prompt, refMap })
+      if (!topic.trim()) {
+        // The route refuses an empty prompt and so does the editor; without
+        // this the server run billed a script written about nothing.
+        const err = new Error(`prompt_required: node "${nodeLabel}" needs a topic — connect a Text node to its Prompt input.`) as Error & { code?: string }
+        err.code = "prompt_required"
+        throw err
+      }
       return {
         jobName: "generate-script",
         queueName: "video-generation",
         modelIdentifier: buildLlmCreditIdentifier("generate-script", scriptLlmModel, scriptEffort, data.advancedMode === true),
         payload: {
           jobId,
-          prompt: applyPromptAffixes(resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap), readPromptAffixes(data), refMap),
-          sceneCount: data.sceneCount,
-          tone: data.tone ?? data.style,
-          targetDuration: data.targetDuration ?? data.targetLength,
+          prompt: topic,
+          ...readScriptSettings(data, refMap),
           provider: data.provider,
           llmModel: scriptLlmModel,
           reasoningEffort: scriptEffort,
@@ -7041,7 +7147,8 @@ function scene3DGraphReferences(
     if (edge.target !== node.id || edge.targetHandle !== "references" || seen.has(edge.source)) continue
     const source = ctx?.nodes?.find((candidate) => candidate.id === edge.source)
     if (!source) continue
-    const output = ctx?.nodeStates?.[source.id]?.output ?? extractSourceNodeOutput(source) ?? extractSavedNodeOutput(source)
+    const sourceState = ctx?.nodeStates?.[source.id]
+    const output = sourceState?.output ?? (savedDataAllowed(sourceState) ? (extractSourceNodeOutput(source) ?? extractSavedNodeOutput(source)) : undefined)
     const url = output ? getPrimaryOutput(output, source.type, edge.sourceHandle) : undefined
     if (!url || !/^https?:\/\//.test(url)) continue
     seen.add(source.id)

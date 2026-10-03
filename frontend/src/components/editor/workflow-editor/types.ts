@@ -3,7 +3,7 @@ import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -67,6 +67,19 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   // (clips·premium·180m = 1480), never-under-quote — mirrors video-analysis's
   // fallback rationale so a run never fails mid-DAG after transcribe charged.
   "edit-plan": 1480,
+  // Content Recipe / Content Ideas: the node badge and the run-level estimate
+  // name the composite (contentRecipeCreditId / contentIdeasCreditId — model
+  // tier, and for ideas the per-five-ideas bucket) and read it here on a cold
+  // cache. Mirrors STATIC_CREDIT_COSTS.
+  "content-recipe:economy": 5,
+  "content-recipe": 20,
+  "content-recipe:premium": 35,
+  "content-ideas:economy": 10,
+  "content-ideas": 35,
+  "content-ideas:premium": 50,
+  "content-ideas:10:economy": 20,
+  "content-ideas:10": 70,
+  "content-ideas:10:premium": 100,
   "assemble-narrated-video": 40,
   "image-collage": 20,
   "image-overlay": 10,
@@ -141,6 +154,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "web-scrape": 20,
   "meta-ads-scrape": 20,
   "instagram-scrape": 20,
+  // Social Search: per page of up to 20 results (packages/shared is the table).
+  ...SOCIAL_SEARCH_CREDIT_COSTS,
   // Flash floor — the real per-run cost is duration/model-bucketed (see
   // estimateNodeCredits below + the node's live useModelCredits estimate).
   // Kept equal to VIDEO_ANALYSIS_BUCKET_CREDITS' table-wide ceiling
@@ -468,9 +483,12 @@ export function videoAuditAnalysisWired(
  * never-under-quoting default.
  */
 export function estimateNodeCredits(
-  node: { id?: string; type?: string; data?: Record<string, unknown> },
-  edges?: ReadonlyArray<{ target: string; targetHandle?: string | null }>,
+  storedNode: { id?: string; type?: string; data?: Record<string, unknown> },
+  edges?: ReadonlyArray<{ source?: string; target: string; targetHandle?: string | null }>,
+  /** With `edges`, lets a node with a Settings input be priced as it runs. */
+  nodes?: ReadonlyArray<{ id: string; type?: string | null; data?: unknown }>,
 ): number {
+  const node = withWiredSettings(storedNode, nodes, edges)
   const nodeType = node.type ?? ""
   // Component nodes: use the published estimatedCredits stored on the node data
   if (nodeType === "component" && node.data) {
@@ -512,6 +530,11 @@ export function estimateNodeCredits(
     const modelId = instagramScrapeCreditIdFromNode(node.data)
     return INSTAGRAM_SCRAPE_CREDIT_COSTS[modelId] ?? NODE_CREDIT_COSTS["instagram-scrape"] ?? 0
   }
+  if (nodeType === "social-search" && node.data) {
+    // The page count the run reserves — the same builder the backend uses.
+    const modelId = socialSearchCreditIdFromNode(node.data)
+    return getCachedCredits(modelId) ?? SOCIAL_SEARCH_CREDIT_COSTS[modelId] ?? NODE_CREDIT_COSTS["social-search"] ?? 0
+  }
   if (nodeType === "video-analysis" && node.data) {
     // data.llmModel stores the TIER string ("fast"/"pro"/"mixed"/"mixed-fast") —
     // resolve it to the engine id first (audit fix: the raw tier built
@@ -539,6 +562,17 @@ export function estimateNodeCredits(
     return bucketSec !== null
       ? VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(model, bucketSec)] ?? NODE_CREDIT_COSTS["video-analysis"] ?? 0
       : NODE_CREDIT_COSTS["video-analysis"] ?? 0
+  }
+  // Content Recipe / Content Ideas: the composite the run reserves (the
+  // effective model's tier; for ideas, the per-five-ideas bucket) — the live
+  // charged price when cached, else the cold-cache table above.
+  if (nodeType === "content-recipe" && node.data) {
+    const id = contentRecipeCreditId(node.data.llmModel, node.data.reasoningEffort as string | undefined)
+    return getCachedCredits(id) ?? NODE_CREDIT_COSTS[id] ?? 0
+  }
+  if (nodeType === "content-ideas" && node.data) {
+    const id = contentIdeasCreditId(node.data.count, node.data.llmModel, node.data.reasoningEffort as string | undefined)
+    return getCachedCredits(id) ?? NODE_CREDIT_COSTS[id] ?? 0
   }
   // Audio Sync: priced per source aligned to the reference — the wired source
   // count, from the edges (the SAME count getModelIdentifier and the node pill
@@ -699,11 +733,16 @@ export const EXECUTABLE_TYPES = new Set([
   "web-scrape",
   "meta-ads-scrape",
   "instagram-scrape",
+  // Social Search — a cloud plugin node (job + poll, like video-analysis).
+  "social-search",
   "video-analysis",
   // AI Audit — re-watches a clip against an analysis and emits the CORRECTED
   // analysis (same payload shape as video-analysis, so it chains anywhere an
   // analysis does). Priced per family × duration bucket (estimateNodeCredits).
   "video-audit",
+  // Steal-the-format pair — cloud plugin nodes (job + poll, like video-analysis).
+  "content-recipe",
+  "content-ideas",
   "router",
   "teleport-send",
   "teleport-receive",
@@ -714,9 +753,10 @@ export const EXECUTABLE_TYPES = new Set([
   "reference-board",
 ]);
 
-/** Frontend mirror of backend's FAN_IN_NODE_TYPES.
- * Used to skip fan-out for nodes that consume listResults whole. */
-export const FAN_IN_NODE_TYPES = new Set(["reduce"])
+/** The node types that fold their inputs into one run (Choose Best, Content
+ * Ideas) — DERIVED from @nodaro/shared FAN_IN_TARGETS, the one table both
+ * engines read (per edge, via isFanInEdge). */
+export const FAN_IN_NODE_TYPES: ReadonlySet<string> = new Set(Object.keys(FAN_IN_TARGETS))
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 20;
 
@@ -873,6 +913,40 @@ function editPlanClipFanOut(
 }
 
 /**
+ * Downstream executions one Content Ideas run fans out: one per idea. Not
+ * re-running → its saved briefs are what iterate (exact). Running → it writes
+ * `count` ideas, clamped the way the run clamps it (1–10, default 5).
+ */
+function contentIdeasFanOut(
+  data: Record<string, unknown>,
+  reruns: boolean,
+  selector?: SelectorFields,
+): number {
+  const saved = Array.isArray(data.ideaBriefs)
+    ? data.ideaBriefs.filter((b) => typeof b === "string" && b.trim() !== "").length
+    : 0;
+  const ideas = !reruns && saved > 0 ? saved : clampContentIdeasCount(data.count);
+  const kept = fanOutCount(Array.from({ length: ideas }, (_, i) => String(i + 1)), selector);
+  return kept > 0 ? kept : 1;
+}
+
+/**
+ * How many times one run of a fan-out PRODUCER makes the node after it run,
+ * for every `FAN_OUT_EACH_TYPES` member that is not a list operation (a list
+ * operation's count is its items, read below). Keyed by node type; the value
+ * reads the producer's data, whether it is about to run again, and the edge's
+ * selector. A producer missing here is estimated as ONE run downstream — which
+ * under-quotes and lets a run pass the balance precheck it cannot finish, so
+ * `__tests__/cost-multiplier.test.ts` fails the build for any such producer.
+ */
+export const PRODUCER_FAN_OUT: Readonly<
+  Record<string, (data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields) => number>
+> = {
+  "edit-plan": editPlanClipFanOut,
+  "content-ideas": contentIdeasFanOut,
+};
+
+/**
  * The clips fan-out a node INHERITS from further upstream: Clip Pack renders each
  * clip (edit-plan ⇒ apply-edl) and then captions each render across an explicit
  * "each" edge (apply-edl ⇒ add-captions), so the captions node runs once per clip
@@ -934,10 +1008,12 @@ function getBaseFanOut(
     const edgeData = edge.data as Record<string, unknown> | undefined;
     const selector = edgeData as SelectorFields | undefined;
 
-    // Edit Plan in `clips` mode: one downstream execution per clip (it is in
-    // FAN_OUT_EACH_TYPES, but has no `items`/`rows` for the list reads below).
-    if (sourceNode.type === "edit-plan") {
-      const n = editPlanClipFanOut(sourceNode.data as Record<string, unknown>, rerunIds.has(sourceNode.id), selector);
+    // A fan-out producer (Edit Plan in `clips` mode, Content Ideas): one
+    // downstream execution per item it emits. It is in FAN_OUT_EACH_TYPES but
+    // has no `items`/`rows` for the list reads below — see PRODUCER_FAN_OUT.
+    const producer = PRODUCER_FAN_OUT[sourceNode.type ?? ""];
+    if (producer) {
+      const n = producer(sourceNode.data as Record<string, unknown>, rerunIds.has(sourceNode.id), selector);
       if (n > 1) return n;
     }
 

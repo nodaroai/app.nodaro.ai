@@ -1,6 +1,6 @@
 import { ANALYZABLE_PICKER_TYPES } from "@nodaro/prompts"
 import { OVERLAY_HANDLE_IDS } from "@/types/nodes"
-import { VIDEO_OVERLAY_HANDLE_IDS } from "@nodaro/shared"
+import { VIDEO_OVERLAY_HANDLE_IDS, SETTINGS_INPUT_HANDLE } from "@nodaro/shared"
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
 import { GENERATE_VIDEO_INPUT_HANDLES, isValidGenerateVideoConnection } from "./generate-video-handles"
 import { GENERATE_VIDEO_PRO_INPUT_HANDLES, isValidGenerateVideoProConnection } from "./generate-video-pro-handles"
@@ -8,6 +8,8 @@ import { EDIT_VIDEO_PRO_INPUT_HANDLES, isValidEditVideoProConnection } from "./e
 import { VIDEO_RETAKE_HANDLE_IDS, isValidVideoRetakeConnection } from "./video-retake-handles"
 import { isValidVideoSfxConnection } from "./video-sfx-handles"
 import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "./ffmpeg-handles"
+import { ACCEPTS_BRAND_TEXT, ACCEPTS_CONTENT_MATERIAL, ACCEPTS_POST_LINK, ACCEPTS_RECIPE } from "./content-handles"
+import { ACCEPTS_VIDEO_OR_POST_LINK } from "./video-analysis-handles"
 import {
   isValidListNodeConnection,
   isValidWebScrapeConnection,
@@ -87,6 +89,7 @@ import {
   isValidSunoConvertWavConnection,
   isValidSunoUploadExtendConnection,
   isValidGenerateScriptConnection,
+  GENERATE_SCRIPT_FIELD_HANDLES,
   isValidLlmChatConnection,
   isValidTranscribeConnection,
   isValidSplitMediaConnection,
@@ -216,11 +219,14 @@ const GENERATE_IMAGE_HANDLE_LABELS: Record<string, string> = {
   assets: "Assets",
   elements: "Elements",
   look: "Look",
+  [SETTINGS_INPUT_HANDLE]: "Settings",
 }
 
-/** Friendly labels for Generate Video's eleven input handles (mirrors the
- *  node component's HandleWithPopover `label` props). There is no exported
- *  GENERATE_VIDEO_*_LABELS map — kept local like GENERATE_IMAGE_HANDLE_LABELS. */
+/** Friendly labels for Generate Video's input handles (mirrors the node
+ *  component's HandleWithPopover `label` props), and Generate Video Pro's —
+ *  it has the same handles by construction (generate-video-pro-handles.ts).
+ *  There is no exported GENERATE_VIDEO_*_LABELS map — kept local like
+ *  GENERATE_IMAGE_HANDLE_LABELS. */
 const GENERATE_VIDEO_HANDLE_LABELS: Record<string, string> = {
   prompt: "Prompt",
   negative: "Negative",
@@ -233,19 +239,11 @@ const GENERATE_VIDEO_HANDLE_LABELS: Record<string, string> = {
   assets: "Assets",
   elements: "Elements",
   look: "Look",
-}
-
-/** Friendly labels for Generate Video Pro's three input handles — trimmed
- *  subset of GENERATE_VIDEO_HANDLE_LABELS. No exported GENERATE_VIDEO_PRO_*_LABELS
- *  map — kept local like its sibling above. */
-const GENERATE_VIDEO_PRO_HANDLE_LABELS: Record<string, string> = {
-  prompt: "Prompt",
-  startFrame: "Start Frame",
-  imageReferences: "Image Refs",
+  [SETTINGS_INPUT_HANDLE]: "Settings",
 }
 
 /** Friendly labels for Edit Video Pro's three input handles — sibling of
- *  GENERATE_VIDEO_PRO_HANDLE_LABELS with `video` swapped in for startFrame
+ *  Generate Video Pro's labels with `video` swapped in for startFrame
  *  (the required source clip to edit, not an optional reference frame). No
  *  exported EDIT_VIDEO_PRO_*_LABELS map — kept local like its sibling. */
 const EDIT_VIDEO_PRO_HANDLE_LABELS: Record<string, string> = {
@@ -290,12 +288,12 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     accepts: (sourceType: string) =>
       isValidGenerateVideoConnection(handleId, sourceType, isVisualPickerType),
   })),
-  // Generate Video Pro mirrors Generate Video, trimmed to its three input
-  // handles built from GENERATE_VIDEO_PRO_INPUT_HANDLES so the popover
+  // Generate Video Pro mirrors Generate Video (the same handles by
+  // construction), built from GENERATE_VIDEO_PRO_INPUT_HANDLES so the popover
   // candidate set can't drift from the rendered handle set.
   "generate-video-pro": GENERATE_VIDEO_PRO_INPUT_HANDLES.map((handleId) => ({
     handleId,
-    label: GENERATE_VIDEO_PRO_HANDLE_LABELS[handleId] ?? handleId,
+    label: GENERATE_VIDEO_HANDLE_LABELS[handleId] ?? handleId,
     accepts: (sourceType: string) =>
       isValidGenerateVideoProConnection(handleId, sourceType, isVisualPickerType),
   })),
@@ -344,9 +342,23 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   // direction popovers (drag from a producer's output pip) walk this
   // map to find which ffmpeg consumers + handles light up.
   "trim-video":         [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
-  // Video Analysis takes ONE video on its `video` target and emits a scene-
-  // breakdown JSON on its `json` source. Video producers light up here.
-  "video-analysis":     [{ handleId: "video", label: "Video", accepts: ACCEPTS_VIDEO }],
+  // Video Analysis takes ONE video on its `video` target (a file, or a post's
+  // link from a text output) and emits a scene-breakdown JSON on its `json`
+  // source. Video and text producers light up here.
+  "video-analysis":     [{ handleId: "video", label: "Video", accepts: ACCEPTS_VIDEO_OR_POST_LINK }],
+  // Content Recipe reads one post's material (a Video Analysis, a scraped post,
+  // a caption) on `in` and cites the post's link from `link` (a Video URL
+  // node's page link, or text). Same predicates as the node's own pips.
+  "content-recipe":     [
+    { handleId: "in",   label: "Source material", accepts: ACCEPTS_CONTENT_MATERIAL },
+    { handleId: "link", label: "Source post", accepts: ACCEPTS_POST_LINK },
+  ],
+  // Content Ideas folds every recipe wired into `recipes`; the brand profile
+  // is a text field it can also take from a wire.
+  "content-ideas":      [
+    { handleId: "recipes",     label: "Recipes", accepts: ACCEPTS_RECIPE },
+    { handleId: "field-brand", label: "Brand",   accepts: ACCEPTS_BRAND_TEXT },
+  ],
   // AI Audit re-watches ONE clip against an OPTIONAL finished analysis. Both
   // targets are enumerated so a video producer AND an analysis producer each
   // light up the right pip (an unwired `analysis` is a valid, pricier run).
@@ -360,6 +372,14 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "apply-edl":          [
     { handleId: "edl", label: "EDL", accepts: ACCEPTS_JSON },
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
+    { handleId: "sources", label: "Sources", accepts: ACCEPTS_MEDIA },
+  ],
+  // edit-plan: a required Transcript (json), optional silence ranges (json),
+  // optional audio-sync offsets (json) and the wired media sources.
+  "edit-plan":          [
+    { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
+    { handleId: "silence", label: "Silence", accepts: ACCEPTS_JSON },
+    { handleId: "offsets", label: "Offsets (Audio Sync)", accepts: ACCEPTS_JSON },
     { handleId: "sources", label: "Sources", accepts: ACCEPTS_MEDIA },
   ],
   "extract-frame":      [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
@@ -531,6 +551,11 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   // ─── AI > Script & Text (Batch 3 of audio/text typed-handles migration) ──
   "generate-script": [
     { handleId: "prompt", label: AUDIO_TEXT_HANDLE_LABELS["generate-script"].prompt, accepts: (s) => isValidGenerateScriptConnection("prompt", s, isVisualPickerType) },
+    ...Object.values(GENERATE_SCRIPT_FIELD_HANDLES).map((handleId) => ({
+      handleId,
+      label: AUDIO_TEXT_HANDLE_LABELS["generate-script"][handleId],
+      accepts: (s: string) => isValidGenerateScriptConnection(handleId, s, isVisualPickerType),
+    })),
   ],
   "llm-chat": [
     { handleId: "prompt",        label: AUDIO_TEXT_HANDLE_LABELS["llm-chat"].prompt,            accepts: (s) => isValidLlmChatConnection("prompt",        s, isVisualPickerType) },
@@ -582,6 +607,12 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   ],
   "meta-ads-scrape": [
     { handleId: "in", label: "Keyword / Page URLs", accepts: (s) => isValidWebScrapeConnection("in", s) },
+  ],
+  "instagram-scrape": [
+    { handleId: "in", label: "Profiles / Hashtags", accepts: (s) => isValidWebScrapeConnection("in", s) },
+  ],
+  "social-search": [
+    { handleId: "in", label: "Keyword or account", accepts: (s) => isValidWebScrapeConnection("in", s) },
   ],
   "extract-field": [
     { handleId: "in", label: "Source", accepts: (s) => isValidExtractFieldConnection("in", s) },

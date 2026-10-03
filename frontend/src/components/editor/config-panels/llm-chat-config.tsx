@@ -30,6 +30,7 @@ import { getLlmModalityCaps, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
 import { useSaveTemplatesMutation } from "@/hooks/queries/use-user-settings-queries"
+import { CompareModelsLink } from "@/components/editor/node-docs/compare-models-link"
 import {
   GENERATE_TEXT_TEMPLATES,
   getGenerateTextTemplate,
@@ -349,6 +350,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
           feature="llm-chat"
           value={data.llmModel}
           onChange={(v) => onUpdate({ llmModel: v })}
+          labelAction={<CompareModelsLink />}
         />
         <ReasoningEffortSelect
           feature="llm-chat"

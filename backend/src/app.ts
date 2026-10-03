@@ -134,6 +134,7 @@ import { generateCreatureAssetRoutes } from "./routes/generate-creature-asset.js
 import { generateCreatureMotionRoutes } from "./routes/generate-creature-motion.js"
 import { locationRoutes } from "./routes/locations.js"
 import { nodePresetRoutes } from "./routes/node-presets.js"
+import { savedPostRoutes } from "./routes/saved-posts.js"
 import { nodePresetGroupRoutes } from "./routes/node-preset-groups.js"
 import { promptSnippetRoutes } from "./routes/prompt-snippets.js"
 import { locationRestoreRoutes } from "./routes/location-restore.js"
@@ -282,6 +283,7 @@ import { nodesRoutes } from "./routes/nodes.js"
 import { pickerCatalogsRoutes } from "./routes/picker-catalogs.js"
 import { catalogsRoutes } from "./routes/catalogs.js"
 import { oauthRoutes } from "./routes/oauth.js"
+import { connectedAppsRoutes } from "./routes/connected-apps.js"
 import { registerOauthRegister } from "./routes/oauth-register.js"
 import { oauthPluginConnectRoutes, POLL_KEY_HEADER } from "./routes/oauth-plugin-connect.js"
 import { ssoRoutes } from "./routes/sso.js"
@@ -572,6 +574,7 @@ export async function buildApp() {
   await app.register(generateCreatureMotionRoutes)
   await app.register(locationRoutes)
   await app.register(nodePresetRoutes)
+  await app.register(savedPostRoutes)
   await app.register(nodePresetGroupRoutes)
   await app.register(promptSnippetRoutes)
   await app.register(locationRestoreRoutes)
@@ -745,6 +748,8 @@ export async function buildApp() {
   await app.register(pickerCatalogsRoutes)
   await app.register(catalogsRoutes)
   await app.register(oauthRoutes)
+  // The grants a user gave through OAuth, and the button that takes one back.
+  await app.register(connectedAppsRoutes)
   await registerOauthRegister(app)
   await app.register(oauthPluginConnectRoutes)
   await app.register(ssoRoutes)

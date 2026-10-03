@@ -19,22 +19,41 @@ import type { LocaleLabelTables } from "./label-tables"
 import { LABELS_HE } from "./labels.he"
 import { LABELS_JA } from "./labels.ja"
 import { PRESET_CONTENT_JA } from "./preset-content.ja"
-import { translate } from "./index"
+import { LABELS_KO } from "./labels.ko"
+import { PRESET_CONTENT_KO } from "./preset-content.ko"
+import { LABELS_PT_BR } from "./labels.pt-br"
+import { PRESET_CONTENT_PT_BR } from "./preset-content.pt-br"
+import { translate, type MessageKey } from "./index"
 
 /**
  * Every locale's label tables. The coverage guards iterate this registry, so a
  * locale added here is checked for complete tables the day it is added.
  */
-export const LABEL_TABLES: Readonly<Partial<Record<LocaleId, LocaleLabelTables>>> = { he: LABELS_HE, ja: LABELS_JA }
+export const LABEL_TABLES: Readonly<Partial<Record<LocaleId, LocaleLabelTables>>> = { he: LABELS_HE, ja: LABELS_JA, ko: LABELS_KO, "pt-BR": LABELS_PT_BR }
 
 /** Translate a node's display label for a locale; unknown/custom labels pass through. */
 export function localizeNodeLabel(label: string, locale: LocaleId): string {
   return LABEL_TABLES[locale]?.node[label] ?? label
 }
 
+/**
+ * Handle labels the code numbers, one pip per slot ("Layer 3" on the overlay
+ * nodes). A table cannot hold every number, so these translate as a whole
+ * through the dictionary key that carries the number.
+ */
+const NUMBERED_HANDLE_LABELS: ReadonlyArray<readonly [RegExp, MessageKey]> = [
+  [/^Layer (\d+)$/, "proccfg.overlay.layerN"],
+]
+
 /** Translate a handle pip label for a locale; unknown labels pass through. */
 export function localizeHandleLabel(label: string, locale: LocaleId): string {
-  return LABEL_TABLES[locale]?.handle[label] ?? label
+  const hit = LABEL_TABLES[locale]?.handle[label]
+  if (hit) return hit
+  for (const [pattern, key] of NUMBERED_HANDLE_LABELS) {
+    const m = pattern.exec(label)
+    if (m) return translate(locale, key, { n: m[1] })
+  }
+  return label
 }
 
 /** Hook: returns a node-label localizer bound to the current locale.
@@ -127,7 +146,7 @@ export function useLocalizeOptionLabel(): (label: string) => string {
  * Partial per locale — a preset with no entry falls back to the catalog's
  * English, so upstream additions never render blank.
  */
-export const PRESET_CONTENT_MAPS: Readonly<Partial<Record<LocaleId, Record<string, PresetCopy>>>> = { he: PRESET_CONTENT_HE, ja: PRESET_CONTENT_JA }
+export const PRESET_CONTENT_MAPS: Readonly<Partial<Record<LocaleId, Record<string, PresetCopy>>>> = { he: PRESET_CONTENT_HE, ja: PRESET_CONTENT_JA, ko: PRESET_CONTENT_KO, "pt-BR": PRESET_CONTENT_PT_BR }
 
 /** Hook: returns a preset-copy resolver bound to the current locale.
  *  Stable across renders (memoized on locale) so callers can list it in

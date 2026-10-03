@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolvePrompt, computeNodePrompt, computeLlmChatFields } from "../resolve-prompt.js"
+import { resolvePrompt, computeNodePrompt, computeLlmChatFields, computeScriptTopic } from "../resolve-prompt.js"
 const M = new Map<string, string>()
 const R = new Map([["Hero", "a knight"]])
 describe("resolvePrompt", () => {
@@ -41,4 +41,16 @@ describe("computeLlmChatFields", () => {
     expect(computeLlmChatFields({ userInput: "u", systemPrompt: "s" },
       { override: "o", wiredUserInput: "wu", wiredSystemPrompt: "ws", refMap: M }).userInput).toBe("o")
   })
+})
+describe("computeScriptTopic (generate-script)", () => {
+  it("the wired prompt wins over the saved `prompt`, the reverse of computeNodePrompt", () =>
+    expect(computeScriptTopic({ prompt: "saved" }, { wired: "wire", refMap: M })).toBe("wire"))
+  it("a list fan-out item wins over both", () =>
+    expect(computeScriptTopic({ prompt: "saved" }, { override: "row", wired: "wire", refMap: M })).toBe("row"))
+  it("falls back to the saved `prompt` and resolves its {Label}", () =>
+    expect(computeScriptTopic({ prompt: "{Hero}" }, { wired: "  ", refMap: R })).toBe("a knight"))
+  it("wraps the topic with the node's pre/post text", () =>
+    expect(computeScriptTopic({ promptPrefix: "A story:", promptSuffix: "The end." }, { wired: "a knight", refMap: M }))
+      .toBe("A story: a knight The end."))
+  it("nothing -> empty string", () => expect(computeScriptTopic({}, { refMap: M })).toBe(""))
 })

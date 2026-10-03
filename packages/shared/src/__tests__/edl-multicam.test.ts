@@ -1,8 +1,13 @@
 import { describe, it, expect } from "vitest"
 import { remapMsThroughEdl, type Edl, type EdlRegion, type EdlSegment } from "../edl.js"
 import {
+  AUDIO_SYNC_MIN_CONFIDENCE,
   EDL_FULL_FRAME,
+  applyAudioSyncOffsets,
+  describeAudioSyncOffsetIssue,
+  editPlanTranscriptOrigin,
   mergeEdlSourceOffsets,
+  resolveEditPlanSources,
   resolveEdlSegmentSlots,
   type ResolveEdlSlotsOptions,
 } from "../edl-multicam.js"
@@ -300,5 +305,192 @@ describe("mergeEdlSourceOffsets — anchored rebase", () => {
     expect(() => mergeEdlSourceOffsets({} as Edl, { a: 1 })).not.toThrow()
     expect(mergeEdlSourceOffsets({} as Edl, { a: 1 }).ignored).toEqual([{ sourceId: "a", reason: "unknown-source" }])
     expect(() => mergeEdlSourceOffsets(podcast(), null as unknown as Record<string, number>)).not.toThrow()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────
+//  applyAudioSyncOffsets — B4 (decided 2026-09-25)
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("applyAudioSyncOffsets — audio-sync offsets onto a planner's sources (B4)", () => {
+  const MIC = { id: "mic", url: "https://x/mic.wav", kind: "audio", role: "master-audio" }
+  const CAM_A = { id: "cam-a", url: "https://x/a.mp4", kind: "video" }
+  const CAM_B = { id: "cam-b", url: "https://x/b.mp4", kind: "video" }
+  const row = (sourceId: string, offsetMs: number, confidence = 0.9) => ({ sourceId, offsetMs, confidence, driftMsPerHour: 0 })
+  /** audio-sync's result with the mic as the reference: camera A started 2 s
+   *  after the mic (referenceMs = camMs + 2000), camera B 0.5 s after A. */
+  const byMic = { version: 1, reference: "mic", offsets: [row("mic", 0, 1), row("cam-a", 2_000), row("cam-b", 2_500)], notes: [] }
+  const offsetsOf = (r: ReturnType<typeof applyAudioSyncOffsets>) => (r.ok ? Object.fromEntries(r.sources.map((s) => [s.id, (s as { offsetMs?: number }).offsetMs])) : r.issues)
+
+  it("writes each camera's offset on the master's clock (masterMs = sourceMs + offsetMs) and leaves the master at its own clock", () => {
+    const r = applyAudioSyncOffsets([MIC, CAM_A, CAM_B], byMic)
+    expect(offsetsOf(r)).toEqual({ mic: undefined, "cam-a": 2_000, "cam-b": 2_500 })
+    expect(r).toMatchObject({ ok: true, anchor: "mic", applied: ["cam-a", "cam-b"] })
+  })
+
+  it("rebases onto the master when audio-sync's reference was a camera — the same instants, the same offsets", () => {
+    // Same recordings measured against camera A: the mic started 2 s BEFORE A
+    // (camAms = micMs − 2000 → offset(mic) = −2000), B 0.5 s after A.
+    const byCamA = { version: 1, reference: "cam-a", offsets: [row("mic", -2_000), row("cam-a", 0, 1), row("cam-b", 500)], notes: [] }
+    expect(offsetsOf(applyAudioSyncOffsets([MIC, CAM_A, CAM_B], byCamA))).toEqual({ mic: undefined, "cam-a": 2_000, "cam-b": 2_500 })
+  })
+
+  it("accepts the JSON string a canvas handle carries", () => {
+    expect(offsetsOf(applyAudioSyncOffsets([MIC, CAM_A], JSON.stringify(byMic)))).toEqual({ mic: undefined, "cam-a": 2_000 })
+  })
+
+  it("anchors on edit-plan's own rule: the master-audio source wherever it sits, else the first source", () => {
+    expect(applyAudioSyncOffsets([CAM_A, MIC], byMic)).toMatchObject({ ok: true, anchor: "mic" })
+    const noRole = [{ ...CAM_A }, { ...MIC, role: undefined }]
+    const r = applyAudioSyncOffsets(noRole, byMic)
+    expect(r).toMatchObject({ ok: true, anchor: "cam-a" })
+    expect(offsetsOf(r)).toEqual({ "cam-a": undefined, mic: -2_000 })
+  })
+
+  it("a hand-set offset always wins over the measured one — including a hand-set 0", () => {
+    expect(offsetsOf(applyAudioSyncOffsets([MIC, { ...CAM_A, offsetMs: 1_234 }, { ...CAM_B, offsetMs: 0 }], byMic)))
+      .toEqual({ mic: undefined, "cam-a": 1_234, "cam-b": 0 })
+  })
+
+  it("is idempotent: applying the result again changes nothing", () => {
+    const once = applyAudioSyncOffsets([MIC, CAM_A, CAM_B], byMic)
+    expect(once.ok).toBe(true)
+    if (once.ok) expect(offsetsOf(applyAudioSyncOffsets(once.sources, byMic))).toEqual(offsetsOf(once))
+  })
+
+  it("ignores rows for sources the planner does not have", () => {
+    const extra = { ...byMic, offsets: [...byMic.offsets, row("lav-2", 900)] }
+    expect(offsetsOf(applyAudioSyncOffsets([MIC, CAM_A], extra))).toEqual({ mic: undefined, "cam-a": 2_000 })
+  })
+
+  it("a weak match fails, naming the source and its confidence — unless its offset is hand-set", () => {
+    const weak = { ...byMic, offsets: [row("mic", 0, 1), row("cam-a", 2_000, 0.49), row("cam-b", 2_500)] }
+    expect(applyAudioSyncOffsets([MIC, CAM_A, CAM_B], weak)).toEqual({ ok: false, issues: [{ code: "weak-match", sourceId: "cam-a", confidence: 0.49, anchor: false }] })
+    expect(applyAudioSyncOffsets([MIC, { ...CAM_A, offsetMs: 1_900 }, CAM_B], weak).ok).toBe(true)
+    // Exactly the threshold is trusted.
+    const edge = { ...byMic, offsets: [row("mic", 0, 1), row("cam-a", 2_000, AUDIO_SYNC_MIN_CONFIDENCE)] }
+    expect(applyAudioSyncOffsets([MIC, CAM_A], edge).ok).toBe(true)
+  })
+
+  it("a source audio-sync could not hear (its row at confidence 0) is a weak match", () => {
+    const silent = { ...byMic, offsets: [row("mic", 0, 1), row("cam-a", 0, 0)] }
+    expect(applyAudioSyncOffsets([MIC, CAM_A], silent)).toMatchObject({ ok: false, issues: [{ code: "weak-match", sourceId: "cam-a", confidence: 0 }] })
+  })
+
+  it("a camera audio-sync did not measure fails — unless its offset is hand-set", () => {
+    const partial = { ...byMic, offsets: [row("mic", 0, 1), row("cam-a", 2_000)] }
+    expect(applyAudioSyncOffsets([MIC, CAM_A, CAM_B], partial)).toEqual({ ok: false, issues: [{ code: "unmeasured", sourceId: "cam-b" }] })
+    expect(applyAudioSyncOffsets([MIC, CAM_A, { ...CAM_B, offsetMs: 0 }], partial).ok).toBe(true)
+  })
+
+  it("the master must be measured when a camera takes a measured offset — else every offset is on the wrong clock", () => {
+    const withoutMic = { version: 1, reference: "cam-a", offsets: [row("cam-a", 0, 1), row("cam-b", 500)], notes: [] }
+    expect(applyAudioSyncOffsets([MIC, CAM_A, CAM_B], withoutMic)).toEqual({ ok: false, issues: [{ code: "anchor-unmeasured", sourceId: "mic" }] })
+    // Every camera hand-set → the master's measurement is not needed.
+    expect(applyAudioSyncOffsets([MIC, { ...CAM_A, offsetMs: 2_000 }, { ...CAM_B, offsetMs: 2_500 }], withoutMic).ok).toBe(true)
+  })
+
+  it("a weakly-measured master fails, flagged as the master", () => {
+    const weakMic = { version: 1, reference: "cam-a", offsets: [row("mic", -2_000, 0.3), row("cam-a", 0, 1), row("cam-b", 500)], notes: [] }
+    expect(applyAudioSyncOffsets([MIC, CAM_A, CAM_B], weakMic)).toEqual({ ok: false, issues: [{ code: "weak-match", sourceId: "mic", confidence: 0.3, anchor: true }] })
+  })
+
+  it("a hand-set non-zero offset on the master fails (the plan follows its clock); a hand-set 0 is fine", () => {
+    expect(applyAudioSyncOffsets([{ ...MIC, offsetMs: 40 }, CAM_A], byMic)).toMatchObject({ ok: false, issues: [{ code: "anchor-offset", sourceId: "mic", offsetMs: 40 }] })
+    expect(applyAudioSyncOffsets([{ ...MIC, offsetMs: 0 }, CAM_A], byMic).ok).toBe(true)
+  })
+
+  it("reports every issue at once", () => {
+    const r = applyAudioSyncOffsets([MIC, CAM_A, CAM_B], { ...byMic, offsets: [row("mic", 0, 1), row("cam-a", 2_000, 0.1)] })
+    expect(r).toEqual({ ok: false, issues: [{ code: "weak-match", sourceId: "cam-a", confidence: 0.1, anchor: false }, { code: "unmeasured", sourceId: "cam-b" }] })
+  })
+
+  it("refuses anything that is not an audio-sync result, and never throws", () => {
+    for (const bad of [null, 42, "not json", "{}", { offsets: "x" }, { offsets: [{ sourceId: "a" }] }, { offsets: [null] }]) {
+      expect(applyAudioSyncOffsets([MIC, CAM_A], bad)).toEqual({ ok: false, issues: [{ code: "not-audio-sync" }] })
+    }
+    expect(() => applyAudioSyncOffsets(null as never, byMic)).not.toThrow()
+    expect(applyAudioSyncOffsets([], byMic)).toEqual({ ok: true, sources: [], applied: [] })
+  })
+
+  it("names the source with the caller's label in every message", () => {
+    const label = (id: string) => ({ mic: "Zoom H6", "cam-b": "Wide camera" })[id] ?? id
+    expect(describeAudioSyncOffsetIssue({ code: "unmeasured", sourceId: "cam-b" }, label)).toMatch(/"Wide camera" was not measured by audio-sync — wire it into audio-sync, or set its offset by hand/)
+    expect(describeAudioSyncOffsetIssue({ code: "weak-match", sourceId: "cam-b", confidence: 0.31, anchor: false }, label)).toMatch(/"Wide camera" is too weak to trust \(confidence 0.31; 0.5 needed\) — set its offset by hand/)
+    expect(describeAudioSyncOffsetIssue({ code: "anchor-unmeasured", sourceId: "mic" }, label)).toMatch(/did not measure "Zoom H6", the master/)
+    expect(describeAudioSyncOffsetIssue({ code: "anchor-offset", sourceId: "mic", offsetMs: 40 }, label)).toMatch(/"Zoom H6" is the master .* must be 0, not 40 ms/)
+  })
+})
+
+describe("resolveEditPlanSources — the one pre-dispatch check (B4)", () => {
+  const MIC = { id: "mic", role: "master-audio" }
+  const CAM_A = { id: "cam-a" }
+  const CAM_B = { id: "cam-b" }
+  const row = (sourceId: string, offsetMs: number, confidence = 0.9) => ({ sourceId, offsetMs, confidence })
+  const byMic = { reference: "mic", offsets: [row("mic", 0, 1), row("cam-a", 2_000), row("cam-b", 2_500)] }
+
+  it("without offsets, passes the sources through untouched (today's behaviour)", () => {
+    expect(resolveEditPlanSources([MIC, { ...CAM_A, offsetMs: 300 }])).toEqual({ ok: true, sources: [MIC, { ...CAM_A, offsetMs: 300 }] })
+  })
+
+  it("wired offsets are applied; wired-but-empty (null / \"\") fails rather than planning unsynced", () => {
+    expect(resolveEditPlanSources([MIC, CAM_A], { offsets: byMic })).toMatchObject({ ok: true, sources: [MIC, { id: "cam-a", offsetMs: 2_000 }] })
+    for (const empty of [null, ""]) {
+      expect(resolveEditPlanSources([MIC, CAM_A], { offsets: empty })).toEqual({ ok: false, issues: [{ code: "not-audio-sync" }] })
+    }
+  })
+
+  it("refuses a hand-set non-zero master offset before charging — with or without offsets", () => {
+    expect(resolveEditPlanSources([{ ...MIC, offsetMs: 25 }, CAM_A])).toEqual({ ok: false, issues: [{ code: "anchor-offset", sourceId: "mic", offsetMs: 25 }] })
+    expect(resolveEditPlanSources([{ ...MIC, offsetMs: 25 }, CAM_A], { offsets: byMic })).toEqual({ ok: false, issues: [{ code: "anchor-offset", sourceId: "mic", offsetMs: 25 }] })
+  })
+
+  it("a transcript made from an offset camera fails, naming both — the cuts would land off by its offset", () => {
+    expect(resolveEditPlanSources([MIC, CAM_A], { offsets: byMic, transcriptSourceId: "cam-a" }))
+      .toEqual({ ok: false, issues: [{ code: "transcript-off-clock", sourceId: "cam-a", masterId: "mic", offsetMs: 2_000 }] })
+    // Hand-set offsets count too.
+    expect(resolveEditPlanSources([MIC, { ...CAM_A, offsetMs: 700 }], { transcriptSourceId: "cam-a" }))
+      .toMatchObject({ ok: false, issues: [{ code: "transcript-off-clock", sourceId: "cam-a" }] })
+  })
+
+  it("a transcript made from the master, or from a source at offset 0, is fine — and its id is echoed to stamp", () => {
+    expect(resolveEditPlanSources([MIC, CAM_A], { offsets: byMic, transcriptSourceId: "mic" })).toMatchObject({ ok: true, transcriptSourceId: "mic" })
+    expect(resolveEditPlanSources([MIC, { ...CAM_A, offsetMs: 0 }], { transcriptSourceId: "cam-a" })).toMatchObject({ ok: true, transcriptSourceId: "cam-a" })
+  })
+
+  it("a transcript whose origin is unknown, or not one of the sources, is assumed to be the master's", () => {
+    expect(resolveEditPlanSources([MIC, CAM_A], { offsets: byMic })).toMatchObject({ ok: true })
+    const r = resolveEditPlanSources([MIC, CAM_A], { offsets: byMic, transcriptSourceId: "elsewhere" })
+    expect(r).toMatchObject({ ok: true })
+    expect(r.ok && r.transcriptSourceId).toBeFalsy()
+  })
+
+  it("a hand-set offset that is not a number is refused, never summed as a string or read as absent", () => {
+    expect(resolveEditPlanSources([{ ...MIC, offsetMs: "500" as unknown as number }, CAM_A], { offsets: byMic }))
+      .toEqual({ ok: false, issues: [{ code: "invalid-offset", sourceId: "mic" }] })
+    expect(resolveEditPlanSources([MIC, { ...CAM_A, offsetMs: "1200" as unknown as number }]))
+      .toEqual({ ok: false, issues: [{ code: "invalid-offset", sourceId: "cam-a" }] })
+  })
+
+  it("phrases the transcript issue with the caller's labels", () => {
+    const label = (id: string) => ({ mic: "Zoom H6", "cam-a": "Camera A" })[id] ?? id
+    expect(describeAudioSyncOffsetIssue({ code: "transcript-off-clock", sourceId: "cam-a", masterId: "mic", offsetMs: 2_000 }, label))
+      .toBe('the transcript was made from "Camera A", which is 2000 ms off the master "Zoom H6" — the plan follows the master\'s clock, so transcribe "Zoom H6", or mark "Camera A" as master audio')
+  })
+})
+
+describe("editPlanTranscriptOrigin — the recording a canvas transcript was made from", () => {
+  const types: Record<string, string> = { t: "transcribe", ea: "extract-audio", cam: "upload-video", mic: "upload-audio", llm: "llm-chat" }
+  const typeOf = (id: string) => types[id]
+  it("the node feeding the transcriber", () => {
+    expect(editPlanTranscriptOrigin("t", typeOf, [{ source: "mic", target: "t" }])).toBe("mic")
+  })
+  it("through extract-audio (it keeps the clock)", () => {
+    expect(editPlanTranscriptOrigin("t", typeOf, [{ source: "ea", target: "t" }, { source: "cam", target: "ea" }])).toBe("cam")
+  })
+  it("unknown when the producer is not a transcriber, or the trace is ambiguous or missing", () => {
+    expect(editPlanTranscriptOrigin("llm", typeOf, [{ source: "mic", target: "llm" }])).toBeUndefined()
+    expect(editPlanTranscriptOrigin("t", typeOf, [{ source: "mic", target: "t" }, { source: "cam", target: "t" }])).toBeUndefined()
+    expect(editPlanTranscriptOrigin("t", typeOf, [])).toBeUndefined()
   })
 })

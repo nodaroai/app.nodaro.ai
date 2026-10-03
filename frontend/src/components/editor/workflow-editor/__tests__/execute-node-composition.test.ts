@@ -815,7 +815,7 @@ describe("suno-generate", () => {
       "n1",
       expect.any(Function),
       "generatedAudioUrl",
-      "Suno Generate",
+      "Suno Create Music",
       expect.anything(),
       expect.any(Function),
     )

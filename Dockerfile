@@ -116,7 +116,11 @@ WORKDIR /app/backend
 # tsc emits JS only; copy-build-assets.mjs ships the runtime-read assets
 # (tutorial-seed templates) into dist/ and FAILS the build if any are
 # missing — without it every install boots with zero tutorials.
-RUN npx tsc -p tsconfig.build.json && node scripts/copy-build-assets.mjs
+# The backend tree's type check needs ~2.7 GB of heap (2026-10-03, measured
+# with --extendedDiagnostics), past Node's default ceiling on smaller builders:
+# the CI mirror of this step crashed with exit 134 (heap out of memory) with no
+# type error. 4 GB, the same budget the frontend build below uses.
+RUN NODE_OPTIONS=--max-old-space-size=4096 npx tsc -p tsconfig.build.json && node scripts/copy-build-assets.mjs
 
 # ── Stage 4: Build frontend (vite) ────────────────────────────────────
 # Vite resolves @nodaro/shared via the same workspace symlink. The
@@ -166,6 +170,7 @@ ARG VITE_FREECUT_URL
 ARG VITE_AUDIOMASS_URL
 ARG VITE_STUDIO_URL
 ARG VITE_VOICE_URL
+ARG VITE_PERSON_URL
 # Optional analytics + owner gate (empty = disabled; self-host default)
 ARG VITE_GA_ID
 ARG VITE_CLARITY_ID
@@ -193,6 +198,7 @@ ENV VITE_FREECUT_URL=$VITE_FREECUT_URL
 ENV VITE_AUDIOMASS_URL=$VITE_AUDIOMASS_URL
 ENV VITE_STUDIO_URL=$VITE_STUDIO_URL
 ENV VITE_VOICE_URL=$VITE_VOICE_URL
+ENV VITE_PERSON_URL=$VITE_PERSON_URL
 ENV VITE_GA_ID=$VITE_GA_ID
 ENV VITE_DELTA_SAVES=$VITE_DELTA_SAVES
 ENV VITE_CLARITY_ID=$VITE_CLARITY_ID

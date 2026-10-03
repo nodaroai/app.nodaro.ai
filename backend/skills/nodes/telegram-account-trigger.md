@@ -1,7 +1,7 @@
 ---
 node_type: telegram-account-trigger
-generated_at: 2026-09-25T12:25:37.622Z
-generated_from: ce1a2e649
+generated_at: 2026-10-02T00:36:40.522Z
+generated_from: 5f14bf98e
 ---
 
 # Telegram Account Trigger
@@ -9,9 +9,9 @@ generated_from: ce1a2e649
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `telegram-account-trigger`
 **Category:** input
-**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** (none)
-**Outputs (source handles):** `text`, `chatId`, `messageId`, `senderId`
+**Outputs (source handles):** `out`, `videoLink`, `postText`, `postLink`
 
 **Required data fields:**
 - `label: string`
@@ -23,6 +23,7 @@ generated_from: ce1a2e649
 - `messageTypeFilters?: string[]`
 - `keywords?: string[]`
 - `includeOutgoing?: boolean`
+- `inboxMode?: boolean`
 - `isActive?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 
@@ -34,6 +35,7 @@ generated_from: ce1a2e649
   "messageTypeFilters": [],
   "keywords": [],
   "includeOutgoing": false,
+  "inboxMode": false,
   "isActive": false
 }
 ```
@@ -67,6 +69,7 @@ generated_from: ce1a2e649
     "messageTypeFilters": [],
     "keywords": [],
     "includeOutgoing": false,
+    "inboxMode": false,
     "isActive": false
   }
 }

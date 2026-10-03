@@ -1,4 +1,4 @@
-import { usdToCredits } from "@nodaro/shared"
+import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -19,7 +19,7 @@ import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/apply-edl-plan.js
 import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { PIPELINE_PINNABLE_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_BUCKET_MINUTES, buildEditPlanCreditId, type EditPlanTier } from "@nodaro/shared"
+import { PIPELINE_PINNABLE_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_BUCKET_MINUTES, buildEditPlanCreditId, type EditPlanTier, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
@@ -1500,6 +1500,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Instagram scraper: 1 credit per requested post, tiered on count × sources,
   // + the same analysis multiples (packages/shared is the table). Migration 433.
   ...INSTAGRAM_SCRAPE_CREDIT_COSTS,
+  // Social Search: per page of up to 20 results (20 / 40 / 60 posts), the same
+  // on every platform. Cloud-only — a private plugin runs the search; these
+  // are the public prices it is billed at (packages/shared social-search.ts is
+  // the table).
+  ...SOCIAL_SEARCH_CREDIT_COSTS,
   "qa-check": 10,
   "qa-check:economy": 1,
   "qa-check:premium": 10,
@@ -1601,6 +1606,21 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "image-critic": 5,
   "image-critic:economy": 10,
   "image-critic:premium": 20,
+  // Content Recipe — one structured call over one post, flat per call by the
+  // model's tier (owner decision 2026-10-01). Cloud-only: the private plugin
+  // runs it; these are the public prices it is billed at.
+  "content-recipe:economy": 5,
+  "content-recipe": 20,
+  "content-recipe:premium": 35,
+  // Content Ideas — charged per batch of up to five ideas (owner decision
+  // 2026-10-02): 1–5 ideas bill the base id, 6–10 the `:10` id at two batches.
+  // The count rule lives in @nodaro/shared content-recipe-ideas.ts.
+  "content-ideas:economy": 10,
+  "content-ideas": 35,
+  "content-ideas:premium": 50,
+  "content-ideas:10:economy": 20,
+  "content-ideas:10": 70,
+  "content-ideas:10:premium": 100,
   "character": 20,
   "object": 20,
   "location": 20,
@@ -1895,6 +1915,7 @@ const modelPricingCache = new TtlCache<ModelPricing>(60_000)
  */
 export function invalidateModelPricingCache(): void {
   modelPricingCache.invalidate()
+  pricingRowsCache.invalidate()
 }
 
 /**
@@ -1955,6 +1976,91 @@ export async function getModelCreditCostFromDB(modelIdentifier: string): Promise
   const settings = await getAppSettings()
   const creditCost = applyServiceMarkup(base.creditCost, settings, modelIdentifier)
   return creditCost === base.creditCost ? base : { ...base, creditCost }
+}
+
+// ── Charged price table (60s TTL) ──
+
+/**
+ * Every price at once, for the surfaces that list many: `GET /v1/models`, MCP
+ * `list_models`, `GET /v1/nodes` and the workflow estimates.
+ *
+ * The batch twin of `getModelCreditCostFromDB`, and it has to stay that: a
+ * listed price that differs from the Run button is the bug this exists to fix
+ * (listed 150, charged 165). Same rule, so a price reads the same on every
+ * surface: a `model_pricing` row wins, `STATIC_CREDIT_COSTS` is the fallback,
+ * and `applyServiceMarkup` marks the base up ONCE for its identifier.
+ */
+export interface ChargedPriceTable {
+  /** The base credits for `identifier`: its `model_pricing` row, else its
+   *  `STATIC_CREDIT_COSTS` entry, else undefined (priced nowhere). */
+  base(identifier: string): number | undefined
+  /** `baseCredits` marked up once for `identifier`, exactly as a reservation
+   *  is: `creditGuard` marks a computed total (Image Overlay's per-platform
+   *  price, a per-second rate × seconds) up once at the route's identifier. */
+  charge(identifier: string, baseCredits: number): number
+}
+
+/**
+ * The price a user pays for `units` of `identifier` (1 by default), or
+ * undefined when it is priced nowhere. Units multiply the base BEFORE the
+ * markup, as a route that computes its price reserves it (a per-second rate ×
+ * seconds, marked up once).
+ */
+export function chargedCredits(prices: ChargedPriceTable, identifier: string, units = 1): number | undefined {
+  const base = prices.base(identifier)
+  return base === undefined ? undefined : prices.charge(identifier, base * units)
+}
+
+/**
+ * `model_pricing` read whole. A page is the next rows after the last one read,
+ * never a fixed offset: PostgREST caps a response at the project's `max_rows`
+ * (1000 by default, lower if configured) WITHOUT an error, so fixed-size pages
+ * would silently skip everything past the cap on each page.
+ */
+async function readModelPricingRows(): Promise<ReadonlyMap<string, number> | null> {
+  const rows = new Map<string, number>()
+  for (let from = 0; ; ) {
+    const { data, error } = await supabase
+      .from("model_pricing")
+      .select("model_identifier, credit_cost")
+      .order("model_identifier", { ascending: true })
+      .range(from, from + 999)
+    if (error) {
+      console.error("[credits] Failed to read model_pricing for the price table:", error.message)
+      return null
+    }
+    const page = (data ?? []) as Array<{ model_identifier: string; credit_cost: unknown }>
+    for (const row of page) {
+      if (typeof row.credit_cost === "number") rows.set(row.model_identifier, row.credit_cost)
+    }
+    if (page.length === 0) return rows
+    from += page.length
+  }
+}
+
+const pricingRowsCache = new TtlCache<ReadonlyMap<string, number>>(60_000)
+let pricingRowsInflight: Promise<ReadonlyMap<string, number> | null> | null = null
+
+async function modelPricingRows(): Promise<ReadonlyMap<string, number>> {
+  const cached = pricingRowsCache.get("all")
+  if (cached) return cached
+  pricingRowsInflight ??= readModelPricingRows().finally(() => {
+    pricingRowsInflight = null
+  })
+  const rows = await pricingRowsInflight
+  // A failed read prices from STATIC_CREDIT_COSTS alone, as a failed single
+  // lookup does, but is not cached: the next request reads the table again.
+  if (!rows) return new Map()
+  pricingRowsCache.set("all", rows)
+  return rows
+}
+
+export async function getChargedPriceTable(): Promise<ChargedPriceTable> {
+  const [rows, settings] = await Promise.all([modelPricingRows(), getAppSettings()])
+  return {
+    base: (identifier) => rows.get(identifier) ?? STATIC_CREDIT_COSTS[identifier],
+    charge: (identifier, baseCredits) => applyServiceMarkup(baseCredits, settings, identifier),
+  }
 }
 
 // ── Tier config cache (60s TTL) ──
@@ -3260,26 +3366,66 @@ export class CreditsService {
   }
 
   /**
-   * Estimate credits for a workflow, reading node data for variable-cost nodes.
-   * Mirrors the frontend getModelIdentifier() logic for composite model identifiers.
+   * What a run of this workflow will be charged, reading node data for
+   * variable-cost nodes. Mirrors the frontend getModelIdentifier() logic for
+   * composite model identifiers, and prices every node the way its
+   * reservation will: `model_pricing` over `STATIC_CREDIT_COSTS`, marked up
+   * once per node (`getChargedPriceTable`).
    */
-  static estimateWorkflowCredits(
+  static async estimateWorkflowCredits(
     nodes: ReadonlyArray<EstimateNode>,
     /** The workflow's edges, when the caller has them. Some prices are a GRAPH
      *  fact (does an edge feed add-captions a timed caption source?). Without
      *  edges the estimator assumes the pricier answer — never under-quote. */
     edges?: ReadonlyArray<EstimateEdge>,
-  ): number {
-    return nodes.reduce((sum, node) => {
-      // Image Overlay is base + 2 per extra platform render — the shared formula.
-      if (node.type === "image-overlay") return sum + imageOverlayCredits((node.data?.variants as unknown[] | undefined))
-      const modelId = getNodeModelIdentifier(node, {
-        timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
-        audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
-      })
-      return sum + (STATIC_CREDIT_COSTS[modelId] ?? STATIC_CREDIT_COSTS[node.type] ?? 0)
-    }, 0)
+  ): Promise<number> {
+    // Without a credit system nothing is charged, so there is no price table
+    // to read: the figure stays the static one these editions always showed.
+    const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
+    return sumWorkflowEstimate(nodes, edges, prices)
   }
+
+  /**
+   * The same estimate at `STATIC_CREDIT_COSTS`' base prices, with no database
+   * read and no markup. Nothing a user sees should quote it — it pins which
+   * identifier each node is estimated at.
+   */
+  static estimateWorkflowBaseCredits(
+    nodes: ReadonlyArray<EstimateNode>,
+    edges?: ReadonlyArray<EstimateEdge>,
+  ): number {
+    return sumWorkflowEstimate(nodes, edges, STATIC_BASE_PRICES)
+  }
+}
+
+/** `STATIC_CREDIT_COSTS` as a price table: the base prices, unmarked. */
+const STATIC_BASE_PRICES: ChargedPriceTable = {
+  base: (identifier) => STATIC_CREDIT_COSTS[identifier],
+  charge: (_identifier, baseCredits) => baseCredits,
+}
+
+function sumWorkflowEstimate(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  prices: ChargedPriceTable,
+): number {
+  return nodes.reduce((sum, node) => {
+    // A parameter node (Provider, Duration, a picker) is read, never run: no
+    // job, no charge. A Provider's data names a model ("veo3"), which the
+    // lookups below would otherwise price as a run of that model. The editor's
+    // estimate already counts executable nodes only.
+    if (PARAMETER_NODE_TYPES.has(node.type)) return sum
+    // Image Overlay is base + 2 per extra platform render — the shared formula,
+    // marked up once as a whole, the way its route's creditGuard reserves it.
+    if (node.type === "image-overlay") {
+      return sum + prices.charge("image-overlay", imageOverlayCredits((node.data?.variants as unknown[] | undefined)))
+    }
+    const modelId = getNodeModelIdentifier(withWiredSettings(node, nodes, edges), {
+      timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
+      audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
+    })
+    return sum + (chargedCredits(prices, modelId) ?? chargedCredits(prices, node.type) ?? 0)
+  }, 0)
 }
 
 /**
@@ -3347,6 +3493,10 @@ function getNodeModelIdentifier(
   // AI Writer always uses "ai-writer"
   if (nodeType === "ai-writer") return "ai-writer"
 
+  // Generate Music reserves on the music id whatever the model (the route and
+  // the payload builder both do); the model id "minimax" is the MiniMax VIDEO price.
+  if (nodeType === "generate-music") return MUSIC_CREDIT_ID
+
   // LLM Chat uses tiered credit identifier based on selected model. Reasoning
   // effort and advanced mode are passed through too — actual billing bumps a
   // tier on clamped xhigh/max effort and again on advanced mode
@@ -3356,6 +3506,16 @@ function getNodeModelIdentifier(
     const llmModel = data.llmModel as string | undefined
     const reasoningEffort = data.reasoningEffort as string | undefined
     return buildLlmCreditIdentifier("llm-chat", llmModel, reasoningEffort, data.advancedMode === true)
+  }
+
+  // Content Recipe / Content Ideas: the same ids the plugin route and the
+  // orchestrator reserve — the EFFECTIVE model's tier (an unset model is the
+  // economy default, never the bare id) and, for ideas, the count bucket.
+  if (nodeType === "content-recipe") {
+    return contentRecipeCreditId(data.llmModel, data.reasoningEffort as string | undefined)
+  }
+  if (nodeType === "content-ideas") {
+    return contentIdeasCreditId(data.count, data.llmModel, data.reasoningEffort as string | undefined)
   }
 
   // Suno: the ROUTE contract decides which operations are version-priced.
@@ -3390,6 +3550,12 @@ function getNodeModelIdentifier(
 
   if (nodeType === "instagram-scrape") {
     return instagramScrapeCreditIdFromNode(data)
+  }
+
+  // Social Search: the page count the run reserves (one page per 20 posts) —
+  // the same builder the orchestrator's payload and the plugin route use.
+  if (nodeType === "social-search") {
+    return socialSearchCreditIdFromNode(data)
   }
 
   // AI Audit: the credit FAMILY is a GRAPH fact (is an analysis wired into the
@@ -3553,10 +3719,10 @@ function getNodeModelIdentifier(
   )
 }
 
-// Export legacy function for backward compatibility
+/** What a run of this workflow will be charged — see `CreditsService.estimateWorkflowCredits`. */
 export function estimateWorkflowCredits(
   nodes: ReadonlyArray<EstimateNode>,
   edges?: ReadonlyArray<EstimateEdge>,
-): number {
+): Promise<number> {
   return CreditsService.estimateWorkflowCredits(nodes, edges)
 }

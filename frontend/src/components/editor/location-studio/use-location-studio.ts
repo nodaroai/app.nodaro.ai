@@ -11,6 +11,7 @@ import {
 import { useInvalidateLocation } from "@/hooks/queries/use-invalidate-location"
 import type { LocationAssetItem, LocationNodeData, LocationReferencePhoto } from "@/types/nodes"
 import { useLocationRealtimeSync, type LocationRealtimeRow } from "./use-location-realtime-sync"
+import { tx } from "@/lib/i18n"
 
 /**
  * Location Studio — staged state hook.
@@ -229,16 +230,16 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
           : prev,
       )
       invalidate()
-      toast.success("Saved")
+      toast.success(tx("common.saved"))
       return result.id
     } catch (e) {
       if (e instanceof ConcurrentModificationError) {
         // 409 path: reload canonical state so the user can re-apply edits
         // over fresh data instead of clobbering the concurrent writer.
-        toast.error("Location was modified in another tab — reloaded")
+        toast.error(tx("toastMsg.locationWasModifiedInAnother"))
         await refetchAndRestage()
       } else {
-        toast.error("Save failed")
+        toast.error(tx("editor.saveFailed"))
       }
       throw e
     } finally {
@@ -298,7 +299,7 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
         return result
       } catch (e) {
         if (e instanceof ConcurrentModificationError) {
-          toast.error("Someone else just approved this — refreshed")
+          toast.error(tx("toastMsg.someoneElseJustApprovedThis"))
           await refetchAndRestage()
         }
         throw e

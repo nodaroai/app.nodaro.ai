@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mockAttemptAutoRecharge = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 vi.mock("../../billing/auto-recharge.js", () => ({ attemptAutoRecharge: mockAttemptAutoRecharge }))
+import { VIDEO_CRITIC_RESERVED_CREDITS_PER_SHOT } from "@nodaro/shared"
 import {
+  VIDEO_CRITIC_PER_SHOT_CREDITS,
   estimateUpfrontCredits,
   resolveMaxCostCredits,
   reservePipelineCredits,
@@ -10,6 +12,15 @@ import {
 } from "../credits.js"
 
 beforeEach(() => vi.clearAllMocks())
+
+describe("the Video Critic's per-shot reservation", () => {
+  // The pipeline config panel quotes these per frame mode ("up to N credits per
+  // shot") from @nodaro/shared. They once disagreed ten-fold: the panel read
+  // ~2 / ~3 / ~4 while the estimate reserved 20 / 30 / 40.
+  it("is what the config panel quotes", () => {
+    expect(VIDEO_CRITIC_PER_SHOT_CREDITS).toEqual(VIDEO_CRITIC_RESERVED_CREDITS_PER_SHOT)
+  })
+})
 
 describe("estimateUpfrontCredits", () => {
   it("includes Stage 1 baseline (300) + music (40) + editor (30) + final-merge (30) + storyboard cohesion (50) + video-critic default budget when music is enabled", () => {

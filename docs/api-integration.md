@@ -663,8 +663,16 @@ re-project a workflow (`{ data: { synced, created, updated, removed } }`).
 Its optional body `{ vouchNodeIds: [...] }` names the trigger nodes the
 caller just added; only an owner's own browser session can vouch, and only
 those rows count as the owner's own runs for a plain stored credential.
+Likewise `accountNodes: [{ id, settings }]` names the Telegram Account
+Triggers the owner's editor changed, each with the listening settings it set
+(`telegramAccountListeningSignature` in `@nodaro/shared`): only the owner's
+own browser session can name them, and one is armed, widened or re-pointed
+only while the stored node still says exactly that. Any other save made as
+the owner (a token, a connected app, MCP) can switch an account trigger off,
+never on.
 Inspect a workflow's triggers with `GET /v1/workflows/<id>/triggers`; pause
-or resume one with `PATCH /v1/workflow-triggers/<id>`. Triggers you create directly with
+or resume one with `PATCH /v1/workflow-triggers/<id>` (a Telegram Account
+Trigger's row can only be paused there: it is started in the editor). Triggers you create directly with
 `POST /v1/workflow-triggers` are not managed by any node, so saving the
 workflow never changes or removes them.
 
@@ -1193,7 +1201,7 @@ node type the server has registered without hard-coding a list.
 | `GET` | `/v1/nodes/:type` | Return a single descriptor by node type string. 404 `not_found` when the type doesn't exist. |
 
 `NodeDescriptor` fields (subset): `type`, `label`, `category`,
-`outputType`, `creditCost` (static credit cost when known — Cloud only; community and business installs have no credit system and omit the field), `inputSchema`
+`outputType`, `creditCost` (the credits a run is charged, the same figure as the node's Run button: one number for a flat price, a `"min-max"` range for a node priced per model or setting — Cloud only; community and business installs have no credit system and omit the field), `inputSchema`
 (JSON Schema for the node's config fields), `providers` (supported
 provider slugs), `capabilities` (feature flags the node exposes). Nodes
 with per-model constraints carry additional discovery fields —
@@ -1210,8 +1218,11 @@ forward-compatible.
 Every AI prompt node also lists `promptPrefix` and `promptSuffix` (`text`) in
 `inputSchema` — see [Prompt pre & post text](./prompt-pre-post-text.md).
 
-Neither endpoint requires authentication; they expose only static
-registry metadata. No scopes required.
+Neither endpoint requires authentication; they expose only registry
+metadata and prices. No scopes required. Both describe what a USER of the
+instance can use: a node the deployment withholds from users is absent, and
+Web Scrape's description leaves out any source it withdraws (its Instagram
+source follows the Instagram node's availability).
 
 ### Model catalog
 
@@ -1221,8 +1232,9 @@ minutes (`Cache-Control: public, max-age=300`). Returns
 `{ sections, recommendations, totalModels }`: models grouped by kind
 (`image` / `video` / `audio`) and vendor family, each with capability
 sheets (`modes`, `features`, `aspectRatios`, `resolutions`, `durations`),
-per-variant credit `pricing` (Cloud only — like `creditCost` on
-`/v1/nodes`, editions without a credit system omit it), compact
+per-variant credit `pricing` — the credits a run is charged, the price
+`GET /v1/credits/model-cost` returns for that variant (Cloud only — like
+`creditCost` on `/v1/nodes`, editions without a credit system omit it), compact
 `promptTips`, and the
 `doctrineCovered` truth flag (`true` only when a sourced per-family prompt
 doctrine exists — gate "vendor doctrine" badges on it; never overclaim).
@@ -1811,7 +1823,7 @@ discovery (`Cache-Control: public, max-age=300`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/picker-catalogs` | Directory of every picker (`{ data: PickerCatalogSummary[] }`) — each `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount }`. |
+| `GET` | `/v1/picker-catalogs` | Directory of every picker (`{ data: PickerCatalogSummary[] }`) — each `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount, imageCount }`; `imageCount` is how many of its options carry an `imageUrl` (0 = no pictures). |
 | `GET` | `/v1/picker-catalogs/:nodeType` | One picker's catalog (`{ data: PickerCatalog }`). 404 `not_found` for an unknown type. |
 
 `GET /v1/picker-catalogs/:nodeType` accepts these query params (a bad value
@@ -1819,7 +1831,7 @@ returns 400 `validation_error`):
 
 | Param | Values | Purpose |
 |---|---|---|
-| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`. `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
+| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`, `imageUrl` (when the option has a picture). `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
 | `category` | string | Single-dim pickers: filter options to one category. |
 | `field` | string | Return only this dimension's field — multi-dim pickers (person / styling / framing), and the secondary parameters of a single-dim picker (transition / character-fx: `position` / `duration` / `intensity`; character-motion: `position` / `pace`). |
 
@@ -1839,6 +1851,52 @@ catalogs that ship as pure data in [`@nodaro/shared`](https://www.npmjs.com/pack
 [Parameter Picker Catalogs](picker-catalogs.md)); the REST endpoints exist for
 clients that can't.
 
+#### Pictures (`imageUrl`, `sections`)
+
+Every option that has a picture carries an **absolute** `imageUrl`, at both
+detail levels, in `options` and in `dimensions[].options` alike; an option
+without one simply has no `imageUrl`. These are the pictures the editor's
+pickers show:
+
+| Pickers | Picture |
+|---|---|
+| `person`, `styling`, `held-prop`, `material`, `animal` | A photo, WebP, up to 480px wide. |
+| `music-genre`, `music-mood`, `instrumentation`, `voice-character`, `voice-delivery` | A 3D emoji (WebP, 128px) or a flag (WebP, 120px wide). |
+| Look pickers (`style`, `color-look`, `lens`, `framing`, `lighting`, `mood`, `camera-format`, `camera-motion`, …) | Nodaro Cloud only: a 480px still of the rendered preview from the Nodaro CDN (a frame of the clip for `camera-motion`). A self-hosted install returns none. |
+
+- **Host.** Self-hosted pictures are served by the installation itself under
+  `/picker-art/`, so `imageUrl` uses its public address — `PUBLIC_URL`
+  (Nodaro Cloud: `https://app.nodaro.ai`; a self-hosted install: its own
+  `PUBLIC_URL`, e.g. `http://localhost:3000`). Use the URL as given; never
+  build one from an option id.
+- **Caching.** File names carry a content hash, so a changed picture gets a
+  new URL; they are served with `Cache-Control: public, max-age=31536000,
+  immutable` and `Access-Control-Allow-Origin: *` (usable from `<img>`,
+  `fetch` and canvas on any origin).
+- **Topics.** `person` and `styling` also return `sections`: the topics the
+  editor groups their settings under, in order — each `{ label, fields,
+  imageUrl? }`, where `fields` are the node-data fields of the settings in
+  that topic (`Identity` → `type`, `age`, `ethnicity`, `regionalAesthetic`)
+  and `imageUrl` is the topic's round picture.
+
+```bash
+curl -s https://app.nodaro.ai/v1/picker-catalogs/person | jq '.data.sections[0], .data.dimensions[0].options[0]'
+```
+
+```json
+{ "label": "Identity", "fields": ["type", "age", "ethnicity", "regionalAesthetic"],
+  "imageUrl": "https://app.nodaro.ai/picker-art/character/sections/identity.2d5ec1a4.webp" }
+{ "id": "man", "label": "Man", "term": "man",
+  "imageUrl": "https://app.nodaro.ai/picker-art/character/person/man.441363db.webp" }
+```
+
+A look picker on Nodaro Cloud (`/v1/picker-catalogs/mood`):
+
+```json
+{ "id": "happy", "label": "Happy", "category": "positive", "term": "happy expression",
+  "imageUrl": "https://cdn.nodaro.ai/cdn-cgi/image/width=480,format=auto,quality=80/images/710df65a-3c1e-485b-b8b7-29f7b3baf479.png" }
+```
+
 ### Catalogs (server-driven projection)
 
 `GET /v1/catalogs` returns **every** picker catalog in one call, projected to a
@@ -1852,15 +1910,15 @@ catalogs. Public, no auth, same 5-minute cache (`Cache-Control: public, max-age=
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/catalogs` | Every registered catalog (`{ data: ProjectedCatalog[] }`). |
+| `GET` | `/v1/catalogs` | Every registered catalog: `{ curated, packs, version, data? }`. `data: ProjectedCatalog[]` is present only when the deployment registered catalog packs (`curated: true`); with none (`curated: false`) the catalogs are the bundled ones, served per picker by `/v1/picker-catalogs/:nodeType`. |
 
 Query param (a bad value returns 400 `validation_error`):
 
 | Param | Values | Purpose |
 |---|---|---|
-| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`. `full`: additionally includes each option's `description` and `promptHint`. |
+| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`, `imageUrl` (when the option has a picture). `full`: additionally includes each option's `description` and `promptHint`. |
 
-Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, defaultValue?, categoryOrder?, categoryLabels?, detail, options?, fields?, dimensions? }` — single-dim catalogs carry `options`; multi-dim catalogs carry `dimensions` (one `{ field, label, options }` per field); a single-dim catalog with secondary parameter fields (`transition`, `character-fx`: `position` / `duration` / `intensity`; `character-motion`: `position` / `pace`) carries both. Each option is `{ id, label, category?, term, icon?, description?, promptHint? }`; `term` rides at **both** detail levels so a thin client can render `label` and inject the compact professional term without a second `detail=full` fetch. The shape is deliberately tag/policy-free.
+Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, defaultValue?, categoryOrder?, categoryLabels?, detail, options?, fields?, dimensions?, sections? }` — single-dim catalogs carry `options`; multi-dim catalogs carry `dimensions` (one `{ field, label, options }` per field); a single-dim catalog with secondary parameter fields (`transition`, `character-fx`: `position` / `duration` / `intensity`; `character-motion`: `position` / `pace`) carries both. Each option is `{ id, label, category?, term, icon?, imageUrl?, description?, promptHint? }` — `imageUrl` and `sections` follow the [picture rules above](#pictures-imageurl-sections); `term` rides at **both** detail levels so a thin client can render `label` and inject the compact professional term without a second `detail=full` fetch. The shape is deliberately tag/policy-free.
 
 ### Text → pickers (AI Fill)
 
@@ -1917,7 +1975,7 @@ symmetric**: `maxTokens` applies on every call — a deliberate departure from
 the LLM routes that put both levers behind the Advanced-mode gate —
 while `temperature` is **silently ignored** unless you also send
 `advancedMode: true`. Advanced mode pins the call to the vendor's own API,
-where those levers take effect, and therefore bills **one credit tier up**;
+where those levers take effect, and therefore bills **one credit tier up** (capped at premium);
 asking for it on a model with no direct lane is a 400
 `advanced_mode_unsupported`. The call is
 **synchronous and a single call may run several minutes**: each attempt is
@@ -2148,7 +2206,7 @@ has started a long render it waits `waitLimitMs`; when a long render is still to
 {"provider":"gemini-omni-flash","resolution":"720p","duration":12,"renderMethod":"keyframes","segmentMode":"short"}
 ```
 
-The response is `{ "data": { "credits": 660, "upperBound": true } }` in an example configuration with a 660-credit reservation. Read the live response for current prices. For Short/Long, `upperBound` identifies the pre-plan reservation limit; settlement follows the actual plan. A plan-only estimate covers the planning fee and returns `upperBound: false`.
+The response is `{ "data": { "credits": 760, "upperBound": true } }` in an example configuration with a 760-credit reservation. Read the live response for current prices. For Short/Long, `upperBound` identifies the pre-plan reservation limit; settlement follows the actual plan. A plan-only estimate covers the planning fee and returns `upperBound: false`.
 
 `segmentMode` accepts `short`, `long`, or `max` and cannot be combined with numeric `preferredSegmentSec` or explicit `segmentDurations`. Short/Long first assign complete actions to source spans. A plan-only result’s `sourceSegmentDurations` and `planCheckpoint` can be passed back as `sourceSegmentDurations` and `seedPlan` with the same mode and generation settings. See [Generate Video Pro](nodes/ai-video/generate-video-pro.md#how-segmentation-works).
 
@@ -2318,7 +2376,7 @@ orchestrator.
 
 **Response (201):** `{ pipelineId: string, clonedStages: string[], clonedEntities: number }`
 
-**Errors:** 400 (pipeline_not_completed, invalid_stage) · 404 (pipeline_not_found) · 403 (forbidden) · 401 (unauthorized)
+**Errors:** 400 (pipeline_not_completed, invalid_stage) · 404 (pipeline_not_found, also for a pipeline that is not yours) · 401 (unauthorized)
 
 **Scope (OAuth):** `pipelines:execute`
 
@@ -2454,6 +2512,65 @@ curl -s -X POST "https://app.nodaro.ai/v1/node-presets/favorites" \
 curl -s -X DELETE "https://app.nodaro.ai/v1/node-presets/favorites?nodeType=generate-image&presetId=generate-image%2Fcharacter-board" \
   -H "Authorization: Bearer $NODARO_TOKEN" | jq .
 ```
+
+## 16b. Saved posts (inspiration wall)
+
+Save a post you found (a [Social Search](./nodes/input/social-search.md) result)
+with a note and tags, then come back to it on the **Inspiration** page or feed
+it into a workflow. A save keeps a snapshot of the post, because links and
+numbers on the platform change, and the post's still is copied into your
+storage so the wall outlives the platform's expiring image links. The copy
+counts toward your storage and stays out of the media picker. One save per
+post: saving the same post again updates its note and tags.
+
+| Method | Path | Query / Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/saved-posts` | `platform`, `tag`, `q`, `cursor`, `limit` (1-100, default 40) | Your saves, newest first. Returns `{ data: SavedPost[], nextCursor }`. |
+| `POST` | `/v1/saved-posts` | body `{ post, note?, tags?, source? }` | Save a post (`post` is a `SocialPost`, exactly as Social Search returns it). `201` with the new save; `200` with the existing save when the post was already saved. |
+| `POST` | `/v1/saved-posts/lookup` | body `{ postIds }` (up to 200) | Which of these posts you saved. Returns `{ saved: [{ postId, id }] }`. |
+| `PATCH` | `/v1/saved-posts/:id` | body `{ note?, tags? }` | Change a save's note or tags. |
+| `DELETE` | `/v1/saved-posts/:id` | none | Remove a save and its copied still. Returns `{ success: true }`. |
+
+Tags are stored lower-case without a leading `#`: at most 10 per save, 40
+characters each. A comma in any script splits a tag (`"hooks, openers"` is two
+tags), and braces, quotes and backslashes are removed. A note is up to 2,000
+characters. `q` finds words in the note, the post's text and its title.
+`nextCursor` is an opaque token; pass it back as `?cursor=` for the next page
+(`null` on the last page). A cursor the list did not give out is refused with
+`400 invalid_cursor`.
+
+The post is checked before it is stored. A post without an id, a supported
+platform, an `http(s)` link, an author (`handle` and `name`) or text is refused
+with `400`; any other field of the wrong kind (a count that is not a number, a
+link that is not `http(s)`) is dropped. A post snapshot over 64 KB is refused
+with `413 post_too_large`.
+
+`thumbnailUrl` is the copied still, or `null` when there is none (the copy
+failed, or it was cleaned up under the account's
+[media retention](#8b-pay-as-you-go-accounts)); the post's own
+`media.thumbnailUrl` is then the only, expiring, link. Saving the post again
+copies the still again.
+
+OAuth app tokens need `assets:read` for the reads and `assets:write` for the
+writes (no-op for user / API-key auth: you own the resources). Saving is
+limited to 30 requests a minute per token (`429`). On a server that does not
+have saved posts yet, the reads answer empty and the writes answer
+`503 not_available`.
+
+```bash
+# Save one post from a Social Search run (post.json holds that post)
+curl -s -X POST https://app.nodaro.ai/v1/saved-posts \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --slurpfile p post.json '{post: $p[0], note: "strong hook", tags: ["hooks"]}')" | jq .
+
+# Your saved TikTok posts tagged "hooks"
+curl -s "https://app.nodaro.ai/v1/saved-posts?platform=tiktok&tag=hooks" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | {url, note}'
+```
+
+The same routes are wrapped by the SDK (`client.savedPosts`), the MCP tools
+(`save_post` / `list_saved_posts`) and the CLI (`nodaro saved-posts`).
 
 ## 17. Community
 
@@ -2753,7 +2870,7 @@ Connect flows are popup-based and meant for the web app; publishing is available
 | `POST` | `/v1/social/telegram/connect` | Connect Telegram by pasting a bot token (`{ botToken }`). |
 | `POST` | `/v1/social/connect/custom` | Connect a `custom_fields` network (`{ platform, fields }`) — Bluesky, Dev.to, Hashnode, Medium, WordPress, Lemmy. Field specs come from `GET /v1/social/providers` (`customFields`); the credential is validated against the network before saving. |
 | `POST` | `/v1/social/publish` | Publish now (`{ platform, action, connectionId?, caption?, mediaUrl? \| mediaItems?, … }`) → job. 10 credits. Retry semantics differ by failure: `503 publish_retryable` means nothing was posted and the identical request is safe to re-send, while `500 publish_failed` means the outcome is unknown — re-sending it can duplicate the post. |
-| `POST` | `/v1/social/scheduled-posts` | Schedule a publish (`{ connectionId, action, scheduledAt, caption?, media?: [{type, r2Key \| url}], … }`). Media must be assets hosted on this deployment (stable refs — resolved to fresh URLs at publish time; foreign URLs are rejected). 1 credit, charged at publish. |
+| `POST` | `/v1/social/scheduled-posts` | Schedule a publish (`{ connectionId, action, scheduledAt, caption?, media?: [{type, r2Key \| url}], … }`). Media must be assets hosted on this deployment (stable refs — resolved to fresh URLs at publish time; foreign URLs are rejected). 10 credits, charged at publish. |
 | `GET` | `/v1/social/scheduled-posts?from=&to=&status=` | List the caller's scheduled posts (calendar range). |
 | `PATCH` | `/v1/social/scheduled-posts/:id` | Edit while still `queued`/`draft` (`409 not_editable` once publishing). |
 | `DELETE` | `/v1/social/scheduled-posts/:id` | Cancel a queued post (soft — history retained). |

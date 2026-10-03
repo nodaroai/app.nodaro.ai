@@ -17,6 +17,7 @@ import { NodeSettingsButton } from "./node-settings-button"
 import { InlineGluedStripContext } from "./inline-glued-strip-context"
 import { NodeTopToolbar } from "./node-top-toolbar"
 import { NodePolicyOverlay } from "./node-policy-overlay"
+import { NodeConnectionBadge } from "./node-connection-badge"
 import { computeFittedNodeBox } from "./video-node-defaults"
 import { InlineNodePrompt } from "./inline-node-prompt/inline-node-prompt"
 import { useInlinePromptActive } from "./inline-node-prompt/use-inline-prompt-active"
@@ -67,6 +68,9 @@ interface BaseNodeProps {
    *  toolbars that supply their own zoom-scaled pill. Mutually exclusive with
    *  {@link topToolbarContent}. */
   readonly rawToolbarContent?: ReactNode
+  /** A line under the framed run strip (`topToolbarContent`), e.g. the
+   *  Settings input's price note. Bespoke `rawToolbarContent` draws its own. */
+  readonly runStripFootnote?: ReactNode
   /** Force `topToolbarContent`'s NodeToolbar to stay visible regardless of
    *  hover. Used when the toolbar contains dropdowns/popovers whose portaled
    *  content lands outside the node's hover boundary — without this the
@@ -168,6 +172,7 @@ function BaseNodeComponent({
   bottomToolbarContent,
   topToolbarContent,
   rawToolbarContent,
+  runStripFootnote,
   keepTopToolbarVisible,
   className,
   imageAspectRatio,
@@ -654,16 +659,20 @@ function BaseNodeComponent({
           transform: zoom !== 1 ? `scale(${zoom})` : undefined,
         }}
       >
-      {/* Visible on hover, while the preset menu is open, OR whenever a preset is applied (so the
-          preset pill stays on the node). offset scales with the node zoom so the gap above the
-          card tracks the floating title (EditableNodeLabel, `-top-6`) instead of a constant 4px. */}
-      <NodeToolbar align="end" isVisible={isHovered || presetMenuOpen || hasActivePreset} position={Position.Top} offset={Math.round(8 * zoom)}>
-        {/* Toolbar content (preset dropdown + 3-dots) scales by canvasZoom × nodeZoom so it tracks
-            the node title — see NodeTopToolbar. Only mounts while the toolbar is visible. The ⋯ menu
-            and per-node actions show only on hover / while the menu is open; the preset pill always
-            shows when a preset is active. */}
+      {/* Visible on hover, while the preset menu is open, whenever a preset is applied (so the
+          preset pill stays on the node), OR while the node is selected (so its "?" docs link is
+          there). offset scales with the node zoom so the gap above the card tracks the floating
+          title (EditableNodeLabel, `-top-6`) instead of a constant 4px. */}
+      <NodeToolbar align="end" isVisible={isHovered || presetMenuOpen || hasActivePreset || !!selected} position={Position.Top} offset={Math.round(8 * zoom)}>
+        {/* Toolbar content (preset dropdown + "?" + 3-dots) scales by canvasZoom × nodeZoom so it
+            tracks the node title — see NodeTopToolbar. Only mounts while the toolbar is visible. The
+            ⋯ menu and per-node actions show only on hover / while the menu is open; the preset pill
+            always shows when a preset is active; the "?" also shows while the node is selected. */}
         <NodeTopToolbar
           nodeId={id}
+          nodeType={nodeType}
+          showPreset={isHovered || presetMenuOpen || hasActivePreset}
+          showDocs={isHovered || presetMenuOpen || !!selected}
           showActions={isHovered || presetMenuOpen}
           onMoreMenu={handleMoreMenu}
           toolbarActions={toolbarActions}
@@ -721,6 +730,9 @@ function BaseNodeComponent({
           node cards: `jobRecovering` was added that way and is passed by 1 of
           98 call sites, so its chrome has never reached a user. */}
       <NodePolicyOverlay nodeId={id} />
+      {/* "Reconnecting…" while this node's job cannot be read. Mounted here
+          for the same reason as the overlay above: every card, no prop. */}
+      <NodeConnectionBadge nodeId={id} />
       {(!hideHeader || isSkipped) && (
         <div
           className={cn(
@@ -882,7 +894,7 @@ function BaseNodeComponent({
               <InlineGluedStripContext.Provider value={true}>
                 {rawToolbarContent
                   ? rawToolbarContent
-                  : <NodeRunStripShell>{topToolbarContent ?? <NodeSettingsButton nodeId={id} />}</NodeRunStripShell>}
+                  : <NodeRunStripShell footnote={runStripFootnote}>{topToolbarContent ?? <NodeSettingsButton nodeId={id} />}</NodeRunStripShell>}
               </InlineGluedStripContext.Provider>
             </div>
           )
@@ -904,7 +916,7 @@ function BaseNodeComponent({
             >
               {rawToolbarContent
                 ? rawToolbarContent
-                : <NodeRunStripShell>{topToolbarContent ?? <NodeSettingsButton nodeId={id} />}</NodeRunStripShell>}
+                : <NodeRunStripShell footnote={runStripFootnote}>{topToolbarContent ?? <NodeSettingsButton nodeId={id} />}</NodeRunStripShell>}
             </div>
           </NodeToolbar>
         )

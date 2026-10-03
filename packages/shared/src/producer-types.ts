@@ -239,4 +239,41 @@ export const FAN_OUT_EACH_TYPES: ReadonlySet<string> = new Set([
   // to the scalar `edl` value (no fan-out) — the same graceful degradation
   // web-scrape relies on. See `unwrapEditPlanOutput` in `edit-plan-contract.ts`.
   "edit-plan",
+  // Content Ideas emits one creative brief per idea on `listResults`, so an
+  // edge leaving it defaults to "each" — the node after it (typically
+  // Generate Script) runs once per idea, on the server too.
+  "content-ideas",
 ])
+
+/**
+ * FAN-IN targets: nodes that FOLD everything wired into them into ONE run,
+ * instead of running once per upstream item. Keyed by node type; the value
+ * names the target handles that fold (`"*"` = every handle). An edge into any
+ * other handle of such a node is routed normally — Content Ideas folds its
+ * recipes but reads its brand from a `field-brand` wire like any field.
+ *
+ * Single source of truth for both engines' input resolvers (the backend and
+ * the editor each used to keep a private `new Set(["reduce"])`). A fan-in
+ * node is never itself fanned out by an upstream list.
+ */
+export const FAN_IN_TARGETS: Readonly<Record<string, "*" | readonly string[]>> = {
+  // Choose Best — every wire is a candidate.
+  reduce: "*",
+  // Content Ideas — one or more recipes, from several Content Recipe nodes
+  // and/or one that ran once per post.
+  "content-ideas": ["recipes"],
+}
+
+export function isFanInNodeType(nodeType: string | undefined | null): boolean {
+  return typeof nodeType === "string" && Object.prototype.hasOwnProperty.call(FAN_IN_TARGETS, nodeType)
+}
+
+/** True when an edge into `targetHandle` of a `targetType` node is folded.
+ *  An edge with NO target handle (workflow JSON written by an agent often
+ *  omits it) lands on the node's primary input, which is the folding one. */
+export function isFanInEdge(targetType: string | undefined | null, targetHandle: string | null | undefined): boolean {
+  if (!isFanInNodeType(targetType)) return false
+  const spec = FAN_IN_TARGETS[targetType as string]!
+  if (spec === "*") return true
+  return targetHandle == null || targetHandle === "" || spec.includes(targetHandle)
+}

@@ -20,6 +20,9 @@ const ANIMAL_EMOJI: Record<string, string> = {
   fox: "🦊", elephant: "🐘", zebra: "🦓", giraffe: "🦒", panda: "🐼",
   leopard: "🐆", cheetah: "🐆💨", monkey: "🐒", gorilla: "🦍", kangaroo: "🦘",
   koala: "🐨", deer: "🦌", raccoon: "🦝",
+  // no emoji of their own: the nearest look-alike (also their picker stand-in)
+  sloth: "🦥", capybara: "🦫", "red-panda": "🦝", pangolin: "🦔", okapi: "🦓",
+  quokka: "🦘", meerkat: "🐿️",
   // birds
   eagle: "🦅", owl: "🦉", parrot: "🦜", peacock: "🦚", flamingo: "🦩",
   penguin: "🐧", swan: "🦢", sparrow: "🐦", crow: "🐦‍⬛", hummingbird: "🐦💨",

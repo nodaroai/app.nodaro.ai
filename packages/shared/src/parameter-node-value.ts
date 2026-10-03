@@ -51,6 +51,10 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
   "scene-count",
   "duration",
   "aspect-ratio",
+  // Generation Settings "Provider": a model id read from data at run time, like
+  // duration / aspect-ratio (it used to be only a SKIP node, so a server run
+  // could not read it at all).
+  "provider",
   "music-genre",
   "music-mood",
   "instrumentation",
@@ -61,8 +65,8 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
 /**
  * Parameter types that intentionally produce NO prompt hint from
  * `getParameterPromptHint` (in `@nodaro/prompts`). They carry pure runtime
- * parameters — counts, durations, aspect ratios, legacy motion intensity —
- * consumed by the executor directly, never appended to a downstream prompt.
+ * parameters — counts, durations, aspect ratios, a model id — consumed by the
+ * executor directly, never appended to a downstream prompt.
  *
  * Consumers that treat "parameter node" as "text producer" (the `{Label}`
  * auto-fill in `main-text-handle.ts`, ref-map builders) must exclude these:
@@ -72,15 +76,16 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
  * `main-text-handle.test.ts` (members are not text-producing).
  */
 export const HINT_EXEMPT_PARAMETER_TYPES: ReadonlySet<string> = new Set([
-  "motion",
   "scene-count",
   "duration",
   "aspect-ratio",
+  "provider",
 ])
 
 /**
- * Parameter pickers whose fragment only makes sense in MOTION — a camera move,
- * a transition, a timeline, a character effect or a character movement. Every
+ * Parameter nodes whose fragment only makes sense in MOTION — a camera move,
+ * a transition, a timeline, a character effect, a character movement or the
+ * shot's motion intensity (the Motion node). Every
  * still-image consumer (generate-image, edit-image, image-to-image,
  * modify-image, location) excludes these on BOTH executors and in the add-node
  * popup. One set instead of three hand-synced copies: `STILL_IMAGE_EXCLUDE_TYPES`
@@ -93,6 +98,7 @@ export const VIDEO_ONLY_PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
   "transition",
   "character-fx",
   "character-motion",
+  "motion",
 ])
 
 /**
@@ -357,6 +363,8 @@ export function getParameterValue(
       return data.seconds != null ? String(data.seconds) : undefined
     case "aspect-ratio":
       return trim(data.ratio)
+    case "provider":
+      return trim(data.provider)
     default:
       return undefined
   }

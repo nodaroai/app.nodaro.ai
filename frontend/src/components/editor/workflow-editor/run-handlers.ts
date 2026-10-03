@@ -4,6 +4,7 @@ import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@n
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry , NodaroConnectionRequiredError } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
+import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output";
 import { registerNodeRunAbort, clearNodeRunAbort } from "@/lib/node-run-abort";
 import { isNotFound } from "@/lib/api-errors";
 import { hasCredits } from "@/lib/edition";
@@ -14,17 +15,18 @@ import { queryKeys } from "@/lib/query-keys";
 import { getCachedCredits } from "@/ee/hooks/use-model-credits";
 import { spendableCredits, type CreditAllowance } from "@/lib/spendable-credits";
 import { BILLING_SURFACE_QUERY_KEY, type BillingSurface } from "@/lib/billing-surface";
-import type { GeneratedResult, WorkflowNode, WorkflowEdge, JobErrorHint, Scene3DRevisionEntry } from "@/types/nodes";
+import type { GeneratedResult, WorkflowNode, WorkflowEdge, JobErrorHint, Scene3DRevisionEntry, SocialSearchNodeData } from "@/types/nodes";
+import { socialSearchServerRunPatch } from "@/components/nodes/social-search-run-state";
 import {
-  MAX_CONSECUTIVE_POLL_FAILURES,
   isExecutableNode,
   type ExecutionContext,
   type RunConfirmInfo,
 } from "./types";
+import { connectionJustLost, jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { estimateRunCredits } from "./estimate-run-credits";
 import { wordTimingsPreflight } from "./add-captions-preflight";
 import { nestedWordTimingsPreflight } from "./sub-workflow-preflight";
-import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, unwrapEditPlanOutput } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, unwrapEditPlanOutput, withWiredSettings } from "@nodaro/shared"
 import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
@@ -564,7 +566,9 @@ export async function handleRunSingleNode(
   const expanded = planFanOut(
     getListFanOutForNode(node, currentNodes, currentEdges),
     node.type ?? "",
-    node.data as Record<string, unknown>,
+    // Planned on the node as it runs: a Provider wired into its Settings
+    // input makes a several-model image run one model.
+    withWiredSettings(node, currentNodes, currentEdges).data as Record<string, unknown>,
   );
 
   // One key per click of Run-on-this-node. Reused by all retries inside
@@ -899,9 +903,9 @@ export function restorePollingForRunningJobs(
               jobAwaitingReview: undefined,
             });
           }
-        } catch {
+        } catch (err) {
           pollFailures++;
-          if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+          if (shouldStopPolling(err, pollFailures, { nodeId, jobId })) {
             ctx.untrackInterval(poll);
             if (shouldAbandonNode(nodeId, jobId)) {
               // Run discarded/replaced — don't write result/failure to canvas.
@@ -933,9 +937,11 @@ export function restorePollingForRunningJobs(
             } catch { /* final check also failed */ }
             updateNodeData(nodeId, {
               executionStatus: "failed",
+              errorMessage: jobGoneMessage(),
               currentJobId: undefined,
               currentJobProgress: undefined,
               jobAwaitingReview: undefined,
+              jobConnectionLost: undefined,
             });
           }
         }
@@ -990,8 +996,22 @@ function applyRestoredJobCompletion(
   // run's own (scrapeResultPatch), so a restored result is indistinguishable
   // from one that arrived with the tab open.
   if (isScrapeNodeType(nodeType)) {
+    const nodeData = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as Record<string, unknown> | undefined;
     updateNodeData(nodeId, {
-      ...scrapeResultPatch(nodeType, job.output_data?.json, jobId),
+      ...scrapeResultPatch(nodeType, job.output_data?.json, jobId, nodeData),
+      currentJobId: undefined,
+      currentJobProgress: undefined,
+      jobAwaitingReview: undefined,
+    });
+    toast.success(tx("run.backgroundJobCompleted"));
+    return;
+  }
+
+  // Content Recipe / Content Ideas: a recipe object or the ideas, never a
+  // media URL — the live run's own mapping (lib/content-run-output.ts).
+  if (isContentNodeType(nodeType)) {
+    updateNodeData(nodeId, {
+      ...(contentRunResultPatch(nodeType, job.output_data) ?? { executionStatus: "completed" }),
       currentJobId: undefined,
       currentJobProgress: undefined,
       jobAwaitingReview: undefined,
@@ -1288,7 +1308,13 @@ export function streamBackendExecution(
         return;
       }
       pollFailures++;
-      if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES && !finished) {
+      // Not being able to reach the server says nothing about the run: keep
+      // polling, and say so once. Only an execution the server refuses to show
+      // (403/410 — 404 is handled above) ends the watch.
+      if (connectionJustLost(pollFailures) && !finished) {
+        toast.warning(tx("run.lostConnection"));
+      }
+      if (shouldStopPolling(err, pollFailures) && !finished) {
         // Final verification before giving up
         try {
           const finalExec = await getWorkflowExecution(executionId);
@@ -1314,7 +1340,7 @@ export function streamBackendExecution(
           }
         } catch { /* final check also failed */ }
         cleanup();
-        toast.error(tx("run.lostConnection"));
+        toast.error(tx("run.backendNoLongerExists"));
         return;
       }
     }
@@ -1370,6 +1396,8 @@ interface NodeExecutionState {
     imageUrls?: readonly string[];
     audioUrls?: readonly string[];
     text?: string;
+    /** A structured result (Content Recipe's recipe, Content Ideas' ideas). Mirrors backend NodeOutput. */
+    json?: unknown;
     /** Fan-in (reduce / Choose Best) aggregated value. Mirrors backend NodeOutput. */
     result?: string;
     /** Reduce strategy meta beside `result` (selectedIndex / reasoning / summary). */
@@ -1382,6 +1410,8 @@ interface NodeExecutionState {
     splitResults?: string[];
     combinedText?: string;
     listResults?: string[];
+    /** Social Search: every post found (the posts passed on ride on `json`). */
+    searchResults?: unknown[];
     /** Row-aligned twin of listResults (Extract Field, List output). */
     alignedListResults?: string[];
     /** Selector node `picked` output channel (selected items). */
@@ -1503,9 +1533,15 @@ function syncNodeStatesToStore(
 
     // Re-sync results when node is already completed but generatedResults
     // is empty/missing (polling caught status before output was persisted).
+    // Content Ideas' list is its briefs on `ideaBriefs`, never generatedResults,
+    // so "no generatedResults yet" is its normal completed state, not a gap.
     const needsResultSync =
       state.status === "completed" &&
       currentStatus === "completed" &&
+      !isContentNodeType(node.type) &&
+      // Social Search's posts live on searchResults / generatedJson, never on
+      // generatedResults, so an empty generatedResults is its normal state.
+      node.type !== "social-search" &&
       state.output?.listResults &&
       state.output.listResults.length > 1 &&
       !((data.generatedResults as GeneratedResult[] | undefined)?.length);
@@ -1522,7 +1558,18 @@ function syncNodeStatesToStore(
         // between and nothing else would ever clear it.
         jobAwaitingReview: undefined,
       };
-      if (state.output) {
+      if (state.output && isContentNodeType(node.type)) {
+        // Content Recipe / Content Ideas: the live run's own mapping
+        // (lib/content-run-output.ts). Never the generic writes below — the
+        // briefs on __listResults would clone the node on the canvas, and a
+        // text history in generatedResults would be read as a list.
+        Object.assign(updates, contentRunResultPatch(node.type, state.output as Record<string, unknown>) ?? {});
+      } else if (state.output && node.type === "social-search") {
+        // Its own mapping: every post found, the ones passed on, the digest —
+        // never the generic text write below, whose run history in
+        // generatedResults would be read as a list downstream.
+        Object.assign(updates, socialSearchServerRunPatch(data as SocialSearchNodeData, state.output as Record<string, unknown>));
+      } else if (state.output) {
         const nodeType = node.type ?? "";
         if (state.output.imageUrl) {
           if (["character", "face", "object", "location"].includes(nodeType)) {

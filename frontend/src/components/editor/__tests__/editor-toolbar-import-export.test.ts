@@ -193,3 +193,17 @@ describe("buildSaveObjectPayloadFromExport", () => {
     expect(payload.category).toBe("prop")
   })
 })
+
+describe("injectableNodes — what a file or the clipboard brings into the open canvas", () => {
+  it("lands a Telegram account trigger without the exporter's account and chats, so it never arrives listening", async () => {
+    const { injectableNodes } = await import("../editor-toolbar-inject-helpers")
+    const [trigger, hook, text] = injectableNodes([
+      { id: "t", type: "telegram-account-trigger", data: { label: "Inbox", accountId: "acc-1", chatIds: ["-1009"], chatTitles: { "-1009": "x" }, senderIds: ["5"], isActive: true } },
+      { id: "w", type: "webhook-output", data: { label: "Hook", credentialId: "cred-1", url: "https://example.com/hook" } },
+      { id: "p", type: "text-prompt", data: { label: "Note", text: "hello" } },
+    ])
+    expect(trigger.data).toEqual({ label: "Inbox", isActive: true })
+    expect(hook.data).toEqual({ label: "Hook", url: "https://example.com/hook" })
+    expect(text.data).toEqual({ label: "Note", text: "hello" })
+  })
+})

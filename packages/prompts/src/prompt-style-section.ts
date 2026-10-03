@@ -45,7 +45,8 @@
  * section is written flush-left rather than relying on that collapse to be
  * harmless.
  */
-import { joinPromptHints, PROMPT_HINT_SEPARATOR } from "./prompt-hint-join.js"
+import { joinPromptHints } from "./prompt-hint-join.js"
+import { joinSentences } from "./hint-join.js"
 import {
   renderDirectionHintClauses,
   type DirectionFamily,
@@ -173,10 +174,7 @@ export function partitionStyleClauses(
  */
 export function styleSectionFromClauses(clauses: readonly SlottedPromptClause[]): string {
   const line = (slot: PromptClauseSlot) =>
-    clauses
-      .filter((c) => c.slot === slot)
-      .map((c) => c.text)
-      .join(PROMPT_HINT_SEPARATOR)
+    joinSentences(clauses.filter((c) => c.slot === slot).map((c) => c.text))
   const lines = [line("film"), line("scene")].filter((l) => l.length > 0)
   return lines.length === 0 ? "" : `${STYLE_SECTION_HEADER}\n${lines.join("\n")}`
 }

@@ -109,6 +109,7 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
         handles={[
           { id: "transcript", type: "target", position: Position.Left,  customStyle: { top: "24px",              left: "-29px" },  external: true },
           { id: "silence",    type: "target", position: Position.Left,  customStyle: { top: "52px",              left: "-29px" },  external: true },
+          { id: "offsets",    type: "target", position: Position.Left,  customStyle: { top: "80px",              left: "-29px" },  external: true },
           { id: "sources",    type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 24px)", left: "-29px" },  external: true },
           { id: "edl",        type: "source", position: Position.Right, customStyle: { top: "24px",              right: "-29px" }, external: true },
         ]}
@@ -184,6 +185,7 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
       </BaseNode>
       <HandleWithPopover nodeId={id} nodeType="edit-plan" handleId="transcript" type="target" position={Position.Left}  label={t("node.transcript")} color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="24px"              accepts={ACCEPTS_JSON} />
       <HandleWithPopover nodeId={id} nodeType="edit-plan" handleId="silence"    type="target" position={Position.Left}  label={t("node.silence")}    color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="52px"              accepts={ACCEPTS_JSON} />
+      <HandleWithPopover nodeId={id} nodeType="edit-plan" handleId="offsets"    type="target" position={Position.Left}  label={t("node.editPlanOffsets")} color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="80px"              accepts={ACCEPTS_JSON} />
       <HandleWithPopover nodeId={id} nodeType="edit-plan" handleId="sources"    type="target" position={Position.Left}  label={t("node.sources")}    color={HANDLE_COLORS.video}    icon={<Film />}   side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_MEDIA} orderMatters />
       <HandleWithPopover nodeId={id} nodeType="edit-plan" handleId="edl"        type="source" position={Position.Right} label={t("node.editPlanEdl")} color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="24px" />
       {plan !== undefined && plan !== null && (

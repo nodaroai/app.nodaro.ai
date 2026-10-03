@@ -22,6 +22,11 @@
  * holding that exact slug — surfaces as a 23505 on the INSERT, which seedDoc
  * catches and logs (warn + skip), never a clobber. The assertion here pins the
  * safety property the seeder controls: it never UPDATEs a row it does not own.
+ *
+ * The last block pins the edition gate for templates built on a Cloud-only
+ * node (Content Recipe / Content Ideas): off Cloud they are never seeded, since
+ * the workflow routes refuse to save such a graph there; on Cloud they seed
+ * like any other built-in.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
@@ -276,5 +281,72 @@ describe("tutorial seeder — Cloud marketplace lane", () => {
     expect(systemRows).toHaveLength(1)
     expect(systemRows[0]!.slug).toBe("podcast-tighten-episode")
     expect(systemRows[0]!.listed_in).toEqual(["marketplace"])
+  })
+})
+
+function cloudOnlyDoc(over: Record<string, unknown> = {}) {
+  return {
+    slug: "steal-the-format",
+    name: "Steal the format",
+    markdownDescription: "s1",
+    tutorialCategorySlug: "workflows",
+    tutorialSortOrder: 45,
+    nodes: [
+      { id: "recipe", type: "content-recipe", position: { x: 0, y: 0 }, data: {} },
+      { id: "ideas", type: "content-ideas", position: { x: 0, y: 0 }, data: {} },
+    ],
+    edges: [],
+    ...over,
+  }
+}
+
+describe("tutorial seeder — templates built on a Cloud-only node", () => {
+  beforeEach(() => {
+    store.users.length = 0
+    store.profiles.length = 0
+    store.projects.length = 0
+    store.workflows.length = 0
+    store.workflow_templates.length = 0
+    store.tutorial_categories.length = 0
+    store.seq = 0
+    store.fromCalls = 0
+    store.updatePayloads.length = 0
+    config.NODARO_SEED_MARKETPLACE_TEMPLATES = false
+  })
+
+  afterEach(() => {
+    config.EDITION = REAL_EDITION
+    config.NODARO_SEED_MARKETPLACE_TEMPLATES = REAL_FLAG
+  })
+
+  for (const edition of ["community", "business"] as const) {
+    it(`${edition}: skips it (and says so), seeds the rest`, async () => {
+      config.EDITION = edition
+      docs.value = [tutorialDoc(), cloudOnlyDoc()]
+      const log = vi.spyOn(console, "log").mockImplementation(() => {})
+      try {
+        await seed()
+        expect(store.workflow_templates.map((r) => r.slug)).toEqual(["welcome-demo"])
+        const lines = log.mock.calls.map((c) => String(c[0]))
+        expect(lines.some((l) => l.includes("steal-the-format (content-recipe, content-ideas)"))).toBe(true)
+      } finally {
+        log.mockRestore()
+      }
+    })
+  }
+
+  it("reads the doc's own nodes, not its authored nodeTypesUsed", async () => {
+    config.EDITION = "community"
+    docs.value = [cloudOnlyDoc({ nodeTypesUsed: ["text-prompt"] })]
+    await seed()
+    expect(store.workflow_templates).toEqual([])
+  })
+
+  it("cloud: a marketplace-listed one seeds like any other built-in", async () => {
+    config.EDITION = "cloud"
+    config.NODARO_SEED_MARKETPLACE_TEMPLATES = true
+    docs.value = [cloudOnlyDoc({ listedIn: ["marketplace"] })]
+    await seed()
+    expect(store.workflow_templates.map((r) => r.slug)).toEqual(["steal-the-format"])
   })
 })

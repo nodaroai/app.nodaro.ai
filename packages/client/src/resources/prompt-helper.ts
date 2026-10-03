@@ -17,7 +17,7 @@ interface CommonInput {
    * Gemini models only. Runs the request on the provider's own API so
    * `temperature`, `maxTokens` and the full reasoning range actually take
    * effect — on the default lane those levers are not reliably honoured.
-   * Bills one credit tier up. A model without a direct lane returns
+   * Bills one credit tier up, capped at premium. A model without a direct lane returns
    * `400 advanced_mode_unsupported`.
    */
   advancedMode?: boolean

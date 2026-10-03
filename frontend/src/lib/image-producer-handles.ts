@@ -206,8 +206,9 @@ export function isValidRemoveBackgroundConnection(
 // Source: video (renamed from `out`).
 //
 // `face` also accepts identity refs (character/face) — both extract a face
-// image at execution time. The backend's face-swap resolver reads
-// `imageUrl` from the upstream node regardless of which identity type it is.
+// image at execution time. Both resolvers route the `face` handle by handle
+// into `faceImageUrl` (the image producer's file or the entity's portrait),
+// whatever the source type.
 const ACCEPTS_FACE_OR_IDENTITY = (sourceType: string): boolean =>
   ACCEPTS_IMAGE_OR_DYN(sourceType) || IDENTITY_TYPES.has(sourceType)
 

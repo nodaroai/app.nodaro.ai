@@ -1,6 +1,7 @@
 import { applyWebScrapeResult } from "./web-scrape-run-state"
 import { applyMetaAdsScrapeResult } from "./meta-ads-scrape-run-state"
 import { applyInstagramScrapeResult } from "./instagram-scrape-run-state"
+import { applySocialSearchResult } from "./social-search-run-state"
 
 /**
  * Putting a scrape job's result on its node — the ONE rule the live run, the
@@ -16,10 +17,15 @@ import { applyInstagramScrapeResult } from "./instagram-scrape-run-state"
  * the job, nothing on the canvas.
  */
 
-const SCRAPE_RESULT_PATCH: ReadonlyMap<string, (json: unknown) => Record<string, unknown>> = new Map([
+/** Builders read the node's own data where the result depends on it (Social
+ *  Search passes on the first `pickTop` posts); the others ignore it. */
+type ScrapePatchBuilder = (json: unknown, data?: Readonly<Record<string, unknown>>) => Record<string, unknown>
+
+const SCRAPE_RESULT_PATCH: ReadonlyMap<string, ScrapePatchBuilder> = new Map<string, ScrapePatchBuilder>([
   ["web-scrape", applyWebScrapeResult],
   ["meta-ads-scrape", applyMetaAdsScrapeResult],
   ["instagram-scrape", applyInstagramScrapeResult],
+  ["social-search", applySocialSearchResult],
 ])
 
 /** True for the nodes whose result is `output_data.json` written by a scrape. */
@@ -37,10 +43,15 @@ export function isScrapeNodeType(nodeType: string | undefined): boolean {
  * on the node data types: it is bookkeeping, not something a workflow author
  * sets, and the generated node docs list every declared field.
  */
-export function scrapeResultPatch(nodeType: string, json: unknown, jobId: string): Record<string, unknown> | null {
+export function scrapeResultPatch(
+  nodeType: string,
+  json: unknown,
+  jobId: string,
+  data?: Readonly<Record<string, unknown>>,
+): Record<string, unknown> | null {
   const build = SCRAPE_RESULT_PATCH.get(nodeType)
   if (!build) return null
-  return { ...build(json), lastAppliedJobId: jobId }
+  return { ...build(json, data), lastAppliedJobId: jobId }
 }
 
 /**

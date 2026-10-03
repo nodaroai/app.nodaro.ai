@@ -502,11 +502,21 @@ describe("buildPayload", () => {
 
   describe("generate-music", () => {
     it("builds payload", () => {
-      const n = node("n1", "generate-music", { prompt: "epic score", provider: "musicgen" })
+      const n = node("n1", "generate-music", { prompt: "epic score", provider: "minimax", referenceAudioUrl: "https://cdn.nodaro.ai/audio/ref.mp3" })
       const result = buildPayload(n, jobId, {})
       expect(result.jobName).toBe("generate-music")
       expect(result.modelIdentifier).toBe("generate-music")
       expect(result.payload.prompt).toBe("epic score")
+    })
+
+    // New nodes started on "suno", and older ones carry "musicgen" — models
+    // this node never ran (the worker has MiniMax only). They run the default
+    // model rather than failing, and that model's rules apply.
+    it.each(["suno", "musicgen", undefined])("a node saved with %s runs MiniMax Music", (provider) => {
+      const n = node("n1", "generate-music", { prompt: "epic score", provider, referenceAudioUrl: "https://cdn.nodaro.ai/audio/ref.mp3" })
+      expect(buildPayload(n, jobId, {}).payload.provider).toBe("minimax")
+      const bare = node("n1", "generate-music", { prompt: "epic score", provider })
+      expect(() => buildPayload(bare, jobId, {})).toThrow(/audio_required/)
     })
 
     // MiniMax Music is reference-conditioned (`minimax/music-01` → E006 "At

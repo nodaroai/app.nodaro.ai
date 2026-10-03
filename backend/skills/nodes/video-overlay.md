@@ -1,7 +1,7 @@
 ---
 node_type: video-overlay
-generated_at: 2026-09-24T15:05:52.283Z
-generated_from: 586dd7fb7
+generated_at: 2026-09-27T12:51:23.965Z
+generated_from: c607aa02c
 ---
 
 # Video Overlay
@@ -9,7 +9,7 @@ generated_from: 586dd7fb7
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `video-overlay`
 **Category:** processing
-**Credit cost:** `20` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `video`, `overlay`, `overlay2`, `overlay3`, `overlay4`, `overlay5`, `overlay6`, `overlay7`, `overlay8`, `overlay9`, `overlay10`, `overlay11`, `overlay12`
 **Outputs (source handles):** `video-out`
 

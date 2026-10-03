@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react"
-import { Layers, AudioWaveform, ExternalLink, Bell, Film, Image as ImageIcon } from "lucide-react"
+import { Layers, AudioWaveform, UserRound, ExternalLink, Bell, Film, Image as ImageIcon } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 import { useT, type MessageKey } from "@/lib/i18n"
@@ -7,17 +7,19 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { PreviewVideo } from "@/components/ui/preview-video"
 import { studioBaseUrl } from "@/lib/studio"
 import { voiceBaseUrl } from "@/lib/voice"
+import { PERSON_APP_COLLAGE, personAppBaseUrl } from "@/lib/person-app"
 
 /**
  * Flagship "Nodaro apps" band — Nodaro's dedicated, purpose-built products
- * (Studio, Voice Changer Pro), at the top of the home screen's Continue tab.
+ * (Studio, Voice Changer Pro, Person), at the top of the home screen's Continue tab.
  *
  * Data is a small static array: flagships are team-curated and rarely change,
  * so a config surface would be over-engineering. Each card supports a real
  * image/video thumbnail via `media`; until real assets land it falls back to a
  * signature-tinted poster so the card still reads as a product, not a chip.
  */
-type FlagshipStatus = "live" | "coming-soon"
+/** "new" is a live product that is just out: a New badge and a solid call to action. */
+type FlagshipStatus = "live" | "new" | "coming-soon"
 
 interface FlagshipApp {
   readonly id: string
@@ -29,6 +31,8 @@ interface FlagshipApp {
   readonly icon: LucideIcon
   readonly href?: string
   readonly media?: { readonly type: "video" | "image"; readonly url: string }
+  /** Photos fanned along the card's end edge (same-origin files). */
+  readonly collage?: ReadonlyArray<string>
 }
 
 const FLAGSHIP_APPS: readonly FlagshipApp[] = [
@@ -58,6 +62,18 @@ const FLAGSHIP_APPS: readonly FlagshipApp[] = [
     href: voiceBaseUrl(),
     // media: { type: "video", url: "<vcp teaser>" } — drop in later, no code change
   },
+  {
+    id: "person",
+    name: "Person",
+    tagline:
+      "People for your projects. Nobody's likeness. Design a royalty-free person with pictures, or start from a photo.",
+    meta: "person.nodaro.ai",
+    sig: "#ff8a4c",
+    status: "new",
+    icon: UserRound,
+    href: personAppBaseUrl(),
+    collage: PERSON_APP_COLLAGE,
+  },
 ]
 
 /** Signature-tinted cinematic poster used when a card has no real media yet. */
@@ -76,6 +92,7 @@ function posterFallback(sig: string): CSSProperties {
 const FLAGSHIP_TAGLINE_KEYS: Record<string, MessageKey> = {
   "studio": "dash.flagshipStudioTagline",
   "voice-changer-pro": "dash.flagshipVcpTagline",
+  "person": "dash.flagshipPersonTagline",
 }
 
 function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
@@ -121,6 +138,14 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
             {t("dash.live")}
           </span>
+        ) : app.status === "new" ? (
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-black/50 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide backdrop-blur-sm"
+            style={{ color: app.sig }}
+          >
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: app.sig }} />
+            {t("dash.new")}
+          </span>
         ) : (
           <span
             className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-white"
@@ -131,6 +156,27 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
           </span>
         )}
       </div>
+
+      {/* Photo collage along the end edge (Person). Decorative: the name and
+          tagline carry the meaning. */}
+      {app.collage && (
+        <div aria-hidden className="pointer-events-none absolute -end-4 top-14 grid rotate-[-7deg] grid-cols-2 gap-2">
+          {app.collage.map((src, i) => (
+            <img
+              key={src}
+              src={src}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+              className={
+                "h-[96px] w-[72px] rounded-xl border border-white/15 bg-[#0e1424] object-cover object-top shadow-[0_10px_24px_-10px_rgba(0,0,0,.7)]" +
+                (i % 2 === 1 ? " translate-y-3" : "")
+              }
+            />
+          ))}
+        </div>
+      )}
 
       {/* Body */}
       <div className="relative mt-auto p-4">
@@ -146,16 +192,27 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
             {app.meta && <div className="mt-0.5 font-mono text-[11px] text-white/60">{app.meta}</div>}
           </div>
         </div>
-        <p className="max-w-[46ch] text-sm leading-relaxed text-white/80">{taglineKey ? t(taglineKey) : app.tagline}</p>
+        <p className={"text-sm leading-relaxed text-white/80 " + (app.collage ? "max-w-[58%]" : "max-w-[46ch]")}>
+          {taglineKey ? t(taglineKey) : app.tagline}
+        </p>
         {/* De-emphasized ghost "chip". The WHOLE card is the click target (the
             <a>/<button> wrapper below), so this is a visual affordance, not the
             real button — going ghost costs no click affordance. Ghost (vs a solid
             pink fill) keeps the page's actual primary, the New Workflow button,
             the single dominant CTA, and reads cleanly on both the pink (Studio)
             and violet (VCP) card signatures. Live vs coming-soon is carried by
-            the top-right status badge plus the icon/label below. */}
-        <span className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-3.5 py-2 text-[13px] font-semibold text-white backdrop-blur-sm transition-colors group-hover:bg-white/20">
-          {app.status === "live" ? (
+            the top-right status badge plus the icon/label below. The one
+            exception is a "new" product: a solid fill in its signature colour
+            announces the launch while it is new. */}
+        <span
+          className={
+            app.status === "new"
+              ? "mt-4 inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[13px] font-semibold text-[#1a0d05] transition-[filter] group-hover:brightness-110"
+              : "mt-4 inline-flex items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-3.5 py-2 text-[13px] font-semibold text-white backdrop-blur-sm transition-colors group-hover:bg-white/20"
+          }
+          style={app.status === "new" ? { backgroundColor: app.sig } : undefined}
+        >
+          {app.status !== "coming-soon" ? (
             <>
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
               {t("dash.openApp", { name: app.name })}
@@ -175,7 +232,7 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
     "group relative flex min-h-[220px] flex-col overflow-hidden rounded-xl border border-border text-start transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:[border-color:var(--sig)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sig)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
   const cardStyle = { "--sig": app.sig } as CSSProperties
 
-  if (app.status === "live" && app.href) {
+  if (app.status !== "coming-soon" && app.href) {
     return (
       <a href={app.href} target="_blank" rel="noopener noreferrer" className={cardClass} style={cardStyle}>
         {inner}

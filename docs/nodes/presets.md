@@ -97,7 +97,7 @@ Both music nodes ship presets organized along the three axes professional librar
   Trailer, Corporate, Vlog, Ambient Loop, EDM Drop, Game Loop), *By Mood / Score* (Uplifting,
   Emotional, Tense, Epic, Happy, Dark, Romantic), *By Genre* (Lo-fi, EDM, Rock, Jazz, Orchestral,
   Synthwave, Funk, Ambient Cinematic).
-- **Suno Generate** (style-prompt): each preset fills Suno's free-text **style** box using Suno's own
+- **Suno Create Music** (style-prompt): each preset fills Suno's free-text **style** box using Suno's own
   formula — *genre + mood + instrumentation + named tempo/BPM + instrumental/vocals + structure*.
   Setting a style auto-enables Suno custom mode. *By Use-Case* and *By Genre* presets are instrumental
   and run as-is; the **Vocals & Songs** folder (Pop, Rap, Ballad, Rock, Acoustic, R&B, K-Pop) sets the

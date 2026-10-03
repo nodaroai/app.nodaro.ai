@@ -16,7 +16,7 @@ In both cases the target voice's identity is applied while the original pacing, 
 |-------|------|---------|-------------|
 | Voice | `string` | `""` | Target voice to apply. Selectable via VoiceBrowser (premade, custom, or library) |
 | Voice Type | `"premade" \| "custom" \| "library"` | `"premade"` | Source of the selected target voice |
-| Model | `"eleven_english_sts_v2" \| "eleven_multilingual_sts_v2"` | `"eleven_multilingual_sts_v2"` | ElevenLabs speech-to-speech model. **Multilingual v2** covers 29 languages and is ElevenLabs' recommended model — including for English source audio, where it often outperforms the English-only model. **English v2** remains selectable. Credit cost is the same (4 credits) for either model. If the field is left unset, the backend falls back to `eleven_multilingual_sts_v2`. |
+| Model | `"eleven_english_sts_v2" \| "eleven_multilingual_sts_v2"` | `"eleven_multilingual_sts_v2"` | ElevenLabs speech-to-speech model. **Multilingual v2** covers 29 languages and is ElevenLabs' recommended model — including for English source audio, where it often outperforms the English-only model. **English v2** remains selectable. Credit cost is the same (40 credits) for either model. If the field is left unset, the backend falls back to `eleven_multilingual_sts_v2`. |
 | Stability | `number` (0-1) | `0.5` | Voice consistency. Lower = more expressive, higher = more uniform |
 | Similarity Boost | `number` (0-1) | `0.75` | How closely the output matches the target voice timbre |
 | Style Exaggeration | `number` (0-1) | `0` | Amplifies the source speaker's stylistic delivery in the target voice. Keep at `0` unless you want extra drama — values above 0 add latency and can reduce stability. Only sent to the model when above its default. |

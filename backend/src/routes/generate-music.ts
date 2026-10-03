@@ -8,7 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { MUSIC_PROVIDERS } from "@nodaro/shared"
+import { MUSIC_CREDIT_ID, MUSIC_PROVIDERS } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -43,7 +43,7 @@ const generateMusicBody = z.object({
 )
 
 export async function generateMusicRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-music", { preHandler: creditGuard(() => "generate-music") }, async (req, reply) => {
+  app.post("/v1/generate-music", { preHandler: creditGuard(() => MUSIC_CREDIT_ID) }, async (req, reply) => {
     const parsed = generateMusicBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -61,7 +61,7 @@ export async function generateMusicRoutes(app: FastifyInstance) {
     }
 
     // Use node-type identifier (avoids collision with video "minimax")
-    const modelIdentifier = "generate-music"
+    const modelIdentifier = MUSIC_CREDIT_ID
 
     // Build enriched prompt with genre/mood if provided
     const parts = [prompt]

@@ -19,11 +19,13 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { SpeedRampData } from "@/types/nodes"
+import { speedRampCreditId } from "@nodaro/shared"
 
 function SpeedRampNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as SpeedRampData
-  const credits = useModelCredits("ffmpeg", 1)
+  // Priced like the run: the smooth tier costs more than the fast one.
+  const credits = useModelCredits(speedRampCreditId(nodeData.quality), nodeData.quality === "smooth" ? 50 : 20)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)

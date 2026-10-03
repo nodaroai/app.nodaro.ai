@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { resolveNodeInputs, getListInputForNode } from "../input-resolver.js"
+import { seededFromSavedData } from "../saved-data.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
 import { selectListItems } from "@nodaro/shared"
 
@@ -391,10 +392,10 @@ describe("resolveNodeInputs", () => {
       ],
     })
     // `s` did not run in this execution: the orchestrator pre-completes it from
-    // its saved data (extractSavedNodeOutput), which carries the audio but no
-    // Suno ids — those come from the node data, active result first.
+    // its saved data (seededFromSavedData(extractSavedNodeOutput)), which carries
+    // the audio but no Suno ids — those come from the node data, active result first.
     const states: Record<string, NodeExecutionState> = {
-      s: { status: "completed", output: { audioUrl: "https://suno/v1.mp3" } },
+      s: seededFromSavedData({ audioUrl: "https://suno/v1.mp3" }),
     }
     const result = resolveNodeInputs(target, [edge("s", "t")], states, [src, target])
     expect(result.sunoTrackId).toBe("track-2")

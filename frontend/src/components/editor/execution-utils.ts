@@ -1,4 +1,4 @@
-import { tx } from "@/lib/i18n"
+import { tx, type MessageKey } from "@/lib/i18n"
 import { formatDate } from "@/lib/i18n/format"
 
 export const STATUS_COLORS: Record<string, string> = {
@@ -12,6 +12,26 @@ export const STATUS_COLORS: Record<string, string> = {
   // detached from the canvas. Distinct (muted grey) from cancelled's orange.
   discarded: "bg-gray-200 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300",
   timed_out: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400",
+}
+
+/** Execution and job status ids, captioned in the interface language. */
+const STATUS_KEYS: Readonly<Record<string, MessageKey>> = {
+  running: "exec.statusRunning",
+  completed: "exec.statusCompleted",
+  failed: "exec.statusFailed",
+  pending: "exec.statusPending",
+  cancelled: "exec.statusCancelled",
+  discarded: "exec.statusDiscarded",
+  stopping: "exec.statusStopping",
+  timed_out: "exec.statusTimedOut",
+  skipped: "exec.statusSkipped",
+  processing: "exec.statusProcessing",
+  queued: "node.queued",
+}
+
+/** A status badge's text; a status with no caption passes through. */
+export function statusLabel(status: string): string {
+  return Object.hasOwn(STATUS_KEYS, status) ? tx(STATUS_KEYS[status]) : status
 }
 
 export const TRIGGER_LABELS: Record<string, string> = {

@@ -65,6 +65,7 @@ vi.mock("../clear-run-results", () => ({ clearedConnectedListRows: () => null })
 import { streamBackendExecution, teardownActiveWorkflowStream } from "../run-handlers"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
+import { contentRunResultPatch } from "@/lib/content-run-output"
 import type { ExecutionContext } from "../types"
 
 const ctx = {
@@ -216,5 +217,58 @@ describe("syncNodeStatesToStore — Video Overlay run facts", () => {
     streamBackendExecution("exec-3", ctx, vi.fn(), vi.fn())
     const byId = sync({ img: { status: "completed", output: { imageUrl: "https://cdn.test/i.png" } } })
     expect("warnings" in byId.img).toBe(false)
+  })
+})
+
+// Content Recipe / Content Ideas on a BACKEND run (the editor's Execute and
+// Run from here go through the orchestrator): the node gets the live run's own
+// mapping — never the generic writes, which would put the briefs on
+// __listResults (cloning the node on the canvas) and the digest into a
+// generatedResults text history (read downstream as a list).
+describe("syncNodeStatesToStore — Content Recipe / Content Ideas", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+    mockGetWorkflowExecution.mockResolvedValue({ status: "running", nodeStates: {} })
+  })
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  const ideasOutput = {
+    json: [{ title: "one" }, { title: "two" }],
+    text: "CONTENT IDEAS (2)",
+    listResults: ["IDEA 1 of 2: one", "IDEA 2 of 2: two"],
+  }
+
+  it("content-ideas: the briefs land on ideaBriefs, never __listResults or generatedResults", () => {
+    mockNodes = [{ id: "ideas", type: "content-ideas", data: { executionStatus: "running" } }]
+    streamBackendExecution("exec-c1", ctx, vi.fn(), vi.fn())
+    const byId = sync({ ideas: { status: "completed", jobId: "job-i", output: ideasOutput } })
+    expect(byId.ideas).toMatchObject(contentRunResultPatch("content-ideas", ideasOutput)!)
+    expect(byId.ideas.ideaBriefs).toEqual(ideasOutput.listResults)
+    expect(byId.ideas.__listResults).toBeUndefined()
+    expect(byId.ideas.generatedResults).toBeUndefined()
+  })
+
+  it("content-ideas: a later tick on the completed node writes nothing again", () => {
+    mockNodes = [{ id: "ideas", type: "content-ideas", data: { executionStatus: "running" } }]
+    streamBackendExecution("exec-c2", ctx, vi.fn(), vi.fn())
+    sync({ ideas: { status: "completed", output: ideasOutput } })
+    const before = mockNodes[0]!.data
+    sync({ ideas: { status: "completed", output: ideasOutput } })
+    expect(mockNodes[0]!.data).toBe(before)
+  })
+
+  it("content-recipe: the recipe object and its text, no text history", () => {
+    const output = { json: { version: 1, topic: "t" }, text: "CONTENT RECIPE: t" }
+    mockNodes = [{ id: "recipe", type: "content-recipe", data: { executionStatus: "running" } }]
+    streamBackendExecution("exec-c3", ctx, vi.fn(), vi.fn())
+    const byId = sync({ recipe: { status: "completed", output } })
+    expect(byId.recipe).toMatchObject({ executionStatus: "completed", generatedJson: output.json, generatedText: output.text })
+    expect(byId.recipe.generatedResults).toBeUndefined()
   })
 })

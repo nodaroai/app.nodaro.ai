@@ -3,11 +3,11 @@ import { TARGET_HANDLE_ACCEPTS, getTargetHandlesAccepting, ACCEPTS_PARAMETER_PIC
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES, AUDIO_PARAMETER_PICKER_NODE_TYPES } from "../parameter-picker-types"
 
 describe("target-handle-registry", () => {
-  it("generate-image declares all 6 input handles", () => {
+  it("generate-image declares all 7 input handles", () => {
     const handles = TARGET_HANDLE_ACCEPTS["generate-image"]
     expect(handles).toBeDefined()
     const ids = handles!.map(h => h.handleId).sort()
-    expect(ids).toEqual(["assets", "elements", "look", "negative", "prompt", "references"])
+    expect(ids).toEqual(["assets", "elements", "look", "negative", "prompt", "references", "settings"])
   })
 
   it("getTargetHandlesAccepting('mood') returns generate-image.look (mood is a look-family picker)", () => {

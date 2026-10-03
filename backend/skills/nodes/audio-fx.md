@@ -1,7 +1,7 @@
 ---
 node_type: audio-fx
-generated_at: 2026-09-22T09:36:31.407Z
-generated_from: 65b4cddf2
+generated_at: 2026-09-27T12:51:24.278Z
+generated_from: c607aa02c
 ---
 
 # Audio FX
@@ -9,7 +9,7 @@ generated_from: 65b4cddf2
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `audio-fx`
 **Category:** processing
-**Credit cost:** `20` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `audio`
 

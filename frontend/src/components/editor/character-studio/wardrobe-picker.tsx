@@ -1,10 +1,12 @@
 import { useCallback } from "react"
 import { WARDROBE_DIMENSION_ORDER, WARDROBE_CATEGORY_LABELS, WARDROBE_FIELD_BY_DIMENSION, getWardrobeEntriesByDimension, type WardrobeValue, type WardrobeDimension } from "@nodaro/prompts"
 import { pickIds, togglePick } from "@nodaro/shared"
+import { useT } from "@/lib/i18n"
 
 const MULTI: ReadonlySet<WardrobeDimension> = new Set(["headwear", "accessories"])
 
 export function WardrobePicker({ value, onChange }: { value: WardrobeValue; onChange: (v: WardrobeValue) => void }) {
+  const t = useT()
   const toggle = useCallback((dim: WardrobeDimension, id: string) => {
     const field = WARDROBE_FIELD_BY_DIMENSION[dim]
     if (MULTI.has(dim)) {
@@ -26,7 +28,7 @@ export function WardrobePicker({ value, onChange }: { value: WardrobeValue; onCh
     <div className="space-y-3">
       {WARDROBE_DIMENSION_ORDER.map((dim) => (
         <div key={dim}>
-          <div className="text-[10px] text-slate-400 mb-1">{WARDROBE_CATEGORY_LABELS[dim]}{MULTI.has(dim) ? " (multi)" : ""}</div>
+          <div className="text-[10px] text-slate-400 mb-1">{MULTI.has(dim) ? t("common.qualified", { token: WARDROBE_CATEGORY_LABELS[dim], qualifier: t("wardrobe.multiPick") }) : WARDROBE_CATEGORY_LABELS[dim]}</div>
           <div className="flex flex-wrap gap-1.5">
             {getWardrobeEntriesByDimension(dim).map((e) => (
               <button

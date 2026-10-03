@@ -33,9 +33,19 @@
  */
 
 export const VIDEO_ANALYSIS_DURATION_BUCKETS = [60, 180, 360, 600] as const
+/** Pricing grace: a clip at most this far past a bucket edge is priced at that
+ *  bucket. A part chosen as 1:00 in the Video URL chooser downloads at about
+ *  1:03 (the cut lands on keyframes), and must cost a minute, not three. Read
+ *  by pickVideoAnalysisBucket — the ONE bucket picker every price reads (the
+ *  editor estimate, the orchestrator reserve, the cloud routes). */
+export const VIDEO_ANALYSIS_BUCKET_GRACE_SEC = 3
 /** Worker re-check grace: route metadata is integer-rounded, provider durations nominal;
- *  ffprobe floats run 0.05–2 s over. Zero tolerance fails legit videos at 1:00/3:00/6:00/10:00. */
-export const VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC = 3
+ *  ffprobe floats run 0.05–2 s over. Zero tolerance fails legit videos at 1:00/3:00/6:00/10:00.
+ *  It sits ON TOP of the pricing grace: a clip the grace priced into a bucket
+ *  (probe 63 s → 60 s) must still pass the worker gate (bucket + tolerance) at
+ *  its float length (63.4 s). The cloud plugin reads this constant from the
+ *  host app at run time, so its gate moves with it. */
+export const VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC = VIDEO_ANALYSIS_BUCKET_GRACE_SEC + 3
 export const VIDEO_ANALYSIS_MAX_DURATION_SEC = 600
 const WINDOW_LEN = 150, WINDOW_STRIDE = 145, WINDOW_OVERLAP = 5
 export const VIDEO_ANALYSIS_WINDOW = { LEN: WINDOW_LEN, STRIDE: WINDOW_STRIDE, OVERLAP: WINDOW_OVERLAP, SINGLE_MAX: 180 } as const
@@ -113,13 +123,14 @@ export const VIDEO_ANALYSIS_WINDOW = { LEN: WINDOW_LEN, STRIDE: WINDOW_STRIDE, O
 // the legacy `gemini-3-flash` family moves too.
 // Output of the plugin's `scripts/gen-va-buckets.mjs`, pasted verbatim.
 export const VIDEO_ANALYSIS_BUCKET_CREDITS: Record<string, number> = {
-  // Legacy fast-tier model (pre-2026-07) — kept for stored raw-id configs.
+  // Current fast tier (VIDEO_ANALYSIS_TIERS.fast; it was also the fast model
+  // before 2026-07).
   "video-analysis:gemini-3-flash:60s": 181,
   "video-analysis:gemini-3-flash:180s": 186,
   "video-analysis:gemini-3-flash:360s": 516,
   "video-analysis:gemini-3-flash:600s": 849,
-  // Current fast tier — regenerated from the private formula for its backing
-  // model; higher than the legacy fast schedule but still ≤ pro per bucket.
+  // Legacy fast-tier model (backed the fast tier 2026-07 → 2026-07-29) — kept
+  // for stored raw-id configs; still ≤ pro per bucket.
   "video-analysis:gemini-3.6-flash:60s": 205,
   "video-analysis:gemini-3.6-flash:180s": 219,
   "video-analysis:gemini-3.6-flash:360s": 603,
@@ -159,7 +170,7 @@ export function videoAnalysisCreditSegment(modelOrSentinel: string): string {
 }
 
 export function pickVideoAnalysisBucket(durationSec: number): number {
-  for (const b of VIDEO_ANALYSIS_DURATION_BUCKETS) if (durationSec <= b) return b
+  for (const b of VIDEO_ANALYSIS_DURATION_BUCKETS) if (durationSec <= b + VIDEO_ANALYSIS_BUCKET_GRACE_SEC) return b
   return VIDEO_ANALYSIS_MAX_DURATION_SEC
 }
 

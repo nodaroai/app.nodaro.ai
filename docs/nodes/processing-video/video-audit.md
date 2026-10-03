@@ -98,7 +98,8 @@ result: it means the wired analysis held up against the footage.
 AI Audit is **dynamically priced** by duration bucket, on the same bucket
 ladder as [Video Analysis](./video-analysis.md#credit-cost) — the bucket is
 the smallest of **60s / 180s / 360s / 600s** that fits the video's probed
-duration — but split into two **families** selected by whether an analysis
+duration, with the same 3-second pricing grace (a video up to 1:03 is priced as
+≤60s) — but split into two **families** selected by whether an analysis
 was wired in, not by a quality tier. The table below is published as
 `VIDEO_AUDIT_BUCKET_CREDITS` in `packages/shared/src/video-analysis-pricing.ts`
 (the credit prices users are charged) — generated and drift-guarded

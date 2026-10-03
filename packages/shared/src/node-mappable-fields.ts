@@ -1,3 +1,5 @@
+import { settingsInputFields } from "./settings-input.js"
+
 /**
  * Per-node-type list of field names eligible for fieldMappings resolution.
  * Text fields also participate in {} injection when the resolver sees a
@@ -5,7 +7,8 @@
  * mapped source's value verbatim.
  */
 export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> = {
-  "generate-image":      ["prompt", "style", "negativePrompt"],
+  // + the fields its Settings input sets (settings-input.ts).
+  "generate-image":      ["prompt", "style", "negativePrompt", ...settingsInputFields("generate-image")],
   "edit-image":          ["prompt", "style", "negativePrompt"],
   "image-to-image":      ["prompt", "style", "negativePrompt"],
   "modify-image":        ["prompt", "style", "negativePrompt"],
@@ -14,10 +17,13 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   // Unified t2v/i2v node — replaced the two deprecated keys above (kept only
   // for back-compat with un-migrated workflow JSON). Mirrors text-to-video so
   // fieldMappings/{} injection AND missing-ref detection work on the live node.
-  "generate-video":      ["prompt", "negativePrompt"],
+  // + the fields its Settings input sets (settings-input.ts): a Generation
+  // Settings node wired there overrides the node's own aspect ratio, duration
+  // and model at run time, through the same resolver as a field mapping.
+  "generate-video":      ["prompt", "negativePrompt", ...settingsInputFields("generate-video")],
   // Trimmed multi-segment stitch variant of generate-video — prompt only, no
-  // negativePrompt field on the node.
-  "generate-video-pro":  ["prompt"],
+  // negativePrompt field on the node; + the fields its Settings input sets.
+  "generate-video-pro":  ["prompt", ...settingsInputFields("generate-video-pro")],
   // Span-replace sibling of generate-video-pro — prompt only, no
   // negativePrompt field on the node.
   "edit-video-pro":      ["prompt"],
@@ -48,7 +54,9 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   "edit-3d-scene":       ["editPrompt"],
   "pro-3d-render":       ["scenePrompt"],
   "motion-graphics":     ["motionPrompt"],
-  "generate-script":     ["styleGuide"],
+  // Every field the panel offers a source for. Numbers arrive as text from a
+  // Scene Count / Duration node; readScriptSettings coerces them on both engines.
+  "generate-script":     ["styleGuide", "tone", "sceneCount", "targetLength"],
   "speech-to-video":     ["prompt", "negativePrompt"],
   "extend-video":        ["prompt"],
   "motion-transfer":     ["prompt"],
@@ -71,6 +79,14 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   "web-scrape":          ["query", "url", "target"],
   "meta-ads-scrape":     ["query", "pageUrls"],
   "instagram-scrape":    ["targets"],
+  // Content Recipe's material arrives on its `in` wire and the post link on
+  // its `link` wire (a Video URL node's page link) — only the focus is a field.
+  "content-recipe":      ["focus"],
+  // Content Ideas folds its recipes on the `recipes` wire (FAN_IN_TARGETS);
+  // the brand profile and the language are fields a Text node can feed.
+  "content-ideas":       ["brand", "language"],
+  // Social Search: the keyword or account a Text node (or a List item) feeds.
+  "social-search":       ["query"],
 }
 
 /** suno-generate secondary text fields exposed as `field-<key>` canvas handles. */

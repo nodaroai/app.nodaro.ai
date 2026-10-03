@@ -6,6 +6,8 @@
 
 The Held Prop parameter node names a non-weapon object the subject carries or interacts with — phone, umbrella, bouquet, briefcase, coffee cup, etc. Adds narrative texture without dominating the composition. Injected into the consumer's prompt via the `cinematography` handle.
 
+Every option is shown with its own photo in the picker, on the node card and in a published app.
+
 ## Configuration
 
 | Field     | Type   | Default        | Description                                            |

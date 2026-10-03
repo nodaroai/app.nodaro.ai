@@ -9,7 +9,8 @@ import { isCloud } from "@/lib/edition"
 import { useAuth } from "@/hooks/use-auth"
 import { formatCreditUnits, creditUnits } from "@/lib/credit-units"
 import { toast } from "sonner"
-import { useT, tx } from "@/lib/i18n"
+import { labelOf, useT, tx } from "@/lib/i18n"
+import { IMAGE_CRITIC_MODE_LABEL } from "@/lib/image-critic-mode-copy"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -129,7 +130,7 @@ function CriticOutputPreview({ outputData }: { outputData: Record<string, unknow
         )}
         {mode && (
           <span className="text-xs text-gray-500 dark:text-[#94A3B8]">
-            {t("exec.criticMode", { mode })}
+            {t("exec.criticMode", { mode: labelOf(IMAGE_CRITIC_MODE_LABEL, mode, t) })}
           </span>
         )}
       </div>
@@ -145,7 +146,7 @@ function CriticOutputPreview({ outputData }: { outputData: Record<string, unknow
           <ul className="space-y-1">
             {perModeEntries.map(([m, r]) => (
               <li key={m} className="text-xs text-gray-700 dark:text-[#E2E8F0]">
-                <span className="font-mono font-semibold">{m}</span>
+                <span className="font-semibold">{labelOf(IMAGE_CRITIC_MODE_LABEL, m, t)}</span>
                 <span className="mx-2 text-gray-400 dark:text-[#64748B]">{r.score.toFixed(2)}</span>
                 <span>{r.feedback}</span>
               </li>

@@ -1,7 +1,7 @@
 ---
 node_type: generate-script
-generated_at: 2026-09-22T09:36:30.700Z
-generated_from: 65b4cddf2
+generated_at: 2026-09-27T12:51:23.125Z
+generated_from: c607aa02c
 ---
 
 # Generate Script
@@ -9,8 +9,8 @@ generated_from: 65b4cddf2
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `generate-script`
 **Category:** ai
-**Credit cost:** `10-30` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
-**Inputs (target handles):** `prompt`
+**Credit cost:** `10-30` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Inputs (target handles):** `prompt`, `field-tone`, `field-styleGuide`, `field-sceneCount`, `field-targetLength`
 **Outputs (source handles):** `scenes`, `images`, `dialogue`, `music`, `sfx`, `characters`, `locations`
 
 **Required data fields:**
@@ -57,7 +57,13 @@ generated_from: 65b4cddf2
 
 ## When to use
 
-(Add prose here. Auto-gen will preserve it across regenerations.)
+Turns a topic into a structured, scene-by-scene script (visuals, action, dialogue, image prompt per scene). The topic comes from a Text node (or any text output) wired into `prompt`, or from `data.prompt`.
+
+Four settings inputs set one panel field each at run time, over the typed value:
+- `field-tone` — a `tone` node or any text → `tone` (cut to 200 characters).
+- `field-styleGuide` — a `style-guide` node or any text → `styleGuide` (sent with the topic; `{Node Label}` references resolve).
+- `field-sceneCount` — a `scene-count` node → `sceneCount` (a whole number, clamped to 1–20).
+- `field-targetLength` — a `duration` node → `targetLength` (seconds, clamped to 5–600).
 
 <!-- AUTO-GEN:START mcp-call -->
 **MCP tool:** `generate_script`
@@ -67,12 +73,15 @@ generated_from: 65b4cddf2
 - `scene_count`
 - `tone`
 - `target_duration`
+- `style_guide`
 - `model`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas
 
-(Add prose here.)
+- A run with no topic is refused before anything is billed (`prompt_required`). A Tone or Style Guide node is not a topic.
+- Wire settings nodes into their `field-*` input, not into `prompt`: parameter nodes wired into `prompt` never become the topic.
+- `structure` (freeform / 8-step / custom) is stored but not used by the generator.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

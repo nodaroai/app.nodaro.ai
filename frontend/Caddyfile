@@ -204,6 +204,9 @@
 	# neither the browser nor the CDN in front keeps a 404 across a deploy.
 	handle /picker-art/* {
 		root * /app/frontend/dist
+		# Public artwork the API hands out as absolute imageUrls — other apps
+		# load it too (<img>, fetch, canvas), so any origin may read it.
+		header Access-Control-Allow-Origin "*"
 		@picker_art_hashed {
 			file
 			path_regexp \.[0-9a-f]{8}\.webp$

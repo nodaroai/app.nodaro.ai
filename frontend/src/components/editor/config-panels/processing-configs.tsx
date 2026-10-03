@@ -1,6 +1,6 @@
 "use client"
 
-import { useLocalizeNodeLabel, useLocalizeHandleLabel } from "@/lib/i18n/labels"
+import { useLocalizeNodeLabel, useLocalizeHandleLabel, useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
@@ -22,7 +22,9 @@ import {
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { COMPOSITION_RATIOS, COLLAGE_ASPECT_RATIOS } from "./model-options"
 import { CombineTransitionPicker } from "@/lib/picker-ui"
-import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, CAPTION_LOOK_IDS, DEFAULT_CAPTION_LOOK, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_LEVER_BOUNDS, SUPPORTED_FONT_NAMES, type CaptionLookId, type CaptionLookLevers, type SupportedFontName } from "@nodaro/shared"
+import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, CAPTION_LOOK_IDS, DEFAULT_CAPTION_LOOK, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_LEVER_BOUNDS, SUPPORTED_FONT_NAMES, type CaptionLookId, type CaptionLookLevers, type SupportedFontName, speedRampCreditId } from "@nodaro/shared"
+import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { hasCredits } from "@/lib/edition"
 import { resolveCaptionPanelLevers } from "../caption-panel-levers"
 import { isCloud } from "@/lib/edition"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -107,6 +109,7 @@ const CROSSFADE_CURVE_KEYS: Record<
 
 export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<CombineVideosData>) {
   const t = useT()
+  const localizeOption = useLocalizeOptionLabel()
   // Fail-safe (CLAUDE.md pitfall-5 pattern): the manual trim fields are
   // HIDDEN under the smart methods (2026-07-24 — manual and smart are
   // ALTERNATIVE boundary-cut methods, not layers), so custom manual values
@@ -133,6 +136,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         <CombineTransitionPicker
           value={data.transition}
           onChange={(id) => onUpdate({ transition: id })}
+          localizeLabel={localizeOption}
         />
       </div>
 
@@ -265,7 +269,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         <div className="flex flex-col gap-2 ps-3 border-s-2 border-muted-foreground/20">
           <div>
             <Label htmlFor="smart-cut-prev" className="text-[11px] text-muted-foreground">
-              {t("proccfg.searchWindowEndOfPreviousClip", { n: data.smartCutFramesPrev ?? SMART_CUT_WINDOW_DEFAULT })}
+              {t((data.smartCutFramesPrev ?? SMART_CUT_WINDOW_DEFAULT) === 1 ? "proccfg.searchWindowEndOfPreviousClipOne" : "proccfg.searchWindowEndOfPreviousClip", { n: data.smartCutFramesPrev ?? SMART_CUT_WINDOW_DEFAULT })}
             </Label>
             <Input
               id="smart-cut-prev"
@@ -282,7 +286,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
           </div>
           <div>
             <Label htmlFor="smart-cut-next" className="text-[11px] text-muted-foreground">
-              {t("proccfg.searchWindowStartOfNextClip", { n: data.smartCutFramesNext ?? SMART_CUT_WINDOW_DEFAULT })}
+              {t((data.smartCutFramesNext ?? SMART_CUT_WINDOW_DEFAULT) === 1 ? "proccfg.searchWindowStartOfNextClipOne" : "proccfg.searchWindowStartOfNextClip", { n: data.smartCutFramesNext ?? SMART_CUT_WINDOW_DEFAULT })}
             </Label>
             <Input
               id="smart-cut-next"
@@ -896,6 +900,39 @@ export function ApplyEdlConfig({ data, onUpdate }: ConfigProps<ApplyEdlData>) {
 
 const EDIT_PLAN_ROLES = ["auto", "master-audio", "camera", "wide", "screen"] as const
 
+/** A source's hand-set offset, in seconds (stored as `offsetMs`). A draft is
+ *  kept while typing ("-", "1.") and committed on blur / Enter; empty clears
+ *  it, so Audio Sync's measurement applies. */
+function EditPlanOffsetInput({ offsetMs, onCommit, ariaLabel, placeholder }: {
+  offsetMs: number | undefined
+  onCommit: (seconds: number | undefined) => void
+  ariaLabel: string
+  placeholder: string
+}) {
+  const shown = typeof offsetMs === "number" ? String(offsetMs / 1000) : ""
+  const [draft, setDraft] = useState(shown)
+  useEffect(() => setDraft(shown), [shown])
+  const commit = () => {
+    const secs = draft.trim() === "" ? undefined : Number(draft)
+    if (secs === undefined) onCommit(undefined)
+    else if (Number.isFinite(secs)) onCommit(secs)
+    else setDraft(shown)
+  }
+  return (
+    <Input
+      type="text"
+      inputMode="decimal"
+      aria-label={ariaLabel}
+      placeholder={placeholder}
+      className="h-7 w-20 text-xs"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") commit() }}
+    />
+  )
+}
+
 export function EditPlanConfig({ data, onUpdate, sources }: ConfigProps<EditPlanNodeData>) {
   const t = useT()
   const mode = data.mode ?? "tighten"
@@ -913,6 +950,20 @@ export function EditPlanConfig({ data, onUpdate, sources }: ConfigProps<EditPlan
       else next[nodeId] = rest
     } else {
       next[nodeId] = { ...existing, role: role as EditPlanSourceConfig["role"] }
+    }
+    onUpdate({ sourceConfig: next })
+  }
+
+  // A hand-set offset always wins over Audio Sync's measurement (B4).
+  const setSourceOffset = (nodeId: string, seconds: number | undefined) => {
+    const next: Record<string, EditPlanSourceConfig> = { ...sourceConfig }
+    const existing = next[nodeId] ?? {}
+    if (seconds === undefined) {
+      const { offsetMs: _drop, ...rest } = existing
+      if (Object.keys(rest).length === 0) delete next[nodeId]
+      else next[nodeId] = rest
+    } else {
+      next[nodeId] = { ...existing, offsetMs: Math.round(seconds * 1000) }
     }
     onUpdate({ sourceConfig: next })
   }
@@ -1018,19 +1069,30 @@ export function EditPlanConfig({ data, onUpdate, sources }: ConfigProps<EditPlan
           mediaType="any"
           emptyMessage={t("proccfg.editPlanSourcesEmpty")}
           renderRowExtra={(entry) => (
-            <Select
-              value={sourceConfig[entry.id]?.role ?? "auto"}
-              onValueChange={(v) => setSourceRole(entry.id, v)}
-            >
-              <SelectTrigger aria-label={t("proccfg.editPlanRoleAria")} className="h-7 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {EDIT_PLAN_ROLES.map((r) => (
-                  <SelectItem key={r} value={r}>{t(`proccfg.editPlanRole.${r}` as MessageKey)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1.5">
+              <Select
+                value={sourceConfig[entry.id]?.role ?? "auto"}
+                onValueChange={(v) => setSourceRole(entry.id, v)}
+              >
+                <SelectTrigger aria-label={t("proccfg.editPlanRoleAria")} className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {EDIT_PLAN_ROLES.map((r) => (
+                    <SelectItem key={r} value={r}>{t(`proccfg.editPlanRole.${r}` as MessageKey)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <EditPlanOffsetInput
+                offsetMs={sourceConfig[entry.id]?.offsetMs}
+                onCommit={(secs) => setSourceOffset(entry.id, secs)}
+                ariaLabel={t("proccfg.editPlanOffsetAria")}
+                placeholder={t("proccfg.editPlanOffsetPlaceholder")}
+              />
+            </div>
           )}
         />
+        {mediaSources.length > 0 && (
+          <p className="text-[11px] text-muted-foreground">{t("proccfg.editPlanOffsetHint")}</p>
+        )}
       </div>
     </div>
   )
@@ -1591,6 +1653,9 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
   const audioMode: "pitch-preserve" | "pitch-shift" | "drop" =
     data.audioMode ?? (data.adjustAudio === false ? "drop" : "pitch-preserve")
   const quality = data.quality ?? "fast"
+  // Live prices for both tiers (the ids the route and the orchestrator reserve).
+  const fastCredits = useModelCredits(speedRampCreditId("fast"), 20)
+  const smoothCredits = useModelCredits(speedRampCreditId("smooth"), 50)
   const reverse = data.reverse ?? false
   const ramps = data.ramps ?? []
   const usingRamps = ramps.length > 0
@@ -1664,8 +1729,9 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
         <Select value={quality} onValueChange={(v) => onUpdate({ quality: v as "fast" | "smooth" })}>
           <SelectTrigger aria-label={t("proccfg.frameQuality")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="fast">{t("proccfg.fastFrameDuplicate2Cr")}</SelectItem>
-            <SelectItem value="smooth">{t("proccfg.smoothMotionInterpolation5Cr")}</SelectItem>
+            {/* A price only where there is billing (a community build has none). */}
+            <SelectItem value="fast">{hasCredits() ? t("proccfg.fastFrameDuplicateCr", { n: fastCredits }) : t("proccfg.fastFrameDuplicate")}</SelectItem>
+            <SelectItem value="smooth">{hasCredits() ? t("proccfg.smoothMotionInterpolationCr", { n: smoothCredits }) : t("proccfg.smoothMotionInterpolation")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground mt-1">

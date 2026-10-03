@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-09-22T09:36:30.710Z
-generated_from: 65b4cddf2
+generated_at: 2026-09-28T22:47:00.889Z
+generated_from: c77a445b3
 ---
 
 # generate-image
@@ -9,8 +9,8 @@ generated_from: 65b4cddf2
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `generate-image`
 **Category:** ai
-**Credit cost:** `2-620` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
-**Inputs (target handles):** `prompt`, `negative`, `references`, `assets`, `elements`, `look`
+**Credit cost:** `2-620` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Inputs (target handles):** `prompt`, `negative`, `references`, `assets`, `elements`, `look`, `settings`
 **Outputs (source handles):** `image`
 
 **Required data fields:**
@@ -120,6 +120,7 @@ Aspect ratios are model-specific: for 21:9 use a model whose `aspectRatios` incl
 - Field name is `generatedImageUrl` — NOT `imageUrl`, `outputUrl`, or `result.url`. The frontend reads only `generatedImageUrl` (or `generatedResults[].url`); anything else renders an empty placeholder.
 - `executionStatus: "completed"` is REQUIRED for the node to mark itself complete and propagate downstream. The image itself will still render via the URL fallback chain (`activeResult?.url ?? generatedImageUrl ?? url`), but status badges, downstream wiring, and "run from here" will treat the node as incomplete without it.
 - For 4K output, only `nano-banana-pro` currently supports it.
+- The `settings` input takes Aspect Ratio and Provider nodes (one input for all). Each wired value replaces the node's own `aspectRatio` or `provider` at run time, fitted to the model; a wired Provider also replaces `providers` (the node runs only that model, once) and must name an image model, or the run stops before anything is charged.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

@@ -25,6 +25,8 @@ vi.mock("sonner", () => ({
     error: (...args: unknown[]) => mockToastError(...args),
     success: (...args: unknown[]) => mockToastSuccess(...args),
     info: (...args: unknown[]) => mockToastInfo(...args),
+    // The server-run stream warns once when it loses the connection.
+    warning: vi.fn(),
   },
 }))
 
@@ -475,9 +477,9 @@ describe("restorePollingForRunningJobs", () => {
   })
 
   // 10. Poll failure counter - after 5 consecutive failures, stops and marks error
-  it("marks node as failed after 5 consecutive poll failures", async () => {
+  it("marks node as failed, with a message, after 5 answers that the job is gone", async () => {
     mockNodes = [makeNode("n1")]
-    mockGetJobStatus.mockRejectedValue(new Error("Network error"))
+    mockGetJobStatus.mockRejectedValue(Object.assign(new Error("Job not found"), { status: 404 }))
 
     const ctx = makeCtx()
     const setIsRunning = vi.fn()
@@ -493,12 +495,41 @@ describe("restorePollingForRunningJobs", () => {
       await vi.advanceTimersByTimeAsync(3000)
     }
 
-    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", {
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({
       executionStatus: "failed",
+      errorMessage: expect.stringMatching(/can't be found/),
       currentJobId: undefined,
       currentJobProgress: undefined,
-    })
+    }))
     expect(ctx.untrackInterval).toHaveBeenCalled()
+  })
+
+  it("a lost connection never fails the node: the poll keeps going and lands the result", async () => {
+    mockNodes = [makeNode("n1", "generate-image", { generatedResults: [] })]
+    let callCount = 0
+    mockGetJobStatus.mockImplementation(async () => {
+      callCount++
+      if (callCount <= 12) throw new TypeError("Failed to fetch")
+      return { status: "completed", output_data: { imageUrl: "https://cdn.example.com/late.png" } }
+    })
+
+    const ctx = makeCtx()
+    restorePollingForRunningJobs(
+      [{ nodeId: "n1", jobId: "j1", nodeType: "generate-image" }],
+      ctx,
+      vi.fn(),
+    )
+
+    for (let i = 0; i < 12; i++) await vi.advanceTimersByTimeAsync(3000)
+    const failedPatches = mockUpdateNodeData.mock.calls.filter(([, patch]) => patch.executionStatus === "failed")
+    expect(failedPatches).toEqual([])
+    expect(ctx.untrackInterval).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({
+      executionStatus: "completed",
+      generatedImageUrl: "https://cdn.example.com/late.png",
+    }))
   })
 
   // 11. Poll failures reset on successful poll

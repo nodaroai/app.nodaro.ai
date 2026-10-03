@@ -24,7 +24,9 @@ import type { SocialMediaPlatform } from "@/lib/social-media-specs"
 function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as SocialMediaFormatData
-  const credits = useModelCredits("ffmpeg", 1)
+  // The id the route reserves (its own row), not the generic "ffmpeg" one,
+  // which quoted half the charge.
+  const credits = useModelCredits("social-media-format", 20)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

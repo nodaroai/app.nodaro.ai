@@ -39,7 +39,7 @@ describe("i18n translate()", () => {
   it("falls back to English when the locale's dict has no match for a key", () => {
     // Every locale now has a registered dict (empty is fine for most); a
     // locale whose dict doesn't have this key still falls back to English.
-    expect(translate("pt-BR", "nav.integrations")).toBe("Integrations")
+    expect(translate("de", "nav.integrations")).toBe("Integrations")
   })
 
   it("falls back to English when a key is missing in the locale", () => {

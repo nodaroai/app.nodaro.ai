@@ -1,7 +1,7 @@
 ---
 node_type: transition
-generated_at: 2026-09-25T11:17:11.210Z
-generated_from: 073ff7dce
+generated_at: 2026-09-27T12:51:22.531Z
+generated_from: c607aa02c
 ---
 
 # Transition
@@ -9,7 +9,7 @@ generated_from: 073ff7dce
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `transition`
 **Category:** parameter
-**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `out`
 

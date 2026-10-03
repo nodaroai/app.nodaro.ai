@@ -38,20 +38,22 @@ export function setStickyParameterDisplayMode(mode: ParameterDisplayMode): void 
  *  cross-origin iframe (embeddable published apps) or private mode can make
  *  `localStorage` THROW on access, so every read/write is guarded.
  *
- *  Pref key: `nodaro:person-picker-mode` (per-device). Default: compact.
+ *  Pref key: `nodaro:person-picker-view` (per-device). Default: detailed —
+ *  the open, by-topic view. (The key replaced `nodaro:person-picker-mode`,
+ *  whose default was compact, so every device starts on the open view once.)
  */
 
 export type PersonPickerMode = "compact" | "detailed"
 
-const PERSON_PICKER_MODE_KEY = "nodaro:person-picker-mode"
+const PERSON_PICKER_MODE_KEY = "nodaro:person-picker-view"
 
 export function getStickyPersonPickerMode(): PersonPickerMode {
-  if (typeof window === "undefined") return "compact"
+  if (typeof window === "undefined") return "detailed"
   try {
-    return window.localStorage.getItem(PERSON_PICKER_MODE_KEY) === "detailed" ? "detailed" : "compact"
+    return window.localStorage.getItem(PERSON_PICKER_MODE_KEY) === "compact" ? "compact" : "detailed"
   } catch {
     // localStorage may throw in private mode / cross-origin iframe — fall through.
-    return "compact"
+    return "detailed"
   }
 }
 

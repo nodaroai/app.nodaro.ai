@@ -1,5 +1,6 @@
 import { findWordlessTranscriptFeeds } from "@nodaro/shared"
 import type { AddCaptionsData, WorkflowNode, WorkflowEdge } from "@/types/nodes"
+import { nodeRunError, nodeRunText } from "./node-run-message"
 
 /**
  * Single-node Run pre-flight for Add Captions — the mirror of the route's
@@ -28,7 +29,7 @@ export function addCaptionsPreflight(
   const hasTranscript = !!sources.transcript
   const mayTranscribe = d.autoTranscribe !== false
   if (!text && !hasTranscript && !mayTranscribe) {
-    return `Node "${d.label}": no caption source — provide text or re-enable auto-transcribe`
+    return nodeRunError(d.label, "nodeRun.noCaptionSource")
   }
   return null
 }
@@ -55,5 +56,5 @@ export function wordTimingsPreflight(
   const label =
     (executing.find((n) => n.id === hit.transcribeNodeId)?.data as { label?: string } | undefined)?.label ??
     hit.transcribeNodeId
-  return `Node "${label}": ${hit.message}`
+  return nodeRunText(label, hit.message)
 }

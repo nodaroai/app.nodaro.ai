@@ -1,7 +1,7 @@
 ---
 node_type: apply-edl
-generated_at: 2026-09-21T19:12:09.647Z
-generated_from: 09788c987
+generated_at: 2026-09-27T12:51:23.895Z
+generated_from: c607aa02c
 ---
 
 # Apply EDL
@@ -9,7 +9,7 @@ generated_from: 09788c987
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `apply-edl`
 **Category:** processing
-**Credit cost:** `per-minute` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `per-minute` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `edl`, `transcript`, `sources`
 **Outputs (source handles):** `media`, `json`
 

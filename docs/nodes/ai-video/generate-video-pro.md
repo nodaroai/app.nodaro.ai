@@ -32,6 +32,7 @@ with `503 nodaro_connection_required`.
 | `assets` | target | Characters / objects / creatures / locations / faces | Identity references — their images join the reference pool (carried into **every segment** so identity persists across the whole video) and `@mentions` in the prompt resolve exactly as on Generate Video |
 | `elements` | target | Element pickers | Prompt-fragment injection, identical to Generate Video |
 | `look` | target | Look/cinematography pickers | Prompt-fragment injection, identical to Generate Video |
+| `settings` | target | Aspect Ratio / Duration / Provider / Motion | Sets the aspect ratio, the total duration and the model from a wired node, and adds a Motion clause to every segment's prompt, as on [Generate Video](generate-video.md#settings-input) — except that a wired Duration is the **total** length to stitch (clamped to this node's range, like the Duration field), and a wired Provider must name one of this node's models |
 | `video` | source | n/a | Output — the final stitched video |
 
 Generate Video Pro exposes **exactly Generate Video's input handles** — same names, same accepted producers (guarded by an automated parity test). The only behavioral deltas are the ones long-video stitching requires: `videoReferences` is the single Extend Source rather than a style-reference pool, reference images/audio are carried into every segment rather than a single call, and a lone `@mention` stays a reference instead of being promoted to the start frame (identity must persist beyond segment 1).
@@ -219,7 +220,7 @@ reserve = 100 (fee) + ceil(refPerSec × (K × T + D))
 
 where **K** is the number of regenerated segments, **D** the sum of their planned lengths, and **T** the Continuation context setting. Every regenerated segment — the first included — bills at the reference rate, because each re-seeds off the previous footage (the kept prefix for the first one). `fromSegment = 1` degenerates to the fresh-run formula over the same fixed lengths. At commit, only regenerated segments that actually completed are charged; a continuation that produced nothing new refunds in full.
 
-**Worked example (720p, `seedance-2`, the 60s / 5-segment plan above).** Stopped after segment 3 with segment 4 in flight: the delivered video covers segments 1–3, billed for 4 dispatched segments — `10 + ceil(10.25 × 14) + ceil(6.25 × (3 × 2 + 36)) = 10 + 144 + 263 = 417` credits, the rest of the 508-credit reserve refunded. Continuing from segment 4 reserves `10 + ceil(6.25 × (2 × 2 + 24)) = 10 + 175 = 185` credits for the two regenerated segments.
+**Worked example (720p, `seedance-2`, the 60s / 5-segment plan above).** Stopped after segment 3 with segment 4 in flight: the delivered video covers segments 1–3, billed for 4 dispatched segments — `100 + ceil(102.5 × 14) + ceil(62.5 × (3 × 2 + 36)) = 100 + 1435 + 2625 = 4160` credits, the rest of the 5076-credit reserve refunded. Continuing from segment 4 reserves `100 + ceil(62.5 × (2 × 2 + 24)) = 100 + 1750 = 1850` credits for the two regenerated segments.
 
 ## Smart cut
 

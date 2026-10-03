@@ -50,20 +50,20 @@ A "Powered by SwitchX" attribution is shown alongside the output, per Beeble's b
 
 Cost scales with the clip's length in **30-frame blocks × output resolution** — the same unit the provider meters in (≈1 second per block at 30fps). The node reserves the block bucket before the run.
 
-Per 30-frame block: **5 credits at 720p, 15 credits at 1080p.**
+Per 30-frame block: **50 credits at 720p, 150 credits at 1080p.**
 
 | Length | 720p | 1080p |
 |--------|------|-------|
-| ≤ 30 frames (~1s) | 5 | 15 |
-| ≤ 60 frames (~2s) | 10 | 30 |
-| ≤ 90 frames (~3s) | 15 | 45 |
-| ≤ 120 frames (~4s) | 20 | 60 |
-| ≤ 150 frames (~5s) | 25 | 75 |
-| ≤ 180 frames (~6s) | 30 | 90 |
-| ≤ 210 frames (~7s) | 35 | 105 |
-| ≤ 240 frames (~8s) | 40 | 120 |
+| ≤ 30 frames (~1s) | 50 | 150 |
+| ≤ 60 frames (~2s) | 100 | 300 |
+| ≤ 90 frames (~3s) | 150 | 450 |
+| ≤ 120 frames (~4s) | 200 | 600 |
+| ≤ 150 frames (~5s) | 250 | 750 |
+| ≤ 180 frames (~6s) | 300 | 900 |
+| ≤ 210 frames (~7s) | 350 | 1,050 |
+| ≤ 240 frames (~8s) | 400 | 1,200 |
 
-A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 1080p clip spans 5 blocks → 75 credits. The editor shows a typical-length estimate; the exact charge is computed from the clip's real frame count when the job runs.
+A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 1080p clip spans 5 blocks → 750 credits. The editor shows a typical-length estimate; the exact charge is computed from the clip's real frame count when the job runs.
 
 ## Best Practices
 

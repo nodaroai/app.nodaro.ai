@@ -1,5 +1,5 @@
 import { composeCameraMotionHintFromConnections, composeTransitionHintFromConnections, readTransitionOptionValues, type TransitionTiming, composeCharacterFxHintFromConnections, type CharacterFxTiming, composeCharacterMotionHintFromConnections, type CharacterMotionTiming, getParameterPromptHint } from "@nodaro/prompts"
-import { extractReferencedLabels, canonicalVarName, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES } from "@nodaro/shared"
+import { extractReferencedLabels, canonicalVarName, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES, isSettingsHintEdge } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge, TransitionData, CharacterFxData, CharacterMotionData } from "@/types/nodes"
 import { collectCharacterElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
 
@@ -140,9 +140,12 @@ export function collectCinematographyHints(
   //  - injectLook === false     → drop the Look family (look / cinematography / style)
   //  - injectElements === false → drop the `elements` handle + character-borne elements
   // Default ON for both (undefined/true).
-  const consumerData = nodes.find((n) => n.id === consumerNodeId)?.data as
+  const consumerNode = nodes.find((n) => n.id === consumerNodeId)
+  const consumerData = consumerNode?.data as
     | { injectLook?: boolean; injectElements?: boolean; prompt?: string; negativePrompt?: string }
     | undefined
+  const consumerType = consumerNode?.type ?? ""
+  const typeOf = (id: string) => nodes.find((n) => n.id === id)?.type
   const lookOff = consumerData?.injectLook === false
   const elementsOff = consumerData?.injectElements === false
   // Used-as-variable suppression: a source the author placed explicitly via
@@ -154,8 +157,10 @@ export function collectCinematographyHints(
     if (edge.target !== consumerNodeId) continue
     // Generate Image v2.1 splits the legacy `cinematography` / `style` handle
     // into `look` and `elements`. Accept all four so pre-migration AND
-    // post-migration workflows still inject hints.
+    // post-migration workflows still inject hints — plus a prompt-clause
+    // setting (Motion) in the Settings input, which joins the Look family.
     if (
+      !isSettingsHintEdge(edge, consumerType, edges, typeOf) &&
       edge.targetHandle !== "cinematography" &&
       edge.targetHandle !== "style" &&
       edge.targetHandle !== "look" &&

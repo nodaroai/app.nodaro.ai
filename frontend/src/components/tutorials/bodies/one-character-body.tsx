@@ -55,9 +55,11 @@ function sourceRole(source: RecipeSource, t: TFunction): string {
 /** A `{image:N}` / `{image:N:part}` chip: teal marks a whole source, pink a borrowed fragment. */
 function TokenChip({ n, qualifier, small = false }: { n: number; qualifier?: string | null; small?: boolean }) {
   const bare = !qualifier
+  // Prompt syntax, not copy: the chip shows the token exactly as it is typed.
+  const token = bare ? `{image:${n}}` : `{image:${n}:${qualifier}}`
   return (
     <span className="occ-token" data-bare={bare} data-small={small}>
-      {bare ? `{image:${n}}` : `{image:${n}:${qualifier}}`}
+      {token}
     </span>
   )
 }

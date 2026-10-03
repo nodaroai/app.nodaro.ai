@@ -279,9 +279,13 @@ export type PluginTriggerFireResult =
    * paused or not a plugin lane. `refused`: the owner may no longer run the
    * workflow (one visible failed row is recorded). `degraded`: the payer could
    * not be resolved safely, so nothing was billed or run. `throttled`: the
-   * trigger is over its rate or already has the most runs in flight.
+   * trigger is over its rate or already has the most runs in flight —
+   * `throttle` says which (absent on an older host): a run in flight ends
+   * soon, so that event may be offered again; a trigger over its rate is a
+   * flood, and its events are dropped. An account fires only while its
+   * stored status is "active" — any other status reads as `inactive`.
    */
-  | { fired: false; reason: "duplicate" | "inactive" | "refused" | "degraded" | "throttled" }
+  | { fired: false; reason: "duplicate" | "inactive" | "refused" | "degraded" | "throttled"; throttle?: "rate" | "in_flight" }
 
 /**
  * Trigger lanes for a hosted daemon — in the daemon host's toolkit only.

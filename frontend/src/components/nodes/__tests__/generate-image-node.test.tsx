@@ -231,9 +231,9 @@ describe("GenerateImageNode", () => {
     expect(screen.getByTestId("base-node")).toHaveAttribute("data-id", "gen-42")
   })
 
-  it("has correct handles (v2.1: 6 typed inputs + image output)", () => {
+  it("has correct handles (v2.1: 6 typed inputs + Settings + image output)", () => {
     renderNode()
-    for (const id of ["prompt", "negative", "references", "assets", "elements", "look"]) {
+    for (const id of ["prompt", "negative", "references", "assets", "elements", "look", "settings"]) {
       const h = screen.getByTestId(`handle-${id}`)
       expect(h).toHaveAttribute("data-type", "target")
       expect(h).toHaveAttribute("data-position", "left")

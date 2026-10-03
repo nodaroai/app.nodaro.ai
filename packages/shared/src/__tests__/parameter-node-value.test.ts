@@ -143,8 +143,9 @@ describe("getParameterValue — character-motion", () => {
 
 describe("VIDEO_ONLY_PARAMETER_NODE_TYPES", () => {
   it("names exactly the pickers a still image must never receive", () => {
+    // + motion: how much the shot moves (a Settings-input clause on video nodes).
     expect([...VIDEO_ONLY_PARAMETER_NODE_TYPES].sort()).toEqual(
-      ["camera-motion", "character-fx", "character-motion", "temporal", "transition"],
+      ["camera-motion", "character-fx", "character-motion", "motion", "temporal", "transition"],
     )
   })
   it("is a subset of PARAMETER_NODE_TYPES", () => {

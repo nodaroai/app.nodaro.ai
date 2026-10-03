@@ -12,6 +12,8 @@ vi.mock("@/lib/api", () => ({
   uploadAudio: vi.fn(),
 }))
 
+// The modal reads the live voice price (react-query); this suite checks copy only.
+vi.mock("@/hooks/use-model-credit-cost", () => ({ useModelCredits: () => 200 }))
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ updateNodeData: () => {} }),

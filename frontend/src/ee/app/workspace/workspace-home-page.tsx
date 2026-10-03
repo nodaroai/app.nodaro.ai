@@ -8,6 +8,7 @@ import { getActiveWorkspaceId, setActiveWorkspace } from "@/lib/workspace-contex
 import { useVocabulary } from "@/ee/hooks/use-workspace"
 import { useT, type TFunction } from "@/lib/i18n"
 import { OrgApiError, getWorkspace } from "@/ee/lib/orgs-api"
+import { genderedWorkspaceKey, workspaceGender, workspaceSentence, type WorkspaceGender } from "@/ee/lib/org-vocabulary"
 
 /**
  * `/w/:id` — the workspace someone just joined or switched into.
@@ -28,6 +29,7 @@ export default function WorkspaceHomePage() {
   const t = useT()
   const { id = "" } = useParams<{ id: string }>()
   const vocabulary = useVocabulary()
+  const gender = workspaceGender(vocabulary, t)
 
   const { data, error, isLoading } = useQuery({
     queryKey: queryKeys.orgs.workspace(id),
@@ -50,8 +52,8 @@ export default function WorkspaceHomePage() {
     return (
       <div className="mx-auto max-w-xl p-6">
         <Card className="space-y-4 p-8">
-          <h1 className="text-xl font-semibold">{title(code, vocabulary.workspace ?? t("org.workspaceWord"), t)}</h1>
-          <p className="text-sm text-muted-foreground">{explain(code, vocabulary.workspace ?? t("org.workspaceWord"), t)}</p>
+          <h1 className="text-xl font-semibold">{title(code, vocabulary.workspace ?? t("org.workspaceWord"), gender, t)}</h1>
+          <p className="text-sm text-muted-foreground">{explain(code, vocabulary.workspace ?? t("org.workspaceWord"), gender, t)}</p>
           <Button asChild variant="outline">
             <Link to="/">{t("org.backToYourWork")}</Link>
           </Button>
@@ -78,7 +80,7 @@ export default function WorkspaceHomePage() {
 
       {data.archived && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
-          <p className="font-medium">{t("org.workspaceIsArchived", { workspace: (vocabulary.workspace ?? t("org.workspaceWord")).toLowerCase() })}</p>
+          <p className="font-medium">{t(genderedWorkspaceKey("org.workspaceIsArchived", gender), { workspace: (vocabulary.workspace ?? t("org.workspaceWord")).toLowerCase() })}</p>
           <p className="text-muted-foreground">
             {t("org.archivedReadable")}
           </p>
@@ -106,12 +108,12 @@ export default function WorkspaceHomePage() {
   )
 }
 
-function title(code: string, workspaceWord: string, t: TFunction): string {
+function title(code: string, workspaceWord: string, gender: WorkspaceGender, t: TFunction): string {
   if (code === "member_suspended") return t("org.membershipSuspendedTitle")
-  return t("org.workspaceNotFound", { workspace: workspaceWord })
+  return workspaceSentence(t, "org.workspaceNotFound", workspaceWord, gender)
 }
 
-function explain(code: string, workspaceWord: string, t: TFunction): string {
+function explain(code: string, workspaceWord: string, gender: WorkspaceGender, t: TFunction): string {
   switch (code) {
     case "member_suspended":
       return t("org.suspendedCannotOpen")
@@ -120,6 +122,6 @@ function explain(code: string, workspaceWord: string, t: TFunction): string {
     default:
       // A 404 here means "no such workspace" OR "not yours" — the server
       // gives one answer on purpose, and repeating it is the honest thing.
-      return t("org.workspaceMissingOrNotMember", { workspace: workspaceWord.toLowerCase() })
+      return t(genderedWorkspaceKey("org.workspaceMissingOrNotMember", gender), { workspace: workspaceWord.toLowerCase() })
   }
 }

@@ -6,7 +6,7 @@ import { MusicMoodPicker } from "../music-mood-picker"
 import { InstrumentationPicker } from "../instrumentation-picker"
 import { VoiceCharacterPicker } from "../voice-character-picker"
 import { VoiceDeliveryPicker } from "../voice-delivery-picker"
-import { SOUND_ART_FILES } from "../../icons/sound-art-files.generated"
+import { SOUND_ART_FILES } from "@nodaro/prompts"
 
 const EMOJI = { url: "/picker-art/emoji/guitar_3d.0000abcd.webp", kind: "emoji" } as const
 const FLAG = { url: "/picker-art/flags/gb.0000abcd.webp", kind: "flag" } as const

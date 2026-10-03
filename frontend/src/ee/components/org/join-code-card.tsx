@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch"
 import { queryKeys } from "@/lib/query-keys"
 import { useT, type TFunction } from "@/lib/i18n"
 import { OrgApiError, actOnJoinCode, getJoinCode } from "@/ee/lib/orgs-api"
+import { genderedWorkspaceKey, type WorkspaceGender } from "@/ee/lib/org-vocabulary"
 
 /**
  * The join code for one workspace.
@@ -24,10 +25,13 @@ import { OrgApiError, actOnJoinCode, getJoinCode } from "@/ee/lib/orgs-api"
 export function JoinCodeCard({
   workspaceId,
   workspaceWord,
+  gender,
   disabled = false,
 }: {
   workspaceId: string
-  workspaceWord?: string
+  /** The organization's word, with its gender: the description agrees with it. */
+  workspaceWord: string
+  gender: WorkspaceGender
   disabled?: boolean
 }) {
   const t = useT()
@@ -54,7 +58,6 @@ export function JoinCodeCard({
     window.setTimeout(() => setCopied(false), 2000)
   }, [code.data?.code])
 
-  const word = (workspaceWord ?? t("org.workspaceWord")).toLowerCase()
   const enabled = code.data?.enabled ?? false
 
   return (
@@ -63,7 +66,7 @@ export function JoinCodeCard({
         <div>
           <h2 className="font-medium">{t("org.joinCode")}</h2>
           <p className="text-sm text-muted-foreground">
-            {t("org.joinCodeDesc", { word })}
+            {t(genderedWorkspaceKey("org.joinCodeDesc", gender), { workspace: workspaceWord.toLowerCase() })}
           </p>
         </div>
         <Switch

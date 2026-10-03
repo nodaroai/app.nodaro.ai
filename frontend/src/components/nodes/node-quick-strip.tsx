@@ -6,6 +6,10 @@ import { PromptEditButton } from "./prompt-edit-button"
 import { QuickConfigSelect, getQuickConfigs, readQuickConfigValue } from "./node-quick-configs"
 import { nodeHasPromptField } from "@/lib/prompt-fields"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useWiredSettings, wiredFieldSources } from "@/hooks/use-wired-settings"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
+import { getModel } from "@nodaro/shared"
+import { useT } from "@/lib/i18n"
 
 /**
  * Supplies the strip's `handleOpenChange` to inline `children` (e.g. the Suno
@@ -45,6 +49,19 @@ export function NodeQuickStrip({ nodeId, credits, isRunning, children, disabled,
 
   const data = (node?.data ?? {}) as Record<string, unknown>
   const configs = getQuickConfigs(node?.type)
+  // A node with a Settings input: the controls show what the node runs with,
+  // a field a wired node sets is fixed, and a Run the input refuses is disabled.
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
+  const settings = useWiredSettings(nodeId, node?.type ?? "", data)
+  const wiredFrom = wiredFieldSources(settings, localizeNode)
+  const refused = settings.problem
+  const refusedReason = refused
+    ? t("node.settingsProviderRefused", {
+        model: getModel(refused.value)?.label ?? refused.value,
+        source: localizeNode(settings.labels[refused.sourceId] ?? "provider"),
+      })
+    : undefined
   // Prompt button only for node types that actually have a prompt field (the
   // single source is NODE_PROMPT_FIELDS) — reference-sheet etc. have none.
   const hasPrompt = nodeHasPromptField(node?.type)
@@ -86,18 +103,19 @@ export function NodeQuickStrip({ nodeId, credits, isRunning, children, disabled,
           key={control.field}
           nodeId={nodeId}
           control={control}
-          value={readQuickConfigValue(control, data)}
-          data={data}
+          value={readQuickConfigValue(control, settings.data)}
+          data={settings.data}
           disabled={isRunning}
           onOpenChange={handleOpenChange}
+          wiredFrom={wiredFrom.get(control.field)}
         />
       ))}
       <QuickStripOpenChangeContext.Provider value={handleOpenChange}>{children}</QuickStripOpenChangeContext.Provider>
       <RunNodeButton
         nodeId={nodeId}
         credits={credits}
-        disabled={disabled}
-        disabledReason={disabledReason}
+        disabled={disabled || !!refused}
+        disabledReason={refusedReason ?? disabledReason}
         isRunning={isRunning}
         onRun={(nid) => runSingleNode?.(nid)}
       />

@@ -32,7 +32,7 @@ When the prompt (or a template) produces a single block with no `===NEXT===` mar
 | Max Tokens | `number` | `8192` | Maximum output length in tokens. A model's reasoning counts toward it, so the cap has a floor: at `xhigh`/`max` effort — and at **every** effort, including `Auto`, for the models that reason by default — it is raised to 32768 (Claude Opus 5, Grok 4.6, GPT-6 Astra), 16384 (Gemini 3.8 Flash, Gemini 3.1 Pro) or 8192 (Gemini 3 Flash, Gemini 3.6 Flash, Gemini 3.7 Flash). If the model still reaches the cap before it finishes, the run **fails** with a *cut off* error and its credits are refunded — a partial answer is never saved or passed to the next node |
 | # of runs | `number` | `1` | How many generations to produce per Run click (1–4 in the node's quick toolbar). Each run is charged separately — the Run button shows the multiplied credit cost |
 | Effort | `string` | `Auto` | Reasoning effort for models that support it — hidden entirely for models with no reasoning levels. See [Reasoning effort](#reasoning-effort) |
-| Advanced mode | `boolean` | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** (above the model's reasoning floor — see Max Tokens) and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit tier up; the node's cost badge updates immediately. Disabled with an inline reason on non-Gemini models |
+| Advanced mode | `boolean` | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** (above the model's reasoning floor — see Max Tokens) and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit tier up, capped at premium; the node's cost badge updates immediately. Disabled with an inline reason on non-Gemini models |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the **User Input** (never the Instructions / system prompt) at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ### Model selector
@@ -150,12 +150,12 @@ per model). **Auto** applies the vendor default. `xhigh` and `max` bill **one ti
 economy models bill the standard price, standard models bill the premium price, premium
 models are unchanged.
 
-Examples (LLM Chat: 1 cr economy / 2 cr standard / 3 cr premium):
+Examples (LLM Chat: 1 cr economy / 2 cr standard / 6 cr premium):
 - GPT-5.6 Luna at `max` → 2 credits (economy billed as standard)
-- GPT-5.6 Terra at `xhigh` → 3 credits (standard billed as premium)
-- Grok 4.6 at `xhigh` → 3 credits (standard billed as premium; its ladder is low/medium/high/xhigh)
-- GPT-5.6 Sol at `max` → 3 credits (premium, unchanged)
-- GPT-6 Astra at `xhigh` → 3 credits (premium, unchanged; its ladder is low/medium/high/xhigh)
+- GPT-5.6 Terra at `xhigh` → 6 credits (standard billed as premium)
+- Grok 4.6 at `xhigh` → 6 credits (standard billed as premium; its ladder is low/medium/high/xhigh)
+- GPT-5.6 Sol at `max` → 6 credits (premium, unchanged)
+- GPT-6 Astra at `xhigh` → 6 credits (premium, unchanged; its ladder is low/medium/high/xhigh)
 - Claude Sonnet 5 at `high` → 2 credits (high never changes the price)
 - Gemini 3.6 Flash, Gemini 3.7 Flash, and Gemini 3.8 Flash expose `low`/`high` only — none of them changes the price (requests above `high` clamp down to it)
 
@@ -167,7 +167,7 @@ Examples (LLM Chat: 1 cr economy / 2 cr standard / 3 cr premium):
 - For long-form content, raise Max Tokens. The default (8192) handles most cases, but an answer that reaches the cap fails the run (credits refunded) rather than being saved cut off. At `xhigh`/`max` effort the cap is automatically floored — and so it is at **every** effort, including `Auto`, on the models that reason by default, whose reasoning tokens share the output budget on every call: 32768 for Claude Opus 5, Grok 4.6 and GPT-6 Astra; 16384 for Gemini 3.8 Flash and Gemini 3.1 Pro; 8192 for Gemini 3 Flash, Gemini 3.6 Flash and Gemini 3.7 Flash. A small Max Tokens on those models is raised to the floor, so it cannot starve the answer.
 - If a run fails with *The answer was cut off*, ask for a shorter answer in the instructions, lower **Effort**, or raise Max Tokens.
 - For image-prompt fan-out (Photo Shoot Planner / Product Catalog Writer / Storyboard Writer), connect a reference image upstream — running these templates is blocked without one. The Custom template does not require one.
-- Pick the cheapest model that meets your quality bar — economy (1 cr) is plenty for rewriting and captioning; reserve premium (3 cr) for complex reasoning.
+- Pick the cheapest model that meets your quality bar — economy (1 cr) is plenty for rewriting and captioning; reserve premium (6 cr) for complex reasoning.
 - To process a video or audio reference, select a video-capable Gemini model (see the model table — Gemini 3.7 Flash and Gemini 3.8 Flash are image-only for now).
 
 ## Common Use Cases

@@ -21,7 +21,8 @@ import type { AdjustVolumeData } from "@/types/nodes"
 function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as AdjustVolumeData
-  const credits = useModelCredits("ffmpeg", 1)
+  // The id its route reserves (its own row), not the generic "ffmpeg" one.
+  const credits = useModelCredits("adjust-volume", 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

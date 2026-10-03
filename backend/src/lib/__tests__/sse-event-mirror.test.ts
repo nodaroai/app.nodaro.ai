@@ -38,6 +38,7 @@ const MEMBERS: Record<StreamEvent["type"], true> = {
   run_proposed: true,
   action_proposed: true,
   usage: true,
+  field: true,
 }
 
 /** The same list, indexed by the CLIENT's union: a member missing there is a compile error too. */
@@ -51,5 +52,9 @@ describe("the stream event union", () => {
 
   it("carries the studio surface's proposal event", () => {
     expect(MEMBERS.action_proposed).toBe(true)
+  })
+
+  it("carries the streamed structured answer's per-detail event", () => {
+    expect(MEMBERS.field).toBe(true)
   })
 })

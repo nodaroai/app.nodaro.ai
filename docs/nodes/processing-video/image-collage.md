@@ -52,8 +52,8 @@ Priced by output resolution:
 
 | Resolution | Credits |
 |------------|---------|
-| 2K | 2 |
-| 4K | 4 |
+| 2K | 20 |
+| 4K | 40 |
 
 Independent of the number of input images (all compositing is a single local FFmpeg pass).
 

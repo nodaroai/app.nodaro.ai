@@ -61,6 +61,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   Lightbulb,
+  ChefHat,
   Linkedin,
   List,
   ListFilter,
@@ -254,6 +255,17 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Instagram className="h-4 w-4" />,
     category: "Data",
     group: "automate-get-content",
+  },
+  {
+    type: "social-search",
+    label: "Social Search",
+    icon: <ScanSearch className="h-4 w-4" />,
+    category: "Data",
+    group: "automate-get-content",
+    // Preview: admin-only until its price is set and the search provider's
+    // production plan is in place (the backend gate is Admin → Availability).
+    adminOnly: true,
+    keywords: ["tiktok", "instagram", "youtube", "x", "twitter", "reddit", "linkedin", "meta ads", "ad library", "research", "trends", "competitor", "posts", "viral", "inspiration"],
   },
   // Hidden — uncomment to restore in the Add Node UI:
   // {
@@ -674,6 +686,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <BookOpen className="h-4 w-4" />,
     category: "AI",
     group: "video-story-script",
+  },
+  {
+    type: "content-ideas",
+    label: "Content Ideas",
+    icon: <Lightbulb className="h-4 w-4" />,
+    category: "AI",
+    group: "video-story-script",
+    keywords: ["post ideas", "content ideas", "brainstorm", "hooks", "brand", "steal the format", "ideation", "social media"],
   },
   {
     type: "llm-chat",
@@ -1225,6 +1245,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Processing",
     group: "video-analyze",
     keywords: ["analyze video", "scene breakdown", "shot list", "understand video", "describe video", "storyboard from video"],
+  },
+  {
+    type: "content-recipe",
+    label: "Content Recipe",
+    icon: <ChefHat className="h-4 w-4" />,
+    category: "AI",
+    group: "video-analyze",
+    keywords: ["why it works", "hook", "format", "viral", "competitor post", "steal the format", "content recipe", "beats", "tiktok", "reels"],
   },
   {
     type: "video-audit",

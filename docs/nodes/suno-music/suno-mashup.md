@@ -33,7 +33,7 @@ Suno Mashup takes two audio tracks and blends them together into a cohesive mash
 - Combining two Suno-generated tracks into a single composition.
 - Creating DJ-style mashups of vocals from one track with instrumentals from another.
 - Blending different genre versions of the same song concept.
-- Building remix workflows: Suno Generate (track A) + Suno Generate (track B) -> Suno Mashup.
+- Building remix workflows: Suno Create Music (track A) + Suno Create Music (track B) -> Suno Mashup.
 - Combining a Suno Separate vocal output with a different instrumental.
 
 ## Tips

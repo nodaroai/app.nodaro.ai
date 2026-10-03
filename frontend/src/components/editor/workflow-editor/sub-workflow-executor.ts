@@ -7,10 +7,11 @@ import { executeNode } from "./execute-node"
 import { getListFanOutForNode } from "./node-input-resolver"
 import { executeNodeForList } from "./list-execution"
 import { RUN_START_RESET } from "./poll-job"
-import { planFanOut } from "@nodaro/shared"
+import { planFanOut, withWiredSettings } from "@nodaro/shared"
 import { SUB_WORKFLOW_MAX_DEPTH as MAX_DEPTH, loadSubWorkflowRouteGraph, subWorkflowRouteKey } from "./sub-workflow-route-graph"
 import { wordTimingsPreflight } from "./add-captions-preflight"
 import { nestedWordTimingsPreflight } from "./sub-workflow-preflight"
+import { nodeRunError } from "@/components/editor/workflow-editor/node-run-message"
 
 /**
  * Execute a sub-workflow node.
@@ -36,20 +37,20 @@ export async function executeSubWorkflow(
 
   // Validate configuration
   if (!data.referencedWorkflowId) {
-    toast.error(`Node "${data.label}": No workflow selected`)
+    toast.error(nodeRunError(data.label, "nodeRun.noWorkflowSelected"))
     updateNodeData(node.id, { executionStatus: "failed", errorMessage: "No workflow selected" })
     return Promise.reject(new Error("No workflow selected"))
   }
 
   if (!data.routeSnapshot) {
-    toast.error(`Node "${data.label}": No route configured`)
+    toast.error(nodeRunError(data.label, "nodeRun.noRouteConfigured"))
     updateNodeData(node.id, { executionStatus: "failed", errorMessage: "No route configured" })
     return Promise.reject(new Error("No route configured"))
   }
 
   // Depth check
   if (depth >= MAX_DEPTH) {
-    toast.error(`Node "${data.label}": Maximum sub-workflow nesting depth (${MAX_DEPTH}) exceeded`)
+    toast.error(nodeRunError(data.label, "nodeRun.maximumSubWorkflowNestingDepth", { max: MAX_DEPTH }))
     updateNodeData(node.id, { executionStatus: "failed", errorMessage: `Max nesting depth (${MAX_DEPTH}) exceeded` })
     return Promise.reject(new Error("Max nesting depth exceeded"))
   }
@@ -58,7 +59,7 @@ export async function executeSubWorkflow(
   // called with a *different* route (self-referencing is allowed).
   const routeKey = subWorkflowRouteKey(data)
   if (executingRouteKeys.has(routeKey)) {
-    toast.error(`Node "${data.label}": Circular reference detected`)
+    toast.error(nodeRunError(data.label, "nodeRun.circularReferenceDetected"))
     updateNodeData(node.id, { executionStatus: "failed", errorMessage: "Circular reference detected" })
     return Promise.reject(new Error("Circular reference detected"))
   }
@@ -170,7 +171,8 @@ export async function executeSubWorkflow(
           const expanded = planFanOut(
             getListFanOutForNode(subNode, latestNodes, latestEdges),
             subNode.type ?? "",
-            subNode.data as Record<string, unknown>,
+            // As it runs: a wired Provider makes a several-model image run one model.
+            withWiredSettings(subNode, latestNodes, latestEdges).data as Record<string, unknown>,
           )
 
           if (expanded) {

@@ -11,25 +11,37 @@ import type { ModelCatalogEntry, ModelKind, ModelRecommendation } from "@nodaro/
 
 export type CostTier = "Everyday" | "Standard" | "Premium"
 
+/** Where one kind's models split into tiers, in credits. */
+export interface CostTierCuts {
+  /** At or below: Everyday. */
+  everydayMax: number
+  /** At or above (and above `everydayMax`): Premium. */
+  premiumMin: number
+}
+
 /**
- * Coarse, kind-aware price bucket for the "everyday vs advanced" framing.
- * Video credits live on a much higher scale than image/audio, so thresholds
- * differ per kind. Derived from `pricing[0].credits` (the default variant).
+ * The cut points that split one kind's models into thirds by default price.
+ *
+ * RELATIVE on purpose, as the guide defines the tier ("relative within each
+ * modality"). Fixed credit thresholds stayed on the pre-×10 credit scale after
+ * the 2026-07-30 re-denomination and labelled 120 of 128 models Premium. Thirds
+ * of the kind's own prices are scale-free, so a re-denomination cannot move a
+ * tier. Equal prices always share a tier.
  */
-export function costTier(kind: ModelKind, credits: number): CostTier {
-  if (kind === "video") {
-    if (credits <= 15) return "Everyday"
-    if (credits >= 50) return "Premium"
-    return "Standard"
+export function costTierCuts(credits: readonly number[]): CostTierCuts {
+  const sorted = [...credits].sort((a, b) => a - b)
+  if (sorted.length === 0) return { everydayMax: 0, premiumMin: 0 }
+  const last = sorted.length - 1
+  return {
+    everydayMax: sorted[Math.floor(last / 3)]!,
+    premiumMin: sorted[Math.ceil((2 * last) / 3)]!,
   }
-  if (kind === "audio") {
-    if (credits <= 3) return "Everyday"
-    if (credits >= 8) return "Premium"
-    return "Standard"
-  }
-  // image
-  if (credits <= 2) return "Everyday"
-  if (credits >= 5) return "Premium"
+}
+
+/** A model's tier: its default-variant credits against its kind's cut points. */
+export function costTier(credits: number, cuts: CostTierCuts): CostTier {
+  if (credits <= cuts.everydayMax) return "Everyday"
+  if (credits >= cuts.premiumMin) return "Premium"
   return "Standard"
 }
 
@@ -59,6 +71,7 @@ export function renderModelTable(
       return a.label.localeCompare(b.label)
     })
 
+  const cuts = costTierCuts(rows.map(defaultCredits))
   const lines: string[] = []
   lines.push("| Model | Family | Tier | Credits | Modes | Best for |")
   lines.push("| --- | --- | --- | --- | --- | --- |")
@@ -67,10 +80,7 @@ export function renderModelTable(
     const name = e.featured ? `⭐ ${e.label}` : e.label
     const modes = e.modes.join(", ")
     lines.push(
-      `| ${escapeCell(name)} | ${escapeCell(e.family)} | ${costTier(
-        e.kind,
-        credits,
-      )} | ${credits} | ${escapeCell(modes)} | ${escapeCell(e.description)} |`,
+      `| ${escapeCell(name)} | ${escapeCell(e.family)} | ${costTier(credits, cuts)} | ${credits} | ${escapeCell(modes)} | ${escapeCell(e.description)} |`,
     )
   }
   return lines.join("\n")

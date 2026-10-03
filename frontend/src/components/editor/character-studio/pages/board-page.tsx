@@ -178,7 +178,7 @@ export function BoardPage({ state, jobs }: StudioPageProps<CharacterStudioState,
                 </a>
                 {b.type === "identity" && (
                   <span className="absolute start-1.5 top-1.5 rounded bg-primary/90 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-primary-foreground">
-                    {t("studio.identity")}
+                    {t("studio.identityBoardBadge")}
                   </span>
                 )}
                 <div className="absolute end-1.5 top-1.5 flex gap-1 opacity-0 transition group-hover:opacity-100">

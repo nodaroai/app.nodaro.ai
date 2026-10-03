@@ -105,6 +105,8 @@ afterEach(async () => {
   __resetAvailabilityOverridesForTests()
 })
 
+const ACCOUNT_CHANGE = { id: "ta1", settings: '{"accountId":"acc-1","chatIds":["777"]}' }
+
 // `payload: null` sends no body at all (an explicit undefined would take the default).
 const sync = (userId: string | null, authKind = "jwt", payload: Record<string, unknown> | null = { vouchNodeIds: ["s1"] }) =>
   app.inject({
@@ -133,14 +135,37 @@ describe("POST /v1/workflows/:id/sync-triggers", () => {
     expect(reconcileMock.mock.calls[0][0].vouchNodeIds).toBeUndefined()
   })
 
-  it("the owner through an API token projects too — but its vouch ids are ignored", async () => {
+  it("the owner through an API token projects too — its vouch ids are ignored, and it names no account trigger", async () => {
     serve(ROW)
-    const res = await sync(OWNER, "api_token")
+    const res = await sync(OWNER, "api_token", { vouchNodeIds: ["s1"], accountNodes: [ACCOUNT_CHANGE] })
     expect(res.statusCode).toBe(200)
     expect(reconcileMock).toHaveBeenCalledTimes(1)
-    // Still the owner acting: the account lane is theirs to change.
+    // A token acts AS the owner: the account lane is in reach (it can switch
+    // a trigger off), but arming one is the owner's decision in their browser.
     expect(reconcileMock.mock.calls[0][0]).toMatchObject({ userId: OWNER, ownerActing: true })
     expect(reconcileMock.mock.calls[0][0].vouchNodeIds).toBeUndefined()
+    expect(reconcileMock.mock.calls[0][0].accountNodes).toBeUndefined()
+  })
+
+  it("a connected app acting as the owner names no account trigger either", async () => {
+    serve(ROW)
+    const res = await sync(OWNER, "app_token", { accountNodes: [ACCOUNT_CHANGE] })
+    expect(res.statusCode).toBe(200)
+    expect(reconcileMock.mock.calls[0][0]).toMatchObject({ userId: OWNER, ownerActing: true })
+    expect(reconcileMock.mock.calls[0][0].accountNodes).toBeUndefined()
+  })
+
+  it("the account triggers the owner's editor changed reach the projection with their settings — from their own session only", async () => {
+    serve(ROW)
+    await sync(OWNER, "jwt", { vouchNodeIds: [], accountNodes: [ACCOUNT_CHANGE] })
+    expect(reconcileMock.mock.calls[0][0]).toMatchObject({ ownerActing: true, accountNodes: [ACCOUNT_CHANGE] })
+  })
+
+  it("an account change without its settings is refused before anything is read", async () => {
+    serve(ROW)
+    const res = await sync(OWNER, "jwt", { accountNodes: [{ id: "ta1" }] })
+    expect(res.statusCode).toBe(400)
+    expect(reconcileMock).not.toHaveBeenCalled()
   })
 
   it("a malformed body is refused before anything is read", async () => {

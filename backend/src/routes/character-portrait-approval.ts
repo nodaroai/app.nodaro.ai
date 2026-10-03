@@ -34,7 +34,7 @@ const CAPTION_CREDIT_IDENTIFIER = "prompt-helper"
  * Both routes scope by req.userId. Cross-user candidates / characters return
  * 404 (indistinguishable from "doesn't exist" — see spec error table).
  *
- * TODO (spec Open item #7): deduct 1 CR per LLM call. PR 1 ships without it;
+ * TODO (spec Open item #7): charge credits for each LLM call. PR 1 ships without it;
  * the existing studio doesn't hit these routes (PR 2 surface). Will be added
  * before the new studio UI ships.
  */

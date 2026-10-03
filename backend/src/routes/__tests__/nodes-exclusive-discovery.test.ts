@@ -33,8 +33,14 @@ vi.mock("@/lib/node-registry.js", () => {
   return {
     getEnrichedRegistry: () => registry,
     findNode: (type: string) => registry.find((n) => n.type === type),
+    chargedDescriptor: (n: unknown) => n,
   }
 })
+// Discovery here is about WHICH nodes list; their prices are pinned in
+// nodes-charged-prices.test.ts.
+vi.mock("@/lib/pricing/charged-prices.js", () => ({
+  loadChargedPrices: async () => ({ credits: () => undefined }),
+}))
 
 import { nodesRoutes } from "../nodes.js"
 

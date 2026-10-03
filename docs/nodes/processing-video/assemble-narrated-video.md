@@ -83,7 +83,7 @@ Worked examples: 6 blocks → **4** credits, 24 blocks → **7** credits, 60 blo
 > **Known gap:** the formula above is exact for single-node Run, MCP, and SDK calls (they
 > go through the route's `computeCredits` hook). Server-side **workflow-engine** runs
 > (executing this node as part of a larger workflow) currently reserve the flat 6-block
-> base — **4 credits** — regardless of actual block count; the payload builder does not yet
+> base — **40 credits** — regardless of actual block count; the payload builder does not yet
 > build a block-count-scaled composite identifier the way it does for other dynamically
 > priced nodes. This is a tracked billing follow-up, not a docs error.
 

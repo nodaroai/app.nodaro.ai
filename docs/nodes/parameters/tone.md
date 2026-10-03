@@ -37,4 +37,5 @@ Not applicable. This is a data-passing parameter node with no AI provider.
 ## Tips
 
 - The tone value is passed as-is to downstream nodes. How it is used depends on the consuming node -- typically it is injected into the system prompt or appended to the generation prompt.
+- On Generate Script, connect the Tone node to its **Tone** input. The tone then replaces whatever is typed in that field, on single-node runs and workflow runs alike (up to 200 characters). A Tone node is not a topic: the script still needs a Text node with the story.
 - You can connect the `in` input from a Text Prompt node to dynamically set the tone based on upstream logic or user input.

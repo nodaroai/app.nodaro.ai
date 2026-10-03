@@ -89,7 +89,7 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
       // "timed out" (a lie) or an empty panel that never fills.
       if (job.status === "pending_review") throw new Error(tx("sheet.panelAwaitingReview"))
       if (job.status === "failed" || job.status === "cancelled") {
-        throw new Error(job.error_message ?? tx("entity.sheetStatusFallback", { status: job.status }))
+        throw new Error(job.error_message ?? tx(job.status === "cancelled" ? "entity.sheetCancelledFallback" : "entity.sheetFailedFallback"))
       }
     }
     throw new Error(tx("entity.sheetTimedOut"))

@@ -1,15 +1,15 @@
 ---
 node_type: suno-generate
-generated_at: 2026-09-21T19:12:09.383Z
-generated_from: 09788c987
+generated_at: 2026-09-27T12:51:23.461Z
+generated_from: c607aa02c
 ---
 
-# Suno Generate
+# Suno Create Music
 
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `suno-generate`
 **Category:** ai
-**Credit cost:** `30` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `30` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `prompt`, `audio-style`, `voice`, `field-style`, `field-lyrics`, `field-title`, `field-negativeStyle`
 **Outputs (source handles):** `audio`
 
@@ -46,7 +46,7 @@ generated_from: 09788c987
 **Default data:**
 ```json
 {
-  "label": "Suno Generate",
+  "label": "Suno Create Music",
   "prompt": "",
   "model": "V6",
   "lyrics": "",
@@ -97,7 +97,7 @@ generated_from: 09788c987
     "y": 0
   },
   "data": {
-    "label": "Suno Generate",
+    "label": "Suno Create Music",
     "prompt": "",
     "model": "V6",
     "lyrics": "",

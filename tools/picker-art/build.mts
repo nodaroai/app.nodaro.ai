@@ -1,7 +1,8 @@
 #!/usr/bin/env -S npx --no tsx
-// Builds the self-hosted picker art (frontend/public/picker-art/) from the
-// pinned upstream sources in tools/picker-art/sources.json, and writes the
-// content-hashed file map packages/picker-ui/src/icons/sound-art-files.generated.ts.
+// Builds the self-hosted music / voice picker art (frontend/public/picker-art/
+// emoji/ and flags/) from the pinned upstream sources in
+// tools/picker-art/sources.json, and writes the
+// content-hashed file map packages/prompts/src/picker-art/sound-art-files.generated.ts.
 //
 // Dev-time only: the output is committed, so CI and the Docker build never run
 // this. Run it after editing sources.json or sound-art-map.ts:
@@ -34,7 +35,7 @@ const SOURCES_PATH = join(ROOT, "tools/picker-art/sources.json")
 const MANIFEST_PATH = join(ROOT, "tools/picker-art/manifest.json")
 const WORK_DIR = join(ROOT, "tools/picker-art/.work")
 const OUT_DIR = join(ROOT, "frontend/public/picker-art")
-const GENERATED_TS = join(ROOT, "packages/picker-ui/src/icons/sound-art-files.generated.ts")
+const GENERATED_TS = join(ROOT, "packages/prompts/src/picker-art/sound-art-files.generated.ts")
 const MAX_BYTES = 4 * 1024 * 1024
 
 type Kind = "emoji" | "flags"
@@ -137,7 +138,7 @@ async function encode(kind: Kind, buf: Buffer): Promise<Buffer> {
 
 /** Every asset key the art map references — the build fails on any without a source. */
 async function referencedKeys(): Promise<ReadonlySet<string>> {
-  const mod = (await import(pathToFileURL(join(ROOT, "packages/picker-ui/src/icons/sound-art-map.ts")).href)) as {
+  const mod = (await import(pathToFileURL(join(ROOT, "packages/prompts/src/picker-art/sound-art-map.ts")).href)) as {
     SOUND_ART: Record<string, Record<string, Record<string, string>>>
   }
   const keys = new Set<string>()
@@ -158,16 +159,19 @@ function filesUnder(root: string): string[] {
 }
 
 /**
- * Make OUT_DIR hold exactly the finished build: drop files the build no longer
- * has, copy the rest in. Runs only after the whole set built and verified, and
- * never renames the folder the Vite dev server watches (that fails with EPERM
- * on Windows). If a copy fails midway, re-run: the build is idempotent and the
- * committed state is one `git checkout` away.
+ * Make OUT_DIR's emoji/ and flags/ folders hold exactly the finished build:
+ * drop files the build no longer has, copy the rest in. Other folders under
+ * OUT_DIR belong to other builds (character/ → character-art.mts) and are left
+ * alone. Runs only after the whole set built and verified, and never renames
+ * the folder the Vite dev server watches (that fails with EPERM on Windows). If
+ * a copy fails midway, re-run: the build is idempotent and the committed state
+ * is one `git checkout` away.
  */
 function publish(build: string): void {
   mkdirSync(OUT_DIR, { recursive: true })
   const wanted = new Set(filesUnder(build))
-  for (const rel of filesUnder(OUT_DIR)) if (!wanted.has(rel)) rmSync(join(OUT_DIR, rel))
+  const owned = (rel: string): boolean => rel.startsWith("emoji/") || rel.startsWith("flags/")
+  for (const rel of filesUnder(OUT_DIR)) if (owned(rel) && !wanted.has(rel)) rmSync(join(OUT_DIR, rel))
   for (const rel of wanted) {
     mkdirSync(dirname(join(OUT_DIR, rel)), { recursive: true })
     copyFileSync(join(build, rel), join(OUT_DIR, rel))

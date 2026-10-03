@@ -1,7 +1,7 @@
 ---
 node_type: aspect-ratio
-generated_at: 2026-09-21T19:12:08.786Z
-generated_from: 09788c987
+generated_at: 2026-09-27T12:51:22.488Z
+generated_from: c607aa02c
 ---
 
 # Aspect Ratio
@@ -9,9 +9,9 @@ generated_from: 09788c987
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `aspect-ratio`
 **Category:** parameter
-**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** `in`
-**Outputs (source handles):** `aspect_ratio`
+**Outputs (source handles):** `ratio`
 
 **Required data fields:**
 - `label: string`
@@ -28,14 +28,14 @@ generated_from: 09788c987
 
 ## When to use
 
-(Add prose here. Auto-gen will preserve it across regenerations.)
+Sets the aspect ratio of the node it is wired into. Wire its `ratio` output into a Generate Image, Generate Video or Generate Video Pro `settings` input; the value replaces the node's own `aspectRatio` at run time.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas
 
-(Add prose here.)
+- A ratio the model doesn't render is fitted to the nearest one it does (e.g. `4:5` on Seedance 2 runs as `3:4`); the node's chips show the fitted ratio.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

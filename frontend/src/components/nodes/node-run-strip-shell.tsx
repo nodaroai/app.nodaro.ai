@@ -28,17 +28,32 @@ import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
  * manage their own pill + compact mode, so their host nodes pass them via
  * BaseNode's `rawToolbarContent` to bypass this shell (no double-wrap).
  */
-export function NodeRunStripShell({ children }: { readonly children: ReactNode }) {
+export function NodeRunStripShell({
+  children,
+  footnote,
+}: {
+  readonly children: ReactNode
+  /** A line under the pill (e.g. the Settings input's price note); the pair scales as one. */
+  readonly footnote?: ReactNode
+}) {
   const zoom = useStore((s) => s.transform[2])
   const scale = Math.max(NODE_VISUAL_SCALE_FLOOR, zoom)
-  return (
+  const transform = { transform: `scale(${scale})`, transformOrigin: "50% 0%" } as const
+  const pill = (
     <div
       data-testid="node-run-strip"
       className="flex items-center gap-0.5 px-1.5 py-1 backdrop-blur-sm rounded-xl border node-menu-surface"
-      style={{ transform: `scale(${scale})`, transformOrigin: "50% 0%" }}
+      style={footnote ? undefined : transform}
       onClick={(e) => e.stopPropagation()}
     >
       {children}
+    </div>
+  )
+  if (!footnote) return pill
+  return (
+    <div className="flex flex-col items-center" style={transform}>
+      {pill}
+      {footnote}
     </div>
   )
 }

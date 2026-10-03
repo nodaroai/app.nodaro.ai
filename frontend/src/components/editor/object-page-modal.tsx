@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { entityStyleLabel } from "@/lib/entity-profile-labels"
 import type { ObjectNodeData, ObjectAssetItem } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
 
@@ -630,7 +631,7 @@ no shadows, professional product photography`
                 {data.objectName || t("entity.unnamedObject")}
               </h2>
               <p className="text-sm text-muted-foreground">
-                {data.style ?? "realistic"} | {CATEGORY_LABEL_KEYS[data.category] ? t(CATEGORY_LABEL_KEYS[data.category]) : data.category}
+                {entityStyleLabel(data.style, t)} | {CATEGORY_LABEL_KEYS[data.category] ? t(CATEGORY_LABEL_KEYS[data.category]) : data.category}
               </p>
             </div>
             <div className="flex items-center gap-2">

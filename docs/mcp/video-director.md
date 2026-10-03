@@ -17,9 +17,9 @@ illustrated or filmed scenes (see "What Phase-1 can produce" below). If the
 user asks for a bare "explainer" without specifying a visual style, both the
 tool descriptions and the motion-director doctrine instruct the LLM to confirm
 the method with the user *before* calling any tool: motion graphics (this
-family — a fixed **~20 credits** via `create_explainer`, or **~11 credits**
+family — a fixed **~200 credits** via `create_explainer`, or **~110 credits**
 driving the Phase-0 pipeline manually) vs. animated illustrated footage
-(`get_recipe` → `video-explainer`, **~45 credits per 10-second block**). Only
+(`get_recipe` → `video-explainer`, **~450 credits per 10-second block**). Only
 proceed once the user has chosen, or has already stated a style in the
 original ask. See [Content Recipes](./recipes.md) for the `video-explainer`
 side of this choice.
@@ -55,14 +55,14 @@ are charged as four sub-jobs:
 
 | Step | Job type | Credits |
 |------|----------|---------|
-| Authoring (LLM — writes VO script + shot-sequence brief) | `video-director` | **9** |
-| Voiceover synthesis (ElevenLabs v3) | `text-to-speech` | **3** |
-| Forced alignment (ElevenLabs — word timings) | `forced-alignment` | **3** |
+| Authoring (LLM — writes VO script + shot-sequence brief) | `video-director` | **90** |
+| Voiceover synthesis (ElevenLabs v3) | `text-to-speech` | **30** |
+| Forced alignment (ElevenLabs — word timings) | `forced-alignment` | **30** |
 | Resolve (bake cue anchors to frames) | synchronous, no job | **0** |
-| Remotion render | `render-video` | **5** |
-| **Total per video** | | **20** |
+| Remotion render | `render-video` | **50** |
+| **Total per video** | | **200** |
 
-Arithmetic: 9 + 3 + 3 + 0 + 5 = **20 credits per generated video**.
+Arithmetic: 90 + 30 + 30 + 0 + 50 = **200 credits per generated video**.
 
 The authoring credit is refunded if the run fails. Each sub-job (speech,
 alignment, render) is metered independently and is refunded only if that step
@@ -245,7 +245,7 @@ pipeline yourself. The doctrine it returns covers the full workflow:
 6. Call render_shot_sequence(plan) → wait for job → MP4
 ```
 
-Steps 3–6 each consume credits independently (3 + 3 + 0 + 5 = 11 credits for
+Steps 3–6 each consume credits independently (30 + 30 + 0 + 50 = 110 credits for
 the four sub-jobs; no separate authoring charge when you write the brief
 yourself).
 

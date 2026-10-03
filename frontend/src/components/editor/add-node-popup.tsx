@@ -1361,7 +1361,7 @@ export function AddNodePopup({
               hardcoded catalog total, so it stays honest as families collapse
               or the edition hides Cloud-only nodes. */}
           <span className="ms-auto tabular-nums text-[var(--npk-faint)]">
-            {renderedNodeCount} {renderedNodeCount === 1 ? t("addnode.unitNode") : t("addnode.unitNodes")}
+            {t(renderedNodeCount === 1 ? "addnode.nodeCountOne" : "addnode.nodeCountMany", { n: renderedNodeCount })}
           </span>
         </div>
       </div>

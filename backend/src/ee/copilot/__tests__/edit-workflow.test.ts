@@ -157,6 +157,57 @@ describe("edit_workflow — guards", () => {
     expect(created).not.toHaveProperty("active")
   })
 
+  it("a Telegram Account Trigger's account, chats and switch are the person's: kept across an edit, never changed by one, absent on a new node", async () => {
+    const ACCOUNT = "11111111-1111-4111-8111-111111111111"
+    const settings = { accountId: ACCOUNT, chatIds: ["777"], chatTitles: { "777": "Saved Messages" }, inboxMode: true, isActive: true }
+    graphState.nodes = [{ id: "tg", type: "telegram-account-trigger", position: { x: 0, y: 0 }, data: { label: "Inbox", ...settings } }]
+
+    // A relabel resends the node without its settings — they stay as stored.
+    await runEditWorkflow(ctx, { note: "rename", patchNodes: [{ id: "tg", data: { label: "Idea inbox" } }] })
+    const kept = (rpcMock.mock.calls[0]![1] as { p_upsert_nodes: Array<{ data: Record<string, unknown> }> }).p_upsert_nodes[0]!.data
+    expect(kept).toMatchObject({ label: "Idea inbox", ...settings })
+
+    // Widening the chats, re-pointing the account, or arming it is refused.
+    for (const data of [{ chatIds: ["777", "-1001"] }, { accountId: "22222222-2222-4222-8222-222222222222" }, { includeOutgoing: true }]) {
+      await expect(runEditWorkflow(ctx, { note: "change", patchNodes: [{ id: "tg", data }] })).rejects.toBeInstanceOf(EditRejected)
+    }
+    graphState.nodes = [{ id: "tg", type: "telegram-account-trigger", position: { x: 0, y: 0 }, data: { label: "Inbox", accountId: ACCOUNT, chatIds: ["777"], isActive: false } }]
+    await expect(runEditWorkflow(ctx, { note: "arm", patchNodes: [{ id: "tg", data: { isActive: true } }] })).rejects.toBeInstanceOf(EditRejected)
+
+    // A new trigger lands with none of them; one sent with an account and chats is refused.
+    graphState.nodes = []
+    rpcMock.mockClear()
+    await expect(
+      runEditWorkflow(ctx, { note: "new", upsertNodes: [{ id: "tg2", type: "telegram-account-trigger", data: { label: "Inbox", accountId: ACCOUNT, chatIds: ["777"] } }] }),
+    ).rejects.toBeInstanceOf(EditRejected)
+    await runEditWorkflow(ctx, {
+      note: "new",
+      upsertNodes: [{ id: "tg2", type: "telegram-account-trigger", data: { label: "Inbox", chatIds: [], keywords: [], includeOutgoing: false, isActive: false } }],
+    })
+    const created = (rpcMock.mock.calls.at(-1)![1] as { p_upsert_nodes: Array<{ data: Record<string, unknown> }> }).p_upsert_nodes[0]!.data
+    for (const field of ["accountId", "chatIds", "keywords", "includeOutgoing", "isActive"]) expect(created).not.toHaveProperty(field)
+  })
+
+  it("an edit may switch a Telegram Account Trigger off — \"stop it\" stops it — and nothing else", async () => {
+    const ACCOUNT = "11111111-1111-4111-8111-111111111111"
+    graphState.nodes = [{ id: "tg", type: "telegram-account-trigger", position: { x: 0, y: 0 }, data: { label: "Inbox", accountId: ACCOUNT, chatIds: ["777"], isActive: true } }]
+    await runEditWorkflow(ctx, { note: "stop", patchNodes: [{ id: "tg", data: { isActive: false } }] })
+    const stopped = (rpcMock.mock.calls[0]![1] as { p_upsert_nodes: Array<{ data: Record<string, unknown> }> }).p_upsert_nodes[0]!.data
+    expect(stopped).toMatchObject({ accountId: ACCOUNT, chatIds: ["777"], isActive: false })
+  })
+
+  it("re-typing a node does not smuggle a trigger's settings past the guard as \"stored\"", async () => {
+    const ACCOUNT = "11111111-1111-4111-8111-111111111111"
+    // Planted earlier on a node of another type, where nothing guards them.
+    graphState.nodes = [{ id: "n1", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "Note", accountId: ACCOUNT, chatIds: ["-1009"], isActive: true } }]
+    await expect(
+      runEditWorkflow(ctx, {
+        note: "retype",
+        upsertNodes: [{ id: "n1", type: "telegram-account-trigger", data: { label: "Inbox", accountId: ACCOUNT, chatIds: ["-1009"], isActive: true } }],
+      }),
+    ).rejects.toBeInstanceOf(EditRejected)
+  })
+
   it("allows preserving a URL the user already put on the node", async () => {
     graphState.nodes = [{ id: "img", type: "upload-image", data: { imageUrl: "https://mine.test/x.png" } }]
     await runEditWorkflow(ctx, {

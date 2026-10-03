@@ -20,7 +20,7 @@ vi.mock("../locale-header", () => ({ LocaleHeader: () => null }))
 // the PersonPicker reads the package's own prefs module, which a mock of the
 // app path cannot intercept — localStorage is the shared contract.
 beforeAll(() => {
-  window.localStorage.setItem("nodaro:person-picker-mode", "detailed")
+  window.localStorage.setItem("nodaro:person-picker-view", "detailed")
 })
 
 // Rendering the full PersonConfig (all dimensions + options) is heavy.

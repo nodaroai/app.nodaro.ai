@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-09-21T19:12:09.248Z
-generated_from: 09788c987
+generated_at: 2026-09-28T22:17:11.791Z
+generated_from: 41c73564b
 ---
 
 # Generate Video Pro
@@ -9,8 +9,8 @@ generated_from: 09788c987
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `generate-video-pro`
 **Category:** ai
-**Credit cost:** `100` per `GET /v1/nodes` — the live price is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
-**Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`, `audio`, `audioReferences`, `assets`, `elements`, `look`
+**Credit cost:** `100` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`, `audio`, `audioReferences`, `assets`, `elements`, `look`, `settings`
 **Outputs (source handles):** `video`
 
 **Required data fields:**
@@ -109,7 +109,7 @@ generated_from: 09788c987
 
 ## Common gotchas
 
-(Add prose here.)
+- The `settings` input takes Aspect Ratio, Duration, Provider and Motion nodes (one input for all). A wired Duration is the total length to stitch; a wired Provider must name one of this node's models (`list_models`), or the run stops before anything is charged; Motion adds a clause to the prompt.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

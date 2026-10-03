@@ -21,6 +21,8 @@ import { registerFilmDirectorTool } from "./tools/film-director.js"
 import { registerRecastTools } from "./tools/recast.js"
 import { registerStudioProductionTools } from "./tools/studio-production.js"
 import { registerUgcTools } from "./tools/ugc.js"
+import { registerResearchTools } from "./tools/research.js"
+import { registerSavedPostTools } from "./tools/saved-posts.js"
 import { registerSkillLoaders } from "./tools/skill-loaders.js"
 import { registerPipelineTools } from "./tools/pipelines.js"
 import { registerReduce } from "./tools/reduce.js"
@@ -210,6 +212,12 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
     // routes are the cloud plugin's. Ungated by scope (free, they generate
     // nothing); using a saved Character checks `assets:read` inside the tool.
     registerUgcTools({ server, session, fastify: opts.fastify })
+    // Research (social_search): Cloud-only for the same reason — the
+    // `/v1/social-search` route is the cloud plugin's.
+    registerResearchTools({ server, session, fastify: opts.fastify })
+    // The inspiration wall (save_post / list_saved_posts): beside the search
+    // that finds the posts it saves; gated by assets:write / assets:read.
+    registerSavedPostTools({ server, session, fastify: opts.fastify })
   }
   registerReduce({ server, session, fastify: opts.fastify })
   registerPromptHelper({ server, session, fastify: opts.fastify })

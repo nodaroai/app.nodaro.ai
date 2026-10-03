@@ -5,6 +5,7 @@ import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "
 import { applyWorkflowAccess } from "@/hooks/workflow-access-mode"
 import { classifyZeroRowSave, isSaveRefused } from "@/hooks/workflow-save-refusal"
 import { tx } from "@/lib/i18n"
+import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
 import { reconcileWorkflowNodeResults } from "@/lib/reconcile-node-results"
 import { reconcileCompletedSingleNodeJobs, buildScene3DRecoveryPatch, isScene3DNodeType } from "@/lib/reconcile-completed-jobs"
 import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
@@ -19,6 +20,7 @@ import { collectRestorableSingleNodeJobs, applySingleNodeJobRestore } from "@/li
 import { refreshEntityNodes } from "@/lib/entity-node-data"
 import { settledBeforeClear } from "@/lib/results-cleared"
 import { createTriggerSyncTracker, syncTriggersAfterSave, type TriggerSyncTracker } from "@/lib/trigger-sync-after-save"
+import { adoptUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 
@@ -73,6 +75,8 @@ interface NodeExecutionState {
     videoUrl?: string
     audioUrl?: string
     text?: string
+    /** A structured result (Content Recipe's recipe, Content Ideas' ideas). Mirrors backend NodeOutput. */
+    json?: unknown
     script?: unknown
     generatedVoiceId?: string
     alignment?: unknown
@@ -405,7 +409,11 @@ export function applyBackendExecutionState(
     // Map backend status → frontend executionStatus
     if (state.status === "completed") {
       data.executionStatus = "completed"
-      if (state.output) {
+      if (state.output && isContentNodeType(node.type)) {
+        // Content Recipe / Content Ideas: the live run's own mapping — the
+        // generic list/result writes below do not fit a recipe or the briefs.
+        Object.assign(data, contentRunResultPatch(node.type, state.output as Record<string, unknown>) ?? {})
+      } else if (state.output) {
         const nodeType = node.type ?? ""
         if (isScene3DNodeType(nodeType) && state.output.plan) {
           Object.assign(data, buildScene3DRecoveryPatch(data, {
@@ -525,6 +533,14 @@ export function applyCompletedExecutionResults(
     // Their results were already synced (via SSE or a previous load).
     // Any changes the user made (e.g. deleting images) should be respected.
     if (data.executionStatus === "completed") return node
+
+    // Content Recipe / Content Ideas: a recipe or the ideas, never a media URL —
+    // the live run's own mapping. Skipped when the node already holds a result.
+    if (isContentNodeType(node.type)) {
+      if (data.generatedJson || data.generatedText) return node
+      const patch = contentRunResultPatch(node.type, state.output as Record<string, unknown>)
+      return patch ? { ...node, data: { ...data, ...patch } as SceneNodeData } : node
+    }
 
     const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
 
@@ -849,11 +865,11 @@ export function useWorkflowPersistence(projectId?: string) {
             setSaveStatus("error", "Workflow was updated on another device")
             setRemoteUpdatedAt(row.updated_at ?? `conflict:${new Date().toISOString()}`)
             const reload = loadRef.current
-            toast.error("Workflow was updated on another device", {
+            toast.error(tx("toastMsg.workflowWasUpdatedOnAnother"), {
               id: "workflow-remote-conflict",
-              description: "Your unsaved edits are still here. Reload to see the latest version.",
+              description: tx("toastMsg.yourUnsavedEditsAreStill"),
               action: reload && workflowId
-                ? { label: "Reload", onClick: () => { void reload(workflowId) } }
+                ? { label: tx("misc.reload"), onClick: () => { void reload(workflowId) } }
                 : undefined,
               duration: 10_000,
             })
@@ -899,12 +915,14 @@ export function useWorkflowPersistence(projectId?: string) {
           })
           if (contested.length > 0) {
             toast.warning(
-              `Kept your edits to: ${contested
-                .map((n) => ((n.data as Record<string, unknown>).label as string) || n.id)
-                .join(", ")}`,
+              tx("toastMsg.keptYourEditsTo", {
+                nodes: contested
+                  .map((n) => ((n.data as Record<string, unknown>).label as string) || n.id)
+                  .join(tx("common.listComma")),
+              }),
               {
                 id: "delta-rebase-contested",
-                description: "These nodes were also changed on another device — your version won.",
+                description: tx("toastMsg.theseNodesWereAlsoChanged"),
               },
             )
           }
@@ -924,6 +942,19 @@ export function useWorkflowPersistence(projectId?: string) {
         // full write.
         const nodesBeforeSave = useWorkflowStore.getState().lastSavedSnapshot?.nodes
         let createdWorkflowId: string | null = null
+        const viewportAtSave = useWorkflowStore.getState().savedViewport
+        // What this write leaves on the server, so the next save starts from it
+        // (the delta path's base, and the trigger sync's "stored graph the save
+        // started from") instead of from the last load or delta.
+        const savedSnapshot = {
+          nodes,
+          edges,
+          name: workflowName,
+          characterDefinitions,
+          flowPromptTemplates,
+          presentationSettings,
+          savedViewport: viewportAtSave,
+        }
         const payload = {
           project_id: resolvedProjectId,
           name: workflowName,
@@ -937,7 +968,7 @@ export function useWorkflowPersistence(projectId?: string) {
             characterDefinitions: JSON.parse(JSON.stringify(characterDefinitions)),
             flowPromptTemplates: JSON.parse(JSON.stringify(flowPromptTemplates)),
             presentationSettings: JSON.parse(JSON.stringify(presentationSettings)),
-            viewport: useWorkflowStore.getState().savedViewport,
+            viewport: viewportAtSave,
           },
         }
 
@@ -1052,11 +1083,11 @@ export function useWorkflowPersistence(projectId?: string) {
               setRemoteUpdatedAt(`conflict:${new Date().toISOString()}`)
             }
             const reload = loadRef.current
-            toast.error("Workflow was updated on another device", {
+            toast.error(tx("toastMsg.workflowWasUpdatedOnAnother"), {
               id: "workflow-remote-conflict",
-              description: "Your unsaved edits are still here. Reload to see the latest version.",
+              description: tx("toastMsg.yourUnsavedEditsAreStill"),
               action: reload && workflowId
-                ? { label: "Reload", onClick: () => { void reload(workflowId) } }
+                ? { label: tx("misc.reload"), onClick: () => { void reload(workflowId) } }
                 : undefined,
               duration: 10_000,
             })
@@ -1071,7 +1102,7 @@ export function useWorkflowPersistence(projectId?: string) {
             typeof (data as { version?: unknown }).version === "number"
               ? ((data as { version: number }).version)
               : null,
-            undefined,
+            savedSnapshot,
             epochAtStart,
           )
         } else {
@@ -1108,12 +1139,16 @@ export function useWorkflowPersistence(projectId?: string) {
           // The window between insert and re-subscribe is broadcast-safe.
           setWorkflowId(data.id)
           createdWorkflowId = data.id as string
+          // What the owner set in this workflow's trigger panels before it had
+          // an id is now this workflow's — and only this one's (the sync below
+          // reads it under the new id).
+          adoptUnsavedAccountTriggerIntents(createdWorkflowId)
           applySaveSuccess(
             data.updated_at as string,
             typeof (data as { version?: unknown }).version === "number"
               ? ((data as { version: number }).version)
               : null,
-            undefined,
+            savedSnapshot,
             epochAtStart,
           )
         }
@@ -1450,7 +1485,7 @@ export function useWorkflowPersistence(projectId?: string) {
             .maybeSingle()
 
           if (saveError) {
-            toast.error("Failed to save synced nodes")
+            toast.error(tx("toastMsg.failedToSaveSyncedNodes"))
           } else if (sideSaved?.updated_at) {
             setLoadedUpdatedAt(sideSaved.updated_at as string)
             setLoadedVersion(typeof (sideSaved as unknown as { version?: unknown }).version === "number" ? (sideSaved as unknown as { version: number }).version : null)

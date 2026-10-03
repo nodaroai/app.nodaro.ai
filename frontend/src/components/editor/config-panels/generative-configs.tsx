@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import type { GenerativePipelineNodeData } from "@/types/nodes"
-import { PIPELINE_FORMATS, PIPELINE_MODES, PIPELINE_OUTPUT_RESOLUTIONS, PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_SCRIPT_LLMS, PIPELINE_PINNABLE_VIDEO_MODELS, VIDEO_CRITIC_FRAME_MODES, validateDurationForFormat, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode } from "@nodaro/shared"
+import { PIPELINE_FORMATS, PIPELINE_MODES, PIPELINE_OUTPUT_RESOLUTIONS, PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_SCRIPT_LLMS, PIPELINE_PINNABLE_VIDEO_MODELS, VIDEO_CRITIC_FRAME_MODES, VIDEO_CRITIC_RESERVED_CREDITS_PER_SHOT, getModel, validateDurationForFormat, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -56,18 +56,18 @@ function VIDEO_CRITIC_FRAME_LABELS(): Record<VideoCriticFrameMode, string> {
 }
 
 function VIDEO_CRITIC_FRAME_DESCRIPTIONS(): Record<VideoCriticFrameMode, string> {
+  const n = VIDEO_CRITIC_RESERVED_CREDITS_PER_SHOT
   return {
-    first_last: tx("cfgext.genFramesFirstLastDesc"),
-    first_middle_last: tx("cfgext.genFramesFirstMiddleLastDesc"),
-    five_evenly: tx("cfgext.genFramesFiveEvenlyDesc"),
+    first_last: tx("cfgext.genFramesFirstLastDesc", { n: n.first_last }),
+    first_middle_last: tx("cfgext.genFramesFirstMiddleLastDesc", { n: n.first_middle_last }),
+    five_evenly: tx("cfgext.genFramesFiveEvenlyDesc", { n: n.five_evenly }),
   }
 }
 
 // Labels for each pinnable model. The model id list lives in
 // `@nodaro/shared::PIPELINE_PINNABLE_*` so the Zod schema and these dropdowns
-// can't drift. Labels intentionally match the credit-table identifier — e.g.
-// `veo3` is VEO 3.1 Quality (~125cr/shot), `veo3.1` is VEO 3.1 Fast
-// (~30-40cr/shot) per backend/CLAUDE.md.
+// can't drift. No price in a label: the picker shows each model's live charged
+// price beside it (the VEO labels once carried per-shot prices that went stale).
 function IMAGE_MODEL_LABELS(): Record<string, string> {
   return {
     "nano-banana": tx("cfgext.genImgNanoBanana"),
@@ -91,9 +91,9 @@ function VIDEO_MODEL_LABELS(): Record<string, string> {
     "seedance-2-fast": "Seedance 2 Fast",
     "seedance-2-mini": "Seedance 2 Mini",
     "seedance-2-5": "Seedance 2.5",
-    veo3: tx("cfgext.genVidVeo3Quality"),
-    "veo3.1": tx("cfgext.genVidVeo3Fast"),
-    veo3_lite: tx("cfgext.genVidVeo3Lite"),
+    veo3: getModel("veo3")?.label ?? "veo3",
+    "veo3.1": getModel("veo3.1")?.label ?? "veo3.1",
+    veo3_lite: getModel("veo3_lite")?.label ?? "veo3_lite",
     minimax: "MiniMax",
     "hailuo-standard": "Hailuo Standard",
     "wan-turbo": "Wan Turbo",

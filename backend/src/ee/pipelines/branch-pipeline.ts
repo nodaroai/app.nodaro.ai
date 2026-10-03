@@ -93,13 +93,18 @@ export async function branchPipeline(
     throw new BranchPipelineError("invalid_stage", `Unknown stage: ${fromStage}`)
   }
 
-  // 2. Fetch original pipeline
+  // 2. Fetch the original pipeline — the CALLER's. Ownership is part of the
+  // query, so someone else's pipeline is simply not found. Checking it after
+  // the status answered 400 pipeline_not_completed or 403 forbidden for a
+  // foreign id, telling the caller that the pipeline exists, where every other
+  // pipeline route answers 404.
   const { data: original, error: origErr } = await supabase
     .from("pipelines")
     .select(
       "id, status, user_id, workflow_id, root_node_id, pipeline_type, activation_mode, mode, input_prompt, target_duration_seconds, format, output_resolution, language, style_directives, config, max_cost_credits",
     )
     .eq("id", originalPipelineId)
+    .eq("user_id", userId)
     .single()
   if (origErr || !original) {
     throw new BranchPipelineError(
@@ -114,11 +119,6 @@ export async function branchPipeline(
       "pipeline_not_completed",
       `Pipeline ${originalPipelineId} must be status='completed' to branch (current: ${original.status})`,
     )
-  }
-
-  // 4. Ownership check (also done at the route layer — belt-and-suspenders)
-  if (original.user_id !== userId) {
-    throw new BranchPipelineError("forbidden", "Pipeline belongs to a different user")
   }
 
   // 4b. Tier model-pin guard + upfront credit reservation. A branch RE-RUNS the

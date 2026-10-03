@@ -88,7 +88,7 @@ export function computeLiveRunEstimate(
     const cost =
       cached !== undefined
         ? cached
-        : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, args.edges)
+        : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, args.edges, effectiveNodes)
     return sum + cost * getCostMultiplier(node, effectiveNodes, args.edges, rerunIds)
   }, 0)
   return { total, uncachedModelIds }

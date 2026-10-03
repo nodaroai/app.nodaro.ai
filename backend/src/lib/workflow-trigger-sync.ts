@@ -37,6 +37,7 @@ import {
   isValidTimezone,
   legacyScheduleToRules,
   normalizeScheduleRules,
+  telegramAccountListeningSignature,
   type ScheduleRule,
 } from "@nodaro/shared"
 import { supabase } from "./supabase.js"
@@ -191,11 +192,15 @@ export function normalizeTelegramConfig(
  * never omitted (see normalizeTelegramConfig): an omitted key would keep a
  * filter the user just cleared standing on the row. Whether the account is
  * the owner's own is checked where the message arrives, not trusted from here.
+ * The account id must be written exactly (no padding): the editor reads a
+ * padded id as no account of the owner's, so trimming it here would arm a
+ * trigger on an account its panel never showed (the node-id rule in
+ * `unambiguousAccountTriggerNodes`, applied to the account).
  */
 export function normalizeTelegramAccountConfig(
   data: Record<string, unknown>,
 ): Record<string, unknown> | null {
-  const accountId = trimmed(data.accountId)
+  const accountId = typeof data.accountId === "string" && data.accountId === data.accountId.trim() ? data.accountId : ""
   const chatIds = stringList(data.chatIds)
   // No chat picked is not "every chat": a personal account's whole inbox is never a default.
   if (!accountId || data.isActive !== true || chatIds.length === 0) return null
@@ -206,6 +211,11 @@ export function normalizeTelegramAccountConfig(
     messageTypeFilters: stringList(data.messageTypeFilters),
     keywords: stringList(data.keywords),
     includeOutgoing: data.includeOutgoing === true,
+    // Inbox mode: only the owner's own shares start a run — a post link or a
+    // forwarded post, one run per post. The connector that understands it
+    // listens to the owner's own messages for it; projected as set, so a
+    // connector that predates it keeps the plain filters above.
+    inboxMode: data.inboxMode === true,
   }
 }
 
@@ -215,10 +225,33 @@ function stringList(value: unknown): string[] {
   return [...new Set(items.filter((v) => v !== ""))]
 }
 
+/**
+ * The Telegram ACCOUNT trigger nodes that are unambiguous, by id: the id and
+ * the type written exactly (no padding), and no other node of ANY type with
+ * the same id, padded or not. The lane reads the owner's own messages, so an
+ * id that could mean two nodes — the owner's, and a twin written beside it by
+ * a token or a collaborator — is never projected and never confirmed.
+ */
+export function unambiguousAccountTriggerNodes(nodes: readonly GraphNode[] | undefined): Map<string, GraphNode> {
+  const nodesPerId = new Map<string, number>()
+  for (const node of nodes ?? []) {
+    const id = trimmed(node?.id)
+    if (id) nodesPerId.set(id, (nodesPerId.get(id) ?? 0) + 1)
+  }
+  const clean = new Map<string, GraphNode>()
+  for (const node of nodes ?? []) {
+    if (node?.type !== TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE || typeof node.id !== "string") continue
+    if (node.id === "" || node.id !== node.id.trim() || nodesPerId.get(node.id) !== 1) continue
+    clean.set(node.id, node)
+  }
+  return clean
+}
+
 /** Every trigger the graph asks for, in node order. */
 export function desiredTriggersFromGraph(nodes: readonly GraphNode[] | undefined): DesiredTrigger[] {
   const desired: DesiredTrigger[] = []
   const seen = new Set<string>()
+  const cleanAccountNodes = unambiguousAccountTriggerNodes(nodes)
   for (const node of nodes ?? []) {
     const nodeId = trimmed(node?.id)
     const nodeType = trimmed(node?.type)
@@ -246,6 +279,9 @@ export function desiredTriggersFromGraph(nodes: readonly GraphNode[] | undefined
         desired.push({ nodeId, type: "telegram", config, isActive: true })
       }
     } else if (nodeType === TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE) {
+      // Only the one unambiguous node for this id (see above): a padded id or
+      // type, or a twin, projects nothing — its row, if any, is removed.
+      if (cleanAccountNodes.get(nodeId) !== node) continue
       const config = normalizeTelegramAccountConfig(data)
       if (config) {
         seen.add(nodeId)
@@ -560,6 +596,59 @@ function collectTelegramReleases(
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
+ * An armed account-trigger node the owner did NOT change in this save is held
+ * to its stored row — same settings, same switch — and one with no row stays
+ * without one. Only `changed` nodes reach the lane as the graph says. Every
+ * other trigger type passes through untouched.
+ */
+export function holdUnchangedAccountTriggers(
+  desired: readonly DesiredTrigger[],
+  existing: readonly ExistingTrigger[],
+  changed: ReadonlySet<string>,
+): DesiredTrigger[] {
+  const stored = new Map<string, ExistingTrigger>()
+  for (const row of existing) {
+    if (row.type !== "telegram_account") continue
+    const nodeId = trimmed((row.config ?? {}).nodeId)
+    if (nodeId && !stored.has(nodeId)) stored.set(nodeId, row)
+  }
+  return desired.flatMap((want): DesiredTrigger[] => {
+    if (want.type !== "telegram_account" || changed.has(want.nodeId)) return [want]
+    const row = stored.get(want.nodeId)
+    if (!row) return []
+    const { nodeId: _nodeId, ...config } = row.config ?? {}
+    return [{ ...want, config, isActive: row.is_active === true }]
+  })
+}
+
+/** An account trigger the owner's editor changed, with the listening settings it set. */
+export interface ChangedAccountNode {
+  readonly id: string
+  readonly settings: string
+}
+
+/**
+ * The named account triggers whose STORED node still says exactly what the
+ * owner's editor set (`telegramAccountListeningSignature`). A write that
+ * landed after the owner's save — or before a retry of its sync — no longer
+ * matches, and that node stays held to its row.
+ */
+export function confirmedAccountChanges(
+  nodes: readonly GraphNode[] | undefined,
+  named: ReadonlyArray<ChangedAccountNode> | undefined,
+): Set<string> {
+  const confirmed = new Set<string>()
+  if (!named || named.length === 0) return confirmed
+  // The same nodes the projection reads — never a different node for one id.
+  const clean = unambiguousAccountTriggerNodes(nodes)
+  for (const { id, settings } of named) {
+    const node = clean.get(id)
+    if (node && telegramAccountListeningSignature(node.data) === settings) confirmed.add(id)
+  }
+  return confirmed
+}
+
+/**
  * The account ids among the graph's Telegram ACCOUNT triggers that are the
  * owner's own connected accounts in this environment (the generic
  * `plugin_account_secrets` store), or null when that cannot be read — the
@@ -600,20 +689,34 @@ export async function reconcileWorkflowTriggers(params: {
    */
   readonly vouchNodeIds?: ReadonlyArray<string>
   /**
-   * The save was made by the workflow's OWNER. Only such a save may create,
-   * change or remove a Telegram ACCOUNT trigger — the lane reads the owner's
-   * own messages, so an editor saving a shared workflow must never arm, widen
-   * or re-point it (rows are always written under the owner, whoever saved).
-   * Absent or false: rows of that lane are left exactly as stored.
+   * The save was made AS the workflow's owner (their editor, a token, a
+   * connected app or an MCP client). Only such a save reaches the Telegram
+   * ACCOUNT lane — the lane reads the owner's own messages, so a save by an
+   * editor of a shared workflow leaves its rows exactly as stored (rows are
+   * always written under the owner, whoever saved). Within reach, a trigger
+   * switched off or removed is switched off; arming, widening or re-pointing
+   * one takes `accountNodes` as well.
    */
   readonly ownerActing?: boolean
+  /**
+   * The account triggers the owner changed in this save in their OWN editor
+   * session, each with the listening settings that session set (the editor's
+   * sync names them; the route accepts them only from the owner's JWT
+   * session). Only those whose stored node still matches may arm, widen or
+   * re-point the lane. Every other armed node keeps its stored row exactly as
+   * it is, and gets none if it has none: settings written into the graph by a
+   * token, an app or a collaborator never become a listener in the owner's
+   * name — not at their next autosave either.
+   */
+  readonly accountNodes?: ReadonlyArray<ChangedAccountNode>
 }): Promise<ReconcileResult> {
   const { workflowId, userId, nodes } = params
   const vouched = new Set(params.vouchNodeIds ?? [])
+  const accountChanged = confirmedAccountChanges(nodes, params.accountNodes)
   try {
     const accountLane = params.ownerActing === true ? await ownedAccountIds(desiredTriggersFromGraph(nodes), userId) : null
     // Not the owner, or the ownership read failed: the account lane is out of this save's reach.
-    const desired = desiredTriggersFromGraph(nodes).filter(
+    const graphDesired = desiredTriggersFromGraph(nodes).filter(
       (t) => t.type !== "telegram_account" || (accountLane !== null && accountLane.has(String(t.config.accountId))),
     )
 
@@ -627,6 +730,7 @@ export async function reconcileWorkflowTriggers(params: {
     if (listError) return { ...EMPTY, error: listError.message }
 
     const existing = ((rows ?? []) as ExistingTrigger[]).filter((r) => r.type !== "telegram_account" || accountLane !== null)
+    const desired = holdUnchangedAccountTriggers(graphDesired, existing, accountChanged)
     // Nothing on either side: the overwhelmingly common save. No writes.
     if (desired.length === 0 && existing.length === 0) return EMPTY
 

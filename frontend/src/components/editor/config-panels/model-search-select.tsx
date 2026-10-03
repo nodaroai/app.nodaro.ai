@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useModelCreditRange } from "@/hooks/use-model-credit-range"
 import { formatCreditBadge } from "@/components/editor/config-panels/model-options"
 import { modelSearchHaystack, modelMatchesQuery } from "@/lib/model-search"
 
@@ -154,7 +155,7 @@ function ModelCommandItem({
   tooltip?: string
   onSelect: () => void
 }) {
-  const badge = formatCreditBadge(option.value, useModelCredits(option.value))
+  const badge = formatCreditBadge(option.value, useModelCredits(option.value), useModelCreditRange(option.value))
   const localizeDesc = useLocalizeModelDescription()
 
   const item = (

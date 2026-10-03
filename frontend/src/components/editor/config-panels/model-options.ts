@@ -1,7 +1,8 @@
 import { hasCredits } from "@/lib/edition"
 import { creditUnits, creditUnitLabel, formatCreditUnits } from "@/lib/credit-units"
 import { isModelUnavailable } from "@/lib/surface-availability"
-import { VIDEO_DURATION_AUTO, supportsAutoVideoDuration, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, durationsByMode, creditRangesAll, modelsWithFeature, isFlux2Model, isGvpSupportedProvider, isSeedance2Provider, GVP_SUPPORTED_PROVIDERS, VIDEO_GEN_COLLAPSED_T2V_IDS, type LabeledOption } from "@nodaro/shared"
+import { isVariablePricedModel, type CreditRange } from "@/lib/model-credit-range"
+import { VIDEO_DURATION_AUTO, supportsAutoVideoDuration, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, durationsByMode, modelsWithFeature, isFlux2Model, isGvpSupportedProvider, isSeedance2Provider, GVP_SUPPORTED_PROVIDERS, VIDEO_GEN_COLLAPSED_T2V_IDS, type LabeledOption } from "@nodaro/shared"
 import { STYLES, curateEntries } from "@nodaro/prompts"
 import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, SunoModel, TextToVideoProvider, VideoGenProvider, VideoToVideoNodeProvider } from "@nodaro/shared"
 export { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, NATIVE_NEGATIVE_PROMPT_MODELS, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, IMAGE_MASK_MODE, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "@nodaro/shared"
@@ -263,30 +264,25 @@ export const V2V_ALEPH_ASPECT_RATIOS = [
   { value: "21:9", label: "21:9" },
 ] as const
 
-// =============================================================================
-// VARIABLE CREDIT RANGES — derived from MODEL_CATALOG.pricing[]
-// Models with variable pricing (quality/resolution) show "min-max CR" instead of a single value.
-// =============================================================================
-
-export const MODEL_CREDIT_RANGES: Record<string, { min: number; max: number }> =
-  creditRangesAll()
-
-/** Formats the credit badge shown on a model dropdown row. Variable-priced
- *  models render a "min-max CR" range; fixed-price models render "N CR";
+/** Formats the credit badge shown on a model dropdown row. A variable-priced
+ *  model renders "min-max CR" — the cheapest and priciest variant at the price
+ *  a run is charged (`useModelCreditRange`); a fixed-price model renders "N CR";
  *  zero/unknown cost (e.g. community edition where `useModelCredits` returns 0)
  *  renders no badge. Shared by `ModelSelectOption` (Radix Select rows) and
  *  `ModelSearchSelect`'s cmdk rows so the rule lives in one place.
- *  `credits` is the resolved value from the `useModelCredits` hook — passed in
- *  because this is a plain function, not a component. */
-export function formatCreditBadge(value: string, credits: number): string | undefined {
-  // Editions without credits must show no price at all. This has to come
-  // FIRST: MODEL_CREDIT_RANGES is a static derivation of MODEL_CATALOG, so the
-  // range branch below returns before any zero-cost check can suppress it —
-  // which is how every model dropdown in a community build ended up quoting
-  // credits (found in the 2026-08-13 community grind).
+ *  `credits` and `range` are the resolved hook values — passed in because this
+ *  is a plain function, not a component. */
+export function formatCreditBadge(value: string, credits: number, range: CreditRange | undefined): string | undefined {
+  // Editions without credits must show no price at all — FIRST, before any
+  // branch that could quote one (found in the 2026-08-13 community grind).
   if (!hasCredits()) return undefined
-  const range = MODEL_CREDIT_RANGES[value]
-  if (range) return `${creditUnits(range.min)}-${creditUnits(range.max)} ${creditUnitLabel()}`
+  // A model priced per setting quotes its charged range, and nothing until the
+  // range has loaded: its default variant's price alone would read as the
+  // price. The range used to come from the catalog's BASE prices, so the
+  // picker quoted below what the Run button charged.
+  if (isVariablePricedModel(value)) {
+    return range ? `${creditUnits(range.min)}-${creditUnits(range.max)} ${creditUnitLabel()}` : undefined
+  }
   // credit-gated: unreachable without credits — the guard above returns first.
   if (credits > 0) return formatCreditUnits(credits)
   return undefined

@@ -13,11 +13,12 @@ vi.mock("@/lib/video-link-ingest", () => ({
 const toastApi = vi.hoisted(() => ({
   loading: vi.fn((_message: string, _options?: { action?: { label: string; onClick(): void } }) => "toast-1"),
   dismiss: vi.fn(),
-  error: vi.fn(),
+  error: vi.fn((_message: string, _options?: { description?: string; duration?: number; action?: { label: string; onClick(): void } }) => undefined),
 }))
 vi.mock("sonner", () => ({ toast: toastApi }))
 
-import { ensureVideoLinksBeforeRun, videoLinkNodesFeeding } from "../video-link-run-gate"
+import { CHOOSE_PART_TOAST_MS, choosePartMessage, ensureVideoLinksBeforeRun, videoLinkNodesFeeding } from "../video-link-run-gate"
+import { FOCUS_NODES_EVENT } from "@/lib/canvas-focus-event"
 import { translate } from "@/lib/i18n"
 
 const YT = "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
@@ -35,6 +36,17 @@ beforeEach(() => {
 })
 
 describe("videoLinkNodesFeeding", () => {
+  it("does not download a link that only a Content Recipe reads — it cites the page, never the file", () => {
+    const nodes = [link("src"), node("recipe", "content-recipe")]
+    expect(videoLinkNodesFeeding(["recipe"], nodes as never, [edge("src", "recipe")] as never)).toEqual([])
+  })
+
+  it("still downloads it when a node in the run watches the video too", () => {
+    const nodes = [link("src"), node("va", "video-analysis"), node("recipe", "content-recipe")]
+    const edges = [edge("src", "va"), edge("src", "recipe"), edge("va", "recipe")]
+    expect(videoLinkNodesFeeding(["va", "recipe"], nodes as never, edges as never)).toEqual(["src"])
+  })
+
   it("finds the un-downloaded link behind the nodes about to run — at any depth", () => {
     const nodes = [link("src"), node("pass", "trim-video"), node("run")]
     const edges = [edge("src", "pass"), edge("pass", "run")]
@@ -177,5 +189,56 @@ describe("ensureVideoLinksBeforeRun", () => {
     expect(await ensureVideoLinksBeforeRun(["run"], setIsRunning)).toBe(false)
     expect(setIsRunning).toHaveBeenLastCalledWith(false)
     expect(toastApi.dismiss).toHaveBeenCalledWith("toast-1")
+  })
+})
+
+// A run that stops for a long video must say how long it is, where to choose
+// the part, and how long a part the next node reads — the person must never
+// have to guess (owner feedback, 2026-10-02).
+describe("the choose-a-part message", () => {
+  const en = (key: Parameters<typeof translate>[1], vars?: Record<string, string | number>) => translate("en", key, vars)
+  const long = (sec: number | null) => link("src", { youtubeUrl: YT, needsRangeChoice: true, videoDurationSec: sec })
+
+  it("too long for Video Analysis: the length, the limit and what costs the least", () => {
+    const nodes = [long(1159), node("va", "video-analysis")]
+    const msg = choosePartMessage("src", "Post link", nodes as never, [edge("src", "va")] as never)
+    expect(msg.title).toBe(en("run.videoLinkChooseTooLong", { label: "Post link", duration: "19:19", consumer: "Video Analysis", max: "10:00" }))
+    expect(msg.description).toBe(en("run.videoLinkCheapestPart", { consumer: "Video Analysis", cheapest: "1:00" }))
+  })
+
+  it("long, but within what the node reads: choose a part or download it all", () => {
+    const nodes = [long(300), node("va", "video-analysis")]
+    const msg = choosePartMessage("src", "Post link", nodes as never, [edge("src", "va")] as never)
+    expect(msg.title).toBe(en("run.videoLinkChooseLong", { label: "Post link", duration: "5:00" }))
+    expect(msg.description).toBe(en("run.videoLinkCheapestPart", { consumer: "Video Analysis", cheapest: "1:00" }))
+  })
+
+  it("no node with a limit: the length, and no cost line", () => {
+    const nodes = [long(1159), node("trim", "trim-video")]
+    const msg = choosePartMessage("src", "Talk", nodes as never, [edge("src", "trim")] as never)
+    expect(msg).toEqual({ title: en("run.videoLinkChooseLong", { label: "Talk", duration: "19:19" }), description: undefined })
+  })
+
+  it("length unknown: the plain message", () => {
+    const msg = choosePartMessage("src", "Talk", [long(null)] as never, [] as never)
+    expect(msg.title).toBe(en("run.videoLinkChoose", { label: "Talk" }))
+  })
+
+  it("stays up long enough to use, and its Show button points the canvas at the node", async () => {
+    store.nodes = [long(1159), node("va", "video-analysis")]
+    store.edges = [edge("src", "va")]
+    ensureVideoLinksDownloaded.mockResolvedValue({ ok: false, nodeId: "src", label: "Post link", reason: "choose" })
+    expect(await ensureVideoLinksBeforeRun(["va"], vi.fn())).toBe(false)
+
+    const options = toastApi.error.mock.calls[0][1]
+    expect(options?.duration).toBe(CHOOSE_PART_TOAST_MS)
+    expect(options?.action?.label).toBe(en("common.show"))
+
+    const seen: unknown[] = []
+    const listener = (event: Event) => seen.push((event as CustomEvent).detail)
+    window.addEventListener(FOCUS_NODES_EVENT, listener)
+    options?.action?.onClick()
+    window.removeEventListener(FOCUS_NODES_EVENT, listener)
+    expect(seen).toEqual([{ nodeIds: ["src"] }])
   })
 })

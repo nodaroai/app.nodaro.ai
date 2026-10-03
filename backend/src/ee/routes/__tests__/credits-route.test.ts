@@ -25,6 +25,22 @@ const {
   mockAllowanceFor: vi.fn(),
 }))
 
+// The batch route prices from the price table; the rest of the billing module
+// stays real (chargedCredits is the formula under test with it).
+const { mockGetChargedPriceTable } = vi.hoisted(() => ({ mockGetChargedPriceTable: vi.fn() }))
+vi.mock("@/ee/billing/credits.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/ee/billing/credits.js")>()),
+  getChargedPriceTable: mockGetChargedPriceTable,
+}))
+
+/** A price table: `base` per identifier, and a flat +10% charge like an admin setting. */
+function priceTable(base: Record<string, number>) {
+  return {
+    base: (id: string) => base[id],
+    charge: (_id: string, credits: number) => Math.ceil((credits * 110) / 100),
+  }
+}
+
 vi.mock("@/ee/services/credits.js", () => ({
   CreditsService: {
     getBalance: mockGetBalance,
@@ -336,11 +352,8 @@ describe("POST /v1/credits/model-costs", () => {
     expect(body.error.code).toBe("validation_error")
   })
 
-  it("returns costs map + empty missing/errors on full success", async () => {
-    mockGetModelCreditCost
-      .mockResolvedValueOnce(4)
-      .mockResolvedValueOnce(10)
-      .mockResolvedValueOnce(3)
+  it("returns each identifier at the price a run is charged, from one read of the price table", async () => {
+    mockGetChargedPriceTable.mockResolvedValue(priceTable({ "nano-banana": 40, flux: 100, kling: 30 }))
 
     const res = await app.inject({
       method: "POST",
@@ -350,23 +363,17 @@ describe("POST /v1/credits/model-costs", () => {
 
     expect(res.statusCode).toBe(200)
     const body = res.json()
-    expect(body.data).toEqual({
-      "nano-banana": 4,
-      flux: 10,
-      kling: 3,
-    })
+    expect(body.data).toEqual({ "nano-banana": 44, flux: 110, kling: 33 })
     expect(body.missing).toEqual([])
     expect(body.errors).toEqual([])
+    expect(mockGetChargedPriceTable).toHaveBeenCalledTimes(1)
+    expect(mockGetModelCreditCost).not.toHaveBeenCalled()
   })
 
   it("returns 200 with partial data + missing[] when one identifier has no price", async () => {
-    // Per-model fault isolation: one PriceNotConfiguredError must NOT take
-    // down the whole batch (which used to 503 the editor's cost preview).
-    const { PriceNotConfiguredError } = await import("@/ee/billing/credits.js")
-    mockGetModelCreditCost
-      .mockResolvedValueOnce(4)
-      .mockRejectedValueOnce(new PriceNotConfiguredError("mystery-model"))
-      .mockResolvedValueOnce(3)
+    // Per-model fault isolation: an unpriced identifier must NOT take down the
+    // whole batch (which used to 503 the editor's cost preview).
+    mockGetChargedPriceTable.mockResolvedValue(priceTable({ "nano-banana": 40, kling: 30 }))
 
     const res = await app.inject({
       method: "POST",
@@ -376,27 +383,22 @@ describe("POST /v1/credits/model-costs", () => {
 
     expect(res.statusCode).toBe(200)
     const body = res.json()
-    expect(body.data).toEqual({ "nano-banana": 4, kling: 3 })
+    expect(body.data).toEqual({ "nano-banana": 44, kling: 33 })
     expect(body.missing).toEqual(["mystery-model"])
     expect(body.errors).toEqual([])
   })
 
-  it("returns 200 with errors[] for non-price failures (DB blip, etc.)", async () => {
-    mockGetModelCreditCost
-      .mockResolvedValueOnce(4)
-      .mockRejectedValueOnce(new Error("transient DB error"))
+  it("answers a sanitized 500 when the price table cannot be built at all", async () => {
+    mockGetChargedPriceTable.mockRejectedValue(new Error("settings exploded"))
 
     const res = await app.inject({
       method: "POST",
       url: "/v1/credits/model-costs",
-      payload: { models: ["nano-banana", "flux"] },
+      payload: { models: ["nano-banana"] },
     })
 
-    expect(res.statusCode).toBe(200)
-    const body = res.json()
-    expect(body.data).toEqual({ "nano-banana": 4 })
-    expect(body.missing).toEqual([])
-    expect(body.errors).toEqual(["flux"])
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
   })
 })
 

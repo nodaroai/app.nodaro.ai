@@ -93,7 +93,7 @@ export function CompactSlotItem({
       </TooltipTrigger>
       <TooltipContent side="right" className="text-xs">
         <div>{slot.name ?? formatTime(slot.createdAt)}</div>
-        <div className="text-muted-foreground capitalize">{slot.executionStatus === "idle" ? t("runner.statusDraft") : statusLabel(slot.executionStatus, t)}</div>
+        <div className="text-muted-foreground first-letter:uppercase">{slot.executionStatus === "idle" ? t("runner.statusDraft") : statusLabel(slot.executionStatus, t)}</div>
       </TooltipContent>
     </Tooltip>
   )
@@ -250,7 +250,7 @@ export function RunSlotItem({
                       </CreditGate>
                       <div className="flex justify-between">
                         <span className="opacity-70">{t("runner.status")}</span>
-                        <span className="font-medium capitalize">{statusLabel(slot.executionStatus, t)}</span>
+                        <span className="inline-block font-medium first-letter:uppercase">{statusLabel(slot.executionStatus, t)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="opacity-70">{t("runner.progress")}</span>

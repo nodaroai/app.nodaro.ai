@@ -504,6 +504,7 @@ build time):
 | Var | Description |
 |---|---|
 | `VITE_STUDIO_URL` | Base URL of the external Studio app (studio.nodaro.ai) for "Open in Studio" deep links. Default `https://studio.nodaro.ai`. |
+| `VITE_PERSON_URL` | Base URL of the external Person app (person.nodaro.ai) for the home screen "Open Person" card. Default `https://person.nodaro.ai`. |
 
 ## Surface profile (`NODARO_SURFACE_PROFILE`)
 

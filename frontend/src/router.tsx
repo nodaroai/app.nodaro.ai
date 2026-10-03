@@ -34,6 +34,7 @@ const LocationGalleryPage = lazy(() => import("@/components/library/location-gal
 const ExecutionsPage = lazy(() => import("@/app/(dashboard)/executions/page"))
 const UsagePage = lazy(() => import("@/app/(dashboard)/usage/page"))
 const ArchivedRunsPage = lazy(() => import("@/app/(dashboard)/archived-runs/page"))
+const InspirationPage = lazy(() => import("@/app/(dashboard)/inspiration/page"))
 const SharedWithMePage = lazy(() => import("@/app/(dashboard)/shared/page"))
 const GalleryPage = lazy(() => import("@/app/gallery/page"))
 const PricingPage = lazy(() => import("@/app/pricing/page"))
@@ -45,6 +46,7 @@ const EmbedPage = lazy(() => import("@/routes/embed-page"))
 const EmbedScene3DPage = lazy(() => import("@/routes/embed-scene3d-page"))
 const ApiSettingsPage = lazy(() => import("@/app/(dashboard)/settings/api/page"))
 const DeveloperAppsPage = lazy(() => import("@/app/(dashboard)/settings/developer-apps/page"))
+const ConnectedAppsPage = lazy(() => import("@/app/(dashboard)/settings/connected-apps/page"))
 const DeveloperAppDetailPage = lazy(() => import("@/app/(dashboard)/settings/developer-apps/detail/page"))
 const IntegrationsPage = lazy(() => import("@/app/(dashboard)/integrations/page"))
 const AppsPage = lazy(() => import("@/app/(dashboard)/apps/page"))
@@ -362,6 +364,10 @@ export const router = createBrowserRouter([
         element: <SuspenseWrapper><DeveloperAppDetailPage /></SuspenseWrapper>,
       },
       {
+        path: "/settings/connected-apps",
+        element: <SuspenseWrapper><ConnectedAppsPage /></SuspenseWrapper>,
+      },
+      {
         path: "/executions",
         element: <SuspenseWrapper><ExecutionsPage /></SuspenseWrapper>,
       },
@@ -380,6 +386,10 @@ export const router = createBrowserRouter([
       {
         path: "/my-files",
         element: <SuspenseWrapper><LibraryPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/inspiration",
+        element: <SuspenseWrapper><InspirationPage /></SuspenseWrapper>,
       },
       {
         path: "/library/locations",

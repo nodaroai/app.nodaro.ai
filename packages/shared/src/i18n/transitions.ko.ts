@@ -19,7 +19,7 @@ const map: LocaleCatalogMap = {
 
   // ── Time ──
   "fast-forward-day-night": { label: "낮→밤 타임랩스", description: "같은 장면에서 낮에서 밤으로의 타임랩스" },
-  "fast-forward-night-day": { label: "밤→새벽 타임랩스", description: "같은 장면에서 밤에서 새벽으로의 타임랩스" },
+  "fast-forward-night-day": { label: "밤→낮 타임랩스", description: "같은 장면에서 밤에서 새벽으로의 타임랩스" },
   "seasonal-shift": { label: "계절 변화", description: "같은 장면에서 사계절이 흘러감" },
   "aging": { label: "노화", description: "피사체가 눈에 띄게 늙어감" },
   "rewind": { label: "되감기", description: "시간이 역행하며 동작이 거꾸로 재생" },
@@ -28,18 +28,18 @@ const map: LocaleCatalogMap = {
   "flashback": { label: "플래시백", description: "피사체의 과거 순간으로의 기억 회상" },
 
   // ── Element ──
-  "dissolve-to-mist": { label: "안개로 용해", description: "피사체가 안개로 변해 흩어졌다 재형성" },
+  "dissolve-to-mist": { label: "안개로 흩어짐", description: "피사체가 안개로 변해 흩어졌다 재형성" },
   "water-splash": { label: "물 스플래시", description: "피사체가 물로 변해 튀었다 재형성" },
   "sand-scatter": { label: "모래 흩날림", description: "피사체가 모래로 변해 날아갔다 재형성" },
   "fire-burnup": { label: "연소", description: "피사체가 불타 잉걸불이 되고 재형성" },
-  "smoke-puff": { label: "연기 소환", description: "피사체가 연기로 사라졌다 다시 나타남" },
+  "smoke-puff": { label: "연기 속 사라짐", description: "피사체가 연기로 사라졌다 다시 나타남" },
   "magic-sparkles": { label: "마법 입자", description: "어벤져스 스타일의 입자 분해" },
   "lightning-flash": { label: "번개 섬광", description: "번개가 화면을 가르고 섬광 속에서 장면 전환" },
-  "ink-splash": { label: "잉크 스플래시", description: "잉크가 화면을 덮었다 수축하며 새 장면 등장" },
+  "ink-splash": { label: "잉크 스플래시", description: "잉크가 화면에 튀며 장면 전환" },
   "sand-storm": { label: "모래폭풍", description: "모래폭풍이 화면을 삼키고 내부에서 장면 전환" },
   "paint-splash": { label: "물감 스플래시", description: "선명한 물감이 덮었다 수축하며 새 장면 등장" },
   "aurora-sweep": { label: "오로라 스윕", description: "오로라 커튼이 화면을 스쳐 지나가며 장면 전환" },
-  "sakura-petals": { label: "벚꽃 폭풍", description: "벚꽃 잎사귀 폭풍이 화면을 가로지름" },
+  "sakura-petals": { label: "벚꽃 폭풍", description: "벚꽃 꽃잎이 폭풍처럼 화면을 가로지름" },
   "garden-bloom": { label: "정원 개화", description: "꽃이 사방으로 피어 새 장면을 드러냄" },
   "powder-burst": { label: "색 가루 폭발", description: "색 가루가 폭발 후 사라지며 새 장면 등장" },
 
@@ -52,10 +52,10 @@ const map: LocaleCatalogMap = {
   "dream-ripple": { label: "꿈의 파문", description: "수면 파문처럼 퍼져 새 장면 등장" },
   "wireframe-morph": { label: "와이어프레임 변형", description: "피사체가 와이어프레임으로 환원 후 새 피사체로" },
   "polygon-shatter": { label: "폴리곤 파열", description: "피사체가 폴리곤으로 부서져 새 형태로 재조합" },
-  "melt-down": { label: "용해 재생", description: "피사체가 녹아 웅덩이가 되고 새 형태로 솟아오름" },
+  "melt-down": { label: "녹아내림", description: "피사체가 녹아 웅덩이가 되고 새 형태로 솟아오름" },
 
   // ── Portal ──
-  "zoom-into-eye": { label: "눈 속으로 줌", description: "동공으로 밀고 들어가면 새 세계가" },
+  "zoom-into-eye": { label: "눈 속으로 줌", description: "동공 속으로 파고들면 펼쳐지는 새 세계" },
   "zoom-into-mirror": { label: "거울 속으로 줌", description: "거울로 밀어 들어가 반사된 세계로" },
   "zoom-into-screen": { label: "화면 속으로 줌", description: "TV/스마트폰/모니터 화면 속으로" },
   "zoom-into-book": { label: "책 속으로 줌", description: "책 삽화 속으로 밀어 들어감" },
@@ -63,7 +63,7 @@ const map: LocaleCatalogMap = {
   "fall-into-hole": { label: "구멍으로 추락", description: "구멍을 통해 카메라가 추락" },
   "pull-out-reveal": { label: "풀 아웃 리빌", description: "첫 장면이 더 큰 맥락 속의 그림이었음을 드러냄" },
   "zoom-into-mouth": { label: "입 속으로 줌", description: "열린 입 속으로 밀어 들어가 새 세계로" },
-  "push-through-glass": { label: "유리를 통과", description: "카메라가 유리 면을 굴절하며 통과해 새 세계로" },
+  "push-through-glass": { label: "유리를 통과", description: "카메라가 유리창을 뚫고 지나가 새 세계로" },
   "soul-jump": { label: "영혼 점프", description: "반투명한 영혼이 몸을 떠나 새 몸으로 들어감" },
   "mask-transition": { label: "마스크 트랜지션", description: "전경의 물체가 화면을 가리고 카메라가 그 어둠을 통과함" },
   "zoom-through": { label: "줌 스루", description: "카메라가 한 디테일을 확대해 그 안에서 새 장면이 펼쳐짐" },
@@ -82,19 +82,19 @@ const map: LocaleCatalogMap = {
 
   // ── Light ──
   "white-flash": { label: "화이트 플래시", description: "화면이 순백으로 빛남" },
-  "lens-flare-swipe": { label: "렌즈 플레어 스윕", description: "아나모픽 렌즈 플레어가 화면을 가로지름" },
-  "light-streak": { label: "빛 줄기 스윕", description: "빛의 줄기가 화면을 가로질러 장면 전환" },
+  "lens-flare-swipe": { label: "렌즈 플레어 스와이프", description: "아나모픽 렌즈 플레어가 화면을 가로지름" },
+  "light-streak": { label: "빛줄기", description: "빛의 줄기가 화면을 가로질러 장면 전환" },
   "color-invert": { label: "색 반전 플래시", description: "색상이 순간적으로 반전됨" },
-  "sun-glare": { label: "태양 눈부심", description: "강렬한 태양 눈부심이 화면을 씻어냄" },
+  "sun-glare": { label: "태양 눈부심", description: "강렬한 햇빛이 화면을 하얗게 뒤덮음" },
   "lens-crack": { label: "렌즈 균열", description: "렌즈가 갈라지고 균열된 유리 너머로 새 장면" },
-  "dirty-lens-wipe": { label: "오염 렌즈 닦기", description: "렌즈 오염이 닦이며 장면이 전환됨" },
+  "dirty-lens-wipe": { label: "렌즈 얼룩 닦기", description: "렌즈 오염이 닦이며 장면이 전환됨" },
   "eye-light-burst": { label: "눈빛 폭발", description: "피사체의 눈에서 강렬한 빔이 뿜어져 화면 화이트아웃" },
 
   // ── Glitch ──
   "digital-glitch": { label: "디지털 글리치", description: "RGB 분리+스캔라인+데이터모시 글리치" },
   "vhs-rewind": { label: "VHS 되감기", description: "VHS 테이프 되감기 스타일 트래킹 왜곡" },
-  "datamosh": { label: "데이터모쉬", description: "모션 벡터가 두 장면을 번지게 하며 전환" },
-  "channel-flip": { label: "채널 전환", description: "TV 정전기와 함께 채널이 바뀌는 효과" },
+  "datamosh": { label: "데이터모시", description: "모션 벡터가 두 장면을 번지게 하며 전환" },
+  "channel-flip": { label: "채널 전환", description: "TV 노이즈 화면과 함께 채널이 바뀌는 효과" },
   "hologram-flicker": { label: "홀로그램 깜빡임", description: "홀로그램 깜빡임 속에서 새 장면이 출현" },
   "display-wipe": { label: "디스플레이 와이프", description: "장면이 화면으로 압축되었다 새 장면으로 펼쳐짐" },
   "double-exposure": { label: "이중 노출", description: "두 장면이 반투명하게 겹치며 첫 장면이 사라짐" },

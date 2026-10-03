@@ -15,6 +15,7 @@ import { z } from "zod"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { McpSession } from "../session.js"
 import { getPickerCatalog, summarizePickerCatalogs, projectPickerCatalog } from "@nodaro/prompts"
+import { pickerImageOptions } from "../../picker-images.js"
 
 export const GET_PICKER_CATALOG_TOOL_DESCRIPTION =
   "Returns the catalog of valid values for a parameter-picker node type " +
@@ -23,7 +24,8 @@ export const GET_PICKER_CATALOG_TOOL_DESCRIPTION =
   "(from start_workflow_editor's catalog) to get its valid ids, labels, each " +
   "id's short professional `term` (what to write into a prompt when you want " +
   "a compact instruction), the target data field(s), and — with " +
-  "detail='full' — each id's full prompt fragment. Use this before writing a " +
+  "detail='full' — each id's full prompt fragment. Pictured options carry " +
+  "`imageUrl`; person/styling add `sections` (topics). Use this before writing a " +
   "picker node's value field in update_workflow_json so you set a real " +
   "catalog id, not a guess. Read-only, idempotent, free of side effects."
 
@@ -47,7 +49,7 @@ export function registerPickerCatalogs(server: McpServer, _session: McpSession):
           .enum(["compact", "full"])
           .optional()
           .describe(
-            "compact (default): id, label, category, term, icon. full: additionally includes description + promptHint (the prompt fragment each id injects). " +
+            "compact (default): id, label, category, term, icon, imageUrl. full: additionally includes description + promptHint (the prompt fragment each id injects). " +
               "`term` rides at BOTH levels: it is the short professional phrase to inject in compact hint mode (\"whip pan left\"), where `label` is display-only and `promptHint` is the full mechanism sentence. Empty for a no-op (\"auto\"/\"none\") entry that injects nothing.",
           ),
         category: z
@@ -70,7 +72,7 @@ export function registerPickerCatalogs(server: McpServer, _session: McpSession):
       if (!args.node_type) {
         return {
           content: [
-            { type: "text" as const, text: JSON.stringify({ pickers: summarizePickerCatalogs() }, null, 2) },
+            { type: "text" as const, text: JSON.stringify({ pickers: summarizePickerCatalogs({ images: pickerImageOptions() }) }, null, 2) },
           ],
         }
       }
@@ -95,6 +97,7 @@ export function registerPickerCatalogs(server: McpServer, _session: McpSession):
         detail: args.detail,
         category: args.category,
         field: args.field,
+        images: pickerImageOptions(),
       })
       return { content: [{ type: "text" as const, text: JSON.stringify(projected, null, 2) }] }
     },

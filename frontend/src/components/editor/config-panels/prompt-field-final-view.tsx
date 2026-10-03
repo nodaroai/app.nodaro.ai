@@ -38,7 +38,7 @@ export const ORIGIN_CLASS: Record<DisplayOrigin, string> = {
  *  user (it's the identity/reference directive block). Display order is fixed. */
 export function LEGEND_META(): ReadonlyArray<{ origin: Exclude<DisplayOrigin, "user">; label: string; dot: string }> {
   return [
-  { origin: "variable", label: tx("audiocfg.variable"), dot: "bg-sky-500" },
+  { origin: "variable", label: tx("cfgshared.legendVariable"), dot: "bg-sky-500" },
   { origin: "picker", label: tx("cfgshared.legendPicker"), dot: "bg-indigo-500" },
   { origin: "snippet", label: tx("cfgshared.legendSnippet"), dot: "bg-amber-500" },
   { origin: "affix", label: tx("cfgshared.legendAffix"), dot: "bg-teal-500" },

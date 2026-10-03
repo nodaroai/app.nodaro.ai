@@ -13,7 +13,7 @@ Complete reference for all nodes available in the Nodaro.ai visual workflow edit
 
 ## Quick Reference
 
-- **Total Nodes:** 183 creatable from the picker
+- **Total Nodes:** 185 creatable from the picker
 - **Tabs:** 9  ·  **Families:** 46
 
 ---
@@ -48,14 +48,14 @@ the foot of the list.
 |---|---|
 | **Add Your Own** | Upload Video |
 | **Create** | Generate Video · Generate Video Pro · Music Video · Still to Video · Slideshow |
-| **Story & Script** | Story → Video · Scene · Generate Script |
+| **Story & Script** | Story → Video · Scene · Content Ideas · Generate Script |
 | **Animate & Perform** | AI Avatar · Cinematic Avatar · Lip Sync · Speech to Video · Motion Transfer · Face Swap |
 | **Continue & Restyle** | Extend Video · Edit Video Pro · Retake Video · Video to Video · Relight & Switch |
 | **Cut & Assemble** | Trim Video · Combine Videos · Apply EDL · Assemble Narrated Video · Adjust Speed · Loop Video · Fade In/Out · Composite · Compose Video · Split into Chunks · Manual Edit |
 | **Sound for Video** | Video SFX · Merge Video & Audio · Extract Audio · Remove Audio |
 | **Titles, Graphics & Captions** | 3D Title · Motion Graphics · After Effects · Lottie Overlay · Add Captions · Render Video |
 | **Format & Export** | Resize Video · Social Media Format · Upscale Video · Transcode Video · Gif to Video |
-| **Analyze** | Video Analysis · AI Audit |
+| **Analyze** | Video Analysis · AI Audit · Content Recipe |
 
 ### Audio
 
@@ -160,6 +160,7 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 | [Web Scrape](./input/web-scrape.md) | Scrape Google Search, web pages, RSS, Instagram, or TikTok (5 actors, dynamic credit cost) | Data ingestion pipelines; seed generation workflows with live search results or social post metadata |
 | [Meta Ads](./input/meta-ads-scrape.md) | Pull public Facebook + Instagram ads from Meta's Ad Library by keyword, advertiser (picked by name) or Facebook Page (1 credit per requested ad, tiered) | Competitor ad research; seed creative pipelines with real ad copy, CTAs and visuals |
 | [Instagram](./input/instagram-scrape.md) | Pull public Instagram posts (images, carousels, reels) by profile or hashtag (1 credit per requested post, tiered) | Track a creator/brand; research a hashtag; seed pipelines with real captions and visuals |
+| [Social Search](./input/social-search.md) | Search TikTok, Instagram, YouTube, X, Reddit, LinkedIn or Meta's Ad Library by keyword or account, then pick the posts to pass on (per page of 20 results; Cloud, admin preview) | Find what is working on a topic; collect a creator's or advertiser's best posts; feed real posts into Content Recipe |
 | [Video URL](./input/youtube-video.md) | Download video/audio from YouTube or other URLs | Import video from YouTube, TikTok, Instagram, Facebook, X |
 | [Reference Audio](./input/reference-audio.md) | Extract audio from YouTube or uploaded video | Extract audio tracks for dubbing, remixing, or analysis |
 | [Webhook Trigger](./input/webhook-trigger.md) | Trigger workflow via HTTP webhook endpoint | Integrate with external systems, APIs, n8n, or Zapier |
@@ -186,11 +187,11 @@ Free-form or enum settings that feed AI / video / audio generation nodes via Fie
 |------|-------------|-------------|
 | [Tone](./parameters/tone.md) | Define tone/style for AI generation | Set consistent tone across script and image generation |
 | [Style Guide](./parameters/style-guide.md) | Visual style reference text | Maintain consistent visual aesthetics across generated assets |
-| [Provider](./parameters/provider.md) | Select AI provider and model | Route generation to a specific model for downstream nodes |
+| [Provider](./parameters/provider.md) | Choose the model of the nodes it's wired into | Switch every connected image or video node's model from one place (their Settings input) |
 | [Scene Count](./parameters/scene-count.md) | Specify number of scenes to generate | Control script generation output length |
-| [Duration](./parameters/duration.md) | Set target duration in seconds | Define video or audio length for downstream nodes |
-| [Aspect Ratio](./parameters/aspect-ratio.md) | Define video/image aspect ratio | Set consistent dimensions (16:9, 9:16, 1:1, 4:5) |
-| [Motion](./parameters/motion.md) | Control motion intensity | Adjust video generation movement (subtle/moderate/dynamic) |
+| [Duration](./parameters/duration.md) | Set target duration in seconds | A script's target length, or a video's duration (Settings input) |
+| [Aspect Ratio](./parameters/aspect-ratio.md) | Define an image or video aspect ratio | Set consistent dimensions (16:9, 9:16, 1:1, 4:3, 4:5) across generation nodes (Settings input) |
+| [Motion](./parameters/motion.md) | Control motion intensity | A subtle / moderate / dynamic clause in a video node's prompt (Settings input) |
 
 ### Picker nodes — Look family
 
@@ -260,8 +261,8 @@ Music and voice-design pickers. Wire into Suno, Generate Music, Text-to-Audio, o
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Music Genre](./parameters/music-genre.md) | Pick genre + subgenre + era for music generation | Feed Suno Generate, Generate Music (MiniMax), Text to Audio |
-| [Music Mood](./parameters/music-mood.md) | Pick energy + emotion + vibe for music generation | Feed Suno Generate, Generate Music (MiniMax), Text to Audio |
+| [Music Genre](./parameters/music-genre.md) | Pick genre + subgenre + era for music generation | Feed Suno Create Music, Generate Music (MiniMax), Text to Audio |
+| [Music Mood](./parameters/music-mood.md) | Pick energy + emotion + vibe for music generation | Feed Suno Create Music, Generate Music (MiniMax), Text to Audio |
 | [Instrumentation](./parameters/instrumentation.md) | Pick instruments + production style + vocal presence | Feed music generators; flips MiniMax `instrumental` flag |
 | [Voice Character](./parameters/voice-character.md) | Pick age + gender + accent + timbre for ElevenLabs Voice Design | Compose voice descriptions for Voice Design |
 | [Voice Delivery](./parameters/voice-delivery.md) | Pick pace + emotion + archetype for ElevenLabs Voice Design | Compose voice descriptions for Voice Design |
@@ -274,6 +275,8 @@ Generate, transform, or extract text using AI models.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
+| [Content Ideas](./ai-text/content-ideas.md) | One or more Content Recipes + your brand → concrete post ideas (hook, format, beats, shot list, why it fits). Emits a list: the next node runs once per idea. Cloud only | Turn posts that worked into a batch of on-brand ideas, then scripts |
+| [Content Recipe](./ai-text/content-recipe.md) | Why a post worked: hook, format label, timed beats, why it works, CTA, sound, pace — as data and text. Cloud only | Reverse-engineer a competitor or viral post (best after Video Analysis) |
 | [Generate Script](./ai-text/generate-script.md) | AI multi-scene script with cinematography | Create structured video scripts with scene descriptions and camera directions |
 | [Prompt](./ai-text/llm-chat.md) | LLM text generation from a prompt (formerly "Generate Text") (selectable model, optional image/video/audio refs). Two outputs: full `text` and a `===NEXT===`-split `items` fan-out list. Built-in + user templates; "Create N Image Nodes" fan-out | Rewrite/transform text, caption media, brainstorm, or fan out N image prompts |
 | [QA Check](./ai-text/qa-check.md) | LLM quality gate — scores text 0.0-1.0, returns pass/fail + reason | Validate generated scripts or captions before they continue downstream |
@@ -355,8 +358,8 @@ Dedicated suite for music creation, editing, and manipulation powered by Suno AI
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Suno Voice](./suno-music/suno-voice.md) | Create a custom voice persona from a recording | Train a `voiceId` to sing on Suno Generate / Cover / Extend |
-| [Suno Generate](./suno-music/suno-generate.md) | Generate full song from prompt and lyrics | Create complete songs with style, lyrics, and vocal control |
+| [Suno Voice](./suno-music/suno-voice.md) | Create a custom voice persona from a recording | Train a `voiceId` to sing on Suno Create Music / Cover / Extend |
+| [Suno Create Music](./suno-music/suno-generate.md) | Generate full song from prompt and lyrics | Create complete songs with style, lyrics, and vocal control |
 | [Suno Cover](./suno-music/suno-cover.md) | Create cover version of existing song | Re-record existing audio in a new style or voice |
 | [Suno Extend](./suno-music/suno-extend.md) | Continue/extend existing Suno track | Add more content to a Suno-generated track |
 | [Suno Lyrics](./suno-music/suno-lyrics.md) | Generate song lyrics from prompt | AI-write lyrics with structure (verse, chorus, bridge) |
