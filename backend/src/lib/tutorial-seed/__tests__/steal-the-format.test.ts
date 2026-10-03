@@ -6,7 +6,8 @@
  * NODE_HANDLES and every edge lands on a real handle — plus the wiring this
  * template exists for: the Video URL feeds both the analysis and the recipe's
  * `link` (so every idea can cite the post), the brand reaches Content Ideas as
- * a field, and the script node runs once per idea on the economy model.
+ * a field, and the script node (a Prompt) writes the script for the ONE idea the
+ * wire picks (item 1 by default), on the economy model.
  * The frontend twin (frontend/src/lib/__tests__/steal-the-format-connections
  * .test.ts) proves every edge is a connection the canvas accepts.
  */
@@ -108,23 +109,37 @@ describe("steal-the-format template", () => {
     expect(ideas.data?.count).toBe(5)
   })
 
-  it("the script node runs once per idea, on the economy model", async () => {
+  it("the script node writes one script, for the idea the wire picks, on the economy model", async () => {
     const { nodes, edges } = await load()
     const ideas = only(nodes, "content-ideas")
-    const script = only(nodes, "generate-script")
+    const script = only(nodes, "llm-chat")
     const wire = edgeBetween(edges, ideas, script, "prompt")
     expect(wire?.sourceHandle).toBe("ideas")
-    // Content Ideas fans out by type; an explicit "selected" mode on the wire
-    // would hand the script every idea as one text.
+    // Content Ideas fans out by type ("each" by default); the template picks
+    // ONE idea instead — item 1 (1-based), which the person changes to choose
+    // another, or sets back to Each for a script per idea.
     expect(FAN_OUT_EACH_TYPES.has("content-ideas")).toBe(true)
-    expect(wire?.data?.outputMode).toBeUndefined()
-    // Pinned: without llmModel the run bills the standard script price.
-    expect(buildLlmCreditIdentifier("generate-script", script.data?.llmModel as string | undefined)).toBe("generate-script:economy")
+    expect(wire?.data).toEqual({ outputMode: "item", itemIndex: "1" })
+    // Pinned: without llmModel the run bills the standard Prompt price.
+    expect(buildLlmCreditIdentifier("llm-chat", script.data?.llmModel as string | undefined)).toBe("llm-chat:economy")
+    // Each idea reaches the model as its user input: an EMPTY typed input lets
+    // the fan-out item through, and the instructions live in the system prompt.
+    expect(script.data?.userInput).toBe("")
+    expect(String(script.data?.systemPrompt ?? "").length).toBeGreaterThan(0)
+  })
+
+  it("ships an example post as a bare public link — no share token, no downloaded copy", async () => {
+    const { nodes } = await load()
+    const data = only(nodes, "youtube-video").data ?? {}
+    const link = new URL(String(data.youtubeUrl))
+    expect(link.hostname).toBe("www.instagram.com")
+    expect(link.search).toBe("")
+    expect(data.downloadedVideoUrl).toBeUndefined()
   })
 
   it("ends at the scripts — nothing downstream of the script node", async () => {
     const { nodes, edges } = await load()
-    const script = only(nodes, "generate-script")
+    const script = only(nodes, "llm-chat")
     expect(edges.filter((e) => e.source === script.id)).toEqual([])
   })
 })
