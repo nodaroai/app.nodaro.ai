@@ -1,5 +1,77 @@
 # @nodaro/cli
 
+## 1.25.0
+
+### Minor Changes
+
+- 470cbe2: Add `nodaro edit switch-cameras --edl <file> --transcript <file> [--speaker-map <file>] [--speaker-names <file>] [--min-shot-ms] [--lead-ms] [--max-shot-ms] [--wide-every] [--layout-hints]`: put each cut of an edit on the camera of whoever is speaking.
+- 5b8496b: - `nodaro recast estimate` / `create` / `start` take `--segment-pack scenes-max|scenes|max` in place of `--segment-sec <n>`. The API takes a pack name there, so the old option sent a number of seconds that the server rejected.
+  - The README links the command reference on nodaro.ai/docs instead of the old GitHub Pages copy.
+- ba1ae16: Did it work? "I did this" on an action card, and how it went. `@nodaro/shared` adds the mark types (`CardAction`, `CardActionResult`, `CardOutcome`, `CardOutcomeState`, `CardSnapshot`, `CardVerdict`, `AdviceRecord`, `AdviceFamily`, `CompetitorActionsResult`, `MarkCardInput`, `UpdateCardActionInput`, `CARD_OUTCOME_STATES`, `ADVICE_FAMILIES`), `adviceFamilyOf` and `isMeasurableCard`, and `CompetitorCardsResult.record`. `@nodaro/sdk` adds `client.competitors.tried()`, `markDone(cardId, { postUrl })`, `linkPost(markId, url | null)`, `markSeen(markId)` and `unmark(markId)` (`/v1/competitors/actions*`), and re-exports the lesson and mark types. `@nodaro/cli` adds `nodaro competitors done`, `tried`, `link` and `undo`, and `cards` shows the id to mark a card done.
+- d80feff: What works for a brand (stage 4 of the research rollout): `@nodaro/shared` adds the lesson types (`BrandLesson`, `BrandPlatformLessons`, `BrandLessons`, `CompetitorLessonsResult`, `BRAND_LESSON_KINDS`); `@nodaro/sdk` adds `client.competitors.lessons(id)` (`GET /v1/competitors/:id/lessons`); `@nodaro/cli` adds `nodaro competitors lessons <id>`.
+
+  `socialSearchPostVideo` answers `{ kind: "none" }` for an image or a text post, which has no video to analyze.
+
+- 95523c6: Competitor tracking (Nodaro Cloud): `@nodaro/shared` adds the tracked-brand, scan and action-card shapes, the card `kind` vocabulary and the scan price (`competitor-scan:<n>`, one Social Search page per search). `@nodaro/sdk` adds `client.competitors` (`list`, `get`, `create`, `update`, `delete`, `cards`, `discover`, `scan`) and re-exports the types. `@nodaro/cli` adds `nodaro competitors` (`list`, `add`, `discover`, `scan`, `cards`, `show`, `update`, `remove`).
+- 17d734b: `nodaro edit plan` takes `--offsets <file>` (an `edit audio-sync` job's `output_data.json` over the same source ids) and `--transcript-source <id>`, and `--source` accepts `id=url[@kind]` to name a source the way `edit audio-sync` does.
+- df2f7b4: Saved posts, the inspiration wall: `@nodaro/shared` adds the `SavedPost` shape and the request and answer types of `/v1/saved-posts`. `@nodaro/sdk` adds `client.savedPosts` (`list`, `save`, `lookup`, `update`, `delete`) and re-exports the types. `@nodaro/cli` adds `nodaro saved-posts` (`list`, `save --file`, `update`, `delete`).
+
+### Patch Changes
+
+- e98ff5b: Advanced mode's help text now says its one-tier credit bump is capped at premium: a request already at the premium tier stays there.
+- Updated dependencies [e98ff5b]
+- Updated dependencies [470cbe2]
+- Updated dependencies [470cbe2]
+- Updated dependencies [8dc01f1]
+- Updated dependencies [ba1ae16]
+- Updated dependencies [d80feff]
+- Updated dependencies [95523c6]
+- Updated dependencies [5f14bf9]
+- Updated dependencies [17d734b]
+- Updated dependencies [17d734b]
+- Updated dependencies [3134831]
+- Updated dependencies [bac18b7]
+- Updated dependencies [ec71996]
+- Updated dependencies [10054f4]
+- Updated dependencies [086003b]
+- Updated dependencies [3e8a8dc]
+- Updated dependencies [5b8496b]
+- Updated dependencies [d1c208e]
+- Updated dependencies [5e636b4]
+- Updated dependencies [1197130]
+- Updated dependencies [df2f7b4]
+- Updated dependencies [8905992]
+- Updated dependencies [5b8496b]
+- Updated dependencies [2a61d66]
+- Updated dependencies [20edcd9]
+- Updated dependencies [08c60ee]
+- Updated dependencies [3d9bae0]
+- Updated dependencies [10d0467]
+- Updated dependencies [fa682e5]
+- Updated dependencies [09b138b]
+- Updated dependencies [09b138b]
+- Updated dependencies [7363396]
+- Updated dependencies [420aaa2]
+- Updated dependencies [028f3ef]
+- Updated dependencies [00ff1cf]
+- Updated dependencies [8d61db1]
+- Updated dependencies [8096ebe]
+- Updated dependencies [5f0cbab]
+- Updated dependencies [255d9e0]
+- Updated dependencies [8d1e320]
+- Updated dependencies [3bae2cb]
+- Updated dependencies [43ea304]
+- Updated dependencies [f801037]
+- Updated dependencies [9377f6e]
+- Updated dependencies [693baee]
+- Updated dependencies [f801037]
+- Updated dependencies [778de30]
+- Updated dependencies [d127205]
+- Updated dependencies [524c266]
+  - @nodaro/sdk@2.18.0
+  - @nodaro/shared@3.15.0
+  - @nodaro/prompts@1.28.0
+
 ## 1.24.0
 
 ### Minor Changes
