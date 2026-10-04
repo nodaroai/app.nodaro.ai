@@ -63,6 +63,25 @@ export function transitionLevers(kind: TransitionPickKind): ReadonlyArray<Transi
 }
 
 /**
+ * What a change of the picked transition writes. A switch INTO a cut from a
+ * pick that is not one (a non-cut, a cut picked with a non-cut, or nothing)
+ * drops the Duration and the Intensity: they timed and shaped the transition
+ * being left, and a cut takes neither, so a carried Short would otherwise make
+ * seamless-match / jump-match a blend nobody chose. Every other change keeps
+ * every lever, as before. The keys are cleared (`undefined`), never set to
+ * `auto`, so the node holds what a fresh pick holds.
+ */
+export function transitionPickPatch(
+  previous: unknown,
+  next: string | string[] | undefined,
+): { transition: string | string[] | undefined; duration?: undefined; intensity?: undefined } {
+  if (transitionPickKind(previous) === "timed" && transitionPickKind(next) !== "timed") {
+    return { transition: next, duration: undefined, intensity: undefined }
+  }
+  return { transition: next }
+}
+
+/**
  * The row a lever shows for the stored value. On a cut, a stored value the
  * lever does not offer (`full`; a duration that does not blend; anything on a
  * lever a cut hides) shows as `auto` — which is what it renders: no position

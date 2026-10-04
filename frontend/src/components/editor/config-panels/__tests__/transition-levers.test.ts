@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { TRANSITIONS, TRANSITION_DURATIONS, TRANSITION_INTENSITIES, TRANSITION_POSITIONS } from "@nodaro/prompts"
-import { transitionLeverValue, transitionLevers, transitionPickKind } from "../transition-levers"
+import { transitionLeverValue, transitionLevers, transitionPickKind, transitionPickPatch } from "../transition-levers"
 
 const ids = (rows: ReadonlyArray<{ id: string }>) => rows.map((o) => o.id)
 
@@ -75,5 +75,34 @@ describe("transitionLeverValue", () => {
   it("on a timed pick, the stored value shows as stored", () => {
     expect(transitionLeverValue("timed", timedPosition!, "full")).toBe("full")
     expect(transitionLeverValue("timed", timedPosition!, undefined)).toBe("auto")
+  })
+})
+
+describe("transitionPickPatch (a switch INTO a cut drops Duration and Intensity)", () => {
+  const DROP = { duration: undefined, intensity: undefined }
+
+  it("from a non-cut, a cut with a non-cut, or nothing, into a cut: drops both", () => {
+    for (const previous of ["cross-dissolve", ["match-cut", "cross-dissolve"], ["cross-dissolve", "seamless-match"], undefined, "auto"]) {
+      for (const next of ["seamless-match", "jump-match", "match-cut", ["seamless-match"], ["seamless-match", "jump-match"], ["auto", "jump-match"]]) {
+        expect(transitionPickPatch(previous, next), `${JSON.stringify(previous)} -> ${JSON.stringify(next)}`).toEqual({ transition: next, ...DROP })
+      }
+    }
+  })
+
+  it("every other change keeps every lever: cut to cut, cut to non-cut, non-cut to non-cut, clearing the pick", () => {
+    const cases: Array<[unknown, string | string[] | undefined]> = [
+      ["match-cut", "seamless-match"],
+      ["seamless-match", "jump-match"],
+      ["seamless-match", "cross-dissolve"],
+      ["seamless-match", ["seamless-match", "cross-dissolve"]],
+      ["cross-dissolve", "whip-pan"],
+      ["cross-dissolve", undefined],
+      ["seamless-match", undefined],
+    ]
+    for (const [previous, next] of cases) {
+      const patch = transitionPickPatch(previous, next)
+      expect(patch, `${JSON.stringify(previous)} -> ${JSON.stringify(next)}`).toEqual({ transition: next })
+      expect(Object.keys(patch)).toEqual(["transition"])
+    }
   })
 })

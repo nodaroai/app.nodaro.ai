@@ -80,7 +80,7 @@ import { PersonPicker } from "@/lib/picker-ui"
 import { MOODS as BASE_MOODS, POSES as BASE_POSES, buildFramingHints, getLensPromptHint, getCameraFormatPromptHint, buildLightingHints, getColorLookPromptHint, buildAtmosphereHints, buildActionFxHints, getStylePromptHint, getSettingPromptHint, getLoopSubjectPromptHint, buildMoodHints, buildPoseHints, buildStylingHints, buildTemporalHints, buildMaterialHints, getPhotoGenrePromptHint, getBackdropPromptHint, buildHeldPropHints, buildPhotographerHints, buildAestheticHints, getEraPromptHint, buildExposureHints, getRenderQualityPromptHint, getCompositionEffectPromptHint, buildPostProcessHints, buildPersonHints, CHARACTER_FX_POSITIONS, CHARACTER_FX_DURATIONS, CHARACTER_FX_INTENSITIES, CHARACTER_MOTION_POSITIONS, CHARACTER_MOTION_PACES, CHARACTER_MOTION_MAX_PICKS } from "@nodaro/prompts"
 import { getAnimal, getVehicle, getWeapon, getFurniture, pickIds } from "@nodaro/shared"
 import { getTransitionLabel, getTransitionOptions, type TransitionOption } from "@nodaro/prompts"
-import { transitionLeverValue, transitionLevers, transitionPickKind, type TransitionLeverField, type TransitionPickKind } from "./transition-levers"
+import { transitionLeverValue, transitionLevers, transitionPickKind, transitionPickPatch, type TransitionLeverField, type TransitionPickKind } from "./transition-levers"
 import { LookArt, MoodEmoji, useShowsLookRenders } from "@/lib/picker-ui"
 import { LookPreviewStyleSwitch } from "@/components/nodes/look-preview-style"
 import { DimensionTileGrid } from "@/lib/picker-ui"
@@ -1440,7 +1440,7 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
       <Label>{t("paramcfg.transition")}</Label>
       <TransitionPicker
         value={data.transition}
-        onValueChange={(v) => onUpdate({ transition: v as string | string[] | undefined })}
+        onValueChange={(v) => onUpdate(transitionPickPatch(data.transition, v as string | string[] | undefined))}
         maxSelected={2}
       />
 
