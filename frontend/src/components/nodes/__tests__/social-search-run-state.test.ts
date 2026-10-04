@@ -5,6 +5,7 @@ import {
   applySocialSearchPickTop,
   applySocialSearchPicks,
   applySocialSearchResult,
+  clearSocialSearchPatch,
   deriveSocialSearchCardState,
   socialSearchFingerprint,
   socialSearchServerRunPatch,
@@ -115,6 +116,26 @@ describe("the card's state", () => {
   it("a failure says how many results it kept", () => {
     const failed: SocialSearchNodeData = { label: "x", searchResults: results, lastRunOutcome: "failed", errorMessage: "busy", lastGoodAt: 3 }
     expect(deriveSocialSearchCardState(failed)).toMatchObject({ kind: "failed", kept: { count: 6, at: 3 }, errorMessage: "busy" })
+  })
+})
+
+describe("clearing the node (its X)", () => {
+  it("drops every post, the picks and the last run, keeps the settings, and reads as never run", () => {
+    const settings = { platform: "instagram", mode: "account", query: "@nike", count: 20, pickTop: 3, keepPicks: true }
+    const ran = {
+      ...settings,
+      ...applySocialSearchResult(results, settings),
+      ...applySocialSearchPicks({ ...settings, searchResults: results }, ["tiktok:2"]),
+      searchWarnings: ["a note"],
+    } as SocialSearchNodeData
+    expect(deriveSocialSearchCardState(ran).kind).toBe("success")
+
+    const cleared = { ...ran, ...clearSocialSearchPatch() } as SocialSearchNodeData
+    expect(deriveSocialSearchCardState(cleared)).toEqual({ kind: "never-ran" })
+    expect(cleared).toMatchObject({ ...settings, executionStatus: "idle" })
+    for (const key of ["searchResults", "pickedIds", "generatedJson", "generatedText", "searchWarnings", "lastRunOutcome", "lastRunFingerprint"]) {
+      expect(cleared[key as keyof SocialSearchNodeData], key).toBeUndefined()
+    }
   })
 })
 

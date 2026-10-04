@@ -3,7 +3,7 @@
 import { useT } from "@/lib/i18n"
 import { memo, useEffect, useState, type MouseEvent, type ReactNode } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Braces, Lock, ScanSearch, Search, Type } from "lucide-react"
+import { Braces, Lock, ScanSearch, Search, Type, X } from "lucide-react"
 import { socialSearchMode, socialSearchPlatform, type SocialPost } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -15,7 +15,8 @@ import type { SocialSearchNodeData } from "@/types/nodes"
 import { isValidWebScrapeConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { cn } from "@/lib/utils"
 import { elapsedLabel, relativeTime } from "./web-scrape-run-state"
-import { deriveSocialSearchCardState, socialSearchChosen, socialSearchResults } from "./social-search-run-state"
+import { clearSocialSearchPatch, deriveSocialSearchCardState, socialSearchChosen, socialSearchResults } from "./social-search-run-state"
+import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { SOCIAL_PLATFORM_META, choiceLine, socialModeLabel } from "@/components/research/social-platforms"
 import { SocialPostPicker } from "@/components/research/social-post-picker"
 import { SocialPostPreview } from "@/components/research/social-post-preview"
@@ -63,6 +64,7 @@ function SocialSearchNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [reading, setReading] = useState<SocialPost | null>(null)
+  const [clearOpen, setClearOpen] = useState(false)
 
   const platform = socialSearchPlatform(nodeData.platform)
   const mode = socialSearchMode(platform, nodeData.mode)
@@ -78,6 +80,21 @@ function SocialSearchNodeComponent({ id, data, selected }: NodeProps) {
   const picked = Array.isArray(nodeData.pickedIds) && nodeData.pickedIds.length > 0
   const query = (nodeData.query ?? "").trim()
   const warnings = Array.isArray(nodeData.searchWarnings) ? nodeData.searchWarnings : []
+
+  // The X every node has: clears the results so the node starts over. Shown
+  // on hover over what a run left (posts, an empty search, a failure).
+  const clearButton = (
+    <button
+      type="button"
+      aria-label={t("node.deleteResult")}
+      title={t("node.deleteResult")}
+      onClick={(e) => { stop(e); setClearOpen(true) }}
+      onMouseDown={stop}
+      className="nodrag absolute -top-1 -right-1 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-black/40 text-white opacity-0 shadow-sm backdrop-blur-sm transition-opacity hover:bg-black/60 group-hover:opacity-100 focus-visible:opacity-100"
+    >
+      <X className="h-3 w-3" />
+    </button>
+  )
 
   const statusRight =
     state.kind === "never-ran" ? (
@@ -145,7 +162,8 @@ function SocialSearchNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {!running && results.length > 0 && chosen.length > 0 && (
-            <div className={cn("flex flex-col gap-2.5", state.kind === "success" && state.stale ? "opacity-60" : "")}>
+            <div className={cn("group relative flex flex-col gap-2.5", state.kind === "success" && state.stale ? "opacity-60" : "")}>
+              {clearButton}
               <div className="grid grid-cols-3 gap-1.5">
                 {chosen.slice(0, MAX_THUMBS).map((post) => (
                   <SocialPostTile key={post.id} post={post} onRead={setReading} />
@@ -170,10 +188,18 @@ function SocialSearchNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           )}
 
-          {state.kind === "empty" && <Panel dashed>{t("node.queryMatchedNothing")}</Panel>}
+          {state.kind === "empty" && (
+            <div className="group relative">
+              {clearButton}
+              <Panel dashed>{t("node.queryMatchedNothing")}</Panel>
+            </div>
+          )}
 
           {state.kind === "failed" && (
-            <p className="text-[12px] leading-snug text-[var(--meta-ads-muted)]">{nodeData.errorMessage || t("node.scrapeFailed")}</p>
+            <div className="group relative">
+              {results.length === 0 && clearButton}
+              <p className="text-[12px] leading-snug text-[var(--meta-ads-muted)]">{nodeData.errorMessage || t("node.scrapeFailed")}</p>
+            </div>
           )}
 
           {!running && warnings.length > 0 && (
@@ -187,6 +213,11 @@ function SocialSearchNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="social-search" handleId="text" type="source" position={Position.Right} label={t("social.outText")} color={DATA_HANDLE_COLORS.text} icon={<Type />} side="right" top="52px" />
       <SocialPostPicker data={nodeData} open={pickerOpen} onOpenChange={setPickerOpen} onApply={(patch) => updateNodeData(id, patch)} />
       <SocialPostPreview post={reading} onOpenChange={(open) => !open && setReading(null)} />
+      <DeleteConfirmationDialog
+        isOpen={clearOpen}
+        onClose={() => setClearOpen(false)}
+        onConfirm={() => updateNodeData(id, clearSocialSearchPatch())}
+      />
     </div>
   )
 }

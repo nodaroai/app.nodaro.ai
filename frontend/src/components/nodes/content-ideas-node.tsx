@@ -16,6 +16,7 @@ import { ACCEPTS_BRAND_TEXT, ACCEPTS_RECIPE } from "@/lib/content-handles"
 import { contentIdeasCreditId } from "@nodaro/shared"
 import { useT } from "@/lib/i18n"
 import { copyToClipboard } from "@/lib/utils"
+import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import type { ContentIdeasNodeData } from "@/types/nodes"
 
 function IdeasTextModal({
@@ -75,6 +76,7 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
   )
   const credits = useModelCredits(creditModelId)
   const [textOpen, setTextOpen] = useState(false)
+  const [clearOpen, setClearOpen] = useState(false)
 
   return (
     <div className="relative max-w-[280px]">
@@ -149,8 +151,8 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
                   {nodeData.runWarnings.join(" ")}
                 </div>
               )}
-              {text && (
-                <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {text && (<>
                   <button
                     type="button"
                     aria-label={t("node.expandResult")}
@@ -170,8 +172,18 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
                   >
                     <Copy className="w-3 h-3" />
                   </button>
-                </div>
-              )}
+                </>)}
+                {/* The X every node has: clears the ideas so the node starts over. */}
+                <button
+                  type="button"
+                  aria-label={t("node.deleteResult")}
+                  title={t("node.deleteResult")}
+                  className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                  onClick={(e) => { e.stopPropagation(); setClearOpen(true) }}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
             </div>
           )}
 
@@ -190,6 +202,11 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="content-ideas" handleId="field-brand" type="target" position={Position.Left}  label={t("node.contentIdeasBrand")}   color={DATA_HANDLE_COLORS.text} icon={<Building2 />} side="left"  top="52px" accepts={ACCEPTS_BRAND_TEXT} />
       <HandleWithPopover nodeId={id} nodeType="content-ideas" handleId="ideas"       type="source" position={Position.Right} label={t("node.contentIdeasIdeas")}   color={DATA_HANDLE_COLORS.list} icon={<List />}      side="right" top="24px" />
       {text && <IdeasTextModal isOpen={textOpen} onClose={() => setTextOpen(false)} title={nodeData.label} text={text} />}
+      <DeleteConfirmationDialog
+        isOpen={clearOpen}
+        onClose={() => setClearOpen(false)}
+        onConfirm={() => updateNodeData(id, { executionStatus: "idle", errorMessage: undefined, generatedJson: undefined, generatedText: undefined, ideaBriefs: undefined, runWarnings: undefined })}
+      />
     </div>
   )
 }
