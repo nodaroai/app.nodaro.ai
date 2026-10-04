@@ -309,6 +309,25 @@ AWS, DO Spaces (`nyc3`, `fra1`, …) and Supabase-local (`local`) validate
 the region and reject `auto`, so every request fails with an authorization
 or endpoint error that does not mention the region at all.
 
+**Timeouts.** Every storage call is bounded, so a store that stops answering
+fails the job instead of hanging it. A call must connect within 10 s (that
+includes waiting for one of the client's 256 pooled connections) and answer
+within 120 s. A single upload or copy of a known size gets its size at 2 MB/s
+instead, if that is longer; a large file is uploaded in 5 MB parts, each with
+the 120 s. A timed-out call is tried up to three times (an upload streamed from
+a file once — it cannot be replayed). An object the app downloads must then
+deliver at least 15 MB per minute once its first 120 s have passed, and a known
+size gets its size at 2 MB/s (60 minutes at most); those failures read
+`Download timeout: …` and name the limit. Media previews streamed to a viewer
+are bounded only until the store answers — a paused viewer is not a stall. A
+store much slower than that — a congested self-hosted MinIO — will see these
+errors on large media.
+
+Uploads of 2 MB or more first ask the store `Expect: 100-continue` and wait for
+its answer within their budget. Cloudflare R2, MinIO and AWS S3 answer it; a
+store, or a proxy in front of it, that ignores the header fails every such
+upload at its timeout.
+
 **Making media publicly readable.** There are two mechanisms, and most
 installs need only the first:
 

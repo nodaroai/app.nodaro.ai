@@ -145,11 +145,12 @@ describe("listObjectsByPrefix", () => {
 })
 
 describe("copyR2ObjectToPrefix", () => {
-  it("R2->R2 copies our own URL and HEADs the dest for bytes", async () => {
-    // CopyObjectCommand resolves, then HeadObjectCommand returns ContentLength.
+  it("R2->R2 copies our own URL and reports the source's HEADed size", async () => {
+    // The source is HEADed (Track 0.12): its size sizes the copy's budget and,
+    // the copy being byte-identical, is the bytes reported — no second HEAD.
     mocks.mockSend
+      .mockResolvedValueOnce({ ContentLength: 4242 }) // HeadObjectCommand (source)
       .mockResolvedValueOnce({}) // CopyObjectCommand
-      .mockResolvedValueOnce({ ContentLength: 4242 }) // HeadObjectCommand
 
     const result = await copyR2ObjectToPrefix(
       "https://r2.test.com/videos/job-123.mp4",
@@ -164,9 +165,11 @@ describe("copyR2ObjectToPrefix", () => {
     // CopySource references the source key within the bucket
     expect(String(copy.CopySource)).toContain("videos/job-123.mp4")
 
+    // One HEAD, of the SOURCE: it sizes the copy's budget and gives the bytes.
     expect(mocks.headCalls).toHaveLength(1)
-    const head = mocks.headCalls[0] as Record<string, unknown>
-    expect(head.Key).toBe(copy.Key) // HEAD the dest, not the source
+    expect((mocks.headCalls[0] as Record<string, unknown>).Key).toBe("videos/job-123.mp4")
+    // The copy's budget scales with the source size (4242 bytes → the 120 s minimum).
+    expect(mocks.mockSend.mock.calls[1]![1]).toEqual({ requestTimeout: 120_000 })
 
     expect(result.bytes).toBe(4242)
     expect(result.url).toMatch(

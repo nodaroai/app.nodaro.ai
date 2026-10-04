@@ -39,8 +39,8 @@ export interface JobContext {
  * bound through `livenessBudgetMs` — the sum of the kill budgets of its own
  * bounded steps (apply-edl: its per-chunk ffmpeg budget, fetches and probes),
  * never a guess — so "hung" means the same thing to the heartbeat and to
- * those steps. Steps with no ceiling (storage I/O, ffmpeg-slot waits) cannot
- * be summed; they are the residual the heartbeat doc states. Return
+ * those steps. Storage I/O (bounded per call, never summed) and ffmpeg-slot
+ * waits are not in it; they are the residual the heartbeat doc states. Return
  * `undefined` to keep the default. Core-only: the private-plugin contract
  * does not carry this member.
  */

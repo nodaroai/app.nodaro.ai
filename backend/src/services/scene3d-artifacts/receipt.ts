@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { Scene3DArtifactError, type Scene3DArtifactKind } from "./types.js"
 import type { Scene3DObjectStore } from "./object-store.js"
+import { readScene3DObjectForApp } from "./app-read.js"
 
 /**
  * Verify bytes at receipt, before any metadata exists.
@@ -124,7 +125,7 @@ async function consume(
 ): Promise<{ sha256: string; byteLength: number; head: Buffer; body: Buffer | null; etag: string | null }> {
   let read
   try {
-    read = await store.get(objectKey)
+    read = await readScene3DObjectForApp(store, objectKey)
   } catch (error) {
     const failure = error as { name?: string; code?: string; message?: string; $metadata?: { httpStatusCode?: number } } | undefined
     const missing = failure?.$metadata?.httpStatusCode === 404 ||

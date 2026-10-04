@@ -1,4 +1,5 @@
 import { HeadObjectCommand, PutObjectCommand, S3Client, type PutObjectCommandInput } from "@aws-sdk/client-s3"
+import { boundedStorageClientConfig } from "../storage-timeouts.js"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { scene3DArtifactObjectKey } from "../../services/scene3d-artifacts/object-keys.js"
 import { SCENE3D_ARTIFACT_CONTENT_TYPES, type Scene3DArtifactKind } from "../../services/scene3d-artifacts/types.js"
@@ -51,6 +52,7 @@ export function createScene3DUploadGranter(
     region: cfg.region, endpoint: cfg.endpoint, forcePathStyle: cfg.forcePathStyle,
     credentials: { accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey },
     requestChecksumCalculation: "WHEN_REQUIRED",
+    ...boundedStorageClientConfig(),
   })
   return async (input) => {
     const expiresIn = input.expiresInSeconds ?? 900

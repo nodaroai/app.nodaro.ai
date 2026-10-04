@@ -12,6 +12,7 @@ import { config } from "../../lib/config.js"
 import { safeFetch, isPrivateOrReservedIP } from "../../lib/safe-fetch.js"
 import { csvFields } from "./ffprobe-csv.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
+import { watchTransferBody, type TransferRateLimits, type TransferWatch } from "../../lib/transfer-watchdog.js"
 import {
   DEFAULT_FFMPEG_TIMEOUT_MS,
   DOWNLOAD_FLOOR_BYTES_PER_SEC,
@@ -39,23 +40,12 @@ export {
 }
 
 /** The staged limits a BIG-MEDIA download runs under (production:
- *  `BIG_MEDIA_DOWNLOAD_LIMITS`; a test passes small ones). */
-export interface DownloadLimits {
-  /** Wait for the response (status + headers); also the least a body gets,
-   *  and the grace before the minimum rate applies — within this long of the
-   *  start the opt-in path is never stricter than the default flat bound. */
-  readonly responseMs: number
-  /** The body is checked once per window of this length ... */
-  readonly windowMs: number
-  /** ... and aborted when a window delivers fewer bytes than this (a dead or
-   *  drip-fed transfer). */
-  readonly minBytesPerWindow: number
+ *  `BIG_MEDIA_DOWNLOAD_LIMITS`; a test passes small ones). `responseMs` is
+ *  also how long the response (status + headers) may take; the body limits
+ *  are the shared `watchTransferBody` rule (`lib/transfer-watchdog.ts`). */
+export interface DownloadLimits extends TransferRateLimits {
   /** The most it may write (unless the caller passes a smaller `maxBytes`). */
   readonly maxBytes: number
-  /** A known-size body gets size ÷ this (at least `responseMs`). */
-  readonly floorBytesPerSec: number
-  /** Nothing — response plus body — takes longer than this. */
-  readonly maxMs: number
 }
 
 /** For callers that fetch big media — apply-edl's camera originals and the
@@ -126,7 +116,7 @@ export async function downloadFile(
     () => abortWith(`no response within ${seconds(limits.responseMs)}`),
     limits.responseMs,
   )
-  let rate: ReturnType<typeof setInterval> | undefined
+  let body: TransferWatch | undefined
   const maxBytes = Math.min(opts.maxBytes ?? Infinity, limits.maxBytes)
   try {
     // Identity only: camera and audio originals are never sent compressed, and
@@ -143,30 +133,15 @@ export async function downloadFile(
       throw new Error(`Download refused: the server sent a compressed body (Content-Encoding: ${encoding}) though an uncompressed one was requested: ${url}`)
     }
     await saveResponse(url, dest, response, maxBytes, {
-      // The storage client takes no signal (and has no request timeout of its
-      // own — Track 0.12), so none of our limits apply to the R2 fallback.
+      // The R2 fallback is bounded by the storage client's own limits (the
+      // same body rule — `lib/storage-timeouts.ts`, Track 0.12); ours stop here.
       onFallback: () => { clearTimeout(overall); overall = undefined },
       onBody: () => {
         const size = Number(response.headers?.get?.("content-length") ?? NaN)
-        const known = Number.isFinite(size) && size > 0
-        const bodyMs = downloadBodyDeadlineMs(known ? size : undefined, {
-          minMs: limits.responseMs, floorBytesPerSec: limits.floorBytesPerSec, maxMs: limits.maxMs,
-        })
-        phase = setTimeout(
-          () => abortWith(`longer than ${seconds(bodyMs)} for its size (${known ? `${Math.round(size / (1024 * 1024))} MB` : "unknown"})`),
-          bodyMs,
-        )
-        // Minimum rate: every window must deliver `minBytesPerWindow` — once
-        // `responseMs` has passed since the start, when the default path would
-        // itself have given up.
-        let windowBytes = 0
-        rate = setInterval(() => {
-          if (Date.now() - startedAt >= limits.responseMs && windowBytes < limits.minBytesPerWindow) {
-            abortWith(`too slow — ${windowBytes} bytes in the last ${seconds(limits.windowMs)}, under the ${limits.minBytesPerWindow} minimum`)
-          }
-          windowBytes = 0
-        }, limits.windowMs)
-        return (n: number) => { windowBytes += n }
+        // The size deadline and, once `responseMs` has passed since the start
+        // (when the default path would itself have given up), the minimum rate.
+        body = watchTransferBody({ limits, sizeBytes: size, startedAt, stop: abortWith })
+        return body.count
       },
     })
   } catch (err) {
@@ -177,7 +152,7 @@ export async function downloadFile(
   } finally {
     clearTimeout(overall)
     clearTimeout(phase)
-    clearInterval(rate)
+    body?.stop()
   }
 }
 

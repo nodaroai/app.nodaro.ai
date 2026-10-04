@@ -28,6 +28,7 @@ import multipart from "@fastify/multipart"
 import sharp from "sharp"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { s3, withObjectAcl } from "../lib/storage.js"
+import { storageTransferOptions } from "../lib/storage-timeouts.js"
 import { config } from "../lib/config.js"
 import { verifyUploadToken, claimUploadToken } from "./upload-proxy.js"
 import { applyUploadPolicies, uploadBlockedBody, uploadKindFromMime } from "../lib/upload-policy.js"
@@ -321,6 +322,7 @@ export async function uploadHandoffRoutes(app: FastifyInstance): Promise<void> {
             ContentType: finalMime,
             CacheControl: "public, max-age=31536000, immutable",
           })),
+          storageTransferOptions(finalBuffer.length),
         )
       } catch (err) {
         req.log.error({ err }, "[upload-handoff] R2 upload failed")

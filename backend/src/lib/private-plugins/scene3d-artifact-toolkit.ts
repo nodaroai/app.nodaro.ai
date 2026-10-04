@@ -3,6 +3,7 @@ import { supabase } from "../supabase.js"
 import { config } from "../config.js"
 import { accessAtLeast, workflowAccess } from "../workflow-access.js"
 import { resolveScene3DPrivateStorageConfig, type Scene3DObjectStore } from "../../services/scene3d-artifacts/object-store.js"
+import { readScene3DObjectForApp } from "../../services/scene3d-artifacts/app-read.js"
 import { reserveScene3DUploadIntent, receiveScene3DUpload, scene3DUploadIntent } from "../../services/scene3d-artifacts/upload-intents.js"
 import { publishScene3DRevision } from "../../services/scene3d-artifacts/publish.js"
 import { Scene3DArtifactError, type Scene3DUploadIntent } from "../../services/scene3d-artifacts/types.js"
@@ -98,7 +99,7 @@ export function createScene3DArtifactToolkit(): PluginSceneArtifactToolkit | und
       if (intent.kind === "blend-source" || intent.receipt.byteLength > limit) {
         throw new Scene3DArtifactError("SCENE_ASSET_INVALID", "Scene artifact exceeds the buffered read limit")
       }
-      const read = await store.get(intent.objectKey)
+      const read = await readScene3DObjectForApp(store, intent.objectKey)
       const abort = () => read.body.destroy(new Error("Scene artifact read aborted"))
       options?.signal?.addEventListener("abort", abort, { once: true })
       if (options?.signal?.aborted) abort()
