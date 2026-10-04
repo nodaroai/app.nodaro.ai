@@ -313,6 +313,21 @@ export function signedLinkExpiresAt(link: string): number | undefined {
   return seconds !== null && /^\d{9,11}$/.test(seconds) ? Number(seconds) * 1000 : undefined
 }
 
+/**
+ * A post's video link when it is a FILE the analysis can download whole; a
+ * streaming playlist (an HLS `.m3u8`, which some LinkedIn videos are) is not
+ * one, so the post is read by its page instead.
+ */
+function videoFileLink(value: unknown): string | undefined {
+  const link = httpLink(value)
+  if (!link) return undefined
+  try {
+    return /\.m3u8$/i.test(new URL(link).pathname) ? undefined : link
+  } catch {
+    return undefined
+  }
+}
+
 /** What a Social Search post hands Video Analysis. */
 export type SocialSearchPostVideo =
   /** The post's own video file, while the platform's signed link is valid. */
@@ -341,7 +356,7 @@ export function socialSearchPostVideo(output: string, now: number = Date.now()):
   }
   const post = Array.isArray(parsed) ? socialPostsFrom(parsed)[0] : isSocialPost(parsed) ? parsed : undefined
   if (!post) return undefined
-  const file = httpLink(post.media.videoUrl)
+  const file = videoFileLink(post.media.videoUrl)
   if (file) {
     const end = signedLinkExpiresAt(file)
     return end !== undefined && end - SOCIAL_POST_VIDEO_LINK_MARGIN_MS <= now ? { kind: "expired" } : { kind: "file", url: file }

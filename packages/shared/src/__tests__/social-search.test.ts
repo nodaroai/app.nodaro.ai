@@ -188,6 +188,21 @@ describe("the video a post hands Video Analysis", () => {
     expect(socialSearchPostVideo(JSON.stringify(post("7")), NOW)).toEqual({ kind: "page", url: "https://www.tiktok.com/@maker/video/7" })
   })
 
+  it("reads a streaming playlist (HLS) as no file: the post goes by its page", () => {
+    const hls = post("8", {
+      platform: "linkedin",
+      url: "https://www.linkedin.com/posts/acme_launch-activity-1-abcd",
+      media: { kind: "video", videoUrl: "https://dms.licdn.com/playlist/vid/v2/D4E/hls-720p/master.m3u8?e=1791100000&t=s" },
+    })
+    expect(socialSearchPostVideo(JSON.stringify(hls), NOW)).toEqual({ kind: "page", url: "https://www.linkedin.com/posts/acme_launch-activity-1-abcd" })
+    // A LinkedIn progressive file under the same path is a file.
+    const mp4 = post("9", {
+      platform: "linkedin",
+      media: { kind: "video", videoUrl: "https://dms.licdn.com/playlist/vid/v2/D4E/mp4-720p-30fp-crf28/0/1?e=1791100000&t=s" },
+    })
+    expect(socialSearchPostVideo(JSON.stringify(mp4), NOW)).toMatchObject({ kind: "file" })
+  })
+
   it("reads nothing from a digest, an empty list, or something that is not a post", () => {
     expect(socialSearchPostVideo("1. @a: something https://x.com/a/status/1", NOW)).toBeUndefined()
     expect(socialSearchPostVideo("[]", NOW)).toBeUndefined()
