@@ -798,3 +798,110 @@ describe("GET /v1/workflows/shared-with-me", () => {
     expect(res.json().data).toEqual([])
   })
 })
+
+/**
+ * A studio production whose one scene carries the owner's two empty slots and
+ * a run in flight started from one of them — a slot-tagged marker, which
+ * carries that slot's unsent inputs.
+ */
+const SLOTTED = { ...WORKSPACE_WORKFLOW, settings: { studio: { version: 3, shots: [
+  { id: "s1", imageNodeId: "generate-image-s1", stillSlots: [{ id: "slot-1", inputs: { prompt: "an unsent idea" } }],
+    clipSlots: [{ id: "slot-2", inputs: { prompt: "an unsent move" } }],
+    pendingStills: [{ jobId: "job-1", startedAt: 1, slotId: "slot-1", prompt: "an unsent run" }] },
+] } } }
+
+describe("GET /v1/workflows/:id — a `view` reader never receives the owner's studio drafts (T11)", () => {
+  const shotsIn = (body: string) =>
+    (JSON.parse(body) as { data: { settings: { studio: { shots: Array<Record<string, unknown>> } } } }).data.settings.studio.shots
+
+  it("drops them for `view`", async () => {
+    plugin({ access: "view" })
+    workflowRow(SLOTTED)
+    const res = await app.inject({ method: "GET", url: `/v1/workflows/${WF}`, headers: { "x-user-id": OTHER } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.access).toBe("view")
+    expect(shotsIn(res.body)).toEqual([{ id: "s1", imageNodeId: "generate-image-s1" }])
+    expect(res.body).not.toContain("an unsent")
+  })
+
+  it.each(["edit", "own"])("keeps them for `%s` — that reader saves settings back whole", async (access) => {
+    plugin({ access })
+    workflowRow(SLOTTED)
+    const res = await app.inject({ method: "GET", url: `/v1/workflows/${WF}`,
+      headers: { "x-user-id": access === "own" ? CREATOR : OTHER } })
+    expect(res.statusCode).toBe(200)
+    expect(shotsIn(res.body)[0]!.stillSlots).toHaveLength(1)
+    expect(shotsIn(res.body)[0]!.clipSlots).toHaveLength(1)
+    expect(shotsIn(res.body)[0]!.pendingStills).toHaveLength(1)
+  })
+})
+
+describe("GET /v1/workflows/:id/export — a `view` reader never exports the owner's studio drafts (T11)", () => {
+  // The export is the same read in a portable envelope — no `data` wrapper.
+  const shotsIn = (body: string) =>
+    (JSON.parse(body) as { settings: { studio: { shots: Array<Record<string, unknown>> } } }).settings.studio.shots
+
+  it("drops them for `view`", async () => {
+    plugin({ access: "view" })
+    workflowRow(SLOTTED)
+    const res = await app.inject({ method: "GET", url: `/v1/workflows/${WF}/export`, headers: { "x-user-id": OTHER } })
+    expect(res.statusCode).toBe(200)
+    expect(shotsIn(res.body)).toEqual([{ id: "s1", imageNodeId: "generate-image-s1" }])
+    expect(res.body).not.toContain("an unsent")
+  })
+
+  it.each(["edit", "own"])("keeps them for `%s`", async (access) => {
+    plugin({ access })
+    workflowRow(SLOTTED)
+    const res = await app.inject({ method: "GET", url: `/v1/workflows/${WF}/export`,
+      headers: { "x-user-id": access === "own" ? CREATOR : OTHER } })
+    expect(res.statusCode).toBe(200)
+    expect(shotsIn(res.body)[0]!.stillSlots).toHaveLength(1)
+    expect(shotsIn(res.body)[0]!.clipSlots).toHaveLength(1)
+    expect(shotsIn(res.body)[0]!.pendingStills).toHaveLength(1)
+  })
+})
+
+describe("GET /v1/workflows/:id/export?assets=true — a reference only a draft makes is not bundled for `view`", () => {
+  const HERO = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+  // The character is bound ONLY from an empty slot's inputs — nowhere in the
+  // graph, nowhere else in the document.
+  const DRAFTED = { ...WORKSPACE_WORKFLOW, settings: { studio: { version: 3, shots: [
+    { id: "s1", stillSlots: [{ id: "slot-1", inputs: { prompt: "an unsent idea",
+      references: [{ id: HERO, source: "wired-character", name: "Hero" }] } }] },
+  ] } } }
+
+  /** The workflow read, plus an entity table that records the ids it was asked for. */
+  function tables() {
+    const { select } = workflowRow(DRAFTED)
+    const asked: unknown[] = []
+    const entities: Record<string, unknown> = {
+      select: vi.fn(() => entities),
+      in: vi.fn((_col: string, ids: unknown) => { asked.push(ids); return entities }),
+      eq: vi.fn(() => entities),
+      then: (resolve: (v: { data: unknown[]; error: null }) => unknown) => resolve({ data: [], error: null }),
+    }
+    vi.mocked(supabase.from).mockImplementation(((table: string) =>
+      table === "workflows" ? { select } : entities) as never)
+    return asked
+  }
+
+  it("never asks for it for `view`", async () => {
+    plugin({ access: "view" })
+    const asked = tables()
+    const res = await app.inject({ method: "GET", url: `/v1/workflows/${WF}/export?assets=true`,
+      headers: { "x-user-id": OTHER } })
+    expect(res.statusCode).toBe(200)
+    expect(asked).toEqual([])
+    expect(vi.mocked(supabase.from).mock.calls.map(([table]) => table)).toEqual(["workflows"])
+  })
+
+  it("does collect it for `own` — the walk really reaches a slot's references", async () => {
+    plugin({ access: "own" })
+    const asked = tables()
+    const res = await app.inject({ method: "GET", url: `/v1/workflows/${WF}/export?assets=true`,
+      headers: { "x-user-id": CREATOR } })
+    expect(res.statusCode).toBe(200)
+    expect(asked).toEqual([[HERO]])
+  })
+})

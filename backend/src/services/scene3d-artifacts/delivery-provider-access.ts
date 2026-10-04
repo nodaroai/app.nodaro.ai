@@ -41,6 +41,7 @@
  * send would 412 every fetch.
  */
 import { S3Client } from "@aws-sdk/client-s3"
+import { boundedStorageClientConfig } from "../../lib/storage-timeouts.js"
 import { config } from "../../lib/config.js"
 import { authorizeScene3DDeliveryArtifact } from "./delivery-authorize.js"
 import { isScene3DId } from "./object-keys.js"
@@ -121,6 +122,7 @@ export function createScene3DDeliveryAssetSigner(
     endpoint: cfg.endpoint,
     forcePathStyle: cfg.forcePathStyle,
     credentials: { accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey },
+    ...boundedStorageClientConfig(),
   })
   return async ({ actorId, jobId, assetId }) => {
     const auth = await authorize(actorId, jobId, assetId)

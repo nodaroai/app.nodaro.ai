@@ -10,6 +10,7 @@ import {
 } from "@nodaro/shared"
 import { authorizeScene3DArtifact, authorizeScene3DRevision } from "../services/scene3d-artifacts/authorize.js"
 import type { Scene3DObjectStore } from "../services/scene3d-artifacts/object-store.js"
+import { readScene3DObjectForApp } from "../services/scene3d-artifacts/app-read.js"
 
 export class Scene3DRenderPlanError extends Error {
   constructor(message: string, readonly statusCode: 404 | 409) { super(message); this.name = "Scene3DRenderPlanError" }
@@ -79,7 +80,7 @@ export async function prepareScene3DRenderAssets(options: {
     if (stored.bucket !== options.store.bucket || stored.sha256 !== asset.sha256 || stored.byteLength !== asset.byteLength || stored.kind !== asset.kind) {
       throw new Error("Scene asset receipt does not match the retained revision")
     }
-    const source = await options.store.get(stored.objectKey)
+    const source = await readScene3DObjectForApp(options.store, stored.objectKey)
     if (source.contentLength !== null && source.contentLength !== asset.byteLength) {
       source.body.destroy()
       throw new Error("Scene asset length changed")

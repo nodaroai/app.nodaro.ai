@@ -264,9 +264,8 @@ export function socialSearchRequestFromNode(
 /**
  * The page link of a Social Search post, read from the node's `json` output
  * as a wire hands it on: one post (a wire in Each mode) or the list of posts
- * (any other wire: the first). Video Analysis reads it like its own link
- * field, so each picked post is analyzed by its page. Undefined when the
- * output holds no post with an http(s) link.
+ * (any other wire: the first). Undefined when the output holds no post with
+ * an http(s) link.
  */
 export function socialSearchPostLink(output: string): string | undefined {
   let parsed: unknown
@@ -277,8 +276,112 @@ export function socialSearchPostLink(output: string): string | undefined {
   }
   const post = Array.isArray(parsed) ? parsed[0] : parsed
   const url = typeof post === "object" && post !== null ? (post as { url?: unknown }).url : undefined
-  const link = typeof url === "string" ? url.trim() : ""
+  return httpLink(url)
+}
+
+function httpLink(value: unknown): string | undefined {
+  const link = typeof value === "string" ? value.trim() : ""
   return /^https?:\/\/\S+$/i.test(link) ? link : undefined
+}
+
+// ── A post's video, for Video Analysis ─────────────────────────────────────
+
+/**
+ * A signed link counts as expired this long before its stated end, so it
+ * still answers when the run reads it: the length check, then the download.
+ */
+export const SOCIAL_POST_VIDEO_LINK_MARGIN_MS = 60 * 60 * 1000
+
+/**
+ * When a platform's signed media link stops working, in epoch milliseconds,
+ * if the link says: `oe` (hex seconds: Instagram, Facebook and ad videos),
+ * `x-expires` (TikTok), `Expires` (S3, CloudFront), `e` (LinkedIn). Undefined
+ * for a link that names no end (an X video's link does not expire).
+ */
+export function signedLinkExpiresAt(link: string): number | undefined {
+  let url: URL
+  try {
+    url = new URL(link)
+  } catch {
+    return undefined
+  }
+  const params = url.searchParams
+  const oe = params.get("oe")
+  if (oe !== null && /^[0-9a-f]{6,10}$/i.test(oe)) return parseInt(oe, 16) * 1000
+  const linkedin = /(^|\.)licdn\.com$/i.test(url.hostname)
+  const seconds = params.get("x-expires") ?? params.get("Expires") ?? params.get("expires") ?? (linkedin ? params.get("e") : null)
+  return seconds !== null && /^\d{9,11}$/.test(seconds) ? Number(seconds) * 1000 : undefined
+}
+
+/**
+ * A post's video link when it is a FILE the analysis can download whole; a
+ * streaming playlist (an HLS `.m3u8`, which some LinkedIn videos are) is not
+ * one, so the post is read by its page instead.
+ */
+function videoFileLink(value: unknown): string | undefined {
+  const link = httpLink(value)
+  if (!link) return undefined
+  try {
+    return /\.m3u8$/i.test(new URL(link).pathname) ? undefined : link
+  } catch {
+    return undefined
+  }
+}
+
+/** What a Social Search post hands Video Analysis. */
+export type SocialSearchPostVideo =
+  /** The post's own video file, while the platform's signed link is valid. */
+  | { readonly kind: "file"; readonly url: string }
+  /** No file came with the post (TikTok, YouTube): its page, which the analysis fetches. */
+  | { readonly kind: "page"; readonly url: string }
+  /** The file's signed link has expired: the search has to run again. */
+  | { readonly kind: "expired" }
+  /** The post is an image or a text post: there is no video to analyze. */
+  | { readonly kind: "none" }
+
+/**
+ * The video Video Analysis reads from a Social Search node's `json` output,
+ * as a wire hands it on: one post (a wire in Each mode) or the list (any
+ * other wire: the first post). A post that came with its own video file is
+ * analyzed from that file, so the platform's page is never read: Instagram's
+ * page does not say how long the video is, and a video without a length
+ * cannot be priced. A file whose signed link has expired is reported as such
+ * rather than swapped for the page. Undefined when the output holds no post.
+ * Both engines read it (input-resolver / node-input-resolver).
+ */
+export function socialSearchPostVideo(output: string, now: number = Date.now()): SocialSearchPostVideo | undefined {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(output)
+  } catch {
+    return undefined
+  }
+  const post = Array.isArray(parsed) ? socialPostsFrom(parsed)[0] : isSocialPost(parsed) ? parsed : undefined
+  if (!post) return undefined
+  if (post.media.kind !== "video") return { kind: "none" }
+  const file = videoFileLink(post.media.videoUrl)
+  if (file) {
+    const end = signedLinkExpiresAt(file)
+    return end !== undefined && end - SOCIAL_POST_VIDEO_LINK_MARGIN_MS <= now ? { kind: "expired" } : { kind: "file", url: file }
+  }
+  const page = httpLink(post.url)
+  return page ? { kind: "page", url: page } : undefined
+}
+
+/**
+ * The longest video among the posts, in seconds: what Video Analysis quotes
+ * for each post a Social Search wire hands it (each post is charged by its
+ * own length when it runs, so the quote is never lower than the charge).
+ * Posts without a video are left out: Video Analysis refuses them without a
+ * charge. Undefined when no post has a video, or one of them does not say
+ * how long it is (the ceiling quotes it).
+ */
+export function socialPostsLongestVideoSec(posts: readonly SocialPost[]): number | undefined {
+  const lengths = posts.filter((p) => p.media.kind === "video").map((p) => p.media.durationSec)
+  if (lengths.length === 0) return undefined
+  return lengths.every((d): d is number => typeof d === "number" && Number.isFinite(d) && d > 0)
+    ? Math.max(...lengths)
+    : undefined
 }
 
 // ── Pricing ────────────────────────────────────────────────────────────────

@@ -9,13 +9,23 @@ edition: Cloud
 
 Describe what you want; the workflow gets built on your canvas. The copilot reads your open workflow, adds and rewires nodes while you watch, proposes a run, and — after a run — reads what failed and fixes it.
 
-There are two ways in.
+There are three ways in.
 
 **From the home page** — a box at the top of the page: describe what you want, press **Build it**, and you land in a new workflow with the copilot already building it. It can be dismissed and stays dismissed.
 
-In both boxes **Enter** sends and **Shift + Enter** starts a new line, so a description can run to several lines and a pasted link can sit on its own. If a hand-off from the home page fails before the copilot answers — a lost connection, a closed tab — your sentence comes back into the box so you can send it again, and the empty workflow it had opened for you is cleared away on its own a few hours later.
+**From an empty canvas** — a new workflow opens with the copilot in the middle of the canvas, asking what to build. Type a description and press **Build**, or click one of the suggestions under the box to send it as it is. The conversation then moves into the side panel and carries on there. Prefer to start by hand? Click **Image generation**, **Video generation** or **Text / LLM** under **Or start manually**, or right-click anywhere on the canvas. The first node you add, by any route, also moves the copilot into the side panel. If you already work with an AI assistant of your own, the **Prefer your own AI?** row opens the instructions for connecting Claude Code, Claude or ChatGPT to Nodaro in a new tab.
 
-**From the editor** — it lives as a side panel on the left of the canvas. Open it from the **Copilot** button in the editor toolbar, from the narrow tab beside the canvas, or with `Ctrl/Cmd + J`. Closing the panel does not stop a message that is still being written.
+In all three boxes **Enter** sends and **Shift + Enter** starts a new line, so a description can run to several lines and a pasted link can sit on its own. If a hand-off from the home page fails before the copilot answers — a lost connection, a closed tab — your sentence comes back into the box so you can send it again, and the empty workflow it had opened for you is cleared away on its own a few hours later.
+
+**From the editor** — it lives as a side panel on the left of the canvas. Open it from the **Copilot** button in the editor toolbar (pink while the panel is open), from the narrow strip beside the canvas, by right-clicking the canvas and choosing **Ask Copilot…**, or with `Ctrl/Cmd + J`. The **‹** button in the panel folds it into that strip, which shows how many replies the copilot has given; **×** puts it away. Closing the panel does not stop a message that is still being written.
+
+When the canvas is empty again and nothing has been said in the conversation, the copilot goes back to the middle. This happens when you delete the last node, and when you fold or close the panel. You can turn it off in the copilot settings: **Back to the middle when the canvas is empty**. With it off, or once a conversation is under way, folding or closing the panel over an empty canvas leaves the canvas bare; the strip or the **Copilot** button brings the copilot back.
+
+The right-click menu on the canvas adds **Image generation**, **Video generation**, **Text / LLM**, **Upload image** or **Upscale image** exactly where you clicked. **More nodes…** opens the full list.
+
+## Settings
+
+The settings sit behind one small button that shows your current choice, for example **Ask · Smart**. In the panel it is in the header, and in the middle of the canvas it is beside the box. It holds the run mode, the model, posting steps and the return to the middle. All four are described below.
 
 ## What it can do
 
@@ -47,7 +57,7 @@ A character the copilot places this way arrives complete: the picture and the sa
 
 ## Ask or Auto
 
-Each conversation has a run mode, in the panel header:
+Each conversation has a run mode, set in the copilot settings:
 
 - **Ask** (default) — a run proposal appears as a card with its credit estimate. Nothing runs until you press Run.
 - **Auto** — runs start automatically as long as the estimate stays under the credit limit you set on the same card. Anything more expensive still asks, and so does anything whose price is still being worked out.
@@ -80,7 +90,7 @@ It only ever sees things that are yours: the public gallery is out of reach, and
 
 ## Letting it build posting steps
 
-By default the copilot cannot add a step that posts to TikTok, YouTube, Telegram, X, LinkedIn, Facebook or Instagram. Turn on **"Let it build posting steps"** in the panel and it can — for that conversation only, and off again whenever you like.
+By default the copilot cannot add a step that posts to TikTok, YouTube, Telegram, X, LinkedIn, Facebook or Instagram. Turn on **"Let it build posting steps"** in the copilot settings and it can — for that conversation only, and off again whenever you like.
 
 What it can do with that on: add a posting step and wire it into the workflow it just built, so a flow that makes a video can end by publishing it.
 
@@ -109,7 +119,7 @@ Tell the copilot a lasting preference — "always 9:16", "never add background m
 
 ## Choosing a model
 
-Each conversation runs on one of three models, switchable in the panel header:
+Each conversation runs on one of three models, switchable in the copilot settings:
 
 - **Fast** — the cheapest and quickest. Good for small edits and questions; noticeably weaker at building large workflows.
 - **Smart** — the default. Builds well at a fair price.
@@ -161,7 +171,7 @@ Other differences worth knowing:
 
 ## Good to know
 
-- **Save first.** The panel saves your canvas before it sends a message, so you and the copilot are working on the same graph. If it cannot save, it refuses to send rather than risk your edits.
+- **Save first.** The panel saves your canvas before it sends a message, so you and the copilot are working on the same graph. That includes a canvas you have emptied, so nodes you deleted do not reappear under the copilot's work. If it cannot save, it refuses to send rather than risk your edits.
 - **If you edit while it works,** your unsaved changes win: the copilot's edit is written to the workflow but is not pulled onto your canvas, and the panel says so instead of pretending. Reload to see its version.
 - **A turn ends if you close the tab.** You are only charged for what was already spent. A run that has started keeps going.
 - **Stop any time.** The Stop button in the composer ends the current message; anything already written to the canvas stays. **Stop** on a run card really stops the run — results that were already produced are saved to My Library.

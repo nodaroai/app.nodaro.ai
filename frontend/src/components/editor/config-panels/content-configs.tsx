@@ -2,6 +2,7 @@
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useT } from "@/lib/i18n"
 import {
@@ -123,6 +124,20 @@ export function ContentIdeasConfig({ data, onUpdate, sources, fieldMappings, onM
           onChange={(e) => onUpdate({ language: e.target.value })}
         />
       </MappableField>
+
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="content-ideas-brand-lessons">{t("cfgext.contentIdeasBrandLessons")}</Label>
+          <Switch
+            id="content-ideas-brand-lessons"
+            checked={data.useBrandLessons !== false}
+            // `undefined` when on (the default), so a node that never touched
+            // this stays byte-identical to one saved before the switch existed.
+            onCheckedChange={(v) => onUpdate({ useBrandLessons: v ? undefined : false })}
+          />
+        </div>
+        <p className="text-[11px] text-muted-foreground">{t("cfgext.contentIdeasBrandLessonsHint")}</p>
+      </div>
     </div>
   )
 }

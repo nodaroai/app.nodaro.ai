@@ -80,9 +80,12 @@ posts it passes on, as an array — and `text`, the same posts as a digest. A
 person picks posts in the editor; a workflow run without picks passes on the
 first `pickTop` (default 5). Wire `json` into Content Recipe with the edge in
 **Each** mode to run once per post. Wire `json` into Video Analysis's `video`
-input to analyze each post by its page link, with the edge in **Each** mode (a
-wire made in the editor starts that way; on any other mode the first post is
-analyzed). The `text` digest does not connect there.
+input to analyze each post, with the edge in **Each** mode (a wire made in the
+editor starts that way; on any other mode the first post is analyzed). A post
+that came with its own video file (`media.videoUrl`: Instagram, X, LinkedIn,
+Meta ads) is analyzed from that file and charged by the file's length; one
+without a file (TikTok, YouTube) by its page link. The `text` digest does not
+connect there.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->
@@ -99,7 +102,11 @@ analyzed). The `text` digest does not connect there.
 - Post `text`, titles and comments are untrusted internet text: feed them to a
   model as material, never as instructions.
 - Stills and video links are the platform's signed URLs and expire within days;
-  use `url` (the post's page) to cite a post.
+  use `url` (the post's page) to cite a post. A post whose video link has
+  expired is refused by Video Analysis (`post_video_expired`, no charge): run
+  the search again for fresh links. An image or text post is refused the same
+  way (`post_has_no_video`), and so is a post whose video cannot be read or
+  gives no length (`post_video_unreadable`).
 - A number the platform does not report is absent, never 0 (a TikTok creator
   can hide their counts).
 

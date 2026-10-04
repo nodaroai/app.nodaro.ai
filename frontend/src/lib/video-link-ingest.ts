@@ -262,7 +262,10 @@ async function runIngest(
 
   const startOptions: StartVideoDownloadOptions = {
     ...(isYouTube ? { maxHeight: YOUTUBE_MAX_HEIGHT } : {}),
-    ...(section ? { section } : {}),
+    // Exact: nothing here trims the file afterwards, and the nodes it feeds
+    // measure it. Video Analysis prices by its length, so the server's ±3s pad
+    // turned a 1:00 part into 1:06 and the next price bucket.
+    ...(section ? { section, exactSection: true } : {}),
     ...(request.allowSilent ? { requireAudio: false } : {}),
   }
 

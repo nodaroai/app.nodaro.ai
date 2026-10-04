@@ -399,6 +399,13 @@ export function buildCompletedResultPatch(
   // rule shared with the live path + backend (unwrapEditPlanOutput). Same
   // recovery gap as the analysis branch above: no media URL, so it would
   // otherwise fall through and leave a completed node blank.
+  // camera-switch: output_data is { json: <Edl>, transcript } — the node keeps
+  // the pair on generatedJson (the SAME shape the live run writes).
+  if (nodeType === "camera-switch") {
+    const edl = (output as { json?: unknown }).json
+    if (edl === undefined || edl === null || typeof edl !== "object") return null
+    return { executionStatus: "completed", generatedJson: { edl, transcript: (output as { transcript?: unknown }).transcript } }
+  }
   if (nodeType === "edit-plan") {
     const plan = unwrapEditPlanOutput(output)
     if (plan === undefined || plan === null || typeof plan !== "object") return null

@@ -71,7 +71,7 @@ function fixedBar(container: HTMLElement): HTMLElement {
 
 beforeEach(() => {
   localStorage.clear()
-  useCopilotUiStore.setState({ open: false, everOpened: false, turnActive: false })
+  useCopilotUiStore.setState({ mode: "min", dock: "min", everOpened: false, turnActive: false })
   act(() => useLocaleStore.getState().setLocale("he"))
 })
 afterEach(() => {

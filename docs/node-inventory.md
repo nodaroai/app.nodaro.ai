@@ -2,7 +2,7 @@
 
 One row per node **type**. Generative model wrappers are not rows — a type that dispatches to a whole model family is a single row, and the model family is named in "what it does".
 
-**Scope:** the 192 entries of `NODE_DEFINITIONS` (`frontend/src/types/nodes.ts`) plus the 2 deprecated type strings the loader still migrates (`loop` → `list`, `ai-writer` → `llm-chat`) = **194 rows**. One entry, `preview`, is retired (soft-delete, 2026-08): it stays in `NODE_DEFINITIONS` so saved workflows keep loading, but is no longer creatable — see its row.
+**Scope:** the 193 entries of `NODE_DEFINITIONS` (`frontend/src/types/nodes.ts`) plus the 2 deprecated type strings the loader still migrates (`loop` → `list`, `ai-writer` → `llm-chat`) = **195 rows**. One entry, `preview`, is retired (soft-delete, 2026-08): it stays in `NODE_DEFINITIONS` so saved workflows keep loading, but is no longer creatable — see its row.
 
 **Where each column comes from**
 
@@ -205,6 +205,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `linkedin-post` | LinkedIn Post | output | Post text, images, and video to LinkedIn | `in`:any | — | NO |
 | `publish-social` | Publish to Social | output | Publish to any connected social account (Instagram, Facebook, X, LinkedIn, TikTok, YouTube, Telegram, Bluesky, Reddit, and more) — pick the account and the platform follows | `in`:any | — | NO |
 | `save-to-storage` | Save to Storage | output | Persist a node output to user storage | `in`:any | `asset`:any | NO |
+| `telegram-account-send` | Telegram Reply | output | Send the run's text back to its owner on Telegram: as the connected account (under the post that started the run, or to Saved Messages) or from their own bot (privately). One message per run, Cloud preview | `in`:text | — | NO |
 | `telegram-post` | Telegram Post | output | Send a message, photo, or video to a Telegram chat, channel, or group via a connected bot (send type auto-detected from connected media) | `in`:any | — | NO |
 | `tiktok-post` | TikTok Post | output | Publish video content directly to TikTok | `in`:any | — | NO |
 | `webhook-output` | Webhook Output | output | POST a node output to a URL | `in`:any | — | NO |

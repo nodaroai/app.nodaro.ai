@@ -21,11 +21,13 @@ beforeEach(() => {
 })
 
 function renderHeader(onChangeSettings = vi.fn()) {
-  render(<CopilotHeader onClose={vi.fn()} onChangeSettings={onChangeSettings} />)
+  render(<CopilotHeader onClose={vi.fn()} onMinimize={vi.fn()} onChangeSettings={onChangeSettings} />)
+  // The permission sits in the settings, behind the header's settings button.
+  fireEvent.click(screen.getByRole("button", { name: "Copilot settings" }))
   return onChangeSettings
 }
 
-const toggle = () => screen.getByRole("switch")
+const toggle = () => screen.getByRole("switch", { name: "Let it build posting steps" })
 const isOn = () => toggle().getAttribute("aria-checked") === "true"
 
 describe("the publishing permission", () => {

@@ -235,3 +235,138 @@ describe("update_workflow_json — workspace audience gate", () => {
     expect(canChangeVis).not.toHaveBeenCalled()
   })
 })
+
+// ── get_workflow_json / export_workflow (a `view` reader's settings) ─────────
+
+describe("get_workflow_json / export_workflow — a `view` reader gets no studio drafts or runs", () => {
+  const HERO = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+  /**
+   * One scene with the owner's two empty slots and a run in flight started
+   * from one of them (a slot-tagged marker carries the slot's unsent inputs).
+   * The character is bound ONLY from the slot's inputs.
+   */
+  const row = () => ({
+    id: WORKFLOW_ID, user_id: "creator-other", workspace_id: WS_ID, visibility: "workspace", project_id: "p1",
+    name: "Class Film", nodes: [], edges: [], updated_at: "t", version: 3,
+    settings: { studio: { version: 3, shots: [
+      { id: "s1", imageNodeId: "generate-image-s1",
+        stillSlots: [{ id: "slot-1", inputs: { prompt: "an unsent idea",
+          references: [{ id: HERO, source: "wired-character", name: "Hero" }] } }],
+        clipSlots: [{ id: "slot-2", inputs: { prompt: "an unsent move" } }],
+        pendingStills: [{ jobId: "job-1", startedAt: 1, slotId: "slot-1", prompt: "an unsent run" }] },
+    ] } },
+  })
+  const shotsOf = (text: string | undefined) =>
+    (JSON.parse(text ?? "{}") as { settings: { studio: { shots: Array<Record<string, unknown>> } } }).settings.studio.shots
+
+  it.each(["get_workflow_json", "export_workflow"])("%s drops them for `view`", async (tool) => {
+    accessFromRow.mockResolvedValue("view")
+    fromMock.mockReturnValue(chain({ data: row(), error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: wsSession(["workflows:read"]), fastify: Fastify() })
+    const result = await callTool(server, tool, { workflow_id: WORKFLOW_ID })
+
+    expect(result.isError).toBeUndefined()
+    expect(shotsOf(result.content[0]?.text)).toEqual([{ id: "s1", imageNodeId: "generate-image-s1" }])
+    expect(result.content[0]?.text).not.toContain("an unsent")
+  })
+
+  it.each([
+    ["get_workflow_json", "edit"], ["get_workflow_json", "own"],
+    ["export_workflow", "edit"], ["export_workflow", "own"],
+  ])("%s keeps them for `%s`", async (tool, level) => {
+    accessFromRow.mockResolvedValue(level)
+    fromMock.mockReturnValue(chain({ data: row(), error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: wsSession(["workflows:read"]), fastify: Fastify() })
+    const result = await callTool(server, tool, { workflow_id: WORKFLOW_ID })
+
+    expect(result.isError).toBeUndefined()
+    const [shot] = shotsOf(result.content[0]?.text)
+    expect(shot!.stillSlots).toHaveLength(1)
+    expect(shot!.clipSlots).toHaveLength(1)
+    expect(shot!.pendingStills).toHaveLength(1)
+  })
+
+  it.each([["view", []], ["own", [[HERO]]]] as const)(
+    "export_workflow with_assets collects a draft-only reference only for the owner (`%s`)",
+    async (level, expected) => {
+      accessFromRow.mockResolvedValue(level)
+      const asked: unknown[] = []
+      const entities = chain({ data: [], error: null })
+      entities.in = vi.fn((_col: string, ids: unknown) => { asked.push(ids); return entities })
+      fromMock.mockImplementation((table: string) => (table === "workflows" ? chain({ data: row(), error: null }) : entities))
+      const server = buildServer()
+      registerWorkflows({ server, session: wsSession(["workflows:read"]), fastify: Fastify() })
+      const result = await callTool(server, "export_workflow", { workflow_id: WORKFLOW_ID, with_assets: true })
+
+      expect(result.isError).toBeUndefined()
+      expect(asked).toEqual(expected)
+    },
+  )
+})
+
+// ── get_workflow_json / export_workflow (a `view` reader's take records) ─────
+
+describe("get_workflow_json / export_workflow — a `view` reader gets no take's voice record (T42)", () => {
+  const PLAN = { orderedVoices: [{ voiceId: "voice-owner-abi", voiceName: "Abi" }] }
+  /**
+   * A production whose clip takes carry the owner's voice record on the
+   * graph's result rows, and whose bin holds a deleted empty slot and a
+   * deleted voiced take.
+   */
+  const row = () => ({
+    id: WORKFLOW_ID, user_id: "creator-other", workspace_id: WS_ID, visibility: "workspace", project_id: "p1",
+    name: "Class Film", edges: [], updated_at: "t", version: 3,
+    nodes: [{ id: "generate-video-s1", type: "generate-video", position: { x: 0, y: 0 }, data: { prompt: "Abi speaks",
+      generatedResults: [{ url: "https://r2/a.mp4", revoiceTo: PLAN, voiceMode: "character" }] } }],
+    settings: { studio: { version: 3, shots: [{ id: "s1" }], trash: [
+      { kind: "slot", id: "t-slot", shotId: "s1", index: 0, deletedAt: "d", stage: "clip",
+        slot: { id: "slot-1", inputs: { prompt: "an unsent move" } } },
+      { kind: "clip", id: "t-clip", shotId: "s1", index: 1, deletedAt: "d", clipBase: { nodeId: "generate-video-s1" },
+        result: { url: "https://r2/c.mp4", revoiceTo: PLAN, voiceMode: "auto" } },
+    ] } },
+  })
+  const rowsOf = (text: string | undefined) =>
+    (JSON.parse(text ?? "{}") as { nodes: Array<{ data: { generatedResults?: unknown[] } }> }).nodes
+      .flatMap((node) => node.data.generatedResults ?? [])
+  const binOf = (text: string | undefined) =>
+    (JSON.parse(text ?? "{}") as { settings: { studio: { trash: Array<Record<string, unknown>> } } }).settings.studio.trash
+
+  it.each([
+    ["get_workflow_json", {}], ["export_workflow", { with_assets: true }],
+  ] as const)("%s drops them for `view`, off the takes and out of the bin", async (tool, extra) => {
+    accessFromRow.mockResolvedValue("view")
+    fromMock.mockImplementation((table: string) =>
+      chain({ data: table === "workflows" ? row() : [], error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: wsSession(["workflows:read"]), fastify: Fastify() })
+    const result = await callTool(server, tool, { workflow_id: WORKFLOW_ID, ...extra })
+
+    expect(result.isError).toBeUndefined()
+    const text = result.content[0]?.text
+    expect(text).not.toContain("voice-owner-abi")
+    expect(text).not.toContain("voiceMode")
+    expect(text).not.toContain("an unsent")
+    expect(rowsOf(text)).toEqual([{ url: "https://r2/a.mp4" }])
+    expect(binOf(text)).toEqual([{ kind: "clip", id: "t-clip", shotId: "s1", index: 1, deletedAt: "d",
+      clipBase: { nodeId: "generate-video-s1" }, result: { url: "https://r2/c.mp4" } }])
+  })
+
+  it.each([
+    ["get_workflow_json", "edit", {}], ["get_workflow_json", "own", {}],
+    ["export_workflow", "edit", { with_assets: true }], ["export_workflow", "own", { with_assets: true }],
+  ] as const)("%s keeps them for `%s`", async (tool, level, extra) => {
+    accessFromRow.mockResolvedValue(level)
+    fromMock.mockImplementation((table: string) =>
+      chain({ data: table === "workflows" ? row() : [], error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: wsSession(["workflows:read"]), fastify: Fastify() })
+    const result = await callTool(server, tool, { workflow_id: WORKFLOW_ID, ...extra })
+
+    expect(result.isError).toBeUndefined()
+    const text = result.content[0]?.text
+    expect(rowsOf(text)).toEqual([{ url: "https://r2/a.mp4", revoiceTo: PLAN, voiceMode: "character" }])
+    expect(binOf(text).map((entry) => entry.id)).toEqual(["t-slot", "t-clip"])
+  })
+})

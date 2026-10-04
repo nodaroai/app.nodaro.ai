@@ -1,7 +1,7 @@
 ---
 node_type: content-ideas
-generated_at: 2026-10-01T22:35:58.624Z
-generated_from: 9efb4473c
+generated_at: 2026-10-04T01:27:02.968Z
+generated_from: 34195fb18
 ---
 
 # Content Ideas
@@ -31,6 +31,8 @@ generated_from: 9efb4473c
 - `ideaBriefs?: string[]`
 - `generatedText?: string`
 - `runWarnings?: string[]`
+- `useBrandLessons?: boolean`
+- `brandLessons?: { brand: string; lessons: number }`
 
 **Default data:**
 ```json
@@ -53,6 +55,8 @@ Turn one or more content recipes plus a brand profile into concrete post ideas: 
 Wire every Content Recipe into `recipes` (several nodes, or one recipe node that ran once per post — all of them fold into ONE run). Put the brand in `brand` (product, audience, tone, things the brand never does), or wire a Text node into `field-brand`. `count` is 1–10 (default 5); `language` is free text (e.g. "Hebrew"), empty = the brand text's language.
 
 The output is a LIST: the node after it (typically Generate Script) runs once per idea, on the server too. Each item is a complete creative brief.
+
+`useBrandLessons` (on unless `false`) leans the ideas on what has worked for the user's own brand: the lessons of their tracked brand marked "this is my brand" in Competitors (what its best posts share — length, format, hook, hashtag, sound — measured on its own posts; MCP `competitor_lessons`). Nothing changes without an own brand with enough posts; the price is the same. The run's output names the brand it read (`brandLessons`).
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->

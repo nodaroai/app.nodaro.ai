@@ -361,12 +361,15 @@ export function referencedSourceIds(edl: Edl, output: "video" | "audio"): Set<st
  * those lossless slices, the one join + AAC encode (`audioMuxTimeoutMs`). One
  * number decides "hung" for the heartbeat and for those steps.
  *
- * NOT in the sum, because they have no ceiling of their own to add: time
- * WAITING for an ffmpeg slot, and storage I/O (the R2 client has no request
- * timeout — chunk checkpoints, the 404-fallback download, and the deliverable
- * upload after the render). Those ride in the slack between a real render and
- * its kill budgets, plus the 30 minutes after the last beat; see the wrapper
- * doc (`workers/pre-task-heartbeat.ts`).
+ * NOT in the sum: time WAITING for an ffmpeg slot (no ceiling of its own), and
+ * storage I/O — chunk checkpoints, the 404-fallback download, the deliverable
+ * upload after the render. Every storage call is bounded on its own
+ * (`lib/storage-timeouts.ts`, Track 0.12), so it fails rather than hangs, but
+ * its time is deliberately left out (decided 2026-10-04): a CRF render's size
+ * is unknown at dispatch, and sizing it from a nominal bitrate would push the
+ * budget out by hours. Both ride in the slack between a real render and its
+ * kill budgets, plus the 30 minutes after the last beat; see the wrapper doc
+ * (`workers/pre-task-heartbeat.ts`).
  */
 export function applyEdlRenderBudgetMs(
   edl: Edl,

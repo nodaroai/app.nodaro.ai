@@ -11,6 +11,7 @@ const mocks = {
   discover: vi.fn(),
   scan: vi.fn(),
   cards: vi.fn(),
+  lessons: vi.fn(),
   jobsGet: vi.fn(),
 }
 
@@ -25,6 +26,7 @@ vi.mock("../../client.js", () => ({
       discover: mocks.discover,
       scan: mocks.scan,
       cards: mocks.cards,
+      lessons: mocks.lessons,
     },
     jobs: { get: mocks.jobsGet },
   }),
@@ -74,6 +76,37 @@ describe("competitors command", () => {
     await runCmd("competitors", "add", "--brand", "Acme Paint", "--tiktok", "acmepaint", "--meta-ads", "Acme Paint", "--own")
     expect(mocks.discover).not.toHaveBeenCalled()
     expect(mocks.create).toHaveBeenCalledWith({ brand: "Acme Paint", accounts: { tiktok: "acmepaint", meta_ads: "Acme Paint" }, isOwn: true })
+  })
+
+  it("lessons prints what works per platform, with the posts each lesson rests on", async () => {
+    const { info } = await import("../../output.js")
+    mocks.lessons.mockResolvedValueOnce({
+      lessons: {
+        subjectId: "c1",
+        isOwn: true,
+        minPosts: 6,
+        platforms: [
+          {
+            platform: "tiktok",
+            posts: 12,
+            usual: 1150,
+            unit: "views",
+            winners: ["tiktok:1"],
+            misses: [],
+            lessons: [{ id: "tiktok:short_videos:short", kind: "short_videos", platform: "tiktok", params: {}, evidence: ["tiktok:1"], strength: 2.4, text: "On TikTok, videos of 15 seconds or less got 2.4x your usual views (4 posts, 3 of the best)." }],
+          },
+          { platform: "instagram", posts: 3, usual: null, unit: "views", winners: [], misses: [], lessons: [] },
+        ],
+      },
+      posts: { "tiktok:1": { url: "https://www.tiktok.com/@acme/video/1" } },
+    })
+    await runCmd("competitors", "lessons", "c1")
+    expect(mocks.lessons).toHaveBeenCalledWith("c1")
+    const lines = vi.mocked(info).mock.calls.map((c) => String(c[0]))
+    expect(lines).toContain("tiktok: 12 posts, usually 1150 views")
+    expect(lines).toContain("   • On TikTok, videos of 15 seconds or less got 2.4x your usual views (4 posts, 3 of the best).")
+    expect(lines).toContain("     https://www.tiktok.com/@acme/video/1")
+    expect(lines).toContain("instagram: 3 posts — needs 6 to tell what works")
   })
 
   it("scan queues a job", async () => {

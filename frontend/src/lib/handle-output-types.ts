@@ -38,6 +38,8 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   // edit-plan: single `edl` json output (the EDL plan). Same "look" data pip as
   // apply-edl's json / video-analysis's json.
   "edit-plan": { edl: "look" },
+  // camera-switch: the switched edit and the renamed transcript, both json.
+  "camera-switch": { edl: "look", transcript: "look" },
   "add-captions": { "video-out": "video" },
   "adjust-volume": { "video-out": "video", "audio-out": "audio" },
   "assemble-narrated-video": { video: "video" },

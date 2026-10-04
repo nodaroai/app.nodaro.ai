@@ -21,6 +21,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable"
 import { Button } from "@/components/ui/button"
+import { WorkflowThumbnailButton } from "./workflow-thumbnail-button"
 import {
   Tooltip,
   TooltipContent,
@@ -1844,6 +1845,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 open={showPublishTemplate}
                 onOpenChange={setShowPublishTemplate}
               />
+              <WorkflowThumbnailButton workflowId={workflowId} />
             </>
           )}
 

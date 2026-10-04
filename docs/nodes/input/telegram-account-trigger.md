@@ -41,8 +41,14 @@ Inbox mode turns a chat into an inbox for posts you want to work on: you share a
   - Exactly one of Video link and Post text has a value; the other is empty. Wire each into its own Router with the condition **is not equal to** and the value left empty, so only the branch with a value runs.
 - **Your own messages are always included** in inbox mode, so "Also my own messages" is not offered.
 - **Saved Messages works as an inbox**, but every link you save there for yourself then starts a run. A private channel of your own (for example "Nodaro inbox") keeps the two apart.
+- **Your post is marked when its run starts.** Your account adds an eyes reaction to the post you shared, so you see in Telegram that it was picked up.
+  - It marks only your own posts in the inbox chat, once per message, however many links the message has.
+  - In a public channel the channel's members see the mark too.
+  - Where the chat does not allow that reaction (some channels limit reactions; Saved Messages may need Telegram Premium for them), the post simply shows no mark. The run starts all the same.
 
 A forwarded Telegram video is read by its caption for now: the run does not receive the video file yet.
+
+To answer in the inbox chat, end the workflow with a [Telegram Reply](../output/telegram-account-send.md) node: it replies under the post you shared, as your account, or sends you a private message from your bot. Its reply never starts another run.
 
 ## What a triggered run executes
 

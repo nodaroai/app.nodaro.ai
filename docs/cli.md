@@ -179,6 +179,7 @@ nodaro competitors add [--brand <name>] [--website <url>] [--tiktok <h>] [--inst
 nodaro competitors discover <website> [--json]              # free
 nodaro competitors scan <id> [--watch] [--json]             # one Social Search page per search
 nodaro competitors cards [--json]                           # what to do now
+nodaro competitors lessons <id> [--json]                    # what works for a brand (free)
 nodaro competitors show <id> | update <id> [flags] [--clear <platforms>] | remove <id>
 #   update changes only the accounts named (the others are kept); --clear tiktok,x removes accounts
 
@@ -389,6 +390,8 @@ nodaro edit plan --mode tighten|clips|chapters --plan-tier economy|standard|prem
                                                          # matched weakly (set its offsetMs in --sources-file).
 
 # Organizations — only on instances that have them
+nodaro edit switch-cameras --edl <file.json> --transcript <file.json> [--speaker-map <file.json>] [--speaker-names <file.json>] [--min-shot-ms <ms>] [--lead-ms <ms>] [--max-shot-ms <ms>] [--wide-every <n>] [--layout-hints] [--watch] [--poll-interval <ms>] [--json]
+                                                         # multicam: each cut on the speaker's camera; the transcript needs speaker labels.
 nodaro org list [--json]
 nodaro org get <id> [--json]
 nodaro org create --name <name> --kind school|team [--slug <slug>] [--accept-terms] [--json]

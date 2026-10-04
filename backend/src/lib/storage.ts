@@ -1,5 +1,5 @@
 import type { CopyObjectCommandInput, ObjectCannedACL, PutObjectCommandInput } from "@aws-sdk/client-s3"
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, CopyObjectCommand, HeadObjectCommand, ListObjectsV2Command, CreateBucketCommand, PutBucketPolicyCommand } from "@aws-sdk/client-s3"
+import { type S3ClientConfig, S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, CopyObjectCommand, HeadObjectCommand, ListObjectsV2Command, CreateBucketCommand, PutBucketPolicyCommand } from "@aws-sdk/client-s3"
 import { Upload } from "@aws-sdk/lib-storage"
 import { randomUUID } from "node:crypto"
 import { createReadStream, createWriteStream } from "node:fs"
@@ -11,6 +11,12 @@ import { config } from "./config.js"
 import { safeFetch } from "./safe-fetch.js"
 import { assertOrdinaryMediaKey } from "./retained-image-keys.js"
 import { templatePreviewKey } from "./template-preview-key.js"
+import {
+  STORAGE_DOWNLOAD_LIMITS,
+  boundedStorageClientConfig,
+  guardStorageReadBody,
+  storageTransferOptions,
+} from "./storage-timeouts.js"
 import {
   updateStorageUsage,
   reserveStorageIfWithinLimit,
@@ -66,18 +72,37 @@ export function isStorageConfigured(): boolean {
   )
 }
 
-export const s3 = new S3Client({
-  // "auto" is R2's value and MinIO ignores it; Supabase-local ("local") and
-  // DO Spaces / AWS ("nyc3", "us-east-1", …) reject it. See R2_REGION.
-  region: config.R2_REGION,
-  endpoint: resolveStorageEndpoint(config),
-  // MinIO and most self-hosted S3 servers require path-style addressing.
-  forcePathStyle: config.R2_FORCE_PATH_STYLE,
-  credentials: {
-    accessKeyId: config.R2_ACCESS_KEY_ID,
-    secretAccessKey: config.R2_SECRET_ACCESS_KEY,
-  },
-})
+/** The storage clients' options — ONE factory, so the job client and the
+ *  viewer client below can never drift apart. */
+function storageClientOptions(): S3ClientConfig {
+  return {
+    // "auto" is R2's value and MinIO ignores it; Supabase-local ("local") and
+    // DO Spaces / AWS ("nyc3", "us-east-1", …) reject it. See R2_REGION.
+    region: config.R2_REGION,
+    endpoint: resolveStorageEndpoint(config),
+    // MinIO and most self-hosted S3 servers require path-style addressing.
+    forcePathStyle: config.R2_FORCE_PATH_STYLE,
+    credentials: {
+      accessKeyId: config.R2_ACCESS_KEY_ID,
+      secretAccessKey: config.R2_SECRET_ACCESS_KEY,
+    },
+    // Bounded (Track 0.12): without a handler every call could hang forever.
+    // See lib/storage-timeouts.ts for what bounds what. A fresh object per
+    // client, so each builds its own connection pool.
+    ...boundedStorageClientConfig(),
+  }
+}
+
+export const s3 = new S3Client(storageClientOptions())
+
+/**
+ * The client for streams piped to a VIEWER (`streamR2Object`) — the same bounds,
+ * its own connection pool. A viewer's stream holds its connection for as long
+ * as they watch; on the shared pool enough of them would make job uploads and
+ * downloads wait for a connection, and fail at the connect bound (decided
+ * 2026-10-04).
+ */
+export const viewerS3 = new S3Client(storageClientOptions())
 
 /**
  * THE object-ACL seam. Every object write in this repo — Put, Copy and
@@ -312,6 +337,7 @@ export async function copyRecastObject(
       CacheControl: R2_CACHE_CONTROL,
       MetadataDirective: "REPLACE",
     })),
+    storageTransferOptions(bytes),
   )
   return { url: r2Url(destKey), bytes }
 }
@@ -523,6 +549,7 @@ export async function uploadBufferToR2(
       ContentType: contentType,
       CacheControl: R2_CACHE_CONTROL,
     })),
+    storageTransferOptions(buffer.length),
   )
 
   trackStorage(trackUserId, buffer.length)
@@ -552,7 +579,7 @@ export async function uploadFileToR2(
       // bounded PUT carries the signal to the HTTP request and closes the input stream.
       await s3.send(new PutObjectCommand(withObjectAcl({ Bucket: config.R2_BUCKET_NAME, Key: key,
         Body: body, ContentLength: fileStat.size, ContentType: contentType, CacheControl: R2_CACHE_CONTROL,
-      })), { abortSignal: opts.signal })
+      })), { abortSignal: opts.signal, ...storageTransferOptions(fileStat.size) })
       opts.signal.throwIfAborted()
     } finally { body.destroy() }
   } else await streamToR2(key, createReadStream(filePath), contentType)
@@ -623,11 +650,16 @@ const PREVIEW_EXT_TO_MIME: Record<string, string> = {
  * if the object truly doesn't exist, so callers keep a honest failure path.
  */
 export async function downloadR2ObjectToFile(key: string, dest: string): Promise<void> {
+  const controller = new AbortController()
   const res = await s3.send(
     new GetObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key }),
+    { abortSignal: controller.signal },
   )
   if (!res.Body) throw new Error(`R2 origin returned no body for ${key}`)
-  await pipeline(res.Body as Readable, createWriteStream(dest))
+  const body = guardStorageReadBody(res.Body as Readable, {
+    sizeBytes: res.ContentLength, startedAt: Date.now(), label: `r2 object ${key}`, controller, limits: STORAGE_DOWNLOAD_LIMITS,
+  })
+  await pipeline(body, createWriteStream(dest))
 }
 
 /**
@@ -660,22 +692,30 @@ export async function readR2Object(
   opts: { maxBytes?: number } = {},
 ): Promise<{ body: Buffer; contentType: string | null; size: number | null } | null> {
   try {
+    const controller = new AbortController()
     const res = await s3.send(
       new GetObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key }),
+      { abortSignal: controller.signal },
     )
     if (!res.Body) return null
     const size = typeof res.ContentLength === "number" ? res.ContentLength : null
     if (opts.maxBytes !== undefined && size !== null && size > opts.maxBytes) {
       // Don't read a multi-GB object into memory just to refuse it.
       ;(res.Body as Readable).destroy?.()
+      controller.abort()
       return { body: Buffer.alloc(0), contentType: res.ContentType ?? null, size }
     }
+    // A body that stalls is stopped by the body rule, which ends the loop with
+    // an error — read as "not present" below, like any other failure.
+    const guarded = guardStorageReadBody(res.Body as Readable, {
+      sizeBytes: size, startedAt: Date.now(), label: `r2 object ${key}`, controller, limits: STORAGE_DOWNLOAD_LIMITS,
+    })
     const chunks: Buffer[] = []
     let length = 0
-    for await (const chunk of res.Body as Readable) {
+    for await (const chunk of guarded) {
       length += Buffer.byteLength(chunk)
       if (opts.maxBytes !== undefined && length > opts.maxBytes) {
-        ;(res.Body as Readable).destroy?.()
+        guarded.destroy() // also destroys the source and aborts the request
         return { body: Buffer.alloc(0), contentType: res.ContentType ?? null, size: length }
       }
       chunks.push(chunk as Buffer)
@@ -712,7 +752,9 @@ export async function streamR2Object(
   | null
 > {
   try {
-    const res = await s3.send(
+    // Its own client (`viewerS3`): bounded at the headers only — a viewer who
+    // pauses is not a stall (decided 2026-10-04).
+    const res = await viewerS3.send(
       new GetObjectCommand({
         Bucket: config.R2_BUCKET_NAME,
         Key: key,
@@ -822,6 +864,8 @@ export async function copyToTemplatePreview(
         CacheControl: R2_CACHE_CONTROL,
         MetadataDirective: "REPLACE",
       })),
+      // A copy's budget scales with its size (a video preview can be large).
+      storageTransferOptions(await getR2ObjectSize(sourceKey)),
     )
     // Best-effort size tracking. A HEAD failure shouldn't fail the publish —
     // the copy already succeeded; quota accounting drifting by one preview is
@@ -929,10 +973,11 @@ export async function listObjectsByPrefix(prefix: string): Promise<string[]> {
  *
  * Mirrors copyToTemplatePreview: our own R2 URLs go through CopyObjectCommand
  * (no egress, no re-upload); foreign URLs fall back to a bounded safeFetch +
- * SizeLimitedStream + streamToR2. The dest is then HEAD-ed for an
- * authoritative ContentLength — unlike copyToTemplatePreview the HEAD is NOT
- * best-effort here, because the caller (clone) needs the byte count to charge
- * the cloner's storage quota.
+ * SizeLimitedStream + streamToR2. The byte count is authoritative — the caller
+ * (clone) charges the cloner's storage quota with it: an R2→R2 copy reports the
+ * source's HEADed size (the copy is byte-identical; the HEAD also sizes the
+ * copy's budget), otherwise — a foreign source, or a failed source HEAD — the
+ * dest is HEAD-ed, and unlike copyToTemplatePreview that HEAD is not best-effort.
  */
 export async function copyR2ObjectToPrefix(
   sourceUrl: string,
@@ -943,7 +988,11 @@ export async function copyR2ObjectToPrefix(
   const contentType = PREVIEW_EXT_TO_MIME[ext] ?? "application/octet-stream"
 
   const sourceKey = r2KeyFromOurUrl(sourceUrl)
+  // An R2→R2 copy is byte-identical, so the source's size (HEADed to size the
+  // copy's budget) is the dest's too; 0 = the HEAD failed → HEAD the dest below.
+  let copiedBytes = 0
   if (sourceKey) {
+    copiedBytes = await getR2ObjectSize(sourceKey)
     await s3.send(
       new CopyObjectCommand(withObjectAcl({
         Bucket: config.R2_BUCKET_NAME,
@@ -953,6 +1002,8 @@ export async function copyR2ObjectToPrefix(
         CacheControl: R2_CACHE_CONTROL,
         MetadataDirective: "REPLACE",
       })),
+      // A copy's budget scales with its size (a cloned video can be large).
+      storageTransferOptions(copiedBytes),
     )
   } else {
     // Foreign URL — download and upload, bounded by the size cap. Same
@@ -975,6 +1026,7 @@ export async function copyR2ObjectToPrefix(
     await streamToR2(destKey, counter, contentType)
   }
 
+  if (copiedBytes > 0) return { url: r2Url(destKey), bytes: copiedBytes }
   const head = await s3.send(
     new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: destKey }),
   )

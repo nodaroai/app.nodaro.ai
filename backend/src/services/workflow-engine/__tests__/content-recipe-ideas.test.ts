@@ -195,6 +195,12 @@ describe("buildPayload — the plugin's job names and payloads", () => {
     expect(r.payload).toMatchObject({ count: 5, llmModel: "gemini-3.6-flash" })
   })
 
+  it("content-ideas: leans on the user's own brand unless the node turned it off", () => {
+    expect(build("content-ideas", {}, { inputs: [RECIPE_A] }).payload).not.toHaveProperty("useBrandLessons")
+    expect(build("content-ideas", { useBrandLessons: true }, { inputs: [RECIPE_A] }).payload).not.toHaveProperty("useBrandLessons")
+    expect(build("content-ideas", { useBrandLessons: false }, { inputs: [RECIPE_A] }).payload).toMatchObject({ useBrandLessons: false })
+  })
+
   it("content-ideas: refuses to run with no recipe", () => {
     expect(() => build("content-ideas", { brand: "x" }, { inputs: [] })).toThrow(/connect at least one Content Recipe/)
   })

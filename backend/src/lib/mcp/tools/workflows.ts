@@ -7,7 +7,7 @@ import { z } from "zod"
 import { isDeepStrictEqual } from "node:util"
 import { clientRequestIdSchema, idempotencyHeaders } from "./_verb-helpers.js"
 import type { FastifyInstance } from "fastify"
-import { stripExportContent, stripUnownedRefs, stripTransientRuntimeData, normalizeNodeModelParams, normalizeVideoOverlayNodes, describeNodeAdjustments, type GenericNode, type WorkflowExport } from "@nodaro/shared"
+import { stripExportContent, stripStudioDraftWorkflow, stripUnownedRefs, stripTransientRuntimeData, normalizeNodeModelParams, normalizeVideoOverlayNodes, describeNodeAdjustments, type GenericNode, type WorkflowExport } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { reconcileWorkflowTriggers, type GraphNode } from "../../workflow-trigger-sync.js"
 
@@ -236,7 +236,12 @@ export function registerWorkflows({
           "id, project_id, name, nodes, edges, settings, updated_at, version",
         )
         if (!loaded.ok) return err(loaded.message)
-        const row = loaded.row
+        // Same rule as the REST `GET /v1/workflows/:id`: a `view` reader never
+        // receives the owner's studio drafts, runs in flight or voice plans
+        // (empty media slots, per-scene run markers, a take's voice record —
+        // and the same things in the bin). `edit` / `own` read them raw — an
+        // editor writes the graph back whole.
+        const row = loaded.access === "view" ? stripStudioDraftWorkflow(loaded.row) : loaded.row
         return ok(
           JSON.stringify(
             {
@@ -285,7 +290,11 @@ export function registerWorkflows({
           { personalProjectFloor: false },
         )
         if (!loaded.ok) return err(loaded.message)
-        const row = loaded.row
+        // Same rule as the REST export: a `view` reader exports no studio
+        // drafts, runs in flight or voice plans, and no asset only those
+        // drafts reference.
+        const row = loaded.access === "view" ? stripStudioDraftWorkflow(loaded.row) : loaded.row
+        const settings = row.settings
         const rawNodes = asObjectArray(row.nodes)
         const result: WorkflowExport = {
           version: 1,
@@ -295,12 +304,12 @@ export function registerWorkflows({
             ? stripUnownedRefs(rawNodes as unknown as GenericNode[])
             : stripExportContent(rawNodes as unknown as GenericNode[])) as unknown as GenericNode[],
           edges: (row.edges ?? []) as WorkflowExport["edges"],
-          settings: (row.settings ?? {}) as Record<string, unknown>,
+          settings: (settings ?? {}) as Record<string, unknown>,
         }
 
         if (includeAssets) {
           // Graph AND settings, exactly as the REST export collects them.
-          const ids = collectAssetIds(rawNodes, row.settings)
+          const ids = collectAssetIds(rawNodes, settings)
           const assetsResult = await fetchExportAssets(ids, session.userId)
           if ("error" in assetsResult) return err(`Error: ${assetsResult.error}`)
           result.assets = assetsResult

@@ -38,8 +38,9 @@ export const AUDIO_SYNC_FINE_WINDOWS = 3
  *  the duration probe, the envelope decode, and —
  *  for each fine window — a reference window and a source window decode.
  *  Correlation itself is in-process arithmetic well inside the per-source slack.
- *  Not counted, as for every storage call: the proxy's R2 upload (the R2 client
- *  has no request timeout — Track 0.12). */
+ *  Not counted, as for every storage call: the proxy's R2 upload (bounded on its
+ *  own — `lib/storage-timeouts.ts`, Track 0.12 — but never summed into a
+ *  budget, decided 2026-10-04). */
 export const AUDIO_SYNC_PER_SOURCE_BUDGET_MS =
   DOWNLOAD_MAX_MS + FFPROBE_TIMEOUT_MS + MEDIA_PROXY_FFMPEG_TIMEOUT_MS + DOWNLOAD_TIMEOUT_MS + FFPROBE_TIMEOUT_MS
   + AUDIO_SYNC_ENVELOPE_DECODE_TIMEOUT_MS

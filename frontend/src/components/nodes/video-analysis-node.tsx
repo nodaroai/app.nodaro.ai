@@ -1,7 +1,7 @@
 "use client"
 
 import { useT } from "@/lib/i18n"
-import { memo, useMemo, useState } from "react"
+import { memo, useCallback, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ScanSearch, Film, Braces, Type, Loader2, AlertCircle, Copy, Expand, X } from "lucide-react"
@@ -16,7 +16,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
 import { useUpstreamVideoProbe } from "@/hooks/use-upstream-video-probe"
-import { ACCEPTS_VIDEO_OR_POST_LINK } from "@/lib/video-analysis-handles"
+import { ACCEPTS_VIDEO_OR_POST_LINK, wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
 import { DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { buildVideoAnalysisCreditId, resolveVideoAnalysisModel } from "@nodaro/shared"
 import type { VideoAnalysisResult } from "@nodaro/shared"
@@ -89,12 +89,27 @@ function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.probedYoutube && nodeData.probedYoutube.url === nodeData.youtubeUrl
       ? nodeData.probedYoutube.durationSec
       : undefined
+  // A Social Search's posts wired in: the longest of their videos, the same
+  // figure every run estimate quotes (null when no search is wired here).
+  const postsVideoSec = useWorkflowStore(
+    useCallback((s) => wiredSocialPostsVideoSec(id, s.edges, s.nodes), [id]),
+  )
+  // Something to analyze is in place (a wire into `video`, or a link in the
+  // node), so the empty state says it is ready rather than asking for a video.
+  const videoWired = useWorkflowStore(
+    useCallback((s) => s.edges.some((e) => e.target === id && e.targetHandle === "video"), [id]),
+  )
+  const hasSource = videoWired || Boolean(nodeData.youtubeUrl?.trim())
   // Resolve the tier ("fast"/"pro") or raw model to the internal model (default
   // pro) so the pre-run credit estimate matches what the server charges.
   const model = resolveVideoAnalysisModel(nodeData.llmModel)
   const creditModelId = useMemo(
-    () => buildVideoAnalysisCreditId(model, probedDuration ?? upstreamDuration ?? probedVideoDuration ?? undefined),
-    [model, probedDuration, upstreamDuration, probedVideoDuration],
+    () =>
+      buildVideoAnalysisCreditId(
+        model,
+        postsVideoSec !== null ? postsVideoSec : (probedDuration ?? upstreamDuration ?? probedVideoDuration ?? undefined),
+      ),
+    [model, postsVideoSec, probedDuration, upstreamDuration, probedVideoDuration],
   )
   const credits = useModelCredits(creditModelId)
   const [treeOpen, setTreeOpen] = useState(false)
@@ -198,7 +213,7 @@ function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
               style={{ minHeight: 120, flex: 1 }}
             >
               <ScanSearch className="w-6 h-6" />
-              <span className="text-[10px]">{t("node.connectAVideoOrSet")}</span>
+              <span className="text-[10px]">{hasSource ? t("node.vaReadyToRun") : t("node.connectAVideoOrSet")}</span>
             </div>
           )}
         </div>

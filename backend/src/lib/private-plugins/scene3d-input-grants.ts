@@ -1,4 +1,5 @@
 import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { boundedStorageClientConfig } from "../storage-timeouts.js"
 import { z } from "zod"
 import type { authorizeScene3DArtifact } from "../../services/scene3d-artifacts/authorize.js"
 import { authorizeScene3DInputArtifact } from "./scene3d-input-authority.js"
@@ -29,6 +30,7 @@ export function createScene3DInputGranter(
   withPrivateSceneObjectParams(cfg.bucket, publicBucket, { Key: "configuration-check" })
   const client = new S3Client({ region: cfg.region, endpoint: cfg.endpoint, forcePathStyle: cfg.forcePathStyle,
     credentials: { accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey },
+  ...boundedStorageClientConfig(),
   })
   return async (raw, options) => {
     options?.signal?.throwIfAborted()

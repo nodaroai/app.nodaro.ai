@@ -441,6 +441,7 @@ describe("startVideoDownload", () => {
     await startVideoDownload("https://youtu.be/aqz-KE-bpKQ", {
       maxHeight: 1080,
       section: { startSec: 30, endSec: 95 },
+      exactSection: true,
       requireAudio: false,
     })
     expect(sentBody(fetchMock)).toEqual({
@@ -448,6 +449,7 @@ describe("startVideoDownload", () => {
       maxHeight: 1080,
       sectionStartSec: 30,
       sectionEndSec: 95,
+      exactSection: true,
       requireAudio: false,
     })
   })

@@ -14,6 +14,13 @@ import { getPickerCatalog } from "../picker-catalogs.js"
 import { VIDEO_HINT_MODE_DEFAULT, renderDirectionHints } from "../direction-registry.js"
 import { composeVideoPromptText } from "../assemble-video-input.js"
 
+/** match-cut's body (F8 arm B, 2026-10-03), as `transitions-scope.test.ts` pins it. */
+const MATCH_CUT_BODY =
+  "the last picture of the first shot and the first picture of the second share one shape, at the same " +
+  "place and the same size in the frame. The camera holds that shape in place across the cut. On the ne" +
+  "xt frame everything around the shape has changed while the shape itself stays put. The shot ends on " +
+  "the second shot, fully resolved, with no flash frame or zoom between the two"
+
 /**
  * F5 (transition QA, 2026-09-22): a duration clause on a cut ("match cut, …,
  * lasting approximately 1 second") made the video model render a 1.75 s
@@ -94,9 +101,7 @@ describe("instant transitions — the composer drops the duration lever", () => 
         "match-cut", [], [], { position: "middle", duration: "short", intensity: "natural" }, "compact",
       ),
     ).toBe(
-      "match cut (the final composition of the first shot matches the opening composition of the second shot " +
-      `in shape, color, and motion, so the cut feels like a visual rhyme; ${INSTANT_CUT_CLAUSE}), ` +
-      "the transition occurs in the middle of the clip",
+      `match cut (${MATCH_CUT_BODY}; ${INSTANT_CUT_CLAUSE}), the transition occurs in the middle of the clip`,
     )
   })
 
@@ -129,8 +134,7 @@ describe("transitions in a video prompt — `term (hint)`", () => {
   it("the six A/B strings (compact, short + natural levers)", () => {
     const c = (id: string) => composeTransitionHintFromConnections(id, [], [], LEVERS, "compact")
     expect(c("match-cut")).toBe(
-      "match cut (the final composition of the first shot matches the opening composition of the second shot " +
-      `in shape, color, and motion, so the cut feels like a visual rhyme; ${INSTANT_CUT_CLAUSE})`,
+      `match cut (${MATCH_CUT_BODY}; ${INSTANT_CUT_CLAUSE})`,
     )
     expect(c("none")).toBe(
       `hard cut (no transition, instantaneous switch from first shot to second shot; ${INSTANT_CUT_CLAUSE})`,

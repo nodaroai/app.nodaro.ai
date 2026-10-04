@@ -369,6 +369,11 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "combine-videos":     [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   // apply-edl: a required EDL (json), an optional Transcript (json), and
   // optional positional media-URL overrides (video or audio).
+  // camera-switch: the edit (an Edit Plan EDL) and the diarized transcript, both json.
+  "camera-switch":      [
+    { handleId: "edl", label: "EDL", accepts: ACCEPTS_JSON },
+    { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
+  ],
   "apply-edl":          [
     { handleId: "edl", label: "EDL", accepts: ACCEPTS_JSON },
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },

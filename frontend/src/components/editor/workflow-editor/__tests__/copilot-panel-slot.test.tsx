@@ -29,8 +29,13 @@ vi.mock("@/lib/edition", async () => {
   return { ...actual, hasCredits: () => hasCredits() }
 })
 
+// The ee rail and panel, stubbed: these tests pin the core shim, not the panel.
+vi.mock("@/ee/components/copilot/copilot-rail", () => ({ default: () => <div data-testid="copilot-rail" /> }))
+vi.mock("@/ee/components/copilot/copilot-panel", () => ({ default: () => <div data-testid="copilot-panel" /> }))
+
 const { CopilotCollapsedTab, CopilotPanelSlot, CopilotToolbarButton } = await import("../copilot-panel-slot")
 const { useCopilotUiStore } = await import("@/hooks/use-copilot-ui-store")
+const { useWorkflowStore } = await import("@/hooks/use-workflow-store")
 
 /** The slot reads the handoff parameter; nothing here navigates. */
 const Router = ({ children }: { children: React.ReactNode }) => <MemoryRouter>{children}</MemoryRouter>
@@ -51,7 +56,8 @@ const props = {
 
 beforeEach(() => {
   viewportIsMobile = false
-  useCopilotUiStore.setState({ open: false, everOpened: false, turnActive: false })
+  useCopilotUiStore.setState({ mode: "min", dock: "min", everOpened: false, turnActive: false, messageCount: 0 })
+  useWorkflowStore.setState({ nodes: [], isReadOnly: false })
 })
 
 describe("community build", () => {
@@ -83,23 +89,48 @@ describe("cloud build", () => {
     hasCredits.mockReturnValue(true)
   })
 
-  it("shows the collapsed tab before the panel has ever been opened, and loads no ee chunk", () => {
+  it("shows the folded strip at once, then the rail once its chunk arrives", async () => {
     render(<CopilotPanelSlot {...props} />, { wrapper: Router })
     expect(screen.getByRole("button", { name: /copilot/i })).toBeInTheDocument()
+    expect(await screen.findByTestId("copilot-rail")).toBeInTheDocument()
   })
 
-  it("opens the rail from the toolbar button", async () => {
+  it("the tab unfolds the strip into the rail when there is something to talk about", () => {
+    useCopilotUiStore.setState({ messageCount: 2 })
     render(<CopilotToolbarButton />, { wrapper: Router })
-    const button = screen.getByRole("button", { name: /copilot/i })
-    button.click()
-    expect(useCopilotUiStore.getState().open).toBe(true)
+    screen.getByRole("button", { name: /copilot/i }).click()
+    expect(useCopilotUiStore.getState().mode).toBe("panel")
     expect(useCopilotUiStore.getState().everOpened).toBe(true)
   })
 
-  it("marks the button pressed while the rail is open", () => {
-    useCopilotUiStore.setState({ open: true, everOpened: true })
+  it("the tab puts the Copilot in the middle of an empty canvas with nothing said", () => {
     render(<CopilotToolbarButton />, { wrapper: Router })
+    screen.getByRole("button", { name: /copilot/i }).click()
+    expect(useCopilotUiStore.getState().mode).toBe("center")
+  })
+
+  it("the tab folds an open rail to the strip when there is a conversation", () => {
+    useCopilotUiStore.setState({ mode: "panel", everOpened: true, messageCount: 2 })
+    render(<CopilotToolbarButton />, { wrapper: Router })
+    screen.getByRole("button", { name: /copilot/i }).click()
+    expect(useCopilotUiStore.getState().mode).toBe("min")
+  })
+
+  it("the tab takes an open rail over an empty, quiet canvas back to the middle", () => {
+    useCopilotUiStore.setState({ mode: "panel", everOpened: true, messageCount: 0, turnActive: false, pendingPrompt: null })
+    render(<CopilotToolbarButton />, { wrapper: Router })
+    screen.getByRole("button", { name: /copilot/i }).click()
+    expect(useCopilotUiStore.getState()).toMatchObject({ mode: "center", dock: "min" })
+  })
+
+  it("marks the button pressed only while the rail is open", () => {
+    useCopilotUiStore.setState({ mode: "panel", everOpened: true })
+    const { unmount } = render(<CopilotToolbarButton />, { wrapper: Router })
     expect(screen.getByRole("button", { name: /copilot/i })).toHaveAttribute("aria-pressed", "true")
+    unmount()
+    useCopilotUiStore.setState({ mode: "min" })
+    render(<CopilotToolbarButton />, { wrapper: Router })
+    expect(screen.getByRole("button", { name: /copilot/i })).toHaveAttribute("aria-pressed", "false")
   })
 
   it("shows no collapsed tab on a phone — 40px of a phone's canvas is not free", () => {
@@ -108,9 +139,20 @@ describe("cloud build", () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it("still offers the toolbar button on a phone", () => {
+  it("still offers the toolbar button on a phone, opening and closing the sheet", () => {
     viewportIsMobile = true
     render(<CopilotToolbarButton />, { wrapper: Router })
-    expect(screen.getByRole("button", { name: /copilot/i })).toBeInTheDocument()
+    const button = screen.getByRole("button", { name: /copilot/i })
+    button.click()
+    expect(useCopilotUiStore.getState().mode).toBe("panel")
+    button.click()
+    expect(useCopilotUiStore.getState().mode).toBe("hidden")
+  })
+
+  it("renders the sheet on a phone once it is open", async () => {
+    viewportIsMobile = true
+    useCopilotUiStore.setState({ mode: "panel", everOpened: true })
+    render(<CopilotPanelSlot {...props} />, { wrapper: Router })
+    expect(await screen.findByTestId("copilot-panel")).toBeInTheDocument()
   })
 })

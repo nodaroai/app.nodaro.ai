@@ -2587,6 +2587,7 @@ Search page per search; see [Competitors](./features/competitors.md).
 | `PATCH` | `/v1/competitors/:id` | any field of the above | Change it. `accounts` replaces the whole set: send every account to keep. A new `schedule` restarts its clock, so send it only to change it. While a scan of the brand runs, a change to `brand`, `accounts`, `aboutPlatforms` or `isOwn` answers `409 scan_running` (the scan was priced on them). |
 | `DELETE` | `/v1/competitors/:id` | none | Stop tracking it (its scans and cards go too). |
 | `GET` | `/v1/competitors/cards` | none | Every card from each brand's latest scan, most urgent first: `{ cards, posts }`, where `posts` holds the posts the cards rest on. |
+| `GET` | `/v1/competitors/:id/lessons` | none | What works for the brand (free): `{ lessons, posts }`. `lessons.platforms[]` gives, per platform, the brand's own posts counted (`posts`), their median reach (`usual`, `null` below `lessons.minPosts` posts), the best and weakest post ids, and `lessons[]`: a trait its best posts share (`kind`: `short_videos`, `long_videos`, `format`, `question_hook`, `number_hook`, `short_caption`, `long_caption`, `hashtag`, `sound`, `weekday`), its `params` (`lift`, `posts`, `winners`, `unit` and the trait's value), the `evidence` post ids and an English `text`. `posts` holds every post they name. |
 | `POST` | `/v1/competitor-discover` | `{ website }` | Find a brand's accounts from its website (free). Each account says whether the site linked it or it is a guess to check. |
 | `POST` | `/v1/competitor-scan` | `{ competitorId }` | Scan now. Answers `{ jobId }` at once; poll the job. |
 
@@ -2908,7 +2909,7 @@ for the formula). Off Cloud, the three `voice-changer-pro*` routes are absent (4
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/download-video` | Import a social video (YouTube/TikTok/Instagram/X/Facebook) or a direct video file link into storage (`{ url, maxHeight?, sectionStartSec?, sectionEndSec?, requireAudio? }`). A result with no audio stream fails unless `requireAudio: false`. At most 4 downloads run per account at once — a fifth answers `429 too_many_downloads`. Returns `{ downloadId }` — not a job. |
+| `POST` | `/v1/download-video` | Import a social video (YouTube/TikTok/Instagram/X/Facebook) or a direct video file link into storage (`{ url, maxHeight?, sectionStartSec?, sectionEndSec?, exactSection?, requireAudio? }`). A section is fetched with a few seconds of margin on each side, for a client that trims it afterwards; `exactSection: true` cuts it at exactly the requested range instead. A result with no audio stream fails unless `requireAudio: false`. At most 4 downloads run per account at once — a fifth answers `429 too_many_downloads`. Returns `{ downloadId }` — not a job. |
 | `GET` | `/v1/download-video/progress/:downloadId` | Live progress as **server-sent events** (`{ phase, percent, videoUrl?, error? }` every ~500ms; stream ends on `completed`/`failed`). |
 | `POST` | `/v1/video-metadata` | Probe duration/dimensions/title without downloading (`{ url }`). Direct read, not a job. |
 | `POST` | `/v1/trim-video` | Trim a video (`{ videoUrl, startTime?/endTime? \| keepFirstSeconds? \| keepLastSeconds? \| trim*Frames/Seconds }`) → job. |

@@ -703,6 +703,15 @@ export {
   telegramAccountListeningSignature,
   type TelegramAccountTriggerPostField,
 } from "./telegram-account-trigger.js"
+export {
+  TELEGRAM_ACCOUNT_SEND_NODE_TYPE,
+  TELEGRAM_SEND_AS,
+  TELEGRAM_SEND_DESTINATIONS,
+  telegramSendAsOf,
+  telegramSendDestinationOf,
+  type TelegramSendAs,
+  type TelegramSendDestination,
+} from "./telegram-account-send.js"
 
 export { buildFeedMaps, nodeFeedsAnything, type FeedNode, type FeedEdge, type FeedMaps } from "./trigger-feeds.js"
 
@@ -861,6 +870,10 @@ export {
   socialSearchPages,
   socialSearchRequestFromNode,
   socialSearchPostLink,
+  socialSearchPostVideo,
+  signedLinkExpiresAt,
+  socialPostsLongestVideoSec,
+  SOCIAL_POST_VIDEO_LINK_MARGIN_MS,
   socialSearchCreditId,
   socialSearchCreditIdFromNode,
   socialSearchPickTop,
@@ -879,6 +892,7 @@ export {
   type SocialPostMetrics,
   type SocialPostMedia,
   type SocialSearchParams,
+  type SocialSearchPostVideo,
 } from "./social-search.js"
 
 export {
@@ -907,6 +921,7 @@ export {
   COMPETITOR_SCAN_NODE_TYPE,
   COMPETITORS_MAX,
   ACTION_CARD_KINDS,
+  BRAND_LESSON_KINDS,
   COMPETITOR_SCAN_CREDIT_COSTS,
   competitorScanSearches,
   competitorScanCreditId,
@@ -926,6 +941,11 @@ export {
   type CompetitorScan,
   type CompetitorDetail,
   type CompetitorCardsResult,
+  type CompetitorLessonsResult,
+  type BrandLesson,
+  type BrandLessonKind,
+  type BrandLessons,
+  type BrandPlatformLessons,
   type CompetitorDiscovery,
   type CreateCompetitorInput,
   type UpdateCompetitorInput,
@@ -1297,6 +1317,9 @@ export {
   AUDIO_PRODUCER_TYPES,
   DYNAMIC_PRODUCER_TYPES,
   FAN_OUT_EACH_TYPES,
+  FAN_OUT_EACH_HANDLES,
+  defaultEdgeOutputMode,
+  listResultsServeHandle,
   FAN_IN_TARGETS,
   isFanInNodeType,
   isFanInEdge,
@@ -1455,7 +1478,12 @@ export * from "./scene3d-render-pricing.js"
 export {
   STUDIO_TRANSIENT_KEYS,
   STUDIO_SHOT_TRANSIENT_KEYS,
+  STUDIO_SHOT_DRAFT_KEYS,
+  STUDIO_TAKE_VOICE_KEYS,
   stripStudioTransientSettings,
+  stripStudioDraftSettings,
+  stripStudioDraftWorkflow,
+  stripStudioTakeVoiceRecords,
 } from "./studio-transient.js"
 
 export * from "./scene3d-v2-edit.js"
@@ -1473,6 +1501,7 @@ export type { CharacterMotionMetadata } from "./character-motion-metadata.js"
 export * from "./edl.js"
 export * from "./speaker-layouts.js"
 export * from "./edl-multicam.js"
+export * from "./camera-switch-contract.js"
 export * from "./edit-plan-contract.js"
 
 export { VIDEO_DURATION_AUTO, isAutoVideoDuration } from "./video-duration-auto.js"

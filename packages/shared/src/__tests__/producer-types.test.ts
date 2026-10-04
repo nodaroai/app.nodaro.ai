@@ -3,6 +3,10 @@ import {
   AUDIO_PRODUCER_TYPES,
   VIDEO_PRODUCER_TYPES,
   DYNAMIC_PRODUCER_TYPES,
+  FAN_OUT_EACH_TYPES,
+  FAN_OUT_EACH_HANDLES,
+  defaultEdgeOutputMode,
+  listResultsServeHandle,
 } from "../producer-types.js"
 import { getOutputType } from "../presentation-utils.js"
 
@@ -100,5 +104,36 @@ describe("producer-types", () => {
   // on `video-out`. Absent here, every downstream video input would reject it.
   it("registers video-overlay as a video producer", () => {
     expect(VIDEO_PRODUCER_TYPES.has("video-overlay")).toBe(true)
+  })
+})
+
+// Per-handle "each" defaults (decided 2026-10-04): Camera Switch run once per
+// clip fans its EDL out to one render per clip, while its transcript — the same
+// for every clip — stays one value, in every mode.
+describe("defaultEdgeOutputMode / listResultsServeHandle", () => {
+  it("a FAN_OUT_EACH_TYPES source defaults to each on every handle; anything else to last", () => {
+    expect(defaultEdgeOutputMode("edit-plan", "edl")).toBe("each")
+    expect(defaultEdgeOutputMode("list", undefined)).toBe("each")
+    expect(defaultEdgeOutputMode("transcribe", "json")).toBe("last")
+    expect(defaultEdgeOutputMode(undefined, "edl")).toBe("last")
+  })
+  it("Camera Switch: the EDL handle (and no handle = its primary, the EDL) is each; the transcript is last", () => {
+    expect(defaultEdgeOutputMode("camera-switch", "edl")).toBe("each")
+    expect(defaultEdgeOutputMode("camera-switch", undefined)).toBe("each")
+    expect(defaultEdgeOutputMode("camera-switch", null)).toBe("each")
+    expect(defaultEdgeOutputMode("camera-switch", "transcript")).toBe("last")
+  })
+  it("only the each handles read the per-iteration results", () => {
+    expect(listResultsServeHandle("camera-switch", "edl")).toBe(true)
+    expect(listResultsServeHandle("camera-switch", undefined)).toBe(true)
+    expect(listResultsServeHandle("camera-switch", "transcript")).toBe(false)
+    expect(listResultsServeHandle("generate-image", "image")).toBe(true)
+  })
+  it("every per-handle entry names a primary and is not also a whole-node each type", () => {
+    for (const [type, entry] of Object.entries(FAN_OUT_EACH_HANDLES)) {
+      expect(entry.each.length, type).toBeGreaterThan(0)
+      expect(entry.primary, type).toBeTruthy()
+      expect(FAN_OUT_EACH_TYPES.has(type), type).toBe(false)
+    }
   })
 })

@@ -58,4 +58,12 @@ describe("competitors resource", () => {
     expect(call(fetchMock, 1)).toMatchObject({ url: "https://api.example.com/v1/competitor-discover", body: { website: "acme.example" } })
     expect(call(fetchMock, 2)).toMatchObject({ url: "https://api.example.com/v1/competitor-scan", body: { competitorId: ID } })
   })
+
+  it("reads what works for a brand", async () => {
+    const result = { lessons: { subjectId: ID, isOwn: true, platforms: [], minPosts: 6 }, posts: {} }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(result))
+    const sdk = client(fetchMock)
+    expect(await sdk.competitors.lessons(ID)).toEqual(result)
+    expect(call(fetchMock, 0)).toMatchObject({ url: `https://api.example.com/v1/competitors/${ID}/lessons`, method: "GET" })
+  })
 })

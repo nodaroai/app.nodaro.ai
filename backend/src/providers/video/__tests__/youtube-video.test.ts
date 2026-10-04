@@ -160,6 +160,15 @@ describe("buildYtDlpVideoArgs — section downloads", () => {
     expect(args[args.indexOf("--download-sections") + 1]).toBe("*0-8")
   })
 
+  it("an EXACT section is fetched as asked — no pad, still cut at keyframes forced at both ends", () => {
+    // The editor's Video URL node never trims the result, and its consumers
+    // measure the file: a padded 1:00 part (1:06) billed Video Analysis'
+    // 3-minute bucket, a padded 10:00 part ran past the length it reads.
+    const args = buildYtDlpVideoArgs({ ...base, section: { startSec: 10, endSec: 70, exact: true } })
+    expect(args[args.indexOf("--download-sections") + 1]).toBe("*10-70")
+    expect(args).toContain("--force-keyframes-at-cuts")
+  })
+
   it("adds --force-keyframes-at-cuts for an accurate section cut", () => {
     const args = buildYtDlpVideoArgs({ ...base, section: { startSec: 10, endSec: 20 } })
     expect(args).toContain("--force-keyframes-at-cuts")
@@ -682,6 +691,15 @@ describe("buildYtDlpSectionStreamArgs — one half of an HD section download (20
     expect(args).toContain("--force-keyframes-at-cuts")
     // Single stream — nothing to merge; the caller muxes the halves locally.
     expect(args).not.toContain("--merge-output-format")
+  })
+
+  it("an EXACT section's half is cut at the asked range, like the progressive lane", () => {
+    const args = buildYtDlpSectionStreamArgs({
+      url: "https://youtu.be/x", outTemplate: "/tmp/x.vid.%(ext)s",
+      format: "bv*[vcodec^=avc1]", section: { startSec: 10, endSec: 40, exact: true }, proxyArgs: [],
+    })
+    expect(args[args.indexOf("--download-sections") + 1]).toBe("*10-40")
+    expect(args).toContain("--force-keyframes-at-cuts")
   })
 
   it("floors the padded start at 0 (a section starting near the clip head)", () => {

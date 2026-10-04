@@ -186,6 +186,38 @@ describe("POST /v1/download-video — section passthrough to the provider", () =
     await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
   })
 
+  it("exactSection marks the section exact for the provider (the editor's Video URL node)", async () => {
+    const res = await post({ url: YT_URL, sectionStartSec: 10, sectionEndSec: 70, exactSection: true })
+    expect(res.statusCode).toBe(200)
+
+    await vi.waitFor(() => expect(downloadYouTubeVideo).toHaveBeenCalledTimes(1))
+    const opts = vi.mocked(downloadYouTubeVideo).mock.calls[0][0]
+    expect(opts.section).toEqual({ startSec: 10, endSec: 70, exact: true })
+
+    // Drain — see above.
+    await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
+  })
+
+  it("exactSection: false keeps the padded section every other client trims itself", async () => {
+    const res = await post({ url: YT_URL, sectionStartSec: 10, sectionEndSec: 20, exactSection: false })
+    expect(res.statusCode).toBe(200)
+
+    await vi.waitFor(() => expect(downloadYouTubeVideo).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(downloadYouTubeVideo).mock.calls[0][0].section).toEqual({ startSec: 10, endSec: 20 })
+
+    // Drain — see above.
+    await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
+  })
+
+  it("400 when exactSection comes without a section, or is not a boolean", async () => {
+    const lone = await post({ url: YT_URL, exactSection: true })
+    expect(lone.statusCode).toBe(400)
+    expect(JSON.stringify(lone.json().error)).toContain("exactSection applies to a section")
+    const notBool = await post({ url: YT_URL, sectionStartSec: 10, sectionEndSec: 20, exactSection: "yes" })
+    expect(notBool.statusCode).toBe(400)
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
+  })
+
   it("no section params → provider called with section undefined (behavior unchanged)", async () => {
     const res = await post({ url: YT_URL })
     expect(res.statusCode).toBe(200)

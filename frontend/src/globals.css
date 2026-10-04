@@ -326,12 +326,12 @@
   --meta-ads-cta-fg: #0c0a14;
   --meta-ads-thumb-dim: 0.6;
   --meta-ads-dot-idle: #5d5972;
-  --copilot-panel: #171718;
-  --copilot-card: #1E1E1E;
-  --copilot-surface: #242426;
-  --copilot-strong: #3A3A3C;
-  --copilot-muted: #8A8F98;
-  --copilot-dim: #5A5F66;
+  --copilot-panel: #111114;
+  --copilot-card: #141418;
+  --copilot-surface: #1A1A1F;
+  --copilot-strong: #3A3A42;
+  --copilot-muted: #8A8A94;
+  --copilot-dim: #6D6D77;
   --copilot-mention: #38BDF8;
   --copilot-ok: #22C55E;
   --copilot-fail: #EF4444;

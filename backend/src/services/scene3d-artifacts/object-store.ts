@@ -1,4 +1,5 @@
 import { GetObjectCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { boundedStorageClientConfig } from "../../lib/storage-timeouts.js"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { Readable } from "node:stream"
 import { Scene3DArtifactError } from "./types.js"
@@ -30,7 +31,9 @@ export interface Scene3DObjectRead {
 
 export interface Scene3DObjectStore {
   readonly bucket: string
-  get(objectKey: string, range?: Scene3DObjectRange): Promise<Scene3DObjectRead>
+  /** `signal` aborts the request — after the headers too, which is what
+   *  releases the connection when a body read is stopped. */
+  get(objectKey: string, range?: Scene3DObjectRange, opts?: { readonly signal?: AbortSignal }): Promise<Scene3DObjectRead>
   delete(objectKey: string): Promise<void>
 }
 
@@ -176,18 +179,20 @@ export function createS3ObjectStore(cfg: Scene3DPrivateStorageConfig): Scene3DOb
     endpoint: cfg.endpoint,
     forcePathStyle: cfg.forcePathStyle,
     credentials: { accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey },
+    ...boundedStorageClientConfig(),
   })
 
   return {
     bucket: cfg.bucket,
 
-    async get(objectKey, range) {
+    async get(objectKey, range, opts) {
       const response = await client.send(
         new GetObjectCommand({
           Bucket: cfg.bucket,
           Key: objectKey,
           ...(range ? { Range: `bytes=${range.start}-${range.endInclusive}` } : {}),
         }),
+        opts?.signal ? { abortSignal: opts.signal } : undefined,
       )
       return {
         body: toReadable(response.Body),

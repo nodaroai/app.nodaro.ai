@@ -1279,6 +1279,13 @@ export interface TransitionData extends PickerHintModeFields {
   position?: TransitionPosition
   duration?: TransitionDuration
   intensity?: TransitionIntensity
+  /** A wipe's direction — a per-row option of the `wipe` catalog row
+   *  (`Transition.options`); absent = `auto`. */
+  wipeDirection?: string
+  /** A styled row's look — the shared per-row `style` option (debris shower,
+   *  garden bloom, …; `Transition.options`); a row-prefixed choice id, absent =
+   *  the row's default look. */
+  style?: string
   preText?: string
   postText?: string
   [key: string]: unknown
@@ -5751,6 +5758,41 @@ export type EditPlanNodeData = PromptAffixFields & {
   generatedJson?: unknown
 }
 
+/** camera-switch (podcast B5, decided 2026-10-03) — WHO is on screen, from who
+ *  is speaking. Cloud-EXCLUSIVE + relayed, deterministic, flat price. Reads an
+ *  edit (`edl`, e.g. Edit Plan's) and a diarized transcript; emits the switched
+ *  edit on `edl` and the renamed transcript on `transcript`. */
+export type CameraSwitchNodeData = {
+  [key: string]: unknown
+  label: string
+  /** Speaker label (the transcriber's, e.g. "speaker_0") → the camera's SOURCE
+   *  NODE id. Unset speakers are pre-filled by order at run time; `""` = no
+   *  camera of their own (the wide, else any camera with picture). */
+  speakerMap?: Record<string, string>
+  /** Speaker label → display name (segments + the renamed transcript). */
+  speakerNames?: Record<string, string>
+  /** The shortest shot, ms (default 2 500): a shorter turn holds the shot. */
+  minShotMs?: number
+  /** Cut this long before the new speaker starts, ms (default 200). */
+  leadMs?: number
+  /** With a `wide` camera: break to it after this long on one camera, ms (default 20 000). */
+  maxShotMs?: number
+  /** With a `wide` camera: every N-th cut goes to the wide (default 0 = off). */
+  wideEvery?: number
+  /** Overlapping speech → a side-by-side / stacked layout hint (default off). */
+  layoutHints?: boolean
+  /** Optional inline edit / transcript, used when nothing is wired. */
+  edl?: unknown
+  transcript?: unknown
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  /** The result pair: { edl, transcript }. */
+  generatedJson?: { edl?: unknown; transcript?: unknown }
+}
+
 // --- Content Recipe / Content Ideas ("steal the format") ---
 
 /** A content recipe as the cloud returns it (`output_data.json`). Read
@@ -5841,6 +5883,11 @@ export type ContentIdeasNodeData = {
   /** All briefs as one text — the node's single text value. */
   generatedText?: string
   runWarnings?: string[]
+  /** Lean on what has worked for the user's own brand (its tracked brand
+   *  marked "this is my brand" in Competitors). On unless false. */
+  useBrandLessons?: boolean
+  /** The last run's: the own brand whose lessons the ideas leaned on, and how many. */
+  brandLessons?: { brand: string; lessons: number }
 }
 
 // --- Video Audit ("AI Audit") Node Data ---
@@ -6464,6 +6511,31 @@ export type TelegramAccountTriggerData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
 }
 
+/**
+ * Telegram Reply: sends the run's text back to its OWNER on Telegram (Cloud;
+ * the sending runs in a private plugin). There is no chat field: as the
+ * account it writes under the post that started the run, or to the owner's
+ * Saved Messages; as the bot it writes to the owner privately.
+ */
+export type TelegramAccountSendData = {
+  [key: string]: unknown
+  label: string
+  /** "account" (default) or "bot" — @nodaro/shared TELEGRAM_SEND_AS. */
+  sendAs?: string
+  /**
+   * The connected account. Needed in both modes: as the bot, its private
+   * chat with the bot is where the message goes.
+   */
+  accountId?: string
+  /** As the account: "reply" (default) under the post, or "saved" — TELEGRAM_SEND_DESTINATIONS. */
+  destination?: string
+  /** As the bot: which of the owner's bots (Integrations → Telegram); none = their default. */
+  connectionId?: string
+  /** Sent when nothing is wired into the text input. */
+  text?: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+}
+
 export type TelegramChannelFeedData = {
   [key: string]: unknown
   label: string
@@ -6718,6 +6790,7 @@ export type SceneNodeData =
   | VideoAnalysisNodeData
   | VideoAuditNodeData
   | EditPlanNodeData
+  | CameraSwitchNodeData
   | ContentRecipeNodeData
   | ContentIdeasNodeData
   | ListNodeData
@@ -6747,6 +6820,7 @@ export type SceneNodeData =
   | ScheduleTriggerData
   | TelegramTriggerData
   | TelegramAccountTriggerData
+  | TelegramAccountSendData
   | TelegramChannelFeedData
   | SocialPostData
   | MusicGenreData
@@ -6862,6 +6936,7 @@ export type SceneNodeType =
   | "combine-videos"
   | "apply-edl"
   | "edit-plan"
+  | "camera-switch"
   | "content-recipe"
   | "content-ideas"
   | "image-collage"
@@ -6953,6 +7028,7 @@ export type SceneNodeType =
   | "publish-social"
   | "telegram-trigger"
   | "telegram-account-trigger"
+  | "telegram-account-send"
   | "telegram-channel-feed"
   | "component"
   | "music-genre"
@@ -8526,6 +8602,20 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     } as EditPlanNodeData,
   },
   {
+    type: "camera-switch",
+    label: "Camera Switch",
+    category: "processing",
+    // Flat per run (decided 2026-10-03, migration 448).
+    creditCost: 10,
+    inputs: ["edl", "transcript"],
+    outputs: ["edl", "transcript"],
+    defaultData: {
+      label: "Camera Switch",
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as CameraSwitchNodeData,
+  },
+  {
     type: "content-recipe",
     label: "Content Recipe",
     category: "ai",
@@ -10063,6 +10153,20 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       caption: "",
       fieldMappings: {},
     } as SocialPostData,
+  },
+  {
+    type: "telegram-account-send",
+    label: "Telegram Reply",
+    category: "output",
+    creditCost: 10,
+    inputs: ["in"],
+    outputs: [],
+    defaultData: {
+      label: "Telegram Reply",
+      sendAs: "account",
+      destination: "reply",
+      text: "",
+    } as TelegramAccountSendData,
   },
   {
     type: "publish-social",

@@ -86,6 +86,7 @@ import {
   isExecutableNode,
   getCostMultiplier,
   NO_RERUNS,
+  SERVER_RUN_ONLY_TYPES,
   type ExecutionContext,
 } from "./types";
 import {
@@ -504,9 +505,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     // Use composite model identifiers (e.g. "gpt-image:high") for accurate per-model lookup
     const computeEstimate = () => {
       const total = executableNodes.reduce((sum, node) => {
-        const modelId = getModelIdentifier(node, storeEdges, storeNodes);
+        const modelId = getModelIdentifier(node, storeEdges, storeNodes, rerunIds);
         const cached = getCachedCredits(modelId);
-        const cost = cached !== undefined ? cached : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, storeEdges, storeNodes);
+        const cost = cached !== undefined ? cached : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, storeEdges, storeNodes, rerunIds);
         const multiplier = getCostMultiplier(node, storeNodes, storeEdges, rerunIds);
         return sum + cost * multiplier;
       }, 0);
@@ -517,7 +518,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     };
 
     // Collect model identifiers and check which need fetching
-    const modelIds = [...new Set(executableNodes.map((n) => getModelIdentifier(n, storeEdges, storeNodes)).filter(Boolean))];
+    const modelIds = [...new Set(executableNodes.map((n) => getModelIdentifier(n, storeEdges, storeNodes, rerunIds)).filter(Boolean))];
     const uncached = modelIds.filter((m) => getCachedCredits(m) === undefined);
 
     if (uncached.length > 0) {
@@ -945,6 +946,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     setTimeout(() => queryClient.invalidateQueries({ queryKey: ["workflow-executions"] }), 500);
   }
 
+  // The Copilot flushes the canvas before every message. An emptied canvas is
+  // saved too: the Copilot builds on the saved graph, so the nodes someone
+  // removed would otherwise come back to life under it (SaveOptions.allowEmpty).
+  function saveForCopilot(pid: string) {
+    return save(pid, { allowEmpty: true });
+  }
+
   // The Copilot needs to know whether a run actually STARTED — it decides
   // between showing progress and handing the decision back. `handleRun` already
   // announces a start through `onExecutionStarted`; observing that callback is
@@ -981,7 +989,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
    */
   async function runNodeForCopilot(nodeId: string, opts?: { skipConfirm?: boolean }): Promise<{ started: boolean }> {
     const node = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId);
-    if (!node || !isExecutableNode(node)) return { started: false };
+    // A server-only node (one that sends as the person) is never run on the
+    // Copilot's say-so; the person runs it from the canvas.
+    if (!node || !isExecutableNode(node) || SERVER_RUN_ONLY_TYPES.has(node.type ?? "")) return { started: false };
     await handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef, opts);
     return { started: true };
   }
@@ -1061,9 +1071,17 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // Register store callbacks
   // ---------------------------------------------------------------------------
 
+  /** "Run this node": a server-only node runs from here on the server; every other node runs on its own. */
+  function runOneNode(nodeId: string): Promise<void> {
+    const type = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.type ?? "";
+    return SERVER_RUN_ONLY_TYPES.has(type)
+      ? handleRunFromHere(nodeId, ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded)
+      : handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef);
+  }
+
   useEffect(() => {
     useWorkflowStore.getState().setRunSingleNode(
-      isReadOnly ? null : (nodeId: string) => handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef)
+      isReadOnly ? null : (nodeId: string) => runOneNode(nodeId)
         .finally(() => {
           // Invalidate execution history so the single-node run appears immediately
           if (workflowId) {
@@ -1370,7 +1388,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           <div className="absolute inset-0 overflow-hidden flex">
             <CopilotPanelSlot
               projectId={projectId}
-              save={isReadOnly ? null : save}
+              save={isReadOnly ? null : saveForCopilot}
               run={isReadOnly ? null : runForCopilot}
               runNode={isReadOnly ? null : runNodeForCopilot}
               estimateNode={estimateNodeForCopilot}

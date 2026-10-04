@@ -565,6 +565,7 @@ export type {
   ApplyEdlInput,
   EditPlanInput,
   EditPlanSource,
+  CameraSwitchInput,
   SilenceRanges,
 } from "./resources/edit.js"
 export { WorkspacesResource, type CreateWorkspaceInput } from "./resources/workspaces.js"

@@ -1,170 +1,56 @@
 /**
- * Panel header: identity, the Ask/Auto lever, and the auto-run ceiling.
+ * Panel header: identity, the current settings in a word ("Ask · Smart"), and
+ * the panel's own controls — settings, fold to the strip, put away.
  *
- * Ask/Auto is a segmented track rather than a switch because the two states are
- * named behaviours, not on/off. The ceiling stays visible in Ask (dimmed) so it
- * is discoverable before the user needs it, and the hint on the right says in
- * words what the current mode will do — the whole point of the control.
+ * The settings themselves are out of sight until the settings button opens
+ * them under the header (`copilot-settings.tsx`): most turns never touch them,
+ * and a rail that opens on a wall of toggles hides the conversation.
  */
-import { useEffect, useState } from "react"
-import { X } from "lucide-react"
+import { useState } from "react"
+import { ChevronLeft, X } from "lucide-react"
 import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
-import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
-import { Switch } from "@/components/ui/switch"
-import { useT, type MessageKey } from "@/lib/i18n"
+import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
+import { cn } from "@/lib/utils"
 import { CopilotMemoriesButton } from "./copilot-memories"
-import type { CopilotModelTier, CopilotRunMode } from "@/ee/lib/copilot/types"
+import { CopilotSettingsButton, CopilotSettingsControls, type CopilotSettingsPatch } from "./copilot-settings"
 
 interface CopilotHeaderProps {
   onClose: () => void
-  onChangeSettings: (patch: {
-    runMode?: CopilotRunMode
-    autoRunLimitCredits?: number
-    allowPublishing?: boolean
-    modelTier?: CopilotModelTier
-  }) => void
+  onMinimize: () => void
+  onChangeSettings: (patch: CopilotSettingsPatch) => void
 }
 
-/** The ladder's three rungs — names for people, hints for honesty. Keys, resolved at render. */
-const TIER_UI: ReadonlyArray<{ tier: CopilotModelTier; labelKey: MessageKey; hintKey: MessageKey }> = [
-  { tier: "economy", labelKey: K.tierEconomy, hintKey: K.tierHintEconomy },
-  { tier: "standard", labelKey: K.tierStandard, hintKey: K.tierHintStandard },
-  { tier: "premium", labelKey: K.tierPremium, hintKey: K.tierHintPremium },
-]
+const ICON_BUTTON =
+  "w-[26px] h-[26px] rounded-[7px] border border-border text-[var(--copilot-muted)] hover:text-foreground hover:border-[var(--copilot-strong)] flex items-center justify-center transition-colors"
 
-export function CopilotHeader({ onClose, onChangeSettings }: CopilotHeaderProps) {
+export function CopilotHeader({ onClose, onMinimize, onChangeSettings }: CopilotHeaderProps) {
   const t = useT()
-  const runMode = useCopilotStore((s) => s.runMode)
-  const allowPublishing = useCopilotStore((s) => s.allowPublishing)
-  const modelTier = useCopilotStore((s) => s.modelTier)
-  const autoRunLimit = useCopilotStore((s) => s.autoRunLimit)
-  const activeTier = TIER_UI.find((row) => row.tier === modelTier)
-  const [draftLimit, setDraftLimit] = useState(String(autoRunLimit))
-
-  useEffect(() => {
-    setDraftLimit(String(autoRunLimit))
-  }, [autoRunLimit])
-
-  const commitLimit = () => {
-    const parsed = Number.parseInt(draftLimit, 10)
-    if (!Number.isFinite(parsed) || parsed < 0) {
-      setDraftLimit(String(autoRunLimit))
-      return
-    }
-    const clamped = Math.min(parsed, 100_000)
-    setDraftLimit(String(clamped))
-    if (clamped !== autoRunLimit) onChangeSettings({ autoRunLimitCredits: clamped })
-  }
+  const isRtl = useAppDir() === "rtl"
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   return (
-    <div className="flex-none px-3.5 py-3 border-b border-border flex flex-col gap-2.5">
-      <div className="flex items-center gap-2">
+    <div className="flex-none border-b border-border">
+      <div className="px-3.5 py-3 flex items-center gap-2">
         <span className="w-[7px] h-[7px] rounded-[2px] bg-primary" aria-hidden />
         <span className="text-[13.5px] font-semibold text-foreground tracking-[-0.01em]">{t(K.title)}</span>
         <div className="ms-auto flex items-center gap-1.5">
+          <CopilotSettingsButton open={settingsOpen} onToggle={() => setSettingsOpen((v) => !v)} className="py-1" />
           <CopilotMemoriesButton />
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t(K.close)}
-            className="w-[26px] h-[26px] rounded-[7px] border border-border text-[var(--copilot-muted)] hover:text-foreground flex items-center justify-center transition-colors"
-          >
+          <button type="button" onClick={onMinimize} aria-label={t(K.minimize)} title={t(K.minimize)} className={ICON_BUTTON}>
+            {/* Points at the rail's own edge, so it flips with the reading direction. */}
+            <ChevronLeft className={cn("w-3 h-3", isRtl && "rotate-180")} strokeWidth={2.2} />
+          </button>
+          <button type="button" onClick={onClose} aria-label={t(K.close)} title={t(K.close)} className={ICON_BUTTON}>
             <X className="w-3 h-3" strokeWidth={2.2} />
           </button>
         </div>
       </div>
-
-      <div className="flex items-center gap-2">
-        <div role="radiogroup" aria-label={t(K.runModeLabel)} className="flex p-0.5 bg-[var(--copilot-card)] border border-border rounded-lg">
-          {(["ask", "auto"] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              role="radio"
-              aria-checked={runMode === mode}
-              onClick={() => runMode !== mode && onChangeSettings({ runMode: mode })}
-              className={`px-3 py-[5px] rounded-md text-xs font-medium transition-colors ${
-                runMode === mode
-                  ? "bg-[var(--copilot-surface)] text-foreground"
-                  : "text-[var(--copilot-muted)] hover:text-foreground"
-              }`}
-            >
-              {t(mode === "ask" ? K.modeAsk : K.modeAuto)}
-            </button>
-          ))}
+      {settingsOpen && (
+        <div className="px-3.5 pt-1 pb-3.5 border-t border-border bg-[var(--copilot-card)]/40">
+          <CopilotSettingsControls onChange={onChangeSettings} />
         </div>
-
-        <div
-          className={`flex items-center gap-1.5 px-2.5 py-[5px] bg-[var(--copilot-card)] border border-border rounded-lg whitespace-nowrap transition-opacity ${
-            runMode === "auto" ? "opacity-100" : "opacity-45"
-          }`}
-        >
-          <span className="text-[11.5px] text-[var(--copilot-dim)]">{t(K.ceilingPrefix)}</span>
-          <input
-            aria-label={t(K.ceilingLabel)}
-            inputMode="numeric"
-            value={draftLimit}
-            onChange={(e) => setDraftLimit(e.target.value.replace(/[^\d]/g, ""))}
-            onBlur={commitLimit}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur()
-            }}
-            size={Math.max(2, draftLimit.length)}
-            className="bg-transparent border-none outline-none text-xs font-semibold text-foreground tabular-nums w-[4ch] text-center focus:ring-0"
-          />
-          <span className="text-[11.5px] text-[var(--copilot-dim)]">{t(K.ceilingSuffix)}</span>
-        </div>
-
-        <span className="ms-auto text-[11px] text-[var(--copilot-dim)] whitespace-nowrap">
-          {t(runMode === "auto" ? K.modeHintAuto : K.modeHintAsk)}
-        </span>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] text-[var(--copilot-dim)]">{t(K.tierLabel)}</span>
-        <div role="radiogroup" aria-label={t(K.tierLabel)} className="flex p-0.5 bg-[var(--copilot-card)] border border-border rounded-lg">
-          {TIER_UI.map(({ tier, labelKey, hintKey }) => (
-            <button
-              key={tier}
-              type="button"
-              role="radio"
-              aria-checked={modelTier === tier}
-              title={t(hintKey)}
-              onClick={() => modelTier !== tier && onChangeSettings({ modelTier: tier })}
-              className={`px-2.5 py-[4px] rounded-md text-[11.5px] font-medium transition-colors ${
-                modelTier === tier
-                  ? "bg-[var(--copilot-surface)] text-foreground"
-                  : "text-[var(--copilot-muted)] hover:text-foreground"
-              }`}
-            >
-              {t(labelKey)}
-            </button>
-          ))}
-        </div>
-        <span className="ms-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap truncate max-w-[45%]">
-          {activeTier ? t(activeTier.hintKey) : null}
-        </span>
-      </div>
-
-      {/* A switch, matching the on/off toggles across the editor (Voice, Fast
-          Mode): unlike Ask/Auto these are not two named behaviours, they are a
-          single permission the user grants, and the pink track states plainly
-          whether it is on. The text is beside the control, not wrapped in a
-          label — the Switch carries its own accessible name. */}
-      <div className="flex items-center gap-3">
-        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-          <span className="text-[11.5px] text-foreground leading-tight">{t(K.allowPublishing)}</span>
-          <span className="text-[10.5px] text-[var(--copilot-dim)] leading-tight">
-            {t(allowPublishing ? K.allowPublishingOn : K.allowPublishingOff)}
-          </span>
-        </div>
-        <Switch
-          checked={allowPublishing}
-          onCheckedChange={(v: boolean) => onChangeSettings({ allowPublishing: v })}
-          aria-label={t(K.allowPublishing)}
-          className="flex-none"
-        />
-      </div>
+      )}
     </div>
   )
 }

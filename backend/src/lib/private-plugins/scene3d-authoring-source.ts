@@ -4,6 +4,7 @@ import { authorizeScene3DRevision } from "../../services/scene3d-artifacts/autho
 import { loadScene3DRevisionArtifacts } from "../../services/scene3d-artifacts/db.js"
 import { isScene3DId } from "../../services/scene3d-artifacts/object-keys.js"
 import type { Scene3DObjectStore } from "../../services/scene3d-artifacts/object-store.js"
+import { readScene3DObjectForApp } from "../../services/scene3d-artifacts/app-read.js"
 import {
   SCENE3D_ARTIFACT_KIND_USAGE,
   Scene3DArtifactError,
@@ -125,7 +126,7 @@ async function readVerifiedBytes(
 ): Promise<Buffer> {
   let read
   try {
-    read = await store.get(artifact.objectKey)
+    read = await readScene3DObjectForApp(store, artifact.objectKey)
   } catch (error) {
     options?.signal?.throwIfAborted()
     // `openScene3DArtifactStream` calls every failure here missing; a store

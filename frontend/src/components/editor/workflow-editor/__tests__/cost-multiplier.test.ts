@@ -15,7 +15,7 @@ vi.mock("@/components/editor/config-panels/helpers", () => ({
 }))
 
 import { FAN_OUT_EACH_TYPES } from "@nodaro/shared"
-import { getCostMultiplier, getFanOutMultiplier, getOutputMinuteUnits, NO_RERUNS, PRODUCER_FAN_OUT } from "../types"
+import { EACH_WIRE_FAN_OUT, getCostMultiplier, getFanOutMultiplier, getOutputMinuteUnits, NO_RERUNS, PRODUCER_FAN_OUT } from "../types"
 import { estimateRunCredits } from "../estimate-run-credits"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
@@ -265,5 +265,68 @@ describe("every estimate loop multiplies by getCostMultiplier", () => {
       if (readFileSync(file, "utf8").includes("getFanOutMultiplier")) offenders.push(rel)
     }
     expect(offenders, `use getCostMultiplier (fan-out × per-minute units) in:\n${offenders.join("\n")}`).toEqual([])
+  })
+})
+
+// Camera Switch in a clips chain (decided 2026-10-04): it runs once per clip, its
+// EDL fans Apply EDL out once per clip BY DEFAULT, and its transcript edge (the
+// same for every clip) never multiplies anything.
+describe("fan-out — through Camera Switch in a clips chain (B5)", () => {
+  const p = n("ep", "edit-plan", { mode: "clips", count: 6 })
+  const cs = n("cs", "camera-switch")
+  const ae = n("ae", "apply-edl")
+  const cap = n("cap", "add-captions")
+  const all = ids(p, cs, ae, cap)
+  const h = (source: string, target: string, sourceHandle: string, targetHandle: string, outputMode?: string): WorkflowEdge =>
+    ({ id: `${source}-${sourceHandle}-${target}`, source, target, sourceHandle, targetHandle, ...(outputMode ? { data: { outputMode } } : {}) }) as WorkflowEdge
+  const edges = [h("ep", "cs", "edl", "edl"), h("cs", "ae", "edl", "edl"), h("cs", "ae", "transcript", "transcript")]
+
+  it("Camera Switch runs once per clip, and so does the render after it (no outputMode set)", () => {
+    expect(getFanOutMultiplier(cs, [p, cs, ae], edges, all)).toBe(6)
+    expect(getFanOutMultiplier(ae, [p, cs, ae], edges, all)).toBe(6)
+  })
+  it("captions across an explicit each from the render inherit the clips through Camera Switch", () => {
+    const withCaptions = [...edges, h("ae", "cap", "out", "in", "each")]
+    expect(getFanOutMultiplier(cap, [p, cs, ae, cap], withCaptions, all)).toBe(6)
+  })
+  it("a switch that is NOT re-running renders the batch it holds — not Edit Plan's clip count", () => {
+    const held = n("cs", "camera-switch", { __listResults: ["a", "b", "c"] })
+    expect(getFanOutMultiplier(ae, [p, held, ae], edges, ids(ae))).toBe(3)
+    // Re-running, it fans out per clip of the plan again.
+    expect(getFanOutMultiplier(ae, [p, held, ae], edges, ids(p, held, ae))).toBe(6)
+  })
+  it("an each set by hand on the transcript edge counts nothing (it never lists)", () => {
+    const transcriptEach = [h("ep", "cs", "edl", "edl"), h("cs", "ae", "transcript", "transcript", "each")]
+    expect(getFanOutMultiplier(ae, [p, cs, ae], transcriptEach, all)).toBe(1)
+  })
+  it("the EDL edge set to Selected renders once; the transcript edge alone never fans out", () => {
+    const selected = [h("ep", "cs", "edl", "edl"), h("cs", "ae", "edl", "edl", "last"), h("cs", "ae", "transcript", "transcript")]
+    expect(getFanOutMultiplier(ae, [p, cs, ae], selected, all)).toBe(1)
+    const transcriptOnly = [h("ep", "cs", "edl", "edl"), h("cs", "ae", "transcript", "transcript")]
+    expect(getFanOutMultiplier(ae, [p, cs, ae], transcriptOnly, all)).toBe(1)
+  })
+})
+
+describe("a Social Search wire set to Each", () => {
+  const post = (i: number) => ({ id: `instagram:${i}`, platform: "instagram", url: `https://www.instagram.com/reel/${i}/`, text: "", author: { handle: "a", name: "A" }, metrics: {}, media: { kind: "video" }, hashtags: [], extra: {} })
+  const va = n("va", "video-analysis", {})
+
+  it("prices the next node once per post the search holds", () => {
+    const search = n("s", "social-search", { generatedJson: [post(1), post(2)], keepPicks: true })
+    const nodes = [search, va]
+    expect(getCostMultiplier(va, nodes, [e("s", "va", "video", "each")], ids(va))).toBe(2)
+    expect(getCostMultiplier(va, nodes, [e("s", "va", "video", "each")], ids(search, va))).toBe(2)
+  })
+
+  it("prices a fresh search by the posts a run passes on, and a plain wire once", () => {
+    const search = n("s", "social-search", { generatedJson: [post(1), post(2)], pickTop: 3 })
+    const nodes = [search, va]
+    expect(getCostMultiplier(va, nodes, [e("s", "va", "video", "each")], ids(search, va))).toBe(3)
+    expect(getCostMultiplier(va, nodes, [e("s", "va", "video")], ids(va))).toBe(1)
+  })
+
+  it("is sized outside the default fan-out list", () => {
+    expect(FAN_OUT_EACH_TYPES.has("social-search")).toBe(false)
+    expect("social-search" in EACH_WIRE_FAN_OUT).toBe(true)
   })
 })

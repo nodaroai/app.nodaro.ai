@@ -44,7 +44,7 @@ import {
 import { resolveNodeInputs, getListInputForNode, getListFanOutForNode } from "../services/workflow-engine/input-resolver.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
-import { extractSourceNodeOutput, extractSavedNodeOutput } from "../services/workflow-engine/output-extractor.js"
+import { extractSourceNodeOutput, extractSavedNodeOutput, fanOutIterationValue } from "../services/workflow-engine/output-extractor.js"
 import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
 import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { labelRefHintContext } from "../services/workflow-engine/label-ref-hint-context.js"
@@ -1537,13 +1537,7 @@ async function executeNodeForList(
       )
     }
 
-    const output = result.output
-    const resultValue =
-      output.imageUrl ||
-      output.videoUrl ||
-      output.audioUrl ||
-      output.text ||
-      ""
+    const resultValue = fanOutIterationValue(result.output, node.type)
 
     iterationCompleted++
     nodeStates[node.id].iterationCompleted = iterationCompleted

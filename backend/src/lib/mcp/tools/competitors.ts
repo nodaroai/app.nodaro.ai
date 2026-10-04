@@ -5,6 +5,7 @@ import {
   COMPETITOR_SCHEDULES,
   type CompetitorCardsResult,
   type CompetitorDiscovery,
+  type CompetitorLessonsResult,
   type TrackedCompetitor,
 } from "@nodaro/shared"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -50,6 +51,23 @@ export function cardsText(result: CompetitorCardsResult): string {
     .join("\n\n")
 }
 
+export function lessonsText(result: CompetitorLessonsResult): string {
+  const { platforms, minPosts } = result.lessons
+  if (platforms.length === 0) return "No posts of its own yet. Add an account and scan it (scan_competitor)."
+  return platforms
+    .map((pl) => {
+      if (pl.usual === null) return `${pl.platform}: ${pl.posts} posts — needs ${minPosts} to tell what works.`
+      const head = `${pl.platform}: ${pl.posts} posts, usually ${Math.round(pl.usual)} ${pl.unit}.`
+      if (pl.lessons.length === 0) return `${head}\n   Nothing stands out yet.`
+      const lines = pl.lessons.flatMap((lesson) => [
+        `   - ${lesson.text}`,
+        ...lesson.evidence.flatMap((id) => (result.posts[id]?.url ? [`     ${result.posts[id]!.url}`] : [])),
+      ])
+      return [head, ...lines].join("\n")
+    })
+    .join("\n\n")
+}
+
 /**
  * Competitor tracking over MCP. Cloud-only: the `/v1/competitors*` routes are
  * the cloud plugin's (registered beside social_search under hasCredits()).
@@ -87,6 +105,24 @@ export function registerCompetitorTools({ server, session, fastify }: RegisterOp
         const res = await mcpInject(fastify, session, { method: "GET", url: "/v1/competitors/cards", headers: asUser })
         if (res.statusCode >= 400) return routeError(res.statusCode, res.body)
         return text(cardsText(JSON.parse(res.body) as CompetitorCardsResult))
+      },
+    )
+  }
+
+  if (passesGate(session, readGate)) {
+    server.registerTool(
+      "competitor_lessons",
+      {
+        title: "What Works for a Brand",
+        description:
+          "What works for a tracked brand, per platform: what its best posts share (video length, format, hook, hashtag, sound, day), measured on its own posts across every scan, with the posts each lesson rests on. Free. Use it on the user's own brand (is_own) before writing posts or ideas for them.",
+        inputSchema: { competitor_id: z.string().uuid().describe("From list_competitors.") },
+        annotations: { readOnlyHint: true },
+      },
+      async (args) => {
+        const res = await mcpInject(fastify, session, { method: "GET", url: `/v1/competitors/${encodeURIComponent(args.competitor_id)}/lessons`, headers: asUser })
+        if (res.statusCode >= 400) return routeError(res.statusCode, res.body)
+        return text(lessonsText(JSON.parse(res.body) as CompetitorLessonsResult))
       },
     )
   }

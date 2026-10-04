@@ -58,9 +58,18 @@ You provide the source one of three ways:
   or a link. A message that carries a video file (a Telegram bot trigger's
   video message) is analyzed as the file.
 - **Social Search posts** — connect a Social Search's posts (its JSON output)
-  to the video input: each post is analyzed by its page link. A wire made in
-  the editor starts in **Each** mode, so every post the search passes on gets
-  its own analysis; on any other mode the first post is analyzed.
+  to the video input. A post that came with its own video file (Instagram, X,
+  LinkedIn, Meta ads) is analyzed from that file; a post without one (TikTok,
+  YouTube) is analyzed by its page link. A search's video files are signed
+  links that expire after a few days: a post whose link has expired is refused
+  with a message to run the Social Search again, at no charge. An image or a
+  text post has no video and is refused the same way, as is a post whose video
+  cannot be read or does not say how long it is. Each post is
+  charged by its own video's length, and the editor quotes the longest of the
+  posts' videos for each one. A wire made in the editor starts in **Each**
+  mode, so every post the search passes on gets its own analysis; on any other
+  mode the first post is analyzed. When one of several posts fails, the node
+  says why next to its count of results.
 - **YouTube URL** — set `youtubeUrl` in the node config.
 
 **Precedence, not exactly-one:** a wired video input **always wins**, then a

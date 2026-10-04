@@ -26,7 +26,9 @@ import "@xyflow/react/dist/style.css"
 import { nodeTypes } from "@/components/nodes"
 import { matchShortcut, SHORTCUTS } from "@/lib/shortcuts"
 import { FOCUS_NODES_EVENT, focusNodesChanges, parseFocusNodesDetail, type FocusNodesDetail } from "@/lib/canvas-focus-event"
-import { useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
+import { copilotSurfaced, useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
+import { useCopilotCenterAllowed, useCopilotPlacement } from "./workflow-editor/copilot-placement"
+import { CopilotCenterSlot } from "./workflow-editor/copilot-panel-slot"
 import { ShortcutsHelpModal } from "@/components/editor/shortcuts-help-modal"
 import { NodeContextMenu } from "./node-context-menu"
 import { CanvasContextMenu } from "./canvas-context-menu"
@@ -595,6 +597,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const t = useT()
   const ariaLabelConfig = useMemo(() => canvasAriaLabelConfig(locale), [locale])
   const copilotTurnActive = useCopilotUiStore((s) => s.turnActive)
+  const copilotCentered = useCopilotUiStore((s) => s.mode === "center")
+  const copilotPanelOpen = useCopilotUiStore((s) => s.mode === "panel")
+  const copilotCenterAllowed = useCopilotCenterAllowed()
+  const askCopilot = useCopilotUiStore((s) => s.askCopilot)
   const zoom = useStore((s) => s.transform[2])
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
   // Radix Popover (1.1.23+) defers its outside-click dismissal to the follow-up
@@ -916,7 +922,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     nodeCount: nodes.length,
     isLoading: isWorkflowLoading,
     copilotTurnActive,
+    copilotCentered,
+    copilotPanelOpen: copilotPanelOpen && copilotSurfaced(),
+    copilotOwnsEmptyCanvas: copilotCenterAllowed,
   })
+  // Moves the Copilot between the middle of an empty canvas and the rail as
+  // nodes come and go — see copilot-placement.ts.
+  useCopilotPlacement(nodes.length)
   const reconcileFromRemote = useWorkflowStore((s) => s.reconcileFromRemote)
   const setRemoteUpdatedAt = useWorkflowStore((s) => s.setRemoteUpdatedAt)
   useWorkflowRealtimeSync({
@@ -1485,6 +1497,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       if (id) selectNode(id)
     },
     [addNode, selectNode, screenToFlowPosition, getViewportCenter]
+  )
+
+  // The right-click menu's quick-add list: the node lands where the menu was
+  // opened, focused like a node made from the empty canvas.
+  const handleAddNodeAt = useCallback(
+    (type: SceneNodeType, position: { x: number; y: number }) => {
+      const id = addNode(type, position)
+      if (id) selectNode(id)
+    },
+    [addNode, selectNode]
   )
 
   const handleOpenAddNodePopup = useCallback((position?: { x: number; y: number }, placeAtCenter = false) => {
@@ -3068,6 +3090,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             Which of the two shows — and whether either does — is decided by
             `emptyCanvasSurface`, where it is testable. */}
         {emptySurface === "copilot-planning" && <CanvasCopilotPlanning />}
+        <CopilotCenterSlot
+          visible={emptySurface === "copilot-center"}
+          onCreate={handleEmptyStateCreate}
+          onContextMenu={handlePaneContextMenu}
+        />
         {emptySurface === "empty-state" && (
           <EmptyCanvasState
             onCreate={handleEmptyStateCreate}
@@ -3134,6 +3161,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           onSelectAll={handleSelectAll}
           onClearSelection={handleClearSelection}
           hasSelection={hasSelection}
+          onAddNodeType={(type) => handleAddNodeAt(type, { x: canvasContextMenu.flowX, y: canvasContextMenu.flowY })}
+          onAskCopilot={copilotSurfaced() ? askCopilot : undefined}
         />
       )}
 

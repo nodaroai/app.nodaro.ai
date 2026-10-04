@@ -1,12 +1,14 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { Plus, StickyNote, Wand2, MousePointer2, XCircle } from "lucide-react"
+import { Bot, Plus, StickyNote, Wand2, MousePointer2, XCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useClickOutside } from "@/hooks/use-click-outside"
 import { SHORTCUTS, formatBindingCaps, isMacPlatform } from "@/lib/shortcuts"
 import { Kbd } from "@/components/ui/kbd"
 import { useT } from "@/lib/i18n"
+import { QUICK_ADD_NODE_TYPES, quickAddEntries } from "@/lib/quick-add-nodes"
+import type { SceneNodeType } from "@/types/nodes"
 
 interface MenuItemProps {
   readonly icon: React.ReactNode
@@ -14,9 +16,11 @@ interface MenuItemProps {
   readonly shortcut?: readonly string[]
   readonly onClick: () => void
   readonly disabled?: boolean
+  /** The Copilot's entry: the brand colour, so it reads as a different kind of action. */
+  readonly accent?: boolean
 }
 
-function MenuItem({ icon, label, shortcut, onClick, disabled }: MenuItemProps) {
+function MenuItem({ icon, label, shortcut, onClick, disabled, accent }: MenuItemProps) {
   return (
     <button
       type="button"
@@ -29,8 +33,8 @@ function MenuItem({ icon, label, shortcut, onClick, disabled }: MenuItemProps) {
         disabled && "opacity-50 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent"
       )}
     >
-      <span className="text-[#64748B] dark:text-[#94A3B8]">{icon}</span>
-      <span className="flex-1 text-sm text-[#1E293B] dark:text-white">{label}</span>
+      <span className={accent ? "text-primary" : "text-[#64748B] dark:text-[#94A3B8]"}>{icon}</span>
+      <span className={cn("flex-1 text-sm", accent ? "text-primary" : "text-[#1E293B] dark:text-white")}>{label}</span>
       {shortcut && (
         <span className="flex items-center gap-1">
           {shortcut.map((cap, i) => (
@@ -56,6 +60,14 @@ interface CanvasContextMenuProps {
   readonly onSelectAll: () => void
   readonly onClearSelection: () => void
   readonly hasSelection: boolean
+  /**
+   * Adds a node of this type where the menu was opened. When given, the menu
+   * leads with the quick-add list (QUICK_ADD_NODE_TYPES) and the full picker
+   * becomes "More nodes…".
+   */
+  readonly onAddNodeType?: (type: SceneNodeType) => void
+  /** "Ask Copilot…" at the bottom — only where the Copilot is surfaced. */
+  readonly onAskCopilot?: () => void
 }
 
 export function CanvasContextMenu({
@@ -68,8 +80,11 @@ export function CanvasContextMenu({
   onSelectAll,
   onClearSelection,
   hasSelection,
+  onAddNodeType,
+  onAskCopilot,
 }: CanvasContextMenuProps) {
   const t = useT()
+  const quickNodes = onAddNodeType ? quickAddEntries(QUICK_ADD_NODE_TYPES) : []
   const menuRef = useRef<HTMLDivElement>(null)
   const isMac = isMacPlatform()
 
@@ -102,7 +117,7 @@ export function CanvasContextMenu({
   const adjustedPosition = { ...position }
   if (typeof window !== "undefined") {
     const menuWidth = 220
-    const menuHeight = 200
+    const menuHeight = 200 + (quickNodes.length > 0 ? 36 * quickNodes.length + 40 : 0) + (onAskCopilot ? 44 : 0)
     if (position.x + menuWidth > window.innerWidth) {
       adjustedPosition.x = window.innerWidth - menuWidth - 10
     }
@@ -124,9 +139,31 @@ export function CanvasContextMenu({
       )}
       style={{ left: adjustedPosition.x, top: adjustedPosition.y }}
     >
+      {quickNodes.length > 0 && (
+        <>
+          <div className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#64748B] dark:text-[#94A3B8]">
+            {t("canvas.addNode")}
+          </div>
+          {quickNodes.map((entry) => (
+            <MenuItem
+              key={entry.type}
+              icon={
+                <span className="flex w-4 h-4 items-center justify-center" aria-hidden>
+                  <span className={cn("w-2 h-2 rounded-[2px]", entry.swatchClass)} />
+                </span>
+              }
+              label={t(entry.labelKey)}
+              onClick={() => {
+                onAddNodeType?.(entry.type)
+                onClose()
+              }}
+            />
+          ))}
+        </>
+      )}
       <MenuItem
         icon={<Plus className="w-4 h-4" />}
-        label={t("canvas.addNode")}
+        label={t(quickNodes.length > 0 ? "canvas.moreNodes" : "canvas.addNode")}
         shortcut={formatBindingCaps(SHORTCUTS.addNode.bindings[0], isMac)}
         onClick={() => {
           onAddNode()
@@ -175,6 +212,21 @@ export function CanvasContextMenu({
         }}
         disabled={!hasSelection}
       />
+
+      {onAskCopilot && (
+        <>
+          <Separator />
+          <MenuItem
+            accent
+            icon={<Bot className="w-4 h-4" strokeWidth={1.8} />}
+            label={t("canvas.askCopilot")}
+            onClick={() => {
+              onAskCopilot()
+              onClose()
+            }}
+          />
+        </>
+      )}
     </div>
   )
 }

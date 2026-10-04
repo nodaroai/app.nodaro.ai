@@ -3367,6 +3367,38 @@ export async function editPlan(params: {
 }
 
 /**
+ * camera-switch (podcast B5): an edit + a diarized transcript → the edit with
+ * each cut on the speaker's camera (and the renamed transcript). Cloud-exclusive;
+ * flat price. Refused before charging when the transcript has no speaker labels.
+ */
+export async function cameraSwitch(params: {
+  edl: unknown
+  transcript: unknown
+  speakerMap?: Record<string, string>
+  speakerNames?: Record<string, string>
+  minShotMs?: number
+  leadMs?: number
+  maxShotMs?: number
+  wideEvery?: number
+  layoutHints?: boolean
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { edl: params.edl, transcript: params.transcript }
+  if (params.speakerMap && Object.keys(params.speakerMap).length > 0) body.speakerMap = params.speakerMap
+  if (params.speakerNames && Object.keys(params.speakerNames).length > 0) body.speakerNames = params.speakerNames
+  for (const key of ["minShotMs", "leadMs", "maxShotMs", "wideEvery"] as const) {
+    if (typeof params[key] === "number") body[key] = params[key]
+  }
+  if (params.layoutHints) body.layoutHints = true
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/camera-switch", {
+    body,
+    workflowId: true,
+    label: "apiErr.startCameraSwitch",
+  })
+}
+
+/**
  * Image Overlay: base image + 1–12 layers → one composited image (local sharp).
  * Every layer position/size is in % of the base image; see ImageOverlayData.
  */
@@ -4140,6 +4172,9 @@ export interface StartVideoDownloadOptions {
   /** Quality cap, "up to N rows". YouTube only — other hosts have no ladder. */
   readonly maxHeight?: number
   readonly section?: VideoDownloadSection
+  /** `true` = cut the part exactly, with no ±3s pad. For a caller that does not
+   *  trim the result itself; absent keeps the padded fetch. Needs `section`. */
+  readonly exactSection?: boolean
   /** `false` = accept a download with no sound. Absent keeps the server's default
    *  (a silent result fails, and is retried through the proxy pool first). */
   readonly requireAudio?: boolean
@@ -4154,12 +4189,13 @@ export async function startVideoDownload(
   url: string,
   options: StartVideoDownloadOptions = {},
 ): Promise<{ downloadId: string }> {
-  const { maxHeight, section, requireAudio } = options
+  const { maxHeight, section, exactSection, requireAudio } = options
   return apiJson("/v1/download-video", {
     body: {
       url,
       ...(maxHeight !== undefined ? { maxHeight } : {}),
       ...(section ? { sectionStartSec: section.startSec, sectionEndSec: section.endSec } : {}),
+      ...(section && exactSection !== undefined ? { exactSection } : {}),
       ...(requireAudio !== undefined ? { requireAudio } : {}),
     },
     label: "apiErr.startDownloadTheVideoMayBePrivate",
@@ -4463,9 +4499,12 @@ export async function startContentIdeas(params: {
   language?: string
   llmModel?: string
   reasoningEffort?: string
+  /** False turns off leaning on the user's own brand's results (on by default). */
+  useBrandLessons?: boolean
   userId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { recipes: params.recipes }
+  if (params.useBrandLessons === false) body.useBrandLessons = false
   if (params.brand) body.brand = params.brand
   if (params.count !== undefined) body.count = params.count
   if (params.language) body.language = params.language
@@ -4680,6 +4719,11 @@ export async function updateCompetitor(id: string, input: import("@nodaro/shared
 
 export async function deleteCompetitor(id: string): Promise<void> {
   await apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteCompetitor" })
+}
+
+/** What works for a tracked brand: lessons from its own posts (free). */
+export async function competitorLessons(id: string): Promise<import("@nodaro/shared").CompetitorLessonsResult> {
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}/lessons`, { method: "GET", label: "apiErr.loadCompetitorLessons" })
 }
 
 export async function competitorCards(): Promise<import("@nodaro/shared").CompetitorCardsResult> {

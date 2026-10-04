@@ -16,9 +16,9 @@ export const DEFAULT_FFMPEG_TIMEOUT_MS = 10 * 60 * 1000
 
 /** How long `downloadFile` waits for a response (status + headers), and the
  *  least time it ever gives a body. A body is then bounded by
- *  `downloadBodyDeadlineMs` and the per-window minimum rate, never by this. NOT
- *  a bound on the R2-origin 404 fallback, which goes through the storage client
- *  — that client has no request timeout. */
+ *  `downloadBodyDeadlineMs` and the per-window minimum rate, never by this. The
+ *  R2-origin 404 fallback goes through the storage client, which has the same
+ *  numbers of its own (`lib/storage-timeouts.ts`, Track 0.12). */
 export const DOWNLOAD_TIMEOUT_MS = 120_000
 
 /** A big-media download is checked once per window of this length ... */

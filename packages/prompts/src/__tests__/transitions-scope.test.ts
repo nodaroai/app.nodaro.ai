@@ -20,9 +20,12 @@ const INSTANT_IDS = TRANSITIONS.filter((t) => t.instant).map((t) => t.id)
 const NON_INSTANT_IDS = TRANSITIONS.filter((t) => !t.instant && t.id !== "auto").map((t) => t.id)
 const FULL_CLAUSE = "the transition spans the entire clip"
 const FULL_SHOT_CLAUSE = "the transition spans this entire shot"
-const MATCH_CUT_BASE =
-  "match cut (the final composition of the first shot matches the opening composition of the second shot " +
-  "in shape, color, and motion, so the cut feels like a visual rhyme; " + INSTANT_CUT_CLAUSE + ")"
+const MATCH_CUT_BODY =
+  "the last picture of the first shot and the first picture of the second share one shape, at the same " +
+  "place and the same size in the frame. The camera holds that shape in place across the cut. On the ne" +
+  "xt frame everything around the shape has changed while the shape itself stays put. The shot ends on " +
+  "the second shot, fully resolved, with no flash frame or zoom between the two"
+const MATCH_CUT_BASE = `match cut (${MATCH_CUT_BODY}; ${INSTANT_CUT_CLAUSE})`
 
 describe("approved row bodies", () => {
   it("aging", () => {
@@ -447,6 +450,290 @@ describe("zoom-into-mirror body (2026-10-03 redraft: mirror3 D2, liquid ripple)"
   it("at middle / short / natural", () => {
     expect(composeTransitionHintFromConnections("zoom-into-mirror", [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
       `${TERM} (${BODY}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
+    )
+  })
+})
+
+describe("F8 cut bodies (2026-10-03 A/B: F8 arm B on snap-to-black, jump-match and match-cut)", () => {
+  // Arm B, the F8 draft with the ship tidy (first letter lower-cased; the drafts carry no final full stop, so
+  // the anti-blend sentence reads on after the body). Each is byte-identical to the body inside the prompt of
+  // the take it was rated on: snap-to-black 03-B-t2 (2bcc8b81), jump-match 04-B-t1 (b9027a0a), match-cut
+  // 07-B (4c6e3ecd). snap-to-black and match-cut keep their "<label>:" heading, which the renderer strips;
+  // jump-match never had one. None of the three bodies contains a colon, so the heading guard in
+  // transitions-instant.test.ts cannot match them, and no comma item equals its row's term. All three are
+  // cuts: the cut sentence rides inside the parentheses, and duration and intensity are dropped.
+  const ROWS = [
+    {
+      id: "snap-to-black",
+      term: "snap to black",
+      heading: "snap to black: ",
+      body:
+        "the first shot cuts straight to full black on a single frame. The camera holds its framing right up " +
+        "to the cut. The frame stays pure black for a single beat, then the second shot cuts in at full brigh" +
+        "tness on a single frame. The shot ends on the second shot, fully resolved",
+    },
+    {
+      id: "jump-match",
+      term: "match cut on a jump",
+      heading: "",
+      body:
+        "the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The" +
+        " camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stay" +
+        "s at the same place in the frame. In the second shot the same jump carries on without a break, and t" +
+        "he subject comes down and lands in the new place. The shot ends on the subject landed in the second " +
+        "shot, fully resolved",
+    },
+    {
+      id: "match-cut",
+      term: "match cut",
+      heading: "match cut: ",
+      body:
+        "the last picture of the first shot and the first picture of the second share one shape, at the same " +
+        "place and the same size in the frame. The camera holds that shape in place across the cut. On the ne" +
+        "xt frame everything around the shape has changed while the shape itself stays put. The shot ends on " +
+        "the second shot, fully resolved, with no flash frame or zoom between the two",
+    },
+  ] as const
+
+  it.each(ROWS)("$id: the catalog hint carries the new body (heading kept where the row had one)", ({ id, heading, body }) => {
+    expect(getTransitionPromptHint(id)).toBe(heading + body)
+  })
+
+  it.each(ROWS)("$id renders `term (body; cut sentence)` at the tile-default levers", ({ id, term, body }) => {
+    const clause = `${term} (${body}; ${INSTANT_CUT_CLAUSE})`
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "full", { scope: "shot" })).toBe(clause)
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "compact", { scope: "shot" })).toBe(clause)
+    expect(composeTransitionHintFromConnections(id, [], [])).toBe(clause)
+  })
+
+  it.each(ROWS)("$id at middle / short / natural keeps only the position", ({ id, term, body }) => {
+    const levers = { position: "middle", duration: "short", intensity: "natural" } as const
+    expect(composeTransitionHintFromConnections(id, [], [], levers)).toBe(
+      `${term} (${body}; ${INSTANT_CUT_CLAUSE}), the transition occurs in the middle of the clip`,
+    )
+    expect(composeTransitionHintFromConnections(id, [], [], levers, "full", { scope: "shot" })).toBe(
+      `${term} (${body}; ${INSTANT_CUT_CLAUSE}), the transition occurs in the middle of this shot`,
+    )
+  })
+
+  // The other F8 rows keep today's text (jump-cut's body changes in the 2026-10-04 block below).
+  const KEPT: Record<string, string> = {
+    "none":
+      "no transition, hard cut, instantaneous switch from first shot to second shot",
+    "smash-cut":
+      "smash cut: an abrupt jarring transition between two visually or tonally contrasting shots with no fa" +
+      "de, on a beat",
+    "seamless-match":
+      "hidden seamless transition: the camera motion, color palette, and on-screen motion at the end of the" +
+      " first shot continue exactly across the cut into the second shot, so the boundary is invisible and t" +
+      "he two shots feel like one unbroken take",
+    "action-relay":
+      "match cut on action: the subject exits the frame on a committed action — a stride, a throw, a turn —" +
+      " and enters the new scene on the same beat continuing that movement at matched speed and direction, " +
+      "so the action carries unbroken across the cut",
+  }
+
+  it.each(Object.entries(KEPT))("%s keeps today's text", (id, hint) => {
+    expect(getTransitionPromptHint(id)).toBe(hint)
+  })
+})
+
+describe("F9 time bodies (2026-10-03 A/B at full / long: F9 arm B on seasonal-shift and flashback)", () => {
+  // Arm B, the F9 draft with the ship tidy (first letter lower-cased, no final full stop). Each is byte-identical to
+  // the body inside the prompt of the take it was rated on: seasonal-shift 01-B (428e79c6) and flashback 02-B
+  // (bc236b0c), both rendered at position full / duration long (the time-row rule), no intensity, scope shot. Both
+  // rows keep their heading, which the renderer strips. Neither body contains a colon, so the heading guard in
+  // transitions-instant.test.ts has nothing to match, and no comma item equals its row's term. weather-shift was a
+  // tie (A 4 · B 4), so the shorter body stays: today's.
+  const ROWS = [
+    {
+      id: "seasonal-shift",
+      term: "seasonal time-lapse",
+      heading: "accelerated seasonal time-lapse: ",
+      body:
+        "the same view races through the seasons in fast motion, from the season of the first shot to the sea" +
+        "son of the second, as growing things bud, turn and fall and snow comes or goes. The camera stays whe" +
+        "re it is and the framing does not change. The change flows continuously across the whole picture, ev" +
+        "ery part moving on together, until the view matches the second shot. The shot ends on the second sho" +
+        "t's season, still and fully resolved. Only the season changes, and the layout of the view stays exac" +
+        "tly the same",
+    },
+    {
+      id: "flashback",
+      term: "flashback",
+      heading: "brief flashback transition: ",
+      body:
+        "a soft warm wash spreads over the whole picture and a faint ripple drifts across it as the present m" +
+        "oment fades. The camera stays where it is and the framing does not change. Through the ripple an ear" +
+        "lier moment of the same subject comes into focus, like a memory. The shot ends on the remembered mom" +
+        "ent, steady and fully resolved, with the ripple gone. The subject stays at the same place in the fra" +
+        "me while the moment around it changes",
+    },
+  ] as const
+
+  it.each(ROWS)("$id: the catalog hint keeps its heading and carries the B body", ({ id, heading, body }) => {
+    expect(getTransitionPromptHint(id)).toBe(heading + body)
+  })
+
+  it.each(ROWS)("$id renders `term (body)` at the tile-default levers", ({ id, term, body }) => {
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "full", { scope: "shot" })).toBe(`${term} (${body})`)
+  })
+
+  it.each(ROWS)("$id at full / long in a shot window (the levers the take was rendered at)", ({ id, term, body }) => {
+    expect(composeTransitionHintFromConnections(id, [], [], { position: "full", duration: "long" }, "full", { scope: "shot" })).toBe(
+      `${term} (${body}), ${FULL_SHOT_CLAUSE}, lasting approximately 3 seconds`,
+    )
+  })
+
+  it.each(ROWS)("$id at middle / short / natural", ({ id, term, body }) => {
+    expect(composeTransitionHintFromConnections(id, [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      `${term} (${body}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
+    )
+  })
+
+  it("weather-shift keeps today's body", () => {
+    const body =
+      "same scene, framing locked — clear sky darkens to storm clouds, rain begins and intensifies then cle" +
+      "ars, sun returns through breaking clouds"
+    expect(getTransitionPromptHint("weather-shift")).toBe(`accelerated weather transition: ${body}`)
+    expect(composeTransitionHintFromConnections("weather-shift", [], [], {}, "full", { scope: "shot" })).toBe(`weather time-lapse (${body})`)
+  })
+})
+
+describe("F7 glitch and light bodies (2026-10-03 A/B: F7 arm B on channel-flip, display-wipe and color-invert)", () => {
+  // Arm B, the F7 draft with the ship tidy (first letter lower-cased, final full stop dropped). Each is
+  // byte-identical to the body inside the prompt of the take it was rated on: channel-flip 01-B (7f7829ec),
+  // display-wipe 03-B (c66d59bc) and color-invert 04-B (18d66f83), all at the tile-default levers. None of the
+  // three rows has a heading, none of the bodies contains a colon (so the heading guard in
+  // transitions-instant.test.ts has nothing to match), and no comma item equals its row's term. The other F7
+  // rows keep today's text.
+  const ROWS = [
+    {
+      id: "channel-flip",
+      term: "tv channel flip with static",
+      body:
+        "the whole picture breaks into a brief burst of black-and-white static, the image jumping and tearing" +
+        " as if the channel were being changed. The camera stays where it is and the framing does not change." +
+        " The static clears as quickly as it came, and the second shot snaps in, steady, like the next channe" +
+        "l. The shot ends on the second shot, clean and fully resolved, with no static left. The static cover" +
+        "s the whole frame, so the picture itself is what changes channel",
+    },
+    {
+      id: "display-wipe",
+      term: "compress into a screen and expand out",
+      body:
+        "the whole first shot shrinks toward the centre of the frame into a small glowing rectangle, then col" +
+        "lapses to a bright line and a dot as if its power were cut. The camera stays where it is and the fra" +
+        "ming does not change. From the dot a line snaps open and widens into a rectangle showing the second " +
+        "shot, which grows until it fills the frame. The shot ends on the second shot, full frame and fully r" +
+        "esolved, with no border or scanlines left. The picture itself shrinks and grows on a black field, wi" +
+        "th the camera holding still throughout",
+    },
+    {
+      id: "color-invert",
+      term: "color invert flash",
+      body:
+        "the colours of the whole picture turn to their photographic negative in an instant. The camera stays" +
+        " where it is and the framing does not change. The negative holds for a single beat, and when the col" +
+        "ours snap back to normal the second shot is in place. The shot ends on the second shot in natural co" +
+        "lour, fully resolved. The change of shot happens while the picture is in negative, and the picture s" +
+        "tays upright and in place throughout",
+    },
+  ] as const
+
+  it.each(ROWS)("$id: the catalog hint is the B body", ({ id, body }) => {
+    expect(getTransitionPromptHint(id)).toBe(body)
+  })
+
+  it.each(ROWS)("$id renders `term (body)` at the tile-default levers", ({ id, term, body }) => {
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "full", { scope: "shot" })).toBe(`${term} (${body})`)
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "compact", { scope: "shot" })).toBe(`${term} (${body})`)
+    expect(composeTransitionHintFromConnections(id, [], [])).toBe(`${term} (${body})`)
+  })
+
+  it.each(ROWS)("$id at middle / short / natural", ({ id, term, body }) => {
+    expect(composeTransitionHintFromConnections(id, [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      `${term} (${body}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
+    )
+  })
+})
+
+describe("Redrafted glitch bodies and the jump-cut negative sentence (2026-10-04: hologram-flicker D2, datamosh D1, jump-cut C)", () => {
+  // Each body is byte-identical to the body inside the prompt of the take its tile shows, at the tile-default
+  // levers: hologram-flicker from the F7 redraft's D2, a scan-line rebuild (17245f6b); datamosh from its D1,
+  // blocks that tear loose and pile up into the second shot (a16f906b); jump-cut from the jump-cut retest's arm
+  // C, today's body plus one negative sentence (2bfc4380). datamosh and jump-cut keep their "<label>:" heading,
+  // which the renderer strips; hologram-flicker never had one. No body contains a colon, so the heading guard in
+  // transitions-instant.test.ts cannot match them, and no comma item equals its row's term.
+  const ROWS = [
+    {
+      id: "hologram-flicker",
+      term: "hologram flicker",
+      heading: "",
+      body:
+        "the first shot breaks into thin lines of cyan light that flicker out from the top down, leaving the " +
+        "frame black. The camera stays where it is and the framing does not change. A bright scan line sweeps" +
+        " down and draws the second shot behind it in flickering cyan lines that steady into natural colour. " +
+        "The shot ends on the second shot, solid and fully resolved, with no scan lines left. The second shot" +
+        " is drawn only on black, never over the first shot",
+    },
+    {
+      id: "datamosh",
+      term: "datamosh",
+      heading: "datamosh transition: ",
+      body:
+        "the first shot's pixels tear loose in square compression blocks and slide sideways across the frame " +
+        "in long smeared streaks. The camera stays where it is and the framing does not change. The blocks pi" +
+        "le up into the shapes of the second shot, still in the first shot's colours, until the true colours " +
+        "snap in block by block. The shot ends on the second shot, sharp and fully resolved, with no smears o" +
+        "r blocks left. The smear covers the whole frame",
+    },
+  ] as const
+
+  it.each(ROWS)("$id: the catalog hint carries the new body (heading kept where the row had one)", ({ id, heading, body }) => {
+    expect(getTransitionPromptHint(id)).toBe(heading + body)
+  })
+
+  it.each(ROWS)("$id renders `term (body)` at the tile-default levers", ({ id, term, body }) => {
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "full", { scope: "shot" })).toBe(`${term} (${body})`)
+    expect(composeTransitionHintFromConnections(id, [], [], {}, "compact", { scope: "shot" })).toBe(`${term} (${body})`)
+    expect(composeTransitionHintFromConnections(id, [], [])).toBe(`${term} (${body})`)
+  })
+
+  it.each(ROWS)("$id at middle / short / natural", ({ id, term, body }) => {
+    expect(composeTransitionHintFromConnections(id, [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      `${term} (${body}), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
+    )
+  })
+
+  // jump-cut is a cut: the anti-blend sentence rides inside the parentheses after the body, and duration and
+  // intensity are dropped. The new body has a semicolon of its own; the restatement dedupe splits on commas
+  // only, so it is untouched, and the cut sentence still appears exactly once.
+  const JUMP_CUT_BODY =
+    "the framing, lens, and camera position stay identical across the cut while time skips abruptly forwa" +
+    "rd, so the subject snaps to a new position inside what still reads as one continuous shot. No leap, " +
+    "no run, no lunge and no motion blur between the two positions; the subject is in the old place on on" +
+    "e frame and already in the new place on the next"
+  const JUMP_CUT_CLAUSE = `jump cut (${JUMP_CUT_BODY}; ${INSTANT_CUT_CLAUSE})`
+
+  it("jump-cut: the catalog hint carries the new body after its heading", () => {
+    expect(getTransitionPromptHint("jump-cut")).toBe(`jump cut: ${JUMP_CUT_BODY}`)
+  })
+
+  it("jump-cut renders `term (body; cut sentence)` at the tile-default levers, the cut sentence once", () => {
+    expect(composeTransitionHintFromConnections("jump-cut", [], [], {}, "full", { scope: "shot" })).toBe(JUMP_CUT_CLAUSE)
+    expect(composeTransitionHintFromConnections("jump-cut", [], [], {}, "compact", { scope: "shot" })).toBe(JUMP_CUT_CLAUSE)
+    expect(composeTransitionHintFromConnections("jump-cut", [], [])).toBe(JUMP_CUT_CLAUSE)
+    expect(JUMP_CUT_CLAUSE.split(INSTANT_CUT_CLAUSE).length).toBe(2)
+  })
+
+  it("jump-cut at middle / short / natural keeps only the position", () => {
+    const levers = { position: "middle", duration: "short", intensity: "natural" } as const
+    expect(composeTransitionHintFromConnections("jump-cut", [], [], levers)).toBe(
+      `${JUMP_CUT_CLAUSE}, the transition occurs in the middle of the clip`,
+    )
+    expect(composeTransitionHintFromConnections("jump-cut", [], [], levers, "full", { scope: "shot" })).toBe(
+      `${JUMP_CUT_CLAUSE}, the transition occurs in the middle of this shot`,
     )
   })
 })

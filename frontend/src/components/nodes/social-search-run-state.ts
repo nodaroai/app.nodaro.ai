@@ -102,6 +102,31 @@ export function applySocialSearchResult(json: unknown, data: Readonly<Record<str
   }
 }
 
+/**
+ * The patch that clears a search (the node's X): every post found, the picks,
+ * what it passes on and the last run's record, so the node is back to "not
+ * run yet" with its settings (platform, query, count, how many to pass on)
+ * kept. The next run searches afresh.
+ */
+export function clearSocialSearchPatch(): Record<string, unknown> {
+  return {
+    executionStatus: "idle",
+    errorMessage: undefined,
+    searchResults: undefined,
+    pickedIds: undefined,
+    generatedJson: undefined,
+    generatedText: undefined,
+    searchWarnings: undefined,
+    lastRunOutcome: undefined,
+    lastRunAt: undefined,
+    lastRunCount: undefined,
+    lastRunFingerprint: undefined,
+    lastRunStartedAt: undefined,
+    lastGoodAt: undefined,
+    lastGoodCount: undefined,
+  }
+}
+
 export function applySocialSearchFailure(message: string): Record<string, unknown> {
   return { ...applyWebScrapeFailure(message), searchWarnings: undefined }
 }

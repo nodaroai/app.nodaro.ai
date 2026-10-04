@@ -158,6 +158,7 @@ import {
   CombineVideosConfig,
   ApplyEdlConfig,
   EditPlanConfig,
+  CameraSwitchConfig,
   ContentRecipeConfig,
   ContentIdeasConfig,
   AssembleNarratedVideoConfig,
@@ -229,6 +230,7 @@ import {
   ScheduleTriggerConfig,
   TelegramTriggerConfig,
   TelegramAccountTriggerConfig,
+  TelegramAccountSendConfig,
   TelegramChannelFeedConfig,
   InstagramPostConfig,
   TiktokPostConfig,
@@ -280,7 +282,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post", "publish-social",
   "component",
   // FFmpeg processing (tiered credits)
-  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "apply-edl", "edit-plan", "assemble-narrated-video", "image-collage", "image-overlay", "video-overlay", "trim-audio", "split-media", "extract-audio", "silence-detect", "audio-sync", "remove-audio", "trim-video", "extract-frame",
+  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "apply-edl", "edit-plan", "camera-switch", "assemble-narrated-video", "image-collage", "image-overlay", "video-overlay", "trim-audio", "split-media", "extract-audio", "silence-detect", "audio-sync", "remove-audio", "trim-video", "extract-frame",
   "speed-ramp", "loop-video", "gif-to-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume", "audio-fx",
   "add-captions", "mix-audio", "combine-audio",
 ])
@@ -298,6 +300,8 @@ export const RUN_BUTTON_TYPES = new Set([
 const RUN_FROM_HERE_TYPES: Set<string> = new Set([
   ...NODE_DEFINITIONS.filter((d) => d.autoExecute).map((d) => d.type),
   "preview", "list",
+  // Telegram Reply runs on the server only (a private plugin sends it).
+  "telegram-account-send",
 ])
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video", "generate-video"])
@@ -501,6 +505,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "combine-videos": return <CombineVideosConfig {...configProps} />
     case "apply-edl": return <ApplyEdlConfig {...configProps} />
     case "edit-plan": return <EditPlanConfig {...configProps} />
+    case "camera-switch": return <CameraSwitchConfig {...configProps} nodeId={selectedNodeId} />
     case "content-recipe": return <ContentRecipeConfig {...configProps} />
     case "content-ideas": return <ContentIdeasConfig {...configProps} />
     case "assemble-narrated-video": return <AssembleNarratedVideoConfig {...configProps} />
@@ -567,6 +572,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "x-post": return <XPostConfig {...configProps} />
     case "facebook-post": return <FacebookPostConfig {...configProps} />
     case "telegram-post": return <TelegramPostConfig {...configProps} />
+    case "telegram-account-send": return <TelegramAccountSendConfig {...configProps} />
     case "publish-social": return <PublishSocialConfig {...configProps} />
     case "telegram-trigger": return <TelegramTriggerConfig {...configProps} />
     // Keyed by node: a draft typed for one trigger never lands on another.

@@ -51,13 +51,15 @@
  *    shared by `VIDEO_WORKER_CONCURRENCY` jobs; a spawn's kill budget starts
  *    at the spawn, the beats at dispatch. This is a residual for EVERY ffmpeg
  *    handler, and apply-edl's multi-hour slot holds are its dominant cause.
- *  - Steps with no ceiling of their own. The R2 client carries no request
- *    timeout, so storage I/O — apply-edl's chunk checkpoints, the 404
- *    fallback download, the deliverable upload after the render — has none;
- *    nor does the thumbnail step that follows every video handler
- *    (`utils/thumbnail.ts`: its frame-extract ffmpeg and ffprobe run with no
- *    timeout and outside the ffmpeg slot). These are outside every budget.
- *    They ride in the slack between a real run and its kill budgets plus the
+ *  - Storage I/O — apply-edl's chunk checkpoints, the 404 fallback download,
+ *    the deliverable upload after the render. Every call is bounded on its own
+ *    (`lib/storage-timeouts.ts`, Track 0.12), so a dead store fails the run
+ *    instead of hanging it, but its time is outside every budget (decided
+ *    2026-10-04: a render's size is unknown at dispatch).
+ *  - Steps with no ceiling of their own: the thumbnail step that follows every
+ *    video handler (`utils/thumbnail.ts`: its frame-extract ffmpeg and ffprobe
+ *    run with no timeout and outside the ffmpeg slot).
+ *    Both ride in the slack between a real run and its kill budgets plus the
  *    30 minutes after the last beat; that is a margin, not a bound.
  *  - The default cap itself is an empirical margin over today's inventory
  *    (relay polls ≤ 85 min; the media-proxy encode behind silence-detect runs
@@ -116,8 +118,8 @@ export interface PreTaskHeartbeatOptions {
    *  hung-detectors cannot disagree. It can only EXTEND the default
    *  (`PRE_TASK_HEARTBEAT_MAX_MS`): a shorter, zero, negative or non-finite
    *  value is ignored — the default is the floor every handler gets, and with
-   *  storage I/O outside every budget a shorter cap would only take slack
-   *  away from a live run. */
+   *  storage I/O's time outside every budget a shorter cap would only take
+   *  slack away from a live run. */
   readonly maxMs?: number
 }
 

@@ -457,6 +457,20 @@ const PLAN_EDIT_OFFSETS_BYTES = 701
 // this suite: 382_349 total − 379_338 base = 3_011 B, each far under the
 // 8_192 B per-tool budget, and the list keeps the 46 B of headroom it had.
 const COMPETITOR_TOOLS_BYTES = 3_011
+// RAISED 2026-10-03 by switch_cameras (podcast B5) and nothing else — one NEW
+// cloud-only tool (the Camera Switch node's MCP twin), registered beside
+// plan_edit inside the hasCredits() block, so cloud/all names it and the
+// community sets do not. measured by this suite: 381_638 total − 379_338 base
+// = 2_300 B, well under the 8_192 B per-tool budget, and the list keeps the
+// 46 B of headroom it had before.
+const SWITCH_CAMERAS_TOOL_BYTES = 2_300
+// RAISED 2026-10-04 by competitor_lessons and nothing else — one NEW cloud-only
+// tool (what works for a tracked brand: lessons from its own posts), registered
+// beside competitor_cards, gated by assets:read, so cloud/all names it and the
+// community sets and the scope-less sets do not. measured by this suite:
+// 385_491 total − 384_650 base = 841 B, far under the 8_192 B per-tool budget,
+// and the list keeps the 45 B of headroom it had.
+const COMPETITOR_LESSONS_TOOL_BYTES = 841
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -498,7 +512,9 @@ export const TOOL_WIRE_BUDGET = {
     SOCIAL_SEARCH_TOOL_BYTES +
     SAVED_POST_TOOLS_BYTES +
     PLAN_EDIT_OFFSETS_BYTES +
-    COMPETITOR_TOOLS_BYTES,
+    COMPETITOR_TOOLS_BYTES +
+    SWITCH_CAMERAS_TOOL_BYTES +
+    COMPETITOR_LESSONS_TOOL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

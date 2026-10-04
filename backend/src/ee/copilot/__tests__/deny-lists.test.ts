@@ -91,6 +91,9 @@ describe("denied node types (derived from the executors)", () => {
     // Social Search builds its request through socialSearchRequestFromNode
     // (packages/shared/src/social-search.ts).
     "social-search": ["platform", "mode", "query", "subreddit"],
+    // Telegram Reply is a worker job: payload-builder (not scanned above) reads
+    // which account or bot writes, and which of the owner's chats it writes to.
+    "telegram-account-send": ["accountId", "connectionId", "sendAs", "destination"],
   }
   const NO_HANDLER: ReadonlySet<string> = new Set(["rss-feed"])
 
@@ -135,6 +138,7 @@ describe("denied node types (derived from the executors)", () => {
       "telegram-channel-feed",
       "youtube-video",
       "social-search",
+      "telegram-account-send",
     ]) {
       expect(isDeniedNodeType(type), `${type} must be denied`).toBe(true)
     }

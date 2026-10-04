@@ -16,11 +16,13 @@ Unlike the `transition` field on the Combine Videos node (which is an FFmpeg pos
 | Position | select | `"auto"` | Where in the clip the transition occurs: `auto` / `start` / `middle` / `end` / `full`. |
 | Duration | select | `"auto"` | How long the transition lasts: `auto` / `instant` / `short` (~1s) / `medium` (~2s) / `long` (~3s). Ignored for a cut (see below). |
 | Intensity | select | `"auto"` | Energy/character of the transition: `auto` / `subtle` / `natural` / `dynamic` / `crazy`. Ignored for a cut (see below). |
+| Direction | select | `"auto"` | **Wipe only** — shown while `wipe` is picked, stored as `wipeDirection`: `auto` / `left-to-right` / `right-to-left` / `top-to-bottom` / `bottom-to-top` / `top-left-to-bottom-right` / `top-right-to-bottom-left`. See [Wipe direction](#wipe-direction). |
+| Style | select | the row's default look | **Styled rows only** (`debris-shower`, `garden-bloom`, `smoke-puff`, `sakura-petals`, `aurora-sweep`, `sand-storm`, `white-flash`) — shown while one is picked, stored as `style`. Each row has its own looks; the first is the row's default, labelled by its name ("Full cover (default)"). See [Style](#style). |
 | Pre Text | text | empty | Free-form text prepended to the composed hint. |
 | Post Text | text | empty | Free-form text appended to the composed hint. |
 | Hint mode  | select       | `full`    | Does not change how the transition itself is written — always `<name> (<description>)` (see below). It still sets the detail level of the pickers wired into `startState` / `endState`. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
-All four enum fields default to `auto`, which contributes no prompt text. Setting them to non-`auto` values appends descriptive clauses to the composed hint.
+All the enum fields (Transition, Position, Duration, Intensity, the wipe's Direction and a row's Style) default to `auto`. For Position, Duration, Intensity and Direction, `auto` contributes no prompt text; Style's `auto` is the row's default look. Setting Position, Duration or Intensity appends a descriptive clause to the composed hint; Direction changes the wipe's own description, and Style swaps the row's whole description for another look.
 
 Position, Duration and Intensity are catalogs, not free values: the `transition` picker catalog exposes them as `dimensions` beside its `options` (`GET /v1/picker-catalogs/transition`, `client.pickerCatalogs.get("transition")`, the MCP `get_picker_catalog` tool, or `TRANSITION_POSITIONS` / `TRANSITION_DURATIONS` / `TRANSITION_INTENSITIES` from `@nodaro/prompts`), each row carrying the exact clause it injects. The [Character FX](./character-fx.md) node has the same three fields with the same ids but its own wording — read each node's own rows. See [Parameter Picker Catalogs](../../picker-catalogs.md#single-dimension-pickers-with-secondary-parameters-transition-character-fx).
 
@@ -30,11 +32,50 @@ Position, Duration and Intensity are catalogs, not free values: the `transition`
 
 **Cuts are worded as true hard cuts.** Eight transitions are cuts — the change happens between two frames: `none` (hard cut), `snap-to-black`, `match-cut`, `smash-cut`, `seamless-match`, `jump-cut`, `jump-match` and `action-relay`. When every picked transition is a cut:
 
-- The parentheses end, once, with an explicit anti-blend instruction: `match cut (the final composition of the first shot matches the opening composition of the second shot in shape, color, and motion, so the cut feels like a visual rhyme; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)`. Without it, video models often render a cut as a short dissolve. With two cuts picked, the instruction appears once, in the first one's parentheses — the part of the prompt kept longest when a long prompt has to be shortened for a model's length limit.
+- The parentheses end, once, with an explicit anti-blend instruction: `match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)`. Without it, video models often render a cut as a short dissolve. With two cuts picked, the instruction appears once, in the first one's parentheses — the part of the prompt kept longest when a long prompt has to be shortened for a model's length limit.
 - Duration and Intensity are dropped from the prompt. Both describe how a transition plays out over time ("lasting approximately 1 second", "with natural timing"), and on a cut either one makes video models blend the two images instead of cutting.
 - Position still applies — where the cut lands is a real choice — except `full`: a single-frame cut cannot span the whole clip, so `full` adds nothing to the prompt. `start`, `middle` and `end` still place the cut.
 
 When two transitions are picked and only one is a cut, no anti-blend instruction is added and Duration and Intensity are kept. The picker catalog marks the cut rows `instant: true` on their options, and `@nodaro/prompts` exports `isInstantTransition(id)`, so a client can hide the Duration and Intensity controls for them.
+
+<a id="wipe-direction"></a>
+
+**Wipe direction.** The `wipe` transition has one extra setting of its own, **Direction**, stored on the node as `wipeDirection`. It changes the words inside the wipe's parentheses and nothing else — the levers still follow them:
+
+| `wipeDirection` | The wipe as the prompt reads it |
+|---|---|
+| `auto` (or absent) | `linear wipe (a clean straight edge sweeps across the frame, revealing the second shot behind it)` |
+| `left-to-right` | `linear wipe (a clean vertical edge sweeps across the frame from left to right, revealing the second shot behind it)` |
+| `right-to-left` | `linear wipe (a clean vertical edge sweeps across the frame from right to left, revealing the second shot behind it)` |
+| `top-to-bottom` | `linear wipe (a clean horizontal edge sweeps down the frame from top to bottom, revealing the second shot behind it)` |
+| `bottom-to-top` | `linear wipe (a clean horizontal edge sweeps up the frame from bottom to top, revealing the second shot behind it)` |
+| `top-left-to-bottom-right` | `linear wipe (a clean diagonal edge sweeps across the frame from the top-left corner to the bottom-right corner, revealing the second shot behind it)` |
+| `top-right-to-bottom-left` | `linear wipe (a clean diagonal edge sweeps across the frame from the top-right corner to the bottom-left corner, revealing the second shot behind it)` |
+
+A wipe saved before Direction existed reads as `auto`. The picker catalog publishes the rows on the `wipe` option as `params` (see [Per-option parameters](../../picker-catalogs.md#per-option-parameters-a-wipes-direction)); `@nodaro/prompts` callers pass the choice as `composeTransitionHintFromConnections(id, startHints, endHints, timing, mode, { optionValues: { wipeDirection: "left-to-right" } })`. A wipe sent in the `direction` field of a video request has no direction setting and reads as `auto`.
+
+<a id="style"></a>
+
+**Style.** Seven rows have more than one tested look, offered as **Style** and stored on the node as `style`. A style replaces the row's whole description inside the parentheses; the row's name and the levers stay as they are. The field is shared, but every row declares its own looks, and every id except `auto` starts with the row's id, so a style never carries over to another row: a value that is not one of the picked row's looks reads as the default.
+
+| Row | Style | `style` | What it looks like |
+|---|---|---|---|
+| `smoke-puff` | Engulf (default) | `auto` (or absent) | Smoke billows up around the subject, and the new subject appears inside it |
+| `smoke-puff` | Full cover | `smoke-puff-full-cover` | Smoke from the subject fills the whole screen, then clears on the next scene |
+| `sand-storm` | Full cover (default) | `auto` (or absent) | A wall of sand hides the whole picture, then clears on the next scene |
+| `sand-storm` | Light sweep | `sand-storm-light-sweep` | A streak of blown sand crosses the screen with the next scene already behind it |
+| `aurora-sweep` | Sky glow (default) | `auto` (or absent) | Aurora light glows over the scene, then fades to reveal the next one |
+| `aurora-sweep` | Veil | `aurora-sweep-veil` | Aurora curtains drop over the whole picture, then fade to reveal the next scene |
+| `sakura-petals` | Swirling veil (default) | `auto` (or absent) | A swirl of pink petals veils the picture, then drifts past |
+| `sakura-petals` | Side sweep | `sakura-petals-side-sweep` | Petals sweep across from one side and leave by the other, uncovering the next scene |
+| `garden-bloom` | Grow & part (default) | `auto` (or absent) | Flowers and vines grow over the picture, then part like curtains on the next scene |
+| `garden-bloom` | Hedge doors | `garden-bloom-hedge-doors` | Leafy panels close over the picture, then slide apart to the sides |
+| `debris-shower` | Full cover (default) | `auto` (or absent) | Debris fills the whole screen, then blows past to reveal the next scene |
+| `debris-shower` | Light sweep | `debris-shower-light-sweep` | A quick scatter of debris crosses the screen; the scene has changed behind it |
+| `white-flash` | Flash (default) | `auto` (or absent) | A camera flash pops the picture to white, holds, then fades down on the next scene |
+| `white-flash` | Overexposure | `white-flash-overexposure` | The picture blooms to white and resolves into the next scene |
+
+A pick saved before Style existed has no `style` and reads as the row's default look. The picker catalog publishes each row's looks on its option as `params` (field `style`); `@nodaro/prompts` callers pass the choice as `composeTransitionHintFromConnections(id, startHints, endHints, timing, mode, { optionValues: { style: "debris-shower-light-sweep" } })`. On the canvas, a two-pick of two styled rows shows one Style control holding both rows' looks, its first entry named "Default look" (each row keeps its own default); the one stored value styles its own row, and the other row keeps its default. A row sent in the `direction` field of a video request has no style setting and reads as its default.
 
 ## Catalog (82 entries across 8 categories)
 

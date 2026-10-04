@@ -67,6 +67,7 @@ import {
   ListFilter,
   ListMusic,
   ListTree,
+  SwitchCamera,
   LogIn,
   LogOut,
   MapPin,
@@ -1181,6 +1182,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["edit plan", "edl", "tighten", "clips", "chapters", "podcast", "transcript", "cut", "plan", "shorts"],
   },
   {
+    type: "camera-switch",
+    label: "Camera Switch",
+    icon: <SwitchCamera className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-cut-assemble",
+    keywords: ["camera switch", "multicam", "multi-camera", "speaker", "who is talking", "podcast", "edl", "angles", "cut"],
+  },
+  {
     type: "assemble-narrated-video",
     label: "Assemble Narrated Video",
     icon: <Merge className="h-4 w-4" />,
@@ -1559,6 +1568,16 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Send className="h-4 w-4" />,
     category: "Output",
     group: "publish-platforms",
+  },
+  {
+    type: "telegram-account-send",
+    label: "Telegram Reply",
+    icon: <Send className="h-4 w-4" />,
+    category: "Output",
+    group: "publish-export",
+    // Preview: the connected-account feature is admin-only until GA.
+    adminOnly: true,
+    keywords: ["telegram", "reply", "answer", "send", "message", "inbox", "notify", "bot", "saved messages"],
   },
   {
     type: "publish-social",

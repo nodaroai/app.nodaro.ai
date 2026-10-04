@@ -112,6 +112,7 @@ import { LLMChatNode } from "./llm-chat-node";
 import { CombineVideosNode } from "./combine-videos-node";
 import { ApplyEdlNode } from "./apply-edl-node";
 import { EditPlanNode } from "./edit-plan-node";
+import { CameraSwitchNode } from "./camera-switch-node";
 import { ContentRecipeNode } from "./content-recipe-node";
 import { ContentIdeasNode } from "./content-ideas-node";
 import { ImageCollageNode } from "./image-collage-node";
@@ -190,6 +191,7 @@ import { ScheduleTriggerNode } from "./schedule-trigger-node";
 import { SocialNode } from "./social-node";
 import { TelegramTriggerNode } from "./telegram-trigger-node";
 import { TelegramAccountTriggerNode } from "./telegram-account-trigger-node";
+import { TelegramAccountSendNode } from "./telegram-account-send-node";
 import { TelegramChannelFeedNode } from "./telegram-channel-feed-node";
 import { GenerativePipelineNode } from "./generative-pipeline-node";
 import { GroupNode } from "./group-node";
@@ -328,6 +330,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "combine-videos": CombineVideosNode,
   "apply-edl": ApplyEdlNode,
   "edit-plan": EditPlanNode,
+  "camera-switch": CameraSwitchNode,
   "content-recipe": ContentRecipeNode,
   "content-ideas": ContentIdeasNode,
   "image-collage": ImageCollageNode,
@@ -421,6 +424,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "x-post": SocialNode,
   "facebook-post": SocialNode,
   "telegram-post": SocialNode,
+  "telegram-account-send": TelegramAccountSendNode,
   "publish-social": SocialNode,
   "telegram-channel-feed": TelegramChannelFeedNode,
   "telegram-trigger": TelegramTriggerNode,

@@ -2,7 +2,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
-import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostLink } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference } from "@nodaro/shared"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
@@ -758,6 +758,13 @@ export interface FrontendResolvedInputs {
    *  like the node's own link field, and before it; a wired video file still
    *  wins over both. Mirror of backend ResolvedInputs.videoPageUrl. */
   videoPageUrl?: string;
+  /** video-analysis: the wired Social Search post's video link has expired,
+   *  so there is nothing to analyze until the search runs again. Mirror of
+   *  backend ResolvedInputs.socialPostVideoExpired. */
+  socialPostVideoExpired?: boolean;
+  /** video-analysis: the wired Social Search post is an image or a text post.
+   *  Mirror of backend ResolvedInputs.socialPostNoVideo. */
+  socialPostNoVideo?: boolean;
 }
 
 /** Append an asset to the manual-edit inputAssets accumulator. */
@@ -895,6 +902,15 @@ export function extractNodeOutputAsList(
     return requestedType ? buckets[requestedType] : undefined;
   }
   const data = node.data as Record<string, unknown>;
+  // A node that ran once per upstream item (Camera Switch per clip): its "each"
+  // handle lists the LAST batch's per-item results — never its accumulated
+  // history, which holds earlier runs' items too; its other handles never list.
+  // Mirror of the backend's savedListFor / getListInputForNode branch.
+  if (Object.prototype.hasOwnProperty.call(FAN_OUT_EACH_HANDLES, node.type ?? "")) {
+    if (!listResultsServeHandle(node.type, sourceHandle)) return undefined;
+    const batch = data.__listResults as string[] | undefined;
+    return Array.isArray(batch) && batch.length > 0 ? batch : undefined;
+  }
   // Generate Text (llm-chat) `items` handle: fan-out list = the LLM result
   // split on the ===NEXT=== delimiter (shared splitGeneratedItems, identical to
   // the backend output-extractor). The default/`text` handle is intentionally
@@ -1078,7 +1094,7 @@ export function getListFanOutForNode(
 
     // Check outputMode from edge data — only fan-out if mode is "each"
     const edgeOutputMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined;
-    const outputMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type ?? "") ? "each" : "last");
+    const outputMode = edgeOutputMode ?? defaultEdgeOutputMode(sourceNode.type, edge.sourceHandle);
     if (outputMode !== "each") continue;
 
     const edgeData = edge.data as Record<string, unknown> | undefined;
@@ -1268,7 +1284,13 @@ export function resolveNodeInputs(
     // Selector: dual-output list — picked vs rest channel selected by edge.sourceHandle.
     //   Falls back to the in-store mirrors (pickedResults/restResults) if the
     //   runtime `__*` arrays aren't populated yet.
-    const srcListResults = src.type === "group" || src.type === "collect"
+    // A per-handle fan-out node (Camera Switch): its "each" handle reads the
+    // LAST batch only and its other handles never read a list, in any mode —
+    // both decided in extractNodeOutputAsList, NOT the generic `__listResults`
+    // read below, which would hand the transcript handle the clips' EDLs.
+    const srcListResults = Object.prototype.hasOwnProperty.call(FAN_OUT_EACH_HANDLES, src.type ?? "")
+      ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
+      : src.type === "group" || src.type === "collect"
       ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
       : src.type === "split-media"
         ? undefined
@@ -1466,7 +1488,7 @@ export function resolveNodeInputs(
     // During fan-out: resolve per-iteration values from non-loop list sources
     if (!output && listIterationIndex != null && src.type !== "list") {
       if (srcListResults && srcListResults.length > 0) {
-        const effectiveMode = edgeMode ?? (DEFAULT_EACH_TYPES.has(src.type ?? "") ? "each" : "last");
+        const effectiveMode = edgeMode ?? defaultEdgeOutputMode(src.type, resolvedSourceHandle);
         if (effectiveMode === "each") {
           const edgeData = srcEdge.data as Record<string, unknown> | undefined;
           // Indexed BY ROW: the row-aligned twin when the source publishes one.
@@ -1771,11 +1793,22 @@ export function resolveNodeInputs(
     // producer is not a link: it falls through to the file routing below.
     // (The server also lets a trigger message that carries a video FILE fall
     // through; the editor never runs a trigger.) A Social Search source hands
-    // over its posts: the link is the post's page (one post on an Each wire,
-    // the first of the list on any other). Gated on node.type. Mirror of the
-    // backend input-resolver branch.
+    // over its posts (one post on an Each wire, the first of the list on any
+    // other): a post that came with its own video file is analyzed from that
+    // file — Instagram's page gives no length, so its page cannot be priced —
+    // one without a file by its page, and one whose file link has expired is
+    // refused by name. Gated on node.type. Mirror of the backend
+    // input-resolver branch.
     if (node.type === "video-analysis" && srcEdge.targetHandle === "video" && !VIDEO_PRODUCER_TYPES.has(src.type ?? "") && !DYNAMIC_PRODUCER_TYPES.has(src.type ?? "")) {
-      const link = src.type === "social-search" ? socialSearchPostLink(output) ?? "" : output.trim();
+      if (src.type === "social-search") {
+        const video = socialSearchPostVideo(output);
+        if (video?.kind === "file") inputs.videoUrl = video.url;
+        else if (video?.kind === "page") inputs.videoPageUrl = video.url;
+        else if (video?.kind === "expired") inputs.socialPostVideoExpired = true;
+        else if (video?.kind === "none") inputs.socialPostNoVideo = true;
+        continue;
+      }
+      const link = output.trim();
       if (/^https?:\/\/\S+$/i.test(link)) inputs.videoPageUrl = link;
       continue;
     }
@@ -1787,6 +1820,20 @@ export function resolveNodeInputs(
     // EDL/Transcript for the json inputs, a media URL for a `sources` override.
     // Gated on node.type so these handle names don't hijack same-named handles
     // elsewhere. Mirror of the backend input-resolver apply-edl branch.
+    // camera-switch inputs: the edit (`edl`) and the diarized `transcript`,
+    // routed by targetHandle before the source-type chain (like apply-edl's).
+    // Mirror of the backend input-resolver camera-switch branch.
+    if (node.type === "camera-switch") {
+      if (srcEdge.targetHandle === "edl") {
+        inputs.edl = output;
+        continue;
+      }
+      if (srcEdge.targetHandle === "transcript") {
+        inputs.transcript = output;
+        continue;
+      }
+    }
+
     if (node.type === "apply-edl") {
       if (srcEdge.targetHandle === "edl") {
         inputs.edl = output;
@@ -3073,6 +3120,15 @@ export function resolveNodeInputs(
         // Default to prompt for text or any
         inputs.prompt = output;
       }
+    } else if (TEXT_PRODUCER_TYPES.has(src.type ?? "")) {
+      // The catch-all for text. The chain above has none, so a node the
+      // connection validator accepts as a text producer (TEXT_PRODUCER_TYPES)
+      // but without a branch of its own was silently dropped: a Prompt node fed
+      // by Content Ideas ran with no prompt, and Telegram's three nodes fed
+      // nothing either. The server routes every text source this way (backend
+      // input-resolver TEXT_SOURCE_NODE_TYPES → `inputs.prompt = output`, last
+      // wire wins); a type with a branch above never reaches this one.
+      inputs.prompt = output;
     }
   }
 

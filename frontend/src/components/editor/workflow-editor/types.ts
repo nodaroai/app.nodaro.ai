@@ -3,7 +3,8 @@ import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode } from "@nodaro/shared"
+import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -67,6 +68,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   // (clips·premium·180m = 1480), never-under-quote — mirrors video-analysis's
   // fallback rationale so a run never fails mid-DAG after transcribe charged.
   "edit-plan": 1480,
+  // camera-switch: flat (decided 2026-10-03, migration 448).
+  "camera-switch": 10,
   // Content Recipe / Content Ideas: the node badge and the run-level estimate
   // name the composite (contentRecipeCreditId / contentIdeasCreditId — model
   // tier, and for ideas the per-five-ideas bucket) and read it here on a cold
@@ -147,6 +150,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "facebook-post": 10,
   "telegram-post": 10,
   "publish-social": 10,
+  "telegram-account-send": 10,
   "telegram-channel-feed": 10,
   "save-to-storage": 0,
   "qa-check": 10,
@@ -487,6 +491,8 @@ export function estimateNodeCredits(
   edges?: ReadonlyArray<{ source?: string; target: string; targetHandle?: string | null }>,
   /** With `edges`, lets a node with a Settings input be priced as it runs. */
   nodes?: ReadonlyArray<{ id: string; type?: string | null; data?: unknown }>,
+  /** The nodes about to run, for a whole-run estimate (see `getCostMultiplier`). */
+  reruns?: ReadonlySet<string>,
 ): number {
   const node = withWiredSettings(storedNode, nodes, edges)
   const nodeType = node.type ?? ""
@@ -553,9 +559,12 @@ export function estimateNodeCredits(
     // window only exists for the moment between rewire and the hook's re-probe.
     const probed = node.data.probedYoutube as { url: string; durationSec: number } | undefined
     const probedWired = node.data.probedVideo as ProbedVideoInfo | undefined
-    const durationSec =
-      (probed && probed.url === node.data.youtubeUrl ? probed.durationSec : undefined) ??
-      probedWired?.durationSec
+    // A Social Search's posts wired in: the longest of their videos (each post
+    // is charged by its own) — never a `probedVideo` left from an earlier wire.
+    const fromPosts = wiredSocialPostsVideoSec(node.id ?? "", edges, nodes, reruns)
+    const durationSec = fromPosts !== null
+      ? fromPosts
+      : (probed && probed.url === node.data.youtubeUrl ? probed.durationSec : undefined) ?? probedWired?.durationSec
     const bucketSec = bucketSecondsFromCreditId(buildVideoAnalysisCreditId(model, durationSec))
     // The $-derived formula moved to the private @nodaroai/cloud-plugins formula (output published as VIDEO_ANALYSIS_BUCKET_CREDITS)
     // (S5) — look up the precomputed credit table instead of computing it here.
@@ -596,6 +605,14 @@ export function estimateNodeCredits(
   }
   return NODE_CREDIT_COSTS[nodeType] ?? 0
 }
+
+/**
+ * Executable types that run on the SERVER only — the editor has no single-node
+ * path for them (a private plugin runs them, against facts of the run such as
+ * the message that started it). Every "Run this node" entry point runs them
+ * "from here" on the server instead; execute-node.ts refuses them.
+ */
+export const SERVER_RUN_ONLY_TYPES: ReadonlySet<string> = new Set(["telegram-account-send"])
 
 // Group/Collect are non-executable aggregators (resolved at field-resolution time, no jobs created).
 // DO NOT add "group" or "collect" to EXECUTABLE_TYPES — they fall through to no-op cases in execute-node.ts.
@@ -663,6 +680,7 @@ export const EXECUTABLE_TYPES = new Set([
   "combine-videos",
   "apply-edl",
   "edit-plan",
+  "camera-switch",
   "assemble-narrated-video",
   "image-collage",
   "image-overlay",
@@ -726,6 +744,8 @@ export const EXECUTABLE_TYPES = new Set([
   "facebook-post",
   "telegram-post",
   "publish-social",
+  // Runs on the server only (Run from here): a private plugin sends it.
+  "telegram-account-send",
   "telegram-channel-feed",
   "save-to-storage",
   "qa-check",
@@ -939,11 +959,39 @@ function contentIdeasFanOut(
  * under-quotes and lets a run pass the balance precheck it cannot finish, so
  * `__tests__/cost-multiplier.test.ts` fails the build for any such producer.
  */
+/**
+ * Downstream executions one Social Search fans out on an Each wire: one per
+ * post it passes on. Not re-running, or picks kept → the posts it holds now
+ * (exact). Running a fresh search → the first `pickTop` posts (default 5), the
+ * number a run without picks passes on.
+ */
+function socialSearchFanOut(
+  data: Record<string, unknown>,
+  reruns: boolean,
+  selector?: SelectorFields,
+): number {
+  const held = socialPostsFrom(data.generatedJson).length;
+  const posts = (!reruns || isSocialSearchPickFrozen("social-search", data)) && held > 0 ? held : socialSearchPickTop(data.pickTop);
+  const kept = fanOutCount(Array.from({ length: posts }, (_, i) => String(i + 1)), selector);
+  return kept > 0 ? kept : 1;
+}
+
 export const PRODUCER_FAN_OUT: Readonly<
   Record<string, (data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields) => number>
 > = {
   "edit-plan": editPlanClipFanOut,
   "content-ideas": contentIdeasFanOut,
+};
+
+/**
+ * Producers NOT in FAN_OUT_EACH_TYPES (a wire from them passes the whole list
+ * by default) whose wire, once set to Each, runs the next node once per item
+ * they emit. Sized the same way as PRODUCER_FAN_OUT.
+ */
+export const EACH_WIRE_FAN_OUT: Readonly<
+  Record<string, (data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields) => number>
+> = {
+  "social-search": socialSearchFanOut,
 };
 
 /**
@@ -955,6 +1003,14 @@ export const PRODUCER_FAN_OUT: Readonly<
  * different question (a Selector or a list transform runs ONCE over its whole
  * list), and every other graph's estimate stays exactly what it was.
  */
+/** A per-handle fan-out node (Camera Switch) that is NOT re-running renders the
+ *  batch it holds: one downstream run per item of its last batch. 0 otherwise. */
+function heldBatchFanOut(node: WorkflowNode, rerunIds: ReadonlySet<string>): number {
+  if (!Object.prototype.hasOwnProperty.call(FAN_OUT_EACH_HANDLES, node.type ?? "") || rerunIds.has(node.id)) return 0;
+  const batch = (node.data as Record<string, unknown>).__listResults;
+  return Array.isArray(batch) && batch.length > 1 ? batch.length : 0;
+}
+
 function inheritedClipFanOut(
   source: WorkflowNode,
   allNodes: WorkflowNode[],
@@ -979,7 +1035,11 @@ function inheritedClipFanOut(
       if (n > 1) return n;
       continue;
     }
-    if (explicit !== "each") continue;
+    if ((explicit ?? defaultEdgeOutputMode(upstream.type, edge.sourceHandle)) !== "each") continue;
+    // A handle whose edge never lists (Camera Switch's transcript) fans nothing out.
+    if (!listResultsServeHandle(upstream.type, edge.sourceHandle)) continue;
+    const held = heldBatchFanOut(upstream, rerunIds);
+    if (held > 1) return held;
     const n = inheritedClipFanOut(upstream, allNodes, edges, rerunIds, visited);
     if (n > 1) return n;
   }
@@ -1000,9 +1060,7 @@ function getBaseFanOut(
 
     const edgeMode = (edge.data as Record<string, unknown> | undefined)
       ?.outputMode as string | undefined;
-    const mode =
-      edgeMode ??
-      (FAN_OUT_EACH_TYPES.has(sourceNode.type ?? "") ? "each" : "last");
+    const mode = edgeMode ?? defaultEdgeOutputMode(sourceNode.type, edge.sourceHandle);
     if (mode !== "each") continue;
 
     const edgeData = edge.data as Record<string, unknown> | undefined;
@@ -1011,7 +1069,7 @@ function getBaseFanOut(
     // A fan-out producer (Edit Plan in `clips` mode, Content Ideas): one
     // downstream execution per item it emits. It is in FAN_OUT_EACH_TYPES but
     // has no `items`/`rows` for the list reads below — see PRODUCER_FAN_OUT.
-    const producer = PRODUCER_FAN_OUT[sourceNode.type ?? ""];
+    const producer = PRODUCER_FAN_OUT[sourceNode.type ?? ""] ?? EACH_WIRE_FAN_OUT[sourceNode.type ?? ""];
     if (producer) {
       const n = producer(sourceNode.data as Record<string, unknown>, rerunIds.has(sourceNode.id), selector);
       if (n > 1) return n;
@@ -1066,9 +1124,12 @@ function getBaseFanOut(
       }
     }
 
-    // Clip Pack: an explicit "each" edge from a render that is itself fanned out
-    // per clip. Narrow by design — see `inheritedClipFanOut`.
-    if (edgeMode === "each") {
+    // Clip Pack: an "each" edge (set by hand, or a per-handle default like
+    // Camera Switch's EDL) from a node that is itself fanned out per clip.
+    // Narrow by design — see `inheritedClipFanOut`.
+    if (mode === "each" && listResultsServeHandle(sourceNode.type, edge.sourceHandle)) {
+      const held = heldBatchFanOut(sourceNode, rerunIds);
+      if (held > 1) return held;
       const inherited = inheritedClipFanOut(sourceNode, allNodes, edges, rerunIds, new Set());
       if (inherited > 1) return inherited;
     }

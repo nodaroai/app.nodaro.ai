@@ -120,6 +120,27 @@ function deriveOutputTemplate(outPath: string): string {
 export const SECTION_PAD_SEC = 3
 
 /**
+ * A requested part of a video, in seconds. By default the fetch is padded
+ * ±SECTION_PAD_SEC for a client that trims the small result itself (Studio,
+ * Recast, the voice changer). `exact` asks for the range itself, cut at both
+ * ends by `--force-keyframes-at-cuts`: for a client that never trims — the
+ * editor's Video URL node, whose consumers measure the file. Video Analysis
+ * prices by that length, so a padded 1:00 part (1:06) billed the 3-minute
+ * bucket, and a padded 10:00 part (10:06) ran past the length it reads.
+ */
+export interface VideoSection {
+  readonly startSec: number
+  readonly endSec: number
+  readonly exact?: boolean
+}
+
+/** The `--download-sections` value for a section: padded, or exact. Exported for tests. */
+export function sectionDownloadRange(section: VideoSection): string {
+  const pad = section.exact ? 0 : SECTION_PAD_SEC
+  return `*${Math.max(0, section.startSec - pad)}-${section.endSec + pad}`
+}
+
+/**
  * The `--format` selector for a SECTION (trim) download: a SINGLE combined
  * (progressive) stream, NOT the HD two-stream DASH selector.
  *
@@ -148,12 +169,10 @@ export function buildYtDlpSectionStreamArgs(opts: {
   url: string
   outTemplate: string
   format: string
-  section: { startSec: number; endSec: number }
+  section: VideoSection
   proxyArgs: string[]
   writeThumbnail?: boolean
 }): string[] {
-  const start = Math.max(0, opts.section.startSec - SECTION_PAD_SEC)
-  const end = opts.section.endSec + SECTION_PAD_SEC
   return [
     opts.url,
     "--format", opts.format,
@@ -166,7 +185,7 @@ export function buildYtDlpSectionStreamArgs(opts: {
     ...opts.proxyArgs,
     "--newline",
     "--progress-template", "download:%(progress._percent_str)s",
-    "--download-sections", `*${start}-${end}`,
+    "--download-sections", sectionDownloadRange(opts.section),
     "--force-keyframes-at-cuts",
   ]
 }
@@ -180,7 +199,8 @@ export function buildYtDlpSectionStreamArgs(opts: {
  * ABSENT leaves the whole-video selector byte-identical to the uncapped default.
  *
  * `section` (optional) fetches ONLY that time range via `--download-sections`
- * (±SECTION_PAD_SEC keyframe pad) with `--force-keyframes-at-cuts` for accuracy.
+ * (±SECTION_PAD_SEC keyframe pad, or none for an `exact` section — see
+ * VideoSection) with `--force-keyframes-at-cuts` for accuracy.
  * A section forces `sectionFormatSelector` (single progressive stream) instead of
  * the HD two-stream selector, because the two-stream fetch stalls through a proxy
  * (see sectionFormatSelector). Efficient: only the range's bytes are downloaded.
@@ -190,7 +210,7 @@ export function buildYtDlpVideoArgs(opts: {
   outPath: string
   maxFilesizeBytes?: number
   maxHeight?: number
-  section?: { startSec: number; endSec: number }
+  section?: VideoSection
   /**
    * The `--proxy` args for this attempt — one `["--proxy", url]` from the
    * download's proxy chain, or `[]` for no proxy. For a SECTION download this is
@@ -236,11 +256,9 @@ export function buildYtDlpVideoArgs(opts: {
   }
   if (opts.extraArgs) args.push(...opts.extraArgs)
   if (opts.section) {
-    const start = Math.max(0, opts.section.startSec - SECTION_PAD_SEC)
-    const end = opts.section.endSec + SECTION_PAD_SEC
     // `--force-keyframes-at-cuts` re-encodes only around the cut points for an
     // accurate range (the section is small, so this is fast).
-    args.push("--download-sections", `*${start}-${end}`, "--force-keyframes-at-cuts")
+    args.push("--download-sections", sectionDownloadRange(opts.section), "--force-keyframes-at-cuts")
   }
   return args
 }
@@ -496,7 +514,7 @@ async function downloadSectionHd(opts: {
   url: string
   outPath: string
   maxHeight?: number
-  section: { startSec: number; endSec: number }
+  section: VideoSection
   proxyArgs: string[]
   extractorArgs: string[]
   onProgress?: (pct: number) => void
@@ -565,7 +583,7 @@ export async function downloadYouTubeVideo(opts: {
   outPath: string
   maxFilesizeBytes?: number
   maxHeight?: number
-  section?: { startSec: number; endSec: number }
+  section?: VideoSection
   requireAudio?: boolean
   onProgress?: (pct: number) => void
   onProcessingStart?: () => void

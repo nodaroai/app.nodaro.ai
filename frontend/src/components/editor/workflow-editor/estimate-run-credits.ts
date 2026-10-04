@@ -24,7 +24,7 @@ export function estimateRunCredits(
   // single-node / run-from-here render is priced on the plan that will render.
   const rerunIds = new Set(executable.map((n) => n.id))
   return executable.reduce((sum, node) => {
-    const modelId = getModelIdentifier(node, edges, allNodes)
+    const modelId = getModelIdentifier(node, edges, allNodes, rerunIds)
     const cached = cachedCost(modelId)
     // Cold cache: prefer the row for the identifier this run will actually
     // reserve on, and only then the coarse node-type row. `getModelIdentifier`

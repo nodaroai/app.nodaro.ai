@@ -94,6 +94,8 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   // FAN_OUT_EACH_TYPES), but the handle is still a json/data producer — so it
   // feeds apply-edl's `edl` input (ACCEPTS_JSON). See unwrapEditPlanOutput.
   "edit-plan",
+  // camera-switch: the switched edit (`edl`) and the renamed `transcript`.
+  "camera-switch",
   // Content Recipe's `json` handle carries the recipe object (its `text`
   // handle stays in DATA_TEXT_PRODUCER_TYPES) — a dual producer like transcribe.
   "content-recipe",

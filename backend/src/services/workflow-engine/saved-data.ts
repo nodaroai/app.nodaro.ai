@@ -24,7 +24,7 @@
  * and listed. A count cannot tell a gated site swapped for an ungated one in
  * the same file; the reasons in that test are the record of what was checked.
  */
-import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro/shared"
+import { extractAllGeneratedResults, extractGeneratedJsonAsList, FAN_OUT_EACH_HANDLES } from "@nodaro/shared"
 import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
 
 /**
@@ -68,6 +68,12 @@ export function savedDataAllowed(state: NodeExecutionState | undefined): boolean
 export function savedListFor(node: SimpleNode, state: NodeExecutionState | undefined): string[] | undefined {
   if (!savedDataAllowed(state)) return undefined
   const data = node.data as Record<string, unknown>
+  // A node that runs once per upstream item (Camera Switch per clip) lists its
+  // LAST batch — its accumulated history holds earlier runs' items too.
+  if (Object.prototype.hasOwnProperty.call(FAN_OUT_EACH_HANDLES, node.type)) {
+    const batch = data.__listResults
+    return Array.isArray(batch) && batch.length > 0 ? (batch as string[]) : undefined
+  }
   return extractAllGeneratedResults(data) ?? extractGeneratedJsonAsList(data)
 }
 

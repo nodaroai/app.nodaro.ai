@@ -28,8 +28,9 @@ describe("cancellable rendered-file uploads", () => {
     const controller = new AbortController()
     mocks.send.mockImplementation(async (command) => { for await (const _ of command.input.Body) {} })
     await expect(uploadFileToR2(file, "job", "video", "owner", { signal: controller.signal })).resolves.toContain("job.mp4")
+    // The signal, and the size-scaled budget every write carries (Track 0.12).
     expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({ input: expect.objectContaining({ ContentLength: 14 }) }),
-      { abortSignal: controller.signal })
+      { abortSignal: controller.signal, requestTimeout: 120_000 })
     expect(mocks.track).toHaveBeenCalledWith("owner", 14)
     expect(mocks.multipart).not.toHaveBeenCalled()
   })

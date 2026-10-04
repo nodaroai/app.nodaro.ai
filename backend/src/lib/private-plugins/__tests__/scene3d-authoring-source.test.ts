@@ -82,7 +82,8 @@ describe("private authoring source read", () => {
     expect(result).toMatchObject({ sourceArtifactId: SOURCE_ARTIFACT, sourceSha256: sha256 })
     expect((result.plan as { revisionId: string }).revisionId).toBe(REVISION_ID)
     // The pin is the authority: another owner's artifact from another job is fine.
-    expect(store.get).toHaveBeenCalledWith(sourcePin.objectKey)
+    // Read through the storage body rule (Track 0.12): its signal aborts the request.
+    expect(store.get).toHaveBeenCalledWith(sourcePin.objectKey, undefined, { signal: expect.any(AbortSignal) })
     const serialized = JSON.stringify({ ...result, source: undefined })
     for (const secret of [sourcePin.objectKey, sourcePin.bucket, sourcePin.etag, "scene3d/", "http"]) {
       expect(serialized).not.toContain(secret)

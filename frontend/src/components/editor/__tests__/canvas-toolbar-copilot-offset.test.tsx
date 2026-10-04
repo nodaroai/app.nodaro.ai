@@ -62,25 +62,36 @@ function barLeft(container: HTMLElement): number {
 }
 
 beforeEach(() => {
-  useCopilotUiStore.setState({ open: false, everOpened: false, turnActive: false })
+  useCopilotUiStore.setState({ mode: "min", dock: "min", everOpened: false, turnActive: false })
 })
 
 describe("the floating tool bar and the Copilot rail", () => {
-  it("clears the collapsed tab", () => {
+  it("clears the folded strip", () => {
     const { container } = render(<CanvasToolbar {...props} />, { wrapper: Router })
     expect(barLeft(container)).toBeGreaterThanOrEqual(SIDEBAR_WIDTH + COPILOT_TAB_WIDTH)
   })
 
   it("clears the open rail — the bug was buttons sitting on top of the chat", () => {
-    useCopilotUiStore.setState({ open: true, everOpened: true })
+    useCopilotUiStore.setState({ mode: "panel", everOpened: true })
     const { container } = render(<CanvasToolbar {...props} />, { wrapper: Router })
     expect(barLeft(container)).toBeGreaterThanOrEqual(SIDEBAR_WIDTH + COPILOT_RAIL_WIDTH)
   })
 
   it("moves as the rail opens and closes rather than picking one position", () => {
     const closed = barLeft(render(<CanvasToolbar {...props} />, { wrapper: Router }).container)
-    useCopilotUiStore.setState({ open: true, everOpened: true })
+    useCopilotUiStore.setState({ mode: "panel", everOpened: true })
     const opened = barLeft(render(<CanvasToolbar {...props} />, { wrapper: Router }).container)
     expect(opened - closed).toBe(COPILOT_RAIL_WIDTH - COPILOT_TAB_WIDTH)
+  })
+
+  it("takes no room while the Copilot sits in the middle of the canvas, or is put away", () => {
+    useCopilotUiStore.setState({ mode: "center" })
+    const centered = barLeft(render(<CanvasToolbar {...props} />, { wrapper: Router }).container)
+    useCopilotUiStore.setState({ mode: "hidden" })
+    const away = barLeft(render(<CanvasToolbar {...props} />, { wrapper: Router }).container)
+    useCopilotUiStore.setState({ mode: "min" })
+    const folded = barLeft(render(<CanvasToolbar {...props} />, { wrapper: Router }).container)
+    expect(centered).toBe(away)
+    expect(folded - centered).toBe(COPILOT_TAB_WIDTH)
   })
 })

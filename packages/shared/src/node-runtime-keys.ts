@@ -97,6 +97,9 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // patch must never treat them as config.
   "ideaBriefs",
   "runWarnings",
+  // Content Ideas: the own brand whose results the last run leaned on — a
+  // RESULT naming the runner's brand, so a template or a preset never carries it.
+  "brandLessons",
   // Social Search: every post the last search found (the picker's grid), the
   // ids a person picked from them, and the run's non-fatal notes ("only part
   // of the results loaded"). All RESULTS: a template, a preset or a run-only

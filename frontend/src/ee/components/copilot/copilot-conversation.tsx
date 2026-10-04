@@ -29,6 +29,8 @@ interface CopilotConversationProps {
   onShowOnCanvas: (nodeIds: string[]) => void
   onStopRun: () => void
   onRetry: () => void
+  /** A message handed over from the middle of the canvas whose turn has not started yet. */
+  handover?: string | null
 }
 
 export function CopilotConversation({
@@ -38,6 +40,7 @@ export function CopilotConversation({
   onShowOnCanvas,
   onStopRun,
   onRetry,
+  handover = null,
 }: CopilotConversationProps) {
   const t = useT()
   const turn = useCopilotStore((s) => s.turn)
@@ -102,6 +105,16 @@ export function CopilotConversation({
             collapsed={activityCollapsed}
             onExpand={() => setActivityCollapsed(false)}
           />
+        </>
+      )}
+
+      {/* Sent from the middle of the canvas: shown at once, with the same
+          "working" skeleton a turn opens with, while the save and the thread
+          handshake run. The live block above takes over when the turn starts. */}
+      {handover && (
+        <>
+          <UserBubble text={handover} />
+          <CopilotAnswerSkeleton />
         </>
       )}
 

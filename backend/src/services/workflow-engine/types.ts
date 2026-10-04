@@ -70,6 +70,9 @@ export interface NodeOutput {
   paramOutputs?: Record<string, string>
   /** Accumulated results from fan-out (list/loop/split-text) execution */
   listResults?: string[]
+  /** content-ideas: the own brand whose lessons the run leaned on, and how
+   *  many — the node's "leaned on" line, kept on a server run too. */
+  brandLessons?: { brand: string; lessons: number }
   /** social-search: EVERY post the search found (the editor's picker grid);
    *  `json` holds only the posts the node passes on. Lets a server-side run
    *  repaint the node card the way the editor's own run does. */
@@ -486,6 +489,20 @@ export interface ResolvedInputs {
    *  Read like the node's own link field, and before it; a wired video file
    *  still wins over both. Only an http(s) link is kept. */
   videoPageUrl?: string
+  /** video-analysis: `videoUrl` is a Social Search post's own video file. Its
+   *  length is read from the file before the reserve (video-analysis-post-probe),
+   *  never taken from the post. */
+  videoFromSocialPost?: boolean
+  /** video-analysis: the wired Social Search post's video link has expired, so
+   *  there is nothing to analyze until the search runs again. */
+  socialPostVideoExpired?: boolean
+  /** video-analysis: `videoPageUrl` is a Social Search post's page (a post
+   *  that came without its own file). A page that gives no length is refused,
+   *  never priced at the ceiling. */
+  videoPageFromSocialPost?: boolean
+  /** video-analysis: the wired Social Search post is an image or a text
+   *  post — there is no video to analyze. */
+  socialPostNoVideo?: boolean
 }
 
 // ---------------------------------------------------------------------------

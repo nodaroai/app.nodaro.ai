@@ -98,7 +98,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "video-cut-assemble",
     label: "Cut & Assemble",
     tab: "video",
-    types: ["trim-video", "combine-videos", "apply-edl", "edit-plan", "assemble-narrated-video", "speed-ramp", "loop-video", "fade-video", "composite", "video-composer", "split-media", "manual-edit"],
+    types: ["trim-video", "combine-videos", "apply-edl", "edit-plan", "camera-switch", "assemble-narrated-video", "speed-ramp", "loop-video", "fade-video", "composite", "video-composer", "split-media", "manual-edit"],
   },
   {
     id: "video-sound",
@@ -269,7 +269,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "publish-export",
     label: "Export",
     tab: "publish",
-    types: ["save-to-storage", "webhook-output"],
+    types: ["save-to-storage", "webhook-output", "telegram-account-send"],
   },
   {
     id: "cc-subject",

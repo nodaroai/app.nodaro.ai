@@ -821,6 +821,14 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     const briefs = Array.isArray(d.ideaBriefs) ? d.ideaBriefs.filter((b): b is string => typeof b === "string" && b.trim() !== "") : [];
     return briefs.length > 0 ? briefs.join("\n\n") : undefined;
   }
+  // Camera Switch: generatedJson is the { edl, transcript } pair — the
+  // `transcript` handle carries the renamed transcript, `edl` (the default) the
+  // switched edit. Mirrors the backend getPrimaryOutput branch.
+  if (type === "camera-switch") {
+    const pair = (node.data as { generatedJson?: { edl?: unknown; transcript?: unknown } }).generatedJson;
+    const value = sourceHandle === "transcript" ? pair?.transcript : pair?.edl;
+    return value === undefined || value === null ? undefined : JSON.stringify(value);
+  }
   if (type === "edit-plan") {
     const d = node.data as { generatedJson?: unknown };
     const plan = d.generatedJson;
@@ -1209,6 +1217,8 @@ export function detectPreviewItemType(
   if (nodeType === "audio-sync") return "data"
   // edit-plan emits an EDL plan (json), never a media URL — classify as data.
   if (nodeType === "edit-plan") return "data"
+  // camera-switch emits the switched edit + the renamed transcript, both json.
+  if (nodeType === "camera-switch") return "data"
   // Content Recipe's `json` handle is the recipe object; its `text` handle
   // and Content Ideas are readable text.
   if (nodeType === "content-recipe") return sourceHandle === "json" ? "data" : "text"

@@ -14,6 +14,7 @@ import { queryKeys } from "@/lib/query-keys"
 import { useAuth } from "@/hooks/use-auth"
 import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
 import { nodeDocsLinksShown, useNodeDocsUrl } from "@/lib/node-docs/node-docs"
+import { nodeThumbnailUrl } from "./node-thumbnail"
 
 interface NodeContextMenuProps {
   readonly nodeId: string
@@ -75,12 +76,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
     return !!(node.data as Record<string, unknown>).skipped
   }, [nodeId, nodes])
 
-  const thumbnailUrl = useMemo(() => {
-    const node = nodes.find((n) => n.id === nodeId)
-    if (!node) return null
-    const d = node.data as Record<string, unknown>
-    return (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string) ?? null
-  }, [nodeId, nodes])
+  const thumbnailUrl = useMemo(() => nodeThumbnailUrl(nodes.find((n) => n.id === nodeId)), [nodeId, nodes])
 
   const zoom = useMemo(() => {
     const node = nodes.find((n) => n.id === nodeId)
@@ -118,7 +114,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
 
   function handleSetThumbnail() {
     if (thumbnailUrl) {
-      setWorkflowThumbnail(thumbnailUrl)
+      void setWorkflowThumbnail(thumbnailUrl)
     }
     onClose()
   }

@@ -12,23 +12,26 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { COPILOT_RAIL_WIDTH } from "@/hooks/use-copilot-ui-store"
+import { COPILOT_RAIL_WIDTH, useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
 import { COPILOT_KEYS as K } from "@/ee/lib/copilot/strings"
 import { useT } from "@/lib/i18n"
 import { focusNodes } from "@/ee/lib/copilot/canvas-sync"
 import { useCopilotMentions } from "@/ee/lib/copilot/use-copilot-mentions"
 import { sendCopilotMessage, stopCopilotTurn, teardownCopilot } from "@/ee/lib/copilot/turn-engine"
 import { useCopilotStore, type CopilotSaveResult } from "@/ee/lib/copilot/turn-store"
-import { useCopilotHistory, useCopilotSettings, useCopilotThreadForWorkflow } from "@/ee/hooks/copilot/use-copilot-thread"
+import { useCopilotHistory, useCopilotThreadForWorkflow } from "@/ee/hooks/copilot/use-copilot-thread"
 import { useCopilotHandoff } from "@/ee/hooks/copilot/use-copilot-handoff"
-import type { CopilotMention, CopilotModelTier } from "@/ee/lib/copilot/types"
 import { CopilotComposer } from "./copilot-composer"
 import { CopilotConversation } from "./copilot-conversation"
 import { CopilotEmptyState } from "./copilot-empty-state"
 import { CopilotHeader } from "./copilot-header"
+import { useCopilotSettingsChange } from "./copilot-settings"
+import { firstNameOf } from "@/ee/lib/copilot/first-name"
 
 export interface CopilotPanelProps {
   onClose: () => void
+  /** Folds the rail to the strip. On a phone, where there is no strip, it closes the sheet. */
+  onMinimize: () => void
   projectId: string | undefined
   save: ((projectId: string) => Promise<CopilotSaveResult>) | null
   run: ((opts?: { skipConfirm?: boolean }) => Promise<{ executionId: string | null }>) | null
@@ -48,6 +51,7 @@ export interface CopilotPanelProps {
 
 export default function CopilotPanel({
   onClose,
+  onMinimize,
   projectId,
   save,
   run,
@@ -73,12 +77,13 @@ export default function CopilotPanel({
   const setBridge = useCopilotStore((s) => s.setBridge)
   const turnStatus = useCopilotStore((s) => s.turn.status)
   const turnUserText = useCopilotStore((s) => s.turn.userText)
+  const turnStartedAt = useCopilotStore((s) => s.turn.startedAt)
 
   const { thread } = useCopilotThreadForWorkflow()
   const { messages, busy } = useCopilotHistory(threadId)
   // Arriving from the home page: send what the user typed there, once.
   useCopilotHandoff(thread, workflowId)
-  const settings = useCopilotSettings(threadId)
+  const setSettings = useCopilotSettingsChange()
 
   // Held here, not in the composer: for FILES this is a server query, and this
   // is the component that owns the fetch.
@@ -139,22 +144,37 @@ export default function CopilotPanel({
     void sendCopilotMessage(text)
   }
 
-  const setSettings = (patch: {
-    runMode?: "ask" | "auto"
-    autoRunLimitCredits?: number
-    allowPublishing?: boolean
-    modelTier?: CopilotModelTier
-  }) => {
-    // Local first so the toggle responds with no thread and with no network.
-    const current = useCopilotStore.getState()
-    current.setRunSettings(
-      patch.runMode ?? current.runMode,
-      patch.autoRunLimitCredits ?? current.autoRunLimit,
-      patch.allowPublishing ?? current.allowPublishing,
-      patch.modelTier ?? current.modelTier,
-    )
-    if (threadId) settings.mutate(patch)
-  }
+  // A message typed in the middle of the canvas, handed over as the rail
+  // opened. Declared after the bridge effects above, so on the first mount the
+  // editor callbacks a send needs are registered before it goes out; bound to
+  // its workflow, so a switch in between never sends it to another one. It
+  // stays pending until the send settles: the save and the thread handshake
+  // come before the turn is marked active, and folding the rail in that gap
+  // must not read as "nothing said" (copilot-placement).
+  const pendingPrompt = useCopilotUiStore((s) => s.pendingPrompt)
+  const handedOver = useRef<typeof pendingPrompt>(null)
+  useEffect(() => {
+    if (!pendingPrompt || handedOver.current === pendingPrompt) return
+    handedOver.current = pendingPrompt
+    if (pendingPrompt.workflowId !== workflowId) {
+      useCopilotUiStore.getState().clearPendingPrompt()
+      return
+    }
+    void sendCopilotMessage(pendingPrompt.text).finally(() => {
+      if (useCopilotUiStore.getState().pendingPrompt !== pendingPrompt) return
+      useCopilotUiStore.getState().clearPendingPrompt()
+      // Refused before its turn began (a failed save, a lost connection, the
+      // notice says which): the sentence goes back into the box to send again.
+      const { turn, draft, setDraft } = useCopilotStore.getState()
+      if (!turnStartedSince(turn.startedAt, pendingPrompt.sentAt) && !draft.trim()) setDraft(pendingPrompt.text)
+    })
+  }, [pendingPrompt, workflowId])
+  // On screen from the click on: the save and the thread handshake run before
+  // the engine starts the turn, and the rail must not sit empty meanwhile.
+  const handover =
+    pendingPrompt && pendingPrompt.workflowId === workflowId && !turnStartedSince(turnStartedAt, pendingPrompt.sentAt)
+      ? pendingPrompt.text
+      : null
 
   return (
     <aside
@@ -164,18 +184,20 @@ export default function CopilotPanel({
         fullScreen ? "absolute inset-0 z-40" : "flex-none border-e border-border"
       }`}
     >
-      <CopilotHeader onClose={onClose} onChangeSettings={setSettings} />
+      <CopilotHeader onClose={onClose} onMinimize={onMinimize} onChangeSettings={setSettings} />
 
       {/* `role="log"` carries an implicit `aria-live="polite"`, so it must be
           turned off explicitly: a streamed answer mutates on every token and a
           screen reader would read a half-formed sentence continuously. The
           status line below is the sole announcer. */}
       <div className="flex-1 overflow-y-auto px-3.5 py-4 min-h-0" role="log" aria-live="off">
-        {messages.length === 0 && !streaming && turnStatus === "idle" ? (
+        {messages.length === 0 && !streaming && turnStatus === "idle" && handover === null ? (
           <CopilotEmptyState
             firstName={firstNameOf(user?.email, user?.user_metadata?.full_name as string | undefined)}
             onPick={send}
             disabled={isReadOnly}
+            // The person started building by hand: the rail says where it went.
+            moved={nodeCount > 0}
           />
         ) : (
           <CopilotConversation
@@ -185,6 +207,7 @@ export default function CopilotPanel({
             onShowOnCanvas={focusNodes}
             onStopRun={onStopRun}
             onRetry={() => send(turnUserText)}
+            handover={handover}
           />
         )}
       </div>
@@ -225,19 +248,14 @@ export default function CopilotPanel({
           onLoadMoreFiles={loadMoreFiles}
           onSend={send}
           onStop={() => void stopCopilotTurn()}
-          disabled={busy !== null}
+          disabled={busy !== null || handover !== null}
         />
       )}
     </aside>
   )
 }
 
-/**
- * "Hey asi" — the greeting uses whatever first name we can honestly derive, and
- * "" when there is none (the empty state then greets without a name).
- */
-function firstNameOf(email: string | undefined, fullName: string | undefined): string {
-  const fromName = fullName?.trim().split(/\s+/)[0]
-  if (fromName) return fromName
-  return email?.split("@")[0] ?? ""
+/** Whether the engine started a turn at or after `since` (a handover's own turn, not an earlier one). */
+function turnStartedSince(startedAt: number | null, since: number): boolean {
+  return startedAt !== null && startedAt >= since
 }

@@ -7,6 +7,7 @@ import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { assetSourceColumns } from "../lib/job-source.js"
 import { s3, withObjectAcl } from "../lib/storage.js"
+import { storageTransferOptions } from "../lib/storage-timeouts.js"
 import {
   validateFile,
   checkStorageQuota,
@@ -68,6 +69,7 @@ async function uploadBufferToS3(
       ContentType: contentType,
       CacheControl: "public, max-age=31536000, immutable",
     })),
+    storageTransferOptions(buffer.length),
   )
   return `${config.R2_PUBLIC_URL}/${key}`
 }

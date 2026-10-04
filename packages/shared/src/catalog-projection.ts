@@ -25,6 +25,13 @@ export interface ProjectedCatalogOption {
   /** Authored Character Motion prerequisites and sequence state. Missing means unknown. */
   motion?: CharacterMotionMetadata
   /**
+   * Per-option parameters — node-data fields that apply only while THIS option
+   * is picked (the Transition catalog's `wipe` → `wipeDirection`). Same shape
+   * as a catalog's `dimensions`, at both detail levels; `auto` leads each list
+   * and means "send nothing". Absent on every other option.
+   */
+  params?: ProjectedCatalogDimension[]
+  /**
    * Absolute URL of the option's picture (a photo, 3D emoji, flag or rendered
    * look preview), on the installation's own host — or the Nodaro CDN for the
    * look previews, which only Nodaro Cloud serves. Absent when the option has

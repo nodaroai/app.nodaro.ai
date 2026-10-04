@@ -104,7 +104,7 @@ the foot of the list.
 |---|---|
 | **One-Click** | Publish to Social |
 | **Platforms** | Instagram Post · TikTok Post · YouTube Upload · Facebook Post · X Post · LinkedIn Post · Telegram Post |
-| **Export** | Save to Storage · Webhook Output |
+| **Export** | Save to Storage · Webhook Output · Telegram Reply |
 
 ### Creative Controls
 
@@ -384,6 +384,7 @@ FFmpeg-based video manipulation.
 | [Combine Videos](./processing-video/combine-videos.md) | Concatenate videos with transitions | Join multiple clips with ~50 FFmpeg `xfade` transitions: cuts, fades, dips, wipes, slides, irises, slices, reveals, covers, blurs, and zooms |
 | [Apply EDL](./processing-video/apply-edl.md) | Render an edit decision list into one media file (10 CR/output minute) | Turn a structured edit description (sources + ordered segments) into a finished video or audio cut; optionally emit a transcript remapped to match the cut |
 | [Edit Plan](./processing-video/edit-plan.md) | Plan an edit from a transcript — tighten, find clips, or mark chapters (Cloud; per source-minute × tier) | Turn a timed transcript into an EDL plan that Apply EDL renders; clips mode fans out one render per clip |
+| [Camera Switch](./processing-video/camera-switch.md) | Put each cut of an edit on the camera of whoever is speaking (Cloud; flat 10 credits per run) | Multicam podcasts and interviews: Edit Plan's EDL + a diarized transcript → a switched EDL for Apply EDL, sound unchanged |
 | [Assemble Narrated Video](./processing-video/assemble-narrated-video.md) | Fit N ordered (clip, voice) blocks into one MP4 | Audio-led narrated-video assembly: short voice centers over its clip with padding, long voice slows the clip (capped, then holds); audio is never cropped |
 | [Still to Video](./processing-video/still-to-video.md) | One still image + one audio track → MP4, zero credits | Animate a still with zoom / pan / Ken Burns (or none) for exactly the audio's length — narrated slides, visualizers, photo moments |
 | [Slideshow](./processing-video/slideshow.md) | 2–100 images over one optional audio track → MP4, zero credits | Ordered stills with per-slide motion + transitions; audio-anchored timing (equal split / pinned rows / disclosed proportional scale), silent without audio |
@@ -488,6 +489,7 @@ Deliver results to storage, webhooks, or social media platforms.
 | [Facebook Post](./output/facebook-post.md) | Post to Facebook | Share text, images, video, or stories |
 | [Telegram Post](./output/telegram-post.md) | Send a message, photo, or video to Telegram | Publish to a Telegram chat, channel, or group via a bot |
 | [Publish to Social](./output/publish-social.md) | Publish to ANY connected social account | One node for all networks — pick the account, the platform follows |
+| [Telegram Reply](./output/telegram-account-send.md) | Send the result back to yourself on Telegram, as your connected account or from your bot (Cloud, preview) | Answer a post you shared to your inbox, under that post; send a digest to your Saved Messages |
 
 ---
 
