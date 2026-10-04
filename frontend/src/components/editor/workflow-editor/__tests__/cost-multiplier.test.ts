@@ -55,6 +55,17 @@ describe("getPricingUnits", () => {
     const blocks = Array.from({ length: 7 }, (_, i) => ({ id: `e${i}`, source: `v${i}`, target: "a", targetHandle: "video" })) as never
     expect(getPricingUnits(assemble, [assemble], blocks, NO_RERUNS)).toBe(5)
   })
+
+  // LTX 2.3 Pro Extend reserves its per-second row × the seconds it adds (the
+  // model's default 6 when none is set); every other extend is one row.
+  it("is the seconds an LTX 2.3 Pro extend adds", () => {
+    const ltx = n("x", "extend-video", { provider: "ltx-2.3-pro", duration: 20 })
+    expect(getPricingUnits(ltx, [ltx], [], NO_RERUNS)).toBe(20)
+    const ltxDefault = n("y", "extend-video", { provider: "ltx-2.3-pro" })
+    expect(getPricingUnits(ltxDefault, [ltxDefault], [], NO_RERUNS)).toBe(6)
+    const veo = n("z", "extend-video", { provider: "veo-extend", duration: 20 })
+    expect(getPricingUnits(veo, [veo], [], NO_RERUNS)).toBe(1)
+  })
 })
 
 describe("fan-out — Edit Plan clips", () => {

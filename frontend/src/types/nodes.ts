@@ -2282,11 +2282,11 @@ export interface EditVideoProNodeData extends PromptAffixFields {
  *  using zsxkib/mmaudio (single-shot Replicate dispatch — see
  *  `backend/src/providers/replicate/sfx.ts`).
  *
- *  Pricing: duration-bucketed BASE credits (10cr ≤15s → 110cr ≤300s, pre-markup)
- *  scaled by `versions` (1-4). The route's `probeDurationPreHandler` ffprobes
- *  the resolved video URL up front; credit reservation uses
- *  `bucketBaseCreditsFor(duration) * versions`. Backend Zod schema is
- *  `VideoSfxBody` in `backend/src/routes/video-sfx.ts`.
+ *  Pricing: a price row per input-clip length (`replicate-mmaudio:8s` …
+ *  `:300s`, picked by `videoSfxCreditId` in @nodaro/shared) scaled by
+ *  `versions` (1-4). The route's `probeDurationPreHandler` and a workflow
+ *  run both ffprobe the resolved video URL up front and reserve that row.
+ *  Backend Zod schema is `VideoSfxBody` in `backend/src/routes/video-sfx.ts`.
  *
  *  Input wiring: `videoUrl` is NOT user-typed — it's resolved at execution
  *  time from the connected video edge (mirrors how `lip-sync`/`video-to-video`

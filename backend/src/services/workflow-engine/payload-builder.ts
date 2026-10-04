@@ -7,6 +7,7 @@ import {
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
+import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 import { socialSearchRequestFromNode, socialSearchCreditId, socialSearchPickTop } from "@nodaro/shared"
@@ -4905,18 +4906,21 @@ export function buildPayload(
       // LTX extend operates on the source video URL (no KIE taskId — Replicate
       // accepts any HTTPS-reachable video). Webhook-driven completion via the
       // standard Replicate prediction reconcile path. `duration` is the number
-      // of seconds to ADD (1–20); `extendMode` is "start" or "end" (defaults
-      // to "end" — append).
+      // of seconds to ADD (1–20, default 6 — `ltxExtendDurationSec`, the
+      // reading the route sends too); `extendMode` is "start" or "end"
+      // (defaults to "end" — append). Priced per second added: the reservation
+      // is the per-second row times these seconds (node-executor's
+      // computeLtxExtendCreditOverride, the route guard's twin).
       if (evProvider === "ltx-2.3-pro") {
         return {
           jobName: "extend-video",
           queueName: "video-generation",
-          modelIdentifier: evProvider,
+          modelIdentifier: LTX_EXTEND_PER_SECOND_CREDIT_ID,
           payload: {
             jobId,
             provider: evProvider,
             video: resolvedInputs.videoUrl || data.videoUrl,
-            duration: data.duration,
+            duration: ltxExtendDurationSec(data.duration),
             extend_mode: (data.extendMode as string | undefined) ?? "end",
             usageLogId,
           },

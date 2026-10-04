@@ -20,7 +20,7 @@ The Extend Video node continues a video by appending new content guided by a tex
 |----------|-------------|
 | veo-extend | Model: fast (VEO 3.1 Fast) or quality (VEO 3.1 Quality) |
 | runway-extend | Quality: 720p or 1080p |
-| ltx-2.3-pro | Extend mode: `start` (prepend before clip) or `end` (append after clip, default); duration: 1–20s of new footage to add |
+| ltx-2.3-pro | Extend mode: `start` (prepend before clip) or `end` (append after clip, default); duration: 1–20s of new footage to add (default 6) |
 | seedance-2-extend | Duration: 4–15s of new footage to add (default 8); Resolution: 480p / 720p / 1080p (default 720p); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
 
 ## Inputs & Outputs
@@ -41,6 +41,25 @@ The Extend Video node continues a video by appending new content guided by a tex
 | `seedance-2-extend` | Any video URL | append-only | +4–15s of new footage per run (chain to go further) | 480p / 720p / 1080p |
 
 LTX 2.3 Fast does **not** support extend mode — only Pro extends. The `extend_mode` field controls whether the new footage is prepended (`start`) or appended (`end`, default).
+
+### LTX 2.3 Pro Extend credits
+
+Priced per second of new footage, at **40 credits per second** (`ltx-2.3-pro-extend:per-second`):
+
+```
+credits = 40 × seconds added
+```
+
+The seconds are a whole number from 1 to 20. With no duration set, the extend adds the model's default of **6 seconds** and is priced for 6.
+
+| Seconds added | Credits |
+|---|---|
+| 2 | 80 |
+| 6 (or none set) | 240 |
+| 10 | 400 |
+| 20 | 800 |
+
+That amount is held when the job starts. The final charge follows the processing the render actually used, and never exceeds the hold. Any unused part is refunded automatically when the job completes. A single-node run, a run inside a workflow, and MCP or SDK calls are all priced this way, and the node's Run button and the workflow's estimate quote the same amount.
 
 ### How Seedance 2 Extend works
 

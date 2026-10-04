@@ -829,9 +829,8 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
       "Generate synchronized SFX / foley / ambient audio for a video clip using Replicate's mmaudio. Credit cost scales with input clip duration — one bucketed row per clip length (`replicate-mmaudio:<bucket>s`), spanning the advertised band pre-markup.",
     outputType: "video",
     // Duration-bucketed pricing — see `STATIC_CREDIT_COSTS["replicate-mmaudio:*"]`
-    // in `ee/billing/credits.ts` and `bucketBaseCreditsFor` in `routes/video-sfx.ts`.
-    // Range is pre-markup; the admin-configured markup and version count are
-    // applied to the user-visible cost.
+    // in `ee/billing/credits.ts` and `videoSfxCreditId` in `@nodaro/shared`,
+    // which picks the row for a clip's length on every path a run takes.
     creditCost: creditBandFor("video-sfx"),
     providers: ["replicate-mmaudio"],
     capabilities: ["sound-effect"],

@@ -9,6 +9,7 @@ import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
+import { videoSfxCreditId } from "@nodaro/shared"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import type { VideoSfxNodeData } from "@/types/nodes"
@@ -24,29 +25,6 @@ interface VideoSfxQuickToolbarProps {
   readonly onAnyOpenChange?: (open: boolean) => void
 }
 
-/** Duration-bucketed credit keys — mirrors `BUCKETS` in
- *  `backend/src/routes/video-sfx.ts`. The frontend re-derives the key from
- *  the upstream video's reported duration so the Run-button cost matches
- *  what the route will actually charge once ffprobe measures the real file.
- *  ffprobe is authoritative; this is best-effort UI accuracy only. */
-const BUCKET_KEYS = [
-  { upTo: 8,   key: "replicate-mmaudio:8s" },
-  { upTo: 15,  key: "replicate-mmaudio:15s" },
-  { upTo: 30,  key: "replicate-mmaudio:30s" },
-  { upTo: 60,  key: "replicate-mmaudio:60s" },
-  { upTo: 120, key: "replicate-mmaudio:120s" },
-  { upTo: 300, key: "replicate-mmaudio:300s" },
-] as const
-
-/** When no upstream is wired yet (or duration unknown), fall back to the
- *  cheapest bucket — the Run button still renders a number, but the user
- *  knows it's a floor: longer clips will bill higher. The route's preHandler
- *  rejects > 300s up front so the 300s key is a hard ceiling. */
-function bucketKeyForDuration(duration: number | null): string {
-  if (duration == null || duration <= 0) return "replicate-mmaudio:8s"
-  return BUCKET_KEYS.find((b) => duration <= b.upTo)?.key ?? "replicate-mmaudio:300s"
-}
-
 /**
  * Hover-revealed toolbar that sits below a Video SFX node
  * (`topToolbarContent` position). The video-sfx node has a single
@@ -56,17 +34,15 @@ function bucketKeyForDuration(duration: number | null): string {
  * CFG, steps, seed) lives in the full config panel.
  *
  * Credit display is duration-dependent: we walk the upstream video edge,
- * read the producer's reported duration, map it to the matching bucket key
- * (`replicate-mmaudio:8s` … `replicate-mmaudio:300s` — same buckets as
- * `bucketKeyFor` in `backend/src/routes/video-sfx.ts`), look up the BASE
- * credits via `useModelCredits()`, and multiply by `versions`. Without the
- * bucket lookup the button would show 1cr regardless of input length —
- * the bare `replicate-mmaudio` key resolves to the 8s bucket fallback.
+ * read the producer's reported duration, map it to its price row
+ * (`replicate-mmaudio:8s` … `replicate-mmaudio:300s` — `videoSfxCreditId`,
+ * the rule the route and the workflow run charge by; an unknown length is the
+ * 8s row, a floor), look up its credits via `useModelCredits()`, and multiply
+ * by `versions`.
  *
- * Note: this is best-effort UI accuracy. The route's `probeDurationPreHandler`
- * ffprobes the resolved file at execute time and uses THAT for the actual
- * reservation, so a wrong-by-one-bucket display here is corrected up front
- * before any credits are spent (and refunded if the actual was lower).
+ * Note: this is best-effort UI accuracy. The run ffprobes the resolved file
+ * and reserves the row for THAT length, so a wrong-by-one-bucket display here
+ * is corrected before any credits are spent.
  */
 export function VideoSfxQuickToolbar({
   nodeId,
@@ -83,7 +59,7 @@ export function VideoSfxQuickToolbar({
   // no source node, or no recognised duration field — in which case the
   // bucket key falls back to `:8s` and the Run button shows the floor cost.
   const upstreamDuration = useUpstreamVideoDuration(nodeId, "video")
-  const creditModelId = bucketKeyForDuration(upstreamDuration)
+  const creditModelId = videoSfxCreditId(upstreamDuration)
   const baseCredits = useModelCredits(creditModelId, 1)
   const versions = Math.min(Math.max(1, data.versions ?? 1), 4)
   const credits = baseCredits * versions
@@ -188,8 +164,8 @@ export function VideoSfxQuickToolbar({
 
       {/* Versions (×1–×4): how many distinct SFX takes to generate per run.
           Linear credit multiplier — applied client-side here, mirrored by
-          `creditGuard.computeCredits` on the route via `bucketBaseCreditsFor
-          × versions`. */}
+          `creditGuard.computeCredits` on the route (the clip's row ×
+          versions). */}
       <Select disabled={isRunning} value={String(versions)} onValueChange={handleVersionsChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={ghostTriggerClass} title={t("node.versionsPerRun")}>
           <Copy className="opacity-70" />

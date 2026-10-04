@@ -21,6 +21,7 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ExtendVideoData } from "@/types/nodes"
+import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec } from "@nodaro/shared"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_VIDEO          = (t: string) => isValidExtendVideoConnection("video",          t, isPickerType)
@@ -45,7 +46,15 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [videoError, setVideoError] = useState(false)
   const extendProvider = nodeData.provider || "veo-extend"
-  const credits = useModelCredits(extendProvider, extendProvider === "runway-extend" ? 32 : 40)
+  // LTX 2.3 Pro is priced per second added: its per-second row × the seconds
+  // the run sends (ltxExtendDurationSec) — what the route and a workflow run
+  // both reserve. Every other provider is one row per run.
+  const isLtxExtend = extendProvider === "ltx-2.3-pro"
+  const unitCredits = useModelCredits(
+    isLtxExtend ? LTX_EXTEND_PER_SECOND_CREDIT_ID : extendProvider,
+    extendProvider === "runway-extend" ? 32 : 40,
+  )
+  const credits = isLtxExtend ? unitCredits * ltxExtendDurationSec(nodeData.duration) : unitCredits
 
   // Result aspect drives node sizing — 16:9 until a result lands, then snaps to
   // the real video aspect (raw dims fed in via the overlay's onRawDimensions).

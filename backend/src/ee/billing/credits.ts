@@ -1,4 +1,4 @@
-import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, CAMERA_SWITCH_CREDIT_ID } from "@nodaro/shared"
+import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, videoSfxCreditId } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -3443,12 +3443,24 @@ function sumWorkflowEstimate(
       const base = videoUtilityBaseCredits(node.type, utilityBody)
       if (base !== undefined) return sum + prices.charge(node.type, base)
     }
-    const modelId = getNodeModelIdentifier(withWiredSettings(node, nodes, edges), {
+    const priced = withWiredSettings(node, nodes, edges)
+    const modelId = getNodeModelIdentifier(priced, {
       timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
       audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
     })
-    return sum + (chargedCredits(prices, modelId) ?? chargedCredits(prices, node.type) ?? 0)
+    return sum + (chargedCredits(prices, modelId, estimatePricingUnits(priced)) ?? chargedCredits(prices, node.type) ?? 0)
   }, 0)
+}
+
+/**
+ * How many of its price row a node's run is charged: the seconds an LTX 2.3
+ * Pro extend adds (its row is per second — the same product the route's guard
+ * and the workflow run reserve, lib/ltx-extend-credits.ts), else one.
+ */
+function estimatePricingUnits(node: EstimateNode): number {
+  const data = node.data ?? {}
+  if (node.type === "extend-video" && data.provider === "ltx-2.3-pro") return ltxExtendDurationSec(data.duration)
+  return 1
 }
 
 /**
@@ -3656,6 +3668,11 @@ function getNodeModelIdentifier(
     return (typeof data.provider === "string" && data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
   }
 
+  // Video SFX: a price row per input-clip length, chosen when the run measures
+  // the clip. The clip is not measured before a run, so the estimate quotes
+  // the row for the length an unmeasurable clip is charged (8 seconds).
+  if (nodeType === "video-sfx") return videoSfxCreditId(undefined)
+
   const provider = data.provider as string | undefined
   if (!provider) return nodeType
 
@@ -3663,6 +3680,10 @@ function getNodeModelIdentifier(
   if (nodeType === "extend-video" && provider === "veo-extend" && data.model === "quality") {
     return "veo-extend:quality"
   }
+
+  // Extend-video: LTX 2.3 Pro is priced per second added — the per-second row,
+  // which sumWorkflowEstimate multiplies by the seconds (estimatePricingUnits).
+  if (nodeType === "extend-video" && provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
 
   // Extend-video: seedance trim-stitch extend prices by duration tier ×
   // resolution, for the model SEEDANCE_EXTEND_GENERATION_MODEL actually

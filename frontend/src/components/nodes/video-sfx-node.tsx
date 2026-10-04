@@ -31,6 +31,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
+import { videoSfxCreditId } from "@nodaro/shared"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { isValidVideoSfxConnection } from "@/lib/video-sfx-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
@@ -58,27 +59,6 @@ const HANDLE_TOP = {
   video:    "calc(100% - 92px)",
 } as const
 
-// Duration-bucketed credit keys — mirrors `BUCKETS` in
-// `backend/src/routes/video-sfx.ts` and `video-sfx-quick-toolbar.tsx`.
-// The frontend re-derives the key from the upstream video's reported
-// duration so any in-node credit display (if added later) and the
-// toolbar's Run-button cost match what the route will actually charge
-// once ffprobe measures the real file. ffprobe is authoritative; this
-// is best-effort UI accuracy only.
-const BUCKET_KEYS = [
-  { upTo: 8,   key: "replicate-mmaudio:8s" },
-  { upTo: 15,  key: "replicate-mmaudio:15s" },
-  { upTo: 30,  key: "replicate-mmaudio:30s" },
-  { upTo: 60,  key: "replicate-mmaudio:60s" },
-  { upTo: 120, key: "replicate-mmaudio:120s" },
-  { upTo: 300, key: "replicate-mmaudio:300s" },
-] as const
-
-function bucketKeyForDuration(duration: number | null): string {
-  if (duration == null || duration <= 0) return "replicate-mmaudio:8s"
-  return BUCKET_KEYS.find((b) => duration <= b.upTo)?.key ?? "replicate-mmaudio:300s"
-}
-
 function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as VideoSfxNodeData
@@ -103,14 +83,14 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
   const shouldPlay = videoAutoplay && playState === "loop"
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  // Credit display — duration-bucketed × versions multiplier. Best-effort
-  // UI display only; the route's `probeDurationPreHandler` ffprobes the
-  // resolved file at execute time and uses THAT for the actual reservation.
+  // Credit display — the price row for the upstream clip's reported length
+  // (`videoSfxCreditId`, the rule the route and the workflow run charge by)
+  // × versions. Best-effort: the run ffprobes the real file and prices THAT.
   // BaseNode header is hidden so this number isn't user-visible in the body
   // (the quick toolbar shows it via RunNodeButton), but we still compute
   // and pass it for forward-compat with any future header reveal.
   const upstreamDuration = useUpstreamVideoDuration(id, "video")
-  const baseCredits = useModelCredits(bucketKeyForDuration(upstreamDuration), 1)
+  const baseCredits = useModelCredits(videoSfxCreditId(upstreamDuration), 1)
   const versions = Math.min(Math.max(1, nodeData.versions ?? 1), 4)
   const credits = baseCredits * versions
 

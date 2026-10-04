@@ -14,6 +14,14 @@ export {
   imageOverlayCredits,
 } from "./image-overlay.js"
 
+export { VIDEO_SFX_PRICING, videoSfxCreditId } from "./video-sfx.js"
+
+export {
+  LTX_EXTEND_PER_SECOND_CREDIT_ID,
+  LTX_EXTEND_DURATION,
+  ltxExtendDurationSec,
+} from "./ltx-extend.js"
+
 export type {
   LoopVideoEstimatorInput,
   TrimVideoEstimatorInput,
