@@ -96,6 +96,8 @@ import { formatZodError } from "../zod-error.js"
 import { insertWithIdempotencyKey } from "../idempotent-insert.js"
 import { billingPairColumns } from "../insert-job.js"
 import { firePluginTrigger, listActivePluginTriggers } from "../plugin-triggers.js"
+import { readJobExecution } from "./job-execution.js"
+import { sendTelegramBotTextFor } from "./social-toolkit.js"
 import { jobSourceColumns } from "../job-source.js"
 import { throwIfJobCancelled } from "../job-cancellation.js"
 import { hasCredits, hasOrganizations } from "../config.js"
@@ -1314,6 +1316,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       refundStorage,
     },
     jobs: {
+      readJobExecution,
       readJobsOwnedBy,
       readJobSubmissionsOwnedBy,
       waitForJob,
@@ -1587,6 +1590,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     // Starting runs for any owner's trigger rows is the daemon host's alone.
     ...(opts.role === "daemon" ? { triggers: { listActive: listActivePluginTriggers, fire: firePluginTrigger } } : {}),
     sse: { create: (req, reply) => createSSEStream(req, reply) },
+    social: { sendTelegramBotText: sendTelegramBotTextFor },
     db: supabase,
     workflows: {
       writeCompatible,

@@ -1661,6 +1661,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "facebook-post": 10,
   "telegram-post": 10,
   "publish-social": 10,
+  // Telegram Reply — one message to the run's owner, flat (owner decision
+  // 2026-10-02). Cloud-only: the private plugin sends it.
+  "telegram-account-send": 10,
   "telegram-channel-feed": 10,
   "save-to-storage": 0,
   "router": 0,

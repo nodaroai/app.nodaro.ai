@@ -1581,6 +1581,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "facebook-post", label: "Facebook Post", category: "output", description: "Post text, images, video, and stories to Facebook.", outputType: "none" },
   { type: "telegram-post", label: "Telegram Post", category: "output", description: "Send a message, photo, or video to a Telegram chat, channel, or group via a connected bot (send type auto-detected from connected media).", outputType: "none" },
   { type: "publish-social", label: "Publish to Social", category: "output", description: "Publish to any connected social account (Instagram, Facebook, X, LinkedIn, TikTok, YouTube, Telegram, Bluesky, Reddit, and more) — pick the account and the platform follows.", outputType: "none" },
+  // Cloud-only (a private plugin sends). Every destination is the run's owner;
+  // none is written in node data — the chat of a reply comes from the run.
+  { type: "telegram-account-send", label: "Telegram Reply", category: "output", description: "Send the text wired in back to yourself on Telegram (Cloud, preview): as your connected account — under the post that started the run (Telegram Account Trigger runs), or to your Saved Messages — or from your own connected bot, as a private message. Never to anyone else. Whatever is wired in arrives as one message per run (up to 3 parts). 10 credits per message.", outputType: "none" },
   { type: "telegram-channel-feed", label: "Telegram Channel Feed", category: "input", description: "Read recent posts from a PUBLIC Telegram channel (t.me/s/<channel>) — emits their text for rewrite/repost workflows. Pair with a Schedule Trigger to poll; dedupes via a per-node cursor so each post is processed once.", outputType: "text" },
 
   { type: "list", label: "List", category: "control", description: "Static list of items for fan-out.", outputType: "data" },

@@ -230,6 +230,7 @@ import {
   ScheduleTriggerConfig,
   TelegramTriggerConfig,
   TelegramAccountTriggerConfig,
+  TelegramAccountSendConfig,
   TelegramChannelFeedConfig,
   InstagramPostConfig,
   TiktokPostConfig,
@@ -299,6 +300,8 @@ export const RUN_BUTTON_TYPES = new Set([
 const RUN_FROM_HERE_TYPES: Set<string> = new Set([
   ...NODE_DEFINITIONS.filter((d) => d.autoExecute).map((d) => d.type),
   "preview", "list",
+  // Telegram Reply runs on the server only (a private plugin sends it).
+  "telegram-account-send",
 ])
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video", "generate-video"])
@@ -569,6 +572,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "x-post": return <XPostConfig {...configProps} />
     case "facebook-post": return <FacebookPostConfig {...configProps} />
     case "telegram-post": return <TelegramPostConfig {...configProps} />
+    case "telegram-account-send": return <TelegramAccountSendConfig {...configProps} />
     case "publish-social": return <PublishSocialConfig {...configProps} />
     case "telegram-trigger": return <TelegramTriggerConfig {...configProps} />
     // Keyed by node: a draft typed for one trigger never lands on another.

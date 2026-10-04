@@ -9795,6 +9795,17 @@ function executeNodeCore(
     );
   }
 
+  // Telegram Reply runs on the SERVER only: a private plugin sends it, and a
+  // reply's chat comes from the run that a Telegram message started. The Run
+  // entry points route it to Run from here (SERVER_RUN_ONLY_TYPES); a path
+  // that still lands here says so instead of resolving silently.
+  if (node.type === "telegram-account-send") {
+    const msg = tx("tgsend.serverOnly");
+    useWorkflowStore.getState().updateNodeData(node.id, { executionStatus: "failed", errorMessage: msg });
+    toast.error(msg);
+    return Promise.reject(new Error(msg));
+  }
+
   // Social Media Post — publish to connected platform
   if (
     node.type === "instagram-post" ||

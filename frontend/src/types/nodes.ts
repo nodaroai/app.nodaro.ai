@@ -6506,6 +6506,31 @@ export type TelegramAccountTriggerData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
 }
 
+/**
+ * Telegram Reply: sends the run's text back to its OWNER on Telegram (Cloud;
+ * the sending runs in a private plugin). There is no chat field: as the
+ * account it writes under the post that started the run, or to the owner's
+ * Saved Messages; as the bot it writes to the owner privately.
+ */
+export type TelegramAccountSendData = {
+  [key: string]: unknown
+  label: string
+  /** "account" (default) or "bot" — @nodaro/shared TELEGRAM_SEND_AS. */
+  sendAs?: string
+  /**
+   * The connected account. Needed in both modes: as the bot, its private
+   * chat with the bot is where the message goes.
+   */
+  accountId?: string
+  /** As the account: "reply" (default) under the post, or "saved" — TELEGRAM_SEND_DESTINATIONS. */
+  destination?: string
+  /** As the bot: which of the owner's bots (Integrations → Telegram); none = their default. */
+  connectionId?: string
+  /** Sent when nothing is wired into the text input. */
+  text?: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+}
+
 export type TelegramChannelFeedData = {
   [key: string]: unknown
   label: string
@@ -6790,6 +6815,7 @@ export type SceneNodeData =
   | ScheduleTriggerData
   | TelegramTriggerData
   | TelegramAccountTriggerData
+  | TelegramAccountSendData
   | TelegramChannelFeedData
   | SocialPostData
   | MusicGenreData
@@ -6997,6 +7023,7 @@ export type SceneNodeType =
   | "publish-social"
   | "telegram-trigger"
   | "telegram-account-trigger"
+  | "telegram-account-send"
   | "telegram-channel-feed"
   | "component"
   | "music-genre"
@@ -10121,6 +10148,20 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       caption: "",
       fieldMappings: {},
     } as SocialPostData,
+  },
+  {
+    type: "telegram-account-send",
+    label: "Telegram Reply",
+    category: "output",
+    creditCost: 10,
+    inputs: ["in"],
+    outputs: [],
+    defaultData: {
+      label: "Telegram Reply",
+      sendAs: "account",
+      destination: "reply",
+      text: "",
+    } as TelegramAccountSendData,
   },
   {
     type: "publish-social",

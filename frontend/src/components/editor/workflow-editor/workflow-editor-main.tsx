@@ -86,6 +86,7 @@ import {
   isExecutableNode,
   getCostMultiplier,
   NO_RERUNS,
+  SERVER_RUN_ONLY_TYPES,
   type ExecutionContext,
 } from "./types";
 import {
@@ -981,7 +982,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
    */
   async function runNodeForCopilot(nodeId: string, opts?: { skipConfirm?: boolean }): Promise<{ started: boolean }> {
     const node = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId);
-    if (!node || !isExecutableNode(node)) return { started: false };
+    // A server-only node (one that sends as the person) is never run on the
+    // Copilot's say-so; the person runs it from the canvas.
+    if (!node || !isExecutableNode(node) || SERVER_RUN_ONLY_TYPES.has(node.type ?? "")) return { started: false };
     await handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef, opts);
     return { started: true };
   }
@@ -1061,9 +1064,17 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // Register store callbacks
   // ---------------------------------------------------------------------------
 
+  /** "Run this node": a server-only node runs from here on the server; every other node runs on its own. */
+  function runOneNode(nodeId: string): Promise<void> {
+    const type = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.type ?? "";
+    return SERVER_RUN_ONLY_TYPES.has(type)
+      ? handleRunFromHere(nodeId, ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded)
+      : handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef);
+  }
+
   useEffect(() => {
     useWorkflowStore.getState().setRunSingleNode(
-      isReadOnly ? null : (nodeId: string) => handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef)
+      isReadOnly ? null : (nodeId: string) => runOneNode(nodeId)
         .finally(() => {
           // Invalidate execution history so the single-node run appears immediately
           if (workflowId) {

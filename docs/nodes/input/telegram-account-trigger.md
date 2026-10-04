@@ -48,6 +48,8 @@ Inbox mode turns a chat into an inbox for posts you want to work on: you share a
 
 A forwarded Telegram video is read by its caption for now: the run does not receive the video file yet.
 
+To answer in the inbox chat, end the workflow with a [Telegram Reply](../output/telegram-account-send.md) node: it replies under the post you shared, as your account, or sends you a private message from your bot. Its reply never starts another run.
+
 ## What a triggered run executes
 
 A trigger that is **wired to something** runs only the branch behind it. A trigger **wired to nothing** runs the whole workflow. The rules are the same as the [Telegram Trigger](./telegram-trigger.md#what-a-triggered-run-executes).

@@ -168,6 +168,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "suno-upload-extend": { inputs: ["audio", "prompt"], outputs: ["audio"] },
   "suno-voice": { inputs: [], outputs: ["voicePersona"] },
   "switchx": { inputs: ["video", "image", "mask", "mask-video", "prompt"], outputs: ["video"] },
+  "telegram-account-send": { inputs: ["in"], outputs: [] },
   "telegram-account-trigger": { inputs: [], outputs: ["out", "videoLink", "postText", "postLink"] },
   "telegram-channel-feed": { inputs: [], outputs: ["text"] },
   "telegram-post": { inputs: ["in"], outputs: [] },

@@ -269,7 +269,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "publish-export",
     label: "Export",
     tab: "publish",
-    types: ["save-to-storage", "webhook-output"],
+    types: ["save-to-storage", "webhook-output", "telegram-account-send"],
   },
   {
     id: "cc-subject",

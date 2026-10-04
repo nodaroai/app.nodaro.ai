@@ -233,6 +233,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `suno-upload-extend` — Suno Upload Extend
 - `suno-voice` — Suno Voice
 - `switchx` — Relight & Switch
+- `telegram-account-send` — Telegram Reply
 - `telegram-account-trigger` — Telegram Account Trigger
 - `telegram-channel-feed` — Telegram Channel Feed
 - `telegram-post` — Telegram Post

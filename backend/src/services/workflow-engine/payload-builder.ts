@@ -6,6 +6,7 @@ import {
   CAMERA_SWITCH_CREDIT_ID, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, transcriptSpeakerLabels, type CameraSwitchNodeSettings } from "@nodaro/shared"
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
+import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 import { socialSearchRequestFromNode, socialSearchCreditId, socialSearchPickTop } from "@nodaro/shared"
@@ -1681,6 +1682,13 @@ function ffmpegResult(
     payload,
   }
 }
+
+/**
+ * Telegram Reply text carried in the job payload. Telegram takes 4,096
+ * characters a message and the plugin sends at most three parts, so anything
+ * past this could never be sent anyway.
+ */
+const TELEGRAM_REPLY_PAYLOAD_MAX = 16_000
 
 /** Shorthand for nodes with a fixed model identifier and no provider selection. */
 function simpleResult(
@@ -4139,6 +4147,38 @@ export function buildPayload(
         llmModel,
         reasoningEffort,
         nodeId: node.id,
+      })
+    }
+
+    // Telegram Reply — Cloud-only: the private plugin sends. Everything wired
+    // into `in` arrives folded on inputs.inputs (FAN_IN_TARGETS), so a run
+    // sends ONE message; nothing wired falls back to the node's own text.
+    // Node data says WHO writes (the owner's account or bot) and which of the
+    // owner's chats; no chat is ever named here — a reply's chat comes from
+    // the run itself, which the plugin reads host-side, never from a payload.
+    case TELEGRAM_ACCOUNT_SEND_NODE_TYPE: {
+      // An empty JSON value is nothing to say (a trigger wired straight in, run
+      // with no message behind it, emits "{}") — never a message to send.
+      const wired = (resolvedInputs.inputs ?? []).filter(
+        (t): t is string => typeof t === "string" && t.trim() !== "" && t.trim() !== "{}" && t.trim() !== "[]",
+      )
+      const typed = typeof data.text === "string" ? data.text.trim() : ""
+      const text = wired.length > 0 ? wired.map((t) => t.trim()).join("\n\n") : typed
+      if (!text) throw new Error("telegram-account-send: connect the text to send, or write it in the node")
+      const accountId = typeof data.accountId === "string" ? data.accountId.trim() : ""
+      if (!accountId) throw new Error("telegram-account-send: pick your Telegram account in the node")
+      const sendAs = telegramSendAsOf(data.sendAs)
+      const connectionId = sendAs === "bot" && typeof data.connectionId === "string" && data.connectionId.trim() ? data.connectionId.trim() : undefined
+      return simpleResult(TELEGRAM_ACCOUNT_SEND_NODE_TYPE, TELEGRAM_ACCOUNT_SEND_NODE_TYPE, {
+        jobId,
+        usageLogId,
+        nodeId: node.id,
+        sendAs,
+        accountId,
+        destination: telegramSendDestinationOf(data.destination),
+        ...(connectionId ? { connectionId } : {}),
+        // The plugin fits it to Telegram's limits; this only bounds the payload.
+        text: text.slice(0, TELEGRAM_REPLY_PAYLOAD_MAX),
       })
     }
 

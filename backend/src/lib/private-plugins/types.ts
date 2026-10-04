@@ -880,9 +880,42 @@ export interface PluginJobSettlementResult {
   replayed: boolean
 }
 
+/**
+ * The workflow run a job belongs to, as `readJobExecution` reads it (never
+ * from the job's payload, and never from the run's trigger data, which an
+ * owner or a webhook caller can word).
+ */
+export interface PluginJobExecution {
+  jobId: string
+  /** Who the job runs as — from the job row, which no client can update. A shared or published run's runner is not the workflow's owner. */
+  runnerId: string
+  /** The workflow node the job runs for, when the orchestrator recorded it (job row). */
+  nodeId: string | null
+  /** The run (job row). */
+  executionId: string
+  /**
+   * Through the run row, which its user may re-point to another workflow of
+   * THEIR OWN. Good for refusing someone else's run; never proof on its own
+   * that the runner may act for a workflow — bind that to rows the runner owns.
+   */
+  workflowId: string
+  workflowOwnerId: string
+}
+
 export interface PluginJobsToolkit {
   /** Owner-scoped access to immutable server submission records. */
   readJobSubmissionsOwnedBy?(userId: string, jobIds: ReadonlyArray<string>): Promise<Array<{ id: string; submission_context: Record<string, unknown> }>>
+  /**
+   * The workflow run a job belongs to — its runner, its node and its owner —
+   * read host-side by job id, for a job that may act only for the run's
+   * owner. Never the run's trigger data (owner- or caller-worded). Scoped to the
+   * runner the handler already holds (`ctx.jobUserId`): someone else's job
+   * reads as no run. Null for a job outside any run; a read error throws
+   * rather than reading as "no run".
+   *
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  readJobExecution?(jobId: string, scope: { runnerId: string }): Promise<PluginJobExecution | null>
   /**
    * The status of jobs THIS user owns, by id, redacted.
    *
@@ -2028,6 +2061,57 @@ export interface PluginToolkit {
    * so a route that can stream answers JSON there.
    */
   sse?: PluginSseToolkit
+  /**
+   * The user's own connected social accounts, for delivering something to
+   * that user. ADDITIVE-OPTIONAL — `?.`-guard it.
+   */
+  social?: PluginSocialToolkit
+}
+
+export interface PluginTelegramBotTextInput {
+  /** Whose bot, and whose account it writes to: both are looked up by this owner. */
+  userId: string
+  /** One of the user's Telegram connections; omitted = their default bot. */
+  connectionId?: string
+  /**
+   * One of the user's own connected Telegram accounts (an account-secret row
+   * of theirs, in this environment). The message goes to THAT account's
+   * private chat with the bot — the host reads the chat from the row, so a
+   * caller can name no other chat.
+   */
+  toAccountId: string
+  /** 1–4096 characters, sent as written (no parse mode), link previews off. */
+  text: string
+  /**
+   * The chat a Telegram message started this run from, when one did. A bot
+   * never answers a run started in the chat of ANY of the user's bots
+   * (`own_chat`): its replies would start the next run, and two bots of one
+   * owner would answer each other for ever.
+   */
+  startedFromChatId?: string
+}
+
+export type PluginTelegramBotTextResult =
+  | { status: "sent"; messageId: string }
+  /** No such bot of the user's, or Telegram no longer accepts its token (the bot is marked for reconnecting). */
+  | { status: "not_connected" }
+  /** No such account of the user's here (or an admin switched it off): there is no one to write to. */
+  | { status: "no_account" }
+  /** The run was started from this bot's own chat: answering would start the next run. Nothing was sent. */
+  | { status: "own_chat" }
+  /** The person never pressed Start in the bot, or blocked it: a bot cannot write first. */
+  | { status: "chat_not_started" }
+  | { status: "rate_limited"; retryAfterSeconds: number | null }
+  /** `uncertain`: the request may have reached Telegram — never send it again. */
+  | { status: "failed"; reason: string; uncertain: boolean }
+
+export interface PluginSocialToolkit {
+  /**
+   * One plain-text message from the user's own connected Telegram bot.
+   * Telegram's answer is a typed result; only arguments the caller got wrong
+   * throw. ADDITIVE-OPTIONAL — `?.`-guard it.
+   */
+  sendTelegramBotText?(input: PluginTelegramBotTextInput): Promise<PluginTelegramBotTextResult>
 }
 
 /**

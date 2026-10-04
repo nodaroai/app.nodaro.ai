@@ -1570,6 +1570,16 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "publish-platforms",
   },
   {
+    type: "telegram-account-send",
+    label: "Telegram Reply",
+    icon: <Send className="h-4 w-4" />,
+    category: "Output",
+    group: "publish-export",
+    // Preview: the connected-account feature is admin-only until GA.
+    adminOnly: true,
+    keywords: ["telegram", "reply", "answer", "send", "message", "inbox", "notify", "bot", "saved messages"],
+  },
+  {
     type: "publish-social",
     label: "Publish to Social",
     icon: <Share2 className="h-4 w-4" />,

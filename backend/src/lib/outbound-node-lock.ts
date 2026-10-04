@@ -42,6 +42,11 @@ export const DENIED_NODE_TYPES: ReadonlySet<string> = new Set([
   // Social Search reads a platform, an account or keyword and a subreddit
   // from node data and fetches from that platform.
   "social-search",
+  // Telegram Reply writes as the owner's connected account (`accountId`) or
+  // bot (`connectionId`). Every destination is the owner, but WHOSE account
+  // writes is the owner's to choose on the canvas. Not a publisher the
+  // copilot may lift: it acts as a person, not as a page.
+  "telegram-account-send",
 ])
 
 /**
@@ -86,6 +91,9 @@ export const NAMED_DESTINATION_FIELDS: ReadonlySet<string> = new Set([
   "channel",
   "chatId",
   "connectionId",
+  // A connected Telegram account (plugin_account_secrets row) a node listens
+  // or writes through — the same move as swapping the connection.
+  "accountId",
   // A stored HTTP credential the node sends with. Not a destination by itself,
   // but it decides WHOSE key travels with the request, so swapping it is the
   // same move as swapping the URL.
@@ -113,8 +121,10 @@ export const NAMED_DESTINATION_FIELDS: ReadonlySet<string> = new Set([
  * by `isLockedField`, which the copilot applies to every node. The copilot
  * needs no selector lock today: `allowPublishing` lifts only the publishers,
  * and no publisher has a selector — an `allowFetchers` would have to add it.
+ * Telegram Reply's `sendAs` (account or bot) and `destination` (under the
+ * post or Saved Messages) choose which of the owner's chats it writes to.
  */
-export const OUTBOUND_SELECTOR_FIELDS: ReadonlySet<string> = new Set(["actor", "mode"])
+export const OUTBOUND_SELECTOR_FIELDS: ReadonlySet<string> = new Set(["actor", "mode", "sendAs", "destination"])
 
 /**
  * A field nobody but the person editing the canvas may set. Media reaches a

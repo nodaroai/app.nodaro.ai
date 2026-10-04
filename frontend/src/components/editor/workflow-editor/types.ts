@@ -150,6 +150,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "facebook-post": 10,
   "telegram-post": 10,
   "publish-social": 10,
+  "telegram-account-send": 10,
   "telegram-channel-feed": 10,
   "save-to-storage": 0,
   "qa-check": 10,
@@ -603,6 +604,14 @@ export function estimateNodeCredits(
   return NODE_CREDIT_COSTS[nodeType] ?? 0
 }
 
+/**
+ * Executable types that run on the SERVER only — the editor has no single-node
+ * path for them (a private plugin runs them, against facts of the run such as
+ * the message that started it). Every "Run this node" entry point runs them
+ * "from here" on the server instead; execute-node.ts refuses them.
+ */
+export const SERVER_RUN_ONLY_TYPES: ReadonlySet<string> = new Set(["telegram-account-send"])
+
 // Group/Collect are non-executable aggregators (resolved at field-resolution time, no jobs created).
 // DO NOT add "group" or "collect" to EXECUTABLE_TYPES — they fall through to no-op cases in execute-node.ts.
 export const EXECUTABLE_TYPES = new Set([
@@ -733,6 +742,8 @@ export const EXECUTABLE_TYPES = new Set([
   "facebook-post",
   "telegram-post",
   "publish-social",
+  // Runs on the server only (Run from here): a private plugin sends it.
+  "telegram-account-send",
   "telegram-channel-feed",
   "save-to-storage",
   "qa-check",

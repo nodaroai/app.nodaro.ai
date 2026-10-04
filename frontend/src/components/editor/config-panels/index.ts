@@ -26,6 +26,7 @@ export { SubWorkflowInputConfig, SubWorkflowOutputConfig, SubWorkflowConfig } fr
 export { ComponentConfig } from "./component-config"
 export { WebhookTriggerConfig, TelegramTriggerConfig, TelegramChannelFeedConfig } from "./trigger-configs"
 export { TelegramAccountTriggerConfig } from "./telegram-account-trigger-config"
+export { TelegramAccountSendConfig } from "./telegram-account-send-config"
 export { ScheduleTriggerConfig } from "./schedule-trigger-config"
 export { InstagramPostConfig, TiktokPostConfig, YoutubeUploadConfig, LinkedinPostConfig, XPostConfig, FacebookPostConfig, TelegramPostConfig, PublishSocialConfig } from "./social-configs"
 export { WebScrapeConfig } from "./scraper-configs"

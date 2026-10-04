@@ -237,6 +237,8 @@ const UNOWNED_REF_FIELDS: Record<string, readonly string[]> = {
   // The exporter's connected Telegram account and its chats (a Saved Messages
   // chat id IS the exporter's Telegram user id) — the importer picks their own.
   "telegram-account-trigger": ["accountId", "chatIds", "chatTitles", "senderIds"],
+  // Telegram Reply: the exporter's account and their bot.
+  "telegram-account-send": ["accountId", "connectionId"],
   ...Object.fromEntries([...SOCIAL_POST_NODE_TYPES].map((type) => [type, ["connectionId"]])),
 }
 

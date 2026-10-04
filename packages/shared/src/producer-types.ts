@@ -306,6 +306,10 @@ export const FAN_IN_TARGETS: Readonly<Record<string, "*" | readonly string[]>> =
   // Content Ideas — one or more recipes, from several Content Recipe nodes
   // and/or one that ran once per post.
   "content-ideas": ["recipes"],
+  // Telegram Reply — one message per run, whatever is wired into its text
+  // input: a list (or a writer that ran once per item) arrives as one
+  // message, never as a burst of sends to the owner's chat.
+  "telegram-account-send": ["in"],
 }
 
 export function isFanInNodeType(nodeType: string | undefined | null): boolean {

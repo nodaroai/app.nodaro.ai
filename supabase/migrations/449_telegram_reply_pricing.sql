@@ -1,0 +1,11 @@
+-- Telegram Reply node (telegram-account-send): sends the run's text back to
+-- its owner on Telegram — as their connected account, or from their own bot.
+-- Cloud-only: the implementation is a private plugin; this is the public
+-- price users pay.
+--
+-- Pricing: flat, 10 credits per message (one message per run, up to three
+-- parts when it is long). Mirrors STATIC_CREDIT_COSTS in
+-- backend/src/ee/billing/credits.ts.
+--
+-- ON CONFLICT DO NOTHING: an administrator's retune survives re-application.
+INSERT INTO model_pricing (model_identifier, credit_cost) VALUES ('telegram-account-send', 10) ON CONFLICT (model_identifier) DO NOTHING;

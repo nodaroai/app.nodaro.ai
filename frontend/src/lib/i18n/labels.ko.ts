@@ -206,6 +206,7 @@ const NODE_LABELS_KO: Record<string, string> = {
   "Telegram Channel Feed": "Telegram 채널 피드",
   "Telegram Trigger": "Telegram 트리거",
   "Telegram Account Trigger": "Telegram 계정 트리거",
+  "Telegram Reply": "Telegram 답장",
   "Teleport Send": "텔레포트 송신",
   "Teleport Receive": "텔레포트 수신",
   "Router": "라우터",

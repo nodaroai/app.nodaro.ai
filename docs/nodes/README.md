@@ -104,7 +104,7 @@ the foot of the list.
 |---|---|
 | **One-Click** | Publish to Social |
 | **Platforms** | Instagram Post · TikTok Post · YouTube Upload · Facebook Post · X Post · LinkedIn Post · Telegram Post |
-| **Export** | Save to Storage · Webhook Output |
+| **Export** | Save to Storage · Webhook Output · Telegram Reply |
 
 ### Creative Controls
 
@@ -489,6 +489,7 @@ Deliver results to storage, webhooks, or social media platforms.
 | [Facebook Post](./output/facebook-post.md) | Post to Facebook | Share text, images, video, or stories |
 | [Telegram Post](./output/telegram-post.md) | Send a message, photo, or video to Telegram | Publish to a Telegram chat, channel, or group via a bot |
 | [Publish to Social](./output/publish-social.md) | Publish to ANY connected social account | One node for all networks — pick the account, the platform follows |
+| [Telegram Reply](./output/telegram-account-send.md) | Send the result back to yourself on Telegram, as your connected account or from your bot (Cloud, preview) | Answer a post you shared to your inbox, under that post; send a digest to your Saved Messages |
 
 ---
 

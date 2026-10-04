@@ -703,6 +703,15 @@ export {
   telegramAccountListeningSignature,
   type TelegramAccountTriggerPostField,
 } from "./telegram-account-trigger.js"
+export {
+  TELEGRAM_ACCOUNT_SEND_NODE_TYPE,
+  TELEGRAM_SEND_AS,
+  TELEGRAM_SEND_DESTINATIONS,
+  telegramSendAsOf,
+  telegramSendDestinationOf,
+  type TelegramSendAs,
+  type TelegramSendDestination,
+} from "./telegram-account-send.js"
 
 export { buildFeedMaps, nodeFeedsAnything, type FeedNode, type FeedEdge, type FeedMaps } from "./trigger-feeds.js"
 
