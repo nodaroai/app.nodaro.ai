@@ -5,6 +5,9 @@ import { stripStudioDraftWorkflow } from "@nodaro/shared"
 import { useWorkflowRealtimeSync, VIEW_POLL_INTERVAL_MS } from "../use-workflow-realtime-sync"
 import { ACCESS_RECHECK_INTERVAL_MS } from "../use-workflow-access-recheck"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { ACCESS_ASK_TIMEOUT_MS, requestAccessRecheck } from "@/hooks/workflow-access-mode"
+import { hasSavableChanges, isSaveRefused } from "@/hooks/workflow-save-refusal"
+import type { WorkflowNode } from "@/types/nodes"
 import type { WorkflowAccessInfo, WorkflowAccessLevel, WorkflowDocument } from "@/lib/api"
 import type { WorkflowContentAccess } from "@/lib/workflow-content"
 
@@ -1243,8 +1246,9 @@ describe("useWorkflowRealtimeSync", () => {
     // -----------------------------------------------------------------------
     // T97: the access is not only what the load was told. While the canvas is
     // open it is re-asked — every minute while the tab is visible, as soon as
-    // the tab is shown again, and when a save is refused — and each answer goes
-    // into the same `loadedAccess` record, so the decision above follows it.
+    // the tab is shown again, and when a save misses in a way that can mean the
+    // access changed — and each answer goes into the same `loadedAccess`
+    // record, so the decision above follows it.
     // -----------------------------------------------------------------------
 
     describe("re-asking the access while the canvas is open (T97)", () => {
@@ -1258,6 +1262,8 @@ describe("useWorkflowRealtimeSync", () => {
             readOnlyReason: null,
             runBlockedReason: null,
             saveRefusedFor: null,
+            nodes: [],
+            isDirty: false,
           })
         })
       }
@@ -1267,10 +1273,42 @@ describe("useWorkflowRealtimeSync", () => {
         server.getWorkflowAccess.mockImplementation(() => accessAnswer(access))
       }
 
-      function refuseSave(): void {
+      /**
+       * What the save path does when a save matched no row and was turned away,
+       * or met a row the tab can no longer read: the same call, so these tests
+       * run the trigger the save path pulls (its side is pinned in
+       * use-workflow-persistence-save.test.ts).
+       */
+      function saveMisses(): void {
         act(() => {
-          useWorkflowStore.setState({ saveRefusedFor: "wf-1" })
+          requestAccessRecheck("wf-1")
         })
+      }
+
+      /** A canvas node waiting on `jobId`, as a run leaves it before its result lands. */
+      function running(id: string, jobId: string): WorkflowNode {
+        return {
+          id,
+          type: "generate-image",
+          position: { x: 0, y: 0 },
+          data: { label: id, executionStatus: "running", currentJobId: jobId },
+        } as unknown as WorkflowNode
+      }
+
+      /** A run's last write: its result, and the job it no longer waits on (poll-job.ts). */
+      function finishes(id: string, imageUrl: string): void {
+        act(() => {
+          useWorkflowStore.getState().updateNodeData(id, {
+            executionStatus: "completed",
+            generatedImageUrl: imageUrl,
+            currentJobId: undefined,
+            currentJobProgress: undefined,
+          })
+        })
+      }
+
+      function nodeData(id: string): Record<string, unknown> | undefined {
+        return useWorkflowStore.getState().nodes.find((n) => n.id === id)?.data as Record<string, unknown> | undefined
       }
 
       const triggers = {
@@ -1280,20 +1318,28 @@ describe("useWorkflowRealtimeSync", () => {
           setVisibility("visible")
           await advance(0)
         },
-        "a refused save": async () => {
-          refuseSave()
+        "a save that missed": async () => {
+          saveMisses()
           await advance(0)
         },
       }
 
       afterEach(() => {
         act(() => {
-          useWorkflowStore.setState({ workflowId: null, isReadOnly: false, readOnlyReason: null, runBlockedReason: null, saveRefusedFor: null })
+          useWorkflowStore.setState({
+            workflowId: null,
+            isReadOnly: false,
+            readOnlyReason: null,
+            runBlockedReason: null,
+            saveRefusedFor: null,
+            nodes: [],
+            isDirty: false,
+          })
         })
       })
 
       it.each(Object.keys(triggers) as Array<keyof typeof triggers>)(
-        "an `edit` collaborator lowered to `view` loses the subscription, polls the stripped row and goes read-only within one re-check — %s",
+        "an `edit` collaborator lowered to `view` loses the subscription, stops saving, polls the stripped row and, with no run in flight, goes read-only at once — %s",
         async (trigger) => {
           openedAs("wf-1", "edit")
           const onReconcile = vi.fn()
@@ -1311,6 +1357,7 @@ describe("useWorkflowRealtimeSync", () => {
           expect(removeChannelMock).toHaveBeenCalledTimes(1)
           const s = useWorkflowStore.getState()
           expect(s.loadedAccess).toEqual({ workflowId: "wf-1", access: "view" })
+          expect(isSaveRefused(s)).toBe(true)
           expect(s.isReadOnly).toBe(true)
           expect(s.readOnlyReason).toBe("This workflow is read-only for you.")
           // It polls instead: one look on the spot, content-free...
@@ -1328,7 +1375,7 @@ describe("useWorkflowRealtimeSync", () => {
         },
       )
 
-      it("an answer of `none` — the route's 404 — does the same: no subscription, the poll, read-only", async () => {
+      it("an answer of `none` — the route's 404 — does the same: no subscription, no saves, the poll, read-only", async () => {
         openedAs("wf-1", "edit")
         render(<Harness {...held()} />)
         await advance(0)
@@ -1338,9 +1385,98 @@ describe("useWorkflowRealtimeSync", () => {
 
         expect(removeChannelMock).toHaveBeenCalledTimes(1)
         expect(useWorkflowStore.getState().loadedAccess).toEqual({ workflowId: "wf-1", access: "none" })
+        expect(isSaveRefused(useWorkflowStore.getState())).toBe(true)
         expect(useWorkflowStore.getState().isReadOnly).toBe(true)
         expect(stampReads).toHaveLength(1)
       })
+
+      it("a removed collaborator's save miss re-checks at once: `none` closes the subscription, stops the saves, polls and freezes the canvas", async () => {
+        // Removed, they can no longer read the row, so the save path reads
+        // their miss as `unknown` and asks (its side: the persistence tests).
+        openedAs("wf-1", "edit")
+        render(<Harness {...held()} />)
+        await advance(0)
+
+        accessIsNow("none")
+        saveMisses()
+        await advance(0)
+
+        expect(server.getWorkflowAccess).toHaveBeenCalledTimes(1)
+        expect(removeChannelMock).toHaveBeenCalledTimes(1)
+        const s = useWorkflowStore.getState()
+        expect(s.loadedAccess).toEqual({ workflowId: "wf-1", access: "none" })
+        expect(isSaveRefused(s)).toBe(true)
+        expect(s.isReadOnly).toBe(true)
+        expect(stampReads).toEqual([{ table: "workflows", projection: "updated_at, version", filters: [["id", "wf-1"]] }])
+      })
+
+      it("a downgrade mid-run stops the saves and the subscription at once, lands every run's result, and only then turns read-only", async () => {
+        // Read-only makes `updateNodeData` a no-op: raised while a job is out,
+        // it would drop the result of a job already paid for (the store's
+        // `saveRefusedFor` doc). So it waits until no node holds a job.
+        openedAs("wf-1", "edit")
+        act(() => {
+          useWorkflowStore.setState({ nodes: [running("n1", "job-1"), running("n2", "job-2")] })
+        })
+        render(<Harness {...held()} />)
+        await advance(0)
+
+        accessIsNow("view")
+        await advance(ACCESS_RECHECK_INTERVAL_MS)
+
+        // At once: the subscription is gone, the poll has looked, and nothing
+        // more is sent.
+        expect(removeChannelMock).toHaveBeenCalledTimes(1)
+        expect(stampReads).toHaveLength(1)
+        expect(useWorkflowStore.getState().loadedAccess).toEqual({ workflowId: "wf-1", access: "view" })
+        expect(isSaveRefused(useWorkflowStore.getState())).toBe(true)
+        // Not yet: two jobs are out.
+        expect(useWorkflowStore.getState().isReadOnly).toBe(false)
+
+        finishes("n1", "https://cdn/n1.png")
+        expect(nodeData("n1")).toMatchObject({ executionStatus: "completed", generatedImageUrl: "https://cdn/n1.png" })
+        expect(nodeData("n1")?.currentJobId).toBeUndefined()
+        // One job is still out.
+        expect(useWorkflowStore.getState().isReadOnly).toBe(false)
+
+        // A later re-check that says `view` again changes nothing about that.
+        await advance(ACCESS_RECHECK_INTERVAL_MS)
+        expect(server.getWorkflowAccess).toHaveBeenCalledTimes(2)
+        expect(useWorkflowStore.getState().isReadOnly).toBe(false)
+
+        finishes("n2", "https://cdn/n2.png")
+        expect(nodeData("n2")).toMatchObject({ executionStatus: "completed", generatedImageUrl: "https://cdn/n2.png" })
+        // The last result landed; now the canvas freezes, as a `view` load does.
+        const s = useWorkflowStore.getState()
+        expect(s.isReadOnly).toBe(true)
+        expect(s.readOnlyReason).toBe("This workflow is read-only for you.")
+      })
+
+      it.each(["the slow timer", "the tab shown again"] as const)(
+        "a dirty canvas frozen by %s refuses its saves too, so leaving it offers no Save that would write nothing",
+        async (trigger) => {
+          // A read-only canvas's save returns success without writing, so the
+          // unsaved-changes dialog's Save would report a save that kept nothing.
+          // A refused save is what keeps that dialog from offering it.
+          openedAs("wf-1", "edit")
+          act(() => {
+            useWorkflowStore.setState({ isDirty: true })
+          })
+          render(<Harness {...held({ isDirty: true })} />)
+          await advance(0)
+          expect(hasSavableChanges(useWorkflowStore.getState())).toBe(true)
+
+          accessIsNow("view")
+          await triggers[trigger]()
+
+          const s = useWorkflowStore.getState()
+          expect(s.isReadOnly).toBe(true)
+          expect(isSaveRefused(s)).toBe(true)
+          expect(hasSavableChanges(s)).toBe(false)
+          // The browser's own close prompt still guards the unsaved work.
+          expect(s.isDirty).toBe(true)
+        },
+      )
 
       it("an upgrade opens the subscription again on the next re-check, and the poll stops; the canvas stays read-only until reloaded", async () => {
         openedAs("wf-1", "view")
@@ -1362,7 +1498,7 @@ describe("useWorkflowRealtimeSync", () => {
         expect(stampReads).toHaveLength(reads)
       })
 
-      it("the owner keeps the subscription when the answer narrows — it is their row — and the canvas still turns read-only", async () => {
+      it("the owner keeps the subscription when the answer narrows — it is their row — and the canvas still stops saving and turns read-only", async () => {
         // The creator of a workflow in an archived workspace is answered `view`.
         openedAs("wf-1", "own")
         render(<Harness {...held()} />)
@@ -1375,6 +1511,7 @@ describe("useWorkflowRealtimeSync", () => {
         expect(removeChannelMock).not.toHaveBeenCalled()
         expect(stampReads).toEqual([])
         expect(useWorkflowStore.getState().loadedAccess).toEqual({ workflowId: "wf-1", access: "own" })
+        expect(isSaveRefused(useWorkflowStore.getState())).toBe(true)
         expect(useWorkflowStore.getState().isReadOnly).toBe(true)
       })
 
@@ -1393,10 +1530,36 @@ describe("useWorkflowRealtimeSync", () => {
         expect(stampReads).toEqual([])
         expect(useWorkflowStore.getState().loadedAccess).toEqual({ workflowId: "wf-1", access: "edit" })
         expect(useWorkflowStore.getState().isReadOnly).toBe(false)
+        expect(isSaveRefused(useWorkflowStore.getState())).toBe(false)
 
         accessIsNow("view")
         await advance(ACCESS_RECHECK_INTERVAL_MS)
         expect(removeChannelMock).toHaveBeenCalledTimes(1)
+      })
+
+      it("an ask that never settles times out, and the trigger queued behind it asks again", async () => {
+        // Re-checks are coalesced to one in flight plus one trailing: without a
+        // deadline, one hung ask (a stale connection as a laptop wakes) would
+        // hold every later trigger behind it, the subscription with them.
+        openedAs("wf-1", "edit")
+        server.getWorkflowAccess.mockImplementationOnce(() => new Promise(() => {}))
+        render(<Harness {...held()} />)
+        await advance(ACCESS_RECHECK_INTERVAL_MS)
+        expect(server.getWorkflowAccess).toHaveBeenCalledTimes(1)
+
+        // The access drops, and a save misses, while that ask hangs.
+        accessIsNow("view")
+        saveMisses()
+        await advance(ACCESS_ASK_TIMEOUT_MS - 1)
+        expect(server.getWorkflowAccess).toHaveBeenCalledTimes(1)
+        expect(removeChannelMock).not.toHaveBeenCalled()
+
+        // The deadline passes: the hung ask fails, changing nothing, and the
+        // queued one asks.
+        await advance(1)
+        expect(server.getWorkflowAccess).toHaveBeenCalledTimes(2)
+        expect(removeChannelMock).toHaveBeenCalledTimes(1)
+        expect(useWorkflowStore.getState().loadedAccess).toEqual({ workflowId: "wf-1", access: "view" })
       })
 
       it("a hidden tab does not re-check; showing it re-checks at once and restarts the timer", async () => {
@@ -1416,14 +1579,36 @@ describe("useWorkflowRealtimeSync", () => {
         expect(server.getWorkflowAccess).toHaveBeenCalledTimes(2)
       })
 
-      it("a refused save re-checks at once even in a hidden tab, whose subscription would otherwise outlive the change", async () => {
+      it("a canvas whose load finishes in a hidden tab does not re-check until it is shown", async () => {
+        visibility = "hidden"
+        notLoaded()
+        act(() => {
+          useWorkflowStore.setState({ workflowId: "wf-1" })
+        })
+        const { rerender } = render(<Harness {...defaultProps({ loadedUpdatedAt: null })} />)
+
+        // The load answers while the tab is in the background.
+        rerender(<Harness {...held()} />)
+        loadedAs("wf-1", "edit")
+        await advance(ACCESS_RECHECK_INTERVAL_MS * 3)
+        expect(server.getWorkflowAccess).not.toHaveBeenCalled()
+        expect(vi.getTimerCount()).toBe(0)
+
+        setVisibility("visible")
+        await advance(0)
+        expect(server.getWorkflowAccess).toHaveBeenCalledTimes(1)
+        await advance(ACCESS_RECHECK_INTERVAL_MS)
+        expect(server.getWorkflowAccess).toHaveBeenCalledTimes(2)
+      })
+
+      it("a save that missed re-checks at once even in a hidden tab, whose subscription would otherwise outlive the change", async () => {
         openedAs("wf-1", "edit")
         render(<Harness {...held()} />)
         await advance(0)
         setVisibility("hidden")
 
         accessIsNow("view")
-        refuseSave()
+        saveMisses()
         await advance(0)
 
         expect(server.getWorkflowAccess).toHaveBeenCalledTimes(1)
@@ -1431,6 +1616,18 @@ describe("useWorkflowRealtimeSync", () => {
         // Hidden, the poll waits for the tab to be shown.
         expect(stampReads).toEqual([])
         expect(vi.getTimerCount()).toBe(0)
+      })
+
+      it("a save miss for another workflow asks nothing of this canvas", async () => {
+        openedAs("wf-1", "edit")
+        render(<Harness {...held()} />)
+        await advance(0)
+
+        act(() => {
+          requestAccessRecheck("wf-2")
+        })
+        await advance(0)
+        expect(server.getWorkflowAccess).not.toHaveBeenCalled()
       })
 
       it("asks nothing before the load has answered, and nothing on the answer itself", async () => {
@@ -1454,7 +1651,7 @@ describe("useWorkflowRealtimeSync", () => {
         expect(server.getWorkflowAccess).toHaveBeenCalledTimes(1)
       })
 
-      it("a refusal that lands while a re-check is out gets an answer asked after it", async () => {
+      it("a save miss that lands while a re-check is out gets an answer asked after it", async () => {
         openedAs("wf-1", "edit")
         const pending: Array<(answer: { data: WorkflowAccessInfo }) => void> = []
         server.getWorkflowAccess.mockImplementation(() => new Promise((resolve) => { pending.push(resolve) }))
@@ -1462,9 +1659,9 @@ describe("useWorkflowRealtimeSync", () => {
         await advance(ACCESS_RECHECK_INTERVAL_MS)
         expect(server.getWorkflowAccess).toHaveBeenCalledTimes(1)
 
-        // The access drops and a save is refused while the timed re-check,
-        // asked before the change, is still out.
-        refuseSave()
+        // The access drops and a save misses while the timed re-check, asked
+        // before the change, is still out.
+        saveMisses()
         await advance(0)
         expect(server.getWorkflowAccess).toHaveBeenCalledTimes(1)
         pending[0]!(accessInfo("edit"))
@@ -1502,7 +1699,7 @@ describe("useWorkflowRealtimeSync", () => {
         expect(removeChannelMock).toHaveBeenCalledTimes(removed)
       })
 
-      it("unmounting leaves no re-check timer, listener or store subscription behind", async () => {
+      it("unmounting leaves no re-check timer, visibility listener or save-miss listener behind", async () => {
         openedAs("wf-1", "edit")
         const { unmount } = render(<Harness {...held()} />)
         await advance(0)
@@ -1512,10 +1709,27 @@ describe("useWorkflowRealtimeSync", () => {
         expect(vi.getTimerCount()).toBe(0)
         setVisibility("hidden")
         setVisibility("visible")
-        refuseSave()
+        saveMisses()
         await advance(ACCESS_RECHECK_INTERVAL_MS * 3)
         expect(server.getWorkflowAccess).not.toHaveBeenCalled()
         expect(vi.getTimerCount()).toBe(0)
+      })
+
+      it("unmounting with a re-check out and another queued drops the queued one", async () => {
+        openedAs("wf-1", "edit")
+        const pending: Array<(answer: { data: WorkflowAccessInfo }) => void> = []
+        server.getWorkflowAccess.mockImplementation(() => new Promise((resolve) => { pending.push(resolve) }))
+        const { unmount } = render(<Harness {...held()} />)
+        await advance(ACCESS_RECHECK_INTERVAL_MS)
+        expect(server.getWorkflowAccess).toHaveBeenCalledTimes(1)
+        saveMisses()
+
+        unmount()
+        pending[0]!(accessInfo("edit"))
+        await advance(0)
+        // The canvas is gone; the trailing re-check queued behind the first
+        // asks nothing for it.
+        expect(server.getWorkflowAccess).toHaveBeenCalledTimes(1)
       })
     })
   })

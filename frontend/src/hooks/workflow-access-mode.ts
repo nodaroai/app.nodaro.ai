@@ -1,5 +1,6 @@
 import { getWorkflowAccess, isNotFoundError, type WorkflowAccessLevel } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { isSaveRefused } from "@/hooks/workflow-save-refusal"
 import { recheckedAccess } from "@/lib/workflow-content"
 
 /**
@@ -54,25 +55,23 @@ export async function applyWorkflowAccess(workflowId: string): Promise<void> {
   // Two different things can be true, and only one of them freezes the
   // canvas.
   if (answer.access === "view" || answer.access === "none") {
-    useWorkflowStore.setState({
-      isReadOnly: true,
-      // Deliberately claims nothing about MEMBERSHIP. The same `view` answer
-      // reaches an outside collaborator, a member of a class whose settings
-      // only allow reading, and the CREATOR of a workflow in an archived
-      // workspace — and telling that last person they are "not a member" of
-      // their own class is both false and baffling. What is true of all
-      // three is the part worth saying.
-      readOnlyReason: "This workflow is read-only for you.",
-      ...(changed ? { loadedAccess } : {}),
-    })
+    // At once, the two halves that stop this canvas holding and sending what
+    // its reader may no longer: the record, on which `useWorkflowRealtimeSync`
+    // closes the subscription and starts the stamp poll, and the refusal of
+    // every save from here on (`saveRefusedFor`), so nothing more is sent.
+    if (changed || state.saveRefusedFor !== workflowId) {
+      useWorkflowStore.setState({ saveRefusedFor: workflowId, ...(changed ? { loadedAccess } : {}) })
+    }
+    // Read-only waits for the runs in flight to land their results.
+    freezeOnceRunsLand(workflowId)
     return
   }
 
-  // A wider answer than the record's opens the subscription again. It never
-  // lifts read-only: a canvas a `view` answer made read-only may be holding
-  // the reader's projection, and an editor saves the graph back whole — saving
-  // that would erase the owner's drafts (T21 / T77). The next load reads the
-  // workflow as its editor may hold it.
+  // A wider answer than the record's opens the subscription again. It lifts
+  // neither read-only nor the refusal of saves: a canvas a `view` answer
+  // reached may be holding the reader's projection, and an editor saves the
+  // graph back whole — saving that would erase the owner's drafts (T21 / T77).
+  // The next load reads the workflow as its editor may hold it.
   if (changed) useWorkflowStore.setState({ loadedAccess })
 
   // The case the reason field exists for, and the one nobody can work out
@@ -87,15 +86,137 @@ export async function applyWorkflowAccess(workflowId: string): Promise<void> {
 }
 
 /**
+ * What a `view` or `none` answer says on the canvas.
+ *
+ * Deliberately claims nothing about MEMBERSHIP. The same `view` answer reaches
+ * an outside collaborator, a member of a class whose settings only allow
+ * reading, and the CREATOR of a workflow in an archived workspace — and telling
+ * that last person they are "not a member" of their own class is both false and
+ * baffling. What is true of all three is the part worth saying.
+ */
+const READ_ONLY_REASON = "This workflow is read-only for you."
+
+type WorkflowStoreState = ReturnType<typeof useWorkflowStore.getState>
+
+/** How to stop the one freeze still waiting for its runs to land, if any. */
+let stopWaitingForRuns: (() => void) | null = null
+
+/**
+ * Turn the canvas read-only, but only once no node holds a job.
+ *
+ * `updateNodeData` does nothing on a read-only canvas, so raising read-only
+ * while a job is out would drop the result of a job already paid for and leave
+ * its node spinning (the store's `saveRefusedFor` doc). Its saves are refused
+ * by then, so waiting costs nothing but the lock itself: until the last job
+ * lands, the canvas is the one a refused save leaves, interactive with nothing
+ * kept. A finished job clears its node's `currentJobId` in the same write that
+ * paints its result, so the freeze lands right after the last one.
+ *
+ * Dropped, never applied, once the workflow it was for is no longer the one
+ * open, or a load has replaced the verdict (a load clears `saveRefusedFor` and
+ * asks its own question). One at a time: a re-check that answers `view` every
+ * minute through a long run replaces its own earlier wait.
+ */
+function freezeOnceRunsLand(workflowId: string): void {
+  stopWaitingForRuns?.()
+  stopWaitingForRuns = null
+
+  const verdict = (s: WorkflowStoreState): "freeze" | "wait" | "drop" => {
+    if (s.workflowId !== workflowId || !isSaveRefused(s)) return "drop"
+    // A canvas already read-only (a `view` load) has nothing left to protect;
+    // only its sentence is missing.
+    if (s.isReadOnly || !s.nodes.some(holdsAJob)) return "freeze"
+    return "wait"
+  }
+
+  const now = verdict(useWorkflowStore.getState())
+  if (now !== "wait") {
+    if (now === "freeze") freeze()
+    return
+  }
+
+  const stop = useWorkflowStore.subscribe((s) => {
+    const next = verdict(s)
+    if (next === "wait") return
+    // Stop listening first: the freeze is itself a store write, and would come
+    // straight back here.
+    stop()
+    if (stopWaitingForRuns === stop) stopWaitingForRuns = null
+    if (next === "freeze") freeze()
+  })
+  stopWaitingForRuns = stop
+}
+
+function freeze(): void {
+  const s = useWorkflowStore.getState()
+  if (s.isReadOnly && s.readOnlyReason === READ_ONLY_REASON) return
+  useWorkflowStore.setState({ isReadOnly: true, readOnlyReason: READ_ONLY_REASON })
+}
+
+/**
+ * A node waiting on a job's result. Its poll checks this id before it paints
+ * (`shouldAbandonNode`), and clears it in the write that paints the result.
+ */
+function holdsAJob(node: { readonly data?: unknown }): boolean {
+  return Boolean((node.data as Record<string, unknown> | undefined)?.currentJobId)
+}
+
+/** How long one ask of the access may take before it counts as a failed one. */
+export const ACCESS_ASK_TIMEOUT_MS = 15_000
+
+/**
  * The server's answer, or null when there is none to be had. `none` is an
  * answer: the route turns away a caller with no access at all with the same
  * 404 it gives an id that does not exist, as every by-id route does.
+ *
+ * Bounded by {@link ACCESS_ASK_TIMEOUT_MS}. Re-checks are coalesced to one in
+ * flight plus one trailing (`use-workflow-access-recheck.ts`), so one ask that
+ * never settled would hold every later trigger behind it. Timed out, it is a
+ * failed check like any other, and the trigger queued behind it asks again.
+ * The abort cancels the request; the race settles the ask even when the hang
+ * comes before the request leaves (`apiRequest` waits for the session's
+ * headers first).
  */
 async function askAccess(workflowId: string): Promise<{ access: WorkflowAccessLevel; canRun: boolean } | null> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ACCESS_ASK_TIMEOUT_MS)
+  const timedOut = new Promise<never>((_, reject) => {
+    controller.signal.addEventListener("abort", () => reject(new Error("The access check timed out")), { once: true })
+  })
   try {
-    const { data } = await getWorkflowAccess(workflowId)
+    const { data } = await Promise.race([getWorkflowAccess(workflowId, { signal: controller.signal }), timedOut])
     return { access: data.access, canRun: data.canRun }
   } catch (err) {
     return isNotFoundError(err) ? { access: "none", canRun: false } : null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+type RecheckRequestListener = (workflowId: string) => void
+
+const recheckRequestListeners = new Set<RecheckRequestListener>()
+
+/**
+ * Ask the canvas showing `workflowId` to re-check its access NOW rather than at
+ * its next timed re-check (T97), hidden tab or not: a hidden tab's subscription
+ * would otherwise outlive the change.
+ *
+ * For the save path, which learns something no timer can. A save that matched
+ * no row and was turned away (`refused`), or that met a row this tab can no
+ * longer read (`unknown`), can mean the access changed: a collaborator removed
+ * while the canvas was open can no longer SELECT the row, so their miss reads
+ * `unknown`. A real conflict is somebody else's write and asks nothing. With
+ * no canvas listening (its load has not answered), nothing happens.
+ */
+export function requestAccessRecheck(workflowId: string): void {
+  for (const listener of [...recheckRequestListeners]) listener(workflowId)
+}
+
+/** Hear those requests (`useWorkflowAccessRecheck`). Returns the way to stop. */
+export function onAccessRecheckRequest(listener: RecheckRequestListener): () => void {
+  recheckRequestListeners.add(listener)
+  return () => {
+    recheckRequestListeners.delete(listener)
   }
 }

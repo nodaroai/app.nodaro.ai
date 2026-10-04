@@ -117,6 +117,7 @@ vi.mock("@/hooks/use-workflow-store", () => {
 // ---------------------------------------------------------------------------
 
 import { useWorkflowPersistence, SAVE_QUEUE_WAIT_MS } from "../use-workflow-persistence"
+import { onAccessRecheckRequest } from "../workflow-access-mode"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -961,6 +962,84 @@ describe("useWorkflowPersistence — save", () => {
 
     expect(saveResult!.success).toBe(true)
     expect(mockApplySaveSuccess).toHaveBeenCalledTimes(1)
+  })
+
+  // -----------------------------------------------------------------------
+  // A miss that can mean the reader's access changed asks the open canvas to
+  // re-check it now, rather than at its next timed re-check (T97). A
+  // collaborator removed while the canvas was open can no longer read the row,
+  // so their miss reads `unknown`; a write turned away reads `refused`. What
+  // the canvas does with the answer is pinned beside the Realtime hook
+  // (use-workflow-realtime-sync.test.tsx).
+  // -----------------------------------------------------------------------
+
+  describe("which misses ask the canvas to re-check its access (T97)", () => {
+    let asked: string[] = []
+    let stopHearing: () => void = () => {}
+
+    beforeEach(() => {
+      asked = []
+      stopHearing = onAccessRecheckRequest((workflowId) => {
+        asked.push(workflowId)
+      })
+    })
+
+    afterEach(() => {
+      stopHearing()
+    })
+
+    async function saveOnce(): Promise<{ success: boolean; error?: string }> {
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      let saveResult: { success: boolean; error?: string } | undefined
+      await act(async () => {
+        saveResult = await result.current.save()
+      })
+      return saveResult!
+    }
+
+    it("a row this tab can no longer read — a removed collaborator's miss — asks, and keeps the conflict handling it had", async () => {
+      resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")], loadedVersion: 20, loadedUpdatedAt: "T20" })
+      setupZeroRowSave(null)
+
+      expect(await saveOnce()).toEqual({ success: false, error: "remote_conflict" })
+      expect(asked).toEqual(["w1"])
+    })
+
+    it("a write turned away asks", async () => {
+      resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")], loadedVersion: 20, loadedUpdatedAt: "T20" })
+      setupZeroRowSave({ updated_at: "T20", version: 20 })
+
+      expect(await saveOnce()).toEqual({ success: false, error: "not_writable" })
+      expect(asked).toEqual(["w1"])
+    })
+
+    it("a real conflict — somebody else's write — asks nothing", async () => {
+      resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")], loadedVersion: 20, loadedUpdatedAt: "T20" })
+      setupZeroRowSave({ updated_at: "T21", version: 21 })
+
+      expect(await saveOnce()).toEqual({ success: false, error: "remote_conflict" })
+      expect(asked).toEqual([])
+    })
+
+    it("a miss that lands after the editor moved to another workflow asks nothing", async () => {
+      resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")], loadedVersion: 20, loadedUpdatedAt: "T20" })
+      let release: () => void = () => {}
+      const holdReread = new Promise<void>((resolve) => { release = resolve })
+      const { rereadMaybeSingle } = setupZeroRowSave(null, { holdReread })
+
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      let saveResult: { success: boolean; error?: string } | undefined
+      await act(async () => {
+        const pending = result.current.save()
+        await vi.waitFor(() => expect(rereadMaybeSingle).toHaveBeenCalled())
+        Object.assign(storeState, { workflowId: "w2", saveStatus: "idle" })
+        release()
+        saveResult = await pending
+      })
+
+      expect(saveResult).toEqual({ success: false, error: "workflow_changed" })
+      expect(asked).toEqual([])
+    })
   })
 
   // -----------------------------------------------------------------------

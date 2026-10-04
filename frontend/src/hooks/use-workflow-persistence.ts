@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase"
 import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
 import { readWorkflowContent } from "@/lib/workflow-content"
-import { applyWorkflowAccess } from "@/hooks/workflow-access-mode"
+import { applyWorkflowAccess, requestAccessRecheck } from "@/hooks/workflow-access-mode"
 import { classifyZeroRowSave, isSaveRefused } from "@/hooks/workflow-save-refusal"
 import { tx } from "@/lib/i18n"
 import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
@@ -1062,7 +1062,16 @@ export function useWorkflowPersistence(projectId?: string) {
             // The re-read was a second wait — ask again before writing.
             if (editorMovedOn()) return { success: false, error: "workflow_changed" }
 
-            if (classifyZeroRowSave({ version: loadedVersion, updatedAt: loadedUpdatedAt || null }, current) === "refused") {
+            const cause = classifyZeroRowSave({ version: loadedVersion, updatedAt: loadedUpdatedAt || null }, current)
+            // A write turned away, or a row this tab can no longer read, can
+            // each mean the reader's access changed while the canvas was open:
+            // a collaborator removed can no longer SELECT the row, so their
+            // miss reads `unknown`. So the canvas re-asks its access now rather
+            // than at its next timed re-check (T97). A real conflict is somebody
+            // else's write, and asks nothing.
+            if (cause !== "conflict") requestAccessRecheck(workflowId)
+
+            if (cause === "refused") {
               // The token this tab sent is still the row's token, so nobody
               // else wrote: the write itself was refused. Say that, and stop
               // asking. `saveRefusedFor` is what ends the retries — `saveOnce`
@@ -1072,7 +1081,9 @@ export function useWorkflowPersistence(projectId?: string) {
               // seconds. NOT `isReadOnly`: a refusal usually lands mid-run (the
               // run's own first patch is what dirtied the canvas), and
               // read-only turns `updateNodeData` into a no-op — the result of
-              // a job already paid for would never reach its node.
+              // a job already paid for would never reach its node. The re-check
+              // asked above keeps to the same rule: if it answers `view` or
+              // `none`, read-only waits until no node holds a job.
               const reason = tx("editor.notWritableReason")
               useWorkflowStore.setState({ saveRefusedFor: workflowId })
               setSaveStatus("error", reason)

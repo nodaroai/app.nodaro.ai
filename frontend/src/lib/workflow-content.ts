@@ -38,17 +38,20 @@ import { getCurrentUserId, getWorkflowDocument, type WorkflowAccessLevel, type W
  * can change while a canvas is open (an `edit` collaborator lowered to `view`,
  * or removed), so the canvas re-asks it (T97, `use-workflow-access-recheck.ts`)
  * every minute while its tab is visible, as soon as the tab is shown again, and
- * the moment a save is refused. Each answer goes into the record the load
- * wrote, and an answer of `view` or `none` closes the subscription and turns
- * the canvas read-only on the spot. (An owner's own row stays theirs, and so
- * does its subscription; only the canvas turns read-only: `recheckedAccess`.)
- * So the app never holds what the reader's CURRENT access forbids, with three
- * exceptions. Between two asks a canvas acts on the last answer it had: up to
- * a minute in a visible tab, and in a hidden one until it is shown again or a
- * save is refused. What it was shown under an earlier, wider access stays on
- * screen, read-only, until the canvas is reloaded, or, with no unsaved
- * changes on it, until the row next moves and the stripped re-read replaces
- * it (a reader with no access left is sent nothing to replace it with). And
+ * the moment a save is turned away or meets a row it can no longer read. Each
+ * answer goes into the record the load wrote, and an answer of `view` or
+ * `none` closes the subscription and stops every save on the spot; the canvas
+ * turns read-only too, once no node holds a job, so a run already paid for
+ * still lands its result (`applyWorkflowAccess`). (An owner's own row stays
+ * theirs, and so does its subscription; only the saves stop and the canvas
+ * turns read-only: `recheckedAccess`.) So the app never holds what the
+ * reader's CURRENT access forbids, with three exceptions. Between two asks a
+ * canvas acts on the last answer it had: up to a minute in a visible tab, and
+ * in a hidden one until it is shown again or a save misses. What it was shown
+ * under an earlier, wider access stays on screen, never saved, until the
+ * canvas is reloaded, or, with no unsaved changes on it, until the row next
+ * moves and the stripped re-read replaces it (a reader with no access left is
+ * sent nothing to replace it with). And
  * the record keeps any `own`, not only the owner's: the server answers a
  * platform admin `own` too, and the record cannot tell the two apart. So an
  * admin who loses that role while the canvas is open keeps the subscription
@@ -168,9 +171,9 @@ export function mayHoldStoredRow(
  * caller's own `user_id`), and that is not something an access verdict takes
  * away: the server answers the creator `view` once their workspace is archived
  * and `none` while their membership is suspended, the row policies still hand
- * them the row, and the drafts in it are their own. Their canvas still turns
- * read-only on such an answer, as a load's does (`applyWorkflowAccess`). A
- * workflow's creator cannot change from a browser
+ * them the row, and the drafts in it are their own. Their saves still stop on
+ * such an answer, and their canvas still turns read-only
+ * (`applyWorkflowAccess`). A workflow's creator cannot change from a browser
  * (`check_workflows_update_allowed`, migration 338). The one other `own`
  * record is a platform admin's, answered by the server; losing that role
  * mid-session is not the access change these re-checks are for.

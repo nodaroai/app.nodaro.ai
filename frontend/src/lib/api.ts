@@ -7267,7 +7267,7 @@ export interface WorkflowTrigger {
 async function apiRequest<T>(
   path: string,
   errorMessage: MessageKey,
-  opts?: { method?: string; body?: unknown; skipAuth?: boolean },
+  opts?: { method?: string; body?: unknown; skipAuth?: boolean; signal?: AbortSignal },
 ): Promise<T> {
   const headers: Record<string, string> = opts?.skipAuth ? {} : { ...(await getAuthHeaders()) }
   if (opts?.body !== undefined) headers["Content-Type"] = "application/json"
@@ -7276,6 +7276,7 @@ async function apiRequest<T>(
     method: opts?.method ?? "GET",
     headers,
     body: opts?.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    ...(opts?.signal ? { signal: opts.signal } : {}),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -7658,11 +7659,18 @@ export interface SharedWorkflow {
  * exists twice — in the server and in the row policies, with a test proving
  * they agree. A third answer computed in the browser would be the one nobody
  * remembers to change.
+ *
+ * `signal` aborts the request: the open canvas asks this again and again
+ * (T97), and gives each ask a deadline (`applyWorkflowAccess`).
  */
-export function getWorkflowAccess(workflowId: string): Promise<{ data: WorkflowAccessInfo }> {
+export function getWorkflowAccess(
+  workflowId: string,
+  opts?: { readonly signal?: AbortSignal },
+): Promise<{ data: WorkflowAccessInfo }> {
   return apiRequest<{ data: WorkflowAccessInfo }>(
     `/v1/workflows/${encodeURIComponent(workflowId)}/access`,
     "apiErr.readWorkflowAccess",
+    opts?.signal ? { signal: opts.signal } : undefined,
   )
 }
 

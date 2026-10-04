@@ -10,29 +10,33 @@
  * question of the same route and hands the answer to the same function, which
  * writes it into the same record, so `useWorkflowRealtimeSync` re-decides
  * through `mayHoldStoredRow` as it does after a load: `view` or `none` closes
- * the subscription and polls, `own` or `edit` subscribes. The canvas turns
- * read-only on `view` or `none` exactly as a `view` load does.
+ * the subscription and polls, `own` or `edit` subscribes. On `view` or `none`
+ * the canvas also stops saving at once, and turns read-only as a `view` load
+ * does once no node holds a job (`applyWorkflowAccess`), so a run already paid
+ * for still lands its result.
  *
  * When it asks:
  *   - every {@link ACCESS_RECHECK_INTERVAL_MS} while the tab is visible — the
  *     timer stops while the tab is hidden;
  *   - at once when the tab is shown again (and the timer restarts);
- *   - at once when a save is refused (`saveRefusedFor`), hidden tab or not:
- *     a refusal is the plainest sign the access changed, and a hidden tab's
- *     subscription keeps receiving broadcasts until something re-asks.
+ *   - at once when a save misses in a way that can mean the access changed —
+ *     turned away, or a row the tab can no longer read
+ *     (`requestAccessRecheck`, from the save path) — hidden tab or not: a
+ *     hidden tab's subscription keeps receiving broadcasts until something
+ *     re-asks.
  * Never on mount — the load has just asked — and never before the load has
  * answered for this workflow: there is nothing to re-check, and a load in
  * flight records its own answer.
  *
- * Re-checks are coalesced to one in flight plus one trailing, so a refusal
+ * Re-checks are coalesced to one in flight plus one trailing, so a save miss
  * that lands while a timed re-check is out still gets an answer asked after
- * it. A failed re-check changes nothing (`applyWorkflowAccess` says why); the
- * next trigger asks again.
+ * it. Each ask has a deadline, so one that never settles cannot hold the rest
+ * behind it. A failed re-check, a timed-out one included, changes nothing
+ * (`applyWorkflowAccess` says why); the next trigger asks again.
  */
 import { useEffect } from "react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { applyWorkflowAccess } from "@/hooks/workflow-access-mode"
-import { isSaveRefused } from "@/hooks/workflow-save-refusal"
+import { applyWorkflowAccess, onAccessRecheckRequest } from "@/hooks/workflow-access-mode"
 import { coalesced } from "./coalesced"
 
 /** How often a visible canvas re-asks its access (T97). */
@@ -66,8 +70,8 @@ export function useWorkflowAccessRecheck(workflowId: string | null | undefined):
       recheck()
       resume()
     }
-    const stopWatchingSaves = useWorkflowStore.subscribe((state, prev) => {
-      if (isSaveRefused(state) && !isSaveRefused(prev)) recheck()
+    const stopHearingSaves = onAccessRecheckRequest((asked) => {
+      if (asked === workflowId) recheck()
     })
 
     if (document.visibilityState !== "hidden") resume()
@@ -77,7 +81,7 @@ export function useWorkflowAccessRecheck(workflowId: string | null | undefined):
       active = false
       pause()
       document.removeEventListener("visibilitychange", onVisibility)
-      stopWatchingSaves()
+      stopHearingSaves()
     }
   }, [workflowId, answered])
 }

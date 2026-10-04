@@ -631,6 +631,12 @@ interface WorkflowState {
    * makes `updateNodeData` a no-op, so raising it mid-run would drop the
    * result of a job already paid for and leave the node spinning.
    *
+   * Also set the moment the server answers `view` or `none` for the open
+   * workflow, at load or on a re-check while it stays open (T97,
+   * `applyWorkflowAccess`), so nothing more is sent. That answer raises
+   * `isReadOnly` too, but only once no node holds a `currentJobId`, for the
+   * reason above; until then this is what stops the saves.
+   *
    * An id rather than a flag so a verdict can only apply to the workflow
    * it was reached for — read it through `isSaveRefused()`, never bare.
    * See `workflow-save-refusal.ts`.
