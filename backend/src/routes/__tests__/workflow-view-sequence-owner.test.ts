@@ -320,8 +320,9 @@ describe("POST /v1/workflows/:id/move — the moved row goes back to the mover o
     headers: { "x-user-id": user }, payload: { projectId: TARGET_PROJECT } })
 
   it.each(["view", "none"])("a `%s` mover gets it without the owner's state", async (access) => {
-    // `view` is a team workspace's admin by default; `none` the plugin never
-    // answers a mover today, and it is stripped all the same.
+    // `view` is a team workspace's admin by default. The plugin answers a
+    // mover `none` only when it fails closed (workspace facts it cannot load)
+    // or a standing changes between the move and the check; stripped too.
     plugin(access)
     moveTables()
     const res = await move(OTHER)
