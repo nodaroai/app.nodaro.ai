@@ -3,6 +3,7 @@
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Scissors, Braces, Film, AudioLines, Loader2, AlertCircle } from "lucide-react"
+import { applyEdlCreditId } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
@@ -24,8 +25,9 @@ function ApplyEdlNodeComponent({ id, data, selected }: NodeProps) {
   // Priced per OUTPUT MINUTE: the model cost is a rate, so the pill multiplies it
   // by the minutes this render can reserve (the shared resolver every run-level
   // estimate uses). It used to read `useEstimatedCredits`, which has no apply-edl
-  // case — the pill and its Run button showed 0.
-  const credits = useModelCredits("apply-edl") * useApplyEdlEstimateMinutes(id)
+  // case — the pill and its Run button showed 0. The rate is the row of the
+  // render's quality (a preview's `apply-edl:proxy`), the id the run reserves on.
+  const credits = useModelCredits(applyEdlCreditId(nodeData.quality)) * useApplyEdlEstimateMinutes(id)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

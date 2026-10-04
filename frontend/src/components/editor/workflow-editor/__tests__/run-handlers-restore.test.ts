@@ -1079,4 +1079,63 @@ describe("restorePollingForRunningJobs", () => {
     )
     expect((completionCall![1] as Record<string, unknown>).lastAuditReport).toBeUndefined()
   })
+  // Apply EDL renders ONE cut. A restored audio render on a node still holding
+  // an earlier VIDEO render's URL (rendered as video, then Output switched to
+  // audio) must clear it — both engines read the node as video whenever
+  // generatedVideoUrl is set (lib/apply-edl-cut.ts).
+  it("a restored Apply EDL audio render clears the earlier video render's URL", async () => {
+    mockNodes = [makeNode("n1", "apply-edl", {
+      output: "audio",
+      generatedResults: [{ url: "https://cdn.example.com/take-0.mp4", timestamp: "t0", jobId: "j0" }],
+      generatedVideoUrl: "https://cdn.example.com/take-0.mp4",
+    })]
+    mockGetJobStatus.mockResolvedValue({
+      status: "completed",
+      output_data: { audioUrl: "https://cdn.example.com/take-1.m4a" },
+    })
+
+    restorePollingForRunningJobs([{ nodeId: "n1", jobId: "j1", nodeType: "apply-edl" }], makeCtx(), vi.fn())
+    await vi.advanceTimersByTimeAsync(3000)
+
+    const completion = mockUpdateNodeData.mock.calls.find(
+      (call: unknown[]) => call[0] === "n1" && (call[1] as Record<string, unknown>).executionStatus === "completed",
+    )?.[1] as Record<string, unknown>
+    expect(completion.generatedAudioUrl).toBe("https://cdn.example.com/take-1.m4a")
+    expect(completion).toHaveProperty("generatedVideoUrl")
+    expect(completion.generatedVideoUrl).toBeUndefined()
+  })
+
+  // …and its Transcript output moves with the cut: the restored render's own
+  // (kept on its take too, so a later pick restores it with no job read), or
+  // CLEARED when it was cut with none — never the earlier take's.
+  const EARLIER = { version: 1, words: [{ text: "back", startMs: 1310, endMs: 1650 }] }
+  const RESTORED = { version: 1, words: [{ text: "back", startMs: 420, endMs: 760 }] }
+  const restoreApplyEdl = async (outputData: Record<string, unknown>) => {
+    mockNodes = [makeNode("n1", "apply-edl", {
+      output: "video",
+      generatedResults: [{ url: "https://cdn.example.com/take-0.mp4", timestamp: "t0", jobId: "j0", generatedJson: EARLIER }],
+      generatedVideoUrl: "https://cdn.example.com/take-0.mp4",
+      generatedJson: EARLIER,
+    })]
+    mockGetJobStatus.mockResolvedValue({ status: "completed", output_data: outputData })
+    restorePollingForRunningJobs([{ nodeId: "n1", jobId: "j1", nodeType: "apply-edl" }], makeCtx(), vi.fn())
+    await vi.advanceTimersByTimeAsync(3000)
+    return mockUpdateNodeData.mock.calls.find(
+      (call: unknown[]) => call[0] === "n1" && (call[1] as Record<string, unknown>).executionStatus === "completed",
+    )?.[1] as Record<string, unknown>
+  }
+
+  it("a restored Apply EDL render cut with a transcript makes it the node's Transcript output, and keeps it on its take", async () => {
+    const completion = await restoreApplyEdl({ videoUrl: "https://cdn.example.com/take-1.mp4", json: RESTORED })
+    expect(completion.generatedJson).toEqual(RESTORED)
+    const [landed] = completion.generatedResults as Array<Record<string, unknown>>
+    expect(landed.url).toBe("https://cdn.example.com/take-1.mp4")
+    expect(landed.generatedJson).toEqual(RESTORED)
+  })
+
+  it("a restored Apply EDL render cut with NO transcript clears the earlier take's", async () => {
+    const completion = await restoreApplyEdl({ videoUrl: "https://cdn.example.com/take-1.mp4" })
+    expect(completion).toHaveProperty("generatedJson", undefined)
+    expect((completion.generatedResults as Array<Record<string, unknown>>)[0]).toHaveProperty("generatedJson", undefined)
+  })
 })

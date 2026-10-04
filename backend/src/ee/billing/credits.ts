@@ -1,4 +1,4 @@
-import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId } from "@nodaro/shared"
+import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, applyEdlCreditId } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -15,7 +15,7 @@ import { modelAvailabilityRefusal } from "./model-availability.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
-import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/apply-edl-plan.js"
+import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE, APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/apply-edl-plan.js"
 import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
@@ -1530,8 +1530,16 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // 60000)`. The bare row here is the estimator fallback (1-minute floor).
   // Value is the single source of truth `APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE`
   // (lib/apply-edl-plan.ts); the model_pricing row (migration 431) mirrors it.
-  // PROVISIONAL — the 3-hour staging probe sets the final per-minute number.
+  // Decided 2026-10-04: the final stays at 10.
+  // One row per render QUALITY, for a video and an audio output alike: every
+  // site takes the id from `applyEdlCreditId(quality)` (@nodaro/shared).
   "apply-edl": APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE,
+  // The preview (`quality: "proxy"`) — its own, lower per-minute rate,
+  // decided 2026-10-04. Value is `APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE`
+  // (lib/apply-edl-plan.ts); migration 454 mirrors it. The proxy < final guard
+  // reads these code values, not the admin rows, so the two model_pricing rows
+  // are retuned together (the node docs say so).
+  "apply-edl:proxy": APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE,
   // Image Collage — composites N images into one 2K/4K image (local ffmpeg,
   // no provider cost). Priced by resolution. Base + resolution composites;
   // the single-node route uses computeCredits, workflow runs reserve the
@@ -3679,6 +3687,11 @@ function getNodeModelIdentifier(
   // the clip. The clip is not measured before a run, so the estimate quotes
   // the row for the length an unmeasurable clip is charged (8 seconds).
   if (nodeType === "video-sfx") return videoSfxCreditId(undefined)
+
+  // Apply EDL: the per-minute row of the render's quality — a preview on
+  // `apply-edl:proxy`, a final on `apply-edl` — the id the route and the
+  // workflow run reserve on. (Mirrors the frontend getModelIdentifier.)
+  if (nodeType === "apply-edl") return applyEdlCreditId(data.quality)
 
   const provider = data.provider as string | undefined
   if (!provider) return nodeType

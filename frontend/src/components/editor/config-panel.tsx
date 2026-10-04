@@ -259,42 +259,14 @@ import {
 import { TileCommitContext } from "@/lib/picker-ui"
 import { createRovingTabIndexRef, handleConfigPanelNavKeyDown } from "@/lib/picker-ui"
 
-const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "switchx", "text-to-video", "generate-video", "generate-video-pro", "edit-video-pro", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar"])
-const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "audio-separation", "text-to-dialogue", "voice-changer", "voice-changer-pro", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
-
 // NODE_TYPE_DISPLAY_NAMES + getNodeTypeDisplayName live in ./config-panel-label
 // (dependency-light, so tests import the real table instead of a copy).
 export { getNodeTypeDisplayName } from "./config-panel-label"
 
-export const GENERATE_BUTTON_TYPES = new Set([
-  "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background", "generate-mask", "reference-sheet", "reference-board",
-  "image-to-video", "video-to-video", "switchx", "text-to-video", "generate-video", "text-to-speech",
-  "text-to-audio", "audio-isolation", "audio-separation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
-  "video-upscale", "extend-video", "video-retake", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar", "suno-generate", "suno-cover", "suno-extend",
-  "suno-lyrics", "suno-separate", "suno-music-video",
-  "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
-  "llm-chat", "web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "video-analysis", "video-audit",
-  "content-recipe", "content-ideas",
-  "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
-  "generate-3d-scene", "edit-3d-scene", "pro-3d-render",
-  "image-to-text", "qa-check", "transcribe", "describe-to-picker",
-  "render-video",
-  "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post", "publish-social",
-  "component",
-  // FFmpeg processing (tiered credits)
-  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "apply-edl", "edit-plan", "camera-switch", "assemble-narrated-video", "image-collage", "image-overlay", "video-overlay", "trim-audio", "split-media", "extract-audio", "silence-detect", "audio-sync", "remove-audio", "trim-video", "extract-frame",
-  "speed-ramp", "loop-video", "gif-to-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume", "audio-fx",
-  "add-captions", "mix-audio", "combine-audio",
-])
-
-export const RUN_BUTTON_TYPES = new Set([
-  "manual-edit", "composite",
-  "sub-workflow", "router", "reduce",
-  // The handoff's "Test node": a Webhook Output is the one node you most want
-  // to fire once on its own before trusting a whole run to it. It costs no
-  // credits, so it belongs on this list rather than with the generate buttons.
-  "webhook-output",
-])
+// The Generate / Run button and results-gallery node sets live in
+// ./config-panel-node-sets for the same reason.
+import { GENERATE_BUTTON_TYPES, RUN_BUTTON_TYPES, RESULT_PRODUCING_TYPES } from "./config-panel-node-sets"
+export { GENERATE_BUTTON_TYPES, RUN_BUTTON_TYPES }
 
 /** Nodes that show "Run from here" as primary action instead of "Run". */
 const RUN_FROM_HERE_TYPES: Set<string> = new Set([
@@ -305,23 +277,6 @@ const RUN_FROM_HERE_TYPES: Set<string> = new Set([
 ])
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video", "generate-video"])
-
-// Node types that produce media results (excludes text-only nodes like combine-text, split-text, extract-field, sub-workflow, social posts)
-const RESULT_PRODUCING_TYPES = new Set([
-  ...GENERATE_BUTTON_TYPES,
-  ...RUN_BUTTON_TYPES,
-].filter(t =>
-  t !== "combine-text" && t !== "split-text" && t !== "extract-field" && t !== "json-process" &&
-  t !== "filter-list" && t !== "deduplicate" && t !== "merge-lists" && t !== "sort-list" &&
-  t !== "preview" && t !== "sub-workflow" &&
-  t !== "instagram-post" && t !== "tiktok-post" && t !== "youtube-upload" &&
-  t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post" && t !== "telegram-post" && t !== "publish-social" &&
-  t !== "image-to-text" && t !== "qa-check" && t !== "transcribe" && t !== "llm-chat" &&
-  t !== "describe-to-picker" &&
-  // A webhook delivery produces a status code, not media — it has a Run
-  // button but nothing for a results gallery to show.
-  t !== "webhook-output"
-))
 
 /** Extracted to isolate type checking scope — TS JSX children inference limit */
 function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExpandDirector, update, selectedNodeId }: {
@@ -1138,23 +1093,12 @@ export function ConfigPanel() {
 
           <Separator />
 
-          {/* Results Gallery — shown before run buttons for result-producing nodes */}
-          {(() => {
-            if (!RESULT_PRODUCING_TYPES.has(nodeType)) return null
-            const results = (nodeData.generatedResults ?? []) as Array<{ url?: string; jobId?: string; timestamp?: number }>
-            if (results.length === 0) return null
-            const activeIdx = (nodeData.activeResultIndex as number) ?? 0
-            const mediaType: "image" | "video" | "audio" = LIBRARY_VIDEO_TYPES.has(nodeType) ? "video" : LIBRARY_AUDIO_TYPES.has(nodeType) ? "audio" : "image"
-            return (
-              <ResultsGallery
-                nodeType={nodeType}
-                results={results}
-                activeIndex={activeIdx}
-                mediaType={mediaType}
-                onUpdate={update}
-              />
-            )
-          })()}
+          {/* Results Gallery — shown before run buttons for result-producing nodes.
+              It reads the results, the selected one and the medium from the
+              node's data itself (renders nothing while there are no results). */}
+          {RESULT_PRODUCING_TYPES.has(nodeType) && (
+            <ResultsGallery nodeId={selectedNodeId} nodeType={nodeType} nodeData={nodeData} onUpdate={update} />
+          )}
 
           {(REPEATABLE_NODE_TYPES.has(nodeType) && (
             <div className="flex items-center gap-2 pt-2">

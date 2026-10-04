@@ -9,6 +9,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { applyEdlCreditId } from "@nodaro/shared"
 import { buildEffectiveEdl, validateEffectiveEdl, applyEdlReserveMinutes } from "../lib/apply-edl-plan.js"
 
 /** An SDK/MCP caller may send the EDL as a JSON string on the `edl` field;
@@ -38,6 +39,14 @@ function invalidEdlBody(issues: readonly string[]) {
       issues,
     },
   }
+}
+
+/** The render quality the request names, read off the RAW body as the credit
+ *  guard reads it (before Zod). The guard prices `applyEdlCreditId` of this and
+ *  the handler reserves `applyEdlCreditId` of the parsed `quality`: the same id
+ *  for every body the schema accepts (absent → "final" both ways). */
+function rawQualityOf(body: unknown): unknown {
+  return ((body ?? {}) as Record<string, unknown>).quality
 }
 
 /** The EDL the request describes, read off the RAW body exactly as the credit
@@ -91,21 +100,23 @@ export async function applyEdlRoutes(app: FastifyInstance) {
         const validation = validateEffectiveEdl(effectiveEdlOfRawBody(b), b.output === "audio" ? "audio" : "video")
         if (!validation.ok) return reply.status(400).send(invalidEdlBody(validation.issues))
       },
-      creditGuard(() => "apply-edl", {
+      // Priced on the row of the render's quality: a preview (`proxy`) on
+      // `apply-edl:proxy`, a final on `apply-edl` — the id `applyEdlCreditId`
+      // names here, in `computeCredits` and at the reservation below.
+      creditGuard((req) => applyEdlCreditId(rawQualityOf(req.body)), {
         // Probe-at-reserve on the RENDERED duration: build the same effective EDL
         // the handler renders, reserve `perMinute × ceil(edlDurationMs/60000)`.
         // Base (pre-markup) — creditGuard applies the markup so check and reserve
         // agree. Read the per-minute RATE from model_pricing via
-        // getModelCreditBaseCost (mirroring dubbing) so an admin retune — the path
-        // the 3-hour staging probe uses to set the final number — tunes BOTH the
-        // single-node route AND the DAG (which reserves the same via
+        // getModelCreditBaseCost (mirroring dubbing) so an admin retune tunes
+        // BOTH the single-node route AND the DAG (which reserves the same via
         // applyEdlCreditOverride). Without this the route stayed pinned to the
-        // provisional constant while DAG runs moved to the DB rate. ee import is
+        // code constant while DAG runs moved to the DB rate. ee import is
         // dynamic (shim pattern; computeCredits only runs under hasCredits()).
         computeCredits: async (body) => {
           const eff = effectiveEdlOfRawBody(body)
           const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
-          const { creditCost } = await getModelCreditBaseCost("apply-edl")
+          const { creditCost } = await getModelCreditBaseCost(applyEdlCreditId(rawQualityOf(body)))
           return creditCost * applyEdlReserveMinutes(eff)
         },
       }),
@@ -151,7 +162,8 @@ export async function applyEdlRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to create job")
     }
 
-    const reservation = await reserveCreditsForJob(req, reply, job.id, "apply-edl")
+    // The job is always `apply-edl`; its credit row follows the quality.
+    const reservation = await reserveCreditsForJob(req, reply, job.id, applyEdlCreditId(quality))
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 

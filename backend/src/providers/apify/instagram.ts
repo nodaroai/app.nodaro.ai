@@ -3,13 +3,16 @@ import { MissingProviderKeyError } from "../provider-keys.js"
 import {
   INSTAGRAM_SCRAPE_MAX_COUNT,
   classifyCreativeFormat,
+  instagramPostLink,
+  instagramRequestedCount,
   type InstagramScrapeMode,
   type InstagramScrapePeriod,
 } from "@nodaro/shared"
 
 /**
  * Instagram provider — pulls PUBLIC posts (feed images, carousels, reels) from
- * `apify/instagram-scraper` by profile or hashtag. Unlike Meta's Ad Library,
+ * `apify/instagram-scraper` by profile, by hashtag, or by post link (exactly
+ * the linked posts, whatever their age). Unlike Meta's Ad Library,
  * the actor honours the date window SERVER-SIDE (`onlyPostsNewerThan`), so
  * there is no over-fetch: a light post-filter only trims the odd item that
  * slips through by hours. Posts carry pixel dimensions inline, so the node's
@@ -24,7 +27,7 @@ const CONTEXT = "instagram-scrape"
 
 export interface InstagramScrapeArgs {
   mode: InstagramScrapeMode
-  /** Usernames (profile mode) or hashtags (hashtag mode), already split + stripped of @/#. */
+  /** Usernames (profile mode) or hashtags (hashtag mode), already split + stripped of @/#; canonical post links (post mode). */
   targets: string[]
   count: number
   period: InstagramScrapePeriod
@@ -70,8 +73,15 @@ const PERIOD_MS: Record<InstagramScrapePeriod, number | null> = {
   all: null,
 }
 
-/** The Instagram URL a target scrapes: a profile page, or the hashtag's posts feed. */
+/**
+ * The Instagram URL a target scrapes: a profile page, the hashtag's posts
+ * feed, or — in post mode — the post itself (the actor answers a post url with
+ * that one post, carousel children included). Post targets arrive canonical
+ * from `splitInstagramTargets`; anything that is not a post link yields "" so
+ * it can never be scraped as a profile by accident.
+ */
 export function instagramTargetUrl(mode: InstagramScrapeMode, target: string): string {
+  if (mode === "post") return instagramPostLink(target) ?? ""
   const slug = encodeURIComponent(target.trim().replace(/^[@#]+/, ""))
   return mode === "hashtag"
     ? `https://www.instagram.com/explore/tags/${slug}/`
@@ -79,6 +89,14 @@ export function instagramTargetUrl(mode: InstagramScrapeMode, target: string): s
 }
 
 export function buildInstagramActorInput(args: InstagramScrapeArgs): Record<string, unknown> {
+  // A post link names one post, whatever its age: no date window, one result each.
+  if (args.mode === "post") {
+    return {
+      directUrls: args.targets.map((t) => instagramTargetUrl("post", t)).filter((u) => u.length > 0),
+      resultsType: "posts",
+      resultsLimit: 1,
+    }
+  }
   const newerThan = PERIOD_NEWER_THAN[args.period]
   return {
     directUrls: args.targets.map((t) => instagramTargetUrl(args.mode, t)),
@@ -172,7 +190,8 @@ export function selectInstagramPosts(
   opts: { count: number; sources: number; period: InstagramScrapePeriod; mode: InstagramScrapeMode; now?: Date },
 ): InstagramPost[] {
   const now = opts.now ?? new Date()
-  const windowMs = PERIOD_MS[opts.period]
+  // A post link names its post whatever its age — no date window in post mode.
+  const windowMs = opts.mode === "post" ? null : PERIOD_MS[opts.period]
   const inWindow = projectInstagramPosts(items, Number.POSITIVE_INFINITY).filter((p) => {
     if (windowMs === null || !p.timestamp) return true
     const t = Date.parse(p.timestamp)
@@ -218,7 +237,8 @@ interface ActorRunLike {
 export async function runInstagramScrape(args: InstagramScrapeArgs): Promise<InstagramScrapeOutput> {
   const input = buildInstagramActorInput(args)
   const sources = args.targets.length
-  const maxItems = Math.min(args.count, INSTAGRAM_SCRAPE_MAX_COUNT) * Math.max(1, sources)
+  const perSource = Math.min(instagramRequestedCount(args.mode, args.count), INSTAGRAM_SCRAPE_MAX_COUNT)
+  const maxItems = perSource * Math.max(1, sources)
   try {
     const client = getApifyClient()
     const run = (await client
@@ -238,7 +258,7 @@ export async function runInstagramScrape(args: InstagramScrapeArgs): Promise<Ins
     }
 
     const { items } = await client.dataset(run.defaultDatasetId).listItems()
-    return { json: selectInstagramPosts(items as Raw[], { count: args.count, sources: Math.max(1, sources), period: args.period, mode: args.mode }) }
+    return { json: selectInstagramPosts(items as Raw[], { count: perSource, sources: Math.max(1, sources), period: args.period, mode: args.mode }) }
   } catch (err) {
     if (err instanceof MissingProviderKeyError) throw err
     throw sanitizeApifyError(err, CONTEXT)

@@ -8,6 +8,7 @@ import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOver
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
 import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared"
+import { applyEdlCreditId } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 import { socialSearchRequestFromNode, socialSearchCreditId, socialSearchPickTop } from "@nodaro/shared"
@@ -5877,14 +5878,21 @@ export function buildPayload(
         throw new Error(`apply-edl: invalid EDL — ${shown.join("; ")}${more > 0 ? ` (+${more} more)` : ""}`)
       }
       const transcript = resolvedInputs.transcript ?? (typeof data.transcript === "string" ? data.transcript : undefined)
-      return ffmpegResult("apply-edl", {
-        jobId,
-        edl: effectiveEdl,
-        transcript,
-        output,
-        quality,
-        usageLogId,
-      })
+      // The job is always `apply-edl`; the run reserves on the row of its
+      // quality (a preview on `apply-edl:proxy`) — the id the route reserves
+      // on, and the one applyEdlCreditOverride prices from `payload.quality`.
+      return ffmpegResult(
+        "apply-edl",
+        {
+          jobId,
+          edl: effectiveEdl,
+          transcript,
+          output,
+          quality,
+          usageLogId,
+        },
+        applyEdlCreditId(quality),
+      )
     }
 
     case "assemble-narrated-video": {

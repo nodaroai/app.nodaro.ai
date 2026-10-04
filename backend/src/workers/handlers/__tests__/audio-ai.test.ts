@@ -445,6 +445,17 @@ describe("text-to-speech handler", () => {
     expect(mocks.mockStripAudioTags).toHaveBeenCalledWith("Bonjour")
   })
 
+  // The funnel runs these as turbo (tts-models.ts), so they must be stripped like turbo —
+  // not read through the dialogue model's own sheet, which keeps tags.
+  it.each(["elevenlabs", "elevenlabs-dialogue", "not-a-model", "constructor"])(
+    "provider %s runs as turbo: tags are stripped",
+    async (provider) => {
+      const job = makeJob("text-to-speech", { text: "Hello [whispers]", provider, voice: "Rachel", voiceType: "premade" })
+      await handler(job as never, makeCtx())
+      expect(mocks.mockStripAudioTags).toHaveBeenCalledWith("Hello [whispers]")
+    },
+  )
+
   it("defaults an absent provider to elevenlabs-v3 (direct), tags NOT stripped", async () => {
     const job = makeJob("text-to-speech", { text: "no provider given [whispers]" })
     await handler(job as never, makeCtx())

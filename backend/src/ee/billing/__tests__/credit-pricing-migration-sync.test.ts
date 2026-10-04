@@ -121,8 +121,11 @@ const INSERTED_VALUES = extractInsertedValues()
  * NOT swallow `wan-3-prime`'s rows into the wrong bucket, and `wan-i2v` /
  * `wan-2.7-t2v` are untouched.)
  */
-const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash"] as const
-const VALUE_SYNCED_ROW_COUNT = 187 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash
+// `apply-edl`: the final's row (migration 431) and the preview's
+// `apply-edl:proxy` (migration 454), each one constant in lib/apply-edl-plan.ts
+// — so retuning a constant fails here until its migration row says the same.
+const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash", "apply-edl"] as const
+const VALUE_SYNCED_ROW_COUNT = 189 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash + 2 apply-edl
 
 function familyOf(key: string): string | undefined {
   return VALUE_SYNCED_FAMILIES.find((f) => key === f || key.startsWith(`${f}:`))

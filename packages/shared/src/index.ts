@@ -274,6 +274,7 @@ export {
   pricedVideoSelection,
   buildMotionCreditModelIdentifier,
   speedRampCreditId,
+  applyEdlCreditId,
   sunoCreditType,
   SUNO_VERSION_CREDIT_KEYS,
   SUNO_VERSION_PRICED_OPERATIONS,
@@ -833,6 +834,8 @@ export {
   resolveInstagramScrapeCreditId,
   instagramScrapeSources,
   instagramScrapeCreditIdFromNode,
+  instagramRequestedCount,
+  instagramPostLink,
   splitInstagramTargets,
   clampInstagramFeaturedIndex,
   featuredInstagramOutputs,
@@ -1115,7 +1118,21 @@ export type {
   ModelMenuOption,
   ModelInputAdjustment,
   NormalizedModelInput,
+  TtsCapabilities,
+  TtsSettingLever,
 } from "./model-catalog.js"
+
+// Speech-model capability lookups (derive from `ModelCatalogEntry.tts` above).
+export {
+  TTS_PROVIDER_ALIASES,
+  TTS_FALLBACK_PROVIDER,
+  canonicalTtsProvider,
+  getTtsCapabilities,
+  ttsSupportsAudioTags,
+  ttsSupportsSsmlBreaks,
+  ttsHasLever,
+  ttsLanguageCodes,
+} from "./tts-capabilities.js"
 
 // Per-model safety-filter retry/fallback policy (derives from
 // `ModelCatalogEntry.safetyFilter` above).
@@ -1499,6 +1516,15 @@ export {
   stripStudioDraftSettings,
   stripStudioDraftWorkflow,
   stripStudioTakeVoiceRecords,
+  STUDIO_TAKE_SEQUENCE_KEYS,
+  STUDIO_SEQUENCE_PLANNING_KEYS,
+  STUDIO_SEQUENCE_UNIT_REVIEW_KEYS,
+  STUDIO_SEQUENCE_POLICY_KEYS,
+  STUDIO_SEQUENCE_UNIT_MANIFEST_KEYS,
+  STUDIO_KEYFRAME_NODE_TRANSIENT_KEYS,
+  STUDIO_KEYFRAME_TRANSIENT_KEYS,
+  STUDIO_KEYFRAME_REVIEW_KEYS,
+  STUDIO_KEYFRAME_ACCEPTANCE_PRIVATE_KEYS,
 } from "./studio-transient.js"
 
 export * from "./scene3d-v2-edit.js"

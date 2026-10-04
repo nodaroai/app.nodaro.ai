@@ -5378,7 +5378,7 @@ applyEdl(input: ApplyEdlInput): Promise<EditJobResult>
 | `sources` | `string[]` | no | Positional media-URL overrides for `edl.sources[i].url`. |
 | `transcript` | `Transcript` | no | Transcript remapped through the cut and returned on the job's `json` output. For a **large** transcript where you only need the re-timed result, use `remapTranscript` locally instead. |
 | `output` | `"video" \| "audio"` | no | Default `"video"`. |
-| `quality` | `"proxy" \| "final"` | no | Default `"final"`. |
+| `quality` | `"proxy" \| "final"` | no | Default `"final"`. `"proxy"` is a 720p preview (lighter mono sound on an audio cut), billed per output minute at its own, lower rate — see [Apply EDL](nodes/processing-video/apply-edl.md#credit-cost). |
 | `crossfadeMs` | `number` | no | Default crossfade on boundaries without an explicit transition; `0` = hard cuts. Default `0`. |
 | `workflowId` | `string` | no | Execution-history display. |
 

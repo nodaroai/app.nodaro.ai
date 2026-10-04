@@ -19,7 +19,7 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { IMAGE_GEN_PROVIDERS, IMAGE_I2I_PROVIDERS, IMAGE_EDIT_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, SEEDANCE_VIDEO_EDIT_PROVIDERS, LIP_SYNC_PROVIDERS, TTS_PROVIDERS, SUNO_MODELS as SUNO_PROVIDERS_SHARED } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_I2I_PROVIDERS, IMAGE_EDIT_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, SEEDANCE_VIDEO_EDIT_PROVIDERS, LIP_SYNC_PROVIDERS, TTS_PROVIDERS, TTS_PROVIDER_ALIASES, SUNO_MODELS as SUNO_PROVIDERS_SHARED } from "@nodaro/shared"
 import {
   IMAGE_GEN_MODELS,
   IMAGE_I2I_MODELS,
@@ -112,6 +112,14 @@ describe("frontend dropdown ⊆ shared provider list", () => {
 
   it("TTS_MODELS values ⊆ TTS_PROVIDERS", () => {
     checkSubset("TTS_MODELS", TTS_MODELS, new Set(TTS_PROVIDERS))
+  })
+
+  it("every TTS_PROVIDERS member except the legacy alias is offered in TTS_MODELS", () => {
+    // The reverse of the check above: a provider the route accepts but no picker
+    // lists is a model nobody can choose in the editor.
+    const offered = new Set(TTS_MODELS.map((m) => m.value))
+    const missing = TTS_PROVIDERS.filter((id) => !(id in TTS_PROVIDER_ALIASES) && !offered.has(id))
+    expect(missing, `TTS_PROVIDERS members with no TTS_MODELS entry (model-options.ts): ${missing.join(", ")}`).toEqual([])
   })
 
   it("SUNO_MODELS (frontend) values ⊆ SUNO_MODELS (shared)", () => {

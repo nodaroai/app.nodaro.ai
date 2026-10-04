@@ -76,7 +76,7 @@ export const SOCIAL_PUBLISHER_TYPES: ReadonlySet<string> = new Set([
 /** Named destination fields that do not end in "url". */
 export const NAMED_DESTINATION_FIELDS: ReadonlySet<string> = new Set([
   "target",
-  // Instagram Scrape reads a LIST of profiles / hashtags from `data.targets`
+  // Instagram Scrape reads a LIST of profiles / hashtags / post links from `data.targets`
   // (`splitInstagramTargets`) — plural, so neither the `*Url` pattern nor
   // `target` catches it. The derivation test asserts every destination key
   // an executor reads is locked, so the next plural ships covered.
@@ -113,7 +113,7 @@ export const NAMED_DESTINATION_FIELDS: ReadonlySet<string> = new Set([
 /**
  * Keys that choose WHICH destination field an outbound executor reads —
  * `actor` picks the Web Scrape branch, `mode` picks page-vs-search on Meta
- * Ads and profile-vs-hashtag on Instagram. Each branch falls back to the
+ * Ads and profile / hashtag / post link on Instagram. Each branch falls back to the
  * upstream text when its own field is empty, so flipping the selector aims
  * the fetch at whatever a text input carries. Not destinations themselves, and
  * `mode` is an ordinary key on many other node types — so these are locked

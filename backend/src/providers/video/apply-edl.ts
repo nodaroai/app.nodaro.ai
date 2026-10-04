@@ -14,6 +14,11 @@
  * trimmed to the SAME master-time windows and joined with the SAME boundaries,
  * so picture and sound stay locked.
  *
+ * Quality: a FINAL is the delivery encode. A PROXY (review) render is the same
+ * edit on the same frame grid at ≤720p, encoded fast, with lighter MONO sound
+ * at the same 48 kHz — the average of the final's two channels (`aacArgs`,
+ * `PROXY_DOWNMIX`) — so its cuts are heard exactly where the final's are.
+ *
  * Long edits render in chunks split ONLY at hard-cut boundaries (an xfade
  * cannot straddle a chunk), at most `VIDEO_FILTERGRAPH_MAX_SEGMENTS` segments
  * per picture graph and `AUDIO_FILTERGRAPH_MAX_SEGMENTS` per sound graph; a
@@ -100,9 +105,33 @@ export {
   type PlanSegment,
 } from "./apply-edl-budget.js"
 
-/** The one AAC delivery encode: a single-pass render's inline audio, option B's
- *  mux and a chunked audio render's join all produce the same stream. */
-const AAC_DELIVERY_ARGS = ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2"] as const
+/** A render's sound, by quality. A FINAL carries the delivery stream. A PROXY
+ *  (review) render carries lighter MONO sound (A1c, TA7 decided 2026-10-04):
+ *  AAC at 96 kbps — the top of the decided 64–96 kbps range, so filler and
+ *  breath cuts stay easy to judge — at the SAME 48 kHz, so its timing is the
+ *  final's sample for sample. The mono mix itself is made in the graph
+ *  (`PROXY_DOWNMIX`); the encode only states the layout. */
+const AUDIO_BY_QUALITY = {
+  final: { bitrate: "192k", channels: 2 },
+  proxy: { bitrate: "96k", channels: 1 },
+} as const satisfies Record<"proxy" | "final", { readonly bitrate: string; readonly channels: 1 | 2 }>
+
+/** The one AAC encode of a render's sound: a single-pass render's inline
+ *  audio, option B's mux and a chunked audio render's join all produce the
+ *  same stream for a given quality. */
+export function aacArgs(quality: "proxy" | "final"): readonly string[] {
+  const { bitrate, channels } = AUDIO_BY_QUALITY[quality]
+  return ["-c:a", "aac", "-b:a", bitrate, "-ar", "48000", "-ac", String(channels)]
+}
+
+/** A mono render's mix: the AVERAGE of the joined stereo track's two
+ *  channels, as the last step of its sound graph. Not the encoder's `-ac 1`,
+ *  whose stereo→mono law (each channel at −3 dB, summed) plays a preview 3 dB
+ *  louder than its final — a player sends a mono file to both speakers at full
+ *  level — and can clip a hot source the final does not. The average is exactly
+ *  as loud as the final for centred sound (speech), its peaks never exceed the
+ *  final's, and it mixes sample by sample, so nothing moves in time. */
+const PROXY_DOWNMIX = "pan=mono|c0=0.5*FL+0.5*FR"
 
 /** `maxSegmentsPerChunk` / `chunkThreshold` come from `ChunkPlanOptions`
  *  (`apply-edl-budget.ts`) — the same options the liveness budget plans with. */
@@ -293,7 +322,9 @@ export interface SliceOptions {
   /** Keys the ENCODER: a proxy (review) render encodes fast at a lower
    *  quality; a final one at delivery quality — whatever the canvas size. (It
    *  used to key on `target.height <= 720`, so a FINAL render of 720p sources
-   *  got the proxy encoder.) The canvas cap is `targetForQuality`'s job. */
+   *  got the proxy encoder.) The canvas cap is `targetForQuality`'s job. It
+   *  keys the SOUND too: a proxy's is the lighter mono mix (`aacArgs`,
+   *  `PROXY_DOWNMIX`), lossless slices included. */
   readonly quality: "proxy" | "final"
   readonly target: { width: number; height: number }
   readonly fps: number
@@ -626,6 +657,13 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
       aAcc = out
     }
     audioOutLabel = segs.length === 1 ? plans[0].aLabel! : "[aout]"
+    // A mono render (a proxy) averages the joined stereo track here — before
+    // the encode and before any lossless slice, so the join and the mux
+    // encode exactly this mix.
+    if (AUDIO_BY_QUALITY[opts.quality].channels === 1) {
+      chainParts.push(`${audioOutLabel}${PROXY_DOWNMIX}[amono]`)
+      audioOutLabel = "[amono]"
+    }
   }
 
   // video chain (video output only)
@@ -691,14 +729,15 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
       "-crf", proxy ? "26" : COMBINE_DELIVERY_CRF,
       "-pix_fmt", "yuv420p",
     )
-    if (emitAudio) outputArgs.push(...AAC_DELIVERY_ARGS)
+    if (emitAudio) outputArgs.push(...aacArgs(opts.quality))
     else outputArgs.push("-an")
     outputArgs.push("-movflags", "+faststart")
   } else if (audioCodec === "pcm") {
-    // RF64 keeps a multi-hour f32 stereo slice past WAV's 4 GiB header limit.
-    outputArgs.push("-map", audioOutLabel!, "-c:a", "pcm_f32le", "-ar", "48000", "-ac", "2", "-rf64", "auto")
+    // RF64 keeps a multi-hour f32 slice past WAV's 4 GiB header limit.
+    const channels = String(AUDIO_BY_QUALITY[opts.quality].channels)
+    outputArgs.push("-map", audioOutLabel!, "-c:a", "pcm_f32le", "-ar", "48000", "-ac", channels, "-rf64", "auto")
   } else {
-    outputArgs.push("-map", audioOutLabel!, ...AAC_DELIVERY_ARGS)
+    outputArgs.push("-map", audioOutLabel!, ...aacArgs(opts.quality))
   }
 
   // Explicit longer timeout: the default 10-min per-spawn would kill a long
@@ -849,7 +888,8 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
     const pcmChunks = !wantVideo && chunks.length > 1
     // Only picture chunks are checkpointed. A sound slice is capped at
     // AUDIO_FILTERGRAPH_MAX_SEGMENTS and re-renders in seconds, while its PCM
-    // (~23 MB per minute) would cost more to upload and fetch back than that.
+    // (~23 MB per minute; half that for a proxy's mono) would cost more to
+    // upload and fetch back than that.
     const useCheckpoint = checkpoint && muxAudioSeparately
     // Resume keys hash the exact command, including the ffmpeg build.
     const ffmpegVersion = useCheckpoint ? await ffmpegVersionLine() : ""
@@ -990,7 +1030,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
         // A chunked AUDIO render: join the lossless chunks sample-exactly and
         // encode AAC once — that is the output.
         await runFfmpeg(
-          ["-y", "-f", "concat", "-safe", "0", "-i", listPath, ...AAC_DELIVERY_ARGS, "-movflags", "+faststart", outputPath],
+          ["-y", "-f", "concat", "-safe", "0", "-i", listPath, ...aacArgs(quality), "-movflags", "+faststart", outputPath],
           audioMuxTimeoutMs(edlDurationMs(edl) / 1000),
         )
         await Promise.all(chunkPaths.map((p) => fs.rm(p, { force: true })))
@@ -1006,7 +1046,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
         await runFfmpeg(
           [
             "-y", "-i", concatPath, "-f", "concat", "-safe", "0", "-i", audioListPath,
-            "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", ...AAC_DELIVERY_ARGS,
+            "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", ...aacArgs(quality),
             "-movflags", "+faststart", outputPath,
           ],
           audioMuxTimeoutMs(edlDurationMs(edl) / 1000),

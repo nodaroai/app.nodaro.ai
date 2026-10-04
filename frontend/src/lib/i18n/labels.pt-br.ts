@@ -262,7 +262,7 @@ const HANDLE_LABELS_PT_BR: Record<string, string> = {
   "Text": "Texto",
   "URL / Query": "URL / pesquisa",
   "Keyword / Page URLs": "Palavra-chave / URLs de página",
-  "Profiles / Hashtags": "Perfis / hashtags",
+  "Profiles / Hashtags / Links": "Perfis / hashtags / links",
   "Keyword or account": "Palavra-chave ou conta",
   "Variables": "Variáveis",
   "Video": "Vídeo",

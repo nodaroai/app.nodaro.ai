@@ -1,6 +1,6 @@
 "use client"
 
-import { useT } from "@/lib/i18n"
+import { useT, type MessageKey } from "@/lib/i18n"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Copy, Check, Download, ImageIcon, Play, Music } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -8,26 +8,42 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { restorePickedTakeTranscript } from "@/lib/apply-edl-take-transcript"
 import { cn } from "@/lib/utils"
 import { JobConfigDisplay } from "./job-config-display"
+import { resultsGalleryPickPatch, resultsGalleryPickRefusal, resultsGalleryTakeMedium } from "./results-gallery-media"
 
 const EXTENSION_MAP = { video: "mp4", audio: "mp3", image: "png" } as const
 
+const NO_RESULTS: ReadonlyArray<{ url?: string; jobId?: string }> = []
+
+/** Why a take of the other medium cannot be picked, by that take's medium
+ *  (one whole sentence per medium, so no locale splices in a noun). */
+const PICK_REFUSAL: Readonly<Record<"video" | "audio", MessageKey>> = {
+  audio: "cfgshared.applyEdlTakeIsAudio",
+  video: "cfgshared.applyEdlTakeIsVideo",
+}
+
 interface ResultsGalleryProps {
+  /** The node the gallery belongs to: a pick's late write (Apply EDL's
+   *  Transcript, read back from the take's job) goes to it, not to whichever
+   *  node is selected by then. */
+  readonly nodeId: string | null
   readonly nodeType: string
-  readonly results: ReadonlyArray<{ url?: string; jobId?: string; timestamp?: number }>
-  readonly activeIndex: number
-  readonly mediaType: "image" | "video" | "audio"
+  /** The node's data: its results, the selected one, and (for a node whose
+   *  medium is a setting, like Apply EDL's `output`) what it produces. */
+  readonly nodeData: Readonly<Record<string, unknown>>
   readonly onUpdate: (data: Record<string, unknown>) => void
 }
 
 export function ResultsGallery({
+  nodeId,
   nodeType,
-  results,
-  activeIndex,
-  mediaType,
+  nodeData,
   onUpdate,
 }: ResultsGalleryProps) {
+  const results = (nodeData.generatedResults as ReadonlyArray<{ url?: string; jobId?: string }> | undefined) ?? NO_RESULTS
+  const activeIndex = (nodeData.activeResultIndex as number | undefined) ?? 0
   const t = useT()
   const setWorkflowThumbnail = useWorkflowStore((s) => s.setWorkflowThumbnail)
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
@@ -50,17 +66,21 @@ export function ResultsGallery({
   const handleSetActive = useCallback((idx: number) => {
     const result = results[idx]
     if (!result?.url) return
-    const updates: Record<string, unknown> = { activeResultIndex: idx }
-    if (mediaType === "image") {
-      updates.generatedImageUrl = result.url
-    } else if (mediaType === "video") {
-      updates.generatedVideoUrl = result.url
-    }
-    onUpdate(updates)
-  }, [results, mediaType, onUpdate])
+    // undefined: the pick is refused (its tile is disabled and says why).
+    const patch = resultsGalleryPickPatch(nodeType, nodeData, result.url, idx)
+    if (!patch) return
+    onUpdate(patch)
+    // Apply EDL: a take that kept no Transcript had the node's cleared by the
+    // pick; read the take's own back from its job (once per pick).
+    if (nodeType === "apply-edl" && nodeId) void restorePickedTakeTranscript(nodeId, { ...result, url: result.url })
+  }, [results, nodeId, nodeType, nodeData, onUpdate])
 
   if (results.length === 0 || !activeUrl) return null
 
+  // Each result is shown as the medium of its own file: a node whose medium is a
+  // setting (Apply EDL's Output) keeps results of both media across a change of
+  // it, and one whose output follows its input (Social Media Format) makes both.
+  const mediaType = resultsGalleryTakeMedium(nodeType, nodeData, activeUrl)
   const canSetThumbnail = mediaType !== "audio"
 
   return (
@@ -74,23 +94,38 @@ export function ResultsGallery({
         <div className="flex flex-wrap gap-1.5 mb-2">
           {results.map((r, idx) => {
             if (!r.url) return null
+            const tileMedium = resultsGalleryTakeMedium(nodeType, nodeData, r.url)
+            const refusedMedium = resultsGalleryPickRefusal(nodeType, nodeData, r.url)
+            const refusal = refusedMedium ? t(PICK_REFUSAL[refusedMedium]) : undefined
+            const tileName = t("cfgshared.resultN", { n: idx + 1 })
+            // The reason is part of the NAME, so assistive tech hears why the
+            // tile cannot be picked; aria-disabled (not `disabled`) keeps it
+            // focusable and its tooltip reachable.
+            const accessibleName = refusal ? `${tileName}${t("common.dashJoin")}${refusal}` : tileName
             return (
               <button
                 key={`${r.url}-${idx}`}
                 type="button"
+                // Video and audio tiles show only an icon, so the button names itself.
+                aria-label={accessibleName}
+                aria-disabled={refusal ? true : undefined}
+                title={refusal}
                 onClick={() => handleSetActive(idx)}
                 className={cn(
                   "relative w-12 h-12 rounded-md overflow-hidden border-2 transition-colors",
                   idx === activeIndex
                     ? "border-[#ff0073]"
-                    : "border-transparent hover:border-gray-400 dark:hover:border-gray-500",
+                    : refusal
+                      ? "border-transparent"
+                      : "border-transparent hover:border-gray-400 dark:hover:border-gray-500",
+                  refusal && "opacity-40 cursor-not-allowed",
                 )}
               >
-                {mediaType === "audio" ? (
+                {tileMedium === "audio" ? (
                   <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-[#2D2D2D]">
                     <Music className="w-4 h-4 text-gray-400" />
                   </div>
-                ) : mediaType === "video" ? (
+                ) : tileMedium === "video" ? (
                   <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-[#2D2D2D]">
                     <Play className="w-4 h-4 text-gray-400" />
                   </div>

@@ -803,7 +803,10 @@ export function runCombineVideos(
  * output_data URL the job returned (and clears the other so a video result can't
  * survive into an audio run). The remapped Transcript rides `output_data.json`
  * into `generatedJson`, so the `json` output handle resolves on a single-node
- * Run exactly as it does on a server DAG run (audit-dag parity).
+ * Run exactly as it does on a server DAG run (audit-dag parity). Always written,
+ * on the node and on the new take: a render cut with no transcript wired CLEARS
+ * the Transcript output an earlier take left, which is timed to another cut
+ * (lib/apply-edl-cut.ts).
  */
 export function runApplyEdl(
   nodeId: string,
@@ -816,6 +819,6 @@ export function runApplyEdl(
     ["generatedVideoUrl", "generatedAudioUrl"],
     "Apply EDL",
     ctx,
-    (od) => (od.json !== undefined ? { generatedJson: od.json } : {}),
+    (od) => ({ generatedJson: od.json ?? undefined }),
   );
 }

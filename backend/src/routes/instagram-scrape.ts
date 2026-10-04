@@ -27,6 +27,7 @@ import {
   featuredInstagramOutputs,
   instagramAnalysisCreditId,
   instagramAnalysisTierFrom,
+  instagramRequestedCount,
   resolveInstagramScrapeCreditId,
   splitInstagramTargets,
 } from "@nodaro/shared"
@@ -57,7 +58,7 @@ async function scrapeViaConnection(body: Record<string, unknown>): Promise<Recor
 
 const instagramScrapeBody = z.object({
   mode: z.enum(INSTAGRAM_SCRAPE_MODES).default("profile"),
-  /** Usernames (profile) or hashtags (hashtag), each already a single token; 1..5. */
+  /** Usernames (profile), hashtags (hashtag) or post links (post), one per item; 1..5. */
   targets: z.array(z.string().trim().min(1).max(INSTAGRAM_SCRAPE_MAX_TARGET_LENGTH)).min(1).max(INSTAGRAM_SCRAPE_MAX_SOURCES),
   count: z.number().int().min(1).max(INSTAGRAM_SCRAPE_MAX_COUNT).default(INSTAGRAM_SCRAPE_DEFAULT_COUNT),
   period: z.enum(INSTAGRAM_SCRAPE_PERIODS).default("30d"),
@@ -93,17 +94,23 @@ export async function instagramScrapeRoutes(app: FastifyInstance) {
     }
 
     const parsedBody = parsed.data
-    // Normalize targets ONCE (dedupe, strip @/#, cap) so the guard, the
-    // reservation, the provider, and the persisted input all agree on the same
-    // source set — the guard resolves `sources` through the same splitter.
-    const targets = splitInstagramTargets(parsedBody.targets)
+    // Normalize targets ONCE (dedupe, strip @/#, cap — or, in post mode, keep
+    // only canonical post links) so the guard, the reservation, the provider,
+    // and the persisted input all agree on the same source set — the guard
+    // resolves `sources` through the same splitter with the same mode.
+    const targets = splitInstagramTargets(parsedBody.targets, parsedBody.mode)
     if (targets.length === 0) {
-      return reply.status(400).send({ error: { code: "validation_error", message: "No valid Instagram targets after normalization." } })
+      const message = parsedBody.mode === "post"
+        ? "No valid Instagram post links — paste links like https://www.instagram.com/p/…/"
+        : "No valid Instagram targets after normalization."
+      return reply.status(400).send({ error: { code: "validation_error", message } })
     }
-    const body = { ...parsedBody, targets }
+    // A post link names one post: the format filter would only drop it.
+    const body = { ...parsedBody, targets, ...(parsedBody.mode === "post" ? { formats: undefined } : {}) }
     const sources = targets.length
+    const requestedCount = instagramRequestedCount(body.mode, body.count)
     const analysisTier = instagramAnalysisTierFrom(body)
-    const modelIdentifier = buildInstagramScrapeCreditId({ count: body.count, sources, analysis: analysisTier })
+    const modelIdentifier = buildInstagramScrapeCreditId({ count: requestedCount, sources, analysis: analysisTier })
 
     const viaCloud = await shouldRunOnCloud(config.APIFY_API_TOKEN)
     if (analysisTier && !viaCloud && !config.KIE_API_KEY && !config.ANTHROPIC_API_KEY && !config.GEMINI_API_KEY) {
@@ -190,7 +197,7 @@ export async function instagramScrapeRoutes(app: FastifyInstance) {
         if (usageLogId) {
           if (analyzed && analysisTier) {
             const [scrapeBase, perPost] = await Promise.all([
-              baseCreditCostFor(buildInstagramScrapeCreditId({ count: body.count, sources })),
+              baseCreditCostFor(buildInstagramScrapeCreditId({ count: requestedCount, sources })),
               baseCreditCostFor(instagramAnalysisCreditId(analysisTier)),
             ])
             await commitJobCredits(usageLogId, job.id, null, scrapeBase + perPost * analyzed.stats.analyzed, true)

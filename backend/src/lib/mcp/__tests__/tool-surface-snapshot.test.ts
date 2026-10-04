@@ -479,6 +479,13 @@ const COMPETITOR_LESSONS_TOOL_BYTES = 841
 // 386_689 total − 385_491 base = 1_198 B (503 + 695), far under the 8_192 B
 // per-tool budget, and the list keeps the 45 B of headroom it had.
 const CARD_MARK_TOOLS_BYTES = 1_198
+// RAISED 2026-10-04 by two `apply_edl` sentences and nothing else: a `proxy`
+// render (the 720p preview) is priced on its own, lower per-minute row
+// (`apply-edl:proxy`), so the description and the `quality` describe say so.
+// No tool added, no arg added — the membership fixture does not move. measured
+// by this suite: 386_799 total − 386_715 base = 84 B (43 + 41), which keeps the
+// 19 B of headroom the list had before.
+const APPLY_EDL_PREVIEW_RATE_WORDING_BYTES = 84
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -523,7 +530,8 @@ export const TOOL_WIRE_BUDGET = {
     COMPETITOR_TOOLS_BYTES +
     SWITCH_CAMERAS_TOOL_BYTES +
     COMPETITOR_LESSONS_TOOL_BYTES +
-    CARD_MARK_TOOLS_BYTES,
+    CARD_MARK_TOOLS_BYTES +
+    APPLY_EDL_PREVIEW_RATE_WORDING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

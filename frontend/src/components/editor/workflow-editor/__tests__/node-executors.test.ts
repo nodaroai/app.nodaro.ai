@@ -9,6 +9,7 @@ const mockTextToVideo = vi.fn()
 const mockTextToSpeech = vi.fn()
 const mockGenerateScriptApi = vi.fn()
 const mockCombineVideos = vi.fn()
+const mockApplyEdl = vi.fn()
 const mockGetJobStatusLean = vi.fn()
 // Apply writes to mockNodes so node state (e.g. currentJobId, which the
 // abandon-guard reads mid-poll) reflects what the real store would hold.
@@ -48,6 +49,7 @@ vi.mock("@/lib/api", () => ({
   textToSpeech: (...args: unknown[]) => mockTextToSpeech(...args),
   generateScriptApi: (...args: unknown[]) => mockGenerateScriptApi(...args),
   combineVideos: (...args: unknown[]) => mockCombineVideos(...args),
+  applyEdl: (...args: unknown[]) => mockApplyEdl(...args),
   getJobStatusLean: (...args: unknown[]) => mockGetJobStatusLean(...args),
 }))
 
@@ -72,6 +74,7 @@ import {
   runTextToSpeechGeneration,
   runScriptGeneration,
   runCombineVideos,
+  runApplyEdl,
 } from "../node-executors"
 
 function makeCtx(overrides: any = {}) {
@@ -553,5 +556,51 @@ describe("runCombineVideos", () => {
       "n1",
       expect.objectContaining({ executionStatus: "failed" }),
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// runApplyEdl — the Transcript output moves with the cut
+// ---------------------------------------------------------------------------
+
+describe("runApplyEdl", () => {
+  const EARLIER = { version: 1, words: [{ text: "back", startMs: 1310, endMs: 1650 }] }
+  const LANDED = { version: 1, words: [{ text: "back", startMs: 420, endMs: 760 }] }
+
+  async function run(outputData: Record<string, unknown>) {
+    vi.useFakeTimers()
+    mockApplyEdl.mockResolvedValue({ jobId: "j-edl" })
+    mockGetJobStatusLean.mockResolvedValue({ status: "completed", output_data: outputData })
+    mockNodes = [{
+      id: "n1",
+      data: {
+        output: "video",
+        generatedResults: [{ url: "http://take-0.mp4", timestamp: "t0", jobId: "j-0", generatedJson: EARLIER }],
+        generatedVideoUrl: "http://take-0.mp4",
+        generatedJson: EARLIER,
+      },
+    }]
+    const promise = runApplyEdl("n1", { edl: { version: 1, sources: [], segments: [] }, output: "video" }, makeCtx())
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(2000)
+    await promise
+    return mockUpdateNodeData.mock.calls.find(
+      (call: unknown[]) => call[0] === "n1" && (call[1] as Record<string, unknown>).executionStatus === "completed",
+    )?.[1] as Record<string, unknown>
+  }
+
+  it("a render cut with a transcript: it is the node's Transcript output, and its take keeps it", async () => {
+    const completion = await run({ videoUrl: "http://take-1.mp4", json: LANDED })
+    expect(completion.generatedVideoUrl).toBe("http://take-1.mp4")
+    expect(completion.generatedJson).toEqual(LANDED)
+    expect((completion.generatedResults as Array<Record<string, unknown>>)[0].generatedJson).toEqual(LANDED)
+  })
+
+  it("a render cut with NO transcript clears the earlier take's, and its take keeps none", async () => {
+    const completion = await run({ videoUrl: "http://take-1.mp4" })
+    expect(completion.generatedVideoUrl).toBe("http://take-1.mp4")
+    expect(completion).toHaveProperty("generatedJson", undefined)
+    expect((completion.generatedResults as Array<Record<string, unknown>>)[0]).toHaveProperty("generatedJson", undefined)
+    expect(mockNodes[0].data.generatedJson).toBeUndefined()
   })
 })

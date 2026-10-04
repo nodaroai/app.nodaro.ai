@@ -1,53 +1,32 @@
 import { describe, it, expect } from "vitest"
+import { MODEL_CATALOG } from "@nodaro/shared"
 import {
   AUDIO_TAGS,
   SSML_BREAK_OPTIONS,
-  V3_MODELS,
-  V2_MODELS,
-  isV2Model,
-  isV3Model,
+  LANGUAGE_LABELS,
   getAudioTagCategories,
   getLanguagesForModel,
   ALL_LANGUAGES,
+  tagInsertWarning,
 } from "@/lib/audio-tags"
 
-describe("isV2Model", () => {
-  it("returns true for undefined (v2 is default)", () => {
-    expect(isV2Model(undefined)).toBe(true)
+// Which model performs [audio tags] / honours SSML is answered by the capability
+// sheet in @nodaro/shared (tts-capabilities.test.ts there pins every model);
+// this file covers what the frontend adds on top: the names of the languages.
+describe("language names", () => {
+  it("every language code on every speech model's sheet has a display name", () => {
+    for (const m of Object.values(MODEL_CATALOG)) {
+      for (const code of m.tts?.languages ?? []) {
+        expect(LANGUAGE_LABELS[code], `${m.id}: no name for language "${code}"`).toBeDefined()
+      }
+    }
   })
 
-  it("returns true for elevenlabs-turbo", () => {
-    expect(isV2Model("elevenlabs-turbo")).toBe(true)
-  })
-
-  it("returns true for elevenlabs-multilingual", () => {
-    expect(isV2Model("elevenlabs-multilingual")).toBe(true)
-  })
-
-  it("returns false for elevenlabs-v3", () => {
-    expect(isV2Model("elevenlabs-v3")).toBe(false)
-  })
-
-  it("returns false for unknown model", () => {
-    expect(isV2Model("unknown-model")).toBe(false)
-  })
-})
-
-describe("isV3Model", () => {
-  it("returns true for elevenlabs-v3", () => {
-    expect(isV3Model("elevenlabs-v3")).toBe(true)
-  })
-
-  it("returns false for elevenlabs-turbo", () => {
-    expect(isV3Model("elevenlabs-turbo")).toBe(false)
-  })
-
-  it("returns false for undefined", () => {
-    expect(isV3Model(undefined)).toBe(false)
-  })
-
-  it("returns false for random string", () => {
-    expect(isV3Model("random")).toBe(false)
+  it("every name belongs to a language some speech model offers (no dead names)", () => {
+    const offered = new Set(Object.values(MODEL_CATALOG).flatMap((m) => m.tts?.languages ?? []))
+    for (const code of Object.keys(LANGUAGE_LABELS)) {
+      expect(offered.has(code), `"${code}" is named but no model offers it`).toBe(true)
+    }
   })
 })
 
@@ -112,6 +91,10 @@ describe("getLanguagesForModel", () => {
     expect(langs).toHaveLength(32)
   })
 
+  it("the legacy alias lists what turbo lists (it runs as turbo)", () => {
+    expect(getLanguagesForModel("elevenlabs")).toEqual(getLanguagesForModel("elevenlabs-turbo"))
+  })
+
   it("returns 46 languages for elevenlabs-v3", () => {
     const langs = getLanguagesForModel("elevenlabs-v3")
     expect(langs).toHaveLength(46)
@@ -161,6 +144,40 @@ describe("ALL_LANGUAGES", () => {
   })
 })
 
+describe("tagInsertWarning — what inserting a tag earns on each model", () => {
+  const BREAK = SSML_BREAK_OPTIONS[1]!.tag // <break time="1.0s" />
+  const TAG = "[whispers]"
+
+  it.each([
+    ["elevenlabs-v3", BREAK, "ssml"],
+    ["elevenlabs-v3", TAG, null],
+    ["elevenlabs-turbo", BREAK, null],
+    ["elevenlabs-turbo", TAG, "audioTag"],
+    ["elevenlabs-multilingual", BREAK, null],
+    ["elevenlabs-multilingual", TAG, "audioTag"],
+    ["elevenlabs", BREAK, null], // the legacy id runs as turbo
+    ["elevenlabs", TAG, "audioTag"],
+    ["not-a-model", BREAK, null], // an unknown id runs as turbo too
+    ["not-a-model", TAG, "audioTag"],
+    [undefined, BREAK, null], // no model chosen: never warns
+    [undefined, TAG, null],
+  ])("%s + %s → %s", (provider, tag, expected) => {
+    expect(tagInsertWarning(provider, tag)).toBe(expected)
+  })
+
+  it("a tag that is neither an SSML break nor an audio tag never warns", () => {
+    for (const provider of ["elevenlabs-v3", "elevenlabs-turbo", undefined]) {
+      expect(tagInsertWarning(provider, "plain text")).toBeNull()
+      expect(tagInsertWarning(provider, "")).toBeNull()
+    }
+  })
+
+  it("agrees with every shipped tag: all audio tags start with [ and every SSML break with <", () => {
+    for (const t of AUDIO_TAGS) expect(tagInsertWarning("elevenlabs-turbo", t.tag), t.tag).toBe("audioTag")
+    for (const b of SSML_BREAK_OPTIONS) expect(tagInsertWarning("elevenlabs-v3", b.tag), b.tag).toBe("ssml")
+  })
+})
+
 describe("AUDIO_TAGS data integrity", () => {
   it("all tags are in [bracket] format", () => {
     for (const tag of AUDIO_TAGS) {
@@ -205,13 +222,3 @@ describe("SSML_BREAK_OPTIONS", () => {
   })
 })
 
-describe("model constants", () => {
-  it("V3_MODELS contains elevenlabs-v3", () => {
-    expect(V3_MODELS).toContain("elevenlabs-v3")
-  })
-
-  it("V2_MODELS contains elevenlabs-turbo and elevenlabs-multilingual", () => {
-    expect(V2_MODELS).toContain("elevenlabs-turbo")
-    expect(V2_MODELS).toContain("elevenlabs-multilingual")
-  })
-})

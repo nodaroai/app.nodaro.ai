@@ -60,6 +60,13 @@ describe("instagramTargetUrl / buildInstagramActorInput", () => {
     expect(all.onlyPostsNewerThan).toBeUndefined()
     expect(all.directUrls).toEqual(["https://www.instagram.com/explore/tags/running/"])
   })
+  it("post mode: the post url itself, one result each, no date window — whatever count / period say", () => {
+    expect(instagramTargetUrl("post", "https://instagram.com/p/AbC123/?igsh=x")).toBe("https://www.instagram.com/p/AbC123/")
+    // Never scraped as a profile by accident: a non-link target yields no url.
+    expect(instagramTargetUrl("post", "nike")).toBe("")
+    const input = buildInstagramActorInput({ mode: "post", targets: ["https://www.instagram.com/p/AbC123/", "nike"], count: 80, period: "7d" })
+    expect(input).toEqual({ directUrls: ["https://www.instagram.com/p/AbC123/"], resultsType: "posts", resultsLimit: 1 })
+  })
 })
 
 describe("projectInstagramPosts", () => {
@@ -121,6 +128,15 @@ describe("selectInstagramPosts", () => {
     const out = selectInstagramPosts(items, { count: 2, sources: 2, period: "all", mode: "hashtag", now: NOW })
     expect(out.map((p) => p.postId)).toEqual(["h1", "h2", "h3"])
   })
+
+  it("post mode keeps a linked post however old, one per link", () => {
+    // A January post asked for by its link must come back even with a 7-day period set.
+    const old = rawPost({ id: "old", shortCode: "OLD", timestamp: "2026-01-01T00:00:00.000Z", inputUrl: "https://www.instagram.com/p/OLD/" })
+    const other = rawPost({ id: "x", shortCode: "X", inputUrl: "https://www.instagram.com/p/X/" })
+    const dup = rawPost({ id: "old2", shortCode: "OLD2", inputUrl: "https://www.instagram.com/p/OLD/" })
+    const out = selectInstagramPosts([old, other, dup], { count: 1, sources: 2, period: "7d", mode: "post", now: NOW })
+    expect(out.map((p) => p.postId)).toEqual(["old", "x"])
+  })
 })
 
 describe("runInstagramScrape", () => {
@@ -144,6 +160,15 @@ describe("runInstagramScrape", () => {
     expect(mocks.actorFn).toHaveBeenCalledWith(INSTAGRAM_ACTOR.apifyActorId)
     expect(res.json).toHaveLength(1)
     expect(res.json[0].ownerUsername).toBe("nike")
+  })
+  it("post mode caps the dataset read at one item per link", async () => {
+    mocks.datasetListItems.mockResolvedValueOnce({ items: [rawPost({ timestamp: "2025-05-05T00:00:00.000Z", inputUrl: "https://www.instagram.com/p/AbC/" })] })
+    const res = await runInstagramScrape({ mode: "post", targets: ["https://www.instagram.com/p/AbC/"], count: 80, period: "7d" })
+    expect(mocks.actorCall).toHaveBeenCalledWith(
+      { directUrls: ["https://www.instagram.com/p/AbC/"], resultsType: "posts", resultsLimit: 1 },
+      expect.objectContaining({ maxItems: 1 }),
+    )
+    expect(res.json.map((p) => p.postId)).toEqual(["p1"])
   })
   it("aborts a still-RUNNING run and surfaces a timeout; lets a missing key through", async () => {
     mocks.actorCall.mockResolvedValueOnce({ id: "r2", status: "RUNNING", defaultDatasetId: "ds-2" })
