@@ -209,10 +209,13 @@ also turns up in their search, the same as anything else they can open.
 A change also reaches an editor that already has the workflow open. The
 editor asks again what its reader may do with it: every minute while the tab
 is in view, as soon as a hidden tab is shown again, and whenever a save is
-refused. Someone lowered to `view` gets a read-only canvas that from then on
-receives the workflow the way any viewer does; someone removed gets a
-read-only canvas that receives nothing more. Someone raised from `view`
-keeps a read-only canvas until they reopen the workflow.
+refused. Once it learns that its reader was lowered to `view` or removed,
+nothing more is saved from that editor, and its canvas turns read-only as
+soon as no run is still in progress on it, so a run that was already going
+still delivers its result. From then on, someone lowered to `view` receives
+the workflow the way any viewer does; someone removed receives nothing more.
+Someone raised from `view` keeps a read-only canvas until they reopen the
+workflow.
 
 ### Work shared with me
 
