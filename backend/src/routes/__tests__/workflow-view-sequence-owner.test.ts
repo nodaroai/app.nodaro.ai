@@ -4,7 +4,8 @@ import Fastify, { type FastifyInstance } from "fastify"
 /**
  * A LINKED (keyframe / sequence) studio production's owner state never reaches
  * a reader who is not its owner (studio ruling T87), on the by-id doors (the
- * response to a move included) and on the public share read:
+ * response to a move included, in either form: `POST /v1/workflows/:id/move`
+ * and `PATCH /v1/workflows/:id { projectId }`) and on the public share read:
  *
  * - a take's endpoint pins (`sequenceEndpoints` on the clip node's
  *   `data.generatedResults` rows);
@@ -105,6 +106,8 @@ const CREATOR = "00000000-0000-4000-8000-000000000001"
 const OTHER = "00000000-0000-4000-8000-0000000000ff"
 const WF = "00000000-0000-4000-8000-000000000020"
 const WS = "00000000-0000-4000-8000-000000000030"
+/** The workspace a move files the production under. */
+const TARGET_WS = "00000000-0000-4000-8000-000000000031"
 const NOW = "2026-09-08T12:00:00.000Z"
 
 const PIN = (keyframeId: string, key: string) => ({ keyframeId, planRevision: 1, resultKey: key, jobId: key,
@@ -196,12 +199,17 @@ const PRODUCTION = {
   } },
 }
 
-/** Install an orgs plugin that answers `access` for every workflow. */
-function plugin(access: string) {
+/**
+ * Install an orgs plugin that answers `access` for every workflow; given
+ * `before`, it answers `before` for the production where it starts and
+ * `access` once a move has filed it under {@link TARGET_WS}.
+ */
+function plugin(access: string, before = access) {
   // The seam engages only when the plugin answers every access question.
   const orgs = {
     workflowAccess: vi.fn().mockResolvedValue(access),
-    workflowAccessFromRow: vi.fn().mockResolvedValue(access),
+    workflowAccessFromRow: vi.fn(async (_user: string, row: { workspace_id: string | null }) =>
+      (row.workspace_id === TARGET_WS ? access : before)),
     canDeleteWorkflow: vi.fn().mockResolvedValue(false),
     canRunWorkflow: vi.fn().mockResolvedValue(false),
     canChangeWorkflowVisibility: vi.fn().mockResolvedValue(false),
@@ -224,27 +232,43 @@ function tables(row: unknown = PRODUCTION) {
   vi.mocked(supabase.from).mockImplementation(((table: string) => (table === "workflows" ? workflows : entities)) as never)
 }
 
-/** Where a move takes the production: another project of its own workspace, so the move drops no grant. */
+/** Where a move takes the production: a project of another workspace, {@link TARGET_WS}. */
 const TARGET_PROJECT = "00000000-0000-4000-8000-000000000011"
+/** Someone a grant shared the production with; a move into another workspace drops it. */
+const GRANTEE = "00000000-0000-4000-8000-0000000000aa"
+/** How a move reports the grants it dropped. */
+const dropped = (granted: ReadonlyArray<string>) => granted.map((userId) => ({ userId, name: "Sam" }))
 
 /**
- * Mocks a move. The workflows table answers the move's facts read (select → eq
- * → `maybeSingle`: the row's owner, home and assignment) and its update
- * (update → eq → select → `single`: the moved row); the projects table answers
- * the target project.
+ * Mocks a move into {@link TARGET_WS}. The workflows table answers the reads
+ * of the stored row (select → eq → `maybeSingle`: PATCH's own load, then the
+ * move's facts: the row's owner, home and assignment) and the update (update →
+ * eq → select → `single` for the move endpoint, `maybeSingle` for PATCH: the
+ * moved row, which the database files under its new project's workspace). The
+ * projects table answers the target project, the grants table the grants the
+ * move drops (`granted`) and the profiles table their names. Any other table
+ * (PATCH's trigger sync) reads no rows.
  */
-function moveTables() {
-  const facts = { id: WF, user_id: CREATOR, workspace_id: WS, project_id: PRODUCTION.project_id, assignment_id: null }
-  const moved = { ...structuredClone(PRODUCTION), project_id: TARGET_PROJECT }
+function moveTables(granted: ReadonlyArray<string>) {
+  const stored = { ...structuredClone(PRODUCTION), assignment_id: null }
+  const moved = { ...structuredClone(PRODUCTION), project_id: TARGET_PROJECT, workspace_id: TARGET_WS }
+  const update = vi.fn().mockResolvedValue({ data: moved, error: null })
   const workflows = {
-    select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: facts, error: null }) })) })),
-    update: vi.fn(() => ({ eq: vi.fn(() => ({ select: vi.fn(() => ({
-      single: vi.fn().mockResolvedValue({ data: moved, error: null }) })) })) })),
+    select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: stored, error: null }) })) })),
+    update: vi.fn(() => ({ eq: vi.fn(() => ({ select: vi.fn(() => ({ single: update, maybeSingle: update })) })) })),
   }
   const projects = { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({
-    data: { id: TARGET_PROJECT, user_id: CREATOR, workspace_id: WS }, error: null }) })) })) }
-  vi.mocked(supabase.from).mockImplementation(((table: string) =>
-    (table === "workflows" ? workflows : table === "projects" ? projects : {})) as never)
+    data: { id: TARGET_PROJECT, user_id: CREATOR, workspace_id: TARGET_WS }, error: null }) })) })) }
+  const grants = { delete: vi.fn(() => ({ eq: vi.fn(() => ({ select: vi.fn().mockResolvedValue({
+    data: granted.map((user_id) => ({ user_id })), error: null }) })) })) }
+  const profiles = { select: vi.fn(() => ({ in: vi.fn().mockResolvedValue({
+    data: granted.map((id) => ({ id, full_name: "Sam" })), error: null }) })) }
+  const empty: Record<string, unknown> = {
+    select: vi.fn(() => empty), in: vi.fn(() => empty), eq: vi.fn(() => empty),
+    then: (resolve: (v: { data: unknown[]; error: null }) => unknown) => resolve({ data: [], error: null }),
+  }
+  const byTable: Record<string, unknown> = { workflows, projects, workflow_collaborators: grants, profiles }
+  vi.mocked(supabase.from).mockImplementation(((table: string) => byTable[table] ?? empty) as never)
 }
 
 let app: FastifyInstance
@@ -325,37 +349,58 @@ describe("GET /v1/workflows/:id/export (template) — the result rows are gone a
   )
 })
 
-describe("POST /v1/workflows/:id/move — the moved row goes back to the mover on GET's terms (T87)", () => {
-  const move = (user: string) => app.inject({ method: "POST", url: `/v1/workflows/${WF}/move`,
-    headers: { "x-user-id": user }, payload: { projectId: TARGET_PROJECT } })
+/** The two ways a move can be asked for; both answer it the same way. */
+const MOVES = [
+  ["POST /v1/workflows/:id/move", (user: string) => app.inject({ method: "POST", url: `/v1/workflows/${WF}/move`,
+    headers: { "x-user-id": user }, payload: { projectId: TARGET_PROJECT } })],
+  ["PATCH /v1/workflows/:id { projectId }", (user: string) => app.inject({ method: "PATCH", url: `/v1/workflows/${WF}`,
+    headers: { "x-user-id": user }, payload: { projectId: TARGET_PROJECT } })],
+] as const
 
-  it.each(["view", "none"])("a `%s` mover gets it without the owner's state", async (access) => {
+describe.each(MOVES)("%s — the moved row goes back to the mover on GET's terms (T87)", (_form, move) => {
+  // A move that drops a grant and one that drops none: PATCH answers each from
+  // its own return, and names the dropped grants only when there are some; the
+  // move endpoint always names them.
+  it.each([
+    ["view", "no grant", []], ["view", "a grant", [GRANTEE]],
+    ["none", "no grant", []], ["none", "a grant", [GRANTEE]],
+  ] as const)("a `%s` mover gets it without the owner's state (the move drops %s)", async (access, _drops, granted) => {
     // `view` is a team workspace's admin by default. The plugin answers a
     // mover `none` only when it fails closed (workspace facts it cannot load)
     // or a standing changes between the move and the check; stripped too.
-    plugin(access)
-    moveTables()
+    // Each mover may edit the production where it starts, the bar PATCH asks
+    // before it moves anything, so the moved row's answer is what decides.
+    plugin(access, "edit")
+    moveTables(granted)
     const res = await move(OTHER)
     expect(res.statusCode).toBe(200)
     for (const secret of PRIVATE) expect(res.body).not.toContain(secret)
     for (const key of OWNER_KEYS) expect(res.body).not.toContain(key)
+    expect(res.json().data).toMatchObject({ projectId: TARGET_PROJECT, workspaceId: TARGET_WS })
     const graph = res.json().data as Graph
     expect(graph.nodes).toEqual([clipNode(false), frameNode(false), unitNode(false)])
     expect(graph.settings.studio.sequenceRecommendations).toBeUndefined()
     expect(graph.settings.studio.sequenceGenerationPolicies).toEqual({})
     expect(graph.settings.studio.sequenceTakes).toEqual([take(false)])
     expect(graph.settings.studio.keyframes).toEqual([frameEntry(false)])
-    expect(res.json().droppedCollaborators).toEqual([])
+    // The frame keeps its acceptance and the check it waived; only the owner's reason goes.
+    expect((graph.settings.studio.keyframes as Array<{ acceptance: unknown }>)[0]!.acceptance).toEqual(acceptance(false))
+    expect(res.json().droppedCollaborators ?? []).toEqual(dropped(granted))
   })
 
-  it.each(["edit", "own"])("`%s` gets the moved row raw", async (access) => {
+  it.each([
+    ["edit", "no grant", []], ["edit", "a grant", [GRANTEE]],
+    ["own", "no grant", []], ["own", "a grant", [GRANTEE]],
+  ] as const)("`%s` gets the moved row raw (the move drops %s)", async (access, _drops, granted) => {
     plugin(access)
-    moveTables()
+    moveTables(granted)
     const res = await move(access === "own" ? CREATOR : OTHER)
     expect(res.statusCode).toBe(200)
+    expect(res.json().data).toMatchObject({ projectId: TARGET_PROJECT, workspaceId: TARGET_WS })
     const graph = res.json().data as Graph
     expect(graph.nodes).toEqual(PRODUCTION.nodes)
     expect(graph.settings.studio).toEqual(PRODUCTION.settings.studio)
+    expect(res.json().droppedCollaborators ?? []).toEqual(dropped(granted))
   })
 })
 
