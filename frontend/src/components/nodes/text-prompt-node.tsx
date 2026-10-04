@@ -28,9 +28,16 @@ import { getUpstreamNodes } from "@/lib/node-refs"
 import { INK, NODE_COLORS, getEffectiveColor, readableInk } from "@/lib/node-colors"
 import { hasCredits } from "@/lib/edition"
 import { formatCreditUnits } from "@/lib/credit-units"
-import { estimateNodeCredits, EXECUTABLE_TYPES } from "@/components/editor/workflow-editor/types"
+import { useRunFromHereCredits } from "@/hooks/use-run-from-here-credits"
 import { getPickerOutputMeta, PICKER_FAMILY_COLORS } from "@/lib/picker-handles"
 import type { TextPromptData } from "@/types/nodes"
+
+/** The "Run from here" price: the run's own estimate of everything downstream
+ *  (useRunFromHereCredits), mounted only while the button shows. */
+function RunFromHereCredits({ nodeId }: { readonly nodeId: string }) {
+  const credits = useRunFromHereCredits(nodeId)
+  return credits > 0 ? <span className="ml-1 opacity-80">({formatCreditUnits(credits)})</span> : null
+}
 
 // Module-level so HandleWithPopover's useConnection memo keeps a stable
 // reference. Mirrors the list-node pattern; defining the arrow inside the
@@ -73,54 +80,22 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
 
-  // Both the nodeRefs autocomplete and the downstream-credits walk traverse
-  // the whole graph. Previously this component held whole-array `s.nodes` /
-  // `s.edges` subscriptions, so every node drag (~60fps, new array refs) and
-  // every keystroke anywhere re-rendered this node AND its TagTextarea tree.
-  // Instead, derive PRIMITIVE keys in a useShallow selector: the component
-  // only re-renders when the upstream node set (id\x01label\x01type) or the
-  // downstream credit topology actually changes. The heavy walks are memoized
-  // on those keys and read live arrays from getState() at compute time.
-  const { upstreamKey, downstreamKey } = useWorkflowStore(
+  // The nodeRefs autocomplete traverses the whole graph. Previously this
+  // component held whole-array `s.nodes` / `s.edges` subscriptions, so every
+  // node drag (~60fps, new array refs) and every keystroke anywhere re-rendered
+  // this node AND its TagTextarea tree. Instead, derive PRIMITIVES in a
+  // useShallow selector: the component only re-renders when the upstream node
+  // set (id\x01label\x01type) changes, or whether anything is wired out of it.
+  // The "Run from here" price is computed by <RunFromHereCredits>, mounted only
+  // while that button shows.
+  const { upstreamKey, hasDownstream } = useWorkflowStore(
     useShallow((s) => {
       // Upstream key — id + label + type so a rename invalidates (not id alone,
       // which would leave stale {Node Label} tokens in the textarea).
       const ups = getUpstreamNodes(id, s.nodes, s.edges)
       let uKey = ""
       for (const r of ups) uKey += `${r.id}\x01${r.label}\x01${r.type}\x02`
-
-      // Downstream key — forward BFS topology + each executable downstream
-      // node's type and the data fields estimateNodeCredits reads. Index nodes
-      // by id + edges by source once so the walk is O(V+E), not O(V·(V+E))
-      // from `nodes.find()` + a full `edges` scan per visited node.
-      let dKey = ""
-      const outEdges0 = s.edges.filter((e) => e.source === id)
-      if (outEdges0.length > 0) {
-        const nodesById = new Map<string, (typeof s.nodes)[number]>()
-        for (const n of s.nodes) nodesById.set(n.id, n)
-        const edgesBySource = new Map<string, (typeof s.edges)[number][]>()
-        for (const edge of s.edges) {
-          const bucket = edgesBySource.get(edge.source)
-          if (bucket) bucket.push(edge)
-          else edgesBySource.set(edge.source, [edge])
-        }
-        const visited = new Set<string>([id])
-        const queue = outEdges0.map((e) => e.target)
-        while (queue.length > 0) {
-          const current = queue.shift()!
-          if (visited.has(current)) continue
-          visited.add(current)
-          const dn = nodesById.get(current)
-          if (dn) {
-            const dd = (dn.data ?? {}) as Record<string, unknown>
-            dKey += `${current}\x01${dn.type ?? ""}\x01${String(dd.estimatedCredits ?? "")}\x01${String(dd.provider ?? "")}\x01${String(dd.resolution ?? "")}\x01${String(dd.videoDuration ?? "")}\x01${String(dd.actor ?? "")}\x01${String(dd.mode ?? "")}\x02`
-          }
-          for (const edge of edgesBySource.get(current) ?? []) {
-            if (!visited.has(edge.target)) queue.push(edge.target)
-          }
-        }
-      }
-      return { upstreamKey: uKey, downstreamKey: dKey }
+      return { upstreamKey: uKey, hasDownstream: s.edges.some((e) => e.source === id) }
     }),
   )
 
@@ -286,53 +261,6 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
       })
     }
   }, [id])
-
-  // BFS forward to find downstream executable nodes and sum their credit cost.
-  // Memoized on `downstreamKey` (a primitive fingerprint of the downstream
-  // topology + credit-relevant data) so it only recomputes when that actually
-  // changes; reads live arrays from getState() at compute time.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const { hasDownstream, downstreamCredits } = useMemo(() => {
-    const { nodes, edges } = useWorkflowStore.getState()
-    const outEdges = edges.filter((e) => e.source === id)
-    if (outEdges.length === 0) return { hasDownstream: false, downstreamCredits: 0 }
-
-    // Index nodes by id + edges by source once so the forward walk is O(V+E),
-    // not O(V·(V+E)) from `nodes.find()` + a full `edges` scan per visited node.
-    const nodesById = new Map<string, (typeof nodes)[number]>()
-    for (const n of nodes) nodesById.set(n.id, n)
-    const edgesBySource = new Map<string, (typeof edges)[number][]>()
-    for (const edge of edges) {
-      const bucket = edgesBySource.get(edge.source)
-      if (bucket) bucket.push(edge)
-      else edgesBySource.set(edge.source, [edge])
-    }
-
-    const visited = new Set<string>([id])
-    const queue = outEdges.map((e) => e.target)
-    let totalCredits = 0
-
-    while (queue.length > 0) {
-      const current = queue.shift()!
-      if (visited.has(current)) continue
-      visited.add(current)
-
-      const node = nodesById.get(current)
-      if (!node) continue
-
-      if (EXECUTABLE_TYPES.has(node.type ?? "")) {
-        totalCredits += estimateNodeCredits(node as { id?: string; type?: string; data?: Record<string, unknown> }, edges, nodes)
-      }
-
-      for (const edge of edgesBySource.get(current) ?? []) {
-        if (!visited.has(edge.target)) {
-          queue.push(edge.target)
-        }
-      }
-    }
-
-    return { hasDownstream: true, downstreamCredits: totalCredits }
-  }, [id, downstreamKey])
 
   const outputTarget: "text" | "voice" | "lyrics" =
     nodeData.outputTarget === "voice" || nodeData.outputTarget === "lyrics" ? nodeData.outputTarget : "text"
@@ -540,9 +468,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
               >
                 <FastForward className="w-3 h-3" />
                 {t("node.runFromHere")}
-                {hasCredits() && downstreamCredits > 0 && (
-                  <span className="ml-1 opacity-80">({formatCreditUnits(downstreamCredits)})</span>
-                )}
+                {hasCredits() && <RunFromHereCredits nodeId={id} />}
               </button>
             </NodeRunStripShell>
           </div>

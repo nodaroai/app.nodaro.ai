@@ -37,7 +37,7 @@ interface VideoRetakeQuickToolbarProps {
  *    retake-mode parameter — distinct from aspect/resolution).
  *  - Versions: 1-4 (`data.repeatCount`).
  *  - Run: <RunNodeButton>. Credit math is per-second (`ltx-2.3-pro-retake:
- *    per-second` = 50cr) × `data.retakeDuration` — the parent node
+ *    per-second`) × `data.retakeDuration` — the parent node
  *    computes this and passes `credits` as the per-press cost.
  *
  * Compact-mode threshold + deferred-close pattern preserved verbatim from

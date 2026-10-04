@@ -10,7 +10,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { assembleNarratedVideoCredits } from "../providers/video/narrated-block-fit.js"
+import { assembleNarratedVideoBaseCredits } from "../lib/video-utility-credits.js"
 
 const body = z.object({
   blocks: z.array(z.object({
@@ -25,17 +25,11 @@ const body = z.object({
   userId: z.string().uuid().optional(),
 })
 
-/** BASE credits (pre-markup): 3 + ceil(N/6). Read block count before Zod defaults. */
-function estimateCredits(raw: unknown): number {
-  const blocks = (raw as Record<string, unknown> | undefined)?.blocks
-  const n = Array.isArray(blocks) ? blocks.length : 0
-  return assembleNarratedVideoCredits(Math.max(1, Math.min(60, n)))
-}
 
 export async function assembleNarratedVideoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/assemble-narrated-video",
-    { preHandler: creditGuard(() => "assemble-narrated-video", { computeCredits: (b) => estimateCredits(b) }) },
+    { preHandler: creditGuard(() => "assemble-narrated-video", { computeCredits: (b) => assembleNarratedVideoBaseCredits((b ?? {}) as Record<string, unknown>) }) },
     async (req, reply) => {
       const parsed = body.safeParse(req.body)
       if (!parsed.success) {

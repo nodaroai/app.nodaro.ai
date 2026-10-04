@@ -1,4 +1,4 @@
-import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, CAMERA_SWITCH_CREDIT_ID } from "@nodaro/shared"
+import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -25,6 +25,7 @@ import { PIPELINE_PINNABLE_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCR
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
+import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
 import { ConsentRequiredError } from "../lib/consent-required.js"
 import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pricing/cinematic-avatar-cost.js"
@@ -530,7 +531,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "veo3_lite:1080p": 90,         // (VEO 3.1 Lite @ 1080p)
   // Direct-4K generation (base 1080p → chained get-4k-video). Base cost, NO markup
   // (admin panel applies markup). KIE: ceil(KIE_cr/4). docs.kie.ai VEO 3.1 4K.
-  "veo3:4k": 930,                 // (VEO 3.1 Quality @ 4K)
+  "veo3:4k": 1300,                // (VEO 3.1 Quality @ 4K — a 1080p generation plus the 4K upscale, so above the flat veo3)
   "veo3.1:4k": 450,               // (VEO 3.1 Fast @ 4K)
   "veo3_lite:4k": 380,           // (VEO 3.1 Lite @ 4K)
   "kling": 280,                   // (10s no-audio fallback)
@@ -1513,15 +1514,16 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // (competitor-scan:<n> = n pages). Cloud-only, like Social Search
   // (packages/shared competitors.ts is the table). Migration 447.
   ...COMPETITOR_SCAN_CREDIT_COSTS,
-  "qa-check": 10,
-  "qa-check:economy": 1,
-  "qa-check:premium": 10,
-  // ── Dynamic-priced video utilities (NOT used by routes, but kept as
-  //    safety-net fallback). The three rows below are unreachable when
-  //    routes/loop-video.ts, routes/trim-video.ts, routes/combine-videos.ts
-  //    use the computeCredits hook in creditGuard. Their model_pricing rows
-  //    (also 0) are likewise unreachable.
-  "combine-videos": 30,
+  "qa-check": 20,
+  "qa-check:economy": 10,
+  "qa-check:premium": 40,
+  // ── Video utilities priced per unit (Trim / Loop / Combine / Assemble
+  //    Narrated Video). A run is charged units × VIDEO_UTIL_PRICING.CREDIT_UNIT
+  //    (@nodaro/shared) on both paths — the route's computeCredits and the
+  //    workflow run's override, one mapping in lib/video-utility-credits.ts.
+  //    Each row is ONE unit and mirrors that constant, so an estimate can quote
+  //    the row × units (pinned by video-utility-credits.test.ts).
+  "combine-videos": 10,
   // apply-edl — render an EDL into ONE media file (local ffmpeg, no provider
   // cost). Priced PER MINUTE of rendered output: the route's computeCredits and
   // the DAG's applyEdlCreditOverride both reserve `this × ceil(edlDurationMs/
@@ -1544,11 +1546,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // per extra platform render via imageOverlayCredits (@nodaro/shared).
   "image-overlay": 10,
   // Assemble Narrated Video — fits N ordered (clip, voice) blocks into one
-  // MP4 via ffmpeg (local compute, no external provider cost). BASE credits
-  // (pre-markup) is the 6-block case: 3 + ceil = 4. The route scales
-  // with block count via computeCredits (assembleNarratedVideoCredits).
-  // See migration 246.
-  "assemble-narrated-video": 40,
+  // MP4 via ffmpeg (local compute, no external provider cost). ONE unit (see
+  // the video-utility rows above): a run is 3 units + 1 per 6 blocks
+  // (assembleNarratedVideoCredits), on the route and the workflow run alike.
+  "assemble-narrated-video": 10,
   "merge-video-audio": 20,
   "add-captions": 30,
   "add-captions:kinetic": 50,
@@ -1611,9 +1612,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "llm-structured": 10,
   "llm-structured:economy": 10,
   "llm-structured:premium": 10,
-  "image-critic": 5,
+  "image-critic": 20,
   "image-critic:economy": 10,
-  "image-critic:premium": 20,
+  "image-critic:premium": 40,
   // Content Recipe — one structured call over one post, flat per call by the
   // model's tier (owner decision 2026-10-01). Cloud-only: the private plugin
   // runs it; these are the public prices it is billed at.
@@ -2018,11 +2019,12 @@ export interface ChargedPriceTable {
  * The price a user pays for `units` of `identifier` (1 by default), or
  * undefined when it is priced nowhere. Units multiply the base BEFORE the
  * markup, as a route that computes its price reserves it (a per-second rate ×
- * seconds, marked up once).
+ * seconds, rounded up to a whole credit, marked up once). Units may be
+ * fractional — a retake window is set to the frame.
  */
 export function chargedCredits(prices: ChargedPriceTable, identifier: string, units = 1): number | undefined {
   const base = prices.base(identifier)
-  return base === undefined ? undefined : prices.charge(identifier, base * units)
+  return base === undefined ? undefined : prices.charge(identifier, Math.ceil(base * units))
 }
 
 /**
@@ -3434,12 +3436,34 @@ function sumWorkflowEstimate(
     if (node.type === "image-overlay") {
       return sum + prices.charge("image-overlay", imageOverlayCredits((node.data?.variants as unknown[] | undefined)))
     }
-    const modelId = getNodeModelIdentifier(withWiredSettings(node, nodes, edges), {
+    // Trim / Loop / Combine / Assemble Narrated Video are priced per unit of
+    // what they make — the same estimator the route and the workflow run
+    // charge with (lib/video-utility-credits.ts), marked up once as a whole.
+    const utilityBody = videoUtilityEstimateBody(node, edges)
+    if (utilityBody) {
+      const base = videoUtilityBaseCredits(node.type, utilityBody)
+      if (base !== undefined) return sum + prices.charge(node.type, base)
+    }
+    const priced = withWiredSettings(node, nodes, edges)
+    const modelId = getNodeModelIdentifier(priced, {
       timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
       audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
     })
-    return sum + (chargedCredits(prices, modelId) ?? chargedCredits(prices, node.type) ?? 0)
+    return sum + (chargedCredits(prices, modelId, estimatePricingUnits(priced)) ?? chargedCredits(prices, node.type) ?? 0)
   }, 0)
+}
+
+/**
+ * How many of its price row a node's run is charged: the seconds an LTX 2.3
+ * Pro extend adds (its row is per second — the same product the route's guard
+ * and the workflow run reserve, lib/ltx-extend-credits.ts), else one.
+ */
+function estimatePricingUnits(node: EstimateNode): number {
+  const data = node.data ?? {}
+  if (node.type === "extend-video" && data.provider === "ltx-2.3-pro") return ltxExtendDurationSec(data.duration)
+  // Video Retake: the seconds of the replaced window (lib/ltx-retake-credits.ts).
+  if (node.type === "video-retake") return ltxRetakeDurationSec(data.retakeDuration)
+  return 1
 }
 
 /**
@@ -3510,6 +3534,12 @@ function getNodeModelIdentifier(
   // Generate Music reserves on the music id whatever the model (the route and
   // the payload builder both do); the model id "minimax" is the MiniMax VIDEO price.
   if (nodeType === "generate-music") return MUSIC_CREDIT_ID
+
+  // Video Composer reserves on the scene-graph-ai rows (its route builds the
+  // id from the same three levers), not on the video-composer ones.
+  if (nodeType === "video-composer") {
+    return buildLlmCreditIdentifier("scene-graph-ai", data.llmModel as string | undefined, data.reasoningEffort as string | undefined, data.advancedMode === true)
+  }
 
   // LLM Chat uses tiered credit identifier based on selected model. Reasoning
   // effort and advanced mode are passed through too — actual billing bumps a
@@ -3641,6 +3671,15 @@ function getNodeModelIdentifier(
     return (typeof data.provider === "string" && data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
   }
 
+  // Video Retake: priced per second of the replaced window — the per-second
+  // row, which sumWorkflowEstimate multiplies by the seconds (estimatePricingUnits).
+  if (nodeType === "video-retake") return LTX_RETAKE_PER_SECOND_CREDIT_ID
+
+  // Video SFX: a price row per input-clip length, chosen when the run measures
+  // the clip. The clip is not measured before a run, so the estimate quotes
+  // the row for the length an unmeasurable clip is charged (8 seconds).
+  if (nodeType === "video-sfx") return videoSfxCreditId(undefined)
+
   const provider = data.provider as string | undefined
   if (!provider) return nodeType
 
@@ -3648,6 +3687,10 @@ function getNodeModelIdentifier(
   if (nodeType === "extend-video" && provider === "veo-extend" && data.model === "quality") {
     return "veo-extend:quality"
   }
+
+  // Extend-video: LTX 2.3 Pro is priced per second added — the per-second row,
+  // which sumWorkflowEstimate multiplies by the seconds (estimatePricingUnits).
+  if (nodeType === "extend-video" && provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
 
   // Extend-video: seedance trim-stitch extend prices by duration tier ×
   // resolution, for the model SEEDANCE_EXTEND_GENERATION_MODEL actually

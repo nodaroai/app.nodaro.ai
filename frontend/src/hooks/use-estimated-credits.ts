@@ -1,9 +1,7 @@
-import { estimateLoopVideoCredits, estimateTrimVideoCredits, estimateCombineVideosCredits, assembleNarratedVideoCredits, type LoopVideoEstimatorInput, type TrimVideoEstimatorInput, type CombineVideosEstimatorInput, imageOverlayCredits, overlayVariantIdFromHandle } from "@nodaro/shared"
+import { imageOverlayCredits, overlayVariantIdFromHandle, VIDEO_UTIL_PRICING } from "@nodaro/shared"
+import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import {
-  getUpstreamDuration,
-  getCombineUpstreamDurations,
-} from "@/lib/upstream-duration"
+import { estimateVideoUtilityBaseCredits } from "@/lib/video-utility-estimate"
 import type { WorkflowNode } from "@/types/nodes"
 
 /** Returns the estimated credit cost for a video-utility node by walking
@@ -16,28 +14,9 @@ import type { WorkflowNode } from "@/types/nodes"
 export function useEstimatedCredits(node: WorkflowNode): number {
   return useWorkflowStore((s) => {
     const data = node.data as Record<string, unknown>
+    const utility = estimateVideoUtilityBaseCredits(node, s.nodes as WorkflowNode[], s.edges)
+    if (utility !== undefined) return utility
     switch (node.type) {
-      case "loop-video": {
-        const upstream = getUpstreamDuration(node.id, s.nodes as WorkflowNode[], s.edges)
-        return estimateLoopVideoCredits(data as LoopVideoEstimatorInput, upstream)
-      }
-      case "trim-video": {
-        const upstream = getUpstreamDuration(node.id, s.nodes as WorkflowNode[], s.edges)
-        return estimateTrimVideoCredits(data as TrimVideoEstimatorInput, upstream)
-      }
-      case "combine-videos": {
-        const durations = getCombineUpstreamDurations(node, s.nodes as WorkflowNode[], s.edges)
-        return estimateCombineVideosCredits(data as CombineVideosEstimatorInput, durations)
-      }
-      case "assemble-narrated-video": {
-        // Block count = edges wired into the "video" handle (the `blocks`
-        // array driver — see execute-node.ts). No inputs wired yet still
-        // reserves the 1-block floor (never shows the unreachable N=0 value).
-        const wiredCount = s.edges.filter(
-          (e) => e.target === node.id && e.targetHandle === "video",
-        ).length
-        return assembleNarratedVideoCredits(Math.max(1, wiredCount))
-      }
       case "image-overlay": {
         // Base + 2 per extra platform render — ticked ones plus any platform a
         // wire leaves through (mirrors payload-builder's union).
@@ -52,4 +31,17 @@ export function useEstimatedCredits(node: WorkflowNode): number {
         return 0
     }
   })
+}
+
+/**
+ * What a video-utility node's Run is CHARGED (Trim, Loop, Combine, Assemble
+ * Narrated Video): its one-unit price — the charged lookup every other node's
+ * pill reads — times the units its output spans. The same product the config
+ * panel and the workflow estimate quote (getPricingUnits), and the route and
+ * the workflow run reserve.
+ */
+export function useVideoUtilityCredits(node: WorkflowNode): number {
+  const unitPrice = useModelCredits(node.type)
+  const base = useEstimatedCredits(node)
+  return unitPrice * (base / VIDEO_UTIL_PRICING.CREDIT_UNIT)
 }

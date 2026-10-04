@@ -21,19 +21,21 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { EXTEND_VIDEO_PROVIDERS, PROMPT_HARD_CEILING, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, applyVideoNegativePrompt, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
+import { EXTEND_VIDEO_PROVIDERS, LTX_EXTEND_PER_SECOND_CREDIT_ID, PROMPT_HARD_CEILING, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, applyVideoNegativePrompt, ltxExtendDurationSec, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { buildSeedanceExtendCreditIdentifier } from "../lib/seedance-extend-model.js"
+import { ltxExtendBaseCredits } from "../lib/ltx-extend-credits.js"
 import { assembleVideoConnectedReferences } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
-// KIE providers (veo-extend, runway-extend) need a kieTaskId from the upstream
-// generation; LTX 2.3 Pro is a Replicate model that takes a raw videoUrl. Both
-// fields are optional at the schema level and conditionally required inside
-// the handler so each provider's required input set is enforced precisely.
+// veo-extend and runway-extend continue an upstream generation and need its
+// provider task id; LTX 2.3 Pro takes a raw videoUrl. Both fields are optional
+// at the schema level and conditionally required inside the handler so each
+// provider's required input set is enforced precisely.
 export const extendVideoBody = z.object({
-  kieTaskId: z.string().min(1).optional(), // Required for veo-extend / runway-extend
+  taskId: z.string().min(1).optional(),    // Required for veo-extend / runway-extend (the job output's providerTaskId)
+  kieTaskId: z.string().min(1).optional(), // Deprecated alias of taskId, still accepted
   videoUrl: safeUrlSchema.optional(),       // Required for ltx-2.3-pro
   prompt: z.string().min(1).max(PROMPT_HARD_CEILING).optional(),    // Required for veo-extend / runway-extend; optional for LTX
   negativePrompt: z.string().max(PROMPT_HARD_CEILING).optional(), // Always optional — injected into prompt as "Avoid: …" for non-native providers
@@ -121,6 +123,10 @@ export function resolveExtendVideoIdentifier(body: Record<string, unknown> | und
   if (provider === "veo-extend" && body?.model === "quality") {
     return "veo-extend:quality"
   }
+  // LTX 2.3 Pro extend is priced per second added: the per-second row, which
+  // the guard and the workflow run multiply by the seconds
+  // (ltxExtendBaseCredits).
+  if (provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
   if (provider === "seedance-2-extend") {
     // Duration tier × resolution composites, priced for the model
     // SEEDANCE_EXTEND_GENERATION_MODEL actually dispatches on. Same builder
@@ -135,8 +141,19 @@ export function resolveExtendVideoIdentifier(body: Record<string, unknown> | und
 }
 
 export async function extendVideoRoutes(app: FastifyInstance) {
+  // LTX 2.3 Pro extend is priced per second added, so its guard carries the
+  // seconds (the reservation below then reserves exactly that amount); every
+  // other provider keeps its row-priced guard, unchanged.
+  const ltxExtendGuard = creditGuard(() => LTX_EXTEND_PER_SECOND_CREDIT_ID, {
+    computeCredits: (body) => ltxExtendBaseCredits((body as Record<string, unknown> | undefined)?.duration),
+  })
+  const rowPricedGuard = creditGuard((req) => resolveExtendVideoIdentifier(req.body as Record<string, unknown> | undefined))
+
   app.post("/v1/extend-video", {
-    preHandler: creditGuard((req) => resolveExtendVideoIdentifier(req.body as Record<string, unknown> | undefined)),
+    preHandler: async (req, reply) => {
+      const body = req.body as Record<string, unknown> | undefined
+      await (body?.provider === "ltx-2.3-pro" ? ltxExtendGuard : rowPricedGuard)(req, reply)
+    },
   }, async (req, reply) => {
     const parsed = extendVideoBody.safeParse(req.body)
     if (!parsed.success) {
@@ -145,7 +162,8 @@ export async function extendVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { kieTaskId, videoUrl, prompt, negativePrompt, provider, model, seeds, quality, extendMode, duration } = parsed.data
+    const { videoUrl, prompt, negativePrompt, provider, model, seeds, quality, extendMode, duration } = parsed.data
+    const kieTaskId = parsed.data.taskId ?? parsed.data.kieTaskId
     const userId = req.userId
 
     if (!userId) {
@@ -192,7 +210,7 @@ export async function extendVideoRoutes(app: FastifyInstance) {
       // upstream + a prompt.
       if (!kieTaskId) {
         return reply.status(400).send({
-          error: { code: "validation_error", message: "kieTaskId is required for KIE-based extend providers" },
+          error: { code: "validation_error", message: `taskId (the source generation's providerTaskId) is required for ${provider}` },
         })
       }
       if (!prompt) {
@@ -292,7 +310,8 @@ export async function extendVideoRoutes(app: FastifyInstance) {
             jobId: job.id,
             provider,
             video: videoUrl,
-            duration,
+            // The seconds the guard priced (default 6 when none was given).
+            duration: ltxExtendDurationSec(duration),
             extend_mode: extendMode ?? "end",
             usageLogId,
           }

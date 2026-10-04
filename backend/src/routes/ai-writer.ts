@@ -16,6 +16,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { billedProviderCost } from "../lib/llm-errors.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
 
 const aiWriterBody = z.object({
   // LLM_TEXT_INPUT_MAX (100K) — same rationale as llm-chat: the input feeds an
@@ -325,10 +326,11 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         })
         sse.close()
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Claude API stream failed"
+        // The person reads a model-lane failure's user-safe sentence; the full
+        // diagnostic goes to the log.
+        const message = userFacingMessage(err, "Claude API stream failed")
 
-        console.error("[ai-writer-stream] Error:", message)
+        console.error("[ai-writer-stream] Error:", err instanceof Error ? err.message : message)
 
         // Mark job as failed
         await supabase

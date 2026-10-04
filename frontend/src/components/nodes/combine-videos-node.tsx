@@ -14,7 +14,7 @@ import { ACCEPTS_VIDEO, FFMPEG_COLORS } from "@/lib/ffmpeg-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { useEstimatedCredits } from "@/hooks/use-estimated-credits"
+import { useVideoUtilityCredits } from "@/hooks/use-estimated-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
@@ -24,7 +24,7 @@ import type { CombineVideosData } from "@/types/nodes"
 function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as CombineVideosData
-  const credits = useEstimatedCredits({ id, type: "combine-videos", data: nodeData } as any)
+  const credits = useVideoUtilityCredits({ id, type: "combine-videos", data: nodeData } as any)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)

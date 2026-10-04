@@ -52,6 +52,19 @@ export interface KieModelConfig {
   supportsFastMode?: boolean               // emit pe_fast_mode from options
   supportsSeed?: boolean                   // emit seed from options
   omitSeed?: boolean                       // NEVER send seed — model schema rejects it (additionalProperties: false)
+  /**
+   * SCHEMA FACT: the JSON type this SKU's KIE request schema gives `seed`.
+   * Absent ⇒ integer, which is what our API, MCP and editor carry and what
+   * almost every seeded KIE schema declares. `"string"` ⇒ the seed is sent as
+   * its decimal string: KIE checks the type at createTask and refuses a number
+   * with `{"code":500,"msg":"seed must be a string"}`, so the job fails.
+   *
+   * Read through `kieSeedForWire` by the KIE IMAGE lanes only (`generateImage`
+   * and `editImage` in kie/image.ts). The video and audio seed writes do not
+   * consult it, and `__tests__/models.test.ts` fails if a non-image SKU
+   * declares it. Each declaration cites its doc URL and fetch date.
+   */
+  seedType?: "string"
   requiresDuration?: boolean               // Model schema lists `duration` as REQUIRED — bespoke runners must emit it even in modes where it is ignored (gemini-omni-flash)
 }
 
@@ -322,22 +335,32 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
 
   // Google Imagen4 family
   // See: docs.kie.ai/market/google/imagen4.md
+  // The three tiers do NOT share a seed type, so declare it per SKU, never by
+  // family: imagen4 and imagen4-ultra take a string, imagen4-fast an integer.
   "imagen4": {
     model: "google/imagen4",
     credits: 8,
     cost: 0.04,
+    // docs.kie.ai/market/google/imagen4.md (fetched 2026-10-04): seed is
+    // `type: string, maxLength: 500` — a number fails "seed must be a string".
+    seedType: "string",
     extraParams: { aspect_ratio: "16:9" },
   },
   "imagen4-fast": {
     model: "google/imagen4-fast",
     credits: 4,
     cost: 0.02,
+    // docs.kie.ai/market/google/imagen4-fast.md (fetched 2026-10-04): seed is
+    // `type: integer`, unlike its siblings — so no seedType here.
     extraParams: { aspect_ratio: "16:9" },
   },
   "imagen4-ultra": {
     model: "google/imagen4-ultra",
     credits: 12,
     cost: 0.06,
+    // docs.kie.ai/market/google/imagen4-ultra.md (fetched 2026-10-04): seed is
+    // `type: string, maxLength: 500` — a number fails "seed must be a string".
+    seedType: "string",
     extraParams: { aspect_ratio: "16:9" },
   },
 
@@ -1700,6 +1723,20 @@ export function kieModelAcceptsResolution(provider: string, modelConfig: KieMode
   if (RESOLUTION_CONSUMING_PARAM_ADAPTERS.has(provider)) return true
   if (!modelConfig) return false
   return modelConfig.acceptsResolution === true || modelConfig.extraParams?.resolution !== undefined
+}
+
+// =============================================================================
+// SEED WIRE TYPE
+// =============================================================================
+
+/**
+ * `seed` in the JSON type this SKU's KIE schema declares (see
+ * `KieModelConfig.seedType`). Only a number on a `"string"` SKU changes; any
+ * other value, and every SKU that declares nothing, passes through untouched,
+ * so those models send exactly what they sent before.
+ */
+export function kieSeedForWire(modelConfig: Pick<KieModelConfig, "seedType">, seed: unknown): unknown {
+  return modelConfig.seedType === "string" && typeof seed === "number" ? String(seed) : seed
 }
 
 // =============================================================================

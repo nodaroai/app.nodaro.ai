@@ -2954,7 +2954,7 @@
         }
       },
       "ctx": null,
-      "expected": "double exposure (the first and second scenes blend as a translucent double exposure where both images coexist semi-transparently on the frame, the first image then gradually fades out leaving the second image fully resolved)"
+      "expected": "double exposure (the first subject becomes a crisp silhouette filled solid with the second shot, while the rest of the first shot stays untouched around it. The camera stays where it is and the framing does not change. The silhouette holds for a clear beat, both pictures plainly seen at once, then the first shot around it gives way to the second shot. The shot ends on the second shot alone, fully resolved)"
     },
     {
       "key": "transition/id:dream-ripple",

@@ -1,46 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify from "fastify"
-import { bucketBaseCreditsFor, bucketKeyFor } from "../video-sfx.js"
 import * as ffmpegUtils from "../../providers/video/ffmpeg-utils.js"
 
-describe("bucketBaseCreditsFor", () => {
-  it.each([
-    [1, 1],       // very short → :8s bucket
-    [5, 1],       // 5s → :8s
-    [8, 1],       // 8s exact → :8s
-    [9, 1],       // 9s → :15s
-    [15, 1],      // 15s exact → :15s
-    [16, 2],      // 16s → :30s
-    [30, 2],      // 30s exact → :30s
-    [31, 3],      // 31s → :60s
-    [60, 3],      // 60s exact → :60s
-    [61, 5],      // 61s → :120s
-    [120, 5],     // 120s exact → :120s
-    [121, 11],    // 121s → :300s
-    [300, 11],    // 300s exact → :300s
-  ])("durationSeconds=%i → %i BASE credits", (dur, expected) => {
-    expect(bucketBaseCreditsFor(dur)).toBe(expected)
-  })
-})
-
-describe("bucketKeyFor", () => {
-  it.each([
-    [1,   "replicate-mmaudio:8s"],
-    [8,   "replicate-mmaudio:8s"],
-    [9,   "replicate-mmaudio:15s"],
-    [15,  "replicate-mmaudio:15s"],
-    [16,  "replicate-mmaudio:30s"],
-    [30,  "replicate-mmaudio:30s"],
-    [31,  "replicate-mmaudio:60s"],
-    [60,  "replicate-mmaudio:60s"],
-    [61,  "replicate-mmaudio:120s"],
-    [120, "replicate-mmaudio:120s"],
-    [121, "replicate-mmaudio:300s"],
-    [300, "replicate-mmaudio:300s"],
-  ])("durationSeconds=%i → %s", (dur, expected) => {
-    expect(bucketKeyFor(dur)).toBe(expected)
-  })
-})
+// The base price of each bucket row, as the static table lists it (the
+// mapping from a length to its row is tested in @nodaro/shared).
+const BUCKET_BASE: Record<string, number> = {
+  "replicate-mmaudio:8s": 10,
+  "replicate-mmaudio:15s": 10,
+  "replicate-mmaudio:30s": 20,
+  "replicate-mmaudio:60s": 30,
+  "replicate-mmaudio:120s": 50,
+  "replicate-mmaudio:300s": 110,
+}
 
 describe("probeDurationPreHandler", () => {
   const makeReq = (videoUrl: string) => ({
@@ -115,6 +86,8 @@ describe("POST /v1/video-sfx", () => {
   let app: ReturnType<typeof Fastify>
   let insertCallCount = 0
   let reserveCallCount = 0
+  let reserveCalls: Array<{ model: string; creditOverride: number | undefined }> = []
+  let guardCredits: number | undefined
   let refundCalls: string[] = []
   let jobDeleteIds: string[][] = []
 
@@ -125,6 +98,8 @@ describe("POST /v1/video-sfx", () => {
     vi.resetModules()
     insertCallCount = 0
     reserveCallCount = 0
+    reserveCalls = []
+    guardCredits = undefined
     refundCalls = []
     jobDeleteIds = []
     reserveBehavior = null
@@ -136,6 +111,7 @@ describe("POST /v1/video-sfx", () => {
     vi.doMock("../../middleware/credit-guard.js", () => ({
       creditGuard: (_resolveModel: any, opts: any) => async (req: any) => {
         const credits = opts?.computeCredits ? await opts.computeCredits(req.body) : 0
+        guardCredits = credits
         req.userId = "test-user"
         req.creditReservation = {
           usageLogId: "",
@@ -144,9 +120,10 @@ describe("POST /v1/video-sfx", () => {
           creditOverride: credits,
         }
       },
-      reserveCreditsForJob: vi.fn(async (_req: any, reply: any, jobId: string, _model: string) => {
+      reserveCreditsForJob: vi.fn(async (req: any, reply: any, jobId: string, model: string) => {
         const idx = reserveCallCount
         reserveCallCount += 1
+        reserveCalls.push({ model, creditOverride: req.creditReservation?.creditOverride })
         if (reserveBehavior) {
           const result = await reserveBehavior(jobId, idx)
           if (result === undefined) {
@@ -227,6 +204,12 @@ describe("POST /v1/video-sfx", () => {
       }),
     }))
 
+    // Base price of a row: the static table's bucket prices (the real lookup
+    // reads model_pricing, which the supabase stub above does not serve).
+    vi.doMock("../../lib/credit-base-cost.js", () => ({
+      baseCreditCostFor: vi.fn(async (id: string) => BUCKET_BASE[id] ?? 0),
+    }))
+
     // Stub CreditsService.refundCredits used in rollback
     vi.doMock("../../ee/services/credits.js", () => ({
       CreditsService: {
@@ -249,6 +232,7 @@ describe("POST /v1/video-sfx", () => {
     vi.doUnmock("../../lib/supabase.js")
     vi.doUnmock("../../lib/config.js")
     vi.doUnmock("../../lib/app-settings.js")
+    vi.doUnmock("../../lib/credit-base-cost.js")
     vi.doUnmock("../../ee/services/credits.js")
   })
 
@@ -296,6 +280,49 @@ describe("POST /v1/video-sfx", () => {
     expect(jobIds).toEqual(["job-1", "job-2", "job-3"])
     const usageLogIds = vi.mocked(videoQueue.add).mock.calls.map((c: any) => c[1].usageLogId)
     expect(usageLogIds).toEqual(["ulog-0", "ulog-1", "ulog-2"])
+  })
+
+  it("prices the run from the clip length's own row: the batch is checked, each take reserves one row", async () => {
+    const ffmpeg = await import("../../providers/video/ffmpeg-utils.js")
+    vi.mocked(ffmpeg.probeVideoSource).mockResolvedValue({
+      width: 1920, height: 1080, durationSeconds: 30,
+    } as any)
+
+    const res = await app.inject({
+      method: "POST", url: "/v1/video-sfx",
+      payload: { videoUrl: "https://example.com/v.mp4", prompt: "footsteps", versions: 3 },
+    })
+    expect(res.statusCode).toBe(200)
+    // 30 s → the :30s row (20), three takes checked up front.
+    expect(guardCredits).toBe(60)
+    // Each take reserves the :30s row at its own price (no markup configured here).
+    expect(reserveCalls).toEqual([
+      { model: "replicate-mmaudio:30s", creditOverride: 20 },
+      { model: "replicate-mmaudio:30s", creditOverride: 20 },
+      { model: "replicate-mmaudio:30s", creditOverride: 20 },
+    ])
+    const { videoQueue } = await import("../../lib/queue.js")
+    const payload = vi.mocked(videoQueue.add).mock.calls[0]?.[1] as any
+    expect(payload?.duration_seconds).toBe(30)
+    expect(payload?.bucketKey).toBe("replicate-mmaudio:30s")
+  })
+
+  it.each([
+    [5, "replicate-mmaudio:8s", 10],
+    [31, "replicate-mmaudio:60s", 30],
+    [180, "replicate-mmaudio:300s", 110],
+  ])("a %i s clip reserves %s (%i)", async (seconds, row, credits) => {
+    const ffmpeg = await import("../../providers/video/ffmpeg-utils.js")
+    vi.mocked(ffmpeg.probeVideoSource).mockResolvedValue({
+      width: 1920, height: 1080, durationSeconds: seconds,
+    } as any)
+    const res = await app.inject({
+      method: "POST", url: "/v1/video-sfx",
+      payload: { videoUrl: "https://example.com/v.mp4" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(guardCredits).toBe(credits)
+    expect(reserveCalls).toEqual([{ model: row, creditOverride: credits }])
   })
 
   it("uses random seed (-1) per version when no seed provided", async () => {

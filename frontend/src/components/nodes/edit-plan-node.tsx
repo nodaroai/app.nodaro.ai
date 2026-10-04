@@ -1,10 +1,11 @@
 "use client"
 
 import { memo, useMemo, useState } from "react"
-import { createPortal } from "react-dom"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ListTree, Braces, Film, Loader2, AlertCircle, Copy, Expand, X } from "lucide-react"
+import { ListTree, Braces, Film, Loader2, AlertCircle, Copy, Expand } from "lucide-react"
 import { JsonTree, type JsonValue } from "@/components/ui/json-tree"
+import { InspectorShell } from "@/components/inspector/inspector-shell"
+import { EdlValidityBadge } from "@/components/inspector/edl-validity-badge"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -19,49 +20,6 @@ import { buildEditPlanCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/s
 import { useT } from "@/lib/i18n"
 import { copyToClipboard } from "@/lib/utils"
 import type { EditPlanNodeData } from "@/types/nodes"
-
-function ResultTreeModal({
-  isOpen, onClose, plan, title,
-}: {
-  readonly isOpen: boolean
-  readonly onClose: () => void
-  readonly plan: unknown
-  readonly title: string
-}) {
-  const t = useT()
-  if (!isOpen) return null
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-8" onClick={onClose}>
-      <div
-        className="relative w-full max-w-3xl max-h-[85vh] bg-background rounded-lg border border-border shadow-xl flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <ListTree className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">{title}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80 transition-colors"
-              onClick={() => copyToClipboard(JSON.stringify(plan, null, 2), t("node.dataCopied"))}
-            >
-              {t("cfgext.scrapeCopyJson")}
-            </button>
-            <button type="button" aria-label={t("common.close")} className="text-muted-foreground hover:text-foreground" onClick={onClose}>
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-        <div className="overflow-auto p-4">
-          <JsonTree value={plan as JsonValue} className="text-[11px]" />
-        </div>
-      </div>
-    </div>,
-    document.body,
-  )
-}
 
 function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
@@ -139,11 +97,14 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
 
           {status !== "running" && plan !== undefined && plan !== null && (
             <div className="relative group flex-1 min-h-0 flex flex-col">
-              {clipCount !== undefined && (
-                <div className="text-[10px] text-muted-foreground tabular-nums pb-1">
-                  {t("node.editPlanClips", { count: clipCount })}
-                </div>
-              )}
+              <div className="flex items-center gap-2 pb-1">
+                <EdlValidityBadge value={plan} />
+                {clipCount !== undefined && (
+                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                    {t("node.editPlanClips", { count: clipCount })}
+                  </span>
+                )}
+              </div>
               {/* nowheel/nodrag/nopan: same rationale as video-analysis — lets the
                   tree scroll inside the node instead of panning the canvas. */}
               <div className="rounded-md border bg-muted/30 flex-1 min-h-0 overflow-auto p-1.5 nowheel nodrag nopan scrollbar-reveal">
@@ -190,7 +151,16 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="edit-plan" handleId="sources"    type="target" position={Position.Left}  label={t("node.sources")}    color={HANDLE_COLORS.video}    icon={<Film />}   side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_MEDIA} orderMatters />
       <HandleWithPopover nodeId={id} nodeType="edit-plan" handleId="edl"        type="source" position={Position.Right} label={t("node.editPlanEdl")} color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="24px" />
       {plan !== undefined && plan !== null && (
-        <ResultTreeModal isOpen={treeOpen} onClose={() => setTreeOpen(false)} plan={plan} title={nodeData.label} />
+        <InspectorShell
+          open={treeOpen}
+          onClose={() => setTreeOpen(false)}
+          icon={<ListTree />}
+          title={nodeData.label}
+          meta={<EdlValidityBadge value={plan} />}
+          copyValue={plan}
+        >
+          <JsonTree value={plan as JsonValue} className="text-[11px]" />
+        </InspectorShell>
       )}
     </div>
   )

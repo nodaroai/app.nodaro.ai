@@ -205,6 +205,7 @@ openApiRegistry.registerPath({
   method: "post",
   path: "/v1/oauth/plugin/session",
   description: "Open a plugin connect session. Public. Returns the consent URL to send the user to, the poll key that authorises reading the outcome, and the code the user will type after consenting.",
+  security: [],
   request: { body: { content: { "application/json": { schema: sessionBody } } } },
   responses: {
     200: { description: "Session opened" },
@@ -215,6 +216,7 @@ openApiRegistry.registerPath({
   method: "get",
   path: "/v1/oauth/plugin/callback",
   description: "Where the consent screen sends the browser. Holds the grant against the session named by `state` and asks the user for the plugin's code; renders a page either way.",
+  security: [],
   request: { query: callbackQuery },
   responses: { 200: { description: "HTML: code form, or declined" }, 400: { description: "HTML: expired or invalid" } },
 })
@@ -222,6 +224,7 @@ openApiRegistry.registerPath({
   method: "post",
   path: "/v1/oauth/plugin/confirm",
   description: "The user types the code the plugin is showing. Releases the held grant on a match; five wrong codes settle the session as denied.",
+  security: [],
   request: { body: { content: { "application/x-www-form-urlencoded": { schema: confirmBody }, "application/json": { schema: confirmBody } } } },
   responses: { 200: { description: "HTML: connected, or the form again" }, 400: { description: "HTML: expired, invalid or denied" } },
 })
@@ -229,6 +232,7 @@ openApiRegistry.registerPath({
   method: "get",
   path: "/v1/oauth/plugin/session/{id}",
   description: `Poll a plugin connect session. Public; authorised by the \`${POLL_KEY_HEADER}\` header. A granted session answers once with the access token and is then gone.`,
+  security: [],
   request: { params: pollParams, headers: pollHeaders },
   responses: {
     200: { description: "`{ status: pending }`, `{ status: denied }`, or `{ status: granted, token, tokenType, scope, expiresIn }`" },

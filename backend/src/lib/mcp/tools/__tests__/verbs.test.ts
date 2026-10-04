@@ -284,21 +284,45 @@ describe("animate_image verb", () => {
 })
 
 describe("extend_video verb", () => {
-  it("calls /v1/extend-video with kie_task_id", async () => {
+  it("calls /v1/extend-video with task_id", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/extend-video", { jobId: "j-ex" })
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify })
 
     const result = await callTool(server, "extend_video", {
       prompt: "more",
-      kie_task_id: "k-1",
+      task_id: "k-1",
       model: "veo-extend",
     })
 
     expect(result.isError).toBeUndefined()
     expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-ex")
-    expect(received.body?.kieTaskId).toBe("k-1")
+    expect(received.body?.taskId).toBe("k-1")
     expect(received.body?.provider).toBe("veo-extend")
+  })
+
+  it("still accepts the deprecated kie_task_id", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/extend-video", { jobId: "j-ex" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "extend_video", { prompt: "more", kie_task_id: "k-1", model: "veo-extend" })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.taskId).toBe("k-1")
+  })
+
+  it("names the neutral task_id when it is missing", async () => {
+    const { fastify } = stubRoute("POST", "/v1/extend-video", { jobId: "j-ex" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "extend_video", { prompt: "more", model: "veo-extend" })
+
+    expect(result.isError).toBe(true)
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toMatch(/task_id/)
+    expect(text).not.toMatch(/kie/i)
   })
 
   it("does NOT register without workflows:execute scope", async () => {

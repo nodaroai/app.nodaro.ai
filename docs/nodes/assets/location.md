@@ -19,7 +19,7 @@ The Location node on the canvas is a compact summary card. It shows:
 - An **⬡ Open Studio** button that launches the Location Studio
 - A **Choose existing** button (next to **⬡ Open Studio**) that opens the **Asset Picker** to bind the node to a location you already have. Once a location is bound, this button becomes **Replace** — use it to swap in a different location.
 
-All appearance and asset editing — generating the main image, approving candidates, generating environmental variants, atmosphere motion clips, editing the canonical description, mood-board photos, and style lock — happens inside the studio.
+All appearance and asset editing — generating the main image, approving candidates, generating environmental variants, atmosphere motion clips, mood-board photos, and style lock — happens inside the studio.
 
 ## Configuration
 
@@ -40,7 +40,7 @@ In addition to the main image and identity settings, a location holds the follow
 | Data | Description |
 |------|-------------|
 | `sourceImageUrl` | The approved establishing shot. The reference image for all generated environmental variants and motion clips. |
-| `canonicalDescription` | LLM-authored multi-sentence "true reference" description (~80–120 words). Written automatically by Claude Sonnet vision on main-image approval; editable manually; re-runnable via the studio's Retry caption button. Used as the implicit context block whenever a downstream consumer references this location. |
+| `canonicalDescription` | LLM-authored multi-sentence "true reference" description (~80–120 words). Written automatically by Claude Sonnet vision on main-image approval and shown read-only in the studio. To edit it, `PATCH /v1/locations/:id`; to write it again from the current main image, `POST /v1/locations/:id/llm-caption` (also the SDK's `locations.recaption()`, the CLI's `nodaro locations recaption`, and the MCP tools `update_location` / `recaption_location`). Used as the implicit context block whenever a downstream consumer references this location. |
 | `timeOfDay` | Image variants of the location at different times — dawn, morning, noon, afternoon, golden hour, dusk, blue hour, night, midnight. |
 | `weather` | Image variants under different weather — clear, cloudy, light rain, heavy rain, storm, snow, blizzard, fog, mist. |
 | `seasons` | Image variants across the four seasons — spring, summer, autumn, winter. |
@@ -92,7 +92,7 @@ The studio organizes everything into a config-driven vertical sidebar grouped in
 | Section | Tab | What it Does |
 |---------|-----|--------------|
 | **Resources** | 📷 References | Drag-and-drop / paste reference-photo mood-board (cap 20) with per-tile kind labels — the visual references the location is built from. |
-| **Identity** | 🏞 Appearance | Main image generation + approval, identity form (name, description, category, style), canonical description editor, style lock toggle. |
+| **Identity** | 🏞 Appearance | Main image generation + approval, identity form (name, description, category, style), the canonical description (read-only), style lock toggle. |
 | **Environment** | 🌅 Time of Day | Generate dawn / morning / noon / afternoon / golden hour / dusk / blue hour / night / midnight variants of the approved main image. |
 | **Environment** | 🌧 Weather | Generate clear / cloudy / light rain / heavy rain / storm / snow / blizzard / fog / mist variants. |
 | **Environment** | 🍁 Seasons | Generate spring / summer / autumn / winter variants. |
@@ -107,7 +107,7 @@ Identity controls for the location itself: name, description, category, style, a
 
 - **Main image** — Preview of the approved establishing shot. Empty placeholder until the first approval.
 - **Candidates grid** — When a multi-candidate generation finishes, completed candidates appear here with **Approve** / **Discard** buttons per card.
-- **Canonical description** — Live textarea showing the LLM-authored description. Edit freely; saves are debounced. A **Retry caption** button calls `POST /v1/locations/:id/llm-caption` to re-run Claude Sonnet vision against the current main image (502s on LLM failure; 400 `no_source_image` when no main image is set).
+- **Canonical description** — The LLM-authored description, shown read-only under "Auto-generated when you approved the main image", and hidden while it is empty. The studio has no edit or retry control for it: `PATCH /v1/locations/:id` edits it, and `POST /v1/locations/:id/llm-caption` writes it again from the current main image (502 on LLM failure; 400 `no_source_image` when no main image is set).
 
 ### Approval Flow
 
@@ -123,7 +123,7 @@ The main image generation supports **multi-candidate approval** so you can compa
    - Returns the new main-image URL plus the caption.
 6. **Discard** is purely client-side — it drops the card from the grid without telling the backend. The candidate's R2 asset stays in `jobs.output_data` and is eventually purged by the cleanup-cron.
 
-> Caption-failure semantics: if the LLM call sub-fails during approval, `canonicalDescription` is returned as `""` (NOT null). The main image is still set; click **Retry caption** to recover.
+> Caption-failure semantics: if the LLM call sub-fails during approval, `canonicalDescription` is returned as `""` (NOT null). The main image is still set; call `POST /v1/locations/:id/llm-caption` (or `recaption_location` over MCP) to write it again.
 
 While an approval call is in flight, the studio sets `isApprovingMainImage = true` and the Generate button is locked out — prevents an "approve then immediately re-generate" race that would clobber the new main image.
 

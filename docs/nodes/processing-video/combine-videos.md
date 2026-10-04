@@ -120,9 +120,11 @@ default 8. The run proceeds; it is never rejected for this.
 
 Combine Videos is **dynamically priced** based on output length and input count:
 
-- **Base:** 1 credit per 5 seconds of estimated output length (sum of upstream durations, minus crossfade overlaps, minus per-clip frame trim)
-- **Input adder:** +1 credit per extra input beyond the first 2
-- **Floor:** minimum 1 credit
+- **Base:** 10 credits per 5 seconds of estimated output length (sum of upstream durations, minus crossfade overlaps, minus per-clip frame trim)
+- **Input adder:** +10 credits per extra input beyond the first 2
+- **Floor:** minimum 10 credits
+
+A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way, and the workflow's estimate before a run quotes the same price.
 
 The estimator walks back through the connected upstream nodes to read each clip's duration. When an upstream hasn't generated yet, an 8-second fallback is used per missing entry.
 
@@ -130,9 +132,10 @@ Examples:
 
 | Configuration | Estimated Output | Credits |
 |---|---|---|
-| 2 clips × 5s, cut transition | 10s | 2 |
-| 3 clips × 10s, fade 0.5s | 29s | 7 (6 base + 1 input adder) |
-| 5 clips × 8s, dissolve 0.5s, trim 24+24 frames per clip | 28s | 9 (6 base + 3 input adder) |
+| 2 clips × 5s, cut transition | 10s | 20 |
+| 3 clips × 10s, cut, no frame trim | 30s | 70 (60 base + 10 input adder) |
+| 3 clips × 10s, fade 0.5s | 29s | 70 (60 base + 10 input adder) |
+| 5 clips × 8s, dissolve 0.5s, trim 24+24 frames per clip | 28s | 90 (60 base + 30 input adder) |
 
 The Run button shows the live estimate.
 

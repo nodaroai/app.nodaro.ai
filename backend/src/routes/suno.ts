@@ -1365,7 +1365,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           .eq("id", job.id)
           .eq("user_id", userId)
 
-        return { jobId: job.id, kieTaskId }
+        return { jobId: job.id, providerTaskId: kieTaskId, kieTaskId }
       } catch (err) {
         const message = (err as Error).message
         await supabase

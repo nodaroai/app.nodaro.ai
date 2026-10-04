@@ -586,6 +586,24 @@ describe("video worker processor", () => {
     )
   })
 
+  // A model-lane failure (a plugin's Video Analysis roll, rethrown as is) used
+  // to land "KIE.ai chat-completions <model> failed (code 422): …" on the
+  // node. The person reads the lane error's user-safe sentence; the full
+  // diagnostic is the operator's error_detail.
+  it("a model-lane failure stores its user-safe sentence and keeps the diagnostic in error_detail", async () => {
+    const { LlmLaneError } = await import("../../lib/llm-errors.js")
+    const raw = "KIE.ai chat-completions gemini-3-flash failed (code 422): The channel is not available"
+    const laneError = new LlmLaneError(raw, { lane: "kie", bodyCode: 422 })
+    mocks.mockHandler.mockRejectedValueOnce(laneError)
+    const job = makeBullJob("generate-image")
+    await expect(processor(job)).rejects.toThrow(raw)
+    expect(mocks.mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", error_message: laneError.userMessage, error_detail: raw }),
+    )
+    const written = mocks.mockUpdate.mock.calls.find((c: unknown[]) => (c[0] as { status?: string }).status === "failed")![0] as { error_message: string }
+    expect(written.error_message).not.toMatch(/kie|gemini-3-flash/i)
+  })
+
   it("writes error_detail: null for a plain Error (no provider text)", async () => {
     mocks.mockHandler.mockRejectedValueOnce(new Error("handler crashed"))
     const job = makeBullJob("generate-image")

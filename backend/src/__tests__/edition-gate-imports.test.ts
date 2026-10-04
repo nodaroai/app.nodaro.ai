@@ -106,7 +106,6 @@ const NO_GATE_REQUIRED_FOR_BILLING_IMPORT: ReadonlySet<string> = new Set<string>
   "routes/social-publish.ts",
   "routes/suno.ts",
   "routes/three-d-title-ai.ts",
-  "routes/video-retake.ts",
   "routes/workflow-execution.ts",
   "routes/workflow-templates.ts",
 ])

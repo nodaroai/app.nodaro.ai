@@ -16,7 +16,8 @@ import { resolve } from "node:path"
 const src = (p: string) => readFileSync(resolve(__dirname, p), "utf8")
 
 describe("useUpstreamVideoDuration candidate keys", () => {
-  const hook = src("../use-upstream-video-duration.ts")
+  // The lookup lives in lib/ (the hook and the workflow estimate share it).
+  const hook = src("../../lib/upstream-video-duration.ts")
   const nodeTypes = src("../../types/nodes.ts")
 
   const keys = [...hook.matchAll(/data\.(\w+) as number \| undefined/g)].map((m) => m[1]!)

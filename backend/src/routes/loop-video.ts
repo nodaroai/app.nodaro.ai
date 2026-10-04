@@ -8,7 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { estimateLoopVideoCredits } from "@nodaro/shared"
+import { loopVideoBaseCredits } from "../lib/video-utility-credits.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -31,17 +31,7 @@ const loopVideoBody = z.object({
 export async function loopVideoRoutes(app: FastifyInstance) {
   app.post("/v1/loop-video", {
     preHandler: creditGuard(() => "loop-video", {
-      computeCredits: (body) => {
-        const b = body as Record<string, unknown>
-        const upstream = typeof b.upstreamDuration === "number" ? b.upstreamDuration : undefined
-        return estimateLoopVideoCredits({
-          mode: b.mode as "repeat" | "duration" | undefined,
-          repeatCount: b.repeatCount as number | undefined,
-          targetDuration: b.targetDuration as number | undefined,
-          smartLoopCutBeforeRepeat: b.smartLoopCutBeforeRepeat as boolean | undefined,
-          smartLoopCutLookback: b.smartLoopCutLookback as number | undefined,
-        }, upstream)
-      },
+      computeCredits: (body) => loopVideoBaseCredits(body as Record<string, unknown>),
     }),
   }, async (req, reply) => {
     const parsed = loopVideoBody.safeParse(req.body)

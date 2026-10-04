@@ -37,32 +37,32 @@ function wireVideoBlocks(targetId: string, count: number): WorkflowEdge[] {
 }
 
 describe("useEstimatedCredits — assemble-narrated-video", () => {
-  it("falls back to the 1-block floor (4cr) when nothing is wired", () => {
+  it("falls back to the 1-block floor (40cr) when nothing is wired", () => {
     const node = makeNode("t1", "assemble-narrated-video")
     __store.__setState({ nodes: [node], edges: [] })
     const { result } = renderHook(() => useEstimatedCredits(node))
-    expect(result.current).toBe(4)
+    expect(result.current).toBe(40)
   })
 
-  it("6 wired blocks → 4cr (3 + ceil(6/6))", () => {
+  it("6 wired blocks → 40cr (10 × (3 + ceil(6/6)))", () => {
     const node = makeNode("t1", "assemble-narrated-video")
     __store.__setState({ nodes: [node], edges: wireVideoBlocks("t1", 6) })
     const { result } = renderHook(() => useEstimatedCredits(node))
-    expect(result.current).toBe(4)
+    expect(result.current).toBe(40)
   })
 
-  it("24 wired blocks → 7cr (3 + ceil(24/6))", () => {
+  it("24 wired blocks → 70cr (10 × (3 + ceil(24/6)))", () => {
     const node = makeNode("t1", "assemble-narrated-video")
     __store.__setState({ nodes: [node], edges: wireVideoBlocks("t1", 24) })
     const { result } = renderHook(() => useEstimatedCredits(node))
-    expect(result.current).toBe(7)
+    expect(result.current).toBe(70)
   })
 
-  it("60 wired blocks (max) → 13cr (3 + ceil(60/6))", () => {
+  it("60 wired blocks (max) → 130cr (10 × (3 + ceil(60/6)))", () => {
     const node = makeNode("t1", "assemble-narrated-video")
     __store.__setState({ nodes: [node], edges: wireVideoBlocks("t1", 60) })
     const { result } = renderHook(() => useEstimatedCredits(node))
-    expect(result.current).toBe(13)
+    expect(result.current).toBe(130)
   })
 
   it("only counts edges wired into the 'video' handle, not 'audio'", () => {
@@ -74,7 +74,7 @@ describe("useEstimatedCredits — assemble-narrated-video", () => {
     ]
     __store.__setState({ nodes: [node], edges })
     const { result } = renderHook(() => useEstimatedCredits(node))
-    expect(result.current).toBe(4)
+    expect(result.current).toBe(40)
   })
 
   it("ignores edges targeting a different node", () => {
@@ -85,7 +85,7 @@ describe("useEstimatedCredits — assemble-narrated-video", () => {
       edges: [...wireVideoBlocks("t1", 6), ...wireVideoBlocks("t2", 60)],
     })
     const { result } = renderHook(() => useEstimatedCredits(node))
-    expect(result.current).toBe(4)
+    expect(result.current).toBe(40)
   })
 })
 

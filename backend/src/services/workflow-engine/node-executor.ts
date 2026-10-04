@@ -1,4 +1,4 @@
-import { projectDubbingCreditOverride } from "../../lib/dubbing-pricing.js"
+import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS } from "@nodaro/shared"
 /**
@@ -37,6 +37,10 @@ import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, res
 import { computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
+import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
+import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
+import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
+import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
 import type {
@@ -1244,6 +1248,59 @@ async function probeRefVideosForReservation(payload: Record<string, unknown>): P
   return probeRefVideoDurations({ provider: provider as string, referenceVideoUrls })
 }
 
+/**
+ * Video-utility nodes (Trim, Loop, Combine, Assemble Narrated Video) are priced
+ * by the length or count of what they make. The workflow run reserves what the
+ * single-node route charges for the same request — one mapping,
+ * lib/video-utility-credits.ts — instead of the node's flat one-unit row,
+ * which priced a two-minute trim like a five-second one.
+ */
+async function computeVideoUtilityCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  const base = videoUtilityBaseCredits(jobName, payload)
+  if (base === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
+}
+
+/**
+ * LTX 2.3 Pro Extend is priced per second added. The workflow run reserves what
+ * the route's guard charges for the same request — the per-second row times
+ * the seconds the payload sends (lib/ltx-extend-credits.ts) — instead of the
+ * per-second row alone. Undefined for every other job.
+ */
+export async function computeLtxExtendCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  if (jobName !== "extend-video" || payload.provider !== "ltx-2.3-pro") return undefined
+  const base = await ltxExtendBaseCredits(payload.duration)
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
+}
+
+/**
+ * LTX 2.3 Pro Retake is priced per second of the replaced window. The workflow
+ * run reserves what the route's guard charges for the same request — the
+ * per-second row times the window the payload sends (lib/ltx-retake-credits.ts)
+ * — instead of the flat `video-retake` row it used to. Undefined for every
+ * other job.
+ */
+export async function computeLtxRetakeCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  if (jobName !== "video-retake") return undefined
+  const base = await ltxRetakeBaseCredits(payload.retake_duration)
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
+}
+
 async function computeSeedance2RefVideoCreditOverride(
   payload: Record<string, unknown>,
   probedDurationsSec?: number[],
@@ -1644,6 +1701,33 @@ async function executeWorkerNode(
   // privately and the settlement to probe again.
   const refVideoDurationsSec = refVideoCheck.durationsSec ?? (await probeRefVideosForReservation(payload))
 
+  // 2b'. Video SFX: measure the clip by the route's own rule and stamp the
+  // length (what the model scores) and its price row on the payload, BEFORE
+  // input_data is written below — the worker reads the row, not the queue
+  // payload. Every edition: without the length the model scores only its
+  // default 8 seconds of a longer clip. A clip the route would refuse leaves no
+  // jobs row, like the gate above.
+  const sfxRefusal = await stampVideoSfxDuration(jobName, payload)
+  if (sfxRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(sfxRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = sfxRefusal.code
+    throw err
+  }
+
+  // 2b''. Dubbing (every language but Hebrew, which probes in its credit
+  // override): measure the source by the route's own rule and stamp the span,
+  // or the 30-minute ceiling hold, before input_data is written — the
+  // reconcile lane that delivers long dubs reads the stamp from the row. A
+  // span past 30 minutes is refused before anything is reserved.
+  const dubRefusal = await stampDubbingDuration(jobName, payload)
+  if (dubRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(dubRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = dubRefusal.code
+    throw err
+  }
+
   // 2c. Update job with full input_data from the built payload
   // Store all payload fields so the execution detail modal can show complete inputs.
   // Internal fields (jobId, userId, usageLogId) are kept — useful for admin debugging;
@@ -1729,13 +1813,21 @@ async function executeWorkerNode(
       // the reserve, the gate, and the usage log agree on the exact bucket.
       // `modelIdentifier` is const (buildPayload's transcript/ceiling basis); an
       // unprobeable master falls back to it, the safe over-reserve direction.
+      //
+      // video-sfx is the same shape: a row per clip length, and the length was
+      // measured and stamped above, so the reservation keys off that row.
       const reserveModelIdentifier =
-        (await computeEditPlanReserveId(jobName, payload)) ?? modelIdentifier
+        (await computeEditPlanReserveId(jobName, payload)) ??
+        videoSfxReserveId(jobName, payload) ??
+        modelIdentifier
 
       const creditOverride =
         await applyEdlCreditOverride(jobName, payload) ??
         await projectDubbingCreditOverride(jobName, payload) ??
         computeImageOverlayCreditOverride(payload) ??
+        (await computeVideoUtilityCreditOverride(jobName, payload, modelIdentifier)) ??
+        (await computeLtxExtendCreditOverride(jobName, payload, modelIdentifier)) ??
+        (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeGenerateVideoProCreditOverride(payload, modelIdentifier))?.override ??
         (await computeEditVideoProCreditOverride(payload, modelIdentifier))?.override ??
         (await computeSeedance2RefVideoCreditOverride(payload, refVideoDurationsSec, modelIdentifier)) ??

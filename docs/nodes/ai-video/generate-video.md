@@ -408,16 +408,16 @@ Cross-check the runtime table in `/admin/models` for the live numbers — the wo
 The optional `loopTrim` post-process (PSNR-based smart-loop-cut) adds:
 
 ```
-ceil(duration / 5) + ceil(framesToTest / 24)
+10 × (ceil(duration / 5) + ceil(framesToTest / 24))
 ```
 
-credits on top of the base provider cost, with a minimum of 1 each. If smart-loop-cut fails after generation succeeded, the un-trimmed clip is kept and only the add-on is refunded.
+credits on top of the base provider cost, at least 10 for each part. That is the same unit as Trim Video's smart loop cut: 10 credits per 5 seconds of output and 10 per ~24 frames searched. If smart-loop-cut fails after generation succeeded, the un-trimmed clip is kept and only the add-on is refunded. The add-on applies to a single-node run, MCP and SDK calls; inside a workflow the trim runs without it.
 
 | Configuration | Add-on |
 |---|---|
-| 8s output, framesToTest=16 | +3 credits |
-| 8s output, framesToTest=64 | +5 credits |
-| 5s output, framesToTest=16 | +2 credits |
+| 8s output, framesToTest=16 | +30 credits |
+| 8s output, framesToTest=64 | +50 credits |
+| 5s output, framesToTest=16 | +20 credits |
 | 60s output, framesToTest=16 | +13 credits |
 
 Quality mode (`lossless` vs `precise`) does not affect pricing.

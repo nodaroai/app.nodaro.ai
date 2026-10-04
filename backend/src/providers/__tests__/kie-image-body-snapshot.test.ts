@@ -293,6 +293,74 @@ describe("KIE image generation — request body snapshots", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Seed wire type. KIE checks `seed` against the TYPE in each SKU's schema.
+// google/imagen4 and google/imagen4-ultra declare it a string (maxLength 500),
+// so the number our API carries died at createTask with
+// {"code":500,"msg":"seed must be a string"} — every seeded Imagen 4 / Ultra
+// run failed (prod 2026-10-04: POST /v1/generate-image
+// { model: "imagen4", aspect_ratio: "3:4", seed: 7103 }). imagen4-fast and
+// every other seeded KIE image SKU declare an integer and keep the number.
+// The worker hands the seed over in extraParams, exactly as below.
+// ---------------------------------------------------------------------------
+
+describe("KIE image generation — seed goes out in the type the SKU's schema declares", () => {
+  it("imagen4 sends the seed as a decimal string", async () => {
+    const captured = await captureBody(
+      ["a lighthouse at dusk", undefined, "imagen4", { aspect_ratio: "3:4", seed: 7103 }],
+    )
+    expect(captured).toMatchInlineSnapshot(`
+      {
+        "body": {
+          "aspect_ratio": "3:4",
+          "prompt": "a lighthouse at dusk",
+          "seed": "7103",
+        },
+        "model": "google/imagen4",
+      }
+    `)
+  })
+
+  it("imagen4-ultra sends the seed as a decimal string", async () => {
+    const captured = await captureBody(
+      ["a lighthouse at dusk", undefined, "imagen4-ultra", { aspect_ratio: "3:4", seed: 7103 }],
+    )
+    expect(captured).toMatchInlineSnapshot(`
+      {
+        "body": {
+          "aspect_ratio": "3:4",
+          "prompt": "a lighthouse at dusk",
+          "seed": "7103",
+        },
+        "model": "google/imagen4-ultra",
+      }
+    `)
+  })
+
+  it("imagen4-fast keeps the seed a number — its schema declares an integer", async () => {
+    const captured = await captureBody(
+      ["a lighthouse at dusk", undefined, "imagen4-fast", { aspect_ratio: "3:4", seed: 7103 }],
+    )
+    expect(captured).toMatchInlineSnapshot(`
+      {
+        "body": {
+          "aspect_ratio": "3:4",
+          "prompt": "a lighthouse at dusk",
+          "seed": 7103,
+        },
+        "model": "google/imagen4-fast",
+      }
+    `)
+  })
+
+  it("an integer-seed SKU outside the Imagen family (qwen) keeps the seed a number", async () => {
+    const captured = await captureBody(
+      ["a lighthouse at dusk", undefined, "qwen", { aspect_ratio: "1:1", seed: 7103 }],
+    )
+    expect(captured.body.seed).toBe(7103)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Grok Imagine 2 task-chained edit ops — the worker passes the PRIOR
 // generation's task id through editImage's imageUrl arg; imageParam
 // "task_id" must place it in the request body (never as an image URL).

@@ -200,7 +200,7 @@ describe("/v1/generate-video Seedance 2 reference-video billing", () => {
     await app.close()
   })
 
-  it("the loop-trim add-on stacks on the reference-video base (ceil(6.25 × 13) + 3 = 816)", async () => {
+  it("the loop-trim add-on stacks on the reference-video base (ceil(6.25 × 13) + 30 = 843)", async () => {
     const app = await buildGenerateVideoApp()
     const res = await app.inject({
       method: "POST",
@@ -214,10 +214,10 @@ describe("/v1/generate-video Seedance 2 reference-video billing", () => {
       },
     })
     expect(res.statusCode).toBe(200)
-    // 813 (input + output) + ceil(8/5) + ceil(16/24) = 813 + 3.
+    // 813 (input + output) + 10 × (ceil(8/5) + ceil(16/24)) = 813 + 30.
     expect(reserveSpy).toHaveBeenCalledWith(
       "u-1", "job-1", expect.any(String), 0, 0,
-      expect.objectContaining({ creditOverride: 816 }),
+      expect.objectContaining({ creditOverride: 843 }),
     )
     await app.close()
   })

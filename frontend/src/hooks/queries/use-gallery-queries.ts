@@ -24,7 +24,13 @@ export interface GalleryItem {
   readonly model: string | null
 }
 
-export function useGalleryInfinite(filter: string, userId?: string, favoritesOnly?: boolean) {
+/**
+ * `fresh` skips the browser's 30-second copy of the list (the route answers
+ * `Cache-Control: public, max-age=30`): an admin who just removed items or
+ * blocked a creator must see the result, not the copy from before it.
+ */
+export function useGalleryInfinite(filter: string, userId?: string, favoritesOnly?: boolean, options?: { readonly fresh?: boolean }) {
+  const fresh = options?.fresh === true
   return useInfiniteQuery({
     queryKey: queryKeys.gallery.list(
       [filter, userId ? `user:${userId}` : "", favoritesOnly ? "fav" : ""].filter(Boolean).join(":"),
@@ -36,7 +42,11 @@ export function useGalleryInfinite(filter: string, userId?: string, favoritesOnl
       if (favoritesOnly) params.set("favoritesOnly", "true")
       if (pageParam) params.set("cursor", pageParam)
       const res = await fetch(`/v1/gallery?${params.toString()}`, {
-        headers: favoritesOnly ? await getAuthHeaders() : {},
+        // Signed in for a person's own list (My items, Favorites): the server shows
+        // the owner their own work — private and moderated items too — only when
+        // it knows who is asking.
+        headers: userId || favoritesOnly ? await getAuthHeaders() : {},
+        ...(fresh ? { cache: "no-cache" as const } : {}),
       })
       if (!res.ok) throw new Error("Failed to fetch gallery")
       return res.json() as Promise<{ data: GalleryItem[]; nextCursor: string | null; totalCount?: number }>

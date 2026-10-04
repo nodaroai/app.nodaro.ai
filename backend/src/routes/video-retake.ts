@@ -8,7 +8,8 @@
  * Credit math: `ltx-2.3-pro-retake:per-second × retakeDuration` — the
  * per-second rate is seeded in STATIC_CREDIT_COSTS and model_pricing
  * (Task 1.7). The route's `computeCredits` hook multiplies by the user-
- * supplied retake duration so the reservation matches the actual cost.
+ * supplied retake duration so the reservation matches the actual cost; a
+ * workflow run reserves the same (lib/ltx-retake-credits.ts).
  */
 
 import type { FastifyInstance } from "fastify"
@@ -24,9 +25,10 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { getModelCreditBaseCost } from "../ee/billing/credits.js"
+import { LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared"
+import { ltxRetakeBaseCredits } from "../lib/ltx-retake-credits.js"
 
-const RETAKE_MODEL_IDENTIFIER = "ltx-2.3-pro-retake:per-second"
+const RETAKE_MODEL_IDENTIFIER = LTX_RETAKE_PER_SECOND_CREDIT_ID
 
 const videoRetakeBody = z.object({
   videoUrl: safeUrlSchema,
@@ -48,14 +50,7 @@ export async function videoRetakeRoutes(app: FastifyInstance) {
       // rate from the DB / STATIC_CREDIT_COSTS fallback and multiply by the
       // user-supplied duration. checkCredits + reserveCredits both use this
       // value so they stay in sync.
-      computeCredits: async (body) => {
-        const b = body as Record<string, unknown>
-        const duration = typeof b.retakeDuration === "number" && b.retakeDuration > 0
-          ? b.retakeDuration
-          : 2
-        const pricing = await getModelCreditBaseCost(RETAKE_MODEL_IDENTIFIER)
-        return Math.ceil(pricing.creditCost * duration)
-      },
+      computeCredits: (body) => ltxRetakeBaseCredits((body as Record<string, unknown>).retakeDuration),
     }),
   }, async (req, reply) => {
     const parsed = videoRetakeBody.safeParse(req.body)
@@ -127,7 +122,7 @@ export async function videoRetakeRoutes(app: FastifyInstance) {
       video: videoUrl,
       prompt: finalPrompt ?? "",
       retake_start_time: retakeStartTime,
-      retake_duration: retakeDuration,
+      retake_duration: ltxRetakeDurationSec(retakeDuration),
       retake_mode: retakeMode,
       resolution: "1080p",
       aspect_ratio: aspectRatio,

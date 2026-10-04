@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useMemo, useRef, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { useDismissableLayerSurface } from "@radix-ui/react-dismissable-layer"
+import { isModalDialogOpen, refuseDeleteUnderModal } from "@/lib/modal-open"
 import { buildRangeLabel as buildRangeLabelShared, isCollectInEdge, withWiredSettings, type SelectorMode } from "@nodaro/shared"
 import {
   ReactFlow,
@@ -2138,6 +2139,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           // an inner menu, close at root (its own document listener).
           return
         }
+        if (isModalDialogOpen()) {
+          // A modal dialog (a result inspector, …) is the topmost overlay and
+          // closes itself on Escape; the sidebar and menus under it stay.
+          return
+        }
         setAddNodePopupOpen(false)
         setCanvasContextMenu(null)
         setNodeContextMenu(null)
@@ -2203,7 +2209,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         storeState.configPanelFullscreen ||
         storeState.freecutEdit !== null ||
         storeState.imageEdit !== null ||
-        !!document.querySelector('[role="dialog"][aria-modal="true"]')
+        isModalDialogOpen()
       if (overlayOpen) return
 
       // "?" — show the keyboard shortcuts help (layout-independent: matches the "?"
@@ -3013,6 +3019,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           nodesConnectable={!isReadOnly}
           edgesReconnectable={!isReadOnly}
           deleteKeyCode={isReadOnly ? null : ["Delete", "Backspace"]}
+          onBeforeDelete={refuseDeleteUnderModal}
           className={cn(
             "canvas-ambient touch-manipulation",
             connectingFromType === "source" && "connecting-from-source",

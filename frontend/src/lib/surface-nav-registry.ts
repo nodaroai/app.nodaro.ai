@@ -136,4 +136,6 @@ export const ENTRY_BY_LINK: readonly string[] = [
   // surface NavKey for it (nav.hide's vocabulary is the END-USER nav), so it is
   // classified here like every other /admin child.
   "review",
+  // Gallery Moderation — admin-only, like Content Review.
+  "gallery-moderation",
 ]

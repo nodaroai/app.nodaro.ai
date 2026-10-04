@@ -186,7 +186,7 @@ describe("image-to-video handler — smart-loop-cut", () => {
     )
     expect(mocks.mockRefundLoopTrimAddon).not.toHaveBeenCalled()
     const arg = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown>
-    expect(arg.extraNonProviderCredits).toBe(3)
+    expect(arg.extraNonProviderCredits).toBe(30)
     expect(arg.loopTrimAddonRefundCredits).toBe(0)
   })
 
@@ -219,7 +219,7 @@ describe("image-to-video handler — smart-loop-cut", () => {
 
     // ceil(8/5) + ceil(16/24) = 2 + 1 = 3, carried to finalize instead.
     const arg = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown>
-    expect(arg.loopTrimAddonRefundCredits).toBe(3)
+    expect(arg.loopTrimAddonRefundCredits).toBe(30)
     expect(arg.extraNonProviderCredits).toBe(0)
 
     // Falls back to the un-trimmed raw URL

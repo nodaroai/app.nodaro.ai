@@ -1,18 +1,31 @@
 /**
  * Pure credit estimators for video-utility nodes (loop-video, trim-video,
- * combine-videos). Used by frontend (Run-button display + API call) AND
- * backend (creditGuard reservation) so the displayed cost equals what gets
- * debited.
+ * combine-videos, assemble-narrated-video). Used by frontend (Run-button
+ * display + API call) AND backend (creditGuard reservation, the workflow
+ * run's reservation, the workflow estimate) so the displayed cost equals
+ * what gets debited.
+ *
+ * Every estimate counts pricing UNITS and returns units × CREDIT_UNIT base
+ * credits: a unit is 5 seconds of output, ~24 frames a smart loop cut
+ * searches, each combine input beyond two, and each step of Assemble Narrated
+ * Video (3 + 1 per 6 blocks).
  */
 
 export const VIDEO_UTIL_PRICING = {
-  /** 1 credit per 5 seconds of output, ceiling. */
-  CREDITS_PER_5_SEC: 1,
-  /** Smart-loop-cut work scales at 1 credit per ~24 frames searched. */
+  /** Base credits per pricing unit. The node's own `model_pricing` row is one unit. */
+  CREDIT_UNIT: 10,
+  /** Base credits per 5 seconds of output (one unit), ceiling. */
+  CREDITS_PER_5_SEC: 10,
+  /** Smart-loop-cut work scales at one unit per ~24 frames searched. */
   FRAMES_PER_CREDIT: 24,
   /** Used when an upstream node hasn't produced a measurable duration yet. */
   FALLBACK_DURATION_SECONDS: 8,
 } as const
+
+/** Base credits for a count of pricing units, never below one unit. */
+function unitsToCredits(units: number): number {
+  return VIDEO_UTIL_PRICING.CREDIT_UNIT * Math.max(1, units)
+}
 
 export interface LoopVideoEstimatorInput {
   mode?: "repeat" | "duration"
@@ -64,7 +77,7 @@ export function estimateLoopVideoCredits(
     ? Math.ceil((data.smartLoopCutLookback ?? 16) / VIDEO_UTIL_PRICING.FRAMES_PER_CREDIT)
     : 0
 
-  return Math.max(1, base + cut)
+  return unitsToCredits(base + cut)
 }
 
 export function estimateTrimVideoCredits(
@@ -77,7 +90,7 @@ export function estimateTrimVideoCredits(
   if (data.trimMode === "smart-loop-cut") {
     const base = Math.ceil(inputDuration / 5)
     const cut = Math.ceil((data.smartLoopCutLookback ?? 16) / VIDEO_UTIL_PRICING.FRAMES_PER_CREDIT)
-    return Math.max(1, base + cut)
+    return unitsToCredits(base + cut)
   }
 
   if (data.trimMode === "frames") {
@@ -85,34 +98,34 @@ export function estimateTrimVideoCredits(
     const startSec = (data.trimStartFrames ?? 0) / VIDEO_UTIL_PRICING.FRAMES_PER_CREDIT
     const endSec = (data.trimEndFrames ?? 0) / VIDEO_UTIL_PRICING.FRAMES_PER_CREDIT
     const output = Math.max(0, inputDuration - startSec - endSec)
-    return Math.max(1, Math.ceil(output / 5))
+    return unitsToCredits(Math.ceil(output / 5))
   }
 
   if (data.trimMode === "seconds") {
     const output = Math.max(0, inputDuration - (data.trimStartSeconds ?? 0) - (data.trimEndSeconds ?? 0))
-    return Math.max(1, Math.ceil(output / 5))
+    return unitsToCredits(Math.ceil(output / 5))
   }
 
   if (data.trimMode === "keep-first-seconds") {
     const output = Math.min(inputDuration, Math.max(0, data.keepFirstSeconds ?? 0))
-    return Math.max(1, Math.ceil(output / 5))
+    return unitsToCredits(Math.ceil(output / 5))
   }
 
   if (data.trimMode === "keep-last-seconds") {
     const output = Math.min(inputDuration, Math.max(0, data.keepLastSeconds ?? 0))
-    return Math.max(1, Math.ceil(output / 5))
+    return unitsToCredits(Math.ceil(output / 5))
   }
 
   // "time" mode (default)
   const output = (data.endTime ?? 0) - (data.startTime ?? 0)
-  return Math.max(1, Math.ceil(output / 5))
+  return unitsToCredits(Math.ceil(output / 5))
 }
 
 export function estimateCombineVideosCredits(
   data: CombineVideosEstimatorInput,
   upstreamDurations: ReadonlyArray<number | undefined>,
 ): number {
-  if (upstreamDurations.length === 0) return 1
+  if (upstreamDurations.length === 0) return unitsToCredits(1)
 
   const fallback = VIDEO_UTIL_PRICING.FALLBACK_DURATION_SECONDS
   const n = upstreamDurations.length
@@ -133,7 +146,7 @@ export function estimateCombineVideosCredits(
 
   const base = Math.ceil(Math.max(0, total) / 5)
   const inputAdder = Math.max(0, n - 2)
-  return Math.max(1, base + inputAdder)
+  return unitsToCredits(base + inputAdder)
 }
 
 export interface LoopTrimEstimatorInput {
@@ -143,23 +156,24 @@ export interface LoopTrimEstimatorInput {
 
 /** Add-on credits charged for the smart-loop-cut post-process applied to an
  *  image-to-video output. Returns 0 when loopTrim is undefined or disabled.
- *  Formula: ceil(duration / 5) + ceil(framesToTest / 24) — matches the
- *  trim-video smart-loop-cut formula for consistency. */
+ *  Formula: CREDIT_UNIT × (ceil(duration / 5) + ceil(framesToTest / 24)) —
+ *  the same units as Trim Video's smart loop cut, so 8 s at 16 frames → 30. */
 export function estimateLoopTrimAddonCredits(
   loopTrim: LoopTrimEstimatorInput | undefined,
   outputDurationSeconds: number,
 ): number {
   if (!loopTrim?.enabled) return 0
   const frames = Math.max(1, Math.min(loopTrim.framesToTest ?? 16, 64))
-  return Math.ceil(outputDurationSeconds / 5) +
-         Math.ceil(frames / VIDEO_UTIL_PRICING.FRAMES_PER_CREDIT)
+  return unitsToCredits(
+    Math.ceil(outputDurationSeconds / 5) + Math.ceil(frames / VIDEO_UTIL_PRICING.FRAMES_PER_CREDIT),
+  )
 }
 
-/** BASE credits for assemble-narrated-video: 3 flat + 1 per 6
- *  blocks. 6→4, 24→7, 60→13. Single source of truth shared by the backend
+/** BASE credits for assemble-narrated-video: 3 units flat + 1 per 6
+ *  blocks. 6→40, 24→70, 60→130. Single source of truth shared by the backend
  *  route/creditGuard (`backend/src/providers/video/narrated-block-fit.ts`
- *  re-exports this) and the frontend pre-run estimate
- *  (`frontend/src/hooks/use-estimated-credits.ts`). */
+ *  re-exports this), the workflow run's reservation and the frontend pre-run
+ *  estimate (`frontend/src/hooks/use-estimated-credits.ts`). */
 export function assembleNarratedVideoCredits(blockCount: number): number {
-  return 3 + Math.ceil(blockCount / 6)
+  return unitsToCredits(3 + Math.ceil(blockCount / 6))
 }

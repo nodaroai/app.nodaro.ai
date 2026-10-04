@@ -38,9 +38,9 @@ describe("planBlockFit", () => {
 })
 
 describe("assembleNarratedVideoCredits", () => {
-  it("matches the worked examples 6→4, 24→7, 60→13", () => {
-    expect(assembleNarratedVideoCredits(6)).toBe(4)
-    expect(assembleNarratedVideoCredits(24)).toBe(7)
-    expect(assembleNarratedVideoCredits(60)).toBe(13)
+  it("matches the worked examples 6→40, 24→70, 60→130", () => {
+    expect(assembleNarratedVideoCredits(6)).toBe(40)
+    expect(assembleNarratedVideoCredits(24)).toBe(70)
+    expect(assembleNarratedVideoCredits(60)).toBe(130)
   })
 })

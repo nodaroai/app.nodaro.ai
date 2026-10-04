@@ -185,11 +185,17 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
     note: "Prices by RENDERER, not by node: the cheap FFmpeg drawtext burn vs the Remotion render anything styled / timed / transcribed / segmented needs.",
   },
   "image-collage": { ids: familyIds("image-collage") },
+  // Every run bills its source's row (web-scrape:<source>); the bare row is
+  // never charged, so the quote is the range across the sources.
+  "web-scrape": { ids: familyIds("web-scrape") },
   "speed-ramp": { ids: familyIds("speed-ramp") },
-  "assemble-narrated-video": { ids: familyIds("assemble-narrated-video") },
+  // One-unit row; a run is 3 units + 1 per 6 blocks: 1–60 blocks span 4–13 units.
+  "assemble-narrated-video": { ids: familyIds("assemble-narrated-video"), span: [4, 13] },
   "after-effects": { ids: familyIds("after-effects") },
   "motion-graphics": { ids: familyIds("motion-graphics") },
-  "video-composer": { ids: familyIds("video-composer") },
+  // Billed on the scene-graph-ai rows (routes/scene-graph-ai.ts) — the band
+  // reads those, so an admin repricing reaches the quote too.
+  "video-composer": { ids: familyIds("scene-graph-ai") },
   "lottie-overlay": { ids: familyIds("lottie-overlay") },
   "3d-title": { ids: familyIds("3d-title") },
   "render-video": {
@@ -477,9 +483,11 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "web-scrape",
     label: "Web Scrape",
     category: "input",
-    // outputType: data — emits a structured JSON array via the `json` handle (creditCost auto-filled from STATIC_CREDIT_COSTS = 2).
+    // outputType: data — emits a structured JSON array via the `json` handle. creditCost is the
+    // band across the per-source rows a run is billed on (CREDIT_BAND_SOURCES).
     description: webScrapeDescription(),
     outputType: "data",
+    creditCost: creditBandFor("web-scrape"),
   },
   {
     type: "meta-ads-scrape",
@@ -595,11 +603,14 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         // The timed word transcript (json) — required. Wire a Transcribe node's
         // json output, or supply an inline Transcript object.
         { key: "transcript", type: "object", required: true },
+        // The recordings the plan cuts (1-6). Each row's offsetMs places it on
+        // the timeline. A raw `offsets` value is refused here (422
+        // offsets_not_applied): on the canvas an Audio Sync node fills each
+        // source's offsetMs before the plan runs, and a direct call sets them
+        // on the rows itself.
+        { key: "sources", type: "array", required: true },
         // Optional silence ranges (json) — wire a Silence Detect node's output.
         { key: "silence", type: "object" },
-        // Optional Audio Sync result (json) — its measured offsets are written
-        // onto the sources' offsetMs before the plan runs (a hand-set offset wins).
-        { key: "offsets", type: "object" },
         // Free-text editing instructions (affix-capable).
         { key: "instructions", type: "string" },
         { key: "styleGuide", type: "string" },
@@ -818,9 +829,8 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
       "Generate synchronized SFX / foley / ambient audio for a video clip using Replicate's mmaudio. Credit cost scales with input clip duration — one bucketed row per clip length (`replicate-mmaudio:<bucket>s`), spanning the advertised band pre-markup.",
     outputType: "video",
     // Duration-bucketed pricing — see `STATIC_CREDIT_COSTS["replicate-mmaudio:*"]`
-    // in `ee/billing/credits.ts` and `bucketBaseCreditsFor` in `routes/video-sfx.ts`.
-    // Range is pre-markup; the admin-configured markup and version count are
-    // applied to the user-visible cost.
+    // in `ee/billing/credits.ts` and `videoSfxCreditId` in `@nodaro/shared`,
+    // which picks the row for a clip's length on every path a run takes.
     creditCost: creditBandFor("video-sfx"),
     providers: ["replicate-mmaudio"],
     capabilities: ["sound-effect"],

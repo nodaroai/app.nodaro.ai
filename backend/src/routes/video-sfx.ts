@@ -1,7 +1,9 @@
 // backend/src/routes/video-sfx.ts
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
+import { VIDEO_SFX_PRICING, videoSfxCreditId } from "@nodaro/shared"
+import { measureVideoSfxDuration } from "../lib/video-sfx-duration.js"
+import { baseCreditCostFor } from "../lib/credit-base-cost.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
@@ -30,63 +32,39 @@ export const VideoSfxBody = z.object({
 })
 export type VideoSfxBody = z.infer<typeof VideoSfxBody>
 
-const BUCKETS: ReadonlyArray<{ upTo: number; base: number; key: string }> = [
-  { upTo: 8,   base: 1,  key: "replicate-mmaudio:8s" },
-  { upTo: 15,  base: 1,  key: "replicate-mmaudio:15s" },
-  { upTo: 30,  base: 2,  key: "replicate-mmaudio:30s" },
-  { upTo: 60,  base: 3,  key: "replicate-mmaudio:60s" },
-  { upTo: 120, base: 5,  key: "replicate-mmaudio:120s" },
-  { upTo: 300, base: 11, key: "replicate-mmaudio:300s" },
-]
-
-/** Returns BASE credits (pre-markup). creditGuard applies cost_markup_percent. */
-export function bucketBaseCreditsFor(durationSeconds: number): number {
-  const b = BUCKETS.find((b) => durationSeconds <= b.upTo)
-  return b?.base ?? 11  // ceiling at :300s; route should reject > 300 before reaching here
-}
-
-export function bucketKeyFor(durationSeconds: number): string {
-  const b = BUCKETS.find((b) => durationSeconds <= b.upTo)
-  return b?.key ?? "replicate-mmaudio:300s"
-}
-
 /**
- * Fastify preHandler: ffprobes the input video, validates duration (0 < d <= 300),
- * stashes ceil(duration) on req.probedDuration AND mirrors it on req.body.__probedDuration
- * so creditGuard.computeCredits (which only sees the parsed body) can pick a bucket
- * without re-probing. Falls back to 8s on ffprobe failure (logs warning).
+ * Fastify preHandler: measures the input video by the rule the workflow run
+ * shares (`measureVideoSfxDuration`: 8 s when the probe fails, 400 for a
+ * zero-length or over-300 s video), stashes ceil(duration) on
+ * req.probedDuration AND mirrors it on req.body.__probedDuration so the credit
+ * guard (which only sees the body) prices the right row without re-probing.
  */
 export async function probeDurationPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const body = req.body as VideoSfxBody
-  let duration: number
-  try {
-    const probe = await probeVideoSource(body.videoUrl)
-    duration = probe.durationSeconds
-  } catch (err) {
+  const measured = await measureVideoSfxDuration(body.videoUrl, (err) => {
     req.log.warn({ err }, "video-sfx: ffprobe failed; falling back to 8s bucket")
-    duration = 8
+  })
+  if (!measured.ok) {
+    return void reply.code(400).send({ error: measured.code, message: measured.message })
   }
-  if (duration <= 0) {
-    return void reply.code(400).send({
-      error: "invalid_video_duration",
-      message: "Video has no detectable duration. The file may be corrupted or an unsupported format.",
-    })
-  }
-  if (duration > 300) {
-    return void reply.code(400).send({
-      error: "video_duration_exceeds_limit",
-      message: `Video is ${Math.ceil(duration)} seconds. Maximum duration is 300 seconds (5 minutes) for SFX generation.`,
-    })
-  }
-  const ceiled = Math.ceil(duration)
-  req.probedDuration = ceiled
-  ;(req.body as Record<string, unknown>).__probedDuration = ceiled
+  req.probedDuration = measured.durationSec
+  ;(req.body as Record<string, unknown>).__probedDuration = measured.durationSec
+}
+
+/** The price row for the length the preHandler measured. */
+function probedCreditId(body: unknown): string {
+  const probed = (body as Record<string, unknown> | undefined)?.__probedDuration
+  return videoSfxCreditId(typeof probed === "number" ? probed : undefined)
 }
 
 export default async function videoSfxRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/video-sfx", {
     preHandler: [
       probeDurationPreHandler,
+      // Priced from the length's own row (`replicate-mmaudio:<n>s`, the
+      // admin-editable model_pricing row over the static table), the same row
+      // a workflow run reserves for this clip.
+      //
       // Multi-version batch: credits scale linearly with `versions` (1-4).
       // Without `× versions` the preHandler would greenlight users who can
       // afford ONE generation when versions=4 — then Phase 2A would partially
@@ -96,15 +74,13 @@ export default async function videoSfxRoutes(app: FastifyInstance): Promise<void
       // inside creditGuardImpl so checkCredits + reserveCredits agree on
       // the final number.
       creditGuard(
-        () => "replicate-mmaudio",
+        (req) => probedCreditId(req.body),
         {
           computeCredits: async (parsedBody) => {
             const body = parsedBody as Record<string, unknown>
-            const probed = body.__probedDuration
-            const duration = typeof probed === "number" ? probed : 8
             const versionsRaw = body.versions
             const versions = typeof versionsRaw === "number" && versionsRaw >= 1 ? versionsRaw : 1
-            return bucketBaseCreditsFor(duration) * versions
+            return (await baseCreditCostFor(probedCreditId(body))) * versions
           },
         },
       ),
@@ -139,9 +115,9 @@ export default async function videoSfxRoutes(app: FastifyInstance): Promise<void
       body.negativePrompt = policed.negativePrompt
     }
 
-    const duration = req.probedDuration ?? 8
+    const duration = req.probedDuration ?? VIDEO_SFX_PRICING.FALLBACK_DURATION_SEC
     const versions = body.versions
-    const bucketKey = bucketKeyFor(duration)
+    const bucketKey = videoSfxCreditId(duration)
 
     const mcpClient = extractMcpClient(req.body)
     const workflowId = extractWorkflowId(req.body)
@@ -173,14 +149,14 @@ export default async function videoSfxRoutes(app: FastifyInstance): Promise<void
     // ──────────────────────────────────────────────────────────────────────
     let perJobCreditOverride: number | undefined
     if (hasCredits() && req.creditReservation) {
-      const baseCredits = bucketBaseCreditsFor(duration)
+      const baseCredits = await baseCreditCostFor(bucketKey)
       const { applyServiceMarkup } = await import("../ee/billing/service-margin.js")
       const { getAppSettings } = await import("../lib/app-settings.js")
       const settings = await getAppSettings()
       // Same helper (integer-domain rounding + per-service margin) creditGuardImpl
-      // and the anomaly detector's actual use for "replicate-mmaudio", so the
+      // and the anomaly detector's actual use for the bucket row, so the
       // reserve can never round a credit apart from them (no phantom anomaly).
-      perJobCreditOverride = applyServiceMarkup(baseCredits, settings, "replicate-mmaudio")
+      perJobCreditOverride = applyServiceMarkup(baseCredits, settings, bucketKey)
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -256,7 +232,7 @@ export default async function videoSfxRoutes(app: FastifyInstance): Promise<void
       if (req.creditReservation && perJobCreditOverride !== undefined) {
         req.creditReservation.creditOverride = perJobCreditOverride
       }
-      const reservation = await reserveCreditsForJob(req, reply, jobId, "replicate-mmaudio")
+      const reservation = await reserveCreditsForJob(req, reply, jobId, bucketKey)
       if (reply.sent) {
         // Refund reservations that succeeded earlier in this batch.
         if (reservations.length > 0 && hasCredits()) {

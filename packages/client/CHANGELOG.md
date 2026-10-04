@@ -1,5 +1,93 @@
 # @nodaro/sdk
 
+## 2.18.0
+
+### Minor Changes
+
+- 470cbe2: Add `edit.cameraSwitch({ edl, transcript, speakerMap?, speakerNames?, minShotMs?, leadMs?, maxShotMs?, wideEvery?, layoutHints? })`: put each cut of an EDL on the camera of whoever is speaking (Cloud; flat price). A transcript with no speaker labels rejects with a `NodaroError` (`code: "no_speakers"`) before any request.
+- ba1ae16: Did it work? "I did this" on an action card, and how it went. `@nodaro/shared` adds the mark types (`CardAction`, `CardActionResult`, `CardOutcome`, `CardOutcomeState`, `CardSnapshot`, `CardVerdict`, `AdviceRecord`, `AdviceFamily`, `CompetitorActionsResult`, `MarkCardInput`, `UpdateCardActionInput`, `CARD_OUTCOME_STATES`, `ADVICE_FAMILIES`), `adviceFamilyOf` and `isMeasurableCard`, and `CompetitorCardsResult.record`. `@nodaro/sdk` adds `client.competitors.tried()`, `markDone(cardId, { postUrl })`, `linkPost(markId, url | null)`, `markSeen(markId)` and `unmark(markId)` (`/v1/competitors/actions*`), and re-exports the lesson and mark types. `@nodaro/cli` adds `nodaro competitors done`, `tried`, `link` and `undo`, and `cards` shows the id to mark a card done.
+- d80feff: What works for a brand (stage 4 of the research rollout): `@nodaro/shared` adds the lesson types (`BrandLesson`, `BrandPlatformLessons`, `BrandLessons`, `CompetitorLessonsResult`, `BRAND_LESSON_KINDS`); `@nodaro/sdk` adds `client.competitors.lessons(id)` (`GET /v1/competitors/:id/lessons`); `@nodaro/cli` adds `nodaro competitors lessons <id>`.
+
+  `socialSearchPostVideo` answers `{ kind: "none" }` for an image or a text post, which has no video to analyze.
+
+- 95523c6: Competitor tracking (Nodaro Cloud): `@nodaro/shared` adds the tracked-brand, scan and action-card shapes, the card `kind` vocabulary and the scan price (`competitor-scan:<n>`, one Social Search page per search). `@nodaro/sdk` adds `client.competitors` (`list`, `get`, `create`, `update`, `delete`, `cards`, `discover`, `scan`) and re-exports the types. `@nodaro/cli` adds `nodaro competitors` (`list`, `add`, `discover`, `scan`, `cards`, `show`, `update`, `remove`).
+- 17d734b: `edit.editPlan` takes `offsets` (an `audioSync` result over the same source ids) and `transcriptSourceId`. The measured offsets are written onto the sources before the request; a source that was not measured or matched weakly, an unmeasured master, or a transcript made from a source off the master's clock rejects with a `NodaroError` (`code: "edit_plan_sources"`) before any request or charge.
+- 086003b: Pipelines: `approveSubGate` could never clear Stage 6's `match_cut_break_pending`. The sub-gate routes only resolve Stage 7's gates, and that gate clears one break at a time.
+
+  - `@nodaro/shared`: `ANIMATE_SUB_GATES` / `AnimateSubGateSchema` / `AnimateSubGate` are the sub-gates `POST /v1/pipelines/:id/sub-gates/:gate/{approve,reject}` resolves (`silent_cut_preview`, `dialogue_recheck`), and `MATCH_CUT_BREAK_GATE` names the one that clears per break. The routes answer the match-cut gate with a 400 `invalid_sub_gate` that names the helper route, instead of a 404 or 409.
+  - `@nodaro/sdk`: `pipelines.acceptMatchCutBreak(id, sceneId, shotId)` accepts one break (`POST /v1/pipelines/:id/entities/:sceneId/helpers/accept_match_cut_break`) and returns how many are left. `approveSubGate` now takes an `AnimateSubGate`.
+  - `@nodaro/sdk`: the entry point exports the types its resources re-export but it did not: `PipelineInput`, `PipelineStatus`, `PipelineMode`, `SubGateName`, `AnimateSubGate`, `ChatEnabledStage`, `ProposedChange` and `CommunityFullDetail`.
+
+- df2f7b4: Saved posts, the inspiration wall: `@nodaro/shared` adds the `SavedPost` shape and the request and answer types of `/v1/saved-posts`. `@nodaro/sdk` adds `client.savedPosts` (`list`, `save`, `lookup`, `update`, `delete`) and re-exports the types. `@nodaro/cli` adds `nodaro saved-posts` (`list`, `save --file`, `update`, `delete`).
+- 5b8496b: The SDK's types and docs now match the server.
+
+  - `runAndWait` / `runMany` take `cancelOnAbort: true` to also cancel the job (and release its credit hold) when `signal` aborts. Without it, aborting stops only the waiting: the job keeps running and is charged. The `JobAbortedError` now always carries the `jobId` once the job was submitted.
+  - `DeveloperAppScope` is `OAuthScope` from `@nodaro/shared`, the server's own list. It gains `presets:read`, `workspaces:read` and `workspaces:write`.
+  - `recast.estimate` / `create` / `start` type `segmentSec` as `RecastSegmentPack` (`"max" | "scenes-max" | "scenes"`), the values the server accepts, and the entry point exports them as `RECAST_SEGMENT_PACKS`. It was typed as a number of seconds, which the server rejects.
+  - The entry point exports `RecastSegmentPack`, plus 20 types that resource methods take or return but callers could not import: `CreatureVoice`, `GenerateLocationMotionInput`, `ModelFamilyGroup`, `ReferenceCaptionParams`, `AssembleNarratedVideoParams`, `RunNodeOptions`, `TextToPickerParams`, `TextToPickerResult`, `PipelineRecord`, `PendingApproval`, `PipelineTimeline`, the five `Pro3DRender*` types, `Collaborator`, `AddCollaboratorInput`, `SharedWorkflow` and `DroppedCollaborator`.
+  - The README links nodaro.ai/docs, and its agent primer matches the raw copy again (the voice and audio section was missing; voice cloning, retired, is gone from it).
+
+- 10d0467: Social Search (Nodaro Cloud): `@nodaro/shared` adds the node's vocabulary, the `SocialPost` shape every platform's results share, the `SocialSearchParams` request, its credit ids and the rule for which posts a run passes on. `@nodaro/sdk` types `nodes.run("social-search", …)` and `nodes.runAndWait("social-search", …)` (resolving `SocialSearchJobOutput`) and re-exports the post and request types.
+- 09b138b: `StudioProductionCapabilities.operations` gains the optional `mediaSlots` and `clipSlotInputs` flags. An older host omits them; read an absent flag as `false`.
+- 524c266: Transitions can declare their own options, and the wipe gains a Direction. A catalog row may now carry `options` (each `{ field, label, choices }`, `auto` first) and a `promptTemplate` with one `{<field>}` token per option; its `promptHint` is the template on every `auto` choice, so plain readers still see a finished sentence. The `wipe` row declares `WIPE_DIRECTION` (`wipeDirection`: `auto`, `left-to-right`, `right-to-left`, `top-to-bottom`, `bottom-to-top`, `top-left-to-bottom-right`, `top-right-to-bottom-left`). `composeTransitionHintFromConnections` takes the choices as `options.optionValues`, `renderTransitionBases` as a third argument, and `getTransitionPromptHint` as a second; a transition node's `wipeDirection` is read by `getParameterPromptHint`. New exports: `WIPE_DIRECTION`, `getTransitionOptions`, `TRANSITION_OPTION_FIELDS`, `readTransitionOptionValues` and the `TransitionOption` / `TransitionOptionChoice` / `TransitionOptionValues` types. The picker catalog publishes a row's options on that option as `params`, and the wire projection (`GET /v1/picker-catalogs/:nodeType`, the MCP `get_picker_catalog` tool) carries them at both detail levels — `@nodaro/shared`'s `ProjectedCatalogOption` and the SDK's `PickerOption` gain the optional `params`.
+
+  **Prompt wording change (wipe):** the wipe's default description now reads "a clean straight edge sweeps across the frame" instead of "a clean diagonal line sweeps across the frame"; a chosen direction replaces that phrase (for example "a clean vertical edge sweeps across the frame from left to right").
+
+  **Style (seven rows).** `debris-shower`, `garden-bloom`, `smoke-puff`, `sakura-petals`, `aurora-sweep`, `sand-storm` and `white-flash` each declare a **Style** — one `style` field shared by the styled rows, with each row's own looks as its choices. A styled row's `promptTemplate` is `{style}`: a choice's `phrase` is the row's whole description, so a style swaps the look rather than a phrase. `auto` is the row's DEFAULT look and is labelled with its name ("Full cover (default)"); every other id starts with its row's id (`debris-shower-light-sweep`), so a stored style never carries to another row, and a foreign or unknown id reads as the default. New exports: `TRANSITION_STYLE_FIELD`, `DEBRIS_SHOWER_STYLE`, `GARDEN_BLOOM_STYLE`, `SMOKE_PUFF_STYLE`, `SAKURA_PETALS_STYLE`, `AURORA_SWEEP_STYLE`, `SAND_STORM_STYLE`, `WHITE_FLASH_STYLE`. The looks (default first): debris-shower Full cover / Light sweep; garden-bloom Grow & part / Hedge doors; smoke-puff Engulf / Full cover; sakura-petals Swirling veil / Side sweep; aurora-sweep Sky glow / Veil; sand-storm Full cover / Light sweep; white-flash Flash / Overexposure. `white-flash`'s default look is a new description (a camera-flash pop to white that holds, then fades down to the second shot), so a white-flash pick with no style now renders it; its previous description is the Overexposure look. Each body is the text a tested take was generated from. On the canvas, a two-pick of two styled rows shows one Style control holding both rows' looks.
+
+  **Prompt wording change (Style):** `debris-shower`'s default description is now its tested "Full cover" body (the old body stays available as the "Light sweep" style), and `white-flash`'s is its tested "Flash" body (the old body stays available as the "Overexposure" style). Every other styled row's default is its existing text — `aurora-sweep`'s is the body 1.26.1 already ships, and its pre-1.26.1 body returns as the "Veil" style — so picks with no style keep their words. No other row changes.
+
+### Patch Changes
+
+- e98ff5b: Advanced mode's help text now says its one-tier credit bump is capped at premium: a request already at the premium tier stays there.
+- 8dc01f1: Listed prices are now the prices a run is charged. `GET /v1/models` (`client.models.list()`), `GET /v1/nodes` (`client.nodes.list()` / `get()`) and the MCP `list_models` tool serve the same credits as the node's Run button, where they used to list the catalog's base price. The field docs say so: `PriceVariant.credits` is the catalog's list price, and the SDK's `pricing` and `creditCost` are the charged price.
+- Updated dependencies [470cbe2]
+- Updated dependencies [8dc01f1]
+- Updated dependencies [ba1ae16]
+- Updated dependencies [d80feff]
+- Updated dependencies [95523c6]
+- Updated dependencies [5f14bf9]
+- Updated dependencies [17d734b]
+- Updated dependencies [3134831]
+- Updated dependencies [bac18b7]
+- Updated dependencies [ec71996]
+- Updated dependencies [10054f4]
+- Updated dependencies [086003b]
+- Updated dependencies [3e8a8dc]
+- Updated dependencies [5b8496b]
+- Updated dependencies [d1c208e]
+- Updated dependencies [5e636b4]
+- Updated dependencies [1197130]
+- Updated dependencies [df2f7b4]
+- Updated dependencies [8905992]
+- Updated dependencies [2a61d66]
+- Updated dependencies [20edcd9]
+- Updated dependencies [08c60ee]
+- Updated dependencies [3d9bae0]
+- Updated dependencies [10d0467]
+- Updated dependencies [fa682e5]
+- Updated dependencies [09b138b]
+- Updated dependencies [7363396]
+- Updated dependencies [420aaa2]
+- Updated dependencies [028f3ef]
+- Updated dependencies [00ff1cf]
+- Updated dependencies [8d61db1]
+- Updated dependencies [8096ebe]
+- Updated dependencies [5f0cbab]
+- Updated dependencies [255d9e0]
+- Updated dependencies [8d1e320]
+- Updated dependencies [3bae2cb]
+- Updated dependencies [43ea304]
+- Updated dependencies [f801037]
+- Updated dependencies [9377f6e]
+- Updated dependencies [693baee]
+- Updated dependencies [f801037]
+- Updated dependencies [778de30]
+- Updated dependencies [d127205]
+- Updated dependencies [524c266]
+  - @nodaro/shared@3.15.0
+  - @nodaro/prompts@1.28.0
+
 ## 2.17.0
 
 ### Minor Changes
