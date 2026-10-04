@@ -2,20 +2,27 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * A LINKED (keyframe / sequence) studio production's sequence planning state
- * never reaches a reader who is not its owner (studio ruling T87), on the by-id
- * doors and on the public share read:
+ * A LINKED (keyframe / sequence) studio production's owner state never reaches
+ * a reader who is not its owner (studio ruling T87), on the by-id doors and on
+ * the public share read:
  *
  * - a take's endpoint pins (`sequenceEndpoints` on the clip node's
  *   `data.generatedResults` rows);
+ * - a unit result's frozen request (`requestManifest` on the unit video node's
+ *   `data.sequenceUnitResults` rows);
+ * - a keyframe's runs in flight (`keyframePendingImages` on its image node);
  * - the director's `settings.studio.sequenceRecommendations`;
- * - each sequence take unit's `continuationAcceptance`.
+ * - the owner's current preferences: `settings.studio.sequenceGenerationPolicies`
+ *   goes out EMPTY;
+ * - each sequence take unit's `continuationAcceptance`;
+ * - each keyframe entry's `rejections`.
  *
  * What the studio codec's reader requires to read a production with takes —
- * `sequenceGenerationPolicies`, a take's `policy` and `compilation`, the unit
- * video nodes' `sequenceUnitResults` — still goes out: a strip of the stored row
- * cannot drop it without breaking that reader. `edit` and `own` keep all of
- * it: an editor saves the whole graph back (T21 / T77).
+ * the preferences record itself, a take's `policy` and `compilation`, the unit
+ * results' pins and urls, a frame's plan, acceptance and results — still goes
+ * out: a strip of the stored row cannot drop it without breaking that reader.
+ * `edit` and `own` keep all of it: an editor saves the whole graph back
+ * (T21 / T77).
  */
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -101,6 +108,8 @@ const PIN = (keyframeId: string, key: string) => ({ keyframeId, planRevision: 1,
 const PINS = { sequenceId: "zoom", sequenceRevision: 1, start: PIN("A", "frame-private-a"), end: PIN("B", "frame-private-b") }
 const POLICY = { conditioning: "video-continue", clipLength: "max", boundaryPolicy: "outer-frames",
   lockedBoundaryKeyframeIds: [], provider: "wan-3", resolution: "480p", aspectRatio: "16:9", referenceAssetIds: [] }
+/** The owner's CURRENT preference for the sequence, set after the take was made with {@link POLICY}. */
+const PREFERENCE = { ...POLICY, provider: "preference-private" }
 const COMPILATION = { compilerVersion: "c1", capabilityFingerprint: "exact", renderPlanHash: "plan-1", ready: true, issues: [],
   units: [{ id: "zoom:u0", coverage: [{ shotId: "AB", fromSec: 0, toSec: 4 }], outputDurationSec: 4, generationDurationSec: 4,
     conditioning: "start-end", startKeyframeId: "A", endKeyframeId: "B", guidanceOnlyKeyframeIds: [], reused: false, prerequisites: [] }] }
@@ -109,24 +118,52 @@ const REVIEW = { resultKey: "result0", acceptedBy: "owner-actor-private", accept
 const RECOMMENDATION = { id: "rec-1", createdAt: NOW, sequenceId: "zoom", authoringHash: "h1", capabilityFingerprint: "exact",
   priorityHash: "p1", recommendation: { policy: POLICY, reasons: ["a private director reason"], assumptions: [] },
   provenance: { source: "director", jobId: "job-private", analysisRevision: "rev-1", llmModel: "model-x" } }
-const PRIVATE = ["frame-private-a", "a private director reason", "job-private", "owner-actor-private"]
+/** A unit result's frozen request, as the host writes it when the result lands. */
+const MANIFEST = { version: 1, coverage: [{ shotId: "AB", prompt: "a private compiled prompt" }],
+  media: ["https://r2/reference-private.png"], sourceSnapshots: [{ id: "AB", clipSlots: [{ prompt: "a private unsent slot" }] }] }
+const PROVENANCE = { planRevision: 1, attemptId: "attempt-1", resolvedRequestHash: "b".repeat(64), referencePins: [], descriptionPins: [] }
+/** An image run in flight on keyframe A. */
+const FRAME_RUN = { jobId: "frame-run-private", startedAt: 5, frame: { prompt: "a private pending frame" }, provenance: PROVENANCE }
+/** The owner sent one of A's results back for revision. */
+const REJECTION = { result: PIN("A", "kf-a-2"), rejectedBy: "rejector-private", rejectedAt: NOW, reason: "a private rejection reason" }
+const PRIVATE = ["frame-private-a", "a private director reason", "job-private", "owner-actor-private", "preference-private",
+  "a private compiled prompt", "reference-private", "a private unsent slot", "frame-run-private", "a private pending frame",
+  "rejector-private", "a private rejection reason"]
+/** The keys that carry the owner's state; a `view` reader receives none of them. */
+const OWNER_KEYS = ["sequenceEndpoints", "requestManifest", "keyframePendingImages", "sequenceRecommendations",
+  "continuationAcceptance", "rejections"]
 
-/** A linked scene's clip (its take carries the pins) and one unit video node of a take. */
-const linkedNodes = () => [
-  { id: "clip-AB", type: "generate-video", position: { x: 0, y: 0 }, data: { prompt: "Approach",
-    generatedResults: [{ url: "https://r2/clip.mp4", jobId: "clip-1", sequenceEndpoints: PINS }] } },
-  { id: "owner0", type: "generate-video", position: { x: 680, y: 0 }, data: { sequenceUnitId: "zoom:u0",
-    sequenceUnitResults: [{ url: "https://r2/unit0.mp4", requestHash: "request-0",
-      pin: { unitId: "zoom:u0", resultKey: "result0", jobId: "result0", assetId: "asset-0", contentHash: "hash-0", durationSec: 4 } }],
-    generatedVideoUrl: "https://r2/unit0.mp4", generatedResults: [{ videoUrl: "https://r2/unit0.mp4", jobId: "result0" }] } },
-]
+/** A linked scene's clip; its take carries the pins. */
+const clipNode = (pinned: boolean) => ({ id: "clip-AB", type: "generate-video", position: { x: 0, y: 0 }, data: { prompt: "Approach",
+  generatedResults: [{ url: "https://r2/clip.mp4", jobId: "clip-1", ...(pinned ? { sequenceEndpoints: PINS } : {}) }] } })
+/** Keyframe A's image node: its results stay, its run in flight does not. */
+const frameNode = (running: boolean) => ({ id: "frame-A", type: "generate-image", position: { x: -340, y: 0 }, data: {
+  label: "A", keyframeId: "A", generatedResults: [
+    { url: "https://r2/a1.png", jobId: "kf-a-1", pin: PIN("A", "kf-a-1"), provenance: PROVENANCE },
+    { url: "https://r2/a2.png", jobId: "kf-a-2", pin: PIN("A", "kf-a-2"), provenance: PROVENANCE }],
+  ...(running ? { keyframePendingImages: [FRAME_RUN] } : {}) } })
+/** The take's unit result: the row stays, its frozen request does not. */
+const unitResult = (frozen: boolean) => ({ url: "https://r2/unit0.mp4", requestHash: "request-0",
+  pin: { unitId: "zoom:u0", resultKey: "result0", jobId: "result0", assetId: "asset-0", contentHash: "hash-0", durationSec: 4 },
+  ...(frozen ? { requestManifest: MANIFEST } : {}) })
+const unitNode = (frozen: boolean) => ({ id: "owner0", type: "generate-video", position: { x: 680, y: 0 }, data: { sequenceUnitId: "zoom:u0",
+  sequenceUnitResults: [unitResult(frozen)],
+  generatedVideoUrl: "https://r2/unit0.mp4", generatedResults: [{ videoUrl: "https://r2/unit0.mp4", jobId: "result0" }] } })
+
+/** A linked scene's clip, keyframe A's image node and one unit video node of a take. */
+const linkedNodes = () => [clipNode(true), frameNode(true), unitNode(true)]
+
+/** Keyframe A's entry: its plan stays, its review record does not. */
+const frameEntry = (reviewed: boolean) => ({ imageNodeId: "frame-A",
+  plan: { id: "A", label: "A", revision: 1, frame: { prompt: "A" }, requirements: [] },
+  ...(reviewed ? { rejections: [REJECTION] } : {}) })
 
 /** The take as the codec writes it — and, without `continuationAcceptance`, as a reader gets it. */
 const take = (reviewed: boolean) => ({ id: "take1", sequenceId: "zoom", authoringHash: "h1", revision: 2, createdAt: NOW,
   policy: POLICY, compilation: COMPILATION, units: [{ unitId: "zoom:u0", videoNodeId: "owner0", selectedResultKey: "result0",
     ...(reviewed ? { continuationAcceptance: REVIEW } : {}) }] })
 
-/** A shared, linked production with a take, its director recommendations and a reviewed continuation. */
+/** A shared, linked production with a take, its director recommendations, a reviewed continuation and a reviewed frame. */
 const PRODUCTION = {
   id: WF, project_id: "00000000-0000-4000-8000-000000000010", user_id: CREATOR, workspace_id: WS,
   visibility: "workspace", folder_id: null, name: "Zoom film", description: null, is_template: false,
@@ -138,9 +175,9 @@ const PRODUCTION = {
     version: 3, shared: true,
     shots: [{ id: "AB", sequenceBinding: { sequenceId: "zoom", startKeyframeId: "A", endKeyframeId: "B", continuity: "continuous" } }],
     requiredCapabilities: ["studio-dependent-frames-v1", "studio-sequence-takes-v1"],
-    keyframes: [{ imageNodeId: "frame-A", plan: { id: "A", label: "A", revision: 1, frame: { prompt: "A" }, requirements: [] } }],
+    keyframes: [frameEntry(true)],
     sequences: [{ id: "zoom", name: "Zoom", revision: 1, construction: "nested-zoom", shotIds: ["AB"] }],
-    sequenceGenerationPolicies: { zoom: POLICY },
+    sequenceGenerationPolicies: { zoom: PREFERENCE },
     sequenceTakes: [take(true)],
     sequenceUnitVideos: [{ videoNodeId: "owner0", unitId: "zoom:u0" }],
     selectedSequenceTakeIds: { zoom: "take1" },
@@ -162,7 +199,7 @@ function plugin(access: string) {
   vi.mocked(getPluginServices).mockReturnValue({ orgs } as never)
 }
 
-/** `.from("workflows").select(…).eq("id", …)` → `row` (by-id doors: `maybeSingle`, the share read: `single`); any other table → no rows. */
+/** Mocks the workflows table's by-id read — select → eq → `row` (by-id doors: `maybeSingle`, the share read: `single`); any other table → no rows. */
 function tables(row: unknown = PRODUCTION) {
   const read = vi.fn().mockResolvedValue({ data: structuredClone(row), error: null })
   const workflows = { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: read, single: read })) })) }
@@ -196,25 +233,24 @@ const DOORS = [
   ["GET /v1/workflows/:id/export?assets=true", `/v1/workflows/${WF}/export?assets=true`, (body: any): Graph => body],
 ] as const
 
-const resultRows = (graph: Graph) =>
-  graph.nodes.flatMap((node) => (node.data?.generatedResults as unknown[] | undefined) ?? []) as Array<Record<string, unknown>>
+const dataOf = (graph: Graph, id: string) => graph.nodes.find((node) => node.id === id)!.data!
 
-describe.each(DOORS)("%s — a linked production's sequence planning is the owner's (T87)", (_door, url, graphOf) => {
-  it("a `view` reader gets the production without the pins, the recommendations or the reviews", async () => {
+describe.each(DOORS)("%s — a linked production's owner state is the owner's (T87)", (_door, url, graphOf) => {
+  it("a `view` reader gets the production without the owner's state, and with everything the codec's reader requires", async () => {
     plugin("view")
     tables()
     const res = await app.inject({ method: "GET", url, headers: { "x-user-id": OTHER } })
     expect(res.statusCode).toBe(200)
     for (const secret of PRIVATE) expect(res.body).not.toContain(secret)
-    expect(res.body).not.toContain("sequenceEndpoints")
-    expect(res.body).not.toContain("continuationAcceptance")
+    for (const key of OWNER_KEYS) expect(res.body).not.toContain(key)
     const graph = graphOf(res.json())
-    expect(resultRows(graph)[0]).toEqual({ url: "https://r2/clip.mp4", jobId: "clip-1" })
+    expect(graph.nodes).toEqual([clipNode(false), frameNode(false), unitNode(false)])
     expect(graph.settings.studio.sequenceRecommendations).toBeUndefined()
-    // What the codec's reader needs to read the production still goes out.
+    // What the codec's reader needs to read the production still goes out —
+    // the preferences record EMPTY, and the take with the policy it was made with.
+    expect(graph.settings.studio.sequenceGenerationPolicies).toEqual({})
     expect(graph.settings.studio.sequenceTakes).toEqual([take(false)])
-    expect(graph.settings.studio.sequenceGenerationPolicies).toEqual({ zoom: POLICY })
-    expect(graph.nodes.find((node) => node.id === "owner0")!.data!.sequenceUnitResults).toHaveLength(1)
+    expect(graph.settings.studio.keyframes).toEqual([frameEntry(false)])
   })
 
   it.each(["edit", "own"])("`%s` keeps all of it — that reader saves the graph back", async (access) => {
@@ -224,42 +260,51 @@ describe.each(DOORS)("%s — a linked production's sequence planning is the owne
       headers: { "x-user-id": access === "own" ? CREATOR : OTHER } })
     expect(res.statusCode).toBe(200)
     const graph = graphOf(res.json())
-    expect(resultRows(graph)[0]).toMatchObject({ sequenceEndpoints: PINS })
-    expect(graph.settings.studio.sequenceRecommendations).toEqual([RECOMMENDATION])
-    expect(graph.settings.studio.sequenceTakes).toEqual([take(true)])
+    expect(graph.nodes).toEqual(PRODUCTION.nodes)
+    expect(graph.settings.studio).toEqual(PRODUCTION.settings.studio)
   })
 })
 
-describe("GET /v1/workflows/:id/export (template) — the result rows are gone already; the settings are not", () => {
+describe("GET /v1/workflows/:id/export (template) — the result rows are gone already; the rest of the owner's state is not", () => {
   it.each([["view", "drops"], ["edit", "keeps"], ["own", "keeps"]] as const)(
-    "`%s` %s the recommendations and the reviews", async (access, verb) => {
+    "`%s` %s it", async (access, verb) => {
       const kept = verb === "keeps"
       plugin(access)
       tables()
       const res = await app.inject({ method: "GET", url: `/v1/workflows/${WF}/export`,
         headers: { "x-user-id": access === "own" ? CREATOR : OTHER } })
       expect(res.statusCode).toBe(200)
-      const studio = res.json().settings.studio
+      const graph = res.json() as Graph
+      const studio = graph.settings.studio
       expect(studio.sequenceRecommendations).toEqual(kept ? [RECOMMENDATION] : undefined)
+      expect(studio.sequenceGenerationPolicies).toEqual(kept ? { zoom: PREFERENCE } : {})
       expect(studio.sequenceTakes).toEqual([take(kept)])
+      expect(studio.keyframes).toEqual([frameEntry(kept)])
+      expect(dataOf(graph, "owner0").sequenceUnitResults).toEqual([unitResult(kept)])
+      expect(dataOf(graph, "frame-A").keyframePendingImages).toEqual(kept ? [FRAME_RUN] : undefined)
     },
   )
 })
 
-describe("GET /v1/public/workflows/:id — the share read never carries a production's sequence planning (T87)", () => {
-  it("an ordinary production's stray sequence state comes off its nodes and its settings", async () => {
-    // Nothing on it reads as a linked production (no keyframes, sequences or
-    // declared capability), so the share read projects it here, not through
-    // the codec. Stray state from an older or foreign writer still stays home.
-    const stray = { ...PRODUCTION, settings: { studio: { version: 3, shared: true, shots: [{ id: "AB" }],
-      sequenceTakes: [take(true)], sequenceRecommendations: [RECOMMENDATION] } } }
+describe("GET /v1/public/workflows/:id — the share read never carries a production's owner state (T87)", () => {
+  it("an ordinary production's stray owner state comes off its nodes and its settings", async () => {
+    // Nothing on it reads as a linked production (no keyframes, sequences,
+    // keyframe node or declared capability), so the share read projects it
+    // here, not through the codec. Stray state from an older or foreign
+    // writer still stays home.
+    const still = (running: boolean) => ({ id: "still-1", type: "generate-image", position: { x: 0, y: 460 },
+      data: { prompt: "Still", ...(running ? { keyframePendingImages: [FRAME_RUN] } : {}) } })
+    const stray = { ...PRODUCTION, nodes: [clipNode(true), unitNode(true), still(true)],
+      settings: { studio: { version: 3, shared: true, shots: [{ id: "AB" }], sequenceGenerationPolicies: { zoom: PREFERENCE },
+        sequenceTakes: [take(true)], sequenceRecommendations: [RECOMMENDATION] } } }
     tables(stray)
     const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${WF}` })
     expect(res.statusCode).toBe(200)
     for (const secret of PRIVATE) expect(res.body).not.toContain(secret)
     const graph = res.json().data as Graph
-    expect(resultRows(graph)[0]).toEqual({ url: "https://r2/clip.mp4", jobId: "clip-1" })
-    expect(graph.settings.studio).toEqual({ version: 3, shared: true, shots: [{ id: "AB" }], sequenceTakes: [take(false)] })
+    expect(graph.nodes).toEqual([clipNode(false), unitNode(false), still(false)])
+    expect(graph.settings.studio).toEqual({ version: 3, shared: true, shots: [{ id: "AB" }],
+      sequenceGenerationPolicies: {}, sequenceTakes: [take(false)] })
   })
 
   it("a linked production goes out only through the codec's public projection — never raw", async () => {
