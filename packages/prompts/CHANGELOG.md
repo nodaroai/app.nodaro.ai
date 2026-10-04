@@ -1,5 +1,80 @@
 # @nodaro/prompts
 
+## 1.28.0
+
+### Minor Changes
+
+- bac18b7: Generate Script reads its topic and settings the same way on every run.
+
+  - `@nodaro/shared`: `readScriptSettings(data, refMap?)` returns the scene count, tone, target duration and style guide a Generate Script node sends. It coerces rather than rejects: a number given as text becomes a whole number clamped to the accepted range, text is trimmed and cut to its limit, and an unusable value is dropped so the default applies. The limits are exported as `SCRIPT_SCENE_COUNT_RANGE`, `SCRIPT_TARGET_DURATION_RANGE`, `SCRIPT_TONE_MAX_LENGTH` and `SCRIPT_STYLE_GUIDE_MAX_LENGTH`. `NODE_MAPPABLE_FIELDS["generate-script"]` now lists `tone`, `sceneCount` and `targetLength` beside `styleGuide`.
+  - `@nodaro/prompts`: `computeScriptTopic(data, { override, wired, refMap })` returns a Generate Script node's topic: a list item, then the wired prompt, then the node's saved `prompt`, wrapped with its pre/post text.
+
+- 5e636b4: Prompt joins no longer double a closing period. A prompt typed with a final period used to come out as "no watermark.. butterfly portrait lighting" once a picker hint was appended.
+
+  - New `joinSentences(pieces)`: joins with ". ", or a single space when the piece before already ends a sentence (Latin or CJK full stop, question or exclamation mark, ellipsis). Blank pieces are dropped.
+  - New `appendPromptHints(prompt, hints)`: appends wired picker hints the way both engines fold them. The hints join as clauses, then follow the prompt as a new sentence.
+  - `joinPromptHints`, the style-section lines, `composeNegative` and `resolvePrompt`'s `appendWired` join now go through `joinSentences`. Output only changes where a piece already ended a sentence.
+
+- 2a61d66: The Motion node joins the video nodes' Settings input as a prompt clause.
+
+  - `@nodaro/shared`: `SETTINGS_HINT_SOURCES` (`["motion"]`) are settings a Settings input takes as a prompt clause rather than a field; `SETTINGS_SOURCE_TYPES` lists every setting. `isSettingsHintEdge(edge, consumerType, edges, typeOf)` tells a hint collector whether an edge brings the clause that applies (the last Motion wired), and `settingsSourceForType` finds the wired node of a kind. `SETTINGS_INPUT_CONSUMERS` for Generate Video and Generate Video Pro now include `motion`; a wired setting without a field has no `field`. `motion` leaves `HINT_EXEMPT_PARAMETER_TYPES` and joins `VIDEO_ONLY_PARAMETER_NODE_TYPES`.
+  - `@nodaro/prompts`: `getParameterPromptHint` returns Motion's clause (`subtle` / `moderate` / `dynamic`; the bare term in compact mode).
+
+- 778de30: `ownMotionHint(nodeType, data)` and `DEFAULT_OWN_MOTION`: the clause a video node's own Motion setting adds to its prompt ("dynamic motion"). Legacy Image to Video and Generate Video carry the setting, and Generate Video carries it in both modes; legacy Text to Video has none. An enabled setting with no step stored runs as `moderate`, the step the panel shows. The editor run, the prompt preview and the orchestrator all read this one rule. The editor used to skip it on Generate Video without a start frame, while workflow runs always applied it.
+- 524c266: Transitions can declare their own options, and the wipe gains a Direction. A catalog row may now carry `options` (each `{ field, label, choices }`, `auto` first) and a `promptTemplate` with one `{<field>}` token per option; its `promptHint` is the template on every `auto` choice, so plain readers still see a finished sentence. The `wipe` row declares `WIPE_DIRECTION` (`wipeDirection`: `auto`, `left-to-right`, `right-to-left`, `top-to-bottom`, `bottom-to-top`, `top-left-to-bottom-right`, `top-right-to-bottom-left`). `composeTransitionHintFromConnections` takes the choices as `options.optionValues`, `renderTransitionBases` as a third argument, and `getTransitionPromptHint` as a second; a transition node's `wipeDirection` is read by `getParameterPromptHint`. New exports: `WIPE_DIRECTION`, `getTransitionOptions`, `TRANSITION_OPTION_FIELDS`, `readTransitionOptionValues` and the `TransitionOption` / `TransitionOptionChoice` / `TransitionOptionValues` types. The picker catalog publishes a row's options on that option as `params`, and the wire projection (`GET /v1/picker-catalogs/:nodeType`, the MCP `get_picker_catalog` tool) carries them at both detail levels — `@nodaro/shared`'s `ProjectedCatalogOption` and the SDK's `PickerOption` gain the optional `params`.
+
+  **Prompt wording change (wipe):** the wipe's default description now reads "a clean straight edge sweeps across the frame" instead of "a clean diagonal line sweeps across the frame"; a chosen direction replaces that phrase (for example "a clean vertical edge sweeps across the frame from left to right").
+
+  **Style (seven rows).** `debris-shower`, `garden-bloom`, `smoke-puff`, `sakura-petals`, `aurora-sweep`, `sand-storm` and `white-flash` each declare a **Style** — one `style` field shared by the styled rows, with each row's own looks as its choices. A styled row's `promptTemplate` is `{style}`: a choice's `phrase` is the row's whole description, so a style swaps the look rather than a phrase. `auto` is the row's DEFAULT look and is labelled with its name ("Full cover (default)"); every other id starts with its row's id (`debris-shower-light-sweep`), so a stored style never carries to another row, and a foreign or unknown id reads as the default. New exports: `TRANSITION_STYLE_FIELD`, `DEBRIS_SHOWER_STYLE`, `GARDEN_BLOOM_STYLE`, `SMOKE_PUFF_STYLE`, `SAKURA_PETALS_STYLE`, `AURORA_SWEEP_STYLE`, `SAND_STORM_STYLE`, `WHITE_FLASH_STYLE`. The looks (default first): debris-shower Full cover / Light sweep; garden-bloom Grow & part / Hedge doors; smoke-puff Engulf / Full cover; sakura-petals Swirling veil / Side sweep; aurora-sweep Sky glow / Veil; sand-storm Full cover / Light sweep; white-flash Flash / Overexposure. `white-flash`'s default look is a new description (a camera-flash pop to white that holds, then fades down to the second shot), so a white-flash pick with no style now renders it; its previous description is the Overexposure look. Each body is the text a tested take was generated from. On the canvas, a two-pick of two styled rows shows one Style control holding both rows' looks.
+
+  **Prompt wording change (Style):** `debris-shower`'s default description is now its tested "Full cover" body (the old body stays available as the "Light sweep" style), and `white-flash`'s is its tested "Flash" body (the old body stays available as the "Overexposure" style). Every other styled row's default is its existing text — `aurora-sweep`'s is the body 1.26.1 already ships, and its pre-1.26.1 body returns as the "Veil" style — so picks with no style keep their words. No other row changes.
+
+### Patch Changes
+
+- d1c208e: Person picker: two ethnicity picks now read as one heritage phrase built from each entry's prompt text ("of mixed Slavic Eastern European and Mediterranean heritage"). They used to use the picker's short display labels, which put abbreviations such as "Mediter.", "Pacific Isl." or a bare "East" into the prompt.
+- 028f3ef: Transition `double-exposure` gets a new description: the first subject becomes a crisp silhouette filled solid with the second shot while the rest of the first shot stays untouched around it, the silhouette holds for a clear beat with both pictures seen at once, then the first shot around it gives way to the second shot, and the shot ends on the second shot alone. The camera holds still. No other row changes.
+- 00ff1cf: Transition `roll-transition` gets a new description. The picture makes one smooth, fast, blurred turn around its centre, the camera turning only around its lens axis; the second shot takes over during the turn, and the roll slows and stops with it level and upright. It turns one way only and stops once, with no swing back. No other row changes.
+- 8d61db1: Transitions `channel-flip`, `display-wipe` and `color-invert` get new descriptions. Channel flip: the whole picture breaks into a brief burst of black-and-white static that tears the image, then the second shot snaps in, steady, like the next channel. Display wipe: the picture itself shrinks on a black field to a bright line and a dot, as if its power were cut, then a line snaps open into a rectangle of the second shot that grows until it fills the frame. Color invert flash: the colours of the whole picture turn to their photographic negative for a single beat, and when they snap back the second shot is in place. In all three the camera holds still. No other row changes.
+- 8096ebe: Three cut transitions get new descriptions. `snap-to-black`: the first shot cuts straight to full black on a single frame, the frame stays black for a single beat, and the second shot cuts in at full brightness on a single frame. `jump-match`: the subject launches into a jump and the picture cuts to the new place at the height of the leap, the camera following the arc at the same speed and the subject at the same place in the frame, then the jump carries on and the subject lands in the new place. `match-cut`: the last picture of the first shot and the first picture of the second share one shape at the same place and size in the frame, and on the next frame everything around the shape has changed while the shape stays put, with no flash frame or zoom between them. Each still ends with the same anti-blend sentence. The other cut rows (`none`, `smash-cut`, `jump-cut`, `seamless-match`, `action-relay`) keep their text, and no label, picker description or lever wording changes.
+- 5f0cbab: Two time transitions get new descriptions. `seasonal-shift`: the same view races through the seasons in fast motion, from the season of the first shot to the season of the second, with the camera and framing unchanged; the change flows across the whole picture and the shot ends still on the second shot's season. `flashback`: a soft warm wash and a faint ripple carry the picture from the present moment into an earlier moment of the same subject, which comes into focus like a memory, with the subject at the same place in the frame; the shot ends on the remembered moment with the ripple gone. Both rows keep their heading, which the renderer strips. `weather-shift` keeps its text, and no other row, label, picker description or lever wording changes.
+- 255d9e0: Transitions `hologram-flicker`, `datamosh` and `jump-cut` get new descriptions. Hologram flicker: the first shot breaks into thin lines of cyan light that flicker out from the top down to black, then a bright scan line sweeps down and draws the second shot in flickering cyan lines that steady into natural colour. Datamosh: the first shot's pixels tear loose in square compression blocks and smear sideways, and the blocks pile up into the shapes of the second shot, still in the first shot's colours, until the true colours snap in block by block. Jump cut keeps its description and adds one sentence: no leap, run, lunge or motion blur between the two positions; the subject is in the old place on one frame and already in the new place on the next. In all three the camera holds still. No other row changes.
+- 8d1e320: Transition `zoom-into-mirror` gets a new description. The camera pushes straight at a mirror in the frame; as the lens meets the glass the mirror's surface turns liquid and rings ripple out across the picture, and the camera keeps moving forward through the rippling surface into the second shot. The mirror keeps its own reflection until the lens touches the glass, and the shot ends in the second shot, still, with no ripples left. No other row changes.
+- 3bae2cb: Transition `fast-forward-day-night` gets a new description. The view stays the same with the framing locked while hours pass in seconds: light and shadows sweep across the scene, daylight warms to dusk and fades to night, lights come on, until the picture matches the end frame. `fast-forward-night-day` keeps its text. No other row changes.
+- Updated dependencies [470cbe2]
+- Updated dependencies [8dc01f1]
+- Updated dependencies [ba1ae16]
+- Updated dependencies [d80feff]
+- Updated dependencies [95523c6]
+- Updated dependencies [5f14bf9]
+- Updated dependencies [17d734b]
+- Updated dependencies [3134831]
+- Updated dependencies [bac18b7]
+- Updated dependencies [ec71996]
+- Updated dependencies [10054f4]
+- Updated dependencies [086003b]
+- Updated dependencies [3e8a8dc]
+- Updated dependencies [5b8496b]
+- Updated dependencies [1197130]
+- Updated dependencies [df2f7b4]
+- Updated dependencies [8905992]
+- Updated dependencies [2a61d66]
+- Updated dependencies [20edcd9]
+- Updated dependencies [08c60ee]
+- Updated dependencies [3d9bae0]
+- Updated dependencies [10d0467]
+- Updated dependencies [fa682e5]
+- Updated dependencies [09b138b]
+- Updated dependencies [7363396]
+- Updated dependencies [420aaa2]
+- Updated dependencies [43ea304]
+- Updated dependencies [f801037]
+- Updated dependencies [9377f6e]
+- Updated dependencies [693baee]
+- Updated dependencies [f801037]
+- Updated dependencies [d127205]
+- Updated dependencies [524c266]
+  - @nodaro/shared@3.15.0
+
 ## 1.27.1
 
 ### Patch Changes
