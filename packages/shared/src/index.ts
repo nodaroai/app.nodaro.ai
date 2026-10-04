@@ -1499,6 +1499,9 @@ export {
   stripStudioDraftSettings,
   stripStudioDraftWorkflow,
   stripStudioTakeVoiceRecords,
+  STUDIO_TAKE_SEQUENCE_KEYS,
+  STUDIO_SEQUENCE_PLANNING_KEYS,
+  STUDIO_SEQUENCE_UNIT_REVIEW_KEYS,
 } from "./studio-transient.js"
 
 export * from "./scene3d-v2-edit.js"

@@ -1,0 +1,5 @@
+---
+"@nodaro/shared": minor
+---
+
+Add `STUDIO_TAKE_SEQUENCE_KEYS` (`sequenceEndpoints` — a linked studio clip take's keyframe endpoint pins, on a node's `data.generatedResults` rows), `STUDIO_SEQUENCE_PLANNING_KEYS` (`sequenceRecommendations` — the director's sequence recommendations on `settings.studio`) and `STUDIO_SEQUENCE_UNIT_REVIEW_KEYS` (`continuationAcceptance` — a sequence take unit's continuation review, on `settings.studio.sequenceTakes[].units[]`): a linked production's sequence planning state, which only its owner receives (studio ruling T87). `stripStudioTakeVoiceRecords` now also drops the pins from every result row, and `stripStudioDraftSettings` (the `view` read) and `stripStudioTransientSettings` (the public share read) drop the recommendations and the unit reviews; `stripStudioDraftWorkflow` and the recycle bin's deleted takes and scenes get the same. A take's `policy` and `compilation`, the document's `sequenceGenerationPolicies` and the unit video nodes' `sequenceUnitResults` stay: the studio codec's reader cannot read a production with takes without them.
