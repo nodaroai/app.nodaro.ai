@@ -225,8 +225,8 @@ collaborators](./organizations.md#workflow-collaborators): a move can carry
 work out of the reach of somebody who was sharing it, and the response names
 who so you can tell them.
 
-Both forms answer the same way: the `data` of `POST /v1/workflows/:id/move`,
-and of a `PATCH` that carries a `projectId`, is the moved workflow as it now
+Both forms return the same `data`: for `POST /v1/workflows/:id/move`, and for
+a `PATCH` that carries a `projectId`, it is the moved workflow as it now
 stands. A mover whose access to it, once moved, is below `edit` (a workspace
 admin moving a member's work into a workspace whose `admin_access` is `view`,
 or a mover left with no access to it at all) receives it as a `view` reader's
