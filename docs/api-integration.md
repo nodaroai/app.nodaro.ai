@@ -225,6 +225,13 @@ collaborators](./organizations.md#workflow-collaborators): a move can carry
 work out of the reach of somebody who was sharing it, and the response names
 who so you can tell them.
 
+The move endpoint's `data` is the moved workflow as it now stands. A mover
+whose access to it, once moved, is below `edit` (a workspace admin moving a
+member's work into a workspace whose `admin_access` is `view`) receives it as
+`GET /v1/workflows/:id` would show it to them: without what a `view` reader
+does not receive, listed under [reaching one
+workflow](./organizations.md#reaching-one-workflow).
+
 **OAuth scope note:** the `workflows:read` scope also gates the broader
 workflow REST routes: `GET /v1/workflows` (flat list across all projects),
 `GET /v1/workflows/:id`, and `GET /v1/workflows/:id/export` — in addition
