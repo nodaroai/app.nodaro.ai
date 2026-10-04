@@ -30,11 +30,15 @@ import { join, relative } from "node:path"
  * `readWorkflowContent`, or select only the keys it needs
  * (`characterDefinitions:settings->characterDefinitions` reads one key and
  * nothing else). A projection the guard cannot resolve to a literal counts as
- * content — it fails closed.
+ * content — it fails closed. So does a chain with no verb at all
+ * (`const t = supabase.from("workflows")`, queried somewhere the scanner cannot
+ * follow): only a chain that visibly writes and returns nothing is no read.
  *
  * Realtime is the other way a row reaches the browser: the one subscription to
- * `workflows` is pinned to its hook, which adopts a broadcast's content only
- * for the row's owner (its own tests prove it).
+ * `workflows` is pinned to its hook, which a canvas opens only when its load
+ * answered `own` or `edit` — a `view` reader's canvas polls a content-free
+ * stamp instead and re-reads through the server (T85 / T86; its own tests
+ * prove it).
  */
 
 const ROOT = join(__dirname, "..", "..")
@@ -117,46 +121,54 @@ function skipBalanced(src: string, open: number): number {
   return i
 }
 
+/** One `.name(args)` link of a chain; `args` is null when the name is not called. */
+interface Link {
+  readonly name: string
+  readonly args: string | null
+}
+
+interface Chain {
+  /** The chain's source text, from just after `.from("workflows")`. */
+  readonly text: string
+  readonly links: readonly Link[]
+}
+
 /**
  * The method chain that follows `.from("workflows")` at `start` — every
  * `.name(args)` link up to where the expression stops continuing with `.`,
  * across lines and comments, with each argument list (a multi-line insert
  * body included) skipped as one unit.
  */
-function chainAt(src: string, start: number): string {
+function chainAt(src: string, start: number): Chain {
+  const links: Link[] = []
   let i = start
   for (;;) {
     const dot = skipTrivia(src, i)
-    if (src[dot] !== "." || src[dot + 1] === ".") return src.slice(start, i)
+    if (src[dot] !== "." || src[dot + 1] === ".") return { text: src.slice(start, i), links }
     let j = dot + 1
     while (j < src.length && /[\w$]/.test(src[j]!)) j++
-    if (j === dot + 1) return src.slice(start, i)
+    if (j === dot + 1) return { text: src.slice(start, i), links }
+    const name = src.slice(dot + 1, j)
     let k = skipTrivia(src, j)
     if (src[k] === "<") k = skipTrivia(src, skipBalanced(src, k))
-    i = src[k] === "(" ? skipBalanced(src, k) : j
+    if (src[k] === "(") {
+      const end = skipBalanced(src, k)
+      links.push({ name, args: src.slice(k + 1, end - 1).trim() })
+      i = end
+    } else {
+      links.push({ name, args: null })
+      i = j
+    }
   }
 }
 
-/** The raw argument text of every `.select(…)` in a chain. */
-function selectArgs(chain: string): string[] {
-  const out: string[] = []
-  let at = chain.indexOf(".select(")
-  while (at >= 0) {
-    let i = at + ".select(".length
-    const begin = i
-    let depth = 0
-    while (i < chain.length) {
-      const ch = chain[i]!
-      if (ch === '"' || ch === "'" || ch === "`") { i = skipString(chain, i); continue }
-      if (ch === "(") depth++
-      else if (ch === ")") { if (depth === 0) break; depth-- }
-      i++
-    }
-    out.push(chain.slice(begin, i).trim())
-    at = chain.indexOf(".select(", i)
-  }
-  return out
+/** The raw argument text of every `.select(…)` in a chain; null for a `select` not called. */
+function selectArgs(chain: Chain): Array<string | null> {
+  return chain.links.filter((link) => link.name === "select").map((link) => link.args)
 }
+
+/** The PostgREST verbs. A chain with none of them has not said what it does. */
+const VERBS: ReadonlySet<string> = new Set(["select", "insert", "update", "delete", "upsert"])
 
 /** Same-file string constants: `const NAME = "…"` (or a template of others). */
 function fileConstants(src: string): Map<string, string> {
@@ -238,19 +250,23 @@ function workflowReads(rel: string, src: string): Read[] {
   const reads: Read[] = []
   for (const m of src.matchAll(FROM_WORKFLOWS)) {
     const chain = chainAt(src, m.index! + m[0].length)
-    const args = selectArgs(chain)
-    if (args.length === 0) continue
-    const line = src.slice(0, m.index).split("\n").length
-    const above = src.slice(0, m.index).split("\n").slice(-12).join("\n")
-    for (const arg of args) {
-      reads.push({
-        file: rel,
-        line,
-        projection: resolveProjection(arg, consts),
-        ownerScoped: /\.eq\(\s*["'`]user_id["'`]/.test(chain),
-        marked: above.includes(MARKER),
-      })
+    const site = {
+      file: rel,
+      line: src.slice(0, m.index).split("\n").length,
+      ownerScoped: chain.links.some((link) => link.name === "eq" && /^["'`]user_id["'`]\s*,/.test(link.args ?? "")),
+      marked: src.slice(0, m.index).split("\n").slice(-12).join("\n").includes(MARKER),
     }
+    const selects = selectArgs(chain)
+    if (selects.length === 0) {
+      // A write that returns nothing reads nothing. A chain with no verb at all
+      // — `const t = supabase.from("workflows")`, queried where this scanner
+      // cannot follow — is a read it cannot see, so it fails closed like an
+      // unresolved projection.
+      if (chain.links.some((link) => VERBS.has(link.name))) continue
+      reads.push({ ...site, projection: null })
+      continue
+    }
+    for (const arg of selects) reads.push({ ...site, projection: arg === null ? null : resolveProjection(arg, consts) })
   }
   return reads
 }
@@ -349,7 +365,8 @@ describe("the scanner itself", () => {
     const start = src.indexOf('.from("workflows")') + '.from("workflows")'.length
     const chain = chainAt(src, start)
     expect(selectArgs(chain)).toEqual(["META"])
-    expect(chain).not.toContain("other")
+    expect(chain.links.map((link) => link.name)).toEqual(["insert", "select", "single"])
+    expect(chain.text).not.toContain("other")
   })
 
   it("sees the owner filter only on its own chain", () => {
@@ -361,5 +378,24 @@ describe("the scanner itself", () => {
     expect(read!.ownerScoped).toBe(false)
     const scoped = workflowReads("y.ts", `supabase.from("workflows").select("*").eq("id", id).eq("user_id", me).maybeSingle()`)
     expect(scoped[0]!.ownerScoped).toBe(true)
+  })
+
+  it("fails closed on a chain that never says what it does — the query finished out of its sight", () => {
+    const split = workflowReads("split.ts", `
+      const t = createClient().from("workflows")
+      const { data } = await t.select("nodes").eq("id", id).maybeSingle()
+    `)
+    expect(split).toEqual([{ file: "split.ts", line: 2, projection: null, ownerScoped: false, marked: false }])
+
+    // A `select` spelled with a space is still a select, and still read.
+    expect(workflowReads("spaced.ts", `supabase.from("workflows").select ("*").eq("id", id)`)[0]!.projection).toBe("*")
+  })
+
+  it("passes a write that returns nothing, and reads what a write returns", () => {
+    expect(workflowReads("w.ts", `await supabase.from("workflows").update({ nodes }).eq("id", id)`)).toEqual([])
+    expect(workflowReads("w.ts", `await supabase.from("workflows").delete().eq("id", id)`)).toEqual([])
+    expect(workflowReads("w.ts", `await supabase.from("workflows").upsert(row)`)).toEqual([])
+    const returned = workflowReads("w.ts", `await supabase.from("workflows").insert(row).select("*").single()`)
+    expect(returned.map((r) => r.projection)).toEqual(["*"])
   })
 })
