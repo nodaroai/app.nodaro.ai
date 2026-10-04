@@ -25,6 +25,7 @@ import { adoptUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
+import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 
 /**
  * Execution statuses whose `node_states` are worth restoring onto the canvas on
@@ -271,10 +272,13 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       // reconcile skips the node, so leaving them off here would read "Result (old)".
       const overlayRun = node.type === "video-overlay" ? videoOverlayRunOutputFields(job.output_data) : undefined
 
+      // Apply EDL: the take keeps the Transcript its render was cut with.
+      const takeTranscript = applyEdlTakeTranscriptField(node.type, job.output_data, outputUrl)
+
       // Update the result with the URL if it was missing
       const updatedResults = results.map((r, i) => {
         if (i === 0 && r.jobId === job.id && !r.url && outputUrl) {
-          return { ...r, url: outputUrl, ...(overlayRun ?? {}) }
+          return { ...r, url: outputUrl, ...(overlayRun ?? {}), ...takeTranscript }
         }
         return r
       })
@@ -282,7 +286,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       // If the job was tracked by currentJobId but has no result entry, prepend one
       const hasResultForJob = updatedResults.some(r => r.jobId === job.id)
       if (!hasResultForJob && outputUrl) {
-        updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id, ...(overlayRun ?? {}) })
+        updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id, ...(overlayRun ?? {}), ...takeTranscript })
       }
 
       const newData: Record<string, unknown> = {
@@ -354,6 +358,10 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
           }
         }
       }
+      // Apply EDL holds ONE cut: clear the medium this run did not render, and
+      // make its Transcript output this render's — cleared when it was cut with
+      // none (lib/apply-edl-cut.ts).
+      Object.assign(newData, applyEdlRunCutFields(nodeType, job.output_data))
 
       // CONTENT-POLICY DISCLOSURE passthrough (Task A4 follow-up, 2026-08-03) —
       // GVP-only. `BatchJobStatus.output_data` (api.ts) is narrowly typed with
@@ -445,6 +453,9 @@ export function applyBackendExecutionState(
         }
         if (state.output.videoUrl) data.generatedVideoUrl = state.output.videoUrl
         if (state.output.audioUrl) data.generatedAudioUrl = state.output.audioUrl
+        // Apply EDL holds ONE cut: clear the medium this run did not render, and
+        // make its Transcript output this render's (cleared when it had none).
+        Object.assign(data, applyEdlRunCutFields(nodeType, state.output))
         if (state.output.script) data.generatedScript = state.output.script
         // Voice id, stems, alignment, combined / split text — under the names
         // their readers use (#1547: this lane used to invent its own).
@@ -471,6 +482,8 @@ export function applyBackendExecutionState(
               timestamp: new Date().toISOString(),
               jobId: `exec-${node.id}-${i}`,
               ...rowFields(url),
+              // Apply EDL: only the render the output describes keeps its Transcript.
+              ...applyEdlTakeTranscriptField(nodeType, state.output, url),
             }))
           if (newResults.length > 0) {
             data.generatedResults = [...newResults, ...results]
@@ -486,7 +499,11 @@ export function applyBackendExecutionState(
           const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
           if (outputUrl && !existingUrls.has(outputUrl)) {
             data.generatedResults = [
-              { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}) },
+              {
+                url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}),
+                // Apply EDL: the take keeps the Transcript its render was cut with.
+                ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
+              },
               ...results,
             ]
             data.activeResultIndex = 0
@@ -586,6 +603,9 @@ export function applyCompletedExecutionResults(
     }
     if (state.output.videoUrl) newData.generatedVideoUrl = state.output.videoUrl
     if (state.output.audioUrl) newData.generatedAudioUrl = state.output.audioUrl
+    // Apply EDL holds ONE cut: clear the medium this run did not render, and
+    // make its Transcript output this render's (cleared when it had none).
+    Object.assign(newData, applyEdlRunCutFields(nodeType, state.output))
     if (state.output.script) newData.generatedScript = state.output.script
     // Voice id, stems, alignment, combined / split text — under the names
     // their readers use (#1547: this lane used to invent its own).
@@ -616,6 +636,8 @@ export function applyCompletedExecutionResults(
           timestamp: new Date().toISOString(),
           jobId: `exec-${node.id}-${i}`,
           ...rowFields(url),
+          // Apply EDL: only the render the output describes keeps its Transcript.
+          ...applyEdlTakeTranscriptField(nodeType, state.output, url),
         }))
       if (newResults.length > 0) {
         newData.generatedResults = [...newResults, ...existingResults]
@@ -629,7 +651,11 @@ export function applyCompletedExecutionResults(
       newData.__listCompleted = state.output.listResults!.length
     } else if (outputUrl) {
       newData.generatedResults = [
-        { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}) },
+        {
+          url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}),
+          // Apply EDL: the take keeps the Transcript its render was cut with.
+          ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
+        },
         ...existingResults,
       ]
       newData.activeResultIndex = 0

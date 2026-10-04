@@ -21,6 +21,8 @@ const db = vi.hoisted(() => ({
   truth: new Map<string, Record<string, unknown>>(),
   casFilters: [] as Array<Record<string, unknown>>,
   refunds: [] as string[],
+  /** Before migration 451 reaches the database: a select naming the column fails. */
+  slotWaitColumnMissing: false,
 }))
 
 vi.mock("../../supabase.js", () => {
@@ -29,7 +31,8 @@ vi.mock("../../supabase.js", () => {
     let patch: Record<string, unknown> = {}
     const filters: Record<string, unknown> = {}
     const b: Record<string, unknown> = {}
-    b.select = () => b
+    let columns = ""
+    b.select = (cols?: string) => { if (typeof cols === "string") columns = cols; return b }
     b.update = (p: Record<string, unknown>) => { op = "update"; patch = p; return b }
     b.eq = (col: string, v: unknown) => { filters[`eq:${col}`] = v; return b }
     b.in = (col: string, v: unknown) => { filters[`in:${col}`] = v; return b }
@@ -51,9 +54,22 @@ vi.mock("../../supabase.js", () => {
         return { data: [{ id: row.id }], error: null }
       }
       // The resume's SELECT: the snapshot it read.
-      return { data: db.rows, error: null }
+      if (missingColumn()) return missingColumn()
+      return { data: db.rows.map(project), error: null }
     }
-    b.maybeSingle = async () => ({ data: db.truth.get(filters["eq:id"] as string) ?? null, error: null })
+    // A read returns only the columns it names, like PostgREST — so a read
+    // that forgets one is caught.
+    const project = (row: Record<string, unknown>) =>
+      Object.fromEntries(columns.split(",").map((c) => c.trim()).filter((c) => c in row).map((c) => [c, row[c]]))
+    const missingColumn = () =>
+      db.slotWaitColumnMissing && columns.includes("slot_wait_ms")
+        ? { data: null, error: { code: "42703", message: "column jobs.slot_wait_ms does not exist" } }
+        : undefined
+    b.maybeSingle = async () => {
+      if (missingColumn()) return missingColumn()
+      const row = db.truth.get(filters["eq:id"] as string)
+      return { data: row ? project(row) : null, error: null }
+    }
     b.then = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(settle()).then(res, rej)
     return b
   }
@@ -146,9 +162,30 @@ describe("orchestrator resume — a budgeted render whose worker is still heartb
       usageLogId: "ul-render",
       creditsReserved: 30,
       budgetMs: BUDGET,
-      clocks: { dispatchedAtMs: NOW - 101 * MINUTE, processingStartedAtMs: NOW - 100 * MINUTE },
+      clocks: { dispatchedAtMs: NOW - 101 * MINUTE, processingStartedAtMs: NOW - 100 * MINUTE, slotWaitMs: 0 },
     })
     expect(BUDGET).toBeGreaterThan(90 * MINUTE)
+  })
+
+  // Track 0.13: the adopting poll's absolute clock runs from dispatch BEFORE it
+  // reads the row once — so the row's earlier slot wait rides on the clocks.
+  it("carries the row's ffmpeg-slot wait on the adopted clocks", async () => {
+    stage([renderRow({ slot_wait_ms: 60 * MINUTE })])
+    const { adoptable } = await cancelInFlightChildJobs("exec-1", RESUME)
+    expect(adoptable.get("cut")?.clocks?.slotWaitMs).toBe(60 * MINUTE)
+  })
+
+  it("before migration 451 reaches the database: reads without the column and adopts with no wait", async () => {
+    db.slotWaitColumnMissing = true
+    try {
+      stage([renderRow()])
+      const { adoptable, cancelled } = await cancelInFlightChildJobs("exec-1", RESUME)
+      expect(cancelled).toBe(0)
+      expect(adoptable.get("cut")?.clocks?.slotWaitMs).toBe(0)
+    } finally {
+      db.slotWaitColumnMissing = false
+      ;(await import("../../jobs-slot-wait-column.js")).resetSlotWaitColumnForTests()
+    }
   })
 
   it("a stamp one tick short of the threshold is still live; AT the threshold it is not", async () => {
@@ -216,6 +253,27 @@ describe("the supersede-cancel never races a render that came alive (no double d
     expect(db.refunds).toHaveLength(0)
     expect(db.truth.get("j-render")!.status).toBe("processing")
     expect(adoptable.get("cut")?.jobId).toBe("j-render")
+  })
+
+  // Track 0.13: the re-read must carry the slot wait too — the adopting poll's
+  // absolute clock is checked before it ever reads the row.
+  it("the re-read carries the row's ffmpeg-slot wait onto the adopted clocks", async () => {
+    stage([renderRow({ provider_call_started_at: iso(40 * MINUTE) })], [renderRow({ provider_call_started_at: iso(0), slot_wait_ms: 60 * MINUTE })])
+    const { adoptable } = await cancelInFlightChildJobs("exec-1", RESUME)
+    expect(adoptable.get("cut")?.clocks?.slotWaitMs).toBe(60 * MINUTE)
+  })
+
+  it("the re-read before migration 451 reaches the database: retried without the column, still adopted", async () => {
+    db.slotWaitColumnMissing = true
+    try {
+      stage([renderRow({ provider_call_started_at: iso(40 * MINUTE) })], [renderRow({ provider_call_started_at: iso(0) })])
+      const { adoptable, cancelled } = await cancelInFlightChildJobs("exec-1", RESUME)
+      expect(cancelled).toBe(0)
+      expect(adoptable.get("cut")?.clocks?.slotWaitMs).toBe(0)
+    } finally {
+      db.slotWaitColumnMissing = false
+      ;(await import("../../jobs-slot-wait-column.js")).resetSlotWaitColumnForTests()
+    }
   })
 
   it("read PENDING, but the video worker picked it up before the write → adopted, not cancelled", async () => {

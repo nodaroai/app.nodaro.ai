@@ -39,6 +39,7 @@ import {
   Inbox,
   ToggleRight,
   ShieldAlert,
+  ShieldBan,
   LayoutTemplate,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -69,8 +70,9 @@ const ADMIN_NAV = [
   { href: "/admin/miniapps", label: "MiniApps", icon: AppWindow },
   { href: "/admin/client-apps", label: "Client Apps", icon: Blocks },
   { href: "/admin/reports", label: "Reports", icon: Flag },
-  // The one translated entry: the page behind it is the first `useT()` admin
-  // surface, so its nav label follows the same dictionary. Unconditional —
+  { href: "/admin/gallery-moderation", label: "Gallery Moderation", labelKey: "galleryModeration.navLabel" as MessageKey, icon: ShieldBan },
+  // Translated entries: the pages behind them are `useT()` admin surfaces,
+  // so their nav labels follow the same dictionary. Unconditional —
   // there is no admin `NavKey` and `nav.hide`'s vocabulary is the END-USER
   // nav; the whole /admin block is already edition-gated by hasAdmin().
   { href: "/admin/review", label: "Content Review", labelKey: "adminReview.navLabel" as MessageKey, icon: ShieldAlert },
@@ -171,7 +173,7 @@ export default function AdminLayout() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="flex h-screen bg-background">
+      <div className="flex h-screen overflow-hidden bg-background">
         {/* Mobile overlay */}
         {mobileMenuOpen && (
           <div
@@ -241,7 +243,7 @@ export default function AdminLayout() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-2 py-3 flex flex-col gap-1">
+          <nav className="flex-1 min-h-0 overflow-y-auto px-2 py-3 flex flex-col gap-1">
             {ADMIN_NAV.map((item) => {
               const isActive =
                 item.href === "/admin"

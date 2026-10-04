@@ -197,6 +197,10 @@ export async function reconcileElevenLabsJob(row: ElevenLabsJobRow, opts?: Recon
       // watermark step (stated delta in the PR, not an accident).
       shouldWatermark: false,
       claimant: opts?.claimant ?? "cron",
+      // Settles a run held at the 30-minute ceiling to the span dubbed — the
+      // same reading the worker passes, so both lanes settle alike.
+      mediaDurationSec: meta.media_metadata?.duration,
+      request: row.input_data ?? undefined,
     })
   } catch (err) {
     await bumpAttemptsOrExhaust(row.id, err)

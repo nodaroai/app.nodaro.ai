@@ -109,3 +109,13 @@ describe("NODE_REGISTRY: creature entity", () => {
     expect(entry!.outputType).toBe("data")
   })
 })
+
+describe("NODE_REGISTRY: edit-plan", () => {
+  // Discovery is a contract: the SDK's nodes.run() sends the field names it
+  // reads here, so a listed field the route refuses is a guaranteed 422.
+  it("lists the required sources and not the raw offsets the route refuses", () => {
+    const fields = NODE_REGISTRY.find((n) => n.type === "edit-plan")?.inputSchema?.fields ?? []
+    expect(fields.find((f) => f.key === "sources")).toMatchObject({ type: "array", required: true })
+    expect(fields.find((f) => f.key === "offsets")).toBeUndefined()
+  })
+})

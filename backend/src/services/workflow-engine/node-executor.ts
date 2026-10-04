@@ -1,4 +1,4 @@
-import { projectDubbingCreditOverride } from "../../lib/dubbing-pricing.js"
+import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS } from "@nodaro/shared"
 /**
@@ -33,10 +33,14 @@ import { videoAnalysisPostDuration } from "./video-analysis-post-probe.js"
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets } from "@nodaro/shared"
+import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets, instagramScrapeMode } from "@nodaro/shared"
 import { computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
+import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
+import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
+import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
+import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
 import type {
@@ -57,6 +61,7 @@ import { cancelInFlightChildJobs } from "../../lib/reconcile/cancel-inflight-job
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
 import type { ErrorHint } from "../../lib/safety-block.js"
+import { noteSlotWaitColumnError, withSlotWaitColumn } from "../../lib/jobs-slot-wait-column.js"
 
 // ---------------------------------------------------------------------------
 // Sync HTTP node types — called via internal fetch
@@ -1146,12 +1151,13 @@ export function buildSyncHttpBody(
     }
 
     case "instagram-scrape": {
-      // Targets (profiles / hashtags) are typed one per line, or arrive as the
-      // upstream text so a Prompt / List node can drive the scrape.
-      const own = splitInstagramTargets(data.targets)
-      const targets = own.length > 0 ? own : splitInstagramTargets(resolvedInputs.prompt)
+      // Targets (profiles / hashtags / post links) are typed one per line, or
+      // arrive as the upstream text so a Prompt / List node can drive the scrape.
+      const mode = instagramScrapeMode(data.mode)
+      const own = splitInstagramTargets(data.targets, mode)
+      const targets = own.length > 0 ? own : splitInstagramTargets(resolvedInputs.prompt, mode)
       const body: Record<string, unknown> = {
-        mode: data.mode === "hashtag" ? "hashtag" : "profile",
+        mode,
         targets,
         count: data.count,
         period: data.period,
@@ -1241,6 +1247,59 @@ async function probeRefVideosForReservation(payload: Record<string, unknown>): P
     return undefined
   }
   return probeRefVideoDurations({ provider: provider as string, referenceVideoUrls })
+}
+
+/**
+ * Video-utility nodes (Trim, Loop, Combine, Assemble Narrated Video) are priced
+ * by the length or count of what they make. The workflow run reserves what the
+ * single-node route charges for the same request — one mapping,
+ * lib/video-utility-credits.ts — instead of the node's flat one-unit row,
+ * which priced a two-minute trim like a five-second one.
+ */
+async function computeVideoUtilityCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  const base = videoUtilityBaseCredits(jobName, payload)
+  if (base === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
+}
+
+/**
+ * LTX 2.3 Pro Extend is priced per second added. The workflow run reserves what
+ * the route's guard charges for the same request — the per-second row times
+ * the seconds the payload sends (lib/ltx-extend-credits.ts) — instead of the
+ * per-second row alone. Undefined for every other job.
+ */
+export async function computeLtxExtendCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  if (jobName !== "extend-video" || payload.provider !== "ltx-2.3-pro") return undefined
+  const base = await ltxExtendBaseCredits(payload.duration)
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
+}
+
+/**
+ * LTX 2.3 Pro Retake is priced per second of the replaced window. The workflow
+ * run reserves what the route's guard charges for the same request — the
+ * per-second row times the window the payload sends (lib/ltx-retake-credits.ts)
+ * — instead of the flat `video-retake` row it used to. Undefined for every
+ * other job.
+ */
+export async function computeLtxRetakeCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  if (jobName !== "video-retake") return undefined
+  const base = await ltxRetakeBaseCredits(payload.retake_duration)
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
 }
 
 async function computeSeedance2RefVideoCreditOverride(
@@ -1643,6 +1702,33 @@ async function executeWorkerNode(
   // privately and the settlement to probe again.
   const refVideoDurationsSec = refVideoCheck.durationsSec ?? (await probeRefVideosForReservation(payload))
 
+  // 2b'. Video SFX: measure the clip by the route's own rule and stamp the
+  // length (what the model scores) and its price row on the payload, BEFORE
+  // input_data is written below — the worker reads the row, not the queue
+  // payload. Every edition: without the length the model scores only its
+  // default 8 seconds of a longer clip. A clip the route would refuse leaves no
+  // jobs row, like the gate above.
+  const sfxRefusal = await stampVideoSfxDuration(jobName, payload)
+  if (sfxRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(sfxRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = sfxRefusal.code
+    throw err
+  }
+
+  // 2b''. Dubbing (every language but Hebrew, which probes in its credit
+  // override): measure the source by the route's own rule and stamp the span,
+  // or the 30-minute ceiling hold, before input_data is written — the
+  // reconcile lane that delivers long dubs reads the stamp from the row. A
+  // span past 30 minutes is refused before anything is reserved.
+  const dubRefusal = await stampDubbingDuration(jobName, payload)
+  if (dubRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(dubRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = dubRefusal.code
+    throw err
+  }
+
   // 2c. Update job with full input_data from the built payload
   // Store all payload fields so the execution detail modal can show complete inputs.
   // Internal fields (jobId, userId, usageLogId) are kept — useful for admin debugging;
@@ -1728,13 +1814,21 @@ async function executeWorkerNode(
       // the reserve, the gate, and the usage log agree on the exact bucket.
       // `modelIdentifier` is const (buildPayload's transcript/ceiling basis); an
       // unprobeable master falls back to it, the safe over-reserve direction.
+      //
+      // video-sfx is the same shape: a row per clip length, and the length was
+      // measured and stamped above, so the reservation keys off that row.
       const reserveModelIdentifier =
-        (await computeEditPlanReserveId(jobName, payload)) ?? modelIdentifier
+        (await computeEditPlanReserveId(jobName, payload)) ??
+        videoSfxReserveId(jobName, payload) ??
+        modelIdentifier
 
       const creditOverride =
         await applyEdlCreditOverride(jobName, payload) ??
         await projectDubbingCreditOverride(jobName, payload) ??
         computeImageOverlayCreditOverride(payload) ??
+        (await computeVideoUtilityCreditOverride(jobName, payload, modelIdentifier)) ??
+        (await computeLtxExtendCreditOverride(jobName, payload, modelIdentifier)) ??
+        (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeGenerateVideoProCreditOverride(payload, modelIdentifier))?.override ??
         (await computeEditVideoProCreditOverride(payload, modelIdentifier))?.override ??
         (await computeSeedance2RefVideoCreditOverride(payload, refVideoDurationsSec, modelIdentifier)) ??
@@ -1994,6 +2088,18 @@ async function cancelJobAndThrow(
 /** Today's ceilings — what every job that declares no budget polls under. */
 const DEFAULT_NODE_CEILINGS: NodeCeilings = nodeCeilings()
 
+/** The row `pollJobToCompletion` reads each tick. */
+interface JobPollRow {
+  status: string
+  output_data: unknown
+  error_message: string | null
+  progress: number | null
+  credits_actual: number | null
+  credits: number | null
+  error_hint: unknown
+  slot_wait_ms?: number | null
+}
+
 async function pollJobToCompletion(
   jobId: string,
   nodeType: string,
@@ -2023,6 +2129,19 @@ async function pollJobToCompletion(
    *  already been processing — but it keeps the two clocks independent. */
   let heldBeforeProcessingMs = 0
   const heldSoFar = (): number => heldTotalMs + (heldSinceMs === null ? 0 : Date.now() - heldSinceMs)
+  /** The job's total wait for an ffmpeg slot, as its worker last reported it
+   *  (`jobs.slot_wait_ms`, Track 0.13, decided 2026-10-04). Queued behind other
+   *  renders is not hung, so both node clocks below leave it out — but not the
+   *  workflow cap (`maxChildHeldMs` is review holds only). It accumulates across
+   *  a re-picked job's attempts and never shrinks here (two processors on one
+   *  job would otherwise make it flap); an adopted render starts from the row's
+   *  value, read before its first tick. Up to one heartbeat (60 s) behind. */
+  let slotWaitMs = clocks?.slotWaitMs ?? 0
+  /** What the row already held when this poll's clocks started fresh (an
+   *  adoption with no clocks — those waits predate this poll's clocks, so they
+   *  are not credited). Undefined until the first read; 0 with adopted clocks,
+   *  which count from the row's own start. */
+  let slotWaitAtStart: number | undefined = clocks ? 0 : undefined
 
   while (true) {
     // Check cancellation (fast path — already flagged by orchestrator or sibling node)
@@ -2035,7 +2154,7 @@ async function pollJobToCompletion(
     // starts counting after the worker picks up the job. Both clocks are
     // `POLL_ABSOLUTE_TIMEOUT_MS` / `NODE_TIMEOUT_MS` plus the job's declared
     // budget excess (`ceilings`, 0 for a job that declares none).
-    if (Date.now() - pollStartTime - heldSoFar() > ceilings.pollAbsoluteMs) {
+    if (Date.now() - pollStartTime - heldSoFar() - slotWaitMs > ceilings.pollAbsoluteMs) {
       return await cancelJobAndThrow(jobId, usageLogId, `Poll timeout: job did not complete within ${ceilings.pollAbsoluteMs / 1000}s (may still be pending in queue)`, nodeType, creditsUsed)
     }
 
@@ -2066,14 +2185,27 @@ async function pollJobToCompletion(
     // (migration 376) is the worker's structured safety-block verdict — carried
     // onto the thrown Error below so it can ride into nodeStates[nodeId] the
     // way a mapped billing refusal's errorCode already does.
-    const { data: jobRecord } = await supabase
-      .from("jobs")
-      .select("status, output_data, error_message, progress, credits_actual, credits, error_hint")
-      .eq("id", jobId)
-      .single()
+    // `slot_wait_ms` (migration 451) only once it has reached this shared
+    // database: naming a missing column fails the whole select.
+    const POLL_COLUMNS = "status, output_data, error_message, progress, credits_actual, credits, error_hint"
+    const readJob = async (columns: string) => {
+      const { data, error } = await supabase.from("jobs").select(columns).eq("id", jobId).single()
+      // A runtime column list loses the typed row; these are the columns above.
+      return { data: data as unknown as JobPollRow | null, error }
+    }
+    let { data: jobRecord, error: jobReadError } = await readJob(withSlotWaitColumn(POLL_COLUMNS))
+    if (jobReadError && noteSlotWaitColumnError(jobReadError)) {
+      ;({ data: jobRecord, error: jobReadError } = await readJob(POLL_COLUMNS))
+    }
 
     if (!jobRecord) {
       throw new Error(`Job ${jobId} not found`)
+    }
+    const reportedSlotWait = Number(jobRecord.slot_wait_ms ?? 0)
+    if (Number.isFinite(reportedSlotWait)) {
+      slotWaitAtStart ??= reportedSlotWait
+      const sinceStart = reportedSlotWait - slotWaitAtStart
+      if (sinceStart > slotWaitMs) slotWaitMs = sinceStart
     }
 
     // Surface progress to the orchestrator so the UI can render a progress bar
@@ -2143,7 +2275,7 @@ async function pollJobToCompletion(
     // Queue wait time is bounded by the workflow-level timeout (WORKFLOW_TIMEOUT_MS).
     if (
       processingStartTime !== null &&
-      Date.now() - processingStartTime - (heldMs - heldBeforeProcessingMs) > ceilings.processingMs
+      Date.now() - processingStartTime - (heldMs - heldBeforeProcessingMs) - slotWaitMs > ceilings.processingMs
     ) {
       return await cancelJobAndThrow(jobId, usageLogId, `Node timeout after ${ceilings.processingMs / 1000}s of processing`, nodeType, creditsUsed)
     }

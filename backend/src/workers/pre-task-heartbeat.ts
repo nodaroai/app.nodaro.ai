@@ -46,11 +46,23 @@
  * ffmpeg budget it hands `runFfmpeg`, its probes, its fetches. One number
  * decides "hung" for the heartbeat and for those steps.
  *
+ * WAITING FOR AN FFMPEG SLOT IS NOT RUNNING (Track 0.13, decided 2026-10-04).
+ * `FFMPEG_CONCURRENCY` slots are shared by `VIDEO_WORKER_CONCURRENCY` jobs, so
+ * a short job can queue behind hours of apply-edl renders. The wrapper opens a
+ * slot-wait ledger around the handler (`lib/ffmpeg-slot-wait.ts`); while the
+ * job is stalled on the queue the beats go on and the cap's clock pauses, and
+ * a beat writes the job's total wait (earlier attempts included) to
+ * `jobs.slot_wait_ms` whenever it grew — for any processing row, whatever its
+ * provider kind — which the workflow engine takes off the node's clocks. The
+ * wait itself has no ceiling of its own, because every hold has one: a
+ * timed-out ffmpeg is SIGKILLed 5 s after its SIGTERM, every slot-gated step
+ * declares a limit, and a slot releases itself 30 s past that whatever the
+ * work is doing (`providers/video/ffmpeg-utils.ts`). A workflow's own cap
+ * still bounds a workflow. Not credited: work outside the video worker (the
+ * render worker's own semaphore, the API and orchestrator processes), and a
+ * component node's deadline — a sub-workflow's cap, like the workflow cap.
+ *
  * WHAT NO CAP BOUNDS (stated, not padded over):
- *  - Time spent WAITING for an ffmpeg slot. `FFMPEG_CONCURRENCY` slots are
- *    shared by `VIDEO_WORKER_CONCURRENCY` jobs; a spawn's kill budget starts
- *    at the spawn, the beats at dispatch. This is a residual for EVERY ffmpeg
- *    handler, and apply-edl's multi-hour slot holds are its dominant cause.
  *  - Storage I/O — apply-edl's chunk checkpoints, the 404 fallback download,
  *    the deliverable upload after the render. Every call is bounded on its own
  *    (`lib/storage-timeouts.ts`, Track 0.12), so a dead store fails the run
@@ -91,7 +103,8 @@
  * short delay, and the successor's pickup writes a fresh stamp. The guard
  * tests pin interval + requeue delay far below the threshold.
  */
-import { refreshPreTaskSentinel } from "../lib/reconcile/persistence.js"
+import { recordJobSlotWait, refreshPreTaskSentinel } from "../lib/reconcile/persistence.js"
+import { SlotWaitLedger, runWithSlotWaitLedger } from "../lib/ffmpeg-slot-wait.js"
 import { NODE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 
 /** Beat cadence. Same as the core long-runners (`SCENE3D_HEARTBEAT_MS`) and the
@@ -121,6 +134,9 @@ export interface PreTaskHeartbeatOptions {
    *  storage I/O's time outside every budget a shorter cap would only take
    *  slack away from a live run. */
   readonly maxMs?: number
+  /** The job's slot wait from EARLIER attempts (its row's `slot_wait_ms` at
+   *  pickup): this attempt adds to it, so a re-pick never drops the credit. */
+  readonly slotWaitBaseMs?: number
 }
 
 /** The cap a run actually gets: the declared budget when it extends the
@@ -131,28 +147,44 @@ export function effectiveHeartbeatMaxMs(declared: number | undefined): number {
     : PRE_TASK_HEARTBEAT_MAX_MS
 }
 
-/** One handler, beating while it runs. */
+/** One handler, beating while it runs. The cap counts the run's own time:
+ *  time stalled on the ffmpeg slot queue is taken off (see the header). */
 export function withPreTaskHeartbeat<J, C extends { jobId: string }>(
   handler: QueueHandler<J, C>,
   options: PreTaskHeartbeatOptions = {},
 ): QueueHandler<J, C> {
   const maxMs = effectiveHeartbeatMaxMs(options.maxMs)
+  const base = typeof options.slotWaitBaseMs === "number" && options.slotWaitBaseMs > 0 ? options.slotWaitBaseMs : 0
+  // Waits of earlier runs of THIS wrapper (the worker's inline safety retry
+  // re-runs the same handler): the job's total keeps them.
+  let earlierRunsWait = 0
   return async (job, ctx) => {
     const startedAt = Date.now()
+    const ledger = new SlotWaitLedger()
+    let reportedWait = 0
     const timer = setInterval(() => {
-      if (Date.now() - startedAt >= maxMs) {
+      // The cap counts THIS attempt's own running time.
+      if (Date.now() - startedAt - ledger.waitedMs() >= maxMs) {
         clearInterval(timer)
         return
       }
       // Best-effort by contract; the catch is belt and braces so a future edit
       // to the refresh can never surface as an unhandled rejection here.
       void refreshPreTaskSentinel(ctx.jobId).catch(() => undefined)
+      // The job's total wait (earlier attempts + this one), written only when
+      // it grew — i.e. only while the job waits.
+      const waited = ledger.waitedMs()
+      if (waited > reportedWait) {
+        reportedWait = waited
+        void recordJobSlotWait(ctx.jobId, base + earlierRunsWait + waited).catch(() => undefined)
+      }
     }, PRE_TASK_HEARTBEAT_MS)
     timer.unref?.()
     try {
-      await handler(job, ctx)
+      await runWithSlotWaitLedger(ledger, () => handler(job, ctx))
     } finally {
       clearInterval(timer)
+      earlierRunsWait += ledger.waitedMs()
     }
   }
 }

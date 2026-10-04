@@ -262,7 +262,7 @@ const HANDLE_LABELS_JA: Record<string, string> = {
   "Text": "テキスト",
   "URL / Query": "URL／クエリ",
   "Keyword / Page URLs": "キーワード／ページ URL",
-  "Profiles / Hashtags": "プロフィール／ハッシュタグ",
+  "Profiles / Hashtags / Links": "プロフィール／ハッシュタグ／リンク",
   "Keyword or account": "キーワードまたはアカウント",
   "Variables": "変数",
   "Video": "動画",

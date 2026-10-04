@@ -82,6 +82,40 @@ export interface PriceVariant {
   note?: string
 }
 
+/** A voice-setting lever a speech model honours. */
+export type TtsSettingLever = "stability" | "similarity" | "style" | "speed" | "speakerBoost"
+
+/**
+ * What a speech model (text-to-speech or dialogue) accepts. The ONE source for
+ * every "does this model do X" decision on the text-to-speech lane — tag
+ * stripping, which voice settings are sent and shown, the language picker, the
+ * per-request character cap. Never compare a provider id by hand; read the sheet
+ * through the helpers in `tts-capabilities.ts`.
+ *
+ * The dialogue model carries a sheet for its own lane too, but until that lane
+ * is moved onto it only `maxChars` and `languages` of that sheet are read:
+ * editing its other fields changes no dialogue request.
+ */
+export interface TtsCapabilities {
+  /** Inline `[audio tags]` are performed. false ⇒ strip them before sending (the model reads them aloud). */
+  audioTags: boolean
+  /** SSML `<break time="…"/>` tags are honoured. */
+  ssmlBreaks: boolean
+  /** Voice settings the model honours. A lever not listed is never sent and never shown. */
+  levers: readonly TtsSettingLever[]
+  /** The request may carry a language code. false ⇒ the field is omitted. */
+  languageCode: boolean
+  /**
+   * Per-request character cap (the total across lines for a dialogue model).
+   * `getMaxTtsChars` reads it by exact id and answers {@link TTS_TEXT_MAX}'s 5,000 for
+   * the legacy alias and for ids with no sheet, while the sheet lookups answer
+   * with the cap of the model such a request actually runs as (turbo's 40,000).
+   */
+  maxChars: number
+  /** Languages offered in pickers (ISO 639-1; `fil` has no two-letter code). A curated list, not the vendor's full one. */
+  languages: readonly string[]
+}
+
 export interface ModelCatalogEntry {
   id: string
   kind: ModelKind
@@ -189,6 +223,11 @@ export interface ModelCatalogEntry {
    * the catalog model to offer when it blocks again.
    */
   safetyFilter?: { stochastic: true; fallback?: string }
+  /**
+   * Capability sheet of a speech model. REQUIRED on every entry whose `modes`
+   * include "tts" or "dialogue" — `tts-capabilities.test.ts` fails otherwise.
+   */
+  tts?: TtsCapabilities
 }
 
 /**
@@ -1251,7 +1290,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     resolutions: ["720p", "1080p", "4k"],
     pricing: [
       { identifier: "veo3", credits: 1000, note: "4/6/8s with audio (flat per-generation)" },
-      { identifier: "veo3:4k", credits: 930, note: "4K (base 1080p → get-4k-video)" },
+      { identifier: "veo3:4k", credits: 1300, note: "4K (base 1080p → get-4k-video)" },
     ],
     featured: true,
   },
@@ -2421,6 +2460,20 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
 // =============================================================================
 // AUDIO MODELS
 // =============================================================================
+// Languages each speech model is offered in. The three lists nest: Multilingual
+// v2 ⊂ Flash v2.5 ⊂ v3.
+const TTS_LANGS_MULTILINGUAL_V2 = [
+  "en", "ja", "zh", "de", "hi", "fr", "ko", "pt", "it", "es", "id", "nl", "tr", "fil", "pl",
+  "sv", "bg", "ro", "ar", "cs", "el", "fi", "hr", "ms", "sk", "da", "ta", "uk", "ru",
+] as const
+const TTS_LANGS_FLASH_V25 = [...TTS_LANGS_MULTILINGUAL_V2, "hu", "no", "vi"] as const
+const TTS_LANGS_V3 = [
+  ...TTS_LANGS_FLASH_V25,
+  "he", "th", "bn", "ur", "fa", "sr", "lt", "lv", "et", "ka", "is", "ca", "af", "sw",
+] as const
+// Every lever the v2 families are sent today.
+const TTS_LEVERS_V2 = ["stability", "similarity", "style", "speed", "speakerBoost"] as const
+
 const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   // ── ElevenLabs TTS ──
   "elevenlabs-v3": {
@@ -2435,6 +2488,14 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["audio-tags", "voice-cloning"],
     pricing: [{ identifier: "elevenlabs-v3", credits: 30 }],
     featured: true,
+    tts: {
+      audioTags: true,
+      ssmlBreaks: false,
+      levers: ["stability"],
+      languageCode: true,
+      maxChars: 5000, // official cap (probed: 5,200 chars accepted; keep the clamp)
+      languages: TTS_LANGS_V3,
+    },
   },
   "elevenlabs-turbo": {
     id: "elevenlabs-turbo",
@@ -2446,6 +2507,14 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Fast, cheap ElevenLabs TTS via the direct ElevenLabs API. Good for narration.",
     useCases: ["tts", "narration", "fast"],
     pricing: [{ identifier: "elevenlabs-turbo", credits: 15, note: "per 1K chars" }],
+    tts: {
+      audioTags: false,
+      ssmlBreaks: true,
+      levers: TTS_LEVERS_V2,
+      languageCode: true,
+      maxChars: 40000, // == eleven_flash_v2_5 (functionally equivalent)
+      languages: TTS_LANGS_FLASH_V25,
+    },
   },
   "elevenlabs-multilingual": {
     id: "elevenlabs-multilingual",
@@ -2457,6 +2526,15 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Multi-language ElevenLabs TTS via the direct ElevenLabs API.",
     useCases: ["tts", "multilingual"],
     pricing: [{ identifier: "elevenlabs-multilingual", credits: 30, note: "per 1K chars" }],
+    tts: {
+      audioTags: false,
+      ssmlBreaks: true,
+      levers: TTS_LEVERS_V2,
+      // The API reference: "This parameter is not supported for multilingual_v2 models."
+      languageCode: false,
+      maxChars: 10000,
+      languages: TTS_LANGS_MULTILINGUAL_V2,
+    },
   },
   "elevenlabs-dialogue": {
     id: "elevenlabs-dialogue",
@@ -2472,6 +2550,16 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["tts", "dialogue", "multi-speaker"],
     features: ["audio-tags", "voice-cloning"],
     pricing: [{ identifier: "elevenlabs-dialogue", credits: 25, note: "per 1K chars" }],
+    tts: {
+      audioTags: true,
+      ssmlBreaks: false,
+      levers: ["stability"],
+      languageCode: true,
+      // Total across lines. The documented 2,000 is a recommendation, not a
+      // limit (2,500 and 5,000 both probed 200); capped like v3, the model underneath.
+      maxChars: 5000,
+      languages: TTS_LANGS_V3,
+    },
   },
 
   // ── ElevenLabs voice utilities ──

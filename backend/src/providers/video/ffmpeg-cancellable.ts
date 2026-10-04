@@ -28,5 +28,7 @@ export function runFfmpegCancellable(args: readonly string[], signal: AbortSigna
     })
     signal.addEventListener("abort", abort, { once: true })
     if (signal.aborted) abort()
-  }), signal)
+    // Its own watchdog SIGKILLs the child; the slot releases itself shortly
+    // after `timeoutMs` regardless (`FFMPEG_SLOT_BACKSTOP_MS`).
+  }), { timeoutMs, signal, label: "ffmpeg" })
 }

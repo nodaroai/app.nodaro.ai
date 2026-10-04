@@ -7,6 +7,8 @@ import {
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
+import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared"
+import { applyEdlCreditId } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 import { socialSearchRequestFromNode, socialSearchCreditId, socialSearchPickTop } from "@nodaro/shared"
@@ -4905,18 +4907,21 @@ export function buildPayload(
       // LTX extend operates on the source video URL (no KIE taskId — Replicate
       // accepts any HTTPS-reachable video). Webhook-driven completion via the
       // standard Replicate prediction reconcile path. `duration` is the number
-      // of seconds to ADD (1–20); `extendMode` is "start" or "end" (defaults
-      // to "end" — append).
+      // of seconds to ADD (1–20, default 6 — `ltxExtendDurationSec`, the
+      // reading the route sends too); `extendMode` is "start" or "end"
+      // (defaults to "end" — append). Priced per second added: the reservation
+      // is the per-second row times these seconds (node-executor's
+      // computeLtxExtendCreditOverride, the route guard's twin).
       if (evProvider === "ltx-2.3-pro") {
         return {
           jobName: "extend-video",
           queueName: "video-generation",
-          modelIdentifier: evProvider,
+          modelIdentifier: LTX_EXTEND_PER_SECOND_CREDIT_ID,
           payload: {
             jobId,
             provider: evProvider,
             video: resolvedInputs.videoUrl || data.videoUrl,
-            duration: data.duration,
+            duration: ltxExtendDurationSec(data.duration),
             extend_mode: (data.extendMode as string | undefined) ?? "end",
             usageLogId,
           },
@@ -4997,9 +5002,9 @@ export function buildPayload(
     // Replace a portion of a video — audio only / video only / both —
     // using LTX 2.3 Pro's `retake` task on Replicate. Webhook-driven
     // completion via the standard Replicate reconcile path. Credit math is
-    // `ltx-2.3-pro-retake:per-second × retakeDuration` (the route hook
-    // applies the multiplication on the single-node path; the orchestrator
-    // path also bills `:per-second` here so reconciliation sums match).
+    // `ltx-2.3-pro-retake:per-second × retakeDuration` on both paths: the
+    // route's guard multiplies on the single-node path, node-executor's
+    // computeLtxRetakeCreditOverride on this one.
     case "video-retake": {
       // Walk incoming edges to derive the LTX camera_motion enum. Mirror of
       // the LTX generate-video case — `ltxCameraMotionFromUpstream` consumes
@@ -5017,19 +5022,16 @@ export function buildPayload(
       return {
         jobName: "video-retake",
         queueName: "video-generation",
-        // Orchestrator path uses the static `video-retake` fallback (100cr,
-        // ~2s worth). Single-node route uses `computeCredits` with the actual
-        // `ltx-2.3-pro-retake:per-second × retakeDuration` math — mirrors the
-        // extend-video LTX pattern where orchestrator reserves the base rate
-        // and reconciliation refunds the diff once Replicate reports actual.
-        modelIdentifier: "video-retake",
+        // The per-second row; the reservation multiplies it by the window
+        // sent below (lib/ltx-retake-credits.ts, the route guard's own math).
+        modelIdentifier: LTX_RETAKE_PER_SECOND_CREDIT_ID,
         payload: {
           jobId,
           provider: "ltx-2.3-pro",
           video: resolvedInputs.videoUrl || (data.videoUrl as string | undefined),
           prompt: promptFor("video-retake"),
           retake_start_time: data.retakeStartTime as number | undefined,
-          retake_duration: data.retakeDuration as number | undefined,
+          retake_duration: ltxRetakeDurationSec(data.retakeDuration),
           retake_mode: data.retakeMode as string | undefined,
           resolution: "1080p",
           aspect_ratio: (data.aspectRatio as string | undefined) ?? "16:9",
@@ -5876,14 +5878,21 @@ export function buildPayload(
         throw new Error(`apply-edl: invalid EDL — ${shown.join("; ")}${more > 0 ? ` (+${more} more)` : ""}`)
       }
       const transcript = resolvedInputs.transcript ?? (typeof data.transcript === "string" ? data.transcript : undefined)
-      return ffmpegResult("apply-edl", {
-        jobId,
-        edl: effectiveEdl,
-        transcript,
-        output,
-        quality,
-        usageLogId,
-      })
+      // The job is always `apply-edl`; the run reserves on the row of its
+      // quality (a preview on `apply-edl:proxy`) — the id the route reserves
+      // on, and the one applyEdlCreditOverride prices from `payload.quality`.
+      return ffmpegResult(
+        "apply-edl",
+        {
+          jobId,
+          edl: effectiveEdl,
+          transcript,
+          output,
+          quality,
+          usageLogId,
+        },
+        applyEdlCreditId(quality),
+      )
     }
 
     case "assemble-narrated-video": {

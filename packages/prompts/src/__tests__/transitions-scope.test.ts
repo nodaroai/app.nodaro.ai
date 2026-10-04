@@ -738,6 +738,37 @@ describe("Redrafted glitch bodies and the jump-cut negative sentence (2026-10-04
   })
 })
 
+describe("double-exposure body (2026-10-04: dblexp3 D1, the silhouette wording)", () => {
+  // The D1 draft (first written for dblexp2), byte-identical to the body inside the prompt of the take the
+  // row's tile shows: dblexp3 D1 (c55f1176), rendered at the tile-default levers on a dark profile
+  // silhouette over a near-white ground, cutting to a mountain lake. The row has no heading, the body has no
+  // colon (so the heading guard in transitions-instant.test.ts cannot match it), and no comma item equals the
+  // term. No other row changes.
+  const TERM = "double exposure"
+  const BODY =
+    "the first subject becomes a crisp silhouette filled solid with the second shot, while the rest of th" +
+    "e first shot stays untouched around it. The camera stays where it is and the framing does not change" +
+    ". The silhouette holds for a clear beat, both pictures plainly seen at once, then the first shot aro" +
+    "und it gives way to the second shot. The shot ends on the second shot alone, fully resolved"
+  const CLAUSE = `${TERM} (${BODY})`
+
+  it("the catalog hint is the D1 body", () => {
+    expect(getTransitionPromptHint("double-exposure")).toBe(BODY)
+  })
+
+  it("renders `term (body)` at the tile-default levers", () => {
+    expect(composeTransitionHintFromConnections("double-exposure", [], [], {}, "full", { scope: "shot" })).toBe(CLAUSE)
+    expect(composeTransitionHintFromConnections("double-exposure", [], [], {}, "compact", { scope: "shot" })).toBe(CLAUSE)
+    expect(composeTransitionHintFromConnections("double-exposure", [], [])).toBe(CLAUSE)
+  })
+
+  it("at middle / short / natural", () => {
+    expect(composeTransitionHintFromConnections("double-exposure", [], [], { position: "middle", duration: "short", intensity: "natural" })).toBe(
+      `${CLAUSE}, the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing`,
+    )
+  })
+})
+
 describe("L1 — a cut spans nothing, so `full` adds no clause", () => {
   it.each(INSTANT_IDS)("%s + full renders no position clause", (id) => {
     const out = composeTransitionHintFromConnections(id, [], [], { position: "full", duration: "short", intensity: "natural" })

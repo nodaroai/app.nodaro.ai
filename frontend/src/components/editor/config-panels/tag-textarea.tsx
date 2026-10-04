@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo, useEffect, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { Textarea } from "@/components/ui/textarea"
-import { AUDIO_TAGS, SSML_BREAK_OPTIONS, isV2Model } from "@/lib/audio-tags"
+import { AUDIO_TAGS, SSML_BREAK_OPTIONS, tagInsertWarning } from "@/lib/audio-tags"
 import type { NodeRefItem } from "@/lib/node-refs"
 import type { VariableDisplayMode } from "./types"
 import { renderNodeRefs } from "@/lib/render-node-refs"
@@ -642,13 +642,9 @@ export function TagTextarea(props: TagTextareaProps) {
     onChange(newValue)
 
     if (tagMode === "audio") {
-      const isAudioTag = tag.startsWith("[")
-      const isSsmlTag = tag.startsWith("<")
-      if (isSsmlTag && provider !== undefined && !isV2Model(provider)) {
-        setWarning(tx("cfgext.tagTaSsmlWarning"))
-      } else if (isAudioTag && provider !== undefined && isV2Model(provider)) {
-        setWarning(tx("cfgext.tagTaAudioTagWarning", { tag }))
-      }
+      const kind = tagInsertWarning(provider, tag)
+      if (kind === "ssml") setWarning(tx("cfgext.tagTaSsmlWarning"))
+      else if (kind === "audioTag") setWarning(tx("cfgext.tagTaAudioTagWarning", { tag }))
     }
 
     dismiss()

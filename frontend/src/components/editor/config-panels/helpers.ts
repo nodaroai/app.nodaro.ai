@@ -1,11 +1,12 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, applyEdlCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
+import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import type { LlmFeature } from "@nodaro/shared"
 /** Every node type whose output is prose/text. Used to build the compatible
  *  source list for any text-shaped field so the MappableField dropdown is
@@ -599,6 +600,24 @@ export function getModelIdentifier(
   // price it the same way), so the estimate must not quote the fast tier.
   if (nodeType === "speed-ramp") return speedRampCreditId(data.quality)
 
+  // Apply EDL: the per-minute row of the render's quality — a preview on
+  // `apply-edl:proxy`, a final on `apply-edl`, for a video and an audio output
+  // alike — the id the route and the orchestrator reserve on. Every estimate
+  // multiplies it by the render's minutes (PRICING_UNIT_ESTIMATORS).
+  if (nodeType === "apply-edl") return applyEdlCreditId(data.quality)
+
+  // Video Retake: priced per second of the replaced window — its per-second
+  // row, which every estimate multiplies by the seconds (PRICING_UNIT_ESTIMATORS).
+  if (nodeType === "video-retake") return LTX_RETAKE_PER_SECOND_CREDIT_ID
+
+  // Video SFX: the price row for the clip's length — the upstream video's
+  // reported duration through the rule the run charges by (videoSfxCreditId;
+  // the run itself measures the real file). Unknown → the 8s row, as the
+  // node's own Run button quotes.
+  if (nodeType === "video-sfx") {
+    return videoSfxCreditId(upstreamVideoDurationSec(node.id, "video", nodes ?? [], edges ?? []))
+  }
+
   const provider = data.provider as string | undefined
   if (!provider) return nodeType
 
@@ -618,6 +637,10 @@ export function getModelIdentifier(
   if (nodeType === "extend-video" && provider === "veo-extend" && data.model === "quality") {
     return "veo-extend:quality"
   }
+
+  // Extend-video: LTX 2.3 Pro is priced per second added — its per-second row,
+  // which every estimate multiplies by the seconds (PRICING_UNIT_ESTIMATORS).
+  if (nodeType === "extend-video" && provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
 
   // Motion transfer: duration-tiered pricing
   if (nodeType === "motion-transfer") {

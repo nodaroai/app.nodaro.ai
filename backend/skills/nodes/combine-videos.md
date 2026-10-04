@@ -1,7 +1,7 @@
 ---
 node_type: combine-videos
-generated_at: 2026-09-27T12:51:23.874Z
-generated_from: c607aa02c
+generated_at: 2026-10-04T11:03:01.382Z
+generated_from: 7d3b3cf86
 ---
 
 # Combine Videos
@@ -9,7 +9,7 @@ generated_from: c607aa02c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `combine-videos`
 **Category:** processing
-**Credit cost:** `30` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `10` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `video`
 

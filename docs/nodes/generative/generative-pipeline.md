@@ -273,7 +273,7 @@ Extends the previous shot's rendered video rather than generating a fresh clip f
 
 | Model | How it works |
 |-------|-------------|
-| VEO 3.1, VEO 3 | Native — uses the prior clip's `kieTaskId` via the KIE `extend_video` endpoint. Frame-perfect continuation. |
+| VEO 3.1, VEO 3 | Native — continues the prior clip's own generation (its `providerTaskId`) through the provider's extend endpoint. Frame-perfect continuation. |
 | Seedance 2, Seedance 2 Fast | Workaround — passes the prior clip as `reference_video_urls`, the prior shot's last frame as `first_frame_url`, and appends "continue seamlessly from the previous clip" to the prompt. Visually plausible but not frame-perfect. |
 
 **Eligibility:** The prior shot's `video_model` must have `supportsVideoExtension: true` in `VIDEO_MODEL_CAPS`. The Shot List Critic validates this before Stage 7 runs and will reject an invalid `extends_shot_id`.

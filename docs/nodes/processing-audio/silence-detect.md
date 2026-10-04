@@ -67,7 +67,7 @@ Result:
 
 - Raise **Minimum silence** to ignore short breaths and inter-word gaps; lower it to catch brief pauses.
 - If cuts are clipping the start of words, increase **Speech padding**; if silences feel too generous, decrease it.
-- A very quiet room tone may sit above the default threshold — lower **Silence threshold** (e.g. to `-45`) to treat quiet ambience as silence.
+- A noisy room (a fan, air conditioning) can sit above the default threshold, so its gaps are not found — raise **Silence threshold** toward 0 (e.g. to `-30`) so that ambience counts as silence. Lower it (e.g. to `-45`) when quiet speech is being marked as silence.
 - The `ranges` are on the **source** clock, so they line up with the original audio/video timeline for a downstream edit.
 
 ## Common Use Cases

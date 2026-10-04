@@ -32,7 +32,7 @@ The Video SFX node takes an input video plus an optional text prompt and produce
 
 ## Credit Cost
 
-Duration is derived automatically from the input video via ffprobe. The duration is rounded up into the next bucket; the bucket determines the cost shown in the editor and charged at run time.
+Duration is derived automatically from the input video via ffprobe. The duration is rounded up into the next bucket; the bucket determines the cost shown in the editor and charged at run time. A single-node run, a run inside a workflow, and MCP or SDK calls all measure the clip and charge its bucket, and the whole clip is scored on every path.
 
 | Input video duration | Bucket | Credits / version |
 |----------------------|--------|------------------:|
@@ -56,6 +56,8 @@ For multi-version runs the cost multiplies: `versions × per-version`. Worked ex
 | 180s     | 1        | 110           |
 
 If ffprobe fails to derive a duration, the `:8s` bucket is used as a fallback and a warning is logged.
+
+Before a run, the editor reads the length the upstream node reports. If no length is known yet, it quotes the `:8s` bucket, and the run then charges the bucket for the clip it measures. Inside a workflow, each Video SFX node makes one version per run.
 
 ## Constraints
 

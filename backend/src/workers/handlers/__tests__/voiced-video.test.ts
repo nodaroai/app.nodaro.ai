@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   mockImageToVideo: vi.fn(),
   mockDirectDialogue: vi.fn(),
   mockDirectTTS: vi.fn(),
+  mockStripAudioTags: vi.fn((t: string) => t),
   mockExtractAudioTrack: vi.fn(),
   mockDirectVoiceChanger: vi.fn(),
   mockMergeVideoAudio: vi.fn(),
@@ -47,7 +48,7 @@ vi.mock("@/providers/elevenlabs/direct-dialogue.js", () => ({
 
 vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({
   directElevenLabsTTS: mocks.mockDirectTTS,
-  stripAudioTags: (t: string) => t,
+  stripAudioTags: mocks.mockStripAudioTags,
 }))
 
 vi.mock("@/providers/video/extract-audio-track.js", () => ({
@@ -228,6 +229,36 @@ describe("voiced-video handler — wired references ride along (#1396)", () => {
       ctx,
     )
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ meteredBaseCredits: undefined }))
+  })
+})
+
+describe("voiced-video handler — [audio tags] on the single-voice path", () => {
+  const TAGGED = "[whispers] good morning"
+  const run = (ttsProvider: string | undefined) =>
+    handler(
+      makeJob({
+        imageUrl: "https://x.png",
+        prompt: "she greets",
+        provider: "seedance-2",
+        duration: 8,
+        characterVoices: [{ voiceId: "W3C2vBPukr5b5jvoXhPK", voiceType: "library", ttsProvider, speaker: "Natalie" }],
+        dialogue: [{ speaker: "Natalie", line: TAGGED }],
+        voicedAudioAddon: 4,
+      }) as never,
+      ctx,
+    )
+
+  it.each([
+    ["elevenlabs-v3", false],
+    ["elevenlabs-turbo", true],
+    ["elevenlabs-multilingual", true],
+    [undefined, true], // no ttsProvider on the voice → turbo, which strips
+  ])("a %s voice has its tags stripped: %s", async (ttsProvider, stripped) => {
+    await run(ttsProvider)
+    if (stripped) expect(mocks.mockStripAudioTags).toHaveBeenCalledWith(TAGGED)
+    else expect(mocks.mockStripAudioTags).not.toHaveBeenCalled()
+    // The strip spy is an identity function, so the text itself is not what is under test here — the routing is.
+    expect(mocks.mockDirectTTS).toHaveBeenCalledWith(TAGGED, "W3C2vBPukr5b5jvoXhPK", ttsProvider, expect.anything())
   })
 })
 

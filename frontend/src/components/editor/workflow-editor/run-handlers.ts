@@ -24,12 +24,14 @@ import {
 } from "./types";
 import { connectionJustLost, jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { estimateRunCredits } from "./estimate-run-credits";
+import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./run-from-here-set";
 import { wordTimingsPreflight } from "./add-captions-preflight";
 import { nestedWordTimingsPreflight } from "./sub-workflow-preflight";
 import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, unwrapEditPlanOutput, withWiredSettings } from "@nodaro/shared"
 import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
+import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire } from "@nodaro/shared"
 import { collapseExpandedClones } from "./execution-graph";
@@ -260,25 +262,6 @@ export function clearConnectedListRows(nodes: WorkflowNode[]): void {
 // Run-confirmation gate
 // ---------------------------------------------------------------------------
 
-/** Live, non-clone, non-hidden executable nodes — the read-only set used to
- *  size the confirm dialog BEFORE any store mutation. */
-function liveExecutable(nodes: WorkflowNode[]): WorkflowNode[] {
-  return nodes.filter(
-    (n) => isExecutableNode(n) && !(n as { hidden?: boolean }).hidden && !isExpandedClone(n),
-  );
-}
-
-/** Forward BFS: all node ids reachable downstream from `startId` (inclusive). */
-function getDownstreamNodeIds(startId: string, edges: WorkflowEdge[]): Set<string> {
-  const ids = new Set<string>([startId]);
-  const queue = [startId];
-  while (queue.length > 0) {
-    const cur = queue.shift()!;
-    for (const e of edges)
-      if (e.source === cur && !ids.has(e.target)) { ids.add(e.target); queue.push(e.target); }
-  }
-  return ids;
-}
 
 /**
  * The spend a run has to exceed before we interrupt the user to confirm it.
@@ -680,8 +663,7 @@ export async function handleRunFromHere(
   // Read-only forward BFS on the live graph (mirrors the collapse-time BFS below).
   {
     const st = useWorkflowStore.getState();
-    const downstreamIds = getDownstreamNodeIds(nodeId, st.edges);
-    const exec = liveExecutable(st.nodes).filter((n) => downstreamIds.has(n.id));
+    const exec = runFromHereExecutable(nodeId, st.nodes, st.edges);
     if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "from-here", false))) return;
     if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return;
   }
@@ -1120,6 +1102,8 @@ function applyRestoredJobCompletion(
     timestamp: new Date().toISOString(),
     jobId,
     ...(overlayRun ?? {}),
+    // Apply EDL: the take keeps the Transcript its render was cut with.
+    ...applyEdlTakeTranscriptField(nodeType, job.output_data, outputUrl),
   };
 
   const updates: Record<string, unknown> = {
@@ -1147,6 +1131,10 @@ function applyRestoredJobCompletion(
   } else if (job.output_data?.script) {
     updates.generatedScript = job.output_data.script;
   }
+  // Apply EDL holds ONE cut: clear the medium this run did not render, and make
+  // its Transcript output this render's — cleared when it was cut with none
+  // (lib/apply-edl-cut.ts).
+  Object.assign(updates, applyEdlRunCutFields(nodeType, job.output_data));
 
   // CONTENT-POLICY DISCLOSURE passthrough (Task A4 follow-up, 2026-08-03) —
   // GVP-only; this function restores a job that finished while the tab was
@@ -1751,6 +1739,11 @@ function syncNodeStatesToStore(
           updates.generatedVideoUrl = state.output.videoUrl;
         if (state.output.audioUrl)
           updates.generatedAudioUrl = state.output.audioUrl;
+        // Apply EDL holds ONE cut: clear the medium this run did not render, or
+        // an earlier render's URL of the other medium outranks it on both
+        // engines; and make its Transcript output this render's — cleared when
+        // it was cut with none, never an earlier take's (lib/apply-edl-cut.ts).
+        Object.assign(updates, applyEdlRunCutFields(nodeType, state.output));
         if (state.output.script)
           updates.generatedScript = state.output.script;
         // Voice id, stems, alignment, combined / split text: ONE mapping, shared
@@ -1875,6 +1868,8 @@ function syncNodeStatesToStore(
               timestamp: state.completedAt ?? new Date().toISOString(),
               jobId: state.jobIds?.[i] ?? `exec-${node.id}-${i}`,
               ...rowFields(url),
+              // Apply EDL: only the render the output describes keeps its Transcript.
+              ...applyEdlTakeTranscriptField(nodeType, state.output, url),
             }));
           if (newResults.length > 0) {
             updates.generatedResults = [...newResults, ...prev];
@@ -1912,6 +1907,8 @@ function syncNodeStatesToStore(
                   timestamp: state.completedAt ?? new Date().toISOString(),
                   jobId: state.jobId ?? `exec-${node.id}`,
                   ...(overlayRun ?? {}),
+                  // Apply EDL: the take keeps the Transcript its render was cut with.
+                  ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
                 },
                 ...prev,
               ];

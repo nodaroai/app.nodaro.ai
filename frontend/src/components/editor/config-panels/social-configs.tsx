@@ -1,5 +1,5 @@
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -67,6 +67,8 @@ const CAPTION_LIMITS: Record<SocialPlatformType, number> = {
 export function useSocialConnections(platform?: SocialPlatformType) {
   const [connections, setConnections] = useState<SocialConnection[]>([])
   const [loading, setLoading] = useState(true)
+  // Bumped by `reload` — a connection made from inside a panel shows at once.
+  const [version, setVersion] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -80,9 +82,10 @@ export function useSocialConnections(platform?: SocialPlatformType) {
       .catch(() => { /* ignore */ })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [platform])
+  }, [platform, version])
 
-  return { connections, loading }
+  const reload = useCallback(() => setVersion((v) => v + 1), [])
+  return { connections, loading, reload }
 }
 
 /** First action for a platform. Networks without a defined action list (the

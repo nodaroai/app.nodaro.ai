@@ -335,6 +335,18 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | Qwen (T2I, edit) | `negative_prompt` | 500 chars | Native (sent as API param) |
 | Other models | Not natively supported | — | Frontend appends "Avoid: ..." to prompt text |
 
+### seed type
+
+KIE checks `seed` against the TYPE in each SKU's schema. Our API/MCP carry a number, and a SKU whose schema says `type: string` refuses it at createTask (`"seed must be a string"`), which fails the job. When adding an image SKU, read its doc's `seed` type; for a string, declare `seedType: "string"` on its `models.ts` entry (with doc URL + fetch date) and `image.ts` converts the seed through `kieSeedForWire` on both lanes.
+
+| Seed type | Image SKUs (docs fetched 2026-10-04) |
+|-----------|--------------------------------------|
+| string (`seedType: "string"`) | `imagen4`, `imagen4-ultra` |
+| integer (default — declare nothing) | `imagen4-fast`, ideogram, qwen, wan-2.7 |
+| no `seed` in the schema | every other image SKU |
+
+Do not declare it per family — the Imagen 4 tiers disagree. Only the image lanes read `seedType`; `__tests__/models.test.ts` fails if a video/audio SKU declares it.
+
 ---
 
 ## Files in this directory

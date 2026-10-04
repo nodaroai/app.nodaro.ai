@@ -2282,11 +2282,11 @@ export interface EditVideoProNodeData extends PromptAffixFields {
  *  using zsxkib/mmaudio (single-shot Replicate dispatch — see
  *  `backend/src/providers/replicate/sfx.ts`).
  *
- *  Pricing: duration-bucketed BASE credits (10cr ≤15s → 110cr ≤300s, pre-markup)
- *  scaled by `versions` (1-4). The route's `probeDurationPreHandler` ffprobes
- *  the resolved video URL up front; credit reservation uses
- *  `bucketBaseCreditsFor(duration) * versions`. Backend Zod schema is
- *  `VideoSfxBody` in `backend/src/routes/video-sfx.ts`.
+ *  Pricing: a price row per input-clip length (`replicate-mmaudio:8s` …
+ *  `:300s`, picked by `videoSfxCreditId` in @nodaro/shared) scaled by
+ *  `versions` (1-4). The route's `probeDurationPreHandler` and a workflow
+ *  run both ffprobe the resolved video URL up front and reserve that row.
+ *  Backend Zod schema is `VideoSfxBody` in `backend/src/routes/video-sfx.ts`.
  *
  *  Input wiring: `videoUrl` is NOT user-typed — it's resolved at execution
  *  time from the connected video edge (mirrors how `lip-sync`/`video-to-video`
@@ -5523,11 +5523,11 @@ export type SilenceDetectNodeData = {
 export type InstagramScrapeNodeData = {
   [key: string]: unknown
   label: string
-  /** "profile" = posts by account; "hashtag" = posts under a hashtag */
+  /** "profile" = posts by account; "hashtag" = posts under a hashtag; "post" = exactly the linked posts */
   mode?: import("@nodaro/shared").InstagramScrapeMode
-  /** Usernames (profile) or hashtags (hashtag), one per line — up to 5 */
+  /** Usernames (profile), hashtags (hashtag) or post links (post), one per line — up to 5 */
   targets?: string
-  /** Posts per source, 1..100 */
+  /** Posts per source, 1..100 (post mode: one per link, this is ignored) */
   count?: number
   period?: import("@nodaro/shared").InstagramScrapePeriod
   /** Creative formats to keep (vertical / square / horizontal); empty/absent = every format */

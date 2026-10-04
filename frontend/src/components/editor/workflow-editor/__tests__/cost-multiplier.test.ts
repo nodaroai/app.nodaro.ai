@@ -15,7 +15,7 @@ vi.mock("@/components/editor/config-panels/helpers", () => ({
 }))
 
 import { FAN_OUT_EACH_TYPES } from "@nodaro/shared"
-import { EACH_WIRE_FAN_OUT, getCostMultiplier, getFanOutMultiplier, getOutputMinuteUnits, NO_RERUNS, PRODUCER_FAN_OUT } from "../types"
+import { EACH_WIRE_FAN_OUT, getCostMultiplier, getFanOutMultiplier, getPricingUnits, NO_RERUNS, PRODUCER_FAN_OUT } from "../types"
 import { estimateRunCredits } from "../estimate-run-credits"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
@@ -33,17 +33,49 @@ const edlOf = (minutes: number) => ({
 const RATE: Record<string, number> = { transcribe: 10, "edit-plan": 240, "apply-edl": 10, "add-captions": 20, "generate-image": 5, "image-to-video": 50 }
 const cachedCost = (id: string) => RATE[id]
 
-describe("getOutputMinuteUnits", () => {
-  it("is 1 for every node that is not priced per output minute", () => {
+describe("getPricingUnits", () => {
+  it("is 1 for every node that is not priced per unit", () => {
     const img = n("i", "generate-image")
-    expect(getOutputMinuteUnits(img, [img], [], NO_RERUNS)).toBe(1)
+    expect(getPricingUnits(img, [img], [], NO_RERUNS)).toBe(1)
   })
   it("is the render's minutes for apply-edl", () => {
     const master = n("m", "upload-audio", { metadata: { durationSeconds: 45 * 60 } })
     const plan = n("ep", "edit-plan", { mode: "tighten" })
     const ae = n("ae", "apply-edl")
     const edges = [e("m", "ep", "sources"), e("ep", "ae", "edl")]
-    expect(getOutputMinuteUnits(ae, [master, plan, ae], edges, ids(plan, ae))).toBe(45)
+    expect(getPricingUnits(ae, [master, plan, ae], edges, ids(plan, ae))).toBe(45)
+  })
+
+  // The workflow run reserves 10 credits per 5 s of a trim's output (the
+  // single-node route's price); its one-unit row times these units is that.
+  it("is the 5-second steps of a trim's output, and the steps of an Assemble Narrated Video", () => {
+    const trim = { id: "t", type: "trim-video", position: { x: 0, y: 0 }, data: { trimMode: "time", startTime: 0, endTime: 60 } } as never
+    expect(getPricingUnits(trim, [trim], [], NO_RERUNS)).toBe(12)
+    const assemble = { id: "a", type: "assemble-narrated-video", position: { x: 0, y: 0 }, data: {} } as never
+    const blocks = Array.from({ length: 7 }, (_, i) => ({ id: `e${i}`, source: `v${i}`, target: "a", targetHandle: "video" })) as never
+    expect(getPricingUnits(assemble, [assemble], blocks, NO_RERUNS)).toBe(5)
+  })
+
+  // LTX 2.3 Pro Extend reserves its per-second row × the seconds it adds (the
+  // model's default 6 when none is set); every other extend is one row.
+  it("is the seconds an LTX 2.3 Pro extend adds", () => {
+    const ltx = n("x", "extend-video", { provider: "ltx-2.3-pro", duration: 20 })
+    expect(getPricingUnits(ltx, [ltx], [], NO_RERUNS)).toBe(20)
+    const ltxDefault = n("y", "extend-video", { provider: "ltx-2.3-pro" })
+    expect(getPricingUnits(ltxDefault, [ltxDefault], [], NO_RERUNS)).toBe(6)
+    const veo = n("z", "extend-video", { provider: "veo-extend", duration: 20 })
+    expect(getPricingUnits(veo, [veo], [], NO_RERUNS)).toBe(1)
+  })
+
+  // Video Retake reserves its per-second row × the window (2 s minimum); a
+  // fractional window is quoted at its whole seconds, never below the charge.
+  it("is the seconds of a Video Retake window", () => {
+    const retake = n("r", "video-retake", { retakeDuration: 6 })
+    expect(getPricingUnits(retake, [retake], [], NO_RERUNS)).toBe(6)
+    const shortest = n("s", "video-retake", {})
+    expect(getPricingUnits(shortest, [shortest], [], NO_RERUNS)).toBe(2)
+    const fractional = n("f", "video-retake", { retakeDuration: 2.5 })
+    expect(getPricingUnits(fractional, [fractional], [], NO_RERUNS)).toBe(3)
   })
 })
 

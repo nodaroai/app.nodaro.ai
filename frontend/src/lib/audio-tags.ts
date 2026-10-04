@@ -1,5 +1,8 @@
 // Audio tags for ElevenLabs TTS
-// v3 models support [audio tags], v2 models support <break .../> SSML
+// Which models perform [audio tags] and which honour <break .../> SSML is read
+// from each model's capability sheet (`MODEL_CATALOG[id].tts`, @nodaro/shared):
+// `ttsSupportsAudioTags` / `ttsSupportsSsmlBreaks`. Nothing here names a model.
+import { MODEL_CATALOG, ttsLanguageCodes, ttsSupportsAudioTags, ttsSupportsSsmlBreaks } from "@nodaro/shared"
 
 export interface AudioTag {
   tag: string
@@ -91,17 +94,23 @@ export const SSML_BREAK_OPTIONS: SSMLBreakOption[] = [
   { tag: '<break time="3.0s" />', label: "Break 3.0s" },
 ]
 
-// Audio tags ([...]) only work with ElevenLabs v3 models (future)
-// SSML break tags (<break .../>) work with Turbo v2.5 and Multilingual v2
-export const V3_MODELS = ["elevenlabs-v3"] as const
-export const V2_MODELS = ["elevenlabs-turbo", "elevenlabs-multilingual"] as const
-
-export function isV2Model(provider: string | undefined): boolean {
-  return !provider || (V2_MODELS as readonly string[]).includes(provider)
-}
-
-export function isV3Model(provider: string | undefined): boolean {
-  return !!provider && (V3_MODELS as readonly string[]).includes(provider)
+/**
+ * Which warning inserting `tag` earns on `provider`, if any: an SSML break
+ * (`<break …/>`) on a model whose sheet says it does not honour them, or an audio
+ * tag (`[whispers]`) on a model that does not perform them. A node with no model
+ * chosen (`provider === undefined`) never warns; a legacy or unknown id is judged
+ * as the turbo model it runs as.
+ *
+ * The text area sets the matching message and then dismisses its own dropdown,
+ * which clears it, so the warning does not reach the screen today (pre-existing,
+ * and a visible change to fix on its own). The decision lives here, pinned by
+ * tests, so it is right the day that is fixed.
+ */
+export function tagInsertWarning(provider: string | undefined, tag: string): "ssml" | "audioTag" | null {
+  if (provider === undefined) return null
+  if (tag.startsWith("<")) return ttsSupportsSsmlBreaks(provider) ? null : "ssml"
+  if (tag.startsWith("[")) return ttsSupportsAudioTags(provider) ? null : "audioTag"
+  return null
 }
 
 /** Get all tags available for autocomplete (both audio tags and SSML) */
@@ -124,86 +133,41 @@ export interface LanguageOption {
   label: string
 }
 
-/** 29 languages supported by Multilingual v2 */
-const MULTILINGUAL_V2_LANGUAGES: LanguageOption[] = [
-  { value: "en", label: "English" },
-  { value: "ja", label: "Japanese" },
-  { value: "zh", label: "Chinese" },
-  { value: "de", label: "German" },
-  { value: "hi", label: "Hindi" },
-  { value: "fr", label: "French" },
-  { value: "ko", label: "Korean" },
-  { value: "pt", label: "Portuguese" },
-  { value: "it", label: "Italian" },
-  { value: "es", label: "Spanish" },
-  { value: "id", label: "Indonesian" },
-  { value: "nl", label: "Dutch" },
-  { value: "tr", label: "Turkish" },
-  { value: "fil", label: "Filipino" },
-  { value: "pl", label: "Polish" },
-  { value: "sv", label: "Swedish" },
-  { value: "bg", label: "Bulgarian" },
-  { value: "ro", label: "Romanian" },
-  { value: "ar", label: "Arabic" },
-  { value: "cs", label: "Czech" },
-  { value: "el", label: "Greek" },
-  { value: "fi", label: "Finnish" },
-  { value: "hr", label: "Croatian" },
-  { value: "ms", label: "Malay" },
-  { value: "sk", label: "Slovak" },
-  { value: "da", label: "Danish" },
-  { value: "ta", label: "Tamil" },
-  { value: "uk", label: "Ukrainian" },
-  { value: "ru", label: "Russian" },
-]
-
-/** 3 extra languages in Flash v2.5 (on top of Multilingual v2) */
-const FLASH_V25_EXTRA: LanguageOption[] = [
-  { value: "hu", label: "Hungarian" },
-  { value: "no", label: "Norwegian" },
-  { value: "vi", label: "Vietnamese" },
-]
-
-/** Languages only available in v3 */
-const V3_EXTRA_LANGUAGES: LanguageOption[] = [
-  { value: "he", label: "Hebrew" },
-  { value: "th", label: "Thai" },
-  { value: "bn", label: "Bengali" },
-  { value: "ur", label: "Urdu" },
-  { value: "fa", label: "Persian" },
-  { value: "sr", label: "Serbian" },
-  { value: "lt", label: "Lithuanian" },
-  { value: "lv", label: "Latvian" },
-  { value: "et", label: "Estonian" },
-  { value: "ka", label: "Georgian" },
-  { value: "is", label: "Icelandic" },
-  { value: "ca", label: "Catalan" },
-  { value: "af", label: "Afrikaans" },
-  { value: "sw", label: "Swahili" },
-]
-
-/** Display order is ALPHABETICAL BY LABEL, everywhere a language list renders —
- *  the per-model blocks above stay in capability order (that grouping is their
- *  meaning), but a 46-item dropdown in release order is unfindable (user
- *  report, 2026-08-31). Always sort a COPY: two of the returns below would
- *  otherwise mutate the source blocks. */
-const byLabel = (a: LanguageOption, b: LanguageOption) => a.label.localeCompare(b.label)
-
-/** Get languages supported by the given TTS provider */
-export function getLanguagesForModel(provider?: string): LanguageOption[] {
-  if (provider === "elevenlabs-v3") {
-    return [...MULTILINGUAL_V2_LANGUAGES, ...FLASH_V25_EXTRA, ...V3_EXTRA_LANGUAGES].sort(byLabel)
-  }
-  if (provider === "elevenlabs-multilingual") {
-    return [...MULTILINGUAL_V2_LANGUAGES].sort(byLabel)
-  }
-  // Default: elevenlabs-turbo (Flash v2.5)
-  return [...MULTILINGUAL_V2_LANGUAGES, ...FLASH_V25_EXTRA].sort(byLabel)
+/**
+ * English display name of every language a speech model is offered in. A
+ * model's `tts.languages` (its capability sheet, @nodaro/shared) holds codes
+ * only, so a name is written once, here. `audio-tags.test.ts` fails when a code
+ * on any sheet has no name.
+ */
+export const LANGUAGE_LABELS: Readonly<Record<string, string>> = {
+  en: "English", ja: "Japanese", zh: "Chinese", de: "German", hi: "Hindi",
+  fr: "French", ko: "Korean", pt: "Portuguese", it: "Italian", es: "Spanish",
+  id: "Indonesian", nl: "Dutch", tr: "Turkish", fil: "Filipino", pl: "Polish",
+  sv: "Swedish", bg: "Bulgarian", ro: "Romanian", ar: "Arabic", cs: "Czech",
+  el: "Greek", fi: "Finnish", hr: "Croatian", ms: "Malay", sk: "Slovak",
+  da: "Danish", ta: "Tamil", uk: "Ukrainian", ru: "Russian",
+  hu: "Hungarian", no: "Norwegian", vi: "Vietnamese",
+  he: "Hebrew", th: "Thai", bn: "Bengali", ur: "Urdu", fa: "Persian",
+  sr: "Serbian", lt: "Lithuanian", lv: "Latvian", et: "Estonian",
+  ka: "Georgian", is: "Icelandic", ca: "Catalan", af: "Afrikaans", sw: "Swahili",
 }
 
-/** All languages across all models — used for voice browser library filter */
-export const ALL_LANGUAGES: LanguageOption[] = [
-  ...MULTILINGUAL_V2_LANGUAGES,
-  ...FLASH_V25_EXTRA,
-  ...V3_EXTRA_LANGUAGES,
-].sort(byLabel)
+/** Display order is ALPHABETICAL BY LABEL, everywhere a language list renders —
+ *  a 46-item dropdown in release order is unfindable (user report, 2026-08-31).
+ *  The lists below are built fresh on every call, so sorting them in place is safe. */
+const byLabel = (a: LanguageOption, b: LanguageOption) => a.label.localeCompare(b.label)
+
+function toOptions(codes: readonly string[]): LanguageOption[] {
+  return codes.map((value) => ({ value, label: LANGUAGE_LABELS[value] ?? value }))
+}
+
+/** Languages offered for the given TTS provider (a missing or unknown id lists what turbo offers). */
+export function getLanguagesForModel(provider?: string): LanguageOption[] {
+  return toOptions(ttsLanguageCodes(provider)).sort(byLabel)
+}
+
+/** All languages across all speech models — the voice browser's library filter and the dubbing / dialogue pickers. */
+export const ALL_LANGUAGES: LanguageOption[] = toOptions([
+  ...new Set(Object.values(MODEL_CATALOG).flatMap((m) => m.tts?.languages ?? [])),
+]).sort(byLabel)
+

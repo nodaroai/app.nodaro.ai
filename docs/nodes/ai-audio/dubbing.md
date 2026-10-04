@@ -19,7 +19,9 @@ The process is asynchronous — the node submits the dubbing job, polls for comp
 | Maximum uploaded file size | 500 MB (source links are exempt — ElevenLabs fetches those directly) |
 | Price | **40 credits per minute** of the dubbed span, minimum 1 minute |
 
-The dubbed span is the Start/End window when set, otherwise the whole source. When the duration cannot be determined up front (source links, probe failures), a 2-minute reserve (80 credits) is held and the real duration is verified against the 30-minute cap once ElevenLabs probes the media.
+The dubbed span is the Start/End window when set, otherwise the whole source. Its length is measured before the run starts: an uploaded file is read directly, a link to a YouTube, TikTok, Instagram, X or Facebook post is read from the post, and a direct media link is read from the file. A span longer than 30 minutes is rejected before anything is charged.
+
+When the length cannot be read up front (a link that cannot be read, or a file that cannot be probed), the run holds the 30-minute price (**1,200 credits**, so that amount has to be available to start). When the dub is delivered, it is charged for the span that was actually dubbed, from ElevenLabs' own reading of the media or the length of the delivered file, and the rest of the hold is refunded automatically. A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way.
 
 **Worked examples** (matching the platform's pricing tests):
 - A 60-second clip → 1 minute → **40 credits**.

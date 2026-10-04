@@ -22,7 +22,9 @@ export const DUBBING_MAX_SOURCE_BYTES = 500 * 1024 * 1024
  */
 export const DUBBING_MAX_DURATION_SEC = 30 * 60
 
-/** Reserve bucket (seconds) when no duration is probeable at the route. */
+/** The span (seconds) a ceiling-held dub settles at when no length can be
+ *  read even at delivery — neither ElevenLabs' media_metadata nor the
+ *  delivered file. Never the price of a run whose length is known. */
 export const DUBBING_FALLBACK_SECONDS = 120
 
 /** What to dub — exactly one of `url` (media we fetch + attach as a file, with

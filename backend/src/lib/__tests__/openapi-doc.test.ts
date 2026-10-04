@@ -1,15 +1,22 @@
 import { describe, it, expect } from "vitest"
-// Route modules register their paths at import time (core) or at route
-// registration (ee — imported directly here to exercise those too).
+import type { FastifyInstance } from "fastify"
+// Core route modules register their paths at import time; the ee credits
+// routes register theirs inside the route function, called below on a stub.
 import "../../routes/jobs.js"
 import "../../routes/workflows.js"
 import "../../routes/workflow-execution.js"
 import "../../routes/nodes.js"
 import "../../routes/oauth.js"
+import "../../routes/oauth-plugin-connect.js"
 import "../../routes/generate-image.js"
 import "../../routes/generate-video.js"
+import { creditsRoutes } from "../../ee/routes/credits.js"
 import { generateOpenApiDoc } from "../openapi-registry.js"
 import { isAnonymousRoute } from "../../middleware/auth.js"
+
+// Every Fastify call is a no-op: only the OpenAPI registrations matter here.
+const stubApp: FastifyInstance = new Proxy({} as FastifyInstance, { get: () => () => stubApp })
+await creditsRoutes(stubApp)
 
 // Pins the SDK-parity surface of the public OpenAPI spec. A route rename or
 // a dropped registration fails here before polyglot codegen users notice.
@@ -61,6 +68,45 @@ describe("OpenAPI security per operation", () => {
     expect(operation).toBeDefined()
     // Its own `[{ bearerAuth: [] }]`, or the document's global one.
     expect(operation?.security ?? [{ bearerAuth: [] }]).toEqual([{ bearerAuth: [] }])
+  })
+
+  // Every served operation, not a hand-picked few: a new anonymous route
+  // registered with the global bearer default fails here.
+  it("marks exactly the operations the auth hook lets through with no credential", () => {
+    for (const [path, operations] of Object.entries(served.paths)) {
+      const concrete = path.replace(/\{[^}]+\}/g, "x")
+      for (const [method, operation] of Object.entries(operations)) {
+        const expected = isAnonymousRoute(method.toUpperCase(), concrete) ? [] : [{ bearerAuth: [] }]
+        expect(operation.security ?? [{ bearerAuth: [] }], `${method} ${path}`).toEqual(expected)
+      }
+    }
+  })
+
+  // The registrations say it themselves, so a generator that skips the served
+  // document's pass (codegen, a docs build) reads the same contract.
+  it("each anonymous operation is registered with security: [] itself", () => {
+    const raw = generateOpenApiDoc() as unknown as { paths: Record<string, Record<string, Op>> }
+    const anonymous: string[] = []
+    for (const [path, operations] of Object.entries(raw.paths)) {
+      const concrete = path.replace(/\{[^}]+\}/g, "x")
+      for (const [method, operation] of Object.entries(operations)) {
+        if (!isAnonymousRoute(method.toUpperCase(), concrete)) continue
+        anonymous.push(`${method} ${path}`)
+        expect(operation.security, `${method} ${path}`).toEqual([])
+      }
+    }
+    // The scan really reached them all (guard against a vacuous pass).
+    expect(anonymous.sort()).toEqual([
+      "get /v1/nodes",
+      "get /v1/nodes/{type}",
+      "get /v1/oauth/app-info",
+      "get /v1/oauth/plugin/callback",
+      "get /v1/oauth/plugin/session/{id}",
+      "post /v1/credits/model-costs",
+      "post /v1/oauth/plugin/confirm",
+      "post /v1/oauth/plugin/session",
+      "post /v1/oauth/token",
+    ])
   })
 
   it("a route the hook lets through that checks a bearer itself is not anonymous", () => {

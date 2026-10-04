@@ -12,12 +12,13 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
+import { hasCredits } from "../lib/config.js"
+import { dubbingBaseCredits, dubbingReservePlan, effectiveDubbedSeconds, measureDubbingSourceSec } from "../lib/dubbing-duration.js"
 // Duration policy constants live beside the provider (the worker enforces the
 // same cap post-start against ElevenLabs' media_metadata — one source, two
-// seams). 120s fallback = the ai-avatar precedent: 2 min x the per-minute
-// rate prices exactly like the old flat 80. Reservation-vs-actual is NOT
-// trued up (fixed-priced provider — decision A of commitJobCredits).
+// seams). A span that can be measured is reserved exactly (and committed as
+// reserved); one that cannot is held at the 30-minute ceiling and settled to
+// the length actually dubbed at delivery (lib/dubbing-duration.ts).
 import { DUBBING_MAX_DURATION_SEC, DUBBING_FALLBACK_SECONDS } from "../providers/elevenlabs/dubbing.js"
 
 export { DUBBING_MAX_DURATION_SEC, DUBBING_FALLBACK_SECONDS }
@@ -63,24 +64,16 @@ const dubbingBody = z.object({
   { message: "endTime must be greater than startTime" },
 )
 
-/** The dubbed span in seconds: the start/end window when set, else the whole source. */
-function effectiveDubbedSeconds(probedSec: number | undefined, startTime?: number, endTime?: number): number | undefined {
-  const window = startTime != null && endTime != null ? Math.ceil(endTime - startTime) : undefined
-  if (window != null && window > 0) {
-    return probedSec != null ? Math.min(probedSec, window) : window
-  }
-  return probedSec
-}
-
 /**
- * Fastify preHandler: ffprobes the uploaded source (audio or video), rejects
- * anything whose dubbed span exceeds {@link DUBBING_MAX_DURATION_SEC} (413 —
- * the spec's word for it), and stashes the span on `body.__probedDurationSec`
- * for creditGuard's computeCredits. `sourceUrl` inputs are un-probeable here
- * (ElevenLabs fetches them) and fall through to the fallback bucket + the
- * worker's post-hoc cap. Probe failures fail OPEN to the same path — never
- * reject a request over a probe hiccup. Mirrors probeDurationPreHandler
- * (video-sfx) / probeAudioDurationPreHandler (ai-avatar).
+ * Fastify preHandler: measures the source (an upload by ffprobe; a link —
+ * where credits are charged — through the social-post probe or ffprobe,
+ * lib/dubbing-duration.ts), rejects anything whose dubbed span exceeds
+ * {@link DUBBING_MAX_DURATION_SEC} (413 — the spec's word for it), and
+ * stashes the span on `body.__probedDurationSec` for creditGuard's
+ * computeCredits. A source that cannot be measured is never rejected for it:
+ * the run holds the 30-minute ceiling, the worker enforces the cap post-start,
+ * and delivery settles the hold to the length dubbed. Mirrors
+ * probeDurationPreHandler (video-sfx) / probeAudioDurationPreHandler (ai-avatar).
  */
 export async function probeDubbingDurationPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const body = (req.body ?? {}) as Record<string, unknown>
@@ -99,17 +92,18 @@ export async function probeDubbingDurationPreHandler(req: FastifyRequest, reply:
   const mediaUrl = (typeof body.videoUrl === "string" && body.videoUrl)
     || (typeof body.audioUrl === "string" && body.audioUrl)
     || undefined
+  // A link is measured only where credits are charged (its length prices the
+  // run); ElevenLabs fetches it either way.
+  const sourceUrl = !mediaUrl && hasCredits() && typeof body.sourceUrl === "string" && body.sourceUrl
+    ? body.sourceUrl
+    : undefined
   const startTime = typeof body.startTime === "number" ? body.startTime : undefined
   const endTime = typeof body.endTime === "number" ? body.endTime : undefined
-  let probedSec: number | undefined
-  if (mediaUrl) {
-    try {
-      const duration = await probeMediaDuration(mediaUrl)
-      if (Number.isFinite(duration) && duration > 0) probedSec = Math.ceil(duration)
-    } catch (err) {
-      req.log.warn({ err }, "dubbing: media probe failed; falling back to the 120s reserve bucket")
-    }
-  }
+  const probedSec = mediaUrl || sourceUrl
+    ? await measureDubbingSourceSec({ mediaUrl, sourceUrl }, (err) => {
+        req.log.warn({ err }, "dubbing: source probe failed; holding the 30-minute ceiling")
+      })
+    : undefined
   if (typeof body.targetLanguage === "string" && usesDubbingProject(body.targetLanguage) && probedSec == null) {
     return void reply.code(422).send({ error: { code: "unreadable_dubbing_source", message: "Could not read the video duration. Import the source again before dubbing into Hebrew." } })
   }
@@ -131,20 +125,16 @@ export async function dubbingRoutes(app: FastifyInstance) {
     preHandler: [
       probeDubbingDurationPreHandler,
       creditGuard((req) => dubbingModelIdentifier((req.body as Record<string, unknown>)?.targetLanguage), {
-        // Per-minute pricing: probed span (fallback 120s) → ceil to whole
-        // minutes x the per-minute base. The base is read through
-        // getModelCreditBaseCost so an admin model_pricing row tunes the RATE
-        // (treated as per-minute), not a flat price. Returns BASE credits —
-        // creditGuard applies the markup. ee import is dynamic on purpose
-        // (shim pattern): computeCredits only ever runs under hasCredits().
+        // Per-minute pricing: the measured span, or the 30-minute ceiling
+        // when it could not be read (settled down at delivery) → whole
+        // minutes x the per-minute row (admin-editable in model_pricing, so
+        // a row tunes the RATE). Returns BASE credits — creditGuard applies
+        // the markup. The same plan prices a workflow run.
         computeCredits: async (parsedBody) => {
           const body = parsedBody as Record<string, unknown>
           const probed = body.__probedDurationSec
-          const seconds = typeof probed === "number" && probed > 0 ? probed : DUBBING_FALLBACK_SECONDS
-          const minutes = Math.max(1, Math.ceil(seconds / 60))
-          const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
-          const { creditCost } = await getModelCreditBaseCost(dubbingModelIdentifier(body.targetLanguage))
-          return creditCost * minutes
+          const plan = dubbingReservePlan(typeof probed === "number" ? probed : undefined)
+          return dubbingBaseCredits(body.targetLanguage, plan.seconds)
         },
       }),
     ],
@@ -189,9 +179,11 @@ export async function dubbingRoutes(app: FastifyInstance) {
         status: "pending",
         // probedDurationSec rides input_data (not the parsed body — the stash
         // was stripped above) for execution-stats and as reconcile context.
+        // `reservedCeiling` tells delivery the hold was the 30-minute
+        // ceiling, to be settled to the length actually dubbed.
         input_data: {
           ...buildJobInputData(parsed.data, "dubbing"),
-          ...(typeof stashedDuration === "number" ? { probedDurationSec: stashedDuration } : {}),
+          ...(typeof stashedDuration === "number" ? { probedDurationSec: stashedDuration } : { reservedCeiling: true }),
         },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
@@ -221,6 +213,7 @@ export async function dubbingRoutes(app: FastifyInstance) {
       targetAccent,
       watermark,
       probedDurationSec: typeof stashedDuration === "number" ? stashedDuration : undefined,
+      ...(typeof stashedDuration === "number" ? {} : { reservedCeiling: true }),
       usageLogId,
     })
 

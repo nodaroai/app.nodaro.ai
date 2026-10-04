@@ -1,7 +1,7 @@
 ---
 node_type: video-upscale
-generated_at: 2026-09-27T12:51:24.694Z
-generated_from: c607aa02c
+generated_at: 2026-10-04T10:20:16.456Z
+generated_from: f94a0b444
 ---
 
 # Upscale Video
@@ -55,6 +55,7 @@ generated_from: c607aa02c
 - `video_asset_id`
 - `model`
 - `upscale_factor`
+- `task_id`
 - `kie_task_id`
 <!-- AUTO-GEN:END mcp-call -->
 

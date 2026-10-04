@@ -112,10 +112,10 @@ describe("pricing each item", () => {
     expect((await quote([item("transcribe")])).lines[0]!.credits).toBe(22)
   })
   it("the join prices the combine estimate for its clip count, marked up like the guard marks it", async () => {
-    expect(pricingFor("combine_videos", { transition: "cut", audio_mode: "keep", smart_cut: false }, { clipCount: 2 })).toEqual({ id: "combine-videos", base: 4 })
-    expect(pricingFor("combine_videos", { transition: "cut" }, { clipCount: 3 })).toEqual({ id: "combine-videos", base: 6 })
+    expect(pricingFor("combine_videos", { transition: "cut", audio_mode: "keep", smart_cut: false }, { clipCount: 2 })).toEqual({ id: "combine-videos", base: 40 })
+    expect(pricingFor("combine_videos", { transition: "cut" }, { clipCount: 3 })).toEqual({ id: "combine-videos", base: 60 })
     h.markup = 50
-    expect((await quote([item("combine_videos", { transition: "cut" })], [], 2)).lines[0]!.credits).toBe(6)
+    expect((await quote([item("combine_videos", { transition: "cut" })], [], 2)).lines[0]!.credits).toBe(60)
   })
   it("the charge-time price carries the configured markup", async () => {
     h.markup = 10

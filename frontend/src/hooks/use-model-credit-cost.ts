@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { getModelCreditCost } from "@/lib/api"
+import { getModelCreditCost, getBatchModelCreditCosts } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
@@ -43,5 +43,33 @@ export async function fetchModelCredits(model: string): Promise<number | undefin
     return await queryClient.fetchQuery(modelCreditCostQuery(model))
   } catch {
     return undefined
+  }
+}
+
+/**
+ * The cached price of a model id, outside React and without a fetch:
+ * undefined until some reader fetched it. The same cache `useModelCredits`
+ * fills, so a price any node's button fetched is already here for an estimate.
+ */
+export function getCachedModelCredits(model: string): number | undefined {
+  return queryClient.getQueryData<number>(queryKeys.credits.modelCost(model))
+}
+
+/**
+ * Fetch these model ids' prices into that cache — one batch request, falling
+ * back to one request per id. Ids already cached are skipped; a build without
+ * credits fetches nothing.
+ */
+export async function prefetchModelCreditCosts(models: readonly string[]): Promise<void> {
+  if (!hasCredits() || models.length === 0) return
+  const uncached = models.filter((m) => queryClient.getQueryData(queryKeys.credits.modelCost(m)) === undefined)
+  if (uncached.length === 0) return
+  try {
+    const costs = await getBatchModelCreditCosts(uncached)
+    for (const [model, cost] of Object.entries(costs)) {
+      queryClient.setQueryData(queryKeys.credits.modelCost(model), cost)
+    }
+  } catch {
+    await Promise.allSettled(uncached.map((model) => queryClient.prefetchQuery(modelCreditCostQuery(model))))
   }
 }

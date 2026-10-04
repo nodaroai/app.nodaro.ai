@@ -44,9 +44,62 @@ export interface LlmFailureUsage {
  * can see the usage (the adapter that read the provider's reply), not guessed downstream.
  */
 export class LlmStreamResponseError extends Error {
+  /** The full diagnostic (lane, model, provider text) — for the operator's
+   *  `error_detail`, never the person's screen. */
+  readonly internalDetails: string
+
   constructor(message: string, readonly usage: LlmFailureUsage) {
     super(message)
     this.name = "LlmStreamResponseError"
+    this.internalDetails = message
+  }
+
+  /** What the person running it reads (`userFacingMessage`): no lane, vendor
+   *  or internal model id. */
+  get userMessage(): string {
+    return "The AI model stopped partway through its answer. Please try again, or choose another model."
+  }
+}
+
+/**
+ * A request to a model's serving lane that failed WITHOUT usage — an HTTP
+ * error, a service error inside a 200 (KIE's `{code, msg}` envelope), a
+ * stream cut before it finished, a reply that could not be read. A plain
+ * `Error` subclass on purpose: `transportRetryable` and lane fallback treat
+ * it exactly as they treat a plain `Error`.
+ *
+ * `message` stays the full diagnostic, unchanged — logs and the private
+ * plugins' retry classifier read it (`failed (429)`, `failed (5xx)`). The
+ * person running the job reads `userMessage` instead (`userFacingMessage`),
+ * which names no lane, vendor or internal model id; the diagnostic lands in
+ * the job's `error_detail` (`internalDetails`). `httpStatus` and `bodyCode`
+ * let a caller classify the failure by field rather than by message text.
+ */
+export class LlmLaneError extends Error {
+  readonly internalDetails: string
+  readonly lane: "kie" | "direct"
+  readonly httpStatus?: number
+  readonly bodyCode?: number
+
+  constructor(message: string, opts: { lane: "kie" | "direct"; httpStatus?: number; bodyCode?: number }) {
+    super(message)
+    this.name = "LlmLaneError"
+    this.internalDetails = message
+    this.lane = opts.lane
+    if (opts.httpStatus !== undefined) this.httpStatus = opts.httpStatus
+    if (opts.bodyCode !== undefined) this.bodyCode = opts.bodyCode
+  }
+
+  get userMessage(): string {
+    const status = this.httpStatus ?? this.bodyCode
+    if (status === 429) return "The AI model is busy right now. Please try again in a moment."
+    if (status !== undefined && (status >= 500 || this.bodyCode !== undefined)) {
+      return "The AI model's service is unavailable right now. Please try again later, or choose another model."
+    }
+    if (status !== undefined) {
+      return `The AI model's service rejected the request (${status}). Please try again, or choose another model.`
+    }
+    return "The AI model's answer could not be read. Please try again, or choose another model."
   }
 }
 
@@ -75,6 +128,11 @@ export class LlmOutputTruncatedError extends LlmStreamResponseError {
   constructor(message: string, usage: LlmFailureUsage) {
     super(message, usage)
     this.name = "LlmOutputTruncatedError"
+  }
+
+  /** The sentence that says what to change — without the lane's parenthesis. */
+  override get userMessage(): string {
+    return outputCappedMessage()
   }
 }
 

@@ -134,12 +134,12 @@ describe("CreditsService", () => {
 
     it("returns correct cost for FFmpeg nodes", () => {
       const nodes = [
-        { type: "adjust-volume" },   // 1
-        { type: "trim-video" },      // 1
-        { type: "speed-ramp" },      // 2
-        { type: "combine-videos" },  // 3
+        { type: "adjust-volume" },   // 10
+        { type: "trim-video" },      // 10 — one unit: an empty trim
+        { type: "speed-ramp" },      // 20
+        { type: "combine-videos" },  // 10 — one unit: no clips wired yet
       ]
-      expect(CreditsService.estimateWorkflowBaseCredits(nodes)).toBe(70)
+      expect(CreditsService.estimateWorkflowBaseCredits(nodes)).toBe(50)
     })
   })
 

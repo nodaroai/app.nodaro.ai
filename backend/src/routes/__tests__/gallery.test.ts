@@ -397,14 +397,13 @@ describe("DELETE /v1/gallery/:jobId", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       callCount++
       if (callCount === 1) {
-        // Update jobs: from("jobs").update({is_public: false}).eq("id", jobId)
-        const mockEq = vi.fn().mockResolvedValue({ error: null })
-        return { update: vi.fn().mockReturnValue({ eq: mockEq }) } as never
+        // Update jobs: from("jobs").update({is_public: false}).in("id", [jobId]).select("id")
+        const mockSelect = vi.fn().mockResolvedValue({ data: [{ id: validJobId }], error: null })
+        return { update: vi.fn().mockReturnValue({ in: vi.fn().mockReturnValue({ select: mockSelect }) }) } as never
       }
-      // Update gallery_reports: from("gallery_reports").update({status: "reviewed"}).eq("job_id", ...).eq("status", "pending")
-      const mockEq2 = vi.fn().mockResolvedValue({ error: null })
-      const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-      return { update: vi.fn().mockReturnValue({ eq: mockEq1 }) } as never
+      // Update gallery_reports: from("gallery_reports").update({status: "reviewed"}).in("job_id", [...]).eq("status", "pending")
+      const mockEq = vi.fn().mockResolvedValue({ error: null })
+      return { update: vi.fn().mockReturnValue({ in: vi.fn().mockReturnValue({ eq: mockEq }) }) } as never
     })
 
     const res = await app.inject({

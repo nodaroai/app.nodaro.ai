@@ -187,6 +187,7 @@ import { surfaceAvailabilityRoutes } from "./routes/surface-availability.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { meRoutes } from "./routes/me.js"
 import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
+import { adminGalleryModerationRoutes } from "./ee/routes/admin-gallery-moderation.js"
 import { adminCreditAuditRoutes } from "./ee/routes/admin-credit-audit.js"
 import { adminCreditAnomalyRoutes } from "./ee/routes/admin-credit-anomalies.js"
 import { adminPickerGapsRoutes } from "./ee/routes/admin-picker-gaps.js"
@@ -645,6 +646,7 @@ export async function buildApp() {
   await app.register(userSettingsRoutes)
   await app.register(meRoutes)
   if (hasAdmin()) await app.register(adminGalleryReportsRoutes)
+  if (hasAdmin()) await app.register(adminGalleryModerationRoutes)
   if (hasAdmin()) await app.register(adminCreditAuditRoutes)
   if (hasAdmin()) await app.register(adminCreditAnomalyRoutes)
   if (hasAdmin()) await app.register(adminPickerGapsRoutes)

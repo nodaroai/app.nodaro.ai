@@ -648,12 +648,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Extend Video",
       description:
-        "Extend a video. veo-extend / runway-extend continue a previously-generated VEO or Runway video and require the kie_task_id from that job (NOT the URL). " +
+        "Extend a video. veo-extend / runway-extend continue a previously-generated VEO or Runway video and require the task_id from that job (NOT the URL). " +
         "seedance-2-extend extends ANY video by URL (or asset id) — it generates what happens next (audio included) and trim-stitches it into one seamless clip; " +
         "describe only the continuation content in `prompt` (plain action description — no 'reference video' phrasing needed).",
       inputSchema: {
         prompt: z.string().min(1).max(8000),
-        kie_task_id: z.string().min(1).optional().describe("KIE task id from prior video generation (veo-extend / runway-extend only)"),
+        task_id: z.string().min(1).optional().describe("Task id of the prior generation, its output providerTaskId (veo-extend / runway-extend only)"),
+        kie_task_id: z.string().min(1).optional().describe("Use task_id."),
         video_url: z.string().url().optional().describe("Source video URL (seedance-2-extend only)"),
         video_asset_id: z.string().optional().describe("Nodaro job/upload asset id whose output is a video (seedance-2-extend only)"),
         model: z.enum(["veo-extend", "runway-extend", "seedance-2-extend"]),
@@ -734,16 +735,17 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         })
       }
 
-      if (!args.kie_task_id) {
+      const taskId = args.task_id ?? args.kie_task_id
+      if (!taskId) {
         return {
           content: [
-            { type: "text", text: `${args.model} requires kie_task_id from the prior video generation job` },
+            { type: "text", text: `${args.model} requires task_id from the prior video generation job (its output providerTaskId)` },
           ],
           isError: true,
         }
       }
       const payload = {
-        kieTaskId: args.kie_task_id,
+        taskId,
         prompt: args.prompt,
         provider: args.model,
         model: args.veo_quality,
@@ -2633,14 +2635,15 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "Returns a job_id with the enhanced video.\n\n" +
         "**Models**:\n" +
         "  • `topaz` (default) — Topaz AI upscale, 1×/2×/4× factor.\n" +
-        "  • `veo-1080p` — VEO upscale to 1080p (requires kie_task_id from original VEO generation).\n" +
-        "  • `veo-4k` — VEO upscale to 4K (requires kie_task_id from original VEO generation).",
+        "  • `veo-1080p` — VEO upscale to 1080p (requires task_id from the original VEO generation).\n" +
+        "  • `veo-4k` — VEO upscale to 4K (requires task_id from the original VEO generation).",
       inputSchema: {
         video_url: z.string().url().optional().describe("Source video URL (required for topaz)."),
         video_asset_id: z.string().optional().describe("Nodaro video job id (required for topaz)."),
         model: z.enum(["topaz", "veo-1080p", "veo-4k"]).optional().describe("Upscale model. Default topaz."),
         upscale_factor: z.enum(["1", "2", "4"]).optional().describe("Upscale factor for topaz (1×/2×/4×). Default 2."),
-        kie_task_id: z.string().optional().describe("KIE task id from the original VEO generation — required for veo-1080p / veo-4k."),
+        task_id: z.string().optional().describe("Task id of the original VEO generation, its output providerTaskId (veo-1080p / veo-4k)."),
+        kie_task_id: z.string().optional().describe("Use task_id."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -2652,9 +2655,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     async (args) => {
       const provider = args.model ?? "topaz"
       const isVeo = provider === "veo-1080p" || provider === "veo-4k"
+      const taskId = args.task_id ?? args.kie_task_id
 
-      if (isVeo && !args.kie_task_id) {
-        return { content: [{ type: "text" as const, text: "veo-1080p and veo-4k require kie_task_id from the original VEO generation." }], isError: true }
+      if (isVeo && !taskId) {
+        return { content: [{ type: "text" as const, text: "veo-1080p and veo-4k require task_id from the original VEO generation (its output providerTaskId)." }], isError: true }
       }
 
       const videoUrl =
@@ -2670,7 +2674,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         provider,
         upscaleFactor: args.upscale_factor ?? "2",
         ...(videoUrl ? { videoUrl } : {}),
-        ...(args.kie_task_id ? { kieTaskId: args.kie_task_id } : {}),
+        ...(taskId ? { taskId } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }
@@ -3125,13 +3129,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "An optional `transcript` is remapped through the cut. At most 180 minutes of output per " +
         "render. A malformed or over-long EDL is rejected " +
         "up front naming the offending segment and rule, so you can fix and retry. Returns a " +
-        "job_id — poll `get_job` for the rendered file. Priced per rendered minute.",
+        "job_id — poll `get_job` for the rendered file. Priced per rendered minute; a `proxy` " +
+        "preview has its own, lower rate.",
       inputSchema: {
         edl: z.union([z.record(z.string(), z.unknown()), z.string()]).describe("The edit-decision list, as an object OR a JSON string — from plan_edit, or hand-authored to the @nodaro/shared Edl contract."),
         sources: z.array(z.string().url()).optional().describe("Positional media-URL overrides for the EDL's sources[], in sources order."),
         transcript: z.record(z.string(), z.unknown()).optional().describe("Optional upstream transcript object, remapped through the cut for the result's transcript output."),
         output: z.enum(["video", "audio"]).optional().describe("Render a video (default) or an audio-only cut."),
-        quality: z.enum(["proxy", "final"]).optional().describe("proxy (fast preview) or final (default)."),
+        quality: z.enum(["proxy", "final"]).optional().describe("proxy (a fast 720p preview, at its own lower per-minute rate) or final (default)."),
         crossfade_ms: z.number().min(0).max(5000).optional().describe("Default crossfade on boundaries with no explicit transition, in ms. 0 = hard cuts (default)."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,

@@ -27,6 +27,7 @@ import {
   runFfprobe,
   withFfmpegSlot,
 } from "../video/ffmpeg-utils.js"
+import { DEFAULT_FFMPEG_TIMEOUT_MS } from "../video/ffmpeg-timeouts.js"
 import { settledWithLimit } from "../../lib/settled-with-limit.js"
 import { computeCollageLayout, type ImageDim, type CollageLayoutMode } from "./collage-layout.js"
 import {
@@ -358,11 +359,14 @@ export async function createImageCollage(params: ImageCollageParams): Promise<st
   })
   if (svg) {
     const labeledPath = join(workDir, "collage-labeled.png")
+    // Raster work in an ffmpeg slot: the same limit as an ffmpeg run, so the
+    // slot is always released (Track 0.13, decided 2026-10-04).
     await withFfmpegSlot(() =>
       sharp(outputPath)
         .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
         .png()
         .toFile(labeledPath),
+      { timeoutMs: DEFAULT_FFMPEG_TIMEOUT_MS, label: "collage badge overlay" },
     )
     return labeledPath
   }

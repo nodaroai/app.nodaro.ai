@@ -10,7 +10,7 @@
  * - videoUrl: Source video to upscale (max 50MB) — required for Topaz
  * - upscaleFactor: "1", "2", or "4" — Topaz only
  * - provider: "topaz" (default), "veo-1080p", or "veo-4k"
- * - kieTaskId: Required for VEO providers (original VEO task ID)
+ * - taskId: Required for VEO providers (the original VEO job's providerTaskId; kieTaskId is a deprecated alias)
  */
 
 import type { FastifyInstance } from "fastify"
@@ -32,18 +32,19 @@ const videoUpscaleBody = z.object({
   videoUrl: safeUrlSchema.optional(),
   upscaleFactor: z.enum(["1", "2", "4"]).default("2"),
   provider: z.enum(VIDEO_UPSCALE_PROVIDERS).default("topaz"),
-  kieTaskId: z.string().optional(),
+  taskId: z.string().optional(),
+  kieTaskId: z.string().optional(), // Deprecated alias of taskId, still accepted
 }).refine(
   (data) => {
-    // VEO providers require kieTaskId
+    // VEO providers require the source generation's task id
     if (data.provider === "veo-1080p" || data.provider === "veo-4k") {
-      return !!data.kieTaskId
+      return !!(data.taskId ?? data.kieTaskId)
     }
     // Topaz requires videoUrl
     return !!data.videoUrl
   },
   {
-    message: "VEO upscale requires kieTaskId; Topaz requires videoUrl",
+    message: "VEO upscale requires taskId (the source generation's providerTaskId); Topaz requires videoUrl",
   }
 )
 
@@ -67,7 +68,8 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrl, upscaleFactor, provider, kieTaskId } = parsed.data
+    const { videoUrl, upscaleFactor, provider } = parsed.data
+    const kieTaskId = parsed.data.taskId ?? parsed.data.kieTaskId
     const userId = req.userId
 
     if (!userId) {

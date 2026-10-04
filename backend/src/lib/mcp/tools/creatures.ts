@@ -349,6 +349,9 @@ function registerGenerationTools(opts: RegisterCreatureToolsOpts): void {
         motionPrompt: args.motion_prompt,
         sourceImageUrl: args.source_image_url,
         provider: args.provider,
+        // The description quotes kling-turbo's 5 s price; without a duration
+        // the route reserves the bare row, which is priced above it.
+        ...(args.provider === "kling-turbo" ? { duration: 5 } : {}),
         name: args.name,
         userId: session.userId,
         mcp_client: session.clientName,

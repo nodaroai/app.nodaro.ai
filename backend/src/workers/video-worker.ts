@@ -10,6 +10,7 @@ import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellati
 import { isPostProcessingError } from "../lib/post-processing-error.js"
 import { isDeterministicJobError } from "../lib/deterministic-job-error.js"
 import { providerDetailOf } from "../lib/provider-error-detail.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { isReconcileRecoverable } from "../lib/reconcile/types.js"
 import { isDrainAbortError } from "../lib/worker-drain.js"
@@ -39,6 +40,7 @@ import { tryInlineReconcile } from "./inline-reconcile.js"
 import { loadPrivatePlugins } from "../lib/private-plugins/load.js"
 import { withPreTaskHeartbeat } from "./pre-task-heartbeat.js"
 import { signScene3DDeliveryUrlsForProvider } from "../services/scene3d-artifacts/delivery-provider-access.js"
+import { noteSlotWaitColumnError, withSlotWaitColumn } from "../lib/jobs-slot-wait-column.js"
 
 /** How far back into the queue a drain-interrupted job is moved (ms) — a
  *  moment, not a park: Railway brings the replacement container up BEFORE
@@ -231,7 +233,11 @@ export function createVideoWorker() {
         // still dequeued here. The old unguarded overwrite resurrected the
         // cancelled+refunded row to 'processing' and ran the full provider
         // generation — the user kept the refund AND got the output.
-        const { data: pickedRows } = await supabase
+        // The row's `slot_wait_ms` (an earlier attempt's ffmpeg-slot wait, Track
+        // 0.13) rides on the pickup — retried without it while migration 451 has
+        // not reached this (shared) database: a statement naming a missing column
+        // is not applied at all, and every job would be discarded below.
+        const pickUp = (columns: string) => supabase
           .from("jobs")
           .update({
             status: "processing",
@@ -276,7 +282,11 @@ export function createVideoWorker() {
           })
           .eq("id", jobId)
           .in("status", ["pending", "processing"])
-          .select("id")
+          .select(columns)
+        let { data: pickedRows, error: pickupError } = await pickUp(withSlotWaitColumn("id"))
+        if (pickupError && noteSlotWaitColumnError(pickupError)) {
+          ;({ data: pickedRows, error: pickupError } = await pickUp("id"))
+        }
         if (!pickedRows || pickedRows.length === 0) {
           console.log(
             `[worker] Job ${jobId} not in a runnable state at pickup (cancelled/terminal while queued) — discarding`,
@@ -332,7 +342,11 @@ export function createVideoWorker() {
         // budget (`livenessBudgetMs` — apply-edl sums the kill budgets of its
         // bounded steps), so "hung" means one thing to the heartbeat and to
         // those steps.
-        const handler = withPreTaskHeartbeat(found, { maxMs: found.livenessBudgetMs?.(job) })
+        const handler = withPreTaskHeartbeat(found, {
+          maxMs: found.livenessBudgetMs?.(job),
+          // An earlier attempt's ffmpeg-slot wait (a re-pick): this one adds to it.
+          slotWaitBaseMs: Number((pickedRows[0] as { slot_wait_ms?: unknown }).slot_wait_ms ?? 0) || 0,
+        })
 
         // Bind a cancellation context so provider poll loops abort the moment
         // the user cancels — instead of polling the upstream job to completion.
@@ -510,10 +524,12 @@ export function createVideoWorker() {
           // fallback model when the catalog offers one) — copyright/likeness
           // blocks are deterministic on the same input and keep KIE's existing
           // CONTENT_POLICY_MESSAGES text unchanged.
+          // A model-lane failure carries a user-safe sentence (no lane, vendor
+          // or internal model id); its full diagnostic is the error_detail below.
           const errorMessage =
             block && block.class === "safety"
               ? safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, safetyRetried)
-              : message
+              : userFacingMessage(err, message)
           // THE failure writer (lib/job-failure.ts). Its CAS is what keeps a job
           // a concurrent writer already moved to a terminal state (inflight-
           // reconcile cron completing it, or a stall re-pick) from being trampled

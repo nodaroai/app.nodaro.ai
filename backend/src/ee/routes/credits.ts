@@ -211,8 +211,8 @@ export async function creditsRoutes(app: FastifyInstance) {
   // OpenAPI doc on editions where the route actually exists (Cloud).
   openApiRegistry.registerPath({
     method: "post", path: "/v1/credits/model-costs",
-    description: "Batch credit-cost lookup for model identifiers (max 50 per request).",
-    security: [{ bearerAuth: [] }],
+    description: "Batch credit-cost lookup for model identifiers (max 50 per request). Public — prices are not per user.",
+    security: [],
     request: { body: { content: { "application/json": { schema: zOpenApi.object({ models: zOpenApi.array(zOpenApi.string()).max(50) }) } } } },
     responses: { 200: { description: "Costs by identifier", content: { "application/json": { schema: zOpenApi.object({
       data: zOpenApi.record(zOpenApi.string(), zOpenApi.number()),

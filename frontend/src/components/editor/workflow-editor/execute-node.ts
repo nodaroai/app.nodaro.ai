@@ -119,7 +119,7 @@ import { scrapeResultPatch } from "@/components/nodes/scrape-result-recovery";
 import { applyMetaAdsScrapeFailure, applyMetaAdsScrapeResult, metaAdsScrapeRunStartPatch } from "@/components/nodes/meta-ads-scrape-run-state";
 import { applyInstagramScrapeFailure, applyInstagramScrapeResult, instagramScrapeRunStartPatch } from "@/components/nodes/instagram-scrape-run-state";
 import { applySocialSearchFailure, applySocialSearchResult, socialSearchRunStartPatch } from "@/components/nodes/social-search-run-state";
-import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets, socialSearchRequestFromNode } from "@nodaro/shared";
+import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets, instagramScrapeMode, socialSearchRequestFromNode } from "@nodaro/shared";
 import { clampContentIdeasCount, CONTENT_IDEAS_MAX_RECIPE_INPUTS } from "@nodaro/shared";
 import { tx } from "@/lib/i18n";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
@@ -5420,10 +5420,11 @@ function executeNodeCore(
   if (node.type === "instagram-scrape") {
     const d = node.data as InstagramScrapeNodeData;
     const { updateNodeData, edges: liveEdges } = useWorkflowStore.getState();
-    const own = splitInstagramTargets(d.targets);
-    const targets = own.length > 0 ? own : splitInstagramTargets(inputs.prompt);
+    const mode = instagramScrapeMode(d.mode);
+    const own = splitInstagramTargets(d.targets, mode);
+    const targets = own.length > 0 ? own : splitInstagramTargets(inputs.prompt, mode);
     if (targets.length === 0) {
-      const message = tx("cfgext.igTargetsNeeded");
+      const message = tx(mode === "post" ? "cfgext.igPostLinksNeeded" : "cfgext.igTargetsNeeded");
       updateNodeData(node.id, applyInstagramScrapeFailure(message));
       guardedToast.error(message);
       throw new Error(message);
@@ -5433,7 +5434,7 @@ function executeNodeCore(
     setUserPromptTemplate(undefined);
     let instagramJobId = "";
     return instagramScrape({
-      mode: d.mode === "hashtag" ? "hashtag" : "profile",
+      mode,
       targets,
       count: d.count,
       period: d.period,

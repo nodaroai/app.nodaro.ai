@@ -498,7 +498,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "display-wipe",      label: "Display Wipe",       category: "glitch", description: "Scene compresses into display, expands to new scene",
     promptHint: "the whole first shot shrinks toward the centre of the frame into a small glowing rectangle, then collapses to a bright line and a dot as if its power were cut. The camera stays where it is and the framing does not change. From the dot a line snaps open and widens into a rectangle showing the second shot, which grows until it fills the frame. The shot ends on the second shot, full frame and fully resolved, with no border or scanlines left. The picture itself shrinks and grows on a black field, with the camera holding still throughout", term: "compress into a screen and expand out" },
   { id: "double-exposure",   label: "Double Exposure",    category: "glitch", description: "Two scenes overlay translucent, first fades to second",
-    promptHint: "the first and second scenes blend as a translucent double exposure where both images coexist semi-transparently on the frame, the first image then gradually fades out leaving the second image fully resolved" },
+    promptHint: "the first subject becomes a crisp silhouette filled solid with the second shot, while the rest of the first shot stays untouched around it. The camera stays where it is and the framing does not change. The silhouette holds for a clear beat, both pictures plainly seen at once, then the first shot around it gives way to the second shot. The shot ends on the second shot alone, fully resolved" },
 ]
 
 export const TRANSITION_CATEGORY_ORDER: ReadonlyArray<TransitionCategory> = [

@@ -1,83 +1,11 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { isPromptBlocked } from "../config/content-filter.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { formatZodError } from "../lib/zod-error.js"
-
-// Gallery only shows AI-generated creative content — NOT processing/application
-// results.
-//
-// VOCABULARY (load-bearing): every name below is a BULLMQ QUEUE NAME, i.e. the
-// `job.name` the video worker ran the job under — NOT a canvas node type. The
-// filter is `.in("job_type", …)` against the `jobs` column, and that column is
-// OVERWRITTEN with the queue name by the pickup CAS in
-// `workers/video-worker.ts` (`job_type: job.name` — unconditional, not a
-// backfill). Orchestrated DAG rows are inserted with `job_type = node.type`
-// (`services/workflow-engine/node-executor.ts`), so `modify-image`,
-// `upscale-image` and `generate-video` would match NOTHING here; they reach the
-// gallery only because pickup rewrote them to `image-to-image` / `edit-image` /
-// `image-to-video`. Add a NODE type to these sets and it will never match a
-// row; add the QUEUE name and it matches both the direct route and the DAG.
-// `routes/__tests__/gallery.test.ts` pins the three renames.
-//
-// `lib/mcp/tools/gallery.ts` keeps a second copy of these sets for the MCP
-// `browse_gallery` verb — change one, change both.
-const IMAGE_JOBS = new Set([
-  "generate-image", "edit-image", "image-to-image",
-  "generate-character", "generate-character-asset",
-  "generate-object", "generate-object-asset",
-  "generate-location", "generate-location-asset",
-])
-
-const VIDEO_JOBS = new Set([
-  "image-to-video", "text-to-video", "video-to-video",
-  "lip-sync", "motion-transfer",
-  // Excluded: video-upscale, combine-videos, suno-music-video, merge-video-audio,
-  //           resize-video, trim-video, add-captions, fade-video, loop-video (processing)
-])
-
-const AUDIO_JOBS = new Set([
-  "text-to-speech", "generate-music", "text-to-audio",
-  "suno-generate", "suno-cover", "suno-extend",
-  "text-to-dialogue", "voice-changer", "dubbing",
-  "voice-remix", "voice-design",
-  // Excluded: suno-separate, trim-audio, mix-audio, adjust-volume,
-  //           extract-youtube-audio, audio-isolation (processing)
-])
-
-function getOutputType(jobName: string): "image" | "video" | "audio" | null {
-  if (IMAGE_JOBS.has(jobName)) return "image"
-  if (VIDEO_JOBS.has(jobName)) return "video"
-  if (AUDIO_JOBS.has(jobName)) return "audio"
-  return null
-}
-
-/** Dual-mode generators (voice-changer / voice-changer-pro / dubbing): the RUN
- *  decides audio vs video — read what the row actually produced, video first. */
-const DUAL_MODE_JOBS = new Set(["voice-changer", "voice-changer-pro", "dubbing"])
-
-function getOutputUrl(
-  jobName: string,
-  outputData: Record<string, unknown>,
-): string | null {
-  if (DUAL_MODE_JOBS.has(jobName)) {
-    return (outputData?.videoUrl as string) ?? (outputData?.audioUrl as string) ?? null
-  }
-  const type = getOutputType(jobName)
-  if (type === "image") return (outputData?.imageUrl as string) ?? null
-  if (type === "video") return (outputData?.videoUrl as string) ?? null
-  if (type === "audio") return (outputData?.audioUrl as string) ?? null
-  return null
-}
-
-/** Map job names to the set that should be queryable by type filter */
-function jobNamesForType(type: string): string[] {
-  if (type === "image") return [...IMAGE_JOBS]
-  if (type === "video") return [...VIDEO_JOBS]
-  if (type === "audio") return [...AUDIO_JOBS]
-  return []
-}
+import { OWNER_VIEW_MODERATION, loadGalleryModeration } from "../lib/gallery-moderation.js"
+import { readGalleryPage, type GalleryPage } from "../lib/gallery-listing.js"
+import { MAX_GALLERY_REMOVAL, removeFromGallery } from "../lib/gallery-removal.js"
 
 // ---- Zod Schemas ----
 
@@ -93,6 +21,10 @@ const favoriteBody = z.object({
 
 const adminDeleteParams = z.object({
   jobId: z.string().uuid(),
+})
+
+const adminBulkRemoveBody = z.object({
+  jobIds: z.array(z.string().uuid()).min(1).max(MAX_GALLERY_REMOVAL),
 })
 
 export async function galleryRoutes(app: FastifyInstance) {
@@ -126,6 +58,11 @@ export async function galleryRoutes(app: FastifyInstance) {
     // the private view.
     const isOwnerView = !!userIdFilter && !!req.userId && req.userId === userIdFilter
 
+    // Gallery moderation is discovery-only too: the owner view keeps the
+    // built-in word list alone, as before; everyone else gets the admin's
+    // blocked creators and banned words as well (lib/gallery-moderation.ts).
+    const moderation = isOwnerView ? OWNER_VIEW_MODERATION : await loadGalleryModeration()
+
     // Pre-fetch favorite job IDs if filtering by favorites
     let favoriteJobIds: string[] | null = null
     if (favoritesOnly && userIdFilter) {
@@ -140,150 +77,20 @@ export async function galleryRoutes(app: FastifyInstance) {
       }
     }
 
-    // Count query (only on first page — when no cursor)
-    let totalCount: number | null = null
-    if (!cursor) {
-      let countQuery = supabase
-        .from("jobs")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "completed")
-        .not("output_data", "is", null)
-
-      if (!isOwnerView) {
-        countQuery = countQuery.eq("is_public", true)
-      }
-      if (userIdFilter) {
-        countQuery = countQuery.eq("user_id", userIdFilter)
-      }
-      if (favoriteJobIds) {
-        countQuery = countQuery.in("id", favoriteJobIds)
-      }
-
-      if (typeFilter && ["image", "video", "audio"].includes(typeFilter)) {
-        countQuery = countQuery.in("job_type", jobNamesForType(typeFilter))
-      } else {
-        countQuery = countQuery.in("job_type", [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS])
-      }
-
-      const { count } = await countQuery
-      totalCount = count
+    let page: GalleryPage
+    try {
+      page = await readGalleryPage({ limit, type: typeFilter, cursor, userId: userIdFilter, favoriteJobIds, includePrivate: isOwnerView, moderation })
+    } catch (error) {
+      console.error("[gallery] Query failed:", error)
+      return reply.status(500).send({ error: "Failed to fetch gallery" })
     }
+    const items = page.rows.map((row) => row.item)
+    const { nextCursor, totalCount } = page
 
-    // We need `limit` valid items after JS-side filtering (blocked prompts,
-    // missing output URLs). Fetch in batches, over-fetching to compensate for
-    // items that get filtered out.
-    const items: Array<{
-      id: string
-      type: "image" | "video" | "audio"
-      jobName: string
-      outputUrl: string
-      thumbnailUrl: string | null
-      createdAt: string
-      prompt: string | null
-      model: string | null
-    }> = []
-    let pageCursor = cursor ?? null
-    let hasMore = true
-    const MAX_ROUNDS = 3 // safety cap to avoid infinite loops
-    const FETCH_MULTIPLIER = 2 // over-fetch to reduce extra round trips
-
-    for (let round = 0; round < MAX_ROUNDS && items.length < limit && hasMore; round++) {
-      const remaining = limit - items.length
-      const fetchCount = remaining * FETCH_MULTIPLIER + 1 // +1 for hasMore detection
-
-      let dbQuery = supabase
-        .from("jobs")
-        .select("id, job_type, input_data, output_data, completed_at, user_id, provider")
-        .eq("status", "completed")
-        .not("output_data", "is", null)
-        .order("completed_at", { ascending: false })
-        .limit(fetchCount)
-
-      if (!isOwnerView) {
-        dbQuery = dbQuery.eq("is_public", true)
-      }
-      if (userIdFilter) {
-        dbQuery = dbQuery.eq("user_id", userIdFilter)
-      }
-      if (favoriteJobIds) {
-        dbQuery = dbQuery.in("id", favoriteJobIds)
-      }
-
-      if (pageCursor) {
-        dbQuery = dbQuery.lt("completed_at", pageCursor)
-      }
-
-      // Filter by type (restricts to specific job names)
-      if (typeFilter && ["image", "video", "audio"].includes(typeFilter)) {
-        const jobNames = jobNamesForType(typeFilter)
-        dbQuery = dbQuery.in("job_type", jobNames)
-      } else {
-        const allMediaNames = [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS]
-        dbQuery = dbQuery.in("job_type", allMediaNames)
-      }
-
-      const { data: jobs, error } = await dbQuery
-
-      if (error) {
-        console.error("[gallery] Query failed:", error)
-        return reply.status(500).send({ error: "Failed to fetch gallery" })
-      }
-
-      if (!jobs || jobs.length === 0) {
-        hasMore = false
-        break
-      }
-
-      // If we got fewer rows than requested, there are no more items in DB
-      if (jobs.length < fetchCount) {
-        hasMore = false
-      }
-
-      // Advance cursor to the last fetched row
-      const lastJob = jobs[jobs.length - 1]
-      if (lastJob?.completed_at) {
-        pageCursor = lastJob.completed_at
-      }
-
-      // Process and filter
-      for (const job of jobs) {
-        if (items.length >= limit) break
-
-        const outputData = (job.output_data ?? {}) as Record<string, unknown>
-        const inputData = (job.input_data ?? {}) as Record<string, unknown>
-        const type = getOutputType(job.job_type)
-        const outputUrl = getOutputUrl(job.job_type, outputData)
-
-        if (!type || !outputUrl) continue
-
-        const prompt = (inputData.prompt as string)
-          ?? (inputData.text as string)
-          ?? null
-
-        if (isPromptBlocked(prompt)) continue
-
-        const model = (inputData.provider as string)
-          ?? (job.provider as string)
-          ?? null
-
-        items.push({
-          id: job.id,
-          type,
-          jobName: job.job_type,
-          outputUrl,
-          thumbnailUrl: (outputData.thumbnailUrl as string) ?? null,
-          createdAt: job.completed_at,
-          prompt,
-          model,
-        })
-      }
-    }
-
-    // nextCursor is the createdAt of the last item we're returning
-    const lastItem = items[items.length - 1]
-    const nextCursor = hasMore && lastItem?.createdAt ? lastItem.createdAt : null
-
-    reply.header("Cache-Control", "public, max-age=30, stale-while-revalidate=86400")
+    // The owner view holds the caller's private work and skips the gallery's
+    // moderation — it is theirs alone and must never sit in a shared cache.
+    reply.header("Vary", "Authorization")
+    reply.header("Cache-Control", isOwnerView ? "private, no-store" : "public, max-age=30, stale-while-revalidate=86400")
     return reply.send({
       data: items,
       nextCursor,
@@ -460,27 +267,44 @@ export async function galleryRoutes(app: FastifyInstance) {
       })
     }
 
-    const { error } = await supabase
-      .from("jobs")
-      .update({ is_public: false })
-      .eq("id", jobId)
-
-    if (error) {
+    try {
+      await removeFromGallery([jobId])
+    } catch (error) {
       console.error("[gallery] Admin delete failed:", error)
       return reply.status(500).send({ error: "Failed to remove item from gallery" })
     }
 
-    // Auto-review all pending reports for this job
-    const { error: reportsError } = await supabase
-      .from("gallery_reports")
-      .update({ status: "reviewed" })
-      .eq("job_id", jobId)
-      .eq("status", "pending")
+    return reply.send({ success: true, message: "Item removed from gallery" })
+  })
 
-    if (reportsError) {
-      console.error("[gallery] Failed to auto-review reports:", reportsError)
+  /**
+   * POST /v1/gallery/remove - Admin bulk soft-delete from gallery
+   *
+   * Body: { jobIds } (1–100). Same effect as DELETE /v1/gallery/:jobId on each.
+   */
+  app.post("/v1/gallery/remove", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+    if (!(await checkIsAdmin(req.userId))) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "Only admins can remove gallery items" },
+      })
     }
 
-    return reply.send({ success: true, message: "Item removed from gallery" })
+    const parsed = adminBulkRemoveBody.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
+      })
+    }
+
+    try {
+      const { removed } = await removeFromGallery(parsed.data.jobIds)
+      return reply.send({ success: true, removed })
+    } catch (error) {
+      console.error("[gallery] Admin bulk remove failed:", error)
+      return reply.status(500).send({ error: "Failed to remove items from gallery" })
+    }
   })
 }

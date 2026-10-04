@@ -17,6 +17,7 @@ import { calculateLlmCost, type LlmServingLane } from "./pricing/llm-cost.js"
 import { getAnthropicClient } from "./anthropic.js"
 import { callGeminiDirect, streamGeminiDirect } from "./gemini/client.js"
 import {
+  LlmLaneError,
   LlmOutputTruncatedError,
   LlmStreamResponseError,
   assertNotOutputCapped,
@@ -1373,7 +1374,7 @@ function assertKieEnvelope(data: unknown, modelId: string, context: string): voi
     (data as { msg?: string }).msg ??
     (data as { message?: string }).message ??
     JSON.stringify(data)
-  throw new Error(`KIE.ai ${context} ${modelId} failed (code ${code}): ${msg}`)
+  throw new LlmLaneError(`KIE.ai ${context} ${modelId} failed (code ${code}): ${msg}`, { lane: "kie", bodyCode: code })
 }
 
 // ---------------------------------------------------------------------------
@@ -1446,7 +1447,7 @@ async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Prom
 
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`KIE.ai chat-completions ${model.id} failed (${response.status}): ${errText}`)
+    throw new LlmLaneError(`KIE.ai chat-completions ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
   const data = await response.json() as Record<string, unknown>
@@ -1492,7 +1493,7 @@ async function streamKieChatCompletions(
 
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`KIE.ai chat-completions stream ${model.id} failed (${response.status}): ${errText}`)
+    throw new LlmLaneError(`KIE.ai chat-completions stream ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
   return parseSseStream(response, model.id, onToken, "chat-completions", maxTokens)
@@ -1515,7 +1516,7 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
 
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`KIE.ai messages ${model.id} failed (${response.status}): ${errText}`)
+    throw new LlmLaneError(`KIE.ai messages ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
   const data = await response.json() as Record<string, unknown>
@@ -1537,7 +1538,7 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
   } else if (req.jsonSchema && model.structuredOutputMode === "anthropic-tool") {
     const unwrapped = extractKieToolCallInput(rawText)
     if (unwrapped === null && (rawText.includes("<tool_calls>") || rawText.trim() === "")) {
-      throw new Error(`KIE.ai messages ${model.id}: structured call returned no decodable tool payload`)
+      throw new LlmLaneError(`KIE.ai messages ${model.id}: structured call returned no decodable tool payload`, { lane: "kie" })
     }
     text = unwrapped ?? rawText
   } else {
@@ -1572,7 +1573,7 @@ async function streamKieMessages(
 
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`KIE.ai messages stream ${model.id} failed (${response.status}): ${errText}`)
+    throw new LlmLaneError(`KIE.ai messages stream ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
   return parseSseStream(response, model.id, onToken, "messages", base.max_tokens as number)
@@ -1654,7 +1655,7 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
 
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`KIE.ai responses ${model.id} failed (${response.status}): ${errText}`)
+    throw new LlmLaneError(`KIE.ai responses ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
   const data = await response.json() as Record<string, unknown>
@@ -1707,7 +1708,7 @@ async function streamKieResponses(
 
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`KIE.ai responses stream ${model.id} failed (${response.status}): ${errText}`)
+    throw new LlmLaneError(`KIE.ai responses stream ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
   return parseSseStream(response, model.id, onToken, "responses", body.max_output_tokens as number | undefined)
@@ -2126,17 +2127,19 @@ export function reconcileResponsesStreamText(opts: {
   }
 
   if (!sawStreamEnd) {
-    throw new Error(
+    throw new LlmLaneError(
       `KIE.ai responses stream ${modelId} ended without a terminal event ` +
         `(no response.completed, no [DONE]) after ${streamedText.length} chars — the connection was cut mid-answer`,
+      { lane: "kie" },
     )
   }
 
   if (sequenceAnomaly) {
-    throw new Error(
+    throw new LlmLaneError(
       `KIE.ai responses stream ${modelId} lost or reordered an SSE frame ` +
         `(sequence_number gap) and the stream stated no authoritative text to repair it from ` +
         `— the ${streamedText.length}-char answer is incomplete`,
+      { lane: "kie" },
     )
   }
 
@@ -2206,7 +2209,7 @@ async function parseSseStream(
           let envelope: unknown = null
           try { envelope = JSON.parse(buffer) } catch { /* not JSON */ }
           assertKieEnvelope(envelope, modelId, `${format} stream`)
-          throw new Error(`KIE.ai ${format} stream ${modelId}: expected SSE, got JSON: ${buffer.slice(0, 200)}`)
+          throw new LlmLaneError(`KIE.ai ${format} stream ${modelId}: expected SSE, got JSON: ${buffer.slice(0, 200)}`, { lane: "kie" })
         }
       }
 

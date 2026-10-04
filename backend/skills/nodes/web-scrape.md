@@ -1,7 +1,7 @@
 ---
 node_type: web-scrape
-generated_at: 2026-09-27T12:51:22.300Z
-generated_from: c607aa02c
+generated_at: 2026-10-04T11:01:26.639Z
+generated_from: c90be8fb1
 ---
 
 # Web Scrape
@@ -9,7 +9,7 @@ generated_from: c607aa02c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `web-scrape`
 **Category:** input
-**Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `10-50` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `json`
 

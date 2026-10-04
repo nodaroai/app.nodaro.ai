@@ -67,6 +67,7 @@ import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
 import { contentRunResultPatch } from "@/lib/content-run-output"
 import type { ExecutionContext } from "../types"
+import fixture from "../../../../../../backend/src/services/workflow-engine/__tests__/fixtures/apply-edl-picked-take.json"
 
 const ctx = {
   userId: "u1",
@@ -270,5 +271,122 @@ describe("syncNodeStatesToStore — Content Recipe / Content Ideas", () => {
     const byId = sync({ recipe: { status: "completed", output } })
     expect(byId.recipe).toMatchObject({ executionStatus: "completed", generatedJson: output.json, generatedText: output.text })
     expect(byId.recipe.generatedResults).toBeUndefined()
+  })
+})
+
+// Apply EDL on a BACKEND run (Execute All, Run from here, schedule, webhook,
+// app): a run that renders audio on a node still holding an earlier VIDEO
+// render's URL (rendered as video, then Output switched to audio) must leave the
+// node holding the new take only. Both engines read the node as video whenever
+// `generatedVideoUrl` is set, so a stale one hands the OLD video downstream on
+// the server and routes the NEW audio as video on the canvas — with nobody
+// picking anything. The fixture's `runs.audio.after` is also what the server
+// test (backend apply-edl-picked-take.test.ts) and the browser-engine test
+// (config-panels apply-edl-picked-take.test.tsx) read.
+describe("syncNodeStatesToStore — an Apply EDL run leaves the node holding one cut", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+    mockGetWorkflowExecution.mockResolvedValue({ status: "running", nodeStates: {} })
+  })
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  const run = fixture.runs.audio as unknown as {
+    state: Record<string, unknown>
+    before: { id: string; type: string; data: Record<string, unknown> }
+    after: { id: string; type: string; data: Record<string, unknown> }
+  }
+
+  it("an audio render clears the earlier video render's URL: the saved node is the fixture's `after`", () => {
+    mockNodes = [{ id: run.before.id, type: run.before.type, data: structuredClone(run.before.data) }]
+    streamBackendExecution("exec-edl-1", ctx, vi.fn(), vi.fn())
+    const byId = sync({ [run.before.id]: run.state })
+    expect(byId[run.before.id].generatedVideoUrl).toBeUndefined()
+    // What the editor saves: the JSON round trip drops the cleared field.
+    expect(JSON.parse(JSON.stringify(byId[run.before.id]))).toEqual(run.after.data)
+  })
+
+  it("a video render clears an earlier audio render's URL", () => {
+    mockNodes = [{
+      id: "cut",
+      type: "apply-edl",
+      data: { output: "video", executionStatus: "running", generatedAudioUrl: "https://media.test/a.m4a", generatedResults: [{ url: "https://media.test/a.m4a", timestamp: "t0", jobId: "j0" }] },
+    }]
+    streamBackendExecution("exec-edl-2", ctx, vi.fn(), vi.fn())
+    const byId = sync({ cut: { status: "completed", jobId: "j1", output: { videoUrl: "https://media.test/v.mp4" } } })
+    expect(byId.cut.generatedVideoUrl).toBe("https://media.test/v.mp4")
+    expect(byId.cut.generatedAudioUrl).toBeUndefined()
+  })
+
+  it("only Apply EDL: a dual-mode node that delivers video PLUS its audio keeps both", () => {
+    mockNodes = [{ id: "vc", type: "voice-changer", data: { executionStatus: "running" } }]
+    streamBackendExecution("exec-edl-3", ctx, vi.fn(), vi.fn())
+    const byId = sync({ vc: { status: "completed", jobId: "j2", output: { videoUrl: "https://media.test/vc.mp4", audioUrl: "https://media.test/vc.mp3" } } })
+    expect(byId.vc.generatedVideoUrl).toBe("https://media.test/vc.mp4")
+    expect(byId.vc.generatedAudioUrl).toBe("https://media.test/vc.mp3")
+  })
+
+  // The Transcript output moves with the cut. A run that lands a new take must
+  // leave the node's Transcript output as THAT take's — the one its render was
+  // cut with, or none — never the one an earlier take (or a pick's late job
+  // read) left: captions downstream are timed by it, on both engines.
+  const transcriptRun = (name: "video" | "untranscribed") => fixture.runs[name] as unknown as typeof run
+
+  it("a render cut with a transcript: the node's Transcript output and the new take's are that render's — the saved node is the fixture's `after`", () => {
+    const r = transcriptRun("video")
+    mockNodes = [{ id: r.before.id, type: r.before.type, data: structuredClone(r.before.data) }]
+    streamBackendExecution("exec-edl-4", ctx, vi.fn(), vi.fn())
+    const byId = sync({ [r.before.id]: r.state })
+    const transcript = (r.state.output as { json: unknown }).json
+    expect(byId[r.before.id].generatedJson).toEqual(transcript)
+    expect((byId[r.before.id].generatedResults as Array<{ generatedJson?: unknown }>)[0].generatedJson).toEqual(transcript)
+    expect(JSON.parse(JSON.stringify(byId[r.before.id]))).toEqual(r.after.data)
+  })
+
+  it("a render cut with NO transcript clears the earlier take's, and its take keeps none — the saved node is the fixture's `after`", () => {
+    const r = transcriptRun("untranscribed")
+    expect(r.before.data.generatedJson).toBeDefined()
+    mockNodes = [{ id: r.before.id, type: r.before.type, data: structuredClone(r.before.data) }]
+    streamBackendExecution("exec-edl-5", ctx, vi.fn(), vi.fn())
+    const byId = sync({ [r.before.id]: r.state })
+    expect(byId[r.before.id]).toHaveProperty("generatedJson", undefined)
+    // Kept as "none", so a later pick of it clears with no job read.
+    expect((byId[r.before.id].generatedResults as Array<Record<string, unknown>>)[0]).toHaveProperty("generatedJson", undefined)
+    expect(JSON.parse(JSON.stringify(byId[r.before.id]))).toEqual(r.after.data)
+  })
+
+  it("a list run: only the take that IS the render the output describes keeps its Transcript; the others keep none, never its", () => {
+    // The server's fan-out output spreads its FIRST render's output beside
+    // every render's URL, so its `json` is that render's alone.
+    const first = { version: 1, words: [{ text: "one", startMs: 0, endMs: 300 }] }
+    mockNodes = [{ id: "cut", type: "apply-edl", data: { output: "video", executionStatus: "running", generatedJson: { version: 1, words: [] } } }]
+    streamBackendExecution("exec-edl-6", ctx, vi.fn(), vi.fn())
+    const byId = sync({
+      cut: {
+        status: "completed",
+        jobId: "j-b",
+        jobIds: ["j-a", "j-b"],
+        output: { videoUrl: "https://media.test/clip-a.mp4", json: first, listResults: ["https://media.test/clip-a.mp4", "https://media.test/clip-b.mp4"] },
+      },
+    })
+    const takes = byId.cut.generatedResults as Array<Record<string, unknown>>
+    expect(takes.map((t) => t.url)).toEqual(["https://media.test/clip-a.mp4", "https://media.test/clip-b.mp4"])
+    expect(takes[0].generatedJson).toEqual(first)
+    expect(takes[1]).not.toHaveProperty("generatedJson")
+    expect(byId.cut.activeResultIndex).toBe(0)
+    expect(byId.cut.generatedJson).toEqual(first)
+  })
+
+  it("only Apply EDL: another node's run leaves generatedJson alone", () => {
+    mockNodes = [{ id: "tc", type: "trim-video", data: { executionStatus: "running", generatedJson: { kept: true } } }]
+    streamBackendExecution("exec-edl-7", ctx, vi.fn(), vi.fn())
+    const byId = sync({ tc: { status: "completed", jobId: "j3", output: { videoUrl: "https://media.test/t.mp4" } } })
+    expect(byId.tc.generatedJson).toEqual({ kept: true })
+    expect((byId.tc.generatedResults as Array<Record<string, unknown>>)[0]).not.toHaveProperty("generatedJson")
   })
 })

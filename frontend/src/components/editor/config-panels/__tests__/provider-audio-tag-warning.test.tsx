@@ -18,6 +18,19 @@ describe("ProviderAudioTagWarning", () => {
     expect(container).toBeEmptyDOMElement()
   })
 
+  it("renders the warning for the legacy elevenlabs id — it runs as turbo, which strips tags", () => {
+    render(<ProviderAudioTagWarning provider="elevenlabs" fieldValues={["[whispers] hello"]} />)
+    expect(screen.getByText(translate("en", "cfgext.provWarnAudioTags"))).toBeInTheDocument()
+  })
+
+  it.each(["not-a-model", "ELEVENLABS-V3", "constructor", "elevenlabs-dialogue"])(
+    "renders the warning for an id that is not a text-to-speech model (%s) — it runs as turbo too",
+    (provider) => {
+      render(<ProviderAudioTagWarning provider={provider} fieldValues={["[whispers] hello"]} />)
+      expect(screen.getByText(translate("en", "cfgext.provWarnAudioTags"))).toBeInTheDocument()
+    },
+  )
+
   it("renders nothing when no field contains brackets", () => {
     const { container } = render(
       <ProviderAudioTagWarning provider="elevenlabs-multilingual" fieldValues={["hello world"]} />,

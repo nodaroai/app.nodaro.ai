@@ -45,6 +45,11 @@ vi.mock("../models.js", async (importOriginal) => ({
     "recraft-remove-bg": { model: "recraft/remove-background", cost: 0.03, inputType: "image-to-image", imageParam: "image", extraParams: {} },
     "nano-banana-edit": { model: "google/nano-banana-edit", cost: 0.04, inputType: "image-to-image", imageParam: "image_urls", extraParams: {} },
     "ideogram-edit": { model: "ideogram/character-edit", cost: 0.09, inputType: "image-to-image", imageParam: "image_url", extraParams: { rendering_speed: "BALANCED", style: "AUTO" } },
+    // SKUs whose KIE schema types `seed` as a STRING (google/imagen4 and
+    // imagen4-ultra are the real ones). One per lane, so both input builders
+    // are shown to honour the declaration — not a model name.
+    "string-seed-t2i": { model: "test/string-seed-t2i", cost: 0.01, seedType: "string", extraParams: {} },
+    "string-seed-edit": { model: "test/string-seed-edit", cost: 0.01, inputType: "image-to-image", imageParam: "image_url", seedType: "string", extraParams: {} },
   },
 }))
 
@@ -285,6 +290,38 @@ describe("KieImageProvider.editImage", () => {
   it("throws when no URL in result", async () => {
     mocks.mockRunKieTask.mockResolvedValueOnce({ resultJson: { resultUrls: [] } })
     await expect(provider.editImage("https://input.png")).rejects.toThrow()
+  })
+})
+
+describe("seed wire type (models.ts `seedType`)", () => {
+  // KIE checks `seed` against the TYPE in each SKU's schema, and a SKU that
+  // declares a string refuses a number at createTask ("seed must be a string").
+  // The worker hands the seed to both lanes in extraParams as a number.
+  const sentSeed = () => (mocks.mockRunKieTask.mock.calls[0][1] as { seed?: unknown }).seed
+
+  it("generateImage sends a string-seed SKU its seed as a decimal string", async () => {
+    await provider.generateImage("a cat", undefined, "string-seed-t2i", { seed: 7103 })
+    expect(sentSeed()).toBe("7103")
+  })
+
+  it("generateImage leaves the seed a number on a SKU that declares no seed type", async () => {
+    await provider.generateImage("a cat", undefined, "flux", { seed: 7103 })
+    expect(sentSeed()).toBe(7103)
+  })
+
+  it("editImage sends a string-seed SKU its seed as a decimal string", async () => {
+    await provider.editImage("https://input.png", undefined, "string-seed-edit", { seed: 7103 })
+    expect(sentSeed()).toBe("7103")
+  })
+
+  it("editImage leaves the seed a number on a SKU that declares no seed type", async () => {
+    await provider.editImage("https://input.png", undefined, "ideogram-edit", { seed: 7103 })
+    expect(sentSeed()).toBe(7103)
+  })
+
+  it("adds no seed when the caller sent none", async () => {
+    await provider.generateImage("a cat", undefined, "string-seed-t2i")
+    expect(mocks.mockRunKieTask.mock.calls[0][1]).not.toHaveProperty("seed")
   })
 })
 

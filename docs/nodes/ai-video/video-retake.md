@@ -59,6 +59,8 @@ credits = 40 × retakeDuration × repeatCount
 | 10s | 1 | 400 |
 | 4s | 3 | 480 |
 
+The window is the length you pick, to the frame, and never less than 2 seconds. A window with a fraction of a second rounds the total up to a whole credit, so a 2.5s window costs 100. A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way.
+
 The same per-second rate applies to **Extend Video** runs on LTX 2.3 Pro (`credits = 40 × extendDuration`). The runtime table at `/admin/models` (Business / Cloud editions) is the authoritative source — this page is updated whenever the rate changes.
 
 ## Notes

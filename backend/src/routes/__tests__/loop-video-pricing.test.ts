@@ -84,13 +84,13 @@ describe("/v1/loop-video pricing", () => {
       payload: {
         videoUrl: "https://example.com/v.mp4",
         mode: "duration",
-        targetDuration: 60, // ceil(60/5) = 12 credits
+        targetDuration: 60, // ceil(60/5) = 12 units = 120 credits
       },
     })
     expect(res.statusCode).toBe(200)
     expect(reserveSpy).toHaveBeenCalledWith(
       "u-1", "job-1", "loop-video", 0, 0,
-      expect.objectContaining({ creditOverride: 12 }),
+      expect.objectContaining({ creditOverride: 120 }),
     )
     await app.close()
   })
@@ -104,13 +104,13 @@ describe("/v1/loop-video pricing", () => {
         videoUrl: "https://example.com/v.mp4",
         mode: "repeat",
         repeatCount: 4,
-        upstreamDuration: 5, // 4×5 = 20s → 4 credits
+        upstreamDuration: 5, // 4×5 = 20s → 4 units = 40 credits
       },
     })
     expect(res.statusCode).toBe(200)
     expect(reserveSpy).toHaveBeenCalledWith(
       "u-1", "job-1", "loop-video", 0, 0,
-      expect.objectContaining({ creditOverride: 4 }),
+      expect.objectContaining({ creditOverride: 40 }),
     )
     await app.close()
   })
@@ -127,10 +127,10 @@ describe("/v1/loop-video pricing", () => {
       },
     })
     expect(res.statusCode).toBe(200)
-    // 30/5 = 6 base, 16/24 → 1 cut, total 7
+    // 30/5 = 6 units, 16/24 → 1 cut unit, total 7 units = 70 credits
     expect(reserveSpy).toHaveBeenCalledWith(
       "u-1", "job-1", "loop-video", 0, 0,
-      expect.objectContaining({ creditOverride: 7 }),
+      expect.objectContaining({ creditOverride: 70 }),
     )
     await app.close()
   })

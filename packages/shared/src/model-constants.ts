@@ -286,28 +286,29 @@ export function getMaxNegativePromptChars(provider: string | undefined): number 
   return (provider && MAX_NEGATIVE_PROMPT_CHARS_BY_PROVIDER[provider]) || NEGATIVE_PROMPT_MAX
 }
 
-/** Default TTS text cap (legacy `elevenlabs`) when no per-model override. */
+/** What {@link getMaxTtsChars} answers for an id with no entry of its own: the legacy `elevenlabs` alias (which runs as turbo — pass `canonicalTtsProvider(id)` to get that model's cap), a missing id and an unknown id. */
 export const TTS_TEXT_MAX = 5000
 
 /**
- * Per-model Text-to-Speech character cap (PER REQUEST), from official ElevenLabs
- * docs. turbo/multilingual accept FAR more than the old flat 5000; v3 matches
- * the official 5000 (probed live 2026-08-30: 4,500 AND 5,200 chars both
- * returned 200 — the old "API hard-limits v3 at 3000" report no longer holds).
- * Dialogue's documented 2,000 is a recommendation, not a limit (2,500 and
- * 5,000 total chars both probed 200); we cap at 5000 like v3 — same model
- * underneath. Absent → {@link TTS_TEXT_MAX}.
+ * Per-model Text-to-Speech character cap (PER REQUEST). DERIVED from each
+ * speech model's capability sheet (`tts.maxChars` in `MODEL_CATALOG`) — set the
+ * cap there, never here. Absent → {@link TTS_TEXT_MAX}.
  */
-export const MAX_TTS_CHARS_BY_PROVIDER: Record<string, number> = {
-  "elevenlabs-turbo": 40000,        // == eleven_flash_v2_5 (functionally equivalent)
-  "elevenlabs-multilingual": 10000, // eleven_multilingual_v2
-  "elevenlabs-v3": 5000,            // official cap (probed: 5,200 chars accepted; keep the clamp)
-  "elevenlabs-dialogue": 5000,      // total across lines; ≤2,000 recommended for best quality
-}
+export const MAX_TTS_CHARS_BY_PROVIDER: Record<string, number> = Object.fromEntries(
+  Object.values(MODEL_CATALOG)
+    .filter((m) => m.tts !== undefined)
+    .map((m) => [m.id, m.tts!.maxChars]),
+)
 
-/** Max TTS text length (chars) for a provider: verified override, else {@link TTS_TEXT_MAX}. */
+/**
+ * Max TTS text length (chars) for a provider: verified override, else
+ * {@link TTS_TEXT_MAX}. The legacy `elevenlabs` alias has no entry of its own
+ * (callers that mean the model it runs as pass `canonicalTtsProvider(id)`), and
+ * an id named like an inherited object member (`constructor`) is just unknown.
+ */
 export function getMaxTtsChars(provider: string | undefined): number {
-  return (provider && MAX_TTS_CHARS_BY_PROVIDER[provider]) || TTS_TEXT_MAX
+  const cap = provider && Object.hasOwn(MAX_TTS_CHARS_BY_PROVIDER, provider) ? MAX_TTS_CHARS_BY_PROVIDER[provider] : undefined
+  return cap || TTS_TEXT_MAX
 }
 
 /**

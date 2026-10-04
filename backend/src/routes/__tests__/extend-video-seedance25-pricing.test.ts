@@ -46,7 +46,7 @@ describe("route — resolveExtendVideoIdentifier", () => {
     expect(resolveExtendVideoIdentifier({ provider: "veo-extend" })).toBe("veo-extend")
     expect(resolveExtendVideoIdentifier({ provider: "veo-extend", model: "quality" })).toBe("veo-extend:quality")
     expect(resolveExtendVideoIdentifier({ provider: "runway-extend" })).toBe("runway-extend")
-    expect(resolveExtendVideoIdentifier({ provider: "ltx-2.3-pro" })).toBe("ltx-2.3-pro")
+    expect(resolveExtendVideoIdentifier({ provider: "ltx-2.3-pro" })).toBe("ltx-2.3-pro-extend:per-second")
     expect(resolveExtendVideoIdentifier(undefined)).toBe("veo-extend")
   })
 })

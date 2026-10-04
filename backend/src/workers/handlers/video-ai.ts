@@ -27,7 +27,7 @@ import {
   runLtxRetake,
 } from "../../providers/replicate/ltx-video.js"
 import { config } from "../../lib/config.js"
-import { FAL_LIP_SYNC_PROVIDERS, isAutoVideoDuration, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, getMaxTtsChars, isVeoProvider, getVideoAudioCapability, parseAttributedDialogue, resolveDialogueVoices } from "@nodaro/shared"
+import { FAL_LIP_SYNC_PROVIDERS, isAutoVideoDuration, ltxExtendDurationSec, ltxRetakeDurationSec, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, getMaxTtsChars, ttsSupportsAudioTags, isVeoProvider, getVideoAudioCapability, parseAttributedDialogue, resolveDialogueVoices } from "@nodaro/shared"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
@@ -1141,7 +1141,10 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       ltxExtendResult = await runLtxExtend({
         variant: "ltx-2.3-pro",
         video: d.video as string,
-        duration: d.duration as number,
+        // The seconds the run was priced for — the route and the workflow run
+        // already send this reading; repeating it here keeps a hand-queued
+        // job on the same 1-20 whole seconds.
+        duration: ltxExtendDurationSec(d.duration),
         extendMode: (d.extend_mode as "start" | "end" | undefined) ?? "end",
         reconcileOpts: {
           onTaskCreated: makeOnTaskCreated(ctx.jobId, providerKindForVideoModel("ltx-2.3-pro")),
@@ -1450,7 +1453,9 @@ const handleVideoRetake: HandlerFn = async function handleVideoRetake(job, ctx) 
       video: d.video as string,
       prompt: (d.prompt as string | undefined) ?? "",
       retakeStartTime: d.retake_start_time as number,
-      retakeDuration: d.retake_duration as number,
+      // The seconds the run was priced for (at least 2) — the route and the
+      // workflow run send this same reading.
+      retakeDuration: ltxRetakeDurationSec(d.retake_duration),
       retakeMode: d.retake_mode as "replace_audio" | "replace_video" | "replace_audio_and_video",
       resolution: "1080p",
       aspectRatio: (d.aspect_ratio as "16:9" | "9:16" | undefined) ?? "16:9",
@@ -1695,7 +1700,7 @@ async function synthesizeDialogueTrack(
   // premade names resolve too). Honour the voice's ttsProvider.
   const ttsProvider = voices[0]?.ttsProvider
   const joined = resolved.map((r) => r.text).join(" ")
-  const processed = ttsProvider === "elevenlabs-v3" ? joined : stripAudioTags(joined)
+  const processed = ttsSupportsAudioTags(ttsProvider) ? joined : stripAudioTags(joined)
   const buf = await directElevenLabsTTS(processed, resolved[0]!.voice, ttsProvider, {
     allowDefaultVoiceFallback: true,
   })

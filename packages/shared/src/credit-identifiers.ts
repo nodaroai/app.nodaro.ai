@@ -663,6 +663,18 @@ export function speedRampCreditId(quality: unknown): "speed-ramp" | "speed-ramp:
 }
 
 /**
+ * Apply EDL's price id: a `proxy` render (the 720p preview) is its own,
+ * cheaper per-output-minute row; a `final` render keeps the bare id. One id per
+ * QUALITY, for a video and an audio output alike (decided 2026-10-04). Anything
+ * that is not exactly "proxy" is the final, as the route and the node default
+ * it. The route, the workflow run, and the editor's badge and run estimate all
+ * price through this; the job itself is always named `apply-edl`.
+ */
+export function applyEdlCreditId(quality: unknown): "apply-edl" | "apply-edl:proxy" {
+  return quality === "proxy" ? "apply-edl:proxy" : "apply-edl"
+}
+
+/**
  * OUR Nodaro credit key for a Suno operation, given the model version and the
  * operation (which is also the node type and the BullMQ job name).
  *

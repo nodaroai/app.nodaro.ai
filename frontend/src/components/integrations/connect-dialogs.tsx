@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { useT } from "@/lib/i18n"
 import type { SocialProviderInfo } from "@/lib/api"
+import { BOTFATHER_URL } from "@/lib/telegram-links"
 
 /**
  * The two non-OAuth connect forms, lifted out of `platform-card.tsx` so the
@@ -40,7 +41,7 @@ export function TelegramConnectDialog({
           <DialogDescription>
             {t("integ.telegramDescPre")}
             <a
-              href="https://web.telegram.org/k/#@BotFather"
+              href={BOTFATHER_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="font-medium text-primary underline underline-offset-2"

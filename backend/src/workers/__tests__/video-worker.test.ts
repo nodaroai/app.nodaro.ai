@@ -384,6 +384,28 @@ describe("video worker processor", () => {
     ).toBe("image-to-video")
   })
 
+  // Track 0.13: the pickup names `slot_wait_ms` (migration 451). Staging runs
+  // dev against the shared database before the migration reaches it — and a
+  // statement naming a missing column is not applied at all, so without the
+  // retry every job would be discarded as "not runnable".
+  it("pickup retries without slot_wait_ms while the column is missing, and the job runs", async () => {
+    const { resetSlotWaitColumnForTests } = await import("../../lib/jobs-slot-wait-column.js")
+    try {
+      mocks.mockSingle.mockResolvedValue({ data: mockJobRecord(), error: null })
+      mocks.mockCasSelect
+        .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column jobs.slot_wait_ms does not exist" } })
+        .mockResolvedValueOnce({ data: [{ id: "job-1" }], error: null })
+
+      await processor(makeBullJob("generate-image"))
+
+      expect(mocks.mockCasSelect.mock.calls[0]?.[0]).toContain("slot_wait_ms")
+      expect(mocks.mockCasSelect.mock.calls[1]?.[0]).toBe("id")
+      expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
+    } finally {
+      resetSlotWaitColumnForTests()
+    }
+  })
+
   // Phase 4: BullMQ stall-retry guard + inline recovery (Layer 1).
   it("stall-retry: skips handler AND dispatches to tryInlineReconcile when provider_task_id is set", async () => {
     mocks.mockSingle.mockResolvedValueOnce({
@@ -562,6 +584,24 @@ describe("video worker processor", () => {
         error_detail: "KIE API returned 500: internal server error at api.kie.ai/…",
       }),
     )
+  })
+
+  // A model-lane failure (a plugin's Video Analysis roll, rethrown as is) used
+  // to land "KIE.ai chat-completions <model> failed (code 422): …" on the
+  // node. The person reads the lane error's user-safe sentence; the full
+  // diagnostic is the operator's error_detail.
+  it("a model-lane failure stores its user-safe sentence and keeps the diagnostic in error_detail", async () => {
+    const { LlmLaneError } = await import("../../lib/llm-errors.js")
+    const raw = "KIE.ai chat-completions gemini-3-flash failed (code 422): The channel is not available"
+    const laneError = new LlmLaneError(raw, { lane: "kie", bodyCode: 422 })
+    mocks.mockHandler.mockRejectedValueOnce(laneError)
+    const job = makeBullJob("generate-image")
+    await expect(processor(job)).rejects.toThrow(raw)
+    expect(mocks.mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", error_message: laneError.userMessage, error_detail: raw }),
+    )
+    const written = mocks.mockUpdate.mock.calls.find((c: unknown[]) => (c[0] as { status?: string }).status === "failed")![0] as { error_message: string }
+    expect(written.error_message).not.toMatch(/kie|gemini-3-flash/i)
   })
 
   it("writes error_detail: null for a plain Error (no provider text)", async () => {

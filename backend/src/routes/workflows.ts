@@ -705,6 +705,27 @@ async function dropStaleCollaborators(
 }
 
 /**
+ * The moved row as it goes back to whoever moved it: ONE answer for both ways
+ * a move can be asked for, the move endpoint and the older `PATCH { projectId }`,
+ * for the same reason {@link authorizeWorkflowMove} is one rule.
+ *
+ * A mover need not be someone who may edit the row: a workspace admin of both
+ * sides may move a member's work whatever the workspace's `admin_access` says,
+ * and a team workspace's default for it is `view`. PATCH asks for `edit`
+ * before it moves anything, but that answer is about where the row was. So the
+ * answer follows GET's rule, judged on the row as it now stands: below `edit`,
+ * none of the owner's drafts, runs in flight, voice plans or linked-production
+ * state (studio rulings T11 / T22 / T42 / T87). "Below `edit`" rather than
+ * GET's `=== "view"`: the two agree at every level GET serves, and a mover the
+ * rule answers `none` gets the stripped row too, never the raw one.
+ */
+async function movedWorkflowFor(userId: string, row: Record<string, unknown>) {
+  const full = toWorkflowFull(row)
+  const access = await workflowAccessFromRow(userId, toAccessRow(row))
+  return accessAtLeast(access, "edit") ? full : stripStudioDraftWorkflow(full)
+}
+
+/**
  * Resolve the caller's userId, gate the request on a scope when an OAuth
  * developer-app token is in play, and return the userId. Returns `null` when
  * the request was already terminated by sending an auth/scope error.
@@ -1725,8 +1746,9 @@ export async function workflowRoutes(app: FastifyInstance) {
     // precedence and the FK validates it against the new project.
     // Kept in scope past the write: sharing the authorization is only half of
     // "one rule". A move that changes workspace also drops the collaborator
-    // grants, and a path that authorizes identically but skips the
-    // consequence is a second rule wearing the first one's name.
+    // grants, and the moved row goes back on the move endpoint's terms
+    // (`movedWorkflowFor`); a path that authorizes identically but skips
+    // either is a second rule wearing the first one's name.
     let move: MoveAuthorized | null = null
     if (body.projectId !== undefined) {
       const verdict = await authorizeWorkflowMove(req, userId, params.id, body.projectId)
@@ -1819,7 +1841,7 @@ export async function workflowRoutes(app: FastifyInstance) {
         move.targetProject.workspaceId,
       )
       if (droppedCollaborators.length > 0) {
-        return { data: toWorkflowFull(data), droppedCollaborators }
+        return { data: await movedWorkflowFor(userId, data), droppedCollaborators }
       }
     }
 
@@ -1853,7 +1875,9 @@ export async function workflowRoutes(app: FastifyInstance) {
       }
     }
 
-    return { data: toWorkflowFull(data) }
+    // A move answers as the move endpoint does; any other save goes back
+    // whole to the editor who made it.
+    return { data: move ? await movedWorkflowFor(userId, data) : toWorkflowFull(data) }
   })
 
   // Delete workflow
@@ -2195,7 +2219,9 @@ export async function workflowRoutes(app: FastifyInstance) {
       verdict.targetProject.workspaceId,
     )
 
-    return reply.send({ data: toWorkflowFull(data), droppedCollaborators })
+    // On GET's terms, judged on the row as it now stands; PATCH answers a
+    // move the same way.
+    return reply.send({ data: await movedWorkflowFor(userId, data), droppedCollaborators })
   })
 
   // Create a child sub-workflow under a parent

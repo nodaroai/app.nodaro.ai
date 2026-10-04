@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import {
   decideSignupGrant,
+  emailStem,
   SIGNUP_GRANT_RULES,
   type SignupSignalCounts,
 } from "../signup-grant-policy.js"
@@ -218,5 +219,31 @@ describe("isForeignOrigin — any page but our own SPA skips the grace", () => {
     // An explicit, different port is a different origin.
     expect(call({ origin: "http://app.nodaro.ai:8080", publicUrl: "", host: "app.nodaro.ai" })).toBe(true)
     expect(call({ origin: "http://app.nodaro.ai:8080", publicUrl: "", host: "app.nodaro.ai:8080" })).toBe(false)
+  })
+})
+
+describe("decideSignupGrant — repeat signups that hide their device", () => {
+  it("a claim with no keys withholds when any other account was ever seen on the network", () => {
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, ipEverOthers: 1 }, keyless: true })).toEqual({ decision: "withheld", reasons: ["keyless_ip_reuse"] })
+    // With keys, the device rules speak instead; an old neighbour on the network alone is not enough.
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, ipEverOthers: 1 }, keyless: false }).decision).toBe("granted")
+    expect(decideSignupGrant({ providers: google, counts: clean, keyless: true }).decision).toBe("granted")
+  })
+
+  it("another account named like this one withholds, keys or not", () => {
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, similarEmailOthers: 2 } })).toEqual({ decision: "withheld", reasons: ["similar_email"] })
+  })
+})
+
+describe("emailStem", () => {
+  it("cuts the trailing digits, Gmail dots and +tags", () => {
+    expect(emailStem("Series.Name027+x@GoogleMail.com")).toEqual({ stem: "seriesname", domain: "googlemail.com", local: "seriesname027" })
+    expect(emailStem("seriesname29@example.com")?.stem).toBe("seriesname")
+  })
+
+  it("compares only numbered names with enough letters", () => {
+    expect(emailStem("seriesname@example.com")).toBeNull()
+    expect(emailStem("bob7@example.com")).toBeNull()
+    expect(emailStem("not-an-email")).toBeNull()
   })
 })

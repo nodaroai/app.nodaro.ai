@@ -1,13 +1,14 @@
 /**
  * Instagram scraper node — shared vocabulary + credit identifiers.
  *
- * Pulls PUBLIC Instagram posts (feed images, carousels, reels) by profile or
- * by hashtag and emits a normalized JSON array. Same shape of contract as the
+ * Pulls PUBLIC Instagram posts (feed images, carousels, reels) by profile, by
+ * hashtag or by post link and emits a normalized JSON array. Same shape of contract as the
  * Meta Ads node: everything the backend guard/reservation, the frontend credit
  * badge and the docs formula must agree on lives here.
  *
  * Pricing: 1 credit per REQUESTED post, rounded UP to a fixed tier of
- * `count × sources` (a profile / hashtag is one source, up to 5). Optional
+ * `count × sources` (a profile / hashtag / post link is one source, up to 5;
+ * a post link is always ONE post — see `instagramRequestedCount`). Optional
  * per-post AI analysis folds into the same identifier, priced by the model's
  * tier — reusing the Meta analysis per-item values so the two nodes stay in
  * lockstep.
@@ -22,7 +23,12 @@ import { classifyCreativeFormat, type MetaAdsFormat } from "./meta-ads-scrape.js
 
 export const INSTAGRAM_SCRAPE_NODE_TYPE = "instagram-scrape" as const
 
-export const INSTAGRAM_SCRAPE_MODES = ["profile", "hashtag"] as const
+/**
+ * `profile` = recent posts of an account, `hashtag` = recent posts under a tag,
+ * `post` = exactly the posts whose links are given (one post per link — the
+ * "remake this post" entry point, where a full run must land on THAT post).
+ */
+export const INSTAGRAM_SCRAPE_MODES = ["profile", "hashtag", "post"] as const
 export type InstagramScrapeMode = (typeof INSTAGRAM_SCRAPE_MODES)[number]
 
 export function isInstagramScrapeMode(value: unknown): value is InstagramScrapeMode {
@@ -103,17 +109,70 @@ export function isInstagramScrapeCount(value: unknown): value is number {
 }
 
 /**
- * Targets (profile usernames/URLs or hashtags) are typed one per line; the
- * route wants an array. Unlike page urls a target can be a bare username /
- * `#tag`, so split on lines / commas only (never whitespace), strip a leading
- * `@` or `#`, dedupe, cap at MAX_SOURCES.
+ * A post link: instagram.com (any subdomain, an optional username segment
+ * before the kind) or instagr.am, `/p/`, `/reel/`, `/reels/` or `/tv/`, with or
+ * without scheme, query string or trailing slash. Group 1 = the kind, group 2 =
+ * the shortcode. The shortcode is CASE-SENSITIVE — two codes that differ only
+ * in case are two different posts — so the `i` flag only relaxes the host and
+ * the kind; the captured code keeps its case.
+ *
+ * Instagram's own path words are never a username: `/share/p/<token>/` (the
+ * token of a share redirect, not a shortcode), `/stories/…`, `/explore/…` and
+ * the kinds themselves would otherwise turn into a wrong post that still bills.
+ * `/reels/audio/<id>/` is an audio page, not a reel.
  */
-export function splitInstagramTargets(value: unknown): string[] {
+const INSTAGRAM_POST_LINK_RE =
+  /^(?:https?:\/\/)?(?:[a-z0-9-]+\.)*(?:instagram\.com|instagr\.am)\/(?:(?!(?:share|stories|explore|accounts|direct|p|reels?|tv)\/)[A-Za-z0-9._]+\/)?(p|reels?|tv)\/(?!audio(?:[/?#]|$))([A-Za-z0-9_-]+)/i
+
+function parseInstagramPostLink(value: string): { readonly link: string; readonly shortcode: string } | null {
+  const match = INSTAGRAM_POST_LINK_RE.exec(value.trim())
+  if (!match) return null
+  const kind = match[1].toLowerCase()
+  const segment = kind === "p" ? "p" : kind === "tv" ? "tv" : "reel"
+  return { link: `https://www.instagram.com/${segment}/${match[2]}/`, shortcode: match[2] }
+}
+
+/** The canonical link of the post a value points at, or null when it is not an Instagram post link. */
+export function instagramPostLink(value: string): string | null {
+  return parseInstagramPostLink(value)?.link ?? null
+}
+
+/**
+ * Post links, canonicalised, deduped by shortcode (`/p/X` and `/reel/X` are
+ * one post), capped at MAX_SOURCES. An item holding several links (an API
+ * caller's array entry) is split like typed text.
+ */
+function splitInstagramPostLinks(raw: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of raw.flatMap((entry) => entry.split(/[\s,]+/))) {
+    const parsed = parseInstagramPostLink(item)
+    if (!parsed || seen.has(parsed.shortcode)) continue
+    seen.add(parsed.shortcode)
+    out.push(parsed.link)
+    if (out.length >= INSTAGRAM_SCRAPE_MAX_SOURCES) break
+  }
+  return out
+}
+
+/**
+ * Targets are typed one per line; the route wants an array.
+ *
+ * - `profile` / `hashtag` (the default — the signature predates post mode):
+ *   a target can be a bare username / `#tag`, so split on lines / commas only
+ *   (never whitespace), strip a leading `@` or `#`, dedupe, cap at MAX_SOURCES.
+ * - `post`: only Instagram post links count; each is canonicalised (see
+ *   `instagramPostLink`) and anything else is dropped, so the guard, the
+ *   reservation and the scrape all see the same set of posts.
+ */
+export function splitInstagramTargets(value: unknown, mode: InstagramScrapeMode = "profile"): string[] {
+  const separator = mode === "post" ? /[\s,]+/ : /[\n,]+/
   const raw = Array.isArray(value)
     ? value.filter((v): v is string => typeof v === "string")
     : typeof value === "string"
-      ? value.split(/[\n,]+/)
+      ? value.split(separator)
       : []
+  if (mode === "post") return splitInstagramPostLinks(raw)
   const seen = new Set<string>()
   const out: string[] = []
   for (const item of raw) {
@@ -171,15 +230,29 @@ export interface InstagramNodeQuoteFields {
   readonly analysisModel?: unknown
 }
 
+/**
+ * Posts requested PER SOURCE: the `count` setting, except in post mode, where
+ * every source is one link and so one post (the count setting does not apply).
+ * Every price computation goes through this, so the guard, the reservation,
+ * the settlement and the node's badge cannot disagree on a post-mode run.
+ */
+export function instagramRequestedCount(mode: InstagramScrapeMode, count: number): number {
+  return mode === "post" ? 1 : count
+}
+
 /** Billable source count: number of targets (min 1). */
 export function instagramScrapeSources(data: InstagramNodeQuoteFields): number {
-  return Math.max(1, Math.min(splitInstagramTargets(data.targets).length, INSTAGRAM_SCRAPE_MAX_SOURCES))
+  return Math.max(1, Math.min(splitInstagramTargets(data.targets, instagramScrapeMode(data.mode)).length, INSTAGRAM_SCRAPE_MAX_SOURCES))
 }
 
 /** The ONE credit identifier for a node's current settings. */
 export function instagramScrapeCreditIdFromNode(data: InstagramNodeQuoteFields): string {
   const count = typeof data.count === "number" ? data.count : INSTAGRAM_SCRAPE_DEFAULT_COUNT
-  return buildInstagramScrapeCreditId({ count, sources: instagramScrapeSources(data), analysis: instagramAnalysisTierFrom(data) })
+  return buildInstagramScrapeCreditId({
+    count: instagramRequestedCount(instagramScrapeMode(data.mode), count),
+    sources: instagramScrapeSources(data),
+    analysis: instagramAnalysisTierFrom(data),
+  })
 }
 
 /**
@@ -187,16 +260,18 @@ export function instagramScrapeCreditIdFromNode(data: InstagramNodeQuoteFields):
  * runs before Zod). Lands on the SAME tier the reservation computes.
  */
 export function resolveInstagramScrapeCreditId(body: unknown): string {
-  const raw = body as { count?: unknown; targets?: unknown; analyze?: unknown; analysisModel?: unknown } | null | undefined
+  const raw = body as { mode?: unknown; count?: unknown; targets?: unknown; analyze?: unknown; analysisModel?: unknown } | null | undefined
   if (!raw || typeof raw !== "object") return INSTAGRAM_SCRAPE_FALLBACK_CREDIT_ID
   const count = raw.count === undefined ? INSTAGRAM_SCRAPE_DEFAULT_COUNT : raw.count
   if (!isInstagramScrapeCount(count)) return INSTAGRAM_SCRAPE_FALLBACK_CREDIT_ID
-  // Same splitter the handler uses for `sources` (dedupes, caps at MAX), so the
+  // Same mode resolution as the route's Zod default (absent → profile) and the
+  // same splitter the handler uses for `sources` (dedupes, caps at MAX), so the
   // pre-Zod guard and the post-Zod reservation always land on the same tier —
   // a duplicate target bills once, not per copy.
-  const sources = splitInstagramTargets(raw.targets).length
+  const mode = instagramScrapeMode(raw.mode)
+  const sources = splitInstagramTargets(raw.targets, mode).length
   if (sources < 1) return INSTAGRAM_SCRAPE_FALLBACK_CREDIT_ID
-  return buildInstagramScrapeCreditId({ count, sources, analysis: instagramAnalysisTierFrom(raw) })
+  return buildInstagramScrapeCreditId({ count: instagramRequestedCount(mode, count), sources, analysis: instagramAnalysisTierFrom(raw) })
 }
 
 // Re-export the shared creative-format vocabulary so the node imports one place.

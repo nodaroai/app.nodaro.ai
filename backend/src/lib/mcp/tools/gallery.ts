@@ -11,6 +11,7 @@ import { isUuid } from "./_id-guard.js"
 import { failureGuidance } from "./_job-error.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
 import { escapeLikeArgument } from "./_like-escape.js"
+import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -334,6 +335,12 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
                 .eq("status", "completed")
                 .neq("user_id", session.userId)
         query = query.not("output_data", "is", null)
+        // The public scope is the gallery: same moderation as the web one
+        // (lib/gallery-moderation.ts) — blocked creators out in the query,
+        // banned words dropped below. "mine" is the caller's own library.
+        const moderation = scope === "mine" ? null : await loadGalleryModeration()
+        const excludedUsers = moderation ? bannedGalleryUsersFilter(moderation) : null
+        if (excludedUsers) query = query.filter("user_id", "not.in", excludedUsers)
         if (args.cursor) query = query.lt(cursorCol, args.cursor)
         if (args.query) {
           // input_data is JSONB; ->> coerces the prompt key to text so we
@@ -367,13 +374,23 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             : last?.completed_at
         const nextCursor =
           rows.length === limit && lastCursorVal ? lastCursorVal : null
-        const lines = rows.map(formatRow)
+        // The cursor above follows every row READ, so paging goes on past a
+        // stretch the moderation hides; only what is shown is filtered.
+        const shown = moderation
+          ? rows.filter((row) => !galleryHides(moderation, { userId: row.user_id, inputData: row.input_data, outputData: row.output_data }))
+          : rows
+        const lines = shown.map(formatRow)
         const cursorLine = nextCursor
           ? `\n(next_cursor: ${nextCursor} — call browse_gallery again with this cursor)`
           : ""
-        const text = lines.length > 0 ? lines.join("\n") + cursorLine : "(no items)"
+        const text =
+          lines.length > 0
+            ? lines.join("\n") + cursorLine
+            : nextCursor
+              ? "(no items on this page)" + cursorLine
+              : "(no items)"
 
-        const items = rows
+        const items = shown
           .map((row) => rowToGalleryItem(row, session.userId))
           .filter((item): item is GalleryItem => item !== null)
 
@@ -396,6 +413,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
                   .eq("status", "completed")
                   .neq("user_id", session.userId)
           countQuery = countQuery.not("output_data", "is", null)
+          if (excludedUsers) countQuery = countQuery.filter("user_id", "not.in", excludedUsers)
           if (args.query) {
             const safe = escapeLikeArgument(args.query)
             if (safe.length > 0) {

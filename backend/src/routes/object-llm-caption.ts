@@ -13,9 +13,10 @@ import { meterSyncLlm } from "../lib/meter-sync-llm.js"
  * POST /v1/objects/:id/llm-caption — no body
  *   Re-runs the Claude Sonnet vision caption against the object's existing
  *   `source_image_url` and persists the result to `canonical_description`.
- *   Used by the studio's "retry caption" affordance when
- *   `/approve-main-image` initially returned `canonicalDescription: ""`
- *   (LLM sub-failure path).
+ *   The recovery when `/approve-main-image` returned
+ *   `canonicalDescription: ""` (LLM sub-failure path). The studio shows the
+ *   caption read-only with no retry control, so callers are the API, the SDK,
+ *   the CLI and the MCP recaption tool.
  *
  * Mirrors `location-llm-caption.ts` with two object-specific deltas:
  *   - `captionObject` (not `captionLocation`)
