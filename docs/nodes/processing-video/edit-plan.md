@@ -31,6 +31,8 @@ Because the plan is just data, an agent or you can decide *what* the edit is; th
 |--------|------|-------------|
 | EDL | json | The edit plan. **Tighten** → one EDL object; **Clips** → a list of EDLs that fans out one downstream render per clip; **Chapters** → a `{ version, chapters }` object. Wire it into Apply EDL to render. |
 
+Once the node has a plan, it shows a badge: **Well-formed EDL**, or the number of issues. A Clips plan is checked clip by clip. Click the badge to see each issue and warning, in the validator's own words. The badge checks the plan's structure only. Apply EDL can still refuse a well-formed plan it cannot draw, for example one with a layout or one over 180 minutes; the render reports that itself. Warnings never make a plan fail the check: they flag values a newer version may accept, such as an unknown layout id.
+
 ## Configuration
 
 | Field | Type | Default | Description |

@@ -2,10 +2,10 @@
 
 import { useT } from "@/lib/i18n"
 import { memo, useCallback, useMemo, useState } from "react"
-import { createPortal } from "react-dom"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ScanSearch, Film, Braces, Type, Loader2, AlertCircle, Copy, Expand, X } from "lucide-react"
-import { JsonTree, type JsonNodeLabeler, type JsonValue } from "@/components/ui/json-tree"
+import { ScanSearch, Film, Braces, Type, Loader2, AlertCircle, Copy, Expand } from "lucide-react"
+import { JsonTree, type JsonValue } from "@/components/ui/json-tree"
+import { InspectorShell } from "@/components/inspector/inspector-shell"
 import { useAnalysisLabeler } from "./analysis-json-labeler"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -21,52 +21,6 @@ import { DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { buildVideoAnalysisCreditId, resolveVideoAnalysisModel } from "@nodaro/shared"
 import type { VideoAnalysisResult } from "@nodaro/shared"
 import type { VideoAnalysisNodeData } from "@/types/nodes"
-
-function ResultTreeModal({
-  isOpen, onClose, result, labelFor,
-}: {
-  readonly isOpen: boolean
-  readonly onClose: () => void
-  readonly result: VideoAnalysisResult
-  readonly labelFor: JsonNodeLabeler
-}) {
-  const t = useT()
-  if (!isOpen) return null
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-8" onClick={onClose}>
-      <div
-        className="relative w-full max-w-3xl max-h-[85vh] bg-background rounded-lg border border-border shadow-xl flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <ScanSearch className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">{t("node.videoAnalysis")}</span>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {t("node.scenesSlotsDuration", { scenes: result.scenes.length, slots: result.slots.length, seconds: result.meta.durationSec.toFixed(1) })}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80 transition-colors"
-              onClick={() => navigator.clipboard.writeText(JSON.stringify(result, null, 2))}
-            >
-              {t("cfgext.scrapeCopyJson")}
-            </button>
-            <button type="button" aria-label={t("common.close")} className="text-muted-foreground hover:text-foreground" onClick={onClose}>
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-        <div className="overflow-auto p-4">
-          <JsonTree value={result as unknown as JsonValue} labelFor={labelFor} className="text-[11px]" />
-        </div>
-      </div>
-    </div>,
-    document.body,
-  )
-}
 
 function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
@@ -224,7 +178,16 @@ function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
           text inputs (extractNodeOutput stringifies for both handles). */}
       <HandleWithPopover nodeId={id} nodeType="video-analysis" handleId="text"  type="source" position={Position.Right} label="Text"        color={DATA_HANDLE_COLORS.text} icon={<Type />}   side="right" top="52px" />
       {result && (
-        <ResultTreeModal isOpen={treeOpen} onClose={() => setTreeOpen(false)} result={result} labelFor={labelFor} />
+        <InspectorShell
+          open={treeOpen}
+          onClose={() => setTreeOpen(false)}
+          icon={<ScanSearch />}
+          title={t("node.videoAnalysis")}
+          meta={t("node.scenesSlotsDuration", { scenes: result.scenes.length, slots: result.slots.length, seconds: result.meta.durationSec.toFixed(1) })}
+          copyValue={result}
+        >
+          <JsonTree value={result as unknown as JsonValue} labelFor={labelFor} className="text-[11px]" />
+        </InspectorShell>
       )}
     </div>
   )
