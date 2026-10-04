@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 
+import * as kieModels from "../models.js"
 import {
   getKieModelConfig,
   isKieSupported,
@@ -10,7 +11,29 @@ import {
   KIE_IMAGE_MODELS,
   KIE_MOTION_TRANSFER_MODELS,
   KIE_SPEECH_TO_VIDEO_MODELS,
+  type KieModelConfig,
 } from "../models.js"
+
+describe("seedType — honoured by the KIE image lanes only", () => {
+  // `seedType` sits on the shared KieModelConfig, but only kie/image.ts reads
+  // it. On a video/audio SKU the declaration would be silently ignored and the
+  // number would still go out — the "seed must be a string" failure again.
+  it("is declared on no SKU outside KIE_IMAGE_MODELS", () => {
+    const tables = Object.entries(kieModels).filter(
+      ([name]) => /^KIE_[A-Z0-9_]+_MODELS$/.test(name) && name !== "KIE_IMAGE_MODELS",
+    )
+    expect(tables.length).toBeGreaterThan(5) // the scan really saw the non-image tables
+    const offenders = tables.flatMap(([name, table]) =>
+      Object.entries(table as Record<string, KieModelConfig>)
+        .filter(([, config]) => config.seedType !== undefined)
+        .map(([key]) => `${name}.${key}`),
+    )
+    expect(
+      offenders,
+      "Route that lane's seed write through kieSeedForWire before declaring seedType on it",
+    ).toEqual([])
+  })
+})
 
 describe("getKieModelConfig", () => {
   it("returns config for image model nano-banana", () => {

@@ -14,7 +14,7 @@ import type {
 import sharp from "sharp"
 import { KieError, createSanitizedError, runKieTask, type KieResultJson } from "./client.js"
 import { runFluxKontextTask } from "./kontext-client.js"
-import { KIE_IMAGE_MODELS } from "./models.js"
+import { KIE_IMAGE_MODELS, kieSeedForWire } from "./models.js"
 import { ensureImageForProvider } from "./video.js"
 import { TASK_CHAINED_EDIT_PROVIDERS, getMaxImagePromptChars } from "@nodaro/shared"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
@@ -360,6 +360,13 @@ export class KieImageProvider
       )
     }
 
+    // The seed in the type this SKU's schema declares (models.ts `seedType`):
+    // google/imagen4 and imagen4-ultra take a string and refuse the number the
+    // worker hands over. Read off the FINAL modelConfig, after the t2i → i2i swap.
+    if (input.seed !== undefined) {
+      input.seed = kieSeedForWire(modelConfig, input.seed)
+    }
+
     console.log(
       `[KIE.ai] Request input:`,
       JSON.stringify(input, null, 2)
@@ -604,6 +611,11 @@ export class KieImageProvider
       provider === "grok-2-edit"
     )) {
       input.prompt = clampPromptForProvider(prompt, provider)
+    }
+
+    // Same seed-type rule as generateImage (models.ts `seedType`).
+    if (input.seed !== undefined) {
+      input.seed = kieSeedForWire(modelConfig, input.seed)
     }
 
     console.log(
