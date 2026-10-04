@@ -4730,6 +4730,25 @@ export async function competitorCards(): Promise<import("@nodaro/shared").Compet
   return apiJson("/v1/competitors/cards", { method: "GET", label: "apiErr.loadCompetitors" })
 }
 
+/** The cards the person marked "I did this", and how each went (free). */
+export async function competitorCardActions(): Promise<import("@nodaro/shared").CompetitorActionsResult> {
+  return apiJson("/v1/competitors/actions", { method: "GET", label: "apiErr.loadCardMarks" })
+}
+
+/** "I did this" on a card on the wall, optionally with the post that came of it. */
+export async function markCardDone(input: import("@nodaro/shared").MarkCardInput): Promise<import("@nodaro/shared").CardActionResult> {
+  return apiJson("/v1/competitors/actions", { body: { ...input }, label: "apiErr.markCard" })
+}
+
+/** Link (or unlink with null) the post that came of a marked card, or mark its verdict seen. */
+export async function updateCardMark(id: string, input: import("@nodaro/shared").UpdateCardActionInput): Promise<import("@nodaro/shared").CardActionResult> {
+  return apiJson(`/v1/competitors/actions/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.updateCardMark" })
+}
+
+export async function deleteCardMark(id: string): Promise<void> {
+  await apiJson(`/v1/competitors/actions/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.undoCardMark" })
+}
+
 export async function discoverCompetitor(website: string): Promise<import("@nodaro/shared").CompetitorDiscovery> {
   return apiJson("/v1/competitor-discover", { body: { website }, label: "apiErr.discoverCompetitor" })
 }

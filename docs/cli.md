@@ -178,8 +178,12 @@ nodaro competitors add [--brand <name>] [--website <url>] [--tiktok <h>] [--inst
 #   --website with no account flags finds the accounts from the site first (guesses are named)
 nodaro competitors discover <website> [--json]              # free
 nodaro competitors scan <id> [--watch] [--json]             # one Social Search page per search
-nodaro competitors cards [--json]                           # what to do now
+nodaro competitors cards [--json]                           # what to do now (shows the id to mark a card done)
 nodaro competitors lessons <id> [--json]                    # what works for a brand (free)
+nodaro competitors done <card-id> [--link <url>] [--json]   # "I did this", with your post's full link (free)
+nodaro competitors tried [--json]                           # did it work? each mark, how it went, and your record
+nodaro competitors link <mark-id> <url> | link <mark-id> --remove
+nodaro competitors undo <mark-id>                           # removes the mark and its result
 nodaro competitors show <id> | update <id> [flags] [--clear <platforms>] | remove <id>
 #   update changes only the accounts named (the others are kept); --clear tiktok,x removes accounts
 

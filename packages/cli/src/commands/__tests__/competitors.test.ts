@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { Command } from "commander"
-import { accountsFromFlags, competitorsCommand, mergeAccounts, parseAbout, parseClear, parseSchedule } from "../competitors.js"
+import { accountsFromFlags, competitorsCommand, mergeAccounts, outcomeLine, parseAbout, parseClear, parseSchedule, recordLines } from "../competitors.js"
+import { info, success } from "../../output.js"
 
 const mocks = {
   list: vi.fn(),
@@ -12,6 +13,10 @@ const mocks = {
   scan: vi.fn(),
   cards: vi.fn(),
   lessons: vi.fn(),
+  tried: vi.fn(),
+  markDone: vi.fn(),
+  linkPost: vi.fn(),
+  unmark: vi.fn(),
   jobsGet: vi.fn(),
 }
 
@@ -27,6 +32,10 @@ vi.mock("../../client.js", () => ({
       scan: mocks.scan,
       cards: mocks.cards,
       lessons: mocks.lessons,
+      tried: mocks.tried,
+      markDone: mocks.markDone,
+      linkPost: mocks.linkPost,
+      unmark: mocks.unmark,
     },
     jobs: { get: mocks.jobsGet },
   }),
@@ -153,5 +162,91 @@ describe("flag parsing", () => {
     expect(() => parseAbout("reddit,myspace")).toThrow("myspace")
     expect(parseSchedule("off")).toBe("off")
     expect(() => parseSchedule("hourly")).toThrow("--schedule")
+  })
+})
+
+describe("did it work", () => {
+  beforeEach(() => {
+    for (const m of Object.values(mocks)) m.mockReset()
+    vi.mocked(info).mockClear()
+    vi.mocked(success).mockClear()
+  })
+
+  const action = (over: Record<string, unknown> = {}) => ({
+    id: "m1",
+    cardId: "sound:c1:7",
+    actedAt: "2026-10-04T00:00:00Z",
+    onWall: true,
+    postUrl: null,
+    card: { title: "Sound in 3 of Acme's new videos" },
+    outcome: { state: "no_posts_yet" },
+    ...over,
+  })
+
+  it("done marks a card, with the post's link when given", async () => {
+    mocks.markDone.mockResolvedValueOnce({ action: action(), posts: {}, created: true })
+    await runCmd("competitors", "done", "sound:c1:7", "--link", "https://www.tiktok.com/@me/video/1")
+    expect(mocks.markDone).toHaveBeenCalledWith("sound:c1:7", { postUrl: "https://www.tiktok.com/@me/video/1" })
+    expect(vi.mocked(success).mock.calls[0]![0]).toContain("marked (m1)")
+  })
+
+  it("tried lists the marks with how each went, and the track record", async () => {
+    mocks.tried.mockResolvedValueOnce({
+      actions: [action({ outcome: { state: "worked", ratio: 2.1, reach: 8400, usual: 4000, unit: "views", platform: "tiktok" }, postUrl: "https://www.tiktok.com/@me/video/1" })],
+      record: [{ family: "sound", tried: 4, worked: 3, flat: 1, missed: 0, avgRatio: 2.1, shown: true, tier: "proven" }],
+      posts: {},
+    })
+    await runCmd("competitors", "tried")
+    const lines = vi.mocked(info).mock.calls.map((c) => String(c[0]))
+    expect(lines).toContain("Sound advice: 3 of 4 worked for you (on average 2.1x your usual)")
+    expect(lines.some((l) => l.includes("worked: 2.1x your usual"))).toBe(true)
+    expect(lines.some((l) => l.includes("mark: m1"))).toBe(true)
+  })
+
+  it("link links or removes the post, and undo removes the mark", async () => {
+    mocks.linkPost.mockResolvedValue({ action: action(), posts: {} })
+    await runCmd("competitors", "link", "m1", "https://www.tiktok.com/@me/video/2")
+    await runCmd("competitors", "link", "m1", "--remove")
+    expect(mocks.linkPost.mock.calls).toEqual([
+      ["m1", "https://www.tiktok.com/@me/video/2"],
+      ["m1", null],
+    ])
+    await expect(runCmd("competitors", "link", "m1")).rejects.toThrow(/--remove/)
+    mocks.unmark.mockResolvedValueOnce(undefined)
+    await runCmd("competitors", "undo", "m1")
+    expect(mocks.unmark).toHaveBeenCalledWith("m1")
+  })
+
+  it("cards offers done on the cards whose advice is a post of yours", async () => {
+    mocks.cards.mockResolvedValueOnce({
+      cards: [
+        { id: "sound:c1:7", kind: "sound", priority: 2, params: {}, evidence: [], title: "t", why: "w", action: "a" },
+        { id: "pace:c1:tiktok", kind: "pace", priority: 3, params: {}, evidence: [], title: "t", why: "w", action: "a" },
+      ],
+      posts: {},
+      record: [],
+    })
+    await runCmd("competitors", "cards")
+    const lines = vi.mocked(info).mock.calls.map((c) => String(c[0]))
+    expect(lines.filter((l) => l.includes("nodaro competitors done"))).toEqual(["   did it? nodaro competitors done sound:c1:7 [--link <your post>]"])
+  })
+
+  it("phrases every outcome, and only the families with enough verdicts", () => {
+    for (const state of ["worked", "flat", "missed", "waiting", "not_found", "older_than_advice", "no_baseline", "posts_since", "no_posts_yet", "no_brand"] as const) {
+      expect(outcomeLine({ state, ratio: 1.2 }).length).toBeGreaterThan(5)
+    }
+    expect(recordLines([{ family: "launch", tried: 1, worked: 1, flat: 0, missed: 0, avgRatio: 3, shown: false, tier: "neutral" }])).toEqual([])
+  })
+})
+
+describe("post links", () => {
+  it("takes a full http(s) link and refuses anything else before calling the server", async () => {
+    const { checkPostLink } = await import("../competitors.js")
+    expect(checkPostLink(" https://www.tiktok.com/@me/video/1 ")).toBe("https://www.tiktok.com/@me/video/1")
+    expect(() => checkPostLink("javascript:alert(1)")).toThrow(/full link/)
+    expect(() => checkPostLink("www.tiktok.com/@me/video/1")).toThrow(/full link/)
+    mocks.markDone.mockReset()
+    await expect(runCmd("competitors", "done", "sound:c1:7", "--link", "not a link")).rejects.toThrow(/full link/)
+    expect(mocks.markDone).not.toHaveBeenCalled()
   })
 })

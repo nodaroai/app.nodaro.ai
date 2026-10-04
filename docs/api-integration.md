@@ -2586,8 +2586,12 @@ Search page per search; see [Competitors](./features/competitors.md).
 | `GET` | `/v1/competitors/:id` | none | One brand with its latest scan (posts and cards) and its scan history (counts only). |
 | `PATCH` | `/v1/competitors/:id` | any field of the above | Change it. `accounts` replaces the whole set: send every account to keep. A new `schedule` restarts its clock, so send it only to change it. While a scan of the brand runs, a change to `brand`, `accounts`, `aboutPlatforms` or `isOwn` answers `409 scan_running` (the scan was priced on them). |
 | `DELETE` | `/v1/competitors/:id` | none | Stop tracking it (its scans and cards go too). |
-| `GET` | `/v1/competitors/cards` | none | Every card from each brand's latest scan, most urgent first: `{ cards, posts }`, where `posts` holds the posts the cards rest on. |
+| `GET` | `/v1/competitors/cards` | none | Every card from each brand's latest scan, most urgent first: `{ cards, posts, record }`, where `posts` holds the posts the cards rest on and `record` is your track record (see **Did it work?**). |
 | `GET` | `/v1/competitors/:id/lessons` | none | What works for the brand (free): `{ lessons, posts }`. `lessons.platforms[]` gives, per platform, the brand's own posts counted (`posts`), their median reach (`usual`, `null` below `lessons.minPosts` posts), the best and weakest post ids, and `lessons[]`: a trait its best posts share (`kind`: `short_videos`, `long_videos`, `format`, `question_hook`, `number_hook`, `short_caption`, `long_caption`, `hashtag`, `sound`, `weekday`), its `params` (`lift`, `posts`, `winners`, `unit` and the trait's value), the `evidence` post ids and an English `text`. `posts` holds every post they name. |
+| `GET` | `/v1/competitors/actions` | none | The cards you marked done, newest first, with how each went (free): `{ actions, record, posts }`. See **Did it work?** |
+| `POST` | `/v1/competitors/actions` | `{ cardId, postUrl? }` | "I did this" on a card on your wall (`cardId` from `/cards`), optionally with the full link to your post that came of it. `201` with `{ action, posts, created: true }`; a card marked before answers `200` with its mark (`created: false`; a link sent then fills an empty one). `404 card_not_found` when the card left the wall, `400 not_measurable` when its advice is not a post of yours, `400 short_link` for a short link, `409 too_many_actions` past 500 marks. |
+| `PATCH` | `/v1/competitors/actions/:id` | `{ postUrl }` or `{ seen: true }` | Link the post that came of it (`null` removes the link; another post is judged afresh, the same post under another link keeps its verdict), or mark its verdict seen. |
+| `DELETE` | `/v1/competitors/actions/:id` | none | Undo the mark (its verdict leaves your record). |
 | `POST` | `/v1/competitor-discover` | `{ website }` | Find a brand's accounts from its website (free). Each account says whether the site linked it or it is a guess to check. |
 | `POST` | `/v1/competitor-scan` | `{ competitorId }` | Scan now. Answers `{ jobId }` at once; poll the job. |
 
@@ -2614,10 +2618,30 @@ all your brands. Competitor scans do not produce `top_in_sources`. A scan's
 `about:reddit`); a post is new only against scans that could read its
 platform.
 
+**Did it work?** A mark keeps what the card said (`card`: its words,
+`params`, `priority`, brand, platform, evidence) and its `outcome`, judged
+from the scans of your own brand (the one with `isOwn`): `state` is `worked`,
+`flat` or `missed` (a verdict on the one post tied to the card, with
+`ratio`, `reach` and the `usual` it was compared with), `waiting` (too new,
+or not scanned yet), `not_found`, `older_than_advice`, `no_baseline`,
+`posts_since` (nothing tied; your posts since, no verdict), `no_posts_yet`
+or `no_brand`. A post is tied by your link, or for a sound card by your
+first post with that sound after the advice (`matchedBy`). `candidates`
+lists your recent posts to pick the one from. The first verdict is kept in
+`verdict` and does not change; `seenAt` is when you first saw it; `onWall`
+is false once the card left the wall (it can then be marked anew). `record`
+sums verdicts per family of advice (`sound`, `outlier`, `launch`,
+`complaints`): `tried`, `worked`, `flat`, `missed`, `avgRatio`; `shown`
+when there are enough to say, and `tier` (`proven`, `weak`, `neutral`): on
+`/cards`, cards of a `proven` family come first within their priority and
+`weak` ones last.
+
 OAuth app tokens need `assets:read` for the reads and `assets:write` for the
-writes and the website lookup; a scan spends credits, so it also needs a
+writes, the marks and the website lookup; a scan spends credits, so it also needs a
 `:write` or `:execute` scope. While the tables are missing on a server the
-reads answer empty and the writes answer `503 not_available`.
+reads answer empty and the writes answer `503 not_available`; the marks
+(`/v1/competitors/actions*`) answer `503 not_available` until their table
+exists, and `/cards` then answers with an empty `record`.
 
 ```bash
 # Track a brand from its website, then scan it
@@ -2632,12 +2656,19 @@ curl -s -X POST https://app.nodaro.ai/v1/competitor-scan \
   -d '{"competitorId": "<id>"}' | jq .
 
 # What to do now
-curl -s https://app.nodaro.ai/v1/competitors/cards -H "Authorization: Bearer $NODARO_TOKEN" | jq '.cards[] | {title, action}'
+curl -s https://app.nodaro.ai/v1/competitors/cards -H "Authorization: Bearer $NODARO_TOKEN" | jq '.cards[] | {id, title, action}'
+
+# Did it work? Mark a card done with your post, then read how it went
+curl -s -X POST https://app.nodaro.ai/v1/competitors/actions \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -d '{"cardId": "<card id>", "postUrl": "https://www.tiktok.com/@you/video/123"}' | jq '.action.outcome'
+curl -s https://app.nodaro.ai/v1/competitors/actions -H "Authorization: Bearer $NODARO_TOKEN" | jq '.record'
 ```
 
 The same routes are wrapped by the SDK (`client.competitors`), the MCP tools
-(`list_competitors`, `competitor_cards`, `add_competitor`,
-`scan_competitor`) and the CLI (`nodaro competitors`).
+(`list_competitors`, `competitor_cards`, `competitor_lessons`,
+`competitor_tried`, `mark_card_done`, `add_competitor`, `scan_competitor`)
+and the CLI (`nodaro competitors`).
 
 ## 17. Community
 

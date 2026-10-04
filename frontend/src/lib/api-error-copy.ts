@@ -88,6 +88,10 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   too_many_competitors: "apiErr.reason.tooManyBrands",
   nothing_to_scan: "apiErr.reason.nothingToScan",
   not_reachable: "apiErr.reason.siteNotReachable",
+  card_not_found: "apiErr.reason.cardGone",
+  not_measurable: "apiErr.reason.notMeasurable",
+  too_many_actions: "apiErr.reason.tooManyMarks",
+  short_link: "apiErr.reason.shortLink",
 }
 
 /** The translated reason for a server error code, if the code has a fixed meaning. */

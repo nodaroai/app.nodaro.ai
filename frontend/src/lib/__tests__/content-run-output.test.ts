@@ -62,6 +62,13 @@ describe("contentRunResultPatch — content-ideas", () => {
     expect(contentRunResultPatch("content-ideas", { ...base, brandLessons: "Acme" })?.brandLessons).toBeUndefined()
   })
 
+  it("keeps how many families of the brand's track record went in, even with no lessons", () => {
+    const base = { json: [{ title: "one" }], listResults: ["IDEA 1 of 1: one"] }
+    expect(contentRunResultPatch("content-ideas", { ...base, brandLessons: { brand: "Acme", lessons: 2, record: 1 } })?.brandLessons).toEqual({ brand: "Acme", lessons: 2, record: 1 })
+    expect(contentRunResultPatch("content-ideas", { ...base, brandLessons: { brand: "Acme", lessons: 0, record: 2 } })?.brandLessons).toEqual({ brand: "Acme", lessons: 0, record: 2 })
+    expect(contentRunResultPatch("content-ideas", { ...base, brandLessons: { brand: "Acme", lessons: 3, record: 0 } })?.brandLessons).toEqual({ brand: "Acme", lessons: 3 })
+  })
+
   it("with no digest, the text is the briefs joined", () => {
     const patch = contentRunResultPatch("content-ideas", { json: [], listResults: ["a", "b"] })
     expect(patch?.generatedText).toBe("a\n\nb")

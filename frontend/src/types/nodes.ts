@@ -5886,8 +5886,9 @@ export type ContentIdeasNodeData = {
   /** Lean on what has worked for the user's own brand (its tracked brand
    *  marked "this is my brand" in Competitors). On unless false. */
   useBrandLessons?: boolean
-  /** The last run's: the own brand whose lessons the ideas leaned on, and how many. */
-  brandLessons?: { brand: string; lessons: number }
+  /** The last run's: the own brand whose lessons the ideas leaned on, how many,
+   *  and how many families of its track record ("did it work?") went in. */
+  brandLessons?: { brand: string; lessons: number; record?: number }
 }
 
 // --- Video Audit ("AI Audit") Node Data ---

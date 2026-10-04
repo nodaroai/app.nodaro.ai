@@ -67,3 +67,33 @@ describe("competitors resource", () => {
     expect(call(fetchMock, 0)).toMatchObject({ url: `https://api.example.com/v1/competitors/${ID}/lessons`, method: "GET" })
   })
 })
+
+describe("did it work", () => {
+  it("lists the cards you tried, marks one done with its post, links, sees and undoes", async () => {
+    const MARK = "00000000-0000-4000-8000-0000000000a1"
+    const result = { action: { id: MARK, outcome: { state: "no_posts_yet" } }, posts: {}, created: true }
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ actions: [], record: [], posts: {} }))
+      .mockReturnValueOnce(mockOk(result, 201))
+      .mockReturnValueOnce(mockOk(result))
+      .mockReturnValueOnce(mockOk(result))
+      .mockReturnValueOnce(mockOk(result))
+      .mockReturnValueOnce(mockOk({ success: true }))
+    const sdk = client(fetchMock)
+
+    expect(await sdk.competitors.tried()).toEqual({ actions: [], record: [], posts: {} })
+    expect((await sdk.competitors.markDone("sound:c1:7", { postUrl: "https://www.tiktok.com/@me/video/1" })).created).toBe(true)
+    await sdk.competitors.linkPost(MARK, "https://www.tiktok.com/@me/video/2")
+    await sdk.competitors.linkPost(MARK, null)
+    await sdk.competitors.markSeen(MARK)
+    await expect(sdk.competitors.unmark(MARK)).resolves.toBeUndefined()
+
+    expect(call(fetchMock, 0)).toMatchObject({ url: "https://api.example.com/v1/competitors/actions", method: "GET" })
+    expect(call(fetchMock, 1)).toMatchObject({ method: "POST", body: { cardId: "sound:c1:7", postUrl: "https://www.tiktok.com/@me/video/1" } })
+    expect(call(fetchMock, 2)).toMatchObject({ url: `https://api.example.com/v1/competitors/actions/${MARK}`, method: "PATCH", body: { postUrl: "https://www.tiktok.com/@me/video/2" } })
+    expect(call(fetchMock, 3).body).toEqual({ postUrl: null })
+    expect(call(fetchMock, 4).body).toEqual({ seen: true })
+    expect(call(fetchMock, 5)).toMatchObject({ url: `https://api.example.com/v1/competitors/actions/${MARK}`, method: "DELETE" })
+  })
+})

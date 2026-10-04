@@ -1,5 +1,7 @@
 import type { NodaroClient } from "../client.js"
 import type {
+  CardActionResult,
+  CompetitorActionsResult,
   CompetitorCardsResult,
   CompetitorDetail,
   CompetitorDiscovery,
@@ -65,6 +67,46 @@ export class CompetitorsResource {
    */
   lessons(id: string): Promise<CompetitorLessonsResult> {
     return this.client.request<CompetitorLessonsResult>("GET", `/v1/competitors/${encodeURIComponent(id)}/lessons`)
+  }
+
+  /**
+   * `GET /v1/competitors/actions` → the cards you marked "I did this", newest
+   * first, each with how it went (`outcome`), and your track record per
+   * family of advice (free). Each scan of your own brand judges the post that
+   * came of a card once it is a few days old; the first verdict stays.
+   */
+  tried(): Promise<CompetitorActionsResult> {
+    return this.client.request<CompetitorActionsResult>("GET", "/v1/competitors/actions")
+  }
+
+  /**
+   * `POST /v1/competitors/actions` → "I did this" on a card on your wall (its
+   * `id` from `cards()`), optionally with the link to your post that came of
+   * it. Only cards whose advice ends in a post of yours can be marked
+   * (`400 not_measurable`). Marking a marked card returns its mark
+   * (`created: false`).
+   */
+  markDone(cardId: string, options: { postUrl?: string } = {}): Promise<CardActionResult> {
+    return this.client.request<CardActionResult>("POST", "/v1/competitors/actions", { body: { cardId, ...(options.postUrl ? { postUrl: options.postUrl } : {}) } })
+  }
+
+  /**
+   * `PATCH /v1/competitors/actions/:id` → link the post that came of a marked
+   * card (the post's full link; a short link is refused with `400
+   * short_link`), or `null` to remove the link. Another post is judged afresh.
+   */
+  linkPost(markId: string, postUrl: string | null): Promise<CardActionResult> {
+    return this.client.request<CardActionResult>("PATCH", `/v1/competitors/actions/${encodeURIComponent(markId)}`, { body: { postUrl } })
+  }
+
+  /** `PATCH /v1/competitors/actions/:id` with `seen: true` → you have seen its verdict (the app stops announcing it). */
+  markSeen(markId: string): Promise<CardActionResult> {
+    return this.client.request<CardActionResult>("PATCH", `/v1/competitors/actions/${encodeURIComponent(markId)}`, { body: { seen: true } })
+  }
+
+  /** `DELETE /v1/competitors/actions/:id` → undo "I did this" (its verdict leaves your track record). */
+  async unmark(markId: string): Promise<void> {
+    await this.client.request<{ success: true }>("DELETE", `/v1/competitors/actions/${encodeURIComponent(markId)}`)
   }
 
   /** `POST /v1/competitor-discover` → a brand's accounts found from its website (free; guesses are marked). */

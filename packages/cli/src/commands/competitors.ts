@@ -3,6 +3,9 @@ import {
   COMPETITOR_ABOUT_PLATFORMS,
   COMPETITOR_ACCOUNT_KEYS,
   COMPETITOR_SCHEDULES,
+  isMeasurableCard,
+  type AdviceRecord,
+  type CardOutcome,
   type CompetitorAccountKey,
   type CompetitorAboutPlatform,
   type CompetitorAccounts,
@@ -89,6 +92,55 @@ function withAccountFlags(cmd: Command): Command {
     .option("--meta-ads <advertiser>", "Meta ads advertiser name or page id")
     .option("--about <platforms>", `where to search posts naming it, comma separated: ${COMPETITOR_ABOUT_PLATFORMS.join(",")}`)
     .option("--schedule <when>", `${COMPETITOR_SCHEDULES.join(" | ")} (default weekly)`)
+}
+
+const FAMILY_LABEL: Readonly<Record<AdviceRecord["family"], string>> = {
+  sound: "Sound advice",
+  outlier: "Making a post like a hit",
+  launch: "Answering a launch",
+  complaints: "Answering complaints",
+}
+
+/** A post link the server can take: http(s), at most 1,000 characters. */
+export function checkPostLink(url: string): string {
+  const value = url.trim()
+  if (!/^https?:\/\/\S+$/i.test(value) || value.length > 1000) throw new Error("give the post's full link (http or https)")
+  return value
+}
+
+/** How a marked card went, in one line. */
+export function outcomeLine(o: CardOutcome): string {
+  const ratio = typeof o.ratio === "number" ? `${o.ratio}x` : ""
+  const numbers = typeof o.reach === "number" && typeof o.usual === "number" ? ` (${o.reach} ${o.unit ?? "views"} against your usual ${o.usual}${o.platform ? ` on ${o.platform}` : ""})` : ""
+  switch (o.state) {
+    case "worked":
+      return `worked: ${ratio} your usual${numbers}`
+    case "flat":
+      return `about your usual: ${ratio}${numbers}`
+    case "missed":
+      return `below your usual: ${ratio}${numbers}`
+    case "waiting":
+      return "checking: the post needs a few more days and a scan of your brand"
+    case "not_found":
+      return "the linked post is not among your brand's scanned posts: check the link"
+    case "older_than_advice":
+      return "the linked post went up before this advice: link the one that came of it"
+    case "no_baseline":
+      return `not enough of your posts${o.platform ? ` on ${o.platform}` : ""} yet to compare with`
+    case "posts_since":
+      return `your posts since: ${ratio} your usual; link the one that came of it for a verdict`
+    case "no_posts_yet":
+      return "marked; your next posts will be checked"
+    case "no_brand":
+      return "add your own brand (--own) and scan it to see if it worked"
+    default:
+      return o.state
+  }
+}
+
+/** "Sound advice: 3 of 4 worked for you (on average 2.1x your usual)", for the families with enough verdicts. */
+export function recordLines(record: readonly AdviceRecord[]): string[] {
+  return record.filter((r) => r.shown).map((r) => `${FAMILY_LABEL[r.family]}: ${r.worked} of ${r.tried} worked for you (on average ${r.avgRatio}x your usual)`)
 }
 
 function rows(list: readonly TrackedCompetitor[]) {
@@ -266,7 +318,9 @@ export function competitorsCommand(): Command {
             const url = result.posts[postId]?.url
             if (url) info(`   ${url}`)
           }
+          if (isMeasurableCard(card)) info(`   did it? nodaro competitors done ${card.id} [--link <your post>]`)
         }
+        for (const line of recordLines(result.record ?? [])) info(line)
       } catch (err) {
         handleError(err)
       }
@@ -298,6 +352,77 @@ export function competitorsCommand(): Command {
             }
           }
         }
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  // ── Did it work? ──────────────────────────────────────────────────────────
+
+  cmd
+    .command("done <card-id>")
+    .description('"I did this" on a card (its id from `nodaro competitors cards`); each scan of your own brand then checks how it went (free)')
+    .option("--link <url>", "the full link to your post that came of it")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (cardId: string, opts: { link?: string } & GlobalOpts) => {
+      try {
+        const result = await buildClient(opts.profile).competitors.markDone(cardId, opts.link ? { postUrl: checkPostLink(opts.link) } : {})
+        if (opts.json) return emit(result, opts)
+        success(`${result.created === false ? "already marked" : "marked"} (${result.action.id}): ${outcomeLine(result.action.outcome)}`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("tried")
+    .description("the cards you marked done, how each went, and what has worked for you (free)")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (opts: GlobalOpts) => {
+      try {
+        const result = await buildClient(opts.profile).competitors.tried()
+        if (opts.json) return emit(result, opts)
+        if (result.actions.length === 0) return info("nothing marked yet: nodaro competitors done <card-id>")
+        for (const line of recordLines(result.record)) info(line)
+        for (const action of result.actions) {
+          info(`${action.actedAt.slice(0, 10)}  ${action.card.title || action.cardId}${action.onWall ? "" : " (no longer on the wall)"}`)
+          info(`   ${outcomeLine(action.outcome)}`)
+          if (action.postUrl) info(`   ${action.postUrl}`)
+          info(`   mark: ${action.id}`)
+        }
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("link <mark-id> [url]")
+    .description("link the post that came of a marked card (its full link), or --remove the link")
+    .option("--remove", "remove the link")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (markId: string, url: string | undefined, opts: { remove?: boolean } & GlobalOpts) => {
+      try {
+        if (!url && !opts.remove) throw new Error("give the post's link, or --remove")
+        if (url && opts.remove) throw new Error("give a link or --remove, not both")
+        const result = await buildClient(opts.profile).competitors.linkPost(markId, opts.remove ? null : checkPostLink(url!))
+        if (opts.json) return emit(result, opts)
+        success(`${opts.remove ? "unlinked" : "linked"}: ${outcomeLine(result.action.outcome)}`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("undo <mark-id>")
+    .description('undo "I did this" (its verdict leaves your track record)')
+    .option("--profile <name>")
+    .action(async (markId: string, opts: GlobalOpts) => {
+      try {
+        await buildClient(opts.profile).competitors.unmark(markId)
+        success(`removed mark ${markId}`)
       } catch (err) {
         handleError(err)
       }

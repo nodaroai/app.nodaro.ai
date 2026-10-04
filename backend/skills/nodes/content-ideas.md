@@ -1,7 +1,7 @@
 ---
 node_type: content-ideas
-generated_at: 2026-10-04T01:27:02.968Z
-generated_from: 34195fb18
+generated_at: 2026-10-04T07:00:53.601Z
+generated_from: d3cedd55a
 ---
 
 # Content Ideas
@@ -32,7 +32,7 @@ generated_from: 34195fb18
 - `generatedText?: string`
 - `runWarnings?: string[]`
 - `useBrandLessons?: boolean`
-- `brandLessons?: { brand: string; lessons: number }`
+- `brandLessons?: { brand: string; lessons: number; record?: number }`
 
 **Default data:**
 ```json
@@ -56,7 +56,7 @@ Wire every Content Recipe into `recipes` (several nodes, or one recipe node that
 
 The output is a LIST: the node after it (typically Generate Script) runs once per idea, on the server too. Each item is a complete creative brief.
 
-`useBrandLessons` (on unless `false`) leans the ideas on what has worked for the user's own brand: the lessons of their tracked brand marked "this is my brand" in Competitors (what its best posts share — length, format, hook, hashtag, sound — measured on its own posts; MCP `competitor_lessons`). Nothing changes without an own brand with enough posts; the price is the same. The run's output names the brand it read (`brandLessons`).
+`useBrandLessons` (on unless `false`) leans the ideas on what has worked for the user's own brand: the lessons of their tracked brand marked "this is my brand" in Competitors (what its best posts share — length, format, hook, hashtag, sound — measured on its own posts; MCP `competitor_lessons`). It also leans on the user's track record on the cards they marked done (which kinds of advice worked for them; MCP `competitor_tried`). Nothing changes without an own brand with enough posts or results; the price is the same. The run's output names the brand it read and how many lessons and record families went in (`brandLessons`).
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->

@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Loader2, Plus, Radar } from "lucide-react"
+import { Loader2, Plus, Radar, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { useQueryClient } from "@tanstack/react-query"
-import type { CreateCompetitorInput, TrackedCompetitor } from "@nodaro/shared"
+import type { ActionCard, CardAction, CreateCompetitorInput, TrackedCompetitor } from "@nodaro/shared"
 import { Button } from "@/components/ui/button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ActionCardView } from "@/components/competitors/action-card-view"
+import { recordForCard, recordMovesCards, unseenVerdicts } from "@/components/competitors/card-outcome-text"
+import { TriedCards, type MarkHandlers } from "@/components/competitors/tried-cards"
+import { cn } from "@/lib/utils"
 import { CompetitorFormDialog, changedFields } from "@/components/competitors/competitor-form-dialog"
 import { CompetitorPostsDialog, type CompetitorDialogTab } from "@/components/competitors/competitor-posts-dialog"
 import { CompetitorRow } from "@/components/competitors/competitor-row"
 import { scanLanded, scanStateOf, type ScanState } from "@/components/competitors/scan-state"
 import { useSaveControls } from "@/components/competitors/use-save-controls"
-import { useCompetitorCards, useCompetitorMutations, useCompetitors } from "@/hooks/queries/use-competitors-queries"
+import { useCardMarkMutations, useCardMarks, useCompetitorCards, useCompetitorMutations, useCompetitors } from "@/hooks/queries/use-competitors-queries"
 import { queryKeys } from "@/lib/query-keys"
 import { useT } from "@/lib/i18n"
 
@@ -46,12 +49,61 @@ export default function CompetitorsPage() {
     if (landed) void qc.invalidateQueries({ queryKey: queryKeys.competitors.all })
   }, [competitors, qc])
 
+  // Did it work? Marks are offered once the server answers for them (a server
+  // without a place for them yet answers not_available: no button, no tab).
+  const marks = useCardMarks(competitors.length > 0)
+  const markOps = useCardMarkMutations()
+  // Kept through a failed re-read: the marks it has stay shown.
+  const canMark = marks.data !== undefined
+  const marksData = marks.data
+  const [cardsTab, setCardsTab] = useState<"todo" | "tried">("todo")
+  // Cards marked during this visit stay on the wall with their strip (to link
+  // the post); they move to Tried on "Later" or the next visit.
+  const [justMarked, setJustMarked] = useState<ReadonlySet<string>>(() => new Set())
+  const [undoing, setUndoing] = useState<CardAction | null>(null)
+  const markByCard = useMemo(() => new Map((marksData?.actions ?? []).filter((a) => a.onWall).map((a) => [a.cardId, a] as const)), [marksData])
+
   const allCards = cards.data?.cards ?? []
-  const shownCards = showAll ? allCards : allCards.slice(0, CARDS_FIRST)
+  const todoCards = allCards.filter((c) => !markByCard.has(c.id) || justMarked.has(c.id))
+  const shownCards = showAll ? todoCards : todoCards.slice(0, CARDS_FIRST)
   const evidenceIds = useMemo(() => [...new Set(allCards.flatMap((c) => c.evidence))], [allCards])
   const save = useSaveControls(evidenceIds, "competitors")
+  const unseen = unseenVerdicts(marksData?.actions ?? [])
+  const triedTab = canMark && cardsTab === "tried" && (marksData?.actions.length ?? 0) > 0
 
   const fail = (fallback: Parameters<typeof t>[0]) => (err: unknown) => toast.error(err instanceof Error ? err.message : t(fallback))
+  const unmarkLocally = (cardId: string) => setJustMarked((prev) => new Set([...prev].filter((id) => id !== cardId)))
+
+  const markCard = (card: ActionCard) => {
+    setJustMarked((prev) => new Set([...prev, card.id]))
+    markOps.mark.mutate(
+      { card },
+      {
+        onError: (err) => {
+          unmarkLocally(card.id)
+          fail("apiErr.markCard")(err)
+        },
+      },
+    )
+  }
+  const linkMark = (action: CardAction, postUrl: string | null) => markOps.link.mutate({ id: action.id, postUrl }, { onError: fail("apiErr.updateCardMark") })
+  const undoMark = (action: CardAction) =>
+    markOps.undo.mutate({ action }, {
+      onSuccess: () => {
+        unmarkLocally(action.cardId)
+        toast.success(t("marks.undone"))
+      },
+      onError: fail("apiErr.undoCardMark"),
+    })
+  // Undoing a mark with a verdict takes it out of the record too: asked first.
+  const askUndo = (action: CardAction) => (action.verdict ? setUndoing(action) : undoMark(action))
+  const busyMarkId = markOps.link.isPending ? (markOps.link.variables?.id ?? null) : markOps.undo.isPending ? (markOps.undo.variables?.action.id ?? null) : null
+  const markHandlers: MarkHandlers = {
+    busyId: busyMarkId,
+    onLink: linkMark,
+    onUndo: askUndo,
+    onSeen: (action) => markOps.seen.mutate(action.id),
+  }
 
   const submit = (input: CreateCompetitorInput) => {
     const done = () => {
@@ -105,21 +157,78 @@ export default function CompetitorsPage() {
       ) : (
         <div className="flex flex-col gap-8">
           <section>
-            <h2 className="mb-3 text-lg font-semibold">{t("competitors.cardsTitle")}</h2>
-            {cards.isLoading ? (
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 className="text-lg font-semibold">{t("competitors.cardsTitle")}</h2>
+                {recordMovesCards(cards.data?.record) && <p className="text-[12px] text-muted-foreground">{t("marks.sortedByRecord")}</p>}
+              </div>
+              {canMark && (marksData?.actions.length ?? 0) > 0 && (
+                <div className="flex gap-1 rounded-lg border p-0.5 text-[12px] font-bold" role="tablist" aria-label={t("competitors.cardsTitle")}>
+                  {(["todo", "tried"] as const).map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      role="tab"
+                      aria-selected={cardsTab === key}
+                      onClick={() => setCardsTab(key)}
+                      className={cn("rounded-md px-2.5 py-1.5", cardsTab === key ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}
+                    >
+                      {key === "todo" ? t("marks.tabTodo", { n: todoCards.length }) : t("marks.tabTried", { n: marksData?.actions.length ?? 0 })}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {unseen.length > 0 && !triedTab && (
+              <button
+                type="button"
+                onClick={() => setCardsTab("tried")}
+                className="mb-3 flex w-full items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-start text-[13px] font-semibold text-emerald-800 hover:bg-emerald-500/15 dark:text-emerald-300"
+              >
+                <Sparkles className="h-4 w-4 shrink-0" />
+                <span className="flex-1">{unseen.length === 1 ? t("marks.resultsInOne") : t("marks.resultsIn", { n: unseen.length })}</span>
+                <span className="text-[12px] underline">{t("marks.seeResults")}</span>
+              </button>
+            )}
+            {triedTab && marksData ? (
+              <TriedCards data={marksData} handlers={markHandlers} />
+            ) : cards.isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            ) : allCards.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("competitors.noCards")}</p>
+            ) : todoCards.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{allCards.length > 0 ? t("marks.allTried") : t("competitors.noCards")}</p>
             ) : (
               <>
                 <div className="grid gap-3 md:grid-cols-2">
-                  {shownCards.map((card) => (
-                    <ActionCardView key={card.id} card={card} posts={cards.data?.posts ?? {}} save={save} />
-                  ))}
+                  {shownCards.map((card) => {
+                    const action = markByCard.get(card.id)
+                    return (
+                      <ActionCardView
+                        key={card.id}
+                        card={card}
+                        posts={cards.data?.posts ?? {}}
+                        save={save}
+                        record={recordForCard(cards.data?.record, card)}
+                        marking={{
+                          canMark,
+                          action,
+                          posts: marksData?.posts ?? {},
+                          busy: (action ? busyMarkId === action.id : false) || (markOps.mark.isPending && markOps.mark.variables?.card.id === card.id),
+                          linkOpen: justMarked.has(card.id),
+                          onMark: () => markCard(card),
+                          onLink: (url) => action && linkMark(action, url),
+                          onUndo: () => action && askUndo(action),
+                          onLater: () => {
+                            unmarkLocally(card.id)
+                            toast.success(t("marks.movedToTried"))
+                          },
+                        }}
+                      />
+                    )
+                  })}
                 </div>
-                {allCards.length > CARDS_FIRST && (
+                {todoCards.length > CARDS_FIRST && (
                   <Button variant="ghost" size="sm" className="mt-2" onClick={() => setShowAll((v) => !v)}>
-                    {showAll ? t("competitors.showFewer") : t("competitors.showAll", { n: allCards.length })}
+                    {showAll ? t("competitors.showFewer") : t("competitors.showAll", { n: todoCards.length })}
                   </Button>
                 )}
               </>
@@ -171,6 +280,16 @@ export default function CompetitorsPage() {
         onOpenChange={(open) => {
           if (!open) setPostsOf(null)
         }}
+      />
+      <DeleteConfirmationDialog
+        isOpen={undoing !== null}
+        onClose={() => setUndoing(null)}
+        onConfirm={() => {
+          if (undoing) undoMark(undoing)
+        }}
+        title={t("marks.undoTitle")}
+        description={t("marks.undoDesc")}
+        confirmLabel={t("marks.undo")}
       />
       <DeleteConfirmationDialog
         isOpen={removing !== null}
