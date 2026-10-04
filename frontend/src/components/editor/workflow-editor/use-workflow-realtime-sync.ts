@@ -68,9 +68,11 @@
  * broadcast), so the user only receives events for rows they can SELECT.
  * That includes a `view` reader, whose socket therefore receives the stored
  * row whole. So only the row's OWNER adopts a broadcast's content as it
- * arrived (`isOwnRow`); anyone else takes the broadcast as a signal and
- * re-reads the content through the server's door (`rereadContent`), which
- * strips a studio production's owner drafts for `view` (lib/workflow-content.ts).
+ * arrived — decided here, from the signed-in session (`isOwnWorkflowRow`
+ * against `getCachedUserId`), not by the caller; anyone else takes the
+ * broadcast as a signal and re-reads the content through the server's door
+ * (`readWorkflowContentFromServer`), which strips a studio production's owner
+ * drafts for `view` (lib/workflow-content.ts).
  *
  * Migration: supabase/migrations/115_workflows_realtime.sql adds
  *   ALTER TABLE workflows REPLICA IDENTITY FULL;
@@ -92,7 +94,8 @@
 import { useEffect, useRef } from "react"
 import type { Node, Edge } from "@xyflow/react"
 import { createClient } from "@/lib/supabase"
-import type { WorkflowContentRow } from "@/lib/workflow-content"
+import { getCachedUserId } from "@/hooks/use-auth"
+import { isOwnWorkflowRow, readWorkflowContentFromServer, type WorkflowContentRow } from "@/lib/workflow-content"
 
 interface RealtimeWorkflowRow {
   readonly id: string
@@ -200,23 +203,6 @@ export interface UseWorkflowRealtimeSyncParams {
    * `loadedUpdatedAt` to detect divergence.
    */
   readonly onRemoteUpdatedAt: (updatedAt: string) => void
-  /**
-   * Whether a broadcast row's CONTENT may be adopted as it arrived: true only
-   * for the caller's OWN row. The broadcast is the stored row (REPLICA
-   * IDENTITY FULL), and only its owner may hold that whole — a studio
-   * production keeps the owner's drafts, runs in flight and take voice records
-   * in it (studio rulings T11 / T21 / T42). Fail closed: a row with no
-   * `user_id`, or a caller not known yet, is somebody else's.
-   */
-  readonly isOwnRow: (row: { readonly user_id?: unknown }) => boolean
-  /**
-   * For a broadcast about somebody else's row: the content as THIS caller may
-   * hold it, re-read through the server's door (`readWorkflowContentFromServer`
-   * in lib/workflow-content.ts) — the stored row for an `edit` collaborator, the
-   * reader's projection for `view`. The broadcast itself then only says THAT
-   * the row moved. Null when the caller can no longer reach it.
-   */
-  readonly rereadContent: (workflowId: string) => Promise<WorkflowContentRow | null>
 }
 
 /** A re-read row in the broadcast's own shape, so both reach the same reconcile. */
@@ -254,8 +240,6 @@ export function useWorkflowRealtimeSync(
     onAppendNodes,
     onAppendEdges,
     onRemoteUpdatedAt,
-    isOwnRow,
-    rereadContent,
   } = params
 
   // Stash callbacks in refs so the subscribe-effect's closure never
@@ -272,8 +256,6 @@ export function useWorkflowRealtimeSync(
   const onAppendNodesRef = useRef(onAppendNodes)
   const onAppendEdgesRef = useRef(onAppendEdges)
   const onRemoteUpdatedAtRef = useRef(onRemoteUpdatedAt)
-  const isOwnRowRef = useRef(isOwnRow)
-  const rereadContentRef = useRef(rereadContent)
 
   // Update refs on every render — cheap, and guarantees the next event
   // sees the freshest callbacks regardless of how the caller passes them.
@@ -287,8 +269,6 @@ export function useWorkflowRealtimeSync(
   onAppendNodesRef.current = onAppendNodes
   onAppendEdgesRef.current = onAppendEdges
   onRemoteUpdatedAtRef.current = onRemoteUpdatedAt
-  isOwnRowRef.current = isOwnRow
-  rereadContentRef.current = rereadContent
 
   useEffect(() => {
     if (!workflowId) return
@@ -405,21 +385,26 @@ export function useWorkflowRealtimeSync(
           const next = payload.new
           if (!next || alreadyHeld(next)) return
 
-          if (isOwnRowRef.current(next)) {
+          // The broadcast is the stored row (REPLICA IDENTITY FULL), and only
+          // its owner may hold that whole — a studio production keeps the
+          // owner's drafts, runs in flight and take voice records in it
+          // (studio rulings T11 / T21 / T42). Fail closed: a row with no
+          // `user_id`, or a session not known yet, is somebody else's.
+          if (isOwnWorkflowRow(next, getCachedUserId())) {
             adopt(next, next.updated_at as string)
             return
           }
 
           // Somebody else's row: what arrived is the STORED document, which
           // only its owner may hold. It still says THAT the row moved — read
-          // the content again through the server's door and adopt that,
-          // re-checked on arrival, since this tab may have saved, or applied a
-          // newer write, meanwhile.
-          void rereadContentRef
-            .current(workflowId)
+          // the content again through the server's door (the stored row for
+          // an `edit` collaborator, the reader's projection for `view`) and
+          // adopt that, re-checked on arrival, since this tab may have saved,
+          // or applied a newer write, meanwhile.
+          void readWorkflowContentFromServer(workflowId)
             .then((fresh) => {
               if (!active || !fresh) return
-              const row = asBroadcastRow(fresh)
+              const row = asBroadcastRow(fresh.row)
               if (!alreadyHeld(row)) adopt(row, row.updated_at as string)
             })
             .catch(() => {
