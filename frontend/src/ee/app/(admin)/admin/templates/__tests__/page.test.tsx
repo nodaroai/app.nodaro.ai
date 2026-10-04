@@ -22,6 +22,27 @@ vi.mock("@/lib/edition", async (orig) => ({
 }))
 vi.mock("sonner", () => ({ toast: { success: h.toastSuccess, error: h.toastError } }))
 
+// The gallery's preview components, stubbed to what the page hands them.
+vi.mock("@/components/templates/template-detail-modal", () => ({
+  TemplateDetailModal: (props: { slug: string; open: boolean; onPreviewCanvas: () => void; onClose: () => void }) =>
+    props.open ? (
+      <div data-testid="detail-modal">
+        detail:{props.slug}
+        <button onClick={props.onPreviewCanvas}>to canvas</button>
+        <button onClick={props.onClose}>close</button>
+      </div>
+    ) : null,
+}))
+vi.mock("@/components/templates/template-canvas-preview", () => ({
+  TemplateCanvasPreview: (props: { slug: string; open: boolean; onBack: () => void }) =>
+    props.open ? (
+      <div data-testid="canvas-preview">
+        canvas:{props.slug}
+        <button onClick={props.onBack}>back</button>
+      </div>
+    ) : null,
+}))
+
 import AdminTemplatesPage from "../page"
 import { applyListingChange } from "@/ee/hooks/queries/use-admin-templates"
 
@@ -130,15 +151,48 @@ describe("Admin → Templates", () => {
     expect(h.toastError).toHaveBeenCalledWith("Failed to update the template")
   })
 
-  it("links to the gallery only templates that open for everyone", async () => {
+  it("links every template to the gallery: an admin opens any of them", async () => {
     renderPage()
     await screen.findByText("Mascot Story Studio")
     const links = screen.getAllByTitle("Open in the gallery").map((a) => a.getAttribute("href"))
-    // Listed, and tutorial-only: both open. Off: a "not found" for everyone but its creator.
     expect(links).toEqual([
       "/templates?template=mascot-story-studio-50oy83",
       "/templates?template=steal-the-format-x1",
+      "/templates?template=old-template-x2",
     ])
+  })
+
+  it("opens the gallery's preview from the name, then its canvas, and closes", async () => {
+    renderPage()
+    await userEvent.click(await screen.findByRole("button", { name: "Steal the Format" }))
+    expect((await screen.findByTestId("detail-modal")).textContent).toContain("detail:steal-the-format-x1")
+    await userEvent.click(screen.getByRole("button", { name: "to canvas" }))
+    expect((await screen.findByTestId("canvas-preview")).textContent).toContain("canvas:steal-the-format-x1")
+    expect(screen.queryByTestId("detail-modal")).toBeNull()
+    await userEvent.click(screen.getByRole("button", { name: "back" }))
+    await userEvent.click(await screen.findByRole("button", { name: "close" }))
+    expect(screen.queryByTestId("detail-modal")).toBeNull()
+  })
+
+  it("opens the preview from the cover too", async () => {
+    renderPage()
+    await userEvent.click(await screen.findByRole("button", { name: "Preview: Old Template" }))
+    expect((await screen.findByTestId("detail-modal")).textContent).toContain("detail:old-template-x2")
+  })
+
+  it("copies the gallery link, and says who can open it when the template is not public", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true })
+    renderPage()
+    await userEvent.click(await screen.findByRole("button", { name: "Copy link: Mascot Story Studio" }))
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/templates?template=mascot-story-studio-50oy83`)
+    await waitFor(() => expect(h.toastSuccess).toHaveBeenLastCalledWith("Link copied"))
+    await userEvent.click(screen.getByRole("button", { name: "Copy link: Old Template" }))
+    await waitFor(() =>
+      expect(h.toastSuccess).toHaveBeenLastCalledWith(
+        "Link copied. Until the template is on and listed, only admins and its creator can open it.",
+      ),
+    )
   })
 
   it("loads the next page from the server's cursor", async () => {

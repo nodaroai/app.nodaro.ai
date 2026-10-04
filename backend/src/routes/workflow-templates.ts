@@ -15,6 +15,7 @@ import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/ma
 import { copyToTemplatePreview } from "../lib/storage.js"
 import { requireAdmin } from "../ee/middleware/require-admin.js"
 import { hasAdmin } from "../lib/config.js"
+import { checkIsAdmin } from "../lib/admin-check.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { accessAtLeast, workflowAccessFromRow } from "../lib/workflow-access.js"
@@ -142,6 +143,20 @@ const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+
 function readListedIn(row: Record<string, unknown>): string[] {
   const v = row.listed_in
   return Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : []
+}
+
+/**
+ * Whether the signed-in viewer is a platform admin. False on an edition with
+ * no admin panel (the role is not consulted there), for a signed-out request,
+ * and when the role lookup fails: a failed lookup must never widen access.
+ */
+async function viewerIsAdmin(userId: string | undefined): Promise<boolean> {
+  if (!userId || !hasAdmin()) return false
+  try {
+    return await checkIsAdmin(userId)
+  } catch {
+    return false
+  }
 }
 
 /** Toggle a tag in a listed_in array, returning a NEW array (no mutation). */
@@ -674,11 +689,12 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
   app.get("/v1/templates/:slug", async (req, reply) => {
     const { slug } = req.params as { slug: string }
 
+    // No `is_active` filter in the query: the slug is UNIQUE across every row
+    // (migration 076), and an admin may preview a template that is off.
     const { data: template, error } = await supabase
       .from("workflow_templates")
       .select("*")
       .eq("slug", slug)
-      .eq("is_active", true)
       .maybeSingle()
 
     if (error) {
@@ -690,13 +706,17 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
 
     // Broken-object-level-auth guard: this route is public and uses the
     // service-role client (RLS bypassed), so `is_active` alone would expose
-    // templates the creator never listed. Only return a template that is
-    // listed in a public channel, OR is being fetched by its own creator.
+    // templates the creator never listed. Only return a template that is on
+    // AND listed in a public channel, OR is being fetched by its own creator.
+    // An admin reads any template — listed or not, on or off — to preview it
+    // from Admin → Templates; the role is asked only when nothing else lets
+    // the request through.
     const row = template as Record<string, unknown>
     const listed = readListedIn(row)
     const isListedPublicly = listed.includes(MARKETPLACE) || listed.includes(TUTORIAL)
     const isOwner = !!req.userId && req.userId === row.creator_id
-    if (!isListedPublicly && !isOwner) {
+    const visible = row.is_active === true && (isListedPublicly || isOwner)
+    if (!visible && !(await viewerIsAdmin(req.userId))) {
       return reply.status(404).send({ error: { code: "not_found", message: "Template not found" } })
     }
 
