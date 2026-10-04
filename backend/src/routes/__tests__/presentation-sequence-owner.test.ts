@@ -8,8 +8,8 @@ import Fastify, { type FastifyInstance } from "fastify"
  * `data.generatedResults` rows), a unit result's frozen request
  * (`requestManifest` on `data.sequenceUnitResults`) and a keyframe's runs in
  * flight (`data.keyframePendingImages`). The link returns the graph's nodes
- * and edges only, never `settings`, so these are the parts of a production's
- * owner state it could carry. Only the owner gets the nodes whole.
+ * and edges only, never `settings`, so of the keys T87 withholds these three
+ * are the ones it could carry. Only the owner gets the nodes whole.
  *
  * `workflow-view-sequence-owner.test.ts` pins the same rule on the by-id doors.
  */

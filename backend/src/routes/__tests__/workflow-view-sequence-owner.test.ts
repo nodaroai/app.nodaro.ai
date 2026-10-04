@@ -17,10 +17,13 @@ import Fastify, { type FastifyInstance } from "fastify"
  * - each sequence take unit's `continuationAcceptance`;
  * - each keyframe entry's `rejections`.
  *
- * What the studio codec's reader requires to read a production with takes —
- * the preferences record itself, a take's `policy` and `compilation`, the unit
- * results' pins and urls, a frame's plan, acceptance and results — still goes
- * out: a strip of the stored row cannot drop it without breaking that reader.
+ * The rest of a take or a frame still goes out: these strips drop keys, never
+ * rows. Part of it the studio codec's reader cannot read a production with
+ * takes without — the preferences record itself (empty is fine), a take's
+ * `policy` and `compilation`, the unit results its takes select, a frame
+ * plan's `id` / `label` / `revision` / `frame` / `requirements` and the result
+ * its preview names. The rest (a unit's other results, a frame's other history
+ * rows, its acceptance record) the reader can do without, and it stays too.
  * `edit` and `own` keep all of it: an editor saves the whole graph back
  * (T21 / T77).
  */

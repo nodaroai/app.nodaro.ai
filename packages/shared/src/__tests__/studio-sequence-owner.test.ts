@@ -19,8 +19,7 @@ import {
  * A LINKED (keyframe / sequence) production's owner state is the owner's
  * (studio ruling T87). The studio codec's own view withholds it from every
  * reader who is not the owner (`toProductionView`, `includeOwnerState:
- * false`); these strips withhold, from the stored row, every part of it the
- * codec's reader can do without:
+ * false`); these strips withhold these parts of it from the stored row:
  *
  * - `sequenceEndpoints` on a take's result row (a canvas node's
  *   `data.generatedResults`);
@@ -34,10 +33,13 @@ import {
  * - `rejections` on each keyframe entry;
  * - and, in the bin, a deleted keyframe's `pendingImages` and `rejections`.
  *
- * Everything else of a take or a frame — a take's `policy` and `compilation`,
- * a unit result's pin, url and request hash, a frame's plan, acceptance and
- * result history — stays, because the codec refuses to read a production
- * without it.
+ * Everything else of a take or a frame stays: the strips drop keys, never
+ * rows. Part of it the codec refuses to read a production without — a take's
+ * `policy` and `compilation`, the unit result rows its takes select (pin, url
+ * and request hash), a frame plan's `id` / `label` / `revision` / `frame` /
+ * `requirements` and the result its preview names. The rest (a unit's other
+ * results, a frame's other history rows, its acceptance record) the reader can
+ * do without, and it stays too (see `STUDIO_SEQUENCE_PLANNING_KEYS`).
  */
 
 const NOW = "2026-09-08T12:00:00.000Z"
@@ -116,7 +118,7 @@ function linkedStudio(): Record<string, unknown> {
   }
 }
 
-/** What a reader who is not the owner keeps of {@link linkedStudio}: everything the codec's reader requires. */
+/** What a reader who is not the owner keeps of {@link linkedStudio}: all of it but the keys the strips drop, the preferences emptied. */
 function readerStudio(): Record<string, unknown> {
   const { sequenceRecommendations: _recommendations, ...studio } = linkedStudio()
   return { ...studio, keyframes: [frameEntry(false)], sequenceGenerationPolicies: {}, sequenceTakes: [take(false)] }

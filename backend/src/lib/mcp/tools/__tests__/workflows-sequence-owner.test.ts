@@ -14,9 +14,10 @@ import { buildServer, callTool } from "./_helpers.js"
  * `settings.studio.sequenceRecommendations`, the entries of the owner's
  * current `sequenceGenerationPolicies` (the record goes out empty), each
  * sequence take unit's `continuationAcceptance` and each keyframe's
- * `rejections`. What the codec's reader requires to read the production (a
- * take's `policy` and `compilation`, the unit results' pins and urls) still
- * goes out. `edit` and `own` keep all of it: that reader saves the graph back.
+ * `rejections`. The rest still goes out, including what the codec's reader
+ * requires to read the production (a take's `policy` and `compilation`, the
+ * unit results its takes select). `edit` and `own` keep all of it: that reader
+ * saves the graph back.
  *
  * Like `workflows-workspace-scope.test.ts`, this runs the WORKSPACE branch with
  * the access seam mocked: only there can a caller hold `view` on someone

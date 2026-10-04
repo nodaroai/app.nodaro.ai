@@ -126,15 +126,24 @@ const STUDIO_TAKE_PRIVATE_KEYS: ReadonlyArray<string> = [...STUDIO_TAKE_VOICE_KE
  * itself (T87): `sequenceRecommendations`, the director's suggested generation
  * policies for each sequence, with their reasons and provenance.
  *
- * The studio codec's non-owner view withholds two more things that NO list
- * here carries: a take's `policy` and `compilation`, and a unit video node's
- * `data.sequenceUnitResults` (each result's pin, url and request hash). The
- * codec's reader refuses a production with takes when any of them is missing,
- * so a strip of the stored row cannot drop them without breaking every
- * reader's load of that production; the codec withholds them from its own
- * view, after it has read the row. What the reader can do without does go:
- * the current preferences' entries ({@link STUDIO_SEQUENCE_POLICY_KEYS}) and
- * each unit result's frozen request ({@link STUDIO_SEQUENCE_UNIT_MANIFEST_KEYS}).
+ * The studio codec's non-owner view withholds more than the lists here carry
+ * — a take's `policy` and `compilation`, a unit's result rows (on the unit
+ * video node's `data.sequenceUnitResults`, mirrored in its `generatedResults`),
+ * a keyframe's `plan`, its `acceptance` record and all its results but the
+ * preview and the accepted one — because it builds that view AFTER reading
+ * the row. These strips drop KEYS from the stored row; they never filter rows
+ * or rewrite records, so all of it still goes out.
+ *
+ * Part of it the codec's reader requires (0.13.0's `parseProduction`; without
+ * it every reader's load of the production fails): each take's `policy` and
+ * `compilation`; every unit result row some take selects, plus, for the take
+ * selected for export, the existing-clip opening row its policy names; a
+ * keyframe plan's `id`, `label`, `revision`, `frame` (any record, `{}`
+ * included) and `requirements` (a list, empty included); and the result its
+ * `previewResultKey` names. The rest it can do without: the unit node's
+ * mirror, the unit results no take selects, a keyframe's other results, its
+ * plan's `frame` content and `references`, and its `acceptance` — from which
+ * the non-owner view reads the accepted result.
  */
 export const STUDIO_SEQUENCE_PLANNING_KEYS = ["sequenceRecommendations"] as const
 
@@ -315,12 +324,14 @@ function stripRows(value: unknown, drop: ReadonlyArray<string>): unknown {
 }
 
 /**
- * `settings.studio` without a linked production's owner state (T87): its own
- * {@link STUDIO_SEQUENCE_PLANNING_KEYS}; each {@link STUDIO_SEQUENCE_POLICY_KEYS}
- * record EMPTIED, never dropped and never added; every sequence take's units
- * without their {@link STUDIO_SEQUENCE_UNIT_REVIEW_KEYS}; and every keyframe
- * entry without its {@link STUDIO_KEYFRAME_REVIEW_KEYS}. Every other part of a
- * take or a frame stays: the codec's reader needs it to read the row.
+ * `settings.studio` without the linked production's owner state these lists
+ * carry (T87): its own {@link STUDIO_SEQUENCE_PLANNING_KEYS}; each
+ * {@link STUDIO_SEQUENCE_POLICY_KEYS} record EMPTIED, never dropped and never
+ * added; every sequence take's units without their
+ * {@link STUDIO_SEQUENCE_UNIT_REVIEW_KEYS}; and every keyframe entry without
+ * its {@link STUDIO_KEYFRAME_REVIEW_KEYS}. Every other part of a take or a
+ * frame stays, including what the codec's reader requires to read the row
+ * (which part that is: {@link STUDIO_SEQUENCE_PLANNING_KEYS}).
  *
  * The ONE change site for both settings strips. The SAME object back when it
  * carries none of it, and anything that is not take- or frame-shaped rides
