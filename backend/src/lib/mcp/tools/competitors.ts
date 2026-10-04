@@ -3,6 +3,11 @@ import {
   COMPETITOR_ABOUT_PLATFORMS,
   COMPETITOR_ACCOUNT_KEYS,
   COMPETITOR_SCHEDULES,
+  isMeasurableCard,
+  type AdviceRecord,
+  type CardActionResult,
+  type CardOutcome,
+  type CompetitorActionsResult,
   type CompetitorCardsResult,
   type CompetitorDiscovery,
   type CompetitorLessonsResult,
@@ -40,15 +45,72 @@ export function competitorLine(c: TrackedCompetitor): string {
   ].join("\n")
 }
 
+const FAMILY_LABEL: Readonly<Record<AdviceRecord["family"], string>> = {
+  sound: "Sound advice",
+  outlier: "Making a post like a hit",
+  launch: "Answering a launch",
+  complaints: "Answering complaints",
+}
+
+/** "Sound advice: 3 of 4 worked for the user (on average 2.1x their usual)", for the families with enough verdicts. */
+export function recordText(record: readonly AdviceRecord[] | undefined): string[] {
+  return (record ?? [])
+    .filter((r) => r.shown)
+    .map((r) => `${FAMILY_LABEL[r.family]}: ${r.worked} of ${r.tried} worked for the user (on average ${r.avgRatio}x their usual).`)
+}
+
 export function cardsText(result: CompetitorCardsResult): string {
   if (result.cards.length === 0) return "No action cards yet. Scan a tracked brand first (scan_competitor)."
   const label = { 1: "act now", 2: "opening", 3: "good to know" } as const
-  return result.cards
+  const cards = result.cards
     .map((card, i) => {
       const links = card.evidence.flatMap((id) => (result.posts[id]?.url ? [result.posts[id]!.url] : []))
-      return [`${i + 1}. [${label[card.priority]}] ${card.title}`, `   ${card.why}`, `   → ${card.action}`, ...links.map((u) => `   ${u}`)].join("\n")
+      const done = isMeasurableCard(card) ? [`   card id (for mark_card_done): ${card.id}`] : []
+      return [`${i + 1}. [${label[card.priority]}] ${card.title}`, `   ${card.why}`, `   → ${card.action}`, ...links.map((u) => `   ${u}`), ...done].join("\n")
     })
     .join("\n\n")
+  const record = recordText(result.record)
+  return record.length > 0 ? `${cards}\n\nWhat has worked for the user:\n${record.join("\n")}` : cards
+}
+
+/** How a marked card went, in one line. */
+export function outcomeText(o: CardOutcome): string {
+  const ratio = typeof o.ratio === "number" ? `${o.ratio}x` : ""
+  const numbers = typeof o.reach === "number" && typeof o.usual === "number" ? ` (${o.reach} ${o.unit ?? "views"} against a usual ${o.usual}${o.platform ? ` on ${o.platform}` : ""})` : ""
+  switch (o.state) {
+    case "worked":
+      return `Worked: ${ratio} the user's usual${numbers}.`
+    case "flat":
+      return `About the usual: ${ratio}${numbers}.`
+    case "missed":
+      return `Below the usual: ${ratio}${numbers}.`
+    case "waiting":
+      return "Checking: the post needs a few more days and a scan of the user's brand."
+    case "not_found":
+      return "The linked post is not among the brand's scanned posts: check the link."
+    case "older_than_advice":
+      return "The linked post went up before this advice: link the one that came of it."
+    case "no_baseline":
+      return "Not enough of the user's posts on that platform yet to compare with."
+    case "posts_since":
+      return `No post tied to it. The user's posts since: ${ratio} their usual. Link the one that came of it for a verdict.`
+    case "no_posts_yet":
+      return "Marked. The user's next posts will be checked."
+    case "no_brand":
+      return "No own brand scanned: add the user's brand (is_own) and scan it to see if it worked."
+    default:
+      return o.state
+  }
+}
+
+export function triedText(result: CompetitorActionsResult, limit: number): string {
+  if (result.actions.length === 0) return "No card marked done yet (mark_card_done)."
+  const record = recordText(result.record)
+  const marks = result.actions.slice(0, limit).map((a) =>
+    [`- ${a.actedAt.slice(0, 10)} ${a.card.title || a.cardId}${a.onWall ? "" : " (no longer on the wall)"}`, `  ${outcomeText(a.outcome)}`, ...(a.postUrl ? [`  ${a.postUrl}`] : [])].join("\n"),
+  )
+  const more = result.actions.length > limit ? [`(${result.actions.length - limit} older marks not shown)`] : []
+  return [...(record.length > 0 ? ["What has worked for the user:", ...record, ""] : []), ...marks, ...more].join("\n")
 }
 
 export function lessonsText(result: CompetitorLessonsResult): string {
@@ -123,6 +185,71 @@ export function registerCompetitorTools({ server, session, fastify }: RegisterOp
         const res = await mcpInject(fastify, session, { method: "GET", url: `/v1/competitors/${encodeURIComponent(args.competitor_id)}/lessons`, headers: asUser })
         if (res.statusCode >= 400) return routeError(res.statusCode, res.body)
         return text(lessonsText(JSON.parse(res.body) as CompetitorLessonsResult))
+      },
+    )
+
+    server.registerTool(
+      "competitor_tried",
+      {
+        title: "Cards Tried",
+        description:
+          "The action cards the user marked done, newest first, how each went (their post against their usual) and what kinds of advice have worked for them. Free.",
+        inputSchema: { limit: z.number().int().min(1).max(100).optional().describe("Marks to show, newest first. Default 20.") },
+        annotations: { readOnlyHint: true },
+      },
+      async (args) => {
+        const res = await mcpInject(fastify, session, { method: "GET", url: "/v1/competitors/actions", headers: asUser })
+        if (res.statusCode >= 400) return routeError(res.statusCode, res.body)
+        return text(triedText(JSON.parse(res.body) as CompetitorActionsResult, args.limit ?? 20))
+      },
+    )
+  }
+
+  if (passesGate(session, writeGate)) {
+    server.registerTool(
+      "mark_card_done",
+      {
+        title: "Mark Card Done",
+        description:
+          "Mark an action card done (\"I did this\"), with the link to the user's post that came of it when known. Scans of their own brand then tell if it worked. Free.",
+        inputSchema: {
+          card_id: z.string().min(1).max(300).describe("From competitor_cards."),
+          post_url: z
+            .string()
+            .max(1000)
+            .regex(/^https?:\/\/\S+$/i, "an http(s) link")
+            .optional()
+            .describe("The full link to the user's post."),
+        },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      },
+      async (args) => {
+        const res = await mcpInject(fastify, session, {
+          method: "POST",
+          url: "/v1/competitors/actions",
+          payload: { cardId: args.card_id, ...(args.post_url ? { postUrl: args.post_url } : {}), userId: session.userId },
+        })
+        if (res.statusCode >= 400) return routeError(res.statusCode, res.body)
+        const marked = JSON.parse(res.body) as CardActionResult
+        let action = marked.action
+        let note = ""
+        // Marked before with another post: the link is set, unless that post already has its verdict.
+        if (args.post_url && action.postUrl !== args.post_url && marked.created === false) {
+          if (action.verdict) {
+            note = `\nKept: it was already judged on ${action.postUrl ?? "the post that used the sound"}. The user can change the link in the app.`
+          } else {
+            const linked = await mcpInject(fastify, session, {
+              method: "PATCH",
+              url: `/v1/competitors/actions/${encodeURIComponent(action.id)}`,
+              payload: { postUrl: args.post_url, userId: session.userId },
+            })
+            if (linked.statusCode >= 400) return routeError(linked.statusCode, linked.body)
+            action = (JSON.parse(linked.body) as CardActionResult).action
+            note = "\nLinked the post."
+          }
+        }
+        const title = action.card.title || action.cardId
+        return text(`${marked.created === false ? "Already marked" : "Marked"}: ${title}\n${outcomeText(action.outcome)}${note}`)
       },
     )
   }

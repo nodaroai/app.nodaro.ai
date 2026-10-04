@@ -94,14 +94,41 @@ free: it reads the scans already made and charges nothing.
 
 **Content Ideas learns from it.** A [Content Ideas](../nodes/ai-text/content-ideas.md)
 node leans its ideas on what works for your own brand (the one marked **This
-is my brand**; with several, the one scanned last), and after a run says
-which brand it read. Turn it off with **Learn from my brand's results** in
-the node's settings. It costs nothing more.
+is my brand**; with several, the one scanned last), and on the advice that
+worked for you (see **Did it work?** below), and after a run says which
+brand it read. Turn it off with **Learn from my brand's results** in the
+node's settings. It costs nothing more.
+
+## Did it work?
+
+When you act on a card, press **I did this** on it. You can paste the link to
+your post that came of it right there, pick it from your recent posts, or
+press **Later**. The button is on the cards whose advice ends in a post of
+yours: a post like a competitor's hit, an answer to a launch or to
+complaints about a competitor, a sound to try. Marked cards move to **Tried**.
+
+Each scan of your own brand then checks how it went: once your post is a few
+days old, it is compared with your usual on the same platform, and the card
+says **Worked: 2.1x your usual**, **About your usual** or **Below your
+usual**, with both numbers. The first answer stays, even as the post keeps
+growing. A sound card finds its post by itself: your first post with that
+sound after the advice. Without a linked post, the card shows how your posts
+since went, without a verdict, and offers them to pick from. When a result
+comes in, the wall says so.
+
+Results add up per kind of advice: **Sound advice: 3 of 4 worked for you**.
+Once a kind has enough results, its record shows on its cards and in **What
+works for you**, and the cards of a kind that keeps working for you come
+first among cards of the same urgency (a kind that keeps missing goes last).
+Urgency always comes first. Content Ideas leans on the same record.
+
+It needs your own brand tracked and scanned (**This is my brand**). It is
+free. **Undo** removes a mark and its result.
 
 ## From code
 
-The same brands, scans, cards and lessons are available over the API
+The same brands, scans, cards, lessons and marks are available over the API
 (`/v1/competitors*`, see [API integration](../api-integration.md#16c-competitors-nodaro-cloud)),
 the SDK (`client.competitors`), the CLI (`nodaro competitors`) and MCP
 (`list_competitors`, `competitor_cards`, `competitor_lessons`,
-`add_competitor`, `scan_competitor`).
+`competitor_tried`, `mark_card_done`, `add_competitor`, `scan_competitor`).

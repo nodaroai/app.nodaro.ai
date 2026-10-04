@@ -137,6 +137,178 @@ export interface CompetitorDetail extends TrackedCompetitor {
 export interface CompetitorCardsResult {
   readonly cards: readonly ActionCard[]
   readonly posts: Readonly<Record<string, CompetitorPost>>
+  /**
+   * How the advice the person acted on went, per family. Within a priority,
+   * cards of a family marked `proven` come first and `weak` ones last; the
+   * order of priorities never changes. Empty until there are verdicts.
+   */
+  readonly record?: readonly AdviceRecord[]
+}
+
+// ── Did it work? ("I did this" on a card) ─────────────────────────────────
+
+/**
+ * Advice is summed up by family: a competitor's sound and a sound around the
+ * market are both "sound"; "outlier" is making a post like a competitor's
+ * best one.
+ */
+export const ADVICE_FAMILIES = ["sound", "outlier", "launch", "complaints"] as const
+export type AdviceFamily = (typeof ADVICE_FAMILIES)[number]
+
+/** The family a card's advice belongs to; null for a card whose advice is not a post. */
+export function adviceFamilyOf(kind: string): AdviceFamily | null {
+  if (kind === "sound" || kind === "market_sound") return "sound"
+  if (kind === "outlier" || kind === "launch" || kind === "complaints") return kind
+  return null
+}
+
+/**
+ * Whether "I did this" applies: the card's advice ends in a post of the
+ * person's own. Complaints about their own brand end in replies, so not those.
+ * The server is the judge; this only decides whether to offer the button.
+ */
+export function isMeasurableCard(card: Pick<ActionCard, "kind" | "params">): boolean {
+  if (card.kind === "complaints") return card.params.own !== true
+  return adviceFamilyOf(card.kind) !== null
+}
+
+/** What a card said when it was acted on (cards change with every scan). */
+export interface CardSnapshot {
+  readonly title: string
+  readonly why: string
+  readonly action: string
+  readonly priority?: ActionCardPriority
+  /** The card's numbers and words, to phrase it as the wall did. */
+  readonly params?: ActionCard["params"]
+  readonly brand?: string
+  readonly platform?: string
+  readonly evidence: readonly string[]
+  /** A sound card's sound. */
+  readonly soundId?: string
+  /** When the card first showed. */
+  readonly cardAt?: string
+}
+
+export const CARD_OUTCOME_STATES = [
+  "worked",
+  "flat",
+  "missed",
+  "waiting",
+  "not_found",
+  "older_than_advice",
+  "no_baseline",
+  "posts_since",
+  "no_posts_yet",
+  "no_brand",
+] as const
+/**
+ * worked / flat (about the usual) / missed (below it): the verdict on the one
+ * post tied to the card. waiting: that post is too new, or not scanned yet.
+ * not_found: the linked post never showed up in the brand's scans.
+ * older_than_advice: the linked post went up before the advice.
+ * no_baseline: too few of the brand's posts on that platform to compare with.
+ * posts_since: nothing tied to the card; the brand's posts since, no verdict.
+ * no_posts_yet: nothing tied and no post since. no_brand: no own brand scanned.
+ */
+export type CardOutcomeState = (typeof CARD_OUTCOME_STATES)[number]
+
+export interface CardOutcome {
+  readonly state: CardOutcomeState
+  /** The post's reach over the brand's usual. */
+  readonly ratio?: number
+  readonly liftLabel?: string
+  readonly reach?: number
+  readonly usual?: number
+  readonly unit?: "views" | "points" | "likes"
+  readonly platform?: string
+  /** The judged post first; with no tie, the best posts since. */
+  readonly postIds?: readonly string[]
+  readonly ageDays?: number
+  /** How the judged post was tied: the person's link, or a sound card's sound. */
+  readonly matchedBy?: "link" | "sound"
+  /** The brand's posts since the advice, newest first, to pick the one that came of it. */
+  readonly candidates?: readonly string[]
+}
+
+/** The first verdict, kept as it was reached. */
+export interface CardVerdict {
+  readonly state: "worked" | "flat" | "missed"
+  readonly ratio: number
+  readonly reach: number
+  readonly usual: number
+  readonly unit: "views" | "points" | "likes"
+  readonly platform: string
+  readonly postId: string
+  readonly matchedBy: "link" | "sound"
+  readonly at: string
+}
+
+/** A card the person acted on, and how it went. */
+export interface CardAction {
+  readonly id: string
+  /** The card on the wall it was made on. */
+  readonly cardId: string
+  readonly cardKind: ActionCardKind
+  readonly card: CardSnapshot
+  /** The tracked brand it was about; null for a market card (or a removed brand). */
+  readonly subjectId: string | null
+  readonly postUrl: string | null
+  /** When the post was linked. */
+  readonly linkedAt: string | null
+  readonly actedAt: string
+  readonly verdict: CardVerdict | null
+  /** When the person first saw the verdict. */
+  readonly seenAt: string | null
+  /**
+   * The card is still on the wall. Once it leaves, the mark stays (in Tried
+   * and the record), and the card can be marked anew if it comes back.
+   */
+  readonly onWall: boolean
+  readonly outcome: CardOutcome
+}
+
+/** How one family of advice went for the person, one verdict per post. */
+export interface AdviceRecord {
+  readonly family: AdviceFamily
+  readonly tried: number
+  readonly worked: number
+  readonly flat: number
+  readonly missed: number
+  /** The mean of those posts' reach over the usual. */
+  readonly avgRatio: number
+  /** Enough verdicts to show this record. */
+  readonly shown: boolean
+  /** Whether it moves this family's cards (up when proven, down when weak). */
+  readonly tier: "proven" | "weak" | "neutral"
+}
+
+/** `GET /v1/competitors/actions`: the cards the person acted on, newest first. */
+export interface CompetitorActionsResult {
+  readonly actions: readonly CardAction[]
+  readonly record: readonly AdviceRecord[]
+  /** The posts the outcomes name, by id. */
+  readonly posts: Readonly<Record<string, CompetitorPost>>
+}
+
+/** `POST /v1/competitors/actions`: mark a card on the wall as done. */
+export interface MarkCardInput {
+  readonly cardId: string
+  /** The person's own post that came of it (http(s), up to 1,000 characters). */
+  readonly postUrl?: string | null
+}
+
+/** `POST` and `PATCH /v1/competitors/actions*`: the mark, and the posts its outcome names. */
+export interface CardActionResult {
+  readonly action: CardAction
+  readonly posts: Readonly<Record<string, CompetitorPost>>
+  /** POST only: false when the card was already marked (the mark is returned as it was). */
+  readonly created?: boolean
+}
+
+/** `PATCH /v1/competitors/actions/:id`: link (or unlink with null) the post, or mark the verdict seen. */
+export interface UpdateCardActionInput {
+  readonly postUrl?: string | null
+  readonly seen?: true
 }
 
 // ── What works (stage 4: learning from results) ───────────────────────────

@@ -28,7 +28,7 @@
 | `library` | Generated-media library |
 | `presets` | Node presets (factory + user) |
 | `savedPosts` | Inspiration wall: save, list, look up, update, delete saved posts |
-| `competitors` | Tracked brands: add (from a website), scan, action cards (Cloud) |
+| `competitors` | Tracked brands: add (from a website), scan, action cards, what works, and did it work? (`markDone`, `tried`) (Cloud) |
 | `pickerCatalogs` | Parameter-picker catalog discovery |
 | `catalogs` | Catalog packs a deployment registered (`GET /v1/catalogs`) |
 | `models` | Model catalog: capabilities + credit prices (`GET /v1/models`) |

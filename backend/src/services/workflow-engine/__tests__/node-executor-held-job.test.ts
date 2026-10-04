@@ -44,18 +44,27 @@ let jobRecord: Record<string, unknown> = {}
 let executionStatus = "running"
 /** Every `jobs` UPDATE patch, in order — the assertion surface. */
 let jobUpdates: Array<Record<string, unknown>> = []
+/** The column list of the latest select, and whether `slot_wait_ms` is missing. */
+let selectedColumns = ""
+let slotWaitColumnMissing = false
+let slotWaitColumnReads = 0
 
 vi.mock("../../../lib/supabase.js", () => {
   function jobsBuilder() {
     let op: "select" | "insert" | "update" | "delete" | null = null
     const b: Record<string, unknown> = {}
     const self = () => b
-    b.select = () => { op ??= "select"; return b }
+    b.select = (cols?: string) => { op ??= "select"; if (typeof cols === "string") selectedColumns = cols; return b }
     for (const m of ["eq", "not", "in", "order", "limit", "is", "neq"]) b[m] = self
     b.insert = () => { op = "insert"; return b }
     b.update = (patch: Record<string, unknown>) => { op = "update"; jobUpdates.push(patch); return b }
     b.delete = () => { op = "delete"; return b }
-    b.single = async () => (op === "insert" ? { data: { id: JOB_ID }, error: null } : { data: jobRecord, error: null })
+    b.single = async () => {
+      if (op === "insert") return { data: { id: JOB_ID }, error: null }
+      // Before migration 451 reaches the database: naming the column fails the select.
+      if (slotWaitColumnMissing && selectedColumns.includes("slot_wait_ms")) { slotWaitColumnReads++; return { data: null, error: { code: "42703", message: "column jobs.slot_wait_ms does not exist" } } }
+      return { data: jobRecord, error: null }
+    }
     b.maybeSingle = async () => (op === "insert" ? { data: { id: JOB_ID }, error: null } : { data: jobRecord, error: null })
     // Awaited without a terminal: an UPDATE ... RETURNING (cancelJobAndThrow's
     // CAS) yields the flipped rows; anything else yields nothing.
@@ -255,5 +264,122 @@ describe("pollJobToCompletion — a job parked in pending_review", () => {
     await advance(1 * MINUTE)
     await running
     expect(settled[0].ok, String((settled[0].value as Error)?.message)).toBe(true)
+  }, 30_000)
+})
+
+// Track 0.13 (decided 2026-10-04): a job queued for an ffmpeg slot is not hung.
+// Its worker reports the wait in `slot_wait_ms` (with its 60 s heartbeat) and
+// both node clocks leave it out — the workflow cap does not.
+describe("pollJobToCompletion — a job waiting for an ffmpeg slot", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    jobUpdates = []
+    executionStatus = "running"
+    mockCheckCredits.mockResolvedValue({ allowed: true, balance: 5000, watermark: false })
+    mockReserveCredits.mockResolvedValue({ usageLogId: "usage-held-1", creditsReserved: 3, watermark: false })
+    vi.useFakeTimers()
+  })
+  afterEach(() => { vi.useRealTimers() })
+
+  /** Wait for a slot in heartbeat-sized steps, reporting the total like the worker does. */
+  async function waitForSlot(ms: number, from = 0): Promise<void> {
+    for (let waited = from + MINUTE; waited <= from + ms; waited += MINUTE) {
+      await vi.advanceTimersByTimeAsync(MINUTE)
+      jobRecord = { ...jobRecord, slot_wait_ms: waited }
+    }
+  }
+
+  it("survives a 100-minute queue for a slot: the wait is off both 90-minute clocks", async () => {
+    jobRecord = { status: "processing", output_data: null, error_message: null, progress: 0, slot_wait_ms: 0 }
+    const settled: Array<{ ok: boolean; value: unknown }> = []
+    const running = executeNode(vaNode(), {}, [], [vaNode()], {}, makeCtx()).then(
+      (v) => settled.push({ ok: true, value: v }),
+      (e) => settled.push({ ok: false, value: e }),
+    )
+    await waitForSlot(100 * MINUTE) // four long renders hold every slot
+    await advance(20 * MINUTE) // then its own 20-minute run
+    expect(settled).toHaveLength(0)
+    expect(jobUpdates.filter((u) => u.status === "cancelled")).toHaveLength(0)
+
+    jobRecord = { ...jobRecord, status: "completed", output_data: { analysis: "ok", text: "done" }, credits_actual: 3 }
+    await advance(1 * MINUTE)
+    await running
+    expect(settled[0]?.ok).toBe(true)
+    expect(mockRefund).not.toHaveBeenCalled()
+  }, 30_000)
+
+  it("still enforces the node timeout on the time it was RUNNING", async () => {
+    jobRecord = { status: "processing", output_data: null, error_message: null, progress: 0, slot_wait_ms: 0 }
+    const settled: Array<{ ok: boolean; value: unknown }> = []
+    const running = executeNode(vaNode(), {}, [], [vaNode()], {}, makeCtx()).then(
+      (v) => settled.push({ ok: true, value: v }),
+      (e) => settled.push({ ok: false, value: e }),
+    )
+    // 30 minutes queued, then 95 minutes running: 95 > 90 ⇒ the node times out.
+    await waitForSlot(30 * MINUTE)
+    await advance(95 * MINUTE)
+    await running
+    expect(settled).toHaveLength(1)
+    expect(settled[0].ok).toBe(false)
+    expect(String((settled[0].value as Error).message)).toMatch(/Node timeout|Poll timeout/)
+  }, 30_000)
+})
+
+
+describe("pollJobToCompletion — before migration 451 reaches the shared database", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    jobUpdates = []
+    executionStatus = "running"
+    mockCheckCredits.mockResolvedValue({ allowed: true, balance: 5000, watermark: false })
+    mockReserveCredits.mockResolvedValue({ usageLogId: "usage-held-1", creditsReserved: 3, watermark: false })
+    vi.useFakeTimers()
+  })
+  afterEach(async () => {
+    vi.useRealTimers()
+    slotWaitColumnMissing = false
+    ;(await import("../../../lib/jobs-slot-wait-column.js")).resetSlotWaitColumnForTests()
+  })
+
+  it("reads the job without slot_wait_ms and completes as before (no 'Job not found')", async () => {
+    slotWaitColumnMissing = true
+    slotWaitColumnReads = 0
+    jobRecord = { status: "processing", output_data: null, error_message: null, progress: 10 }
+    const settled: Array<{ ok: boolean; value: unknown }> = []
+    const running = executeNode(vaNode(), {}, [], [vaNode()], {}, makeCtx()).then(
+      (v) => settled.push({ ok: true, value: v }),
+      (e) => settled.push({ ok: false, value: e }),
+    )
+    await advance(2 * MINUTE)
+    jobRecord = { ...jobRecord, status: "completed", output_data: { analysis: "ok", text: "done" }, credits_actual: 3 }
+    await advance(1 * MINUTE)
+    await running
+    expect(settled[0]?.ok).toBe(true)
+    // Remembered as missing: only the first of many polls names the column.
+    expect(slotWaitColumnReads).toBe(1)
+  }, 30_000)
+})
+
+describe("pollJobToCompletion — clocks that start fresh credit only waits after their start", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    jobUpdates = []
+    executionStatus = "running"
+    mockCheckCredits.mockResolvedValue({ allowed: true, balance: 5000, watermark: false })
+    mockReserveCredits.mockResolvedValue({ usageLogId: "usage-held-1", creditsReserved: 3, watermark: false })
+    vi.useFakeTimers()
+  })
+  afterEach(() => { vi.useRealTimers() })
+
+  it("a wait the row already held at the first read is not credited to fresh clocks", async () => {
+    jobRecord = { status: "processing", output_data: null, error_message: null, progress: 0, slot_wait_ms: 60 * MINUTE }
+    const settled: Array<{ ok: boolean; value: unknown }> = []
+    const running = executeNode(vaNode(), {}, [], [vaNode()], {}, makeCtx()).then(
+      (v) => settled.push({ ok: true, value: v }),
+      (e) => settled.push({ ok: false, value: e }),
+    )
+    await advance(95 * MINUTE) // 95 min of its own processing; the 60 predate these clocks
+    await running
+    expect(settled[0]?.ok).toBe(false)
   }, 30_000)
 })

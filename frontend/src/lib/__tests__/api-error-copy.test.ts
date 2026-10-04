@@ -21,6 +21,9 @@ describe("apiErrorReasonKey", () => {
     expect(apiErrorReasonKey("nothing_to_scan")).toBe("apiErr.reason.nothingToScan")
     expect(apiErrorReasonKey("not_reachable")).toBe("apiErr.reason.siteNotReachable")
     expect(apiErrorReasonKey("invalid_account")).toBeUndefined()
+    expect(apiErrorReasonKey("card_not_found")).toBe("apiErr.reason.cardGone")
+    expect(apiErrorReasonKey("not_measurable")).toBe("apiErr.reason.notMeasurable")
+    expect(apiErrorReasonKey("too_many_actions")).toBe("apiErr.reason.tooManyMarks")
   })
 
   it("does not read inherited object keys as codes", () => {

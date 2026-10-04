@@ -53,6 +53,7 @@ export const queryKeys = {
     detail: (id: string) => ["competitors", "detail", id] as const,
     cards: () => ["competitors", "cards"] as const,
     lessons: (id: string) => ["competitors", "lessons", id] as const,
+    marks: () => ["competitors", "marks"] as const,
   },
 
   // Node presets

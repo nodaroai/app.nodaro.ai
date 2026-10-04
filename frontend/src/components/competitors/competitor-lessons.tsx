@@ -6,9 +6,10 @@ import type { CompetitorPost, SocialPost } from "@nodaro/shared"
 import { SocialPostCard } from "@/components/research/social-post-card"
 import { SocialPostPreview } from "@/components/research/social-post-preview"
 import { SocialPostTile } from "@/components/research/social-post-tile"
-import { useCompetitorLessons } from "@/hooks/queries/use-competitors-queries"
+import { useCardMarks, useCompetitorLessons } from "@/hooks/queries/use-competitors-queries"
 import { useT } from "@/lib/i18n"
 import { platformLabel } from "./action-card-text"
+import { AdviceRecordList } from "./advice-record"
 import { lessonText, platformLine } from "./lesson-text"
 import { useSaveControls } from "./use-save-controls"
 
@@ -21,6 +22,8 @@ import { useSaveControls } from "./use-save-controls"
 export function CompetitorLessons({ competitorId, isOwn }: { readonly competitorId: string; readonly isOwn: boolean }) {
   const t = useT()
   const query = useCompetitorLessons(competitorId, true)
+  // On your own brand: how the advice you acted on went, beside what works.
+  const marks = useCardMarks(isOwn)
   const [reading, setReading] = useState<SocialPost | null>(null)
   const [now] = useState(() => Date.now())
   const data = query.data
@@ -42,6 +45,7 @@ export function CompetitorLessons({ competitorId, isOwn }: { readonly competitor
   return (
     <div className="flex flex-col gap-6">
       <p className="text-[12.5px] text-muted-foreground">{t(isOwn ? "competitors.lessonsHintOwn" : "competitors.lessonsHintThem")}</p>
+      {isOwn && <AdviceRecordList record={marks.data?.record} />}
       {platforms.map((pl) => (
         <section key={pl.platform} className="flex flex-col gap-2.5">
           <div className="flex flex-wrap items-baseline gap-x-2">

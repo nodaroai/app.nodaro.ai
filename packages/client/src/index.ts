@@ -85,7 +85,24 @@ export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter,
   UpdateCompetitorInput,
   ActionCard,
   ActionCardKind,
-  ActionCardPriority } from "@nodaro/shared"
+  ActionCardPriority,
+  // What works for a brand, and "did it work?" on the cards you acted on.
+  CompetitorLessonsResult,
+  BrandLessons,
+  BrandLesson,
+  BrandLessonKind,
+  BrandPlatformLessons,
+  CompetitorActionsResult,
+  CardAction,
+  CardActionResult,
+  CardOutcome,
+  CardOutcomeState,
+  CardSnapshot,
+  CardVerdict,
+  AdviceRecord,
+  AdviceFamily,
+  MarkCardInput,
+  UpdateCardActionInput } from "@nodaro/shared"
 // `unwrapEditPlanOutput` (value) — the sanctioned way to read an edit-plan job's
 // `output_data` (normalizes clips → bare `Edl[]` and strips `viaNodaroCloud`).
 export { unwrapEditPlanOutput } from "@nodaro/shared"

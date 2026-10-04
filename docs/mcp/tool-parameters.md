@@ -406,6 +406,14 @@ Needs `assets:read` · Nodaro Cloud only.
 |---|---|---|---|
 | `competitor_id` | string | yes | From list_competitors. |
 
+## `competitor_tried`
+
+Needs `assets:read` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `limit` | integer |  | Marks to show, newest first. Default 20. From 1 to 100. |
+
 ## `continue_video_pro`
 
 Needs `workflows:execute`.
@@ -1773,6 +1781,15 @@ Needs `workflows:execute`.
 | `target_duration` | number |  | Target output duration in seconds (1–300). Required when mode = duration. From 1 to 300. |
 | `smart_cut_before_repeat` | boolean |  | Smart loop cut preprocess. Trims source to its cleanest loop boundary before concatenating. Recommended for stochastic-tail sources. |
 | `smart_cut_lookback` | integer |  | Smart-cut lookback window in frames. Default 16, max 64. From 2 to 64. |
+
+## `mark_card_done`
+
+Needs `assets:write` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `card_id` | string | yes | From competitor_cards. From 1 to 300 characters. |
+| `post_url` | string |  | The full link to the user's post. At most 1000 characters. |
 
 ## `merge_video_audio`
 

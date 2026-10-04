@@ -148,7 +148,10 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
               </div>
               {nodeData.brandLessons && (
                 <div className="text-[10px] text-muted-foreground leading-snug" dir="auto">
-                  {t("node.contentIdeasLeanedOn", { brand: nodeData.brandLessons.brand, n: nodeData.brandLessons.lessons })}
+                  {nodeData.brandLessons.lessons > 0
+                    ? t("node.contentIdeasLeanedOn", { brand: nodeData.brandLessons.brand, n: nodeData.brandLessons.lessons })
+                    : t("node.contentIdeasLeanedOnRecord", { brand: nodeData.brandLessons.brand })}
+                  {nodeData.brandLessons.lessons > 0 && (nodeData.brandLessons.record ?? 0) > 0 && ` ${t("node.contentIdeasPlusRecord")}`}
                 </div>
               )}
               {nodeData.runWarnings && nodeData.runWarnings.length > 0 && (

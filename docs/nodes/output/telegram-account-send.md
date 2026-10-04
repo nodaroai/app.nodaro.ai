@@ -32,7 +32,9 @@ Your reply never starts another run of your inbox, even when it contains a link.
 
 ### As your bot
 
-Connect the bot on the Integrations page (**Telegram**), pick it in the node, and pick your Telegram account: the bot writes to that account, privately.
+Pick one of your bots in the node, or connect a new one right there with **Connect a new bot** (it is the same as connecting it on the Integrations page, under **Telegram**). Then pick your Telegram account: the bot writes to that account, privately.
+
+To make a bot, open [@BotFather](https://telegram.me/BotFather) in Telegram, send it `/newbot`, choose a name and a username, and paste the token it answers with. The **?** next to the bot field walks through the same steps.
 
 A bot cannot write to someone first. Open your bot in Telegram and press **Start** once before the first run; until then the node fails with a message that says so.
 

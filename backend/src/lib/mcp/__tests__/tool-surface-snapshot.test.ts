@@ -471,6 +471,14 @@ const SWITCH_CAMERAS_TOOL_BYTES = 2_300
 // 385_491 total − 384_650 base = 841 B, far under the 8_192 B per-tool budget,
 // and the list keeps the 45 B of headroom it had.
 const COMPETITOR_LESSONS_TOOL_BYTES = 841
+// RAISED 2026-10-04 by competitor_tried and mark_card_done and nothing else —
+// two NEW cloud-only tools ("did it work?": the cards the user marked done and
+// how each went; marking one done), registered beside competitor_lessons and
+// gated by assets:read / assets:write, so cloud/all names them and the
+// community sets and the scope-less sets do not. measured by this suite:
+// 386_689 total − 385_491 base = 1_198 B (503 + 695), far under the 8_192 B
+// per-tool budget, and the list keeps the 45 B of headroom it had.
+const CARD_MARK_TOOLS_BYTES = 1_198
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -514,7 +522,8 @@ export const TOOL_WIRE_BUDGET = {
     PLAN_EDIT_OFFSETS_BYTES +
     COMPETITOR_TOOLS_BYTES +
     SWITCH_CAMERAS_TOOL_BYTES +
-    COMPETITOR_LESSONS_TOOL_BYTES,
+    COMPETITOR_LESSONS_TOOL_BYTES +
+    CARD_MARK_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -6,7 +6,7 @@ import { telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
 import { useTelegramAccounts } from "@/hooks/use-telegram-accounts"
 import { useT } from "@/lib/i18n"
 import type { TelegramAccountSendData } from "@/types/nodes"
-import { useSocialConnections } from "./social-configs"
+import { TelegramBotPicker } from "./telegram-bot-picker"
 import type { ConfigProps } from "./types"
 
 /**
@@ -23,7 +23,6 @@ export function TelegramAccountSendConfig({ data, onUpdate }: ConfigProps<Telegr
   const t = useT()
   const d = data as TelegramAccountSendData
   const { accounts, loading: loadingAccounts } = useTelegramAccounts()
-  const { connections: bots, loading: loadingBots } = useSocialConnections("telegram")
   const sendAs = telegramSendAsOf(d.sendAs)
   const destination = telegramSendDestinationOf(d.destination)
 
@@ -96,29 +95,7 @@ export function TelegramAccountSendConfig({ data, onUpdate }: ConfigProps<Telegr
           </RadioGroup>
         </div>
       ) : (
-        <div>
-          <Label className={SECTION_LABEL}>{t("tgsend.bot")}</Label>
-          {!loadingBots && bots.length === 0 ? (
-            <p className="text-xs text-muted-foreground mt-1.5 p-2 bg-muted/30 rounded-md border border-dashed border-border">
-              {t("tgsend.noBot")}{" "}
-              <a href="/integrations" className="underline">{t("tgtrig.connectIn")}</a>
-            </p>
-          ) : (
-            <Select value={d.connectionId || ""} onValueChange={(v) => onUpdate({ connectionId: v })}>
-              <SelectTrigger className="mt-1.5">
-                <SelectValue placeholder={t("tgsend.defaultBot")} />
-              </SelectTrigger>
-              <SelectContent>
-                {bots.map((bot) => (
-                  <SelectItem key={bot.id} value={bot.id}>
-                    {bot.platform_username ? `@${bot.platform_username}` : bot.display_name ?? bot.id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <p className={HINT}>{t("tgsend.botStartHint")}</p>
-        </div>
+        <TelegramBotPicker connectionId={d.connectionId} onPick={(v) => onUpdate({ connectionId: v })} />
       )}
 
       <div>

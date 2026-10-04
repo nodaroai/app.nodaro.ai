@@ -1,13 +1,16 @@
 "use client"
 
-import { ArrowRight, Bookmark, BookmarkCheck, ExternalLink } from "lucide-react"
-import type { ActionCard, CompetitorPost } from "@nodaro/shared"
+import { ArrowRight, Bookmark, BookmarkCheck, CheckCircle2, ExternalLink } from "lucide-react"
+import { isMeasurableCard, type ActionCard, type AdviceRecord, type CardAction, type CompetitorPost } from "@nodaro/shared"
+import { Button } from "@/components/ui/button"
 import { MetaAdMedia } from "@/components/nodes/meta-ad-media"
 import { initialOf, socialPostLink, whoOf } from "@/components/research/social-post-card"
 import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
 import { cardText, priorityLabel } from "./action-card-text"
+import { CardMarkStrip } from "./card-mark-strip"
+import { familyLabel, recordPill } from "./card-outcome-text"
 
 const PRIORITY_TONE: Readonly<Record<ActionCard["priority"], string>> = {
   1: "bg-[#FF0073]/10 text-[#FF0073]",
@@ -58,15 +61,37 @@ function EvidencePost({ post, save }: { readonly post: CompetitorPost; readonly 
   )
 }
 
+/** "I did this" on a card, and its mark once made. */
+export interface CardMarking {
+  /** Marks can be kept (the server has a place for them). */
+  readonly canMark: boolean
+  /** The card's mark, when it has one. */
+  readonly action?: CardAction
+  /** The posts the mark's outcome names. */
+  readonly posts: Readonly<Record<string, CompetitorPost>>
+  readonly busy?: boolean
+  /** Open the link field at once (right after marking). */
+  readonly linkOpen?: boolean
+  readonly onMark: () => void
+  readonly onLink: (postUrl: string | null) => void
+  readonly onUndo: () => void
+  readonly onLater?: () => void
+}
+
 /** An action card: what happened, why it matters, what to do, and the posts it rests on. */
 export function ActionCardView({
   card,
   posts,
   save,
+  marking,
+  record,
 }: {
   readonly card: ActionCard
   readonly posts: Readonly<Record<string, CompetitorPost>>
   readonly save: SaveControls
+  readonly marking?: CardMarking
+  /** How this card's family of advice has gone for the person, when there is enough to say. */
+  readonly record?: AdviceRecord
 }) {
   const t = useT()
   const isRtl = useAppDir() === "rtl"
@@ -74,7 +99,14 @@ export function ActionCardView({
   const evidence = card.evidence.flatMap((id) => (posts[id] ? [posts[id]!] : []))
   return (
     <article className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
-      <span className={cn("self-start rounded-full px-2 py-0.5 text-[11px] font-bold", PRIORITY_TONE[card.priority])}>{priorityLabel(card, t)}</span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", PRIORITY_TONE[card.priority])}>{priorityLabel(card, t)}</span>
+        {record && (
+          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300" title={familyLabel(record.family, t)}>
+            {familyLabel(record.family, t)} · {recordPill(record, t)}
+          </span>
+        )}
+      </div>
       <h3 className="text-[14px] font-semibold leading-snug" dir="auto">
         {text.title}
       </h3>
@@ -94,6 +126,25 @@ export function ActionCardView({
             <EvidencePost key={post.id} post={post} save={save} />
           ))}
         </div>
+      )}
+      {marking?.action ? (
+        <CardMarkStrip
+          action={marking.action}
+          posts={marking.posts}
+          busy={marking.busy}
+          linkOpen={marking.linkOpen}
+          onLink={marking.onLink}
+          onUndo={marking.onUndo}
+          onLater={marking.onLater}
+        />
+      ) : (
+        marking?.canMark &&
+        isMeasurableCard(card) && (
+          <Button variant="ghost" size="sm" className="h-8 self-start px-2 text-[12.5px] font-semibold" onClick={marking.onMark} disabled={marking.busy}>
+            <CheckCircle2 className="me-1.5 h-4 w-4" />
+            {t("marks.iDidThis")}
+          </Button>
+        )
       )}
     </article>
   )

@@ -644,6 +644,7 @@ export async function createImageOverlay(params: ImageOverlayParams): Promise<Im
     const variantIds = Array.from(new Set((params.variants ?? []).filter((id) => overlayPlatformById(id)))).slice(0, OVERLAY_MAX_VARIANTS)
     const { variants, maskPath } = await withFfmpegSlot(() =>
       withTimeout(renderAll(baseBuffer, prepared, canvas, params, outputPath, variantIds, workDir, ext), RENDER_TIMEOUT_MS, "Image Overlay: render timed out"),
+      { timeoutMs: RENDER_TIMEOUT_MS, label: "Image Overlay render" },
     )
     const outMeta = await sharp(outputPath).metadata()
     return { outputPath, width: outMeta.width ?? 0, height: outMeta.height ?? 0, variants, maskPath }

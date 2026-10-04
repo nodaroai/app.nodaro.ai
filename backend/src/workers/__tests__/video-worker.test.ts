@@ -384,6 +384,28 @@ describe("video worker processor", () => {
     ).toBe("image-to-video")
   })
 
+  // Track 0.13: the pickup names `slot_wait_ms` (migration 451). Staging runs
+  // dev against the shared database before the migration reaches it — and a
+  // statement naming a missing column is not applied at all, so without the
+  // retry every job would be discarded as "not runnable".
+  it("pickup retries without slot_wait_ms while the column is missing, and the job runs", async () => {
+    const { resetSlotWaitColumnForTests } = await import("../../lib/jobs-slot-wait-column.js")
+    try {
+      mocks.mockSingle.mockResolvedValue({ data: mockJobRecord(), error: null })
+      mocks.mockCasSelect
+        .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column jobs.slot_wait_ms does not exist" } })
+        .mockResolvedValueOnce({ data: [{ id: "job-1" }], error: null })
+
+      await processor(makeBullJob("generate-image"))
+
+      expect(mocks.mockCasSelect.mock.calls[0]?.[0]).toContain("slot_wait_ms")
+      expect(mocks.mockCasSelect.mock.calls[1]?.[0]).toBe("id")
+      expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
+    } finally {
+      resetSlotWaitColumnForTests()
+    }
+  })
+
   // Phase 4: BullMQ stall-retry guard + inline recovery (Layer 1).
   it("stall-retry: skips handler AND dispatches to tryInlineReconcile when provider_task_id is set", async () => {
     mocks.mockSingle.mockResolvedValueOnce({

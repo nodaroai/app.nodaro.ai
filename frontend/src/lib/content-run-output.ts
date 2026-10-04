@@ -59,8 +59,14 @@ export function contentRunResultPatch(
   }
 }
 
-/** The own brand whose lessons an ideas run leaned on; undefined when none did. */
-function brandLessonsOf(output: Record<string, unknown>): { brand: string; lessons: number } | undefined {
-  const b = output.brandLessons as { brand?: unknown; lessons?: unknown } | undefined
-  return b && typeof b.brand === "string" && typeof b.lessons === "number" && b.lessons > 0 ? { brand: b.brand, lessons: b.lessons } : undefined
+/**
+ * The own brand whose lessons an ideas run leaned on, and how many families
+ * of its track record ("did it work?") went in; undefined when none did.
+ */
+function brandLessonsOf(output: Record<string, unknown>): { brand: string; lessons: number; record?: number } | undefined {
+  const b = output.brandLessons as { brand?: unknown; lessons?: unknown; record?: unknown } | undefined
+  if (!b || typeof b.brand !== "string" || typeof b.lessons !== "number") return undefined
+  const record = typeof b.record === "number" && b.record > 0 ? b.record : 0
+  if (b.lessons <= 0 && record === 0) return undefined
+  return { brand: b.brand, lessons: Math.max(b.lessons, 0), ...(record > 0 ? { record } : {}) }
 }

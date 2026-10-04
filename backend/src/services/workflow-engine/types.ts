@@ -520,6 +520,9 @@ export interface ResolvedInputs {
 export interface AdoptedJobClocks {
   readonly dispatchedAtMs?: number
   readonly processingStartedAtMs?: number
+  /** The row's `slot_wait_ms` when adopted: its earlier ffmpeg-slot wait,
+   *  credited from the first tick (Track 0.13). */
+  readonly slotWaitMs?: number
 }
 
 export interface OrchestratorContext {

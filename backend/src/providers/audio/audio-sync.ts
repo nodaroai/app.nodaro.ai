@@ -182,7 +182,7 @@ async function streamPcm(
       if (code === 0) resolve()
       else reject(new Error(ffmpegFailureMessage(stderr, signal ? `killed (${signal}) after ${timeoutMs} ms` : `exit ${code}`)))
     })
-  }))
+  }), { timeoutMs, label: "audio-sync decode" })
 }
 
 async function decodeWindow(path: string, startSec: number, durationSec: number): Promise<Float32Array> {

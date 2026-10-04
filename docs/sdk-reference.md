@@ -4780,10 +4780,24 @@ OAuth app tokens need `assets:read` / `assets:write`; a scan also needs a
 | `create(input)` | `POST /v1/competitors` | `TrackedCompetitor` |
 | `update(id, input)` | `PATCH /v1/competitors/:id` | `TrackedCompetitor` (`accounts` replaces the whole set; `409 scan_running` for a change to what a running scan was priced on) |
 | `delete(id)` | `DELETE /v1/competitors/:id` | `void` |
-| `cards()` | `GET /v1/competitors/cards` | `CompetitorCardsResult` (`{ cards, posts }`) |
+| `cards()` | `GET /v1/competitors/cards` | `CompetitorCardsResult` (`{ cards, posts, record }`) |
 | `lessons(id)` | `GET /v1/competitors/:id/lessons` | `CompetitorLessonsResult` (`{ lessons, posts }`: what the brand's best posts share, per platform; free) |
+| `tried()` | `GET /v1/competitors/actions` | `CompetitorActionsResult` (`{ actions, record, posts }`: the cards you marked done and how each went; free) |
+| `markDone(cardId, { postUrl? })` | `POST /v1/competitors/actions` | `CardActionResult` (`{ action, posts, created }`; a card marked before returns its mark) |
+| `linkPost(markId, postUrl \| null)` | `PATCH /v1/competitors/actions/:id` | `CardActionResult` (the post's full link; `null` removes it) |
+| `markSeen(markId)` | `PATCH /v1/competitors/actions/:id` | `CardActionResult` |
+| `unmark(markId)` | `DELETE /v1/competitors/actions/:id` | `void` |
 | `discover(website)` | `POST /v1/competitor-discover` | `CompetitorDiscovery` |
 | `scan(id)` | `POST /v1/competitor-scan` | `{ jobId }` |
+
+**Did it work?** `markDone` a card you acted on (with your post's link when
+you have it). Each scan of your own brand (`isOwn`) then judges that post
+against your usual on its platform once it is a few days old:
+`action.outcome.state` is `worked`, `flat` or `missed` with `ratio`, `reach`
+and `usual`, or says why there is no verdict yet. The first verdict stays
+(`action.verdict`). `record` sums verdicts per family of advice (`sound`,
+`outlier`, `launch`, `complaints`); `/cards` puts a `proven` family first
+within each priority. See [API integration](./api-integration.md#16c-competitors-nodaro-cloud).
 
 ```ts
 const found = await client.competitors.discover("acme.example")
@@ -4796,6 +4810,12 @@ const { jobId } = await client.competitors.scan(brand.id)
 // …poll client.jobs.getStatus(jobId) until completed, then:
 const { cards, posts } = await client.competitors.cards()
 for (const card of cards) console.log(card.title, "→", card.action, card.evidence.map((id) => posts[id]?.url))
+
+// Did it work? Mark a card done with your post, then read how it went.
+await client.competitors.markDone(cards[0]!.id, { postUrl: "https://www.tiktok.com/@you/video/123" })
+const { actions, record } = await client.competitors.tried()
+for (const a of actions) console.log(a.card.title, a.outcome.state, a.outcome.ratio)
+for (const r of record.filter((r) => r.shown)) console.log(`${r.family}: ${r.worked} of ${r.tried} worked`)
 ```
 
 ---

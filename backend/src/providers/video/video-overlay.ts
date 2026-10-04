@@ -24,6 +24,7 @@ import {
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { downloadFile, probeVideoOverlayBase, runFfmpeg, withFfmpegSlot } from "./ffmpeg-utils.js"
+import { DEFAULT_FFMPEG_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
 import { buildVideoOverlayGraph, type VideoOverlayGraphLayer } from "./video-overlay-graph.js"
 import { fetchVideoOverlayImage, gateVideoOverlayImage, inspectVideoOverlayImage, type VideoOverlayImageTotals } from "./video-overlay-images.js"
 import { prefitVideoOverlayLayer } from "./video-overlay-prefit.js"
@@ -171,7 +172,9 @@ export async function renderVideoOverlay(payload: VideoOverlayJobPayload, workDi
       })
     }
     return out
-  })
+    // Raster prefits in an ffmpeg slot: the same limit as an ffmpeg run, so the
+    // slot is always released (Track 0.13, decided 2026-10-04).
+  }, { timeoutMs: DEFAULT_FFMPEG_TIMEOUT_MS, label: "Video Overlay layer prefit" })
   // 8. The pure graph.
   const outputPath = join(workDir, "output.mp4")
   const graph = buildVideoOverlayGraph({
