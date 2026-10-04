@@ -40,14 +40,15 @@ import { getCurrentUserId, getWorkflowDocument, type WorkflowAccessLevel, type W
  * every minute while its tab is visible, as soon as the tab is shown again, and
  * the moment a save is refused. Each answer goes into the record the load
  * wrote, and an answer of `view` or `none` closes the subscription and turns
- * the canvas read-only on the spot. So the app never holds what the reader's
- * CURRENT access forbids, with two exceptions. Between two asks a canvas acts
- * on the last answer it had: up to a minute in a visible tab, and in a hidden
- * one until it is shown again or a save is refused. And what it was shown
- * under an earlier, wider access stays on screen, read-only, until the canvas
- * is reloaded, or, with no unsaved changes on it, until the row next moves and
- * the stripped re-read replaces it (a reader with no access left is sent
- * nothing to replace it with).
+ * the canvas read-only on the spot. (An owner's own row stays theirs, and so
+ * does its subscription; only the canvas turns read-only: `recheckedAccess`.)
+ * So the app never holds what the reader's CURRENT access forbids, with two
+ * exceptions. Between two asks a canvas acts on the last answer it had: up to
+ * a minute in a visible tab, and in a hidden one until it is shown again or a
+ * save is refused. And what it was shown under an earlier, wider access stays
+ * on screen, read-only, until the canvas is reloaded, or, with no unsaved
+ * changes on it, until the row next moves and the stripped re-read replaces
+ * it (a reader with no access left is sent nothing to replace it with).
  *
  * Residual, accepted for now by Tal on 2026-10-04 (T96): a `view` reader who
  * deliberately queries the database with their own token can still read the
