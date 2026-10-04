@@ -403,4 +403,16 @@ describe("buildSyncHttpBody — a scraper run features its FIRST result", () => 
     const body = buildSyncHttpBody(node("instagram-scrape", { mode: "profile", targets: "nike", featuredIndex: 3 }), {}, CTX)
     expect(body).not.toHaveProperty("featuredIndex")
   })
+
+  // A workflow run must send the node's REAL mode: the engine used to map every
+  // mode that is not "hashtag" to "profile", which would scrape a post link as a
+  // profile. Post links go out canonical, from the node or from upstream text.
+  it("instagram-scrape post mode sends the mode and canonical links", () => {
+    const own = buildSyncHttpBody(node("instagram-scrape", { mode: "post", targets: "https://instagram.com/p/AbC123/?igsh=x\nnike" }), {}, CTX)
+    expect(own).toMatchObject({ mode: "post", targets: ["https://www.instagram.com/p/AbC123/"] })
+    const wired = buildSyncHttpBody(node("instagram-scrape", { mode: "post", targets: "" }), { prompt: "see https://www.instagram.com/reel/Zz9/ now" }, CTX)
+    expect(wired).toMatchObject({ mode: "post", targets: ["https://www.instagram.com/reel/Zz9/"] })
+    const legacy = buildSyncHttpBody(node("instagram-scrape", { targets: "nike" }), {}, CTX)
+    expect(legacy).toMatchObject({ mode: "profile", targets: ["nike"] })
+  })
 })

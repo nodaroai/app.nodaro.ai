@@ -9,6 +9,7 @@ import {
   META_ADS_FORMATS,
   clampInstagramFeaturedIndex,
   classifyCreativeFormat,
+  instagramScrapeMode,
   splitInstagramTargets,
   type MetaAdsCreativeFormat,
 } from "@nodaro/shared"
@@ -104,7 +105,9 @@ export function instagramActiveCount(items: ReadonlyArray<Record<string, unknown
 export function instagramScrapeFingerprint(d: InstagramScrapeNodeData): string {
   return JSON.stringify([
     d.mode ?? "profile",
-    splitInstagramTargets(d.targets).sort(),
+    // Same splitter + mode as the run, so a post link edited only in its case
+    // (another post — shortcodes are case-sensitive) still reads as a change.
+    splitInstagramTargets(d.targets, instagramScrapeMode(d.mode)).sort(),
     d.count ?? null,
     d.period ?? "",
     Array.isArray(d.formats) ? [...d.formats].sort() : [],

@@ -11,7 +11,7 @@ import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useScrapeNodeCredits } from "./use-scrape-node-credits"
 import { getVideoProxyUrl } from "@/lib/api"
-import { splitInstagramTargets } from "@nodaro/shared"
+import { instagramScrapeMode, splitInstagramTargets, type InstagramScrapeMode } from "@nodaro/shared"
 import type { InstagramScrapeNodeData } from "@/types/nodes"
 import { isValidWebScrapeConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { HANDLE_COLORS } from "@/lib/handle-colors"
@@ -65,7 +65,9 @@ function Dot({ color, glow }: { readonly color: string; readonly glow?: boolean 
   return <span className="inline-block h-[7px] w-[7px] shrink-0 rounded-full" style={{ background: color, boxShadow: glow ? "var(--meta-ads-success-glow)" : undefined }} />
 }
 
-function HeaderRow({ mode, right }: { readonly mode: "profile" | "hashtag"; readonly right: ReactNode }) {
+const MODE_LABEL_KEY = { profile: "cfgext.igModeProfile", hashtag: "cfgext.igModeHashtag", post: "cfgext.igModePost" } as const satisfies Record<InstagramScrapeMode, string>
+
+function HeaderRow({ mode, right }: { readonly mode: InstagramScrapeMode; readonly right: ReactNode }) {
   const t = useT()
   return (
     <div className="flex items-center justify-between gap-2">
@@ -73,7 +75,7 @@ function HeaderRow({ mode, right }: { readonly mode: "profile" | "hashtag"; read
         <span className="text-[11px] font-extrabold uppercase tracking-[.14em] text-[var(--meta-ads-info)]">{t("cfgext.igTitle")}</span>
         <span className="text-[11px] text-[var(--meta-ads-faint)]">·</span>
         <span className="rounded-full bg-[var(--meta-ads-info-tint)] px-2 py-[3px] text-[11px] font-bold uppercase tracking-[.06em] text-[var(--meta-ads-info)]">
-          {mode === "hashtag" ? t("cfgext.igModeHashtag") : t("cfgext.igModeProfile")}
+          {t(MODE_LABEL_KEY[mode])}
         </span>
       </div>
       <div className="flex items-center gap-2 text-[12px] font-semibold text-[var(--meta-ads-muted)]">{right}</div>
@@ -83,9 +85,12 @@ function HeaderRow({ mode, right }: { readonly mode: "profile" | "hashtag"; read
 
 function TargetField({ data }: { readonly data: InstagramScrapeNodeData }) {
   const t = useT()
-  const targets = splitInstagramTargets(data.targets)
-  const prefix = data.mode === "hashtag" ? "#" : "@"
-  const text = targets.length === 0 ? t("cfgext.igTargetsEmpty") : targets.length === 1 ? `${prefix}${targets[0]}` : `${prefix}${targets[0]} +${targets.length - 1}`
+  const mode = instagramScrapeMode(data.mode)
+  const targets = splitInstagramTargets(data.targets, mode)
+  // A post link shows as "instagram.com/p/<code>" — the scheme and www add nothing.
+  const shown = targets.map((target) => (mode === "post" ? target.replace(/^https:\/\/www\./, "").replace(/\/$/, "") : `${mode === "hashtag" ? "#" : "@"}${target}`))
+  const empty = mode === "post" ? t("cfgext.igPostsEmpty") : t("cfgext.igTargetsEmpty")
+  const text = shown.length === 0 ? empty : shown.length === 1 ? shown[0] : `${shown[0]} +${shown.length - 1}`
   return (
     <div className="flex items-center gap-2.5 rounded-xl border border-[var(--meta-ads-border)] bg-[var(--meta-ads-surface-3)] px-3.5 py-2.5 text-[15px] font-semibold text-[var(--meta-ads-text)]">
       <Search className="h-3.5 w-3.5 shrink-0 text-[var(--meta-ads-faint)]" />
@@ -94,6 +99,8 @@ function TargetField({ data }: { readonly data: InstagramScrapeNodeData }) {
   )
 }
 
+const EMPTY_COPY_KEY = { profile: "cfgext.igEmptyCopyProfile", hashtag: "cfgext.igEmptyCopyHashtag", post: "cfgext.igEmptyCopyPost" } as const satisfies Record<InstagramScrapeMode, string>
+
 function EmptyState({ data }: { readonly data: InstagramScrapeNodeData }) {
   const t = useT()
   return (
@@ -101,7 +108,7 @@ function EmptyState({ data }: { readonly data: InstagramScrapeNodeData }) {
       <Instagram className="h-7 w-7 text-[var(--meta-ads-info)]" />
       <div className="text-[15px] font-extrabold text-[var(--meta-ads-text)]">{t("cfgext.igEmptyTitle")}</div>
       <div className="max-w-[320px] text-[12.5px] leading-normal text-[var(--meta-ads-muted)]">
-        {data.mode === "hashtag" ? t("cfgext.igEmptyCopyHashtag") : t("cfgext.igEmptyCopyProfile")}
+        {t(EMPTY_COPY_KEY[instagramScrapeMode(data.mode)])}
       </div>
     </div>
   )
@@ -219,7 +226,7 @@ function InstagramScrapeNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
 
-  const mode = nodeData.mode === "hashtag" ? "hashtag" : "profile"
+  const mode = instagramScrapeMode(nodeData.mode)
   const credits = useScrapeNodeCredits(id, "instagram-scrape", nodeData)
   const state = deriveInstagramScrapeCardState(nodeData)
   const running = state.kind === "running"

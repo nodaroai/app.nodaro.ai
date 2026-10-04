@@ -834,6 +834,8 @@ export {
   resolveInstagramScrapeCreditId,
   instagramScrapeSources,
   instagramScrapeCreditIdFromNode,
+  instagramRequestedCount,
+  instagramPostLink,
   splitInstagramTargets,
   clampInstagramFeaturedIndex,
   featuredInstagramOutputs,

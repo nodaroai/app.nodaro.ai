@@ -99,48 +99,53 @@ function InstagramConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
 
       <div className="flex flex-col gap-2">
         <SectionLabel>{t("cfgext.metaAdsMode")}</SectionLabel>
-        <Segmented value={mode} onChange={(v) => onUpdate({ mode: v })} options={[{ value: "profile", label: t("cfgext.igModeProfile") }, { value: "hashtag", label: t("cfgext.igModeHashtag") }]} />
+        <Segmented value={mode} onChange={(v) => onUpdate({ mode: v })} options={[{ value: "profile", label: t("cfgext.igModeProfile") }, { value: "hashtag", label: t("cfgext.igModeHashtag") }, { value: "post", label: t("cfgext.igModePost") }]} />
       </div>
 
-      <MappableField field="targets" label={mode === "hashtag" ? t("cfgext.igHashtags") : t("cfgext.igProfiles")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="targets" label={mode === "post" ? t("cfgext.igPosts") : mode === "hashtag" ? t("cfgext.igHashtags") : t("cfgext.igProfiles")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <div className="flex flex-col gap-2">
-          <Textarea value={data.targets ?? ""} onChange={(e) => onUpdate({ targets: e.target.value })} placeholder={mode === "hashtag" ? t("cfgext.igHashtagsPh") : t("cfgext.igProfilesPh")} rows={3} className={cn(fieldClass, "min-h-[84px] text-[13px]")} />
+          <Textarea value={data.targets ?? ""} onChange={(e) => onUpdate({ targets: e.target.value })} placeholder={mode === "post" ? t("cfgext.igPostsPh") : mode === "hashtag" ? t("cfgext.igHashtagsPh") : t("cfgext.igProfilesPh")} dir={mode === "post" ? "ltr" : undefined} rows={3} className={cn(fieldClass, "min-h-[84px] text-[13px]")} />
           <p className="text-[11.5px] leading-normal text-[var(--meta-ads-faint)]">
-            {t("cfgext.igTargetsHelp", { max: INSTAGRAM_SCRAPE_MAX_SOURCES })}
+            {t(mode === "post" ? "cfgext.igPostsHelp" : "cfgext.igTargetsHelp", { max: INSTAGRAM_SCRAPE_MAX_SOURCES })}
             {fieldMappings.targets && <span className="ms-1 font-extrabold text-[#FF0073]">· {t("cfgext.metaAdsFromInput")}</span>}
           </p>
         </div>
       </MappableField>
 
-      <div className="flex flex-col gap-2">
-        <SectionLabel>{t("cfgext.igPeriod")}</SectionLabel>
-        <Select value={data.period ?? "30d"} onValueChange={(v) => onUpdate({ period: v })}>
-          <SelectTrigger className={cn(fieldClass, "w-full")}><SelectValue /></SelectTrigger>
-          <SelectContent>{INSTAGRAM_SCRAPE_PERIODS.map((p) => (<SelectItem key={p} value={p}>{periodLabel[p]}</SelectItem>))}</SelectContent>
-        </Select>
-      </div>
+      {/* A post link names one post: no window, no per-source count, no format filter. */}
+      {mode !== "post" && (
+        <>
+          <div className="flex flex-col gap-2">
+            <SectionLabel>{t("cfgext.igPeriod")}</SectionLabel>
+            <Select value={data.period ?? "30d"} onValueChange={(v) => onUpdate({ period: v })}>
+              <SelectTrigger className={cn(fieldClass, "w-full")}><SelectValue /></SelectTrigger>
+              <SelectContent>{INSTAGRAM_SCRAPE_PERIODS.map((p) => (<SelectItem key={p} value={p}>{periodLabel[p]}</SelectItem>))}</SelectContent>
+            </Select>
+          </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <SectionLabel>{t("cfgext.igPostsPerSource")}</SectionLabel>
-          <span className="rounded-full bg-[var(--meta-ads-accent-tint)] px-2 py-0.5 text-[12px] font-extrabold text-[#FF0073]">{count}</span>
-        </div>
-        <Slider value={[count]} min={1} max={INSTAGRAM_SCRAPE_MAX_COUNT} step={1} onValueChange={([v]) => onUpdate({ count: v })} />
-      </div>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <SectionLabel>{t("cfgext.igPostsPerSource")}</SectionLabel>
+              <span className="rounded-full bg-[var(--meta-ads-accent-tint)] px-2 py-0.5 text-[12px] font-extrabold text-[#FF0073]">{count}</span>
+            </div>
+            <Slider value={[count]} min={1} max={INSTAGRAM_SCRAPE_MAX_COUNT} step={1} onValueChange={([v]) => onUpdate({ count: v })} />
+          </div>
 
-      <div className="flex flex-col gap-2">
-        <SectionLabel>{t("cfgext.igFormat")}</SectionLabel>
-        <div className="flex flex-wrap gap-1.5">
-          {META_ADS_FORMATS.map((code) => {
-            const on = selectedFormats.includes(code)
-            const key = instagramFormatLabelKey(code)
-            return (
-              <button key={code} type="button" onClick={() => toggleFormat(code)} className={cn("rounded-full px-2.5 py-1.5 text-[12px] font-bold transition-colors", on ? "border border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-[#FF0073]" : "border border-dashed border-[var(--meta-ads-empty-border)] text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]")}>{key ? t(key) : code}</button>
-            )
-          })}
-        </div>
-        <p className="text-[11.5px] leading-normal text-[var(--meta-ads-faint)]">{t("cfgext.igFormatHint")}</p>
-      </div>
+          <div className="flex flex-col gap-2">
+            <SectionLabel>{t("cfgext.igFormat")}</SectionLabel>
+            <div className="flex flex-wrap gap-1.5">
+              {META_ADS_FORMATS.map((code) => {
+                const on = selectedFormats.includes(code)
+                const key = instagramFormatLabelKey(code)
+                return (
+                  <button key={code} type="button" onClick={() => toggleFormat(code)} className={cn("rounded-full px-2.5 py-1.5 text-[12px] font-bold transition-colors", on ? "border border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-[#FF0073]" : "border border-dashed border-[var(--meta-ads-empty-border)] text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]")}>{key ? t(key) : code}</button>
+                )
+              })}
+            </div>
+            <p className="text-[11.5px] leading-normal text-[var(--meta-ads-faint)]">{t("cfgext.igFormatHint")}</p>
+          </div>
+        </>
+      )}
 
       <div className="flex items-start justify-between gap-3 rounded-[14px] border border-[var(--meta-ads-info-card-border)] bg-[var(--meta-ads-info-card)] px-4 py-3">
         <div className="flex flex-col gap-0.5">

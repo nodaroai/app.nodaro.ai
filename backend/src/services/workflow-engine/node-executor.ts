@@ -33,7 +33,7 @@ import { videoAnalysisPostDuration } from "./video-analysis-post-probe.js"
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets } from "@nodaro/shared"
+import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets, instagramScrapeMode } from "@nodaro/shared"
 import { computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
@@ -1151,12 +1151,13 @@ export function buildSyncHttpBody(
     }
 
     case "instagram-scrape": {
-      // Targets (profiles / hashtags) are typed one per line, or arrive as the
-      // upstream text so a Prompt / List node can drive the scrape.
-      const own = splitInstagramTargets(data.targets)
-      const targets = own.length > 0 ? own : splitInstagramTargets(resolvedInputs.prompt)
+      // Targets (profiles / hashtags / post links) are typed one per line, or
+      // arrive as the upstream text so a Prompt / List node can drive the scrape.
+      const mode = instagramScrapeMode(data.mode)
+      const own = splitInstagramTargets(data.targets, mode)
+      const targets = own.length > 0 ? own : splitInstagramTargets(resolvedInputs.prompt, mode)
       const body: Record<string, unknown> = {
-        mode: data.mode === "hashtag" ? "hashtag" : "profile",
+        mode,
         targets,
         count: data.count,
         period: data.period,
