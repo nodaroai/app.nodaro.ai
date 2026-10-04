@@ -119,6 +119,20 @@ interface SaveResult {
   readonly activeBackendExecution?: ActiveBackendExecution
 }
 
+export interface SaveOptions {
+  /**
+   * Persist a canvas with no nodes. Off by default, because a load clears the
+   * canvas before it fetches, and refusing an empty graph is what stops a save
+   * from writing that blank over the real workflow. The Copilot's flush passes
+   * it: someone who cleared the canvas and asks the Copilot to build means the
+   * empty graph, and the Copilot builds on the saved one. It is honoured only
+   * once a load has settled and left its version behind. The write is then
+   * checked against that version, so it conflicts rather than wipes a row that
+   * moved meanwhile.
+   */
+  readonly allowEmpty?: boolean
+}
+
 const SAVED_DISPLAY_DURATION = 2000
 
 /** Hard cap on a single save round-trip. A hung request would otherwise pin
@@ -685,14 +699,14 @@ export function useWorkflowPersistence(projectId?: string) {
   const inFlightSaveRef = useRef<Promise<SaveResult> | null>(null)
 
   const saveOnce = useCallback(
-    async (pid?: string): Promise<SaveResult> => {
+    async (pid?: string, opts?: SaveOptions): Promise<SaveResult> => {
       const resolvedProjectId = pid ?? projectId
       if (!resolvedProjectId) return { success: false, error: "No project ID" }
 
       // `epochAtStart` travels with the graph read here: applySaveSuccess
       // clears isDirty only if no edit advanced the epoch while the request
       // was out (an in-flight edit was never sent and must stay dirty).
-      const { workflowId, workflowName, nodes: allNodes, edges: allEdges, characterDefinitions, flowPromptTemplates, presentationSettings, dirtyEpoch: epochAtStart, loadGeneration: loadGenAtStart } =
+      const { workflowId, workflowName, nodes: allNodes, edges: allEdges, characterDefinitions, flowPromptTemplates, presentationSettings, dirtyEpoch: epochAtStart, loadGeneration: loadGenAtStart, isWorkflowLoading, loadedVersion: versionAtStart } =
         useWorkflowStore.getState()
 
       // Filter out temporary nodes: sub-workflow execution nodes and expanded loop clones
@@ -703,8 +717,9 @@ export function useWorkflowPersistence(projectId?: string) {
       const nodes = orderNodesParentFirst(cleaned.nodes)
       const edges = cleaned.edges
 
-      // Don't save empty workflows
-      if (nodes.length === 0) return { success: false, error: "Empty workflow" }
+      // Don't save empty workflows, unless asked to on a settled load (SaveOptions.allowEmpty)
+      const emptyAllowed = opts?.allowEmpty === true && !isWorkflowLoading && versionAtStart !== null
+      if (nodes.length === 0 && !emptyAllowed) return { success: false, error: "Empty workflow" }
 
       // isDirty guard: when the row is already persisted and the store has no
       // unsaved edits, skip the Supabase UPDATE entirely. The pre-Run save
@@ -1176,7 +1191,7 @@ export function useWorkflowPersistence(projectId?: string) {
   )
 
   const save = useCallback(
-    async (pid?: string): Promise<SaveResult> => {
+    async (pid?: string, opts?: SaveOptions): Promise<SaveResult> => {
       // The workflow this call was made for: a load() that lands while we
       // wait must not have the queued attempt write the NEW workflow's graph
       // under this call's project id.
@@ -1206,7 +1221,7 @@ export function useWorkflowPersistence(projectId?: string) {
         return { success: false, error: "workflow_changed" }
       }
 
-      const attempt = saveOnce(pid)
+      const attempt = saveOnce(pid, opts)
       inFlightSaveRef.current = attempt
       try {
         return await attempt

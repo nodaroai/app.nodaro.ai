@@ -1,52 +1,30 @@
 /**
- * Core shim for the Copilot rail.
+ * Core shims for the Copilot: the rail beside the canvas, the middle of an
+ * empty canvas, and the top-bar tab.
  *
- * Core code may not statically import from `ee/`, so the panel arrives through
- * `lazy(() => import(...))` — the same pattern as `app-sidebar.tsx`'s org
- * switcher, and the only route from core to enterprise UI. On a community
- * build `hasCredits()` is false, the import expression is never evaluated, and
- * the chunk is never requested.
+ * Core code may not statically import from `ee/`, so every Copilot surface
+ * arrives through `lazy(() => import(...))` — the same pattern as
+ * `app-sidebar.tsx`'s org switcher, and the only route from core to
+ * enterprise UI. On a community build `copilotSurfaced()` is false, the import
+ * expressions are never evaluated, and no ee chunk is ever requested.
  *
- * Once opened, the panel stays MOUNTED and is hidden with `display:none` when
- * closed. That preserves the composer draft and the scroll position across a
- * close/reopen. (Turn survival does not depend on it — the streaming loop lives
- * in a module-level engine, not in this subtree.)
+ * Where the Copilot sits is the `mode` in `use-copilot-ui-store` — `center`,
+ * `panel`, `min` (the folded strip) or `hidden` — moved by the canvas
+ * (`copilot-placement.ts`) and by the person (the tab, the strip, the panel's
+ * own buttons). On a desktop the rail chunk is loaded at once: it reports the
+ * conversation's size (the strip's count, and whether the middle is free), and
+ * mounts the heavy panel only once it is first opened. A phone has no rail and
+ * no middle: the panel is a sheet over the canvas, opened from the tab.
  */
-import { Suspense, lazy, useEffect, type ComponentType } from "react"
+import { Suspense, lazy, useEffect, useRef, useState, type ComponentType, type MouseEvent as ReactMouseEvent } from "react"
 import { useSearchParams } from "react-router-dom"
 import { Bot, Loader2 } from "lucide-react"
 import { SHORTCUTS, formatBinding, isMacPlatform, matchShortcut } from "@/lib/shortcuts"
 import { COPILOT_RAIL_WIDTH, COPILOT_TAB_WIDTH, copilotSurfaced, useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { useT } from "@/lib/i18n"
-
-/**
- * Resolved on first render rather than at module load: the `import()` factory
- * is only ever constructed on a build that has credits, so a community bundle
- * never requests the chunk — and the gate stays observable to a test instead of
- * being frozen into module scope.
- */
-// `copilotSurfaced()` lives beside the rail-width hook so the render paths
-// here and the layout offsets elsewhere answer the same question.
-let lazyPanel: ComponentType<CopilotPanelSlotProps & { onClose: () => void; fullScreen?: boolean }> | null = null
-function resolvePanel() {
-  if (!copilotSurfaced()) return null
-  lazyPanel ??= lazy(() => import("@/ee/components/copilot/copilot-panel")) as unknown as ComponentType<
-    CopilotPanelSlotProps & { onClose: () => void; fullScreen?: boolean }
-  >
-  return lazyPanel
-}
-
-/**
- * Handoff arrivals already acted on, so closing the rail sticks.
- *
- * Keyed by THREAD id, while the handoff hook's own set is keyed by WORKFLOW
- * id. They are deliberately separate questions — "has this rail been opened
- * for this arrival" versus "has this workflow been handed off" — and the only
- * thing that keeps them from diverging visibly is that the parameter is
- * consumed once. Anything that starts preserving it needs to revisit both.
- */
-const honouredArrivals = new Set<string>()
+import type { SceneNodeType } from "@/types/nodes"
+import { canvasHasContent, copilotTabTarget, goToCopilotMode, useCopilotCenterAllowed } from "./copilot-placement"
 
 export interface CopilotPanelSlotProps {
   projectId: string | undefined
@@ -64,6 +42,56 @@ export interface CopilotPanelSlotProps {
   activeExecutionId: string | null
 }
 
+type PanelProps = CopilotPanelSlotProps & { onClose: () => void; onMinimize: () => void; fullScreen?: boolean }
+
+export interface CopilotCenterProps {
+  /** Exit animation: the Copilot is on its way to the rail. */
+  readonly leaving: boolean
+  /** Adds a node at the middle of the canvas (the "Or start manually" buttons). */
+  readonly onCreate: (type: SceneNodeType) => void
+  /** The canvas's own right-click menu: a right-click on the box opens it too. */
+  readonly onContextMenu: (event: ReactMouseEvent) => void
+}
+
+/**
+ * Resolved on first render rather than at module load: the `import()`
+ * factories are only ever constructed on a build where the Copilot is
+ * surfaced, so a community bundle never requests a chunk — and the gate stays
+ * observable to a test instead of being frozen into module scope.
+ */
+let lazyPanel: ComponentType<PanelProps> | null = null
+let lazyRail: ComponentType<CopilotPanelSlotProps> | null = null
+let lazyCenter: ComponentType<CopilotCenterProps> | null = null
+
+function resolvePanel() {
+  if (!copilotSurfaced()) return null
+  lazyPanel ??= lazy(() => import("@/ee/components/copilot/copilot-panel")) as unknown as ComponentType<PanelProps>
+  return lazyPanel
+}
+
+function resolveRail() {
+  if (!copilotSurfaced()) return null
+  lazyRail ??= lazy(() => import("@/ee/components/copilot/copilot-rail")) as unknown as ComponentType<CopilotPanelSlotProps>
+  return lazyRail
+}
+
+function resolveCenter() {
+  if (!copilotSurfaced()) return null
+  lazyCenter ??= lazy(() => import("@/ee/components/copilot/copilot-center")) as unknown as ComponentType<CopilotCenterProps>
+  return lazyCenter
+}
+
+/**
+ * Handoff arrivals already acted on, so closing the rail sticks.
+ *
+ * Keyed by THREAD id, while the handoff hook's own set is keyed by WORKFLOW
+ * id. They are deliberately separate questions — "has this rail been opened
+ * for this arrival" versus "has this workflow been handed off" — and the only
+ * thing that keeps them from diverging visibly is that the parameter is
+ * consumed once. Anything that starts preserving it needs to revisit both.
+ */
+const honouredArrivals = new Set<string>()
+
 export function CopilotPanelSlot(props: CopilotPanelSlotProps) {
   // A reload on the handoff URL must reopen the rail, or the user lands on a
   // closed panel with a turn starting behind it.
@@ -80,32 +108,84 @@ export function CopilotPanelSlot(props: CopilotPanelSlotProps) {
     openPanel()
   }, [arrivingFor, openPanel])
 
-  const open = useCopilotUiStore((s) => s.open)
+  const mode = useCopilotUiStore((s) => s.mode)
   const everOpened = useCopilotUiStore((s) => s.everOpened)
   const closePanel = useCopilotUiStore((s) => s.closePanel)
-  // A phone has no room for a rail beside the canvas — and no room for a 40px
-  // tab permanently eating its width either. There the panel is a sheet over
-  // the canvas, reached from the toolbar button.
   const isMobile = useIsMobile()
 
-  const CopilotPanel = resolvePanel()
-  if (!CopilotPanel) return null
-  if (!open && !everOpened) return isMobile ? null : <CopilotCollapsedTab />
+  if (!copilotSurfaced()) return null
 
-  return (
-    <>
-      {!open && !isMobile && <CopilotCollapsedTab />}
-      {/* `contents` keeps the panel's own flex sizing; `hidden` removes it entirely. */}
-      <div className={open ? "contents" : "hidden"}>
+  if (isMobile) {
+    const CopilotPanel = resolvePanel()
+    if (!CopilotPanel || (mode !== "panel" && !everOpened)) return null
+    return (
+      // Once opened the sheet stays mounted (draft, scroll); `hidden` takes it away.
+      <div className={mode === "panel" ? "contents" : "hidden"}>
         <Suspense fallback={<CopilotPanelFallback />}>
-          <CopilotPanel onClose={closePanel} fullScreen={isMobile} {...props} />
+          <CopilotPanel onClose={closePanel} onMinimize={closePanel} fullScreen {...props} />
         </Suspense>
       </div>
-    </>
+    )
+  }
+
+  const CopilotRail = resolveRail()
+  if (!CopilotRail) return null
+  return (
+    <Suspense fallback={mode === "min" ? <CopilotCollapsedTab /> : mode === "panel" ? <CopilotPanelFallback /> : null}>
+      <CopilotRail {...props} />
+    </Suspense>
   )
 }
 
-/** The always-visible way back in when the rail is closed. */
+/** How long the middle takes to leave for the rail — matches the rail's own width transition. */
+export const COPILOT_CENTER_EXIT_MS = 350
+
+/**
+ * The Copilot in the middle of an empty canvas. Rendered by the canvas where
+ * the first-run surface goes; `visible` is the canvas's `copilot-center`
+ * surface. When it turns false the Copilot plays its exit (it slides toward the
+ * rail and fades) before unmounting.
+ */
+export function CopilotCenterSlot({
+  visible,
+  onCreate,
+  onContextMenu,
+}: {
+  readonly visible: boolean
+  readonly onCreate: (type: SceneNodeType) => void
+  readonly onContextMenu: (event: ReactMouseEvent) => void
+}) {
+  const [mounted, setMounted] = useState(visible)
+  const [leaving, setLeaving] = useState(false)
+  const mountedRef = useRef(mounted)
+  mountedRef.current = mounted
+
+  useEffect(() => {
+    if (visible) {
+      setMounted(true)
+      setLeaving(false)
+      return
+    }
+    if (!mountedRef.current) return
+    setLeaving(true)
+    const timer = window.setTimeout(() => {
+      setMounted(false)
+      setLeaving(false)
+    }, COPILOT_CENTER_EXIT_MS)
+    return () => window.clearTimeout(timer)
+  }, [visible])
+
+  if (!mounted) return null
+  const CopilotCenter = resolveCenter()
+  if (!CopilotCenter) return null
+  return (
+    <Suspense fallback={null}>
+      <CopilotCenter leaving={leaving} onCreate={onCreate} onContextMenu={onContextMenu} />
+    </Suspense>
+  )
+}
+
+/** The folded strip, without its reply count — shown while the rail chunk loads. */
 export function CopilotCollapsedTab() {
   const t = useT()
   const openPanel = useCopilotUiStore((s) => s.openPanel)
@@ -135,21 +215,39 @@ function CopilotPanelFallback() {
   )
 }
 
+/** The tab (or `mod+J`): moves the Copilot on from where it is now. */
+function pressCopilotTab(isMobile: boolean, centerAllowed: boolean) {
+  const ui = useCopilotUiStore.getState()
+  const target = copilotTabTarget({
+    mode: ui.mode,
+    isMobile,
+    hasContent: canvasHasContent(),
+    centerAllowed,
+    returnToCenterWhenEmpty: ui.returnToCenterWhenEmpty,
+  })
+  goToCopilotMode(target, ui.mode === "panel" ? "min" : undefined)
+}
+
 /**
- * Toolbar toggle. Also owns the `mod+J` binding, so the shortcut works from
- * anywhere in the editor without a second listener somewhere else.
+ * The top-bar Copilot tab. Pink while the rail is open; a click folds an open
+ * rail and unfolds a folded or hidden one (see `copilotTabTarget`). Also owns
+ * the `mod+J` binding, so the shortcut works from anywhere in the editor
+ * without a second listener somewhere else.
  */
 export function CopilotToolbarButton() {
   const t = useT()
-  const open = useCopilotUiStore((s) => s.open)
-  const togglePanel = useCopilotUiStore((s) => s.togglePanel)
+  const mode = useCopilotUiStore((s) => s.mode)
+  const isMobile = useIsMobile()
+  const centerAllowed = useCopilotCenterAllowed()
+  const latest = useRef({ isMobile, centerAllowed })
+  latest.current = { isMobile, centerAllowed }
 
   useEffect(() => {
     if (!copilotSurfaced()) return
     const onKey = (e: KeyboardEvent) => {
       if (!matchShortcut(e, SHORTCUTS.copilot)) return
       e.preventDefault()
-      useCopilotUiStore.getState().togglePanel()
+      pressCopilotTab(latest.current.isMobile, latest.current.centerAllowed)
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
@@ -157,10 +255,11 @@ export function CopilotToolbarButton() {
 
   if (!copilotSurfaced()) return null
 
+  const open = mode === "panel"
   return (
     <button
       type="button"
-      onClick={togglePanel}
+      onClick={() => pressCopilotTab(isMobile, centerAllowed)}
       aria-pressed={open}
       title={t("editor.copilotTitle", { sc: formatBinding(SHORTCUTS.copilot.bindings[0], isMacPlatform()) })}
       className={`ms-auto me-2 self-center flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${

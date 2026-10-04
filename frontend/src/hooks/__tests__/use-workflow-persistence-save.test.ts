@@ -232,6 +232,48 @@ describe("useWorkflowPersistence — save", () => {
     expect(mockSupabaseFrom).not.toHaveBeenCalled()
   })
 
+  describe("allowEmpty — the Copilot's flush of a canvas someone cleared", () => {
+    it("writes the empty graph on a settled load, guarded by the loaded version", async () => {
+      resetStoreState({ workflowId: "w1", nodes: [], loadedVersion: 4 })
+      const { update } = setupSupabaseUpdate()
+
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      let saveResult: { success: boolean; error?: string } | undefined
+      await act(async () => {
+        saveResult = await result.current.save(undefined, { allowEmpty: true })
+      })
+
+      expect(saveResult!.success).toBe(true)
+      expect(update).toHaveBeenCalledWith(expect.objectContaining({ nodes: [], edges: [] }))
+    })
+
+    it("still refuses while a load is in flight — the load blanks the canvas before it fetches", async () => {
+      resetStoreState({ workflowId: "w1", nodes: [], loadedVersion: 4, isWorkflowLoading: true })
+
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      let saveResult: { success: boolean; error?: string } | undefined
+      await act(async () => {
+        saveResult = await result.current.save(undefined, { allowEmpty: true })
+      })
+
+      expect(saveResult!.error).toBe("Empty workflow")
+      expect(mockSupabaseFrom).not.toHaveBeenCalled()
+    })
+
+    it("still refuses without a loaded version to check the write against", async () => {
+      resetStoreState({ workflowId: "w1", nodes: [], loadedVersion: null })
+
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      let saveResult: { success: boolean; error?: string } | undefined
+      await act(async () => {
+        saveResult = await result.current.save(undefined, { allowEmpty: true })
+      })
+
+      expect(saveResult!.error).toBe("Empty workflow")
+      expect(mockSupabaseFrom).not.toHaveBeenCalled()
+    })
+  })
+
   it("skips the network update when an existing workflow is already clean (not dirty)", async () => {
     resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")], isDirty: false })
 

@@ -15,6 +15,10 @@ import { activeMentionQuery, insertMentionName, variantSuffix } from "@/ee/lib/c
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { copilotFeatureId } from "@/ee/lib/copilot/constants"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
+import { useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
+
+/** The last "Ask Copilot…" request a composer acted on — module-wide, so a remount does not repeat it. */
+let handledFocusTick = 0
 import { CopilotAttachButton } from "./copilot-attach-button"
 import { CopilotMentionPicker, MENTION_LIST_ID, MentionThumb, safeThumbUrl } from "./copilot-mention-picker"
 import { CopilotMentionModal } from "./copilot-mention-modal"
@@ -56,6 +60,15 @@ export function CopilotComposer({ mentionSources, onSearchChange, fileTotal, has
   const turnCeiling = useModelCredits(copilotFeatureId(modelTier))
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // "Ask Copilot…" from the canvas menu: the rail's composer takes the focus —
+  // also when that same click is what opens the rail and mounts it.
+  const focusTick = useCopilotUiStore((s) => s.focusTick)
+  useEffect(() => {
+    if (focusTick <= handledFocusTick) return
+    handledFocusTick = focusTick
+    inputRef.current?.focus()
+  }, [focusTick])
   const [query, setQuery] = useState<string | null>(null)
   const [activeMentionId, setActiveMentionId] = useState<string | undefined>(undefined)
   // The full-size browser is owned HERE, not by the picker: the picker unmounts

@@ -5,7 +5,7 @@
  * a read-only workflow rather than merely styled as if it were.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter } from "react-router-dom"
 
@@ -40,7 +40,7 @@ vi.mock("@/ee/hooks/copilot/use-copilot-thread", () => ({
   useCopilotSettings: () => ({ mutate: vi.fn() }),
 }))
 vi.mock("@/ee/lib/copilot/turn-engine", () => ({
-  sendCopilotMessage: vi.fn(),
+  sendCopilotMessage: vi.fn(async () => {}),
   stopCopilotTurn: vi.fn(),
   teardownCopilot: vi.fn(),
   startProposedRun: vi.fn(),
@@ -52,10 +52,12 @@ vi.mock("@/ee/lib/copilot/turn-engine", () => ({
 
 const CopilotPanel = (await import("../copilot-panel")).default
 const { useCopilotStore } = await import("@/ee/lib/copilot/turn-store")
+const { useCopilotUiStore } = await import("@/hooks/use-copilot-ui-store")
 const { sendCopilotMessage } = await import("@/ee/lib/copilot/turn-engine")
 
 const props = {
   onClose: vi.fn(),
+  onMinimize: vi.fn(),
   projectId: "p1",
   save: vi.fn(async () => ({ success: true })),
   run: vi.fn(async () => ({ executionId: "exec-1" })),
@@ -97,6 +99,67 @@ beforeEach(() => {
   })
 })
 
+describe("arriving from the middle of the canvas", () => {
+  it("says it moved when the person started building by hand", () => {
+    workflowState.nodes = [{ id: "n1" }]
+    renderPanel()
+    expect(screen.getByText("Copilot moved here")).toBeInTheDocument()
+    expect(screen.queryByText("Hey asi")).toBeNull()
+  })
+
+  it("sends the message typed in the middle once it is up, and only once", async () => {
+    useCopilotUiStore.setState({ pendingPrompt: { text: "A 15-second product ad", workflowId: "wf-1", sentAt: Date.now() } })
+    renderPanel()
+    expect(sendCopilotMessage).toHaveBeenCalledTimes(1)
+    expect(sendCopilotMessage).toHaveBeenCalledWith("A 15-second product ad")
+    await waitFor(() => expect(useCopilotUiStore.getState().pendingPrompt).toBeNull())
+    expect(sendCopilotMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps the message pending until the send settles, so the canvas knows something was said", async () => {
+    let finish: () => void = () => {}
+    vi.mocked(sendCopilotMessage).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
+    const prompt = { text: "A logo animation", workflowId: "wf-1", sentAt: Date.now() }
+    useCopilotUiStore.setState({ pendingPrompt: prompt })
+    renderPanel()
+    expect(useCopilotUiStore.getState().pendingPrompt).toBe(prompt)
+    finish()
+    await waitFor(() => expect(useCopilotUiStore.getState().pendingPrompt).toBeNull())
+  })
+
+  it("shows what was sent at once, while the save and the handshake run", () => {
+    vi.mocked(sendCopilotMessage).mockImplementationOnce(() => new Promise<void>(() => {}))
+    useCopilotUiStore.setState({ pendingPrompt: { text: "A logo animation", workflowId: "wf-1", sentAt: Date.now() } })
+    renderPanel()
+    expect(screen.getByText("A logo animation")).toBeInTheDocument()
+    expect(screen.queryByText("Hey asi")).toBeNull()
+  })
+
+  it("puts the sentence back in the box when the send is refused before its turn begins", async () => {
+    useCopilotUiStore.setState({ pendingPrompt: { text: "A logo animation", workflowId: "wf-1", sentAt: Date.now() } })
+    renderPanel()
+    await waitFor(() => expect(useCopilotUiStore.getState().pendingPrompt).toBeNull())
+    expect(useCopilotStore.getState().draft).toBe("A logo animation")
+  })
+
+  it("never sends a message typed for another workflow", () => {
+    useCopilotUiStore.setState({ pendingPrompt: { text: "Build it", workflowId: "wf-other", sentAt: Date.now() } })
+    renderPanel()
+    expect(sendCopilotMessage).not.toHaveBeenCalled()
+    expect(useCopilotUiStore.getState().pendingPrompt).toBeNull()
+  })
+})
+
+describe("the header's own controls", () => {
+  it("folds the rail and puts it away", () => {
+    renderPanel()
+    fireEvent.click(screen.getByRole("button", { name: "Minimize Copilot" }))
+    expect(props.onMinimize).toHaveBeenCalled()
+    fireEvent.click(screen.getByRole("button", { name: "Close Copilot" }))
+    expect(props.onClose).toHaveBeenCalled()
+  })
+})
+
 describe("the empty rail", () => {
   it("greets the user and offers openers", () => {
     renderPanel()
@@ -119,12 +182,23 @@ describe("the empty rail", () => {
 
   it("states in words what the current mode will do about spending", () => {
     renderPanel()
-    expect(screen.getByText("asks before running")).toBeInTheDocument()
+    // The composer says it with the settings closed; the settings say it too.
     expect(screen.getByText("nothing runs without your OK")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Copilot settings" }))
+    expect(screen.getByText("asks before running")).toBeInTheDocument()
+  })
+
+  it("keeps its settings behind the header button, which names the current choice", () => {
+    renderPanel()
+    expect(screen.queryByRole("radio", { name: "Auto" })).toBeNull()
+    const button = screen.getByRole("button", { name: "Copilot settings" })
+    expect(button.textContent).toContain("Ask")
+    expect(button.textContent).toContain("Smart")
   })
 
   it("shows the ceiling as an editable field, dimmed while Ask is on", () => {
     renderPanel()
+    fireEvent.click(screen.getByRole("button", { name: "Copilot settings" }))
     const ceiling = screen.getByLabelText(/auto-run credit limit/i)
     expect(ceiling).toHaveValue("100")
     expect(ceiling.closest("div")).toHaveClass("opacity-45")
@@ -132,6 +206,7 @@ describe("the empty rail", () => {
 
   it("switches the promise when Auto is picked", () => {
     renderPanel()
+    fireEvent.click(screen.getByRole("button", { name: "Copilot settings" }))
     fireEvent.click(screen.getByRole("radio", { name: "Auto" }))
     expect(screen.getByText("runs on its own")).toBeInTheDocument()
     expect(screen.getByText("auto-runs up to ~100 credits")).toBeInTheDocument()

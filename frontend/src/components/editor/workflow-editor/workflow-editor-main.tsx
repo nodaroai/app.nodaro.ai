@@ -946,6 +946,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     setTimeout(() => queryClient.invalidateQueries({ queryKey: ["workflow-executions"] }), 500);
   }
 
+  // The Copilot flushes the canvas before every message. An emptied canvas is
+  // saved too: the Copilot builds on the saved graph, so the nodes someone
+  // removed would otherwise come back to life under it (SaveOptions.allowEmpty).
+  function saveForCopilot(pid: string) {
+    return save(pid, { allowEmpty: true });
+  }
+
   // The Copilot needs to know whether a run actually STARTED — it decides
   // between showing progress and handing the decision back. `handleRun` already
   // announces a start through `onExecutionStarted`; observing that callback is
@@ -1381,7 +1388,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           <div className="absolute inset-0 overflow-hidden flex">
             <CopilotPanelSlot
               projectId={projectId}
-              save={isReadOnly ? null : save}
+              save={isReadOnly ? null : saveForCopilot}
               run={isReadOnly ? null : runForCopilot}
               runNode={isReadOnly ? null : runNodeForCopilot}
               estimateNode={estimateNodeForCopilot}

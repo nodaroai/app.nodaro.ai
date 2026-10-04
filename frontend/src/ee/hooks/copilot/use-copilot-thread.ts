@@ -92,3 +92,26 @@ export function useCopilotSettings(threadId: string | null) {
     },
   })
 }
+
+/**
+ * The size of the open workflow's conversation — WITHOUT adopting its thread
+ * into the turn store (`useCopilotThreadForWorkflow` does that, and the panel's
+ * teardown on a workflow switch keys off it). `messages` counts both sides:
+ * the canvas asks it before it leaves the Copilot in the middle. `replies`
+ * counts the Copilot's own: the folded strip shows it. Same queries, and
+ * cache, as the panel.
+ */
+export function useCopilotConversationSize(): { messages: number; replies: number; known: boolean } {
+  const workflowId = useWorkflowStore((s) => s.workflowId)
+  const lookup = useQuery({
+    queryKey: queryKeys.copilot.forWorkflow(workflowId ?? "none"),
+    queryFn: () => findCopilotThread(workflowId!),
+    enabled: Boolean(workflowId),
+    staleTime: 30_000,
+  })
+  const threadId = lookup.data?.thread?.id ?? null
+  const history = useCopilotHistory(threadId)
+  const known = Boolean(workflowId) && lookup.isSuccess && (threadId === null || history.thread !== null)
+  const replies = history.messages.filter((m) => m.role === "assistant").length
+  return { messages: history.messages.length, replies, known }
+}

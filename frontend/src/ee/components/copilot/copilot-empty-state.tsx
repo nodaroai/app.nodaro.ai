@@ -2,6 +2,9 @@
  * What the panel says before anyone has asked it anything: who it is, what it
  * will do, and what it will not do without permission — plus four openers, so
  * the first message costs a click rather than a blank-page decision.
+ *
+ * `moved`: the person started building by hand, so the Copilot left the middle
+ * of the canvas for the rail — it says so, and offers to work on what is there.
  */
 import { Bot, Image as ImageIcon, Sparkles, User, Video } from "lucide-react"
 import { COPILOT_KEYS as K, COPILOT_SUGGESTIONS } from "@/ee/lib/copilot/strings"
@@ -18,18 +21,19 @@ interface CopilotEmptyStateProps {
   firstName: string
   onPick: (text: string) => void
   disabled?: boolean
+  moved?: boolean
 }
 
-export function CopilotEmptyState({ firstName, onPick, disabled }: CopilotEmptyStateProps) {
+export function CopilotEmptyState({ firstName, onPick, disabled, moved }: CopilotEmptyStateProps) {
   const t = useT()
   return (
     <div className="flex flex-col gap-[18px] pt-9">
       <div className="flex flex-col items-center gap-3 text-center">
         <Bot className="w-[26px] h-[26px] text-primary" strokeWidth={1.6} />
-        <div className="text-[26px] font-semibold text-foreground tracking-[-0.02em]">
-          {firstName ? t(K.emptyGreeting, { name: firstName }) : t(K.emptyGreetingAnon)}
+        <div className={moved ? "text-[20px] font-semibold text-foreground tracking-[-0.02em]" : "text-[26px] font-semibold text-foreground tracking-[-0.02em]"}>
+          {moved ? t(K.movedTitle) : firstName ? t(K.emptyGreeting, { name: firstName }) : t(K.emptyGreetingAnon)}
         </div>
-        <p className="text-[12.5px] leading-[1.55] text-[var(--copilot-muted)] max-w-[270px]">{t(K.emptyBlurb)}</p>
+        <p className="text-[12.5px] leading-[1.55] text-[var(--copilot-muted)] max-w-[270px]">{t(moved ? K.movedBlurb : K.emptyBlurb)}</p>
       </div>
 
       <div className="flex flex-col gap-2 mt-1.5">
