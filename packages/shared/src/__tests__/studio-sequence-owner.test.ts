@@ -131,6 +131,27 @@ const NODE_PRIVATE = ["frame-private-a", "a private compiled prompt", "reference
 const SETTINGS_PRIVATE = ["a private director reason", "job-private", "owner-actor-private", "preference-private",
   "rejector-private", "a private rejection reason"]
 
+/**
+ * Productions that each carry ONE kind of the settings' owner state and none
+ * of the others, so a strip that skips that kind cannot pass on another kind's
+ * account: [the kind, the stored studio, what a reader keeps, a marker only
+ * that kind carries].
+ */
+const ONE_KIND: ReadonlyArray<readonly [string, () => Record<string, unknown>, () => Record<string, unknown>, string]> = [
+  ["the director's recommendations",
+    () => ({ version: 3, sequenceRecommendations: [RECOMMENDATION] }),
+    () => ({ version: 3 }), "a private director reason"],
+  ["the current preferences, before any take",
+    () => ({ version: 3, sequenceGenerationPolicies: { zoom: PREFERENCE }, sequenceTakes: [] }),
+    () => ({ version: 3, sequenceGenerationPolicies: {}, sequenceTakes: [] }), "preference-private"],
+  ["a take's continuation review",
+    () => ({ version: 3, sequenceGenerationPolicies: {}, sequenceTakes: [take(true)] }),
+    () => ({ version: 3, sequenceGenerationPolicies: {}, sequenceTakes: [take(false)] }), "owner-actor-private"],
+  ["a frame's rejections",
+    () => ({ version: 3, keyframes: [{ ...frameEntry(false), rejections: [REJECTION] }] }),
+    () => ({ version: 3, keyframes: [frameEntry(false)] }), "a private rejection reason"],
+]
+
 describe("the T87 lists", () => {
   it("name the owner-only keys at each of their levels", () => {
     expect([...STUDIO_TAKE_SEQUENCE_KEYS]).toEqual(["sequenceEndpoints"])
@@ -197,6 +218,15 @@ describe.each([
     expect(stored).toEqual({ studio: linkedStudio() })
   })
 
+  it.each(ONE_KIND)("withholds %s when it is the only owner state the production carries", (_kind, stored, reader, marker) => {
+    const settings = { studio: stored() }
+    const out = strip(settings)
+    expect(studioOf(out)).toEqual(reader())
+    expect(JSON.stringify(out)).not.toContain(marker)
+    // Copy-on-write.
+    expect(settings).toEqual({ studio: stored() })
+  })
+
   it("hands back the SAME settings when a linked production carries none of it", () => {
     const clean = { studio: readerStudio() }
     expect(strip(clean)).toBe(clean)
@@ -239,7 +269,11 @@ describe.each([
 })
 
 describe("stripStudioDraftSettings — the bin keeps the owner's deleted work, without the owner's state in it", () => {
-  /** A deleted take with its pins, a deleted frame with a run in flight and a review, and a deleted linked scene. */
+  /**
+   * A deleted take with its pins, a deleted frame with a run in flight and a
+   * review, a deleted linked scene, and a deleted frame with a review and no
+   * run in flight.
+   */
   const bin = () => [
     { kind: "clip", id: "t-clip", shotId: "AB", index: 0, deletedAt: NOW, clipBase: { nodeId: "clip-AB" },
       result: { url: "https://r2/old.mp4", jobId: "clip-0", sequenceEndpoints: PINS } },
@@ -247,17 +281,20 @@ describe("stripStudioDraftSettings — the bin keeps the owner's deleted work, w
       keyframe: { ...frameEntry(true), results: FRAME_RESULTS, pendingImages: [FRAME_RUN] } },
     { kind: "shot", id: "t-shot", shotId: "AB", index: 0, deletedAt: NOW,
       graph: { nodes: linkedNodes(), edges: [], settings: { studio: linkedStudio() } } },
+    { kind: "keyframe", id: "t-rejected", index: 2, deletedAt: NOW,
+      keyframe: { ...frameEntry(false), results: FRAME_RESULTS, rejections: [REJECTION] } },
   ]
 
   it("drops a deleted take's pins, a deleted frame's runs and review, and a deleted scene's owner state, and keeps the rest of each", () => {
     const stored = { studio: { version: 3, trash: bin() } }
     const trash = studioOf(stripStudioDraftSettings(stored)).trash as Array<Record<string, unknown>>
-    expect(trash.map((entry) => entry.id)).toEqual(["t-clip", "t-frame", "t-shot"])
+    expect(trash.map((entry) => entry.id)).toEqual(["t-clip", "t-frame", "t-shot", "t-rejected"])
     expect(trash[0]!.result).toEqual({ url: "https://r2/old.mp4", jobId: "clip-0" })
     expect(trash[1]!.keyframe).toEqual({ ...frameEntry(false), results: FRAME_RESULTS })
     const graph = trash[2]!.graph as { nodes: unknown; settings: unknown }
     expect(graph.nodes).toEqual(readerNodes())
     expect(studioOf(graph.settings)).toEqual(readerStudio())
+    expect(trash[3]!.keyframe).toEqual({ ...frameEntry(false), results: FRAME_RESULTS })
     for (const secret of [...NODE_PRIVATE, ...SETTINGS_PRIVATE]) expect(JSON.stringify(trash)).not.toContain(secret)
     // Copy-on-write.
     expect(stored).toEqual({ studio: { version: 3, trash: bin() } })
@@ -266,6 +303,12 @@ describe("stripStudioDraftSettings — the bin keeps the owner's deleted work, w
   it("keeps a deleted frame that carries neither as the very same bin", () => {
     const quiet = { kind: "keyframe", id: "t-frame", index: 0, deletedAt: NOW, keyframe: { ...frameEntry(false), results: FRAME_RESULTS } }
     const stored = { studio: { version: 3, trash: [quiet] } }
+    expect(stripStudioDraftSettings(stored)).toBe(stored)
+  })
+
+  it("lets a deleted frame it cannot read ride through", () => {
+    const odd = [{ kind: "keyframe", id: "t-null", keyframe: null }, { kind: "keyframe", id: "t-text", keyframe: "nope" }]
+    const stored = { studio: { version: 3, trash: odd } }
     expect(stripStudioDraftSettings(stored)).toBe(stored)
   })
 })
