@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-29",
+  "generatedAt": "2026-10-03",
   "howToLink": {
     "link": "https://nodaro.ai/docs/node/{type}",
     "withLanguage": "https://nodaro.ai/docs/node/{type}?lang={lang}",
@@ -10,7 +10,8 @@
   },
   "languages": {
     "published": [
-      "en"
+      "en",
+      "ja"
     ],
     "note": "Pass the UI language as ?lang=. A language the docs have not published yet falls back to English, so it is safe to always send it. Each node has `summary` in English and `summaries` keyed by language code, holding only the languages whose page is translated."
   },
@@ -43,7 +44,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/upload-image",
       "summary": "Bring your own picture into a workflow. Upload a file or paste a link, crop it on the way in, and send it to every node that takes an image.",
       "summaries": {
-        "en": "Bring your own picture into a workflow. Upload a file or paste a link, crop it on the way in, and send it to every node that takes an image."
+        "en": "Bring your own picture into a workflow. Upload a file or paste a link, crop it on the way in, and send it to every node that takes an image.",
+        "ja": "自分の画像をワークフローに取り込みます。ファイルをアップロードするかリンクを貼り付け、取り込む前にトリミングして、画像を受け付けるすべてのノードに送ります。"
       },
       "sections": [
         "when-to-use",
@@ -63,7 +65,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/generate-image",
       "summary": "Create an image from a text prompt with one of Nodaro's image models, keep characters consistent with references, and edit results in place with a mask.",
       "summaries": {
-        "en": "Create an image from a text prompt with one of Nodaro's image models, keep characters consistent with references, and edit results in place with a mask."
+        "en": "Create an image from a text prompt with one of Nodaro's image models, keep characters consistent with references, and edit results in place with a mask.",
+        "ja": "Nodaro の画像モデルを 1 つ選び、テキストプロンプトから画像を生成します。リファレンスでキャラクターの一貫性を保ち、マスクで結果をその場で編集することもできます。"
       },
       "sections": [
         "when-to-use",
@@ -86,7 +89,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/modify-image",
       "summary": "Change an existing image with a text instruction. Restyle it, fix one detail or repaint a masked area with more than 20 image-editing models.",
       "summaries": {
-        "en": "Change an existing image with a text instruction. Restyle it, fix one detail or repaint a masked area with more than 20 image-editing models."
+        "en": "Change an existing image with a text instruction. Restyle it, fix one detail or repaint a masked area with more than 20 image-editing models.",
+        "ja": "既存の画像をテキストの指示で変更します。20 種類以上の画像編集モデルで、スタイルを変えたり、細部を 1 か所直したり、マスクした領域を描き直したりできます。"
       },
       "sections": [
         "when-to-use",
@@ -108,7 +112,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/upscale-image",
       "summary": "Enlarge and sharpen an image without a prompt. Use Recraft Upscale for quick, low-cost results or Topaz Upscale at 1x, 2x or 4x for final files.",
       "summaries": {
-        "en": "Enlarge and sharpen an image without a prompt. Use Recraft Upscale for quick, low-cost results or Topaz Upscale at 1x, 2x or 4x for final files."
+        "en": "Enlarge and sharpen an image without a prompt. Use Recraft Upscale for quick, low-cost results or Topaz Upscale at 1x, 2x or 4x for final files.",
+        "ja": "プロンプトなしで画像を拡大し、鮮明にします。手早く低コストに仕上げるなら Recraft Upscale、最終ファイルには 1x、2x、4x の Topaz Upscale を使います。"
       },
       "sections": [
         "when-to-use",
@@ -130,7 +135,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/remove-background",
       "summary": "Remove the background from an image in one step. The node returns a transparent PNG of the subject, ready to place on a new scene or a brand graphic.",
       "summaries": {
-        "en": "Remove the background from an image in one step. The node returns a transparent PNG of the subject, ready to place on a new scene or a brand graphic."
+        "en": "Remove the background from an image in one step. The node returns a transparent PNG of the subject, ready to place on a new scene or a brand graphic.",
+        "ja": "画像の背景を 1 ステップで削除します。ノードは被写体だけの透過 PNG を返すので、新しいシーンやブランドのグラフィックにそのまま配置できます。"
       },
       "sections": [
         "when-to-use",
@@ -150,7 +156,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/generate-mask",
       "summary": "Describe a subject in plain words, such as \"the red car\", and get a black-and-white mask of it to repaint only that area in an editing node.",
       "summaries": {
-        "en": "Describe a subject in plain words, such as \"the red car\", and get a black-and-white mask of it to repaint only that area in an editing node."
+        "en": "Describe a subject in plain words, such as \"the red car\", and get a black-and-white mask of it to repaint only that area in an editing node.",
+        "ja": "「the red car」のような平易な言葉で被写体を説明すると、その被写体の白黒マスクが得られます。編集ノードで、その部分だけを描き直すのに使えます。"
       },
       "sections": [
         "when-to-use",
@@ -172,7 +179,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/paint-mask",
       "summary": "Paint a mask by hand over any image, or refine a generated one, and send it to every node that takes a mask. White is edited, black is kept. Free.",
       "summaries": {
-        "en": "Paint a mask by hand over any image, or refine a generated one, and send it to every node that takes a mask. White is edited, black is kept. Free."
+        "en": "Paint a mask by hand over any image, or refine a generated one, and send it to every node that takes a mask. White is edited, black is kept. Free.",
+        "ja": "任意の画像の上にマスクを手で描くか、生成したマスクを調整して、マスクを受け付けるすべてのノードに送ります。白は編集され、黒は保持されます。無料です。"
       },
       "sections": [
         "when-to-use",
@@ -191,7 +199,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/image-collage",
       "summary": "Arrange up to 30 images into one 2K or 4K picture with a smart or grid layout. Add numbers and labels to turn a batch of shots into a storyboard.",
       "summaries": {
-        "en": "Arrange up to 30 images into one 2K or 4K picture with a smart or grid layout. Add numbers and labels to turn a batch of shots into a storyboard."
+        "en": "Arrange up to 30 images into one 2K or 4K picture with a smart or grid layout. Add numbers and labels to turn a batch of shots into a storyboard.",
+        "ja": "最大 30 枚の画像を、スマートまたはグリッドのレイアウトで、2K または 4K の 1 枚の画像にまとめます。番号とラベルを付ければ、一連のショットをストーリーボードにできます。"
       },
       "sections": [
         "when-to-use",
@@ -213,7 +222,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/image-overlay",
       "summary": "Place up to 12 layers, such as logos, text, QR codes and shapes, on an image, pixel-exactly, with a live preview. Export for many platforms in one run.",
       "summaries": {
-        "en": "Place up to 12 layers, such as logos, text, QR codes and shapes, on an image, pixel-exactly, with a live preview. Export for many platforms in one run."
+        "en": "Place up to 12 layers, such as logos, text, QR codes and shapes, on an image, pixel-exactly, with a live preview. Export for many platforms in one run.",
+        "ja": "ロゴ、テキスト、QR コード、図形など最大 12 個のレイヤーを、ライブプレビューを見ながら画像にピクセル単位で正確に配置します。1 回の実行で複数のプラットフォーム向けに書き出せます。"
       },
       "sections": [
         "when-to-use",
@@ -234,7 +244,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/extract-frame",
       "summary": "Pull one frame out of a video as a lossless PNG, such as the first, the last, a timestamp or an exact frame number, to chain clips or make thumbnails.",
       "summaries": {
-        "en": "Pull one frame out of a video as a lossless PNG, such as the first, the last, a timestamp or an exact frame number, to chain clips or make thumbnails."
+        "en": "Pull one frame out of a video as a lossless PNG, such as the first, the last, a timestamp or an exact frame number, to chain clips or make thumbnails.",
+        "ja": "動画から 1 フレームを劣化のない PNG として取り出します。最初、最後、タイムスタンプ、正確なフレーム番号で指定でき、クリップのつなぎやサムネイル作りに使えます。"
       },
       "sections": [
         "when-to-use",
@@ -256,7 +267,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/reference-sheet",
       "summary": "Compose a turnaround, variation board, detail sheet or full model sheet from a Character, Object or Location, and reuse its clean panels as references.",
       "summaries": {
-        "en": "Compose a turnaround, variation board, detail sheet or full model sheet from a Character, Object or Location, and reuse its clean panels as references."
+        "en": "Compose a turnaround, variation board, detail sheet or full model sheet from a Character, Object or Location, and reuse its clean panels as references.",
+        "ja": "キャラクター、オブジェクト、ロケーションから、ターンアラウンド、バリエーションボード、ディテールシート、完全なモデルシートを作り、きれいなパネルをリファレンスとして再利用します。"
       },
       "sections": [
         "when-to-use",
@@ -278,7 +290,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/reference-board",
       "summary": "Generate a dense reference board with a hero image, panels and a color palette in one AI pass, then refine it with an edit, a mask or a re-roll.",
       "summaries": {
-        "en": "Generate a dense reference board with a hero image, panels and a color palette in one AI pass, then refine it with an edit, a mask or a re-roll."
+        "en": "Generate a dense reference board with a hero image, panels and a color palette in one AI pass, then refine it with an edit, a mask or a re-roll.",
+        "ja": "ヒーロー画像、パネル、カラーパレットを詰め込んだリファレンスボードを 1 回の AI 生成で作り、編集、マスク、リロールで仕上げます。"
       },
       "sections": [
         "when-to-use",
@@ -300,7 +313,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/describe-image",
       "summary": "Describe any image in words with a vision model, briefly, in detail or in labeled sections, and send the text to prompts, captions or alt text.",
       "summaries": {
-        "en": "Describe any image in words with a vision model, briefly, in detail or in labeled sections, and send the text to prompts, captions or alt text."
+        "en": "Describe any image in words with a vision model, briefly, in detail or in labeled sections, and send the text to prompts, captions or alt text.",
+        "ja": "ビジョンモデルで画像の内容を言葉で説明します。簡潔、詳細、ラベル付きのセクションから選べ、できたテキストはプロンプト、キャプション、代替テキストに使えます。"
       },
       "sections": [
         "when-to-use",
@@ -321,7 +335,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/describe-to-picker",
       "summary": "Analyze a photo with a vision model and fill the Person, Styling, Framing, Lens and Camera / Film Stock pickers you connect with valid catalog choices.",
       "summaries": {
-        "en": "Analyze a photo with a vision model and fill the Person, Styling, Framing, Lens and Camera / Film Stock pickers you connect with valid catalog choices."
+        "en": "Analyze a photo with a vision model and fill the Person, Styling, Framing, Lens and Camera / Film Stock pickers you connect with valid catalog choices.",
+        "ja": "ビジョンモデルで写真を分析し、接続した人物、スタイリング、フレーミング、レンズ、カメラ／フィルムの各ピッカーに、カタログにある有効な選択肢を入力します。"
       },
       "sections": [
         "when-to-use",
@@ -343,7 +358,8 @@
       "page": "https://nodaro.ai/docs/nodes/image/image-critic",
       "summary": "Score an image for realism, anatomy, prompt adherence, style or character consistency, and route it by the result to build automatic quality checks.",
       "summaries": {
-        "en": "Score an image for realism, anatomy, prompt adherence, style or character consistency, and route it by the result to build automatic quality checks."
+        "en": "Score an image for realism, anatomy, prompt adherence, style or character consistency, and route it by the result to build automatic quality checks.",
+        "ja": "画像を、リアルさ、人体の構造、プロンプトへの忠実度、スタイル、キャラクターの一貫性で採点し、結果に応じて振り分けます。自動の品質チェックを組み込めます。"
       },
       "sections": [
         "when-to-use",
@@ -364,7 +380,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/upload-video",
       "summary": "Bring your own video into a workflow. Upload an MP4, MOV or WebM file or paste a URL, crop, trim or convert it, and send it to any video node.",
       "summaries": {
-        "en": "Bring your own video into a workflow. Upload an MP4, MOV or WebM file or paste a URL, crop, trim or convert it, and send it to any video node."
+        "en": "Bring your own video into a workflow. Upload an MP4, MOV or WebM file or paste a URL, crop, trim or convert it, and send it to any video node.",
+        "ja": "自分の動画をワークフローに取り込みます。MP4、MOV、WebM のファイルをアップロードするか URL を貼り付け、クロップ、トリム、変換をしてから、任意の動画ノードに送れます。"
       },
       "sections": [
         "when-to-use",
@@ -383,7 +400,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/generate-video",
       "summary": "Make a video clip from a prompt, a start frame or references with Seedance, VEO, Kling, Wan and more, with sound, end frames and per-model credit rules.",
       "summaries": {
-        "en": "Make a video clip from a prompt, a start frame or references with Seedance, VEO, Kling, Wan and more, with sound, end frames and per-model credit rules."
+        "en": "Make a video clip from a prompt, a start frame or references with Seedance, VEO, Kling, Wan and more, with sound, end frames and per-model credit rules.",
+        "ja": "Seedance、VEO、Kling、Wan などのモデルで、プロンプト、開始フレーム、リファレンスから動画クリップを作ります。サウンド、終了フレーム、モデルごとのクレジットのルールも解説します。"
       },
       "sections": [
         "when-to-use",
@@ -407,7 +425,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/generate-video-pro",
       "summary": "Make one long AI video from a prompt or a script. Generate Video Pro splits it into model-sized segments, renders them in order and stitches one clip.",
       "summaries": {
-        "en": "Make one long AI video from a prompt or a script. Generate Video Pro splits it into model-sized segments, renders them in order and stitches one clip."
+        "en": "Make one long AI video from a prompt or a script. Generate Video Pro splits it into model-sized segments, renders them in order and stitches one clip.",
+        "ja": "プロンプトや脚本から、長い AI 動画を 1 本作ります。動画生成 Pro は、動画をモデルに合った長さのセグメントに分け、順番にレンダリングして、1 本のクリップにつなぎ合わせます。"
       },
       "sections": [
         "when-to-use",
@@ -431,7 +450,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/music-video",
       "summary": "Generate a music video for a song made with Suno. Connect a Suno music node, run Music Video, and get visuals made for that track, for 10 credits.",
       "summaries": {
-        "en": "Generate a music video for a song made with Suno. Connect a Suno music node, run Music Video, and get visuals made for that track, for 10 credits."
+        "en": "Generate a music video for a song made with Suno. Connect a Suno music node, run Music Video, and get visuals made for that track, for 10 credits.",
+        "ja": "Suno で作った曲のミュージックビデオを生成します。Suno の音楽ノードを接続してミュージックビデオを実行すると、10 クレジットで、その曲に合わせた映像が得られます。"
       },
       "sections": [
         "when-to-use",
@@ -450,7 +470,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/still-to-video",
       "summary": "Turn one image and one audio track into an MP4, with an optional zoom, pan or Ken Burns motion. No AI model runs, so it costs 0 credits.",
       "summaries": {
-        "en": "Turn one image and one audio track into an MP4, with an optional zoom, pan or Ken Burns motion. No AI model runs, so it costs 0 credits."
+        "en": "Turn one image and one audio track into an MP4, with an optional zoom, pan or Ken Burns motion. No AI model runs, so it costs 0 credits.",
+        "ja": "1 枚の画像と 1 本のオーディオトラックから MP4 を作ります。ズーム、パン、Ken Burns の動きも付けられます。AI モデルを使わないため、料金は 0 クレジットです。"
       },
       "sections": [
         "when-to-use",
@@ -471,7 +492,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/slideshow",
       "summary": "Turn 2 to 100 images and an optional audio track into an MP4 slideshow with motion and transitions. No AI model runs, so it costs 0 credits.",
       "summaries": {
-        "en": "Turn 2 to 100 images and an optional audio track into an MP4 slideshow with motion and transitions. No AI model runs, so it costs 0 credits."
+        "en": "Turn 2 to 100 images and an optional audio track into an MP4 slideshow with motion and transitions. No AI model runs, so it costs 0 credits.",
+        "ja": "2〜100 枚の画像と、任意のオーディオトラックから、モーションとトランジション付きの MP4 スライドショーを作ります。AI モデルを実行しないので、0 クレジットです。"
       },
       "sections": [
         "when-to-use",
@@ -492,7 +514,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/story-to-video",
       "summary": "Turn a story prompt into a finished AI film. Story → Video writes the script, casts, plans shots, animates and edits, and stops for your approval.",
       "summaries": {
-        "en": "Turn a story prompt into a finished AI film. Story → Video writes the script, casts, plans shots, animates and edits, and stops for your approval."
+        "en": "Turn a story prompt into a finished AI film. Story → Video writes the script, casts, plans shots, animates and edits, and stops for your approval.",
+        "ja": "ストーリーのプロンプトから、完成した AI 映画を作ります。「ストーリー → 動画」は、脚本、キャスティング、ショットの計画、動画化、編集までを行い、途中で承認を求めて停止します。"
       },
       "sections": [
         "when-to-use",
@@ -513,12 +536,38 @@
       "page": "https://nodaro.ai/docs/nodes/video/scene",
       "summary": "The Scene node holds one scene of a Story → Video film, with its shots, camera, keyframes and clip. Review it, refine the shots and approve it.",
       "summaries": {
-        "en": "The Scene node holds one scene of a Story → Video film, with its shots, camera, keyframes and clip. Review it, refine the shots and approve it."
+        "en": "The Scene node holds one scene of a Story → Video film, with its shots, camera, keyframes and clip. Review it, refine the shots and approve it.",
+        "ja": "シーンノードは、ストーリー → 動画で作る映画の 1 シーンを、ショット、カメラ、キーフレーム、クリップとともに保持します。確認し、ショットを調整して、承認します。"
       },
       "sections": [
         "when-to-use",
         "outputs",
         "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "content-ideas",
+      "label": "Content Ideas",
+      "pickerTab": "Video",
+      "family": "Story & Script",
+      "link": "https://nodaro.ai/docs/node/content-ideas",
+      "page": "https://nodaro.ai/docs/nodes/video/content-ideas",
+      "summary": "Turn one or more content recipes and your brand into 1 to 10 post ideas, each with a hook, beats and a shot list. The next node runs once per idea.",
+      "summaries": {
+        "en": "Turn one or more content recipes and your brand into 1 to 10 post ideas, each with a hook, beats and a shot list. The next node runs once per idea.",
+        "ja": "1 つ以上のコンテンツレシピとブランドから、フック、ビート、ショットリスト付きの投稿アイデアを 1〜10 件作ります。次のノードは、アイデアごとに 1 回実行されます。"
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
         "faq"
       ]
     },
@@ -531,7 +580,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/generate-script",
       "summary": "Write a multi-scene video script with AI. Each scene gets a description, action, mood, length, camera, dialogue and a ready-to-use image prompt.",
       "summaries": {
-        "en": "Write a multi-scene video script with AI. Each scene gets a description, action, mood, length, camera, dialogue and a ready-to-use image prompt."
+        "en": "Write a multi-scene video script with AI. Each scene gets a description, action, mood, length, camera, dialogue and a ready-to-use image prompt.",
+        "ja": "AI で複数シーンの動画脚本を書きます。各シーンには、説明、アクション、ムード、長さ、カメラ、セリフ、そのまま使える画像プロンプトが付きます。"
       },
       "sections": [
         "when-to-use",
@@ -553,7 +603,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/ai-avatar",
       "summary": "Make a talking avatar video with HeyGen. Pick an avatar or animate your own image, then give it a script and a voice, or a recorded voiceover.",
       "summaries": {
-        "en": "Make a talking avatar video with HeyGen. Pick an avatar or animate your own image, then give it a script and a voice, or a recorded voiceover."
+        "en": "Make a talking avatar video with HeyGen. Pick an avatar or animate your own image, then give it a script and a voice, or a recorded voiceover.",
+        "ja": "HeyGen で話すアバター動画を作ります。アバターを選ぶか自分の画像を動かし、スクリプトとボイス、または録音したナレーションを渡します。"
       },
       "sections": [
         "when-to-use",
@@ -573,7 +624,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/cinematic-avatar",
       "summary": "Make a short cinematic clip with 1 to 3 HeyGen avatar looks from a text prompt. No script or voice; the prompt directs the scene, action and camera.",
       "summaries": {
-        "en": "Make a short cinematic clip with 1 to 3 HeyGen avatar looks from a text prompt. No script or voice; the prompt directs the scene, action and camera."
+        "en": "Make a short cinematic clip with 1 to 3 HeyGen avatar looks from a text prompt. No script or voice; the prompt directs the scene, action and camera.",
+        "ja": "テキストプロンプトから、HeyGen アバターのルックを 1〜3 つ使った短いシネマティックなクリップを作ります。台本や音声は不要で、プロンプトがシーン、アクション、カメラを演出します。"
       },
       "sections": [
         "when-to-use",
@@ -594,7 +646,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/lip-sync",
       "summary": "Make a portrait speak an audio track, or dub an existing video by re-syncing its lips to new speech, with Kling Avatar, OmniHuman, Seedance and more.",
       "summaries": {
-        "en": "Make a portrait speak an audio track, or dub an existing video by re-syncing its lips to new speech, with Kling Avatar, OmniHuman, Seedance and more."
+        "en": "Make a portrait speak an audio track, or dub an existing video by re-syncing its lips to new speech, with Kling Avatar, OmniHuman, Seedance and more.",
+        "ja": "ポートレートにオーディオの内容を話させたり、既存の動画の口の動きを新しい音声に合わせ直して吹き替えたりできます。Kling Avatar、OmniHuman、Seedance などに対応しています。"
       },
       "sections": [
         "when-to-use",
@@ -617,7 +670,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/speech-to-video",
       "summary": "Generate a video driven by a speech track with Wan 2.2. Connect speech audio, a portrait and a prompt, and get a talking video from 30 credits.",
       "summaries": {
-        "en": "Generate a video driven by a speech track with Wan 2.2. Connect speech audio, a portrait and a prompt, and get a talking video from 30 credits."
+        "en": "Generate a video driven by a speech track with Wan 2.2. Connect speech audio, a portrait and a prompt, and get a talking video from 30 credits.",
+        "ja": "Wan 2.2 で、音声トラックに合わせて動く動画を生成します。音声、ポートレート、プロンプトを接続すると、30 クレジットから話す動画が得られます。"
       },
       "sections": [
         "when-to-use",
@@ -638,7 +692,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/motion-transfer",
       "summary": "Make a still character perform the moves of a reference video, such as a dance or a gesture, with Kling 2.6, Kling 3.0 or Wan Animate.",
       "summaries": {
-        "en": "Make a still character perform the moves of a reference video, such as a dance or a gesture, with Kling 2.6, Kling 3.0 or Wan Animate."
+        "en": "Make a still character perform the moves of a reference video, such as a dance or a gesture, with Kling 2.6, Kling 3.0 or Wan Animate.",
+        "ja": "静止画のキャラクターに、ダンスやジェスチャーなど、リファレンス動画の動きを演じさせます。モデルは Kling 2.6、Kling 3.0、Wan Animate から選べます。"
       },
       "sections": [
         "when-to-use",
@@ -660,7 +715,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/face-swap",
       "summary": "Replace the face in a video with the face from a reference image, for character replacement, privacy or creative remixes, for 130 credits per run.",
       "summaries": {
-        "en": "Replace the face in a video with the face from a reference image, for character replacement, privacy or creative remixes, for 130 credits per run."
+        "en": "Replace the face in a video with the face from a reference image, for character replacement, privacy or creative remixes, for 130 credits per run.",
+        "ja": "動画の顔を、リファレンス画像の顔に置き換えます。キャラクターの差し替え、プライバシーの保護、クリエイティブなリミックスに使え、料金は 1 回の実行につき 130 クレジットです。"
       },
       "sections": [
         "when-to-use",
@@ -682,7 +738,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/extend-video",
       "summary": "Continue a video with new footage that follows your prompt, using Seedance 2 Extend, LTX 2.3 Pro, VEO Extend or Runway Extend, and chain runs for long shots.",
       "summaries": {
-        "en": "Continue a video with new footage that follows your prompt, using Seedance 2 Extend, LTX 2.3 Pro, VEO Extend or Runway Extend, and chain runs for long shots."
+        "en": "Continue a video with new footage that follows your prompt, using Seedance 2 Extend, LTX 2.3 Pro, VEO Extend or Runway Extend, and chain runs for long shots.",
+        "ja": "プロンプトに沿った新しい映像で、動画の続きを作ります。Seedance 2 Extend、LTX 2.3 Pro、VEO Extend、Runway Extend を使え、実行をつなげれば長いショットも作れます。"
       },
       "sections": [
         "when-to-use",
@@ -705,7 +762,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/edit-video-pro",
       "summary": "Replace a chosen span of an existing video, from 4 seconds up to 2 minutes, with new Seedance footage stitched back so the rest of the clip stays the same.",
       "summaries": {
-        "en": "Replace a chosen span of an existing video, from 4 seconds up to 2 minutes, with new Seedance footage stitched back so the rest of the clip stays the same."
+        "en": "Replace a chosen span of an existing video, from 4 seconds up to 2 minutes, with new Seedance footage stitched back so the rest of the clip stays the same.",
+        "ja": "既存の動画から選んだ 4 秒〜2 分の範囲を、Seedance で生成した新しい映像に置き換えます。新しい映像を元の動画につなぎ直すので、クリップのそれ以外の部分は変わりません。"
       },
       "sections": [
         "when-to-use",
@@ -727,7 +785,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/retake-video",
       "summary": "Regenerate a time window of an existing video with LTX 2.3 Pro. Replace only the sound, only the picture or both, and keep everything outside the window.",
       "summaries": {
-        "en": "Regenerate a time window of an existing video with LTX 2.3 Pro. Replace only the sound, only the picture or both, and keep everything outside the window."
+        "en": "Regenerate a time window of an existing video with LTX 2.3 Pro. Replace only the sound, only the picture or both, and keep everything outside the window.",
+        "ja": "LTX 2.3 Pro で、既存の動画の一定区間を生成し直します。音だけ、映像だけ、または両方を置き換え、区間の外側はすべてそのまま残します。"
       },
       "sections": [
         "when-to-use",
@@ -750,7 +809,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/video-to-video",
       "summary": "Transform a whole video from a prompt. Restyle footage as anime or claymation, turn day into night, or edit a clip by instruction with Seedance 2.5 Edit.",
       "summaries": {
-        "en": "Transform a whole video from a prompt. Restyle footage as anime or claymation, turn day into night, or edit a clip by instruction with Seedance 2.5 Edit."
+        "en": "Transform a whole video from a prompt. Restyle footage as anime or claymation, turn day into night, or edit a clip by instruction with Seedance 2.5 Edit.",
+        "ja": "プロンプトで動画全体を変換します。映像をアニメ風やクレイアニメ風に変えたり、昼を夜にしたり、Seedance 2.5 Edit で指示どおりにクリップを編集したりできます。"
       },
       "sections": [
         "when-to-use",
@@ -772,7 +832,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/relight-and-switch",
       "summary": "Relight a subject, swap or restyle a background, or composite new elements into a video, driven by the clip's own pixels, a mask and a reference image.",
       "summaries": {
-        "en": "Relight a subject, swap or restyle a background, or composite new elements into a video, driven by the clip's own pixels, a mask and a reference image."
+        "en": "Relight a subject, swap or restyle a background, or composite new elements into a video, driven by the clip's own pixels, a mask and a reference image.",
+        "ja": "クリップ自体のピクセル、マスク、リファレンス画像をもとに、被写体のライティングを変えたり、背景を差し替えたりスタイルを変えたり、新しい要素を動画に合成したりします。"
       },
       "sections": [
         "when-to-use",
@@ -794,7 +855,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/trim-video",
       "summary": "Cut a video by start and end time, trim seconds or frames from its edges, keep its first or last seconds, or cut at the cleanest loop point with Smart loop cut.",
       "summaries": {
-        "en": "Cut a video by start and end time, trim seconds or frames from its edges, keep its first or last seconds, or cut at the cleanest loop point with Smart loop cut."
+        "en": "Cut a video by start and end time, trim seconds or frames from its edges, keep its first or last seconds, or cut at the cleanest loop point with Smart loop cut.",
+        "ja": "開始と終了の時間で動画をカットしたり、両端から秒数やフレーム数を削ったり、最初や最後の数秒を残したりできます。スマートループカットでは、最もきれいにループする位置でカットします。"
       },
       "sections": [
         "when-to-use",
@@ -814,7 +876,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/combine-videos",
       "summary": "Join several video clips into one in the order you set, with more than 50 transitions, audio crossfades, seam trims and jump-free joins for continuous shots.",
       "summaries": {
-        "en": "Join several video clips into one in the order you set, with more than 50 transitions, audio crossfades, seam trims and jump-free joins for continuous shots."
+        "en": "Join several video clips into one in the order you set, with more than 50 transitions, audio crossfades, seam trims and jump-free joins for continuous shots.",
+        "ja": "複数の動画クリップを指定した順番で 1 本に結合します。50 種類以上のトランジション、オーディオのクロスフェード、つなぎ目のトリム、連続したショットを映像が飛ばないようにつなぐ機能を使えます。"
       },
       "sections": [
         "when-to-use",
@@ -836,7 +899,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/apply-edl",
       "summary": "Render an edit decision list into one finished video or audio file, with cuts and crossfades, and remap a transcript so captions follow the finished cut.",
       "summaries": {
-        "en": "Render an edit decision list into one finished video or audio file, with cuts and crossfades, and remap a transcript so captions follow the finished cut."
+        "en": "Render an edit decision list into one finished video or audio file, with cuts and crossfades, and remap a transcript so captions follow the finished cut.",
+        "ja": "編集決定リスト（EDL）を、カットとクロスフェードを含む完成した動画またはオーディオのファイルにレンダリングします。文字起こしもカットに合わせて再マッピングし、字幕が完成版とずれないようにします。"
       },
       "sections": [
         "when-to-use",
@@ -858,7 +922,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/assemble-narrated-video",
       "summary": "Fit each voice take to its video clip and join the blocks into one narrated MP4. Short voices are centered, long voices slow the clip, and no voice is ever cut.",
       "summaries": {
-        "en": "Fit each voice take to its video clip and join the blocks into one narrated MP4. Short voices are centered, long voices slow the clip, and no voice is ever cut."
+        "en": "Fit each voice take to its video clip and join the blocks into one narrated MP4. Short voices are centered, long voices slow the clip, and no voice is ever cut.",
+        "ja": "各音声テイクを対応する動画クリップに合わせ、ブロックをつないで 1 本のナレーション付き MP4 にします。短い音声は中央に配置され、長い音声ではクリップがスローになり、音声が切れることはありません。"
       },
       "sections": [
         "when-to-use",
@@ -880,7 +945,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/adjust-speed",
       "summary": "Change a video's playback speed from 0.05x to 100x, play it in reverse, keep or shift the pitch, add smooth slow motion, or ramp the speed with segments.",
       "summaries": {
-        "en": "Change a video's playback speed from 0.05x to 100x, play it in reverse, keep or shift the pitch, add smooth slow motion, or ramp the speed with segments."
+        "en": "Change a video's playback speed from 0.05x to 100x, play it in reverse, keep or shift the pitch, add smooth slow motion, or ramp the speed with segments.",
+        "ja": "動画の再生速度を 0.05x〜100x で変更します。逆再生、ピッチの維持や変化、なめらかなスローモーション、セグメントによるスピードランプにも対応します。"
       },
       "sections": [
         "when-to-use",
@@ -901,7 +967,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/loop-video",
       "summary": "Repeat a short video a set number of times or until it reaches a target length, and cut it at its cleanest loop point first so that no repeat shows a jump.",
       "summaries": {
-        "en": "Repeat a short video a set number of times or until it reaches a target length, and cut it at its cleanest loop point first so that no repeat shows a jump."
+        "en": "Repeat a short video a set number of times or until it reaches a target length, and cut it at its cleanest loop point first so that no repeat shows a jump.",
+        "ja": "短い動画を、指定した回数だけ、または目標の長さに達するまで繰り返します。先に最もきれいなループ位置でカットしておけば、どの繰り返しでも映像が飛びません。"
       },
       "sections": [
         "when-to-use",
@@ -922,7 +989,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/fade-in-out",
       "summary": "Fade a video in at its start and out at its end, from and to black or white, with separate durations from 0.1 to 3 seconds. The sound fades along with it.",
       "summaries": {
-        "en": "Fade a video in at its start and out at its end, from and to black or white, with separate durations from 0.1 to 3 seconds. The sound fades along with it."
+        "en": "Fade a video in at its start and out at its end, from and to black or white, with separate durations from 0.1 to 3 seconds. The sound fades along with it.",
+        "ja": "動画の冒頭をフェードインし、最後をフェードアウトします。色は黒か白で、長さは 0.1〜3 秒の範囲でそれぞれ設定できます。音声も映像と一緒にフェードします。"
       },
       "sections": [
         "when-to-use",
@@ -942,7 +1010,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/composite",
       "summary": "Layer up to four videos into one composition with per-layer position, blend mode, opacity and timing. It costs no credits; Render Video turns it into an MP4.",
       "summaries": {
-        "en": "Layer up to four videos into one composition with per-layer position, blend mode, opacity and timing. It costs no credits; Render Video turns it into an MP4."
+        "en": "Layer up to four videos into one composition with per-layer position, blend mode, opacity and timing. It costs no credits; Render Video turns it into an MP4.",
+        "ja": "最大 4 本の動画を、レイヤーごとの位置、描画モード、不透明度、タイミングを指定して 1 つのコンポジションに重ねます。クレジットは不要で、動画レンダリングで MP4 にします。"
       },
       "sections": [
         "when-to-use",
@@ -963,7 +1032,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/compose-video",
       "summary": "Describe the video you want, and an AI model arranges your connected images, clips and audio into a timed, multi-track composition that Render Video renders.",
       "summaries": {
-        "en": "Describe the video you want, and an AI model arranges your connected images, clips and audio into a timed, multi-track composition that Render Video renders."
+        "en": "Describe the video you want, and an AI model arranges your connected images, clips and audio into a timed, multi-track composition that Render Video renders.",
+        "ja": "作りたい動画を説明すると、AI モデルが接続した画像、クリップ、オーディオを、タイミング付きのマルチトラックのコンポジションに配置します。レンダリングは動画レンダリングノードで行います。"
       },
       "sections": [
         "when-to-use",
@@ -984,7 +1054,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/split-into-chunks",
       "summary": "Cut a long video or audio file into equal-length chunks, as audio files and video clips, so you can transcribe, dub or transform each piece separately.",
       "summaries": {
-        "en": "Cut a long video or audio file into equal-length chunks, as audio files and video clips, so you can transcribe, dub or transform each piece separately."
+        "en": "Cut a long video or audio file into equal-length chunks, as audio files and video clips, so you can transcribe, dub or transform each piece separately.",
+        "ja": "長い動画やオーディオファイルを同じ長さのチャンクに分割し、オーディオファイルと動画クリップとして出力します。分割した部分ごとに、文字起こし、吹き替え、変換を行えます。"
       },
       "sections": [
         "when-to-use",
@@ -1006,7 +1077,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/manual-edit",
       "summary": "Open clips, images and audio in the NodarCut video editor, cut and arrange them by hand, and pass the edited video on, or pause a workflow until you finish.",
       "summaries": {
-        "en": "Open clips, images and audio in the NodarCut video editor, cut and arrange them by hand, and pass the edited video on, or pause a workflow until you finish."
+        "en": "Open clips, images and audio in the NodarCut video editor, cut and arrange them by hand, and pass the edited video on, or pause a workflow until you finish.",
+        "ja": "クリップ、画像、オーディオを NodarCut 動画エディターで開き、手作業でカットして並べ、編集した動画を次に渡します。編集が終わるまでワークフローを一時停止することもできます。"
       },
       "sections": [
         "when-to-use",
@@ -1027,7 +1099,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/edit-plan",
       "summary": "Plan an edit from a recording's transcript. Tighten it, find short shareable clips or mark chapters, as an edit decision list that Apply EDL renders.",
       "summaries": {
-        "en": "Plan an edit from a recording's transcript. Tighten it, find short shareable clips or mark chapters, as an edit decision list that Apply EDL renders."
+        "en": "Plan an edit from a recording's transcript. Tighten it, find short shareable clips or mark chapters, as an edit decision list that Apply EDL renders.",
+        "ja": "収録の文字起こしをもとに編集を計画します。全体の間を詰める、共有しやすい短いクリップを探す、チャプターを付けるのいずれかを、EDL 適用でレンダリングできる編集決定リストとして出力します。"
       },
       "sections": [
         "when-to-use",
@@ -1049,7 +1122,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/video-sfx",
       "summary": "Generate sound effects, foley and ambience that follow the action in a video, from an optional prompt. The new sound replaces the video's own audio track.",
       "summaries": {
-        "en": "Generate sound effects, foley and ambience that follow the action in a video, from an optional prompt. The new sound replaces the video's own audio track."
+        "en": "Generate sound effects, foley and ambience that follow the action in a video, from an optional prompt. The new sound replaces the video's own audio track.",
+        "ja": "動画の動きに合わせた効果音、フォーリー、環境音を生成します。プロンプトは任意です。生成した音は、動画の元のオーディオトラックと置き換わります。"
       },
       "sections": [
         "when-to-use",
@@ -1071,7 +1145,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/merge-video-audio",
       "summary": "Add voiceover, music or sound effects to a video. Set each track's volume and start time, and keep, lower or mute the video's own sound.",
       "summaries": {
-        "en": "Add voiceover, music or sound effects to a video. Set each track's volume and start time, and keep, lower or mute the video's own sound."
+        "en": "Add voiceover, music or sound effects to a video. Set each track's volume and start time, and keep, lower or mute the video's own sound.",
+        "ja": "動画にナレーション、音楽、効果音を追加します。トラックごとに音量と開始時間を設定でき、動画にもともと入っている音は、そのまま残すことも、小さくすることも、ミュートすることもできます。"
       },
       "sections": [
         "when-to-use",
@@ -1092,7 +1167,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/extract-audio",
       "summary": "Pull the audio track out of a video as a standalone MP3 file, to split it into stems, clean the voice or reuse the soundtrack under another clip. No settings.",
       "summaries": {
-        "en": "Pull the audio track out of a video as a standalone MP3 file, to split it into stems, clean the voice or reuse the soundtrack under another clip. No settings."
+        "en": "Pull the audio track out of a video as a standalone MP3 file, to split it into stems, clean the voice or reuse the soundtrack under another clip. No settings.",
+        "ja": "動画の音声トラックを、単独の MP3 ファイルとして取り出します。ステムへの分離、声のクリーンアップ、別のクリップでのサウンドトラックの再利用に使えます。設定はありません。"
       },
       "sections": [
         "when-to-use",
@@ -1113,7 +1189,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/remove-audio",
       "summary": "Strip the audio track from a video and keep a silent clip. The picture is copied without re-encoding, so nothing is lost and the node finishes almost at once.",
       "summaries": {
-        "en": "Strip the audio track from a video and keep a silent clip. The picture is copied without re-encoding, so nothing is lost and the node finishes almost at once."
+        "en": "Strip the audio track from a video and keep a silent clip. The picture is copied without re-encoding, so nothing is lost and the node finishes almost at once.",
+        "ja": "動画からオーディオトラックを取り除き、無音のクリップを残します。映像は再エンコードせずにコピーされるので劣化がなく、ノードはほぼ一瞬で完了します。"
       },
       "sections": [
         "when-to-use",
@@ -1133,7 +1210,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/3d-title",
       "summary": "Describe a title and an AI model plans an animated 3D text scene with camera moves, lighting and particles, up to 60 seconds, for intros, outros and trailers.",
       "summaries": {
-        "en": "Describe a title and an AI model plans an animated 3D text scene with camera moves, lighting and particles, up to 60 seconds, for intros, outros and trailers."
+        "en": "Describe a title and an AI model plans an animated 3D text scene with camera moves, lighting and particles, up to 60 seconds, for intros, outros and trailers.",
+        "ja": "タイトルを説明すると、AI モデルがカメラワーク、ライティング、パーティクル付きの 3D テキストのアニメーションシーンを最長 60 秒で計画します。イントロ、アウトロ、予告編に使えます。"
       },
       "sections": [
         "when-to-use",
@@ -1154,7 +1232,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/motion-graphics",
       "summary": "Describe a lower third, title card or kinetic typography and an AI model animates it in 2D, as editable Lottie with free color and text edits, up to 60 seconds.",
       "summaries": {
-        "en": "Describe a lower third, title card or kinetic typography and an AI model animates it in 2D, as editable Lottie with free color and text edits, up to 60 seconds."
+        "en": "Describe a lower third, title card or kinetic typography and an AI model animates it in 2D, as editable Lottie with free color and text edits, up to 60 seconds.",
+        "ja": "ローワーサード、タイトルカード、キネティックタイポグラフィを説明すると、AI モデルが最長 60 秒の 2D アニメーションを作ります。編集できる Lottie 形式なので、色や文字は無料で変更できます。"
       },
       "sections": [
         "when-to-use",
@@ -1176,7 +1255,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/after-effects",
       "summary": "Describe a look and an AI model plans video effects, such as a color grade, film grain, vignette, letterbox or motion blur, and previews them before you render.",
       "summaries": {
-        "en": "Describe a look and an AI model plans video effects, such as a color grade, film grain, vignette, letterbox or motion blur, and previews them before you render."
+        "en": "Describe a look and an AI model plans video effects, such as a color grade, film grain, vignette, letterbox or motion blur, and previews them before you render.",
+        "ja": "ルックを説明すると、AI モデルがカラーグレーディング、フィルムグレイン、ビネット、レターボックス、モーションブラーなどの動画エフェクトを計画し、レンダリング前にプレビューします。"
       },
       "sections": [
         "when-to-use",
@@ -1197,7 +1277,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/lottie-overlay",
       "summary": "Describe the overlays and an AI model places and times Lottie animations, such as confetti, hearts or arrows, or your own Motion Graphics, over a video.",
       "summaries": {
-        "en": "Describe the overlays and an AI model places and times Lottie animations, such as confetti, hearts or arrows, or your own Motion Graphics, over a video."
+        "en": "Describe the overlays and an AI model places and times Lottie animations, such as confetti, hearts or arrows, or your own Motion Graphics, over a video.",
+        "ja": "オーバーレイの内容を説明すると、AI モデルが紙吹雪、ハート、矢印などの Lottie アニメーションや、モーショングラフィックスで作った独自のアニメーションを、動画の上に配置してタイミングを決めます。"
       },
       "sections": [
         "when-to-use",
@@ -1218,7 +1299,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/add-captions",
       "summary": "Transcribe a video and burn in captions, as a clean subtitle or one of five animated word-by-word styles, with fonts, outlines, position and words per line.",
       "summaries": {
-        "en": "Transcribe a video and burn in captions, as a clean subtitle or one of five animated word-by-word styles, with fonts, outlines, position and words per line."
+        "en": "Transcribe a video and burn in captions, as a clean subtitle or one of five animated word-by-word styles, with fonts, outlines, position and words per line.",
+        "ja": "動画を文字起こしして字幕を焼き込みます。シンプルな静的字幕か、単語ごとに動く 5 種類のアニメーションスタイルから選べ、フォント、縁取り、位置、1 行の単語数も調整できます。"
       },
       "sections": [
         "when-to-use",
@@ -1240,7 +1322,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/render-video",
       "summary": "Render the plan of Motion Graphics, 3D Title, After Effects, Lottie Overlay, Compose Video or a 3D scene into an MP4, or arrange connected media without a plan.",
       "summaries": {
-        "en": "Render the plan of Motion Graphics, 3D Title, After Effects, Lottie Overlay, Compose Video or a 3D scene into an MP4, or arrange connected media without a plan."
+        "en": "Render the plan of Motion Graphics, 3D Title, After Effects, Lottie Overlay, Compose Video or a 3D scene into an MP4, or arrange connected media without a plan.",
+        "ja": "モーショングラフィックス、3D タイトル、特殊効果、Lottie オーバーレイ、動画を構成、3D シーンのプランを MP4 にレンダリングします。プランなしで、接続したメディアを並べることもできます。"
       },
       "sections": [
         "when-to-use",
@@ -1262,7 +1345,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/video-overlay",
       "summary": "Show up to 20 images over a video, each in its own time window, as a card, corner badge, full frame or custom box, with a live preview and the audio kept.",
       "summaries": {
-        "en": "Show up to 20 images over a video, each in its own time window, as a card, corner badge, full frame or custom box, with a live preview and the audio kept."
+        "en": "Show up to 20 images over a video, each in its own time window, as a card, corner badge, full frame or custom box, with a live preview and the audio kept.",
+        "ja": "最大 20 枚の画像を、それぞれ指定した時間だけ動画に重ねます。配置はカード、コーナーバッジ、全画面、カスタムから選べます。ライブプレビューで確認でき、オーディオはそのまま残ります。"
       },
       "sections": [
         "when-to-use",
@@ -1283,7 +1367,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/generate-3d-scene",
       "summary": "Describe a shot and get an editable, animated 3D clay scene for previz, with objects, camera moves and timing, to render as a layout reference for video models.",
       "summaries": {
-        "en": "Describe a shot and get an editable, animated 3D clay scene for previz, with objects, camera moves and timing, to render as a layout reference for video models."
+        "en": "Describe a shot and get an editable, animated 3D clay scene for previz, with objects, camera moves and timing, to render as a layout reference for video models.",
+        "ja": "ショットを説明すると、オブジェクト、カメラの動き、タイミングを含む、編集できるアニメーション付きのクレイ調 3D シーンをプリビズ用に作ります。レンダリングすれば、動画モデルのレイアウトリファレンスになります。"
       },
       "sections": [
         "when-to-use",
@@ -1306,7 +1391,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/edit-3d-scene",
       "summary": "Change a 3D clay scene with a plain instruction or free direct edits, lock the objects that must stay the same, and keep every revision to compare or restore.",
       "summaries": {
-        "en": "Change a 3D clay scene with a plain instruction or free direct edits, lock the objects that must stay the same, and keep every revision to compare or restore."
+        "en": "Change a 3D clay scene with a plain instruction or free direct edits, lock the objects that must stay the same, and keep every revision to compare or restore.",
+        "ja": "クレイ調の 3D シーンを、普通の言葉による指示か無料の直接編集で変更します。変えてはいけないオブジェクトはロックでき、すべてのリビジョンが残るので、比較や復元もできます。"
       },
       "sections": [
         "when-to-use",
@@ -1328,7 +1414,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/pro-3d-render",
       "summary": "Author an animated 3D scene from a brief and render it in one run on a hosted engine, returning the MP4, the editable scene and one still image per shot.",
       "summaries": {
-        "en": "Author an animated 3D scene from a brief and render it in one run on a hosted engine, returning the MP4, the editable scene and one still image per shot."
+        "en": "Author an animated 3D scene from a brief and render it in one run on a hosted engine, returning the MP4, the editable scene and one still image per shot.",
+        "ja": "説明文からアニメーション付きの 3D シーンを作成し、ホスト型のエンジンで、1 回の実行でレンダリングします。MP4、編集できるシーン、ショットごとの静止画 1 枚が返されます。"
       },
       "sections": [
         "when-to-use",
@@ -1351,7 +1438,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/resize-video",
       "summary": "Change a video's aspect ratio to 16:9, 9:16, 1:1 or 4:5 by cropping, padding or stretching, for example to turn a landscape clip into a vertical Reel.",
       "summaries": {
-        "en": "Change a video's aspect ratio to 16:9, 9:16, 1:1 or 4:5 by cropping, padding or stretching, for example to turn a landscape clip into a vertical Reel."
+        "en": "Change a video's aspect ratio to 16:9, 9:16, 1:1 or 4:5 by cropping, padding or stretching, for example to turn a landscape clip into a vertical Reel.",
+        "ja": "クロップ、余白の追加、引き伸ばしによって、動画のアスペクト比を 16:9、9:16、1:1、4:5 に変えます。たとえば、横長のクリップを縦長のリールにできます。"
       },
       "sections": [
         "when-to-use",
@@ -1372,7 +1460,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/social-media-format",
       "summary": "Fit a video or image to the frame size of Instagram, TikTok, YouTube Shorts, X, Facebook or LinkedIn, and keep the post caption within the platform's limit.",
       "summaries": {
-        "en": "Fit a video or image to the frame size of Instagram, TikTok, YouTube Shorts, X, Facebook or LinkedIn, and keep the post caption within the platform's limit."
+        "en": "Fit a video or image to the frame size of Instagram, TikTok, YouTube Shorts, X, Facebook or LinkedIn, and keep the post caption within the platform's limit.",
+        "ja": "動画や画像を、Instagram、TikTok、YouTube ショート、X、Facebook、LinkedIn のフレームサイズに合わせ、投稿のキャプションをプラットフォームの文字数制限内に収めます。"
       },
       "sections": [
         "when-to-use",
@@ -1393,7 +1482,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/upscale-video",
       "summary": "Increase a video's resolution with AI, using Topaz at 1x, 2x or 4x for any clip, or VEO 1080p and VEO 4K for a video made by a VEO model in the same workflow.",
       "summaries": {
-        "en": "Increase a video's resolution with AI, using Topaz at 1x, 2x or 4x for any clip, or VEO 1080p and VEO 4K for a video made by a VEO model in the same workflow."
+        "en": "Increase a video's resolution with AI, using Topaz at 1x, 2x or 4x for any clip, or VEO 1080p and VEO 4K for a video made by a VEO model in the same workflow.",
+        "ja": "AI で動画の解像度を上げます。どのクリップにも使える Topaz の 1x、2x、4x か、同じワークフロー内の VEO モデルで作った動画向けの VEO 1080p と VEO 4K を使えます。"
       },
       "sections": [
         "when-to-use",
@@ -1416,7 +1506,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/transcode-video",
       "summary": "Re-encode a video with H.264 or H.265, a quality (CRF) value, a lower resolution and an audio bitrate, to shrink files or make them play on any device.",
       "summaries": {
-        "en": "Re-encode a video with H.264 or H.265, a quality (CRF) value, a lower resolution and an audio bitrate, to shrink files or make them play on any device."
+        "en": "Re-encode a video with H.264 or H.265, a quality (CRF) value, a lower resolution and an audio bitrate, to shrink files or make them play on any device.",
+        "ja": "H.264 か H.265 のコーデック、品質（CRF）の値、より低い解像度、オーディオのビットレートを指定して動画を再エンコードします。ファイルを小さくしたり、どのデバイスでも再生できるようにしたりできます。"
       },
       "sections": [
         "when-to-use",
@@ -1437,7 +1528,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/gif-to-video",
       "summary": "Convert an animated GIF into an MP4 for free, loop short GIFs to a usable length, and use the clip as a motion reference for video models that refuse GIF files.",
       "summaries": {
-        "en": "Convert an animated GIF into an MP4 for free, loop short GIFs to a usable length, and use the clip as a motion reference for video models that refuse GIF files."
+        "en": "Convert an animated GIF into an MP4 for free, loop short GIFs to a usable length, and use the clip as a motion reference for video models that refuse GIF files.",
+        "ja": "アニメーション GIF を無料で MP4 に変換します。短い GIF は使える長さまでループし、GIF を受け付けない動画モデルのモーションリファレンスとして使えます。"
       },
       "sections": [
         "when-to-use",
@@ -1459,7 +1551,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/video-analysis",
       "summary": "Break a video or YouTube link of up to 10 minutes into scenes of 8 seconds or less, with prompt-ready visuals, camera, audio and castable people and places.",
       "summaries": {
-        "en": "Break a video or YouTube link of up to 10 minutes into scenes of 8 seconds or less, with prompt-ready visuals, camera, audio and castable people and places."
+        "en": "Break a video or YouTube link of up to 10 minutes into scenes of 8 seconds or less, with prompt-ready visuals, camera, audio and castable people and places.",
+        "ja": "最長 10 分の動画や YouTube のリンクを、8 秒以下のシーンに分解します。プロンプトにそのまま使える映像、カメラ、音声の説明と、キャスティングできる人物や場所が得られます。"
       },
       "sections": [
         "when-to-use",
@@ -1482,7 +1575,8 @@
       "page": "https://nodaro.ai/docs/nodes/video/ai-audit",
       "summary": "Re-watch a video against its Video Analysis, apply only the fixes the footage confirms, and get a report of every fix, declined change and watch item.",
       "summaries": {
-        "en": "Re-watch a video against its Video Analysis, apply only the fixes the footage confirms, and get a report of every fix, declined change and watch item."
+        "en": "Re-watch a video against its Video Analysis, apply only the fixes the footage confirms, and get a report of every fix, declined change and watch item.",
+        "ja": "動画を動画分析の結果と照らし合わせて見直し、映像で裏付けられた修正だけを適用します。すべての修正、見送った変更、要注意の項目をレポートで確認できます。"
       },
       "sections": [
         "when-to-use",
@@ -1497,6 +1591,31 @@
       ]
     },
     {
+      "type": "content-recipe",
+      "label": "Content Recipe",
+      "pickerTab": "Video",
+      "family": "Analyze",
+      "link": "https://nodaro.ai/docs/node/content-recipe",
+      "page": "https://nodaro.ai/docs/nodes/video/content-recipe",
+      "summary": "Find out why a social post worked: the hook, format, beats, call to action, sound and pace, as a reusable recipe in structured data and readable text.",
+      "summaries": {
+        "en": "Find out why a social post worked: the hook, format, beats, call to action, sound and pace, as a reusable recipe in structured data and readable text.",
+        "ja": "SNS 投稿がうまくいった理由を、フック、フォーマット、ビート、行動喚起、音、テンポに分けて、再利用できるレシピにします。構造化データと読みやすいテキストで返します。"
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
       "type": "upload-audio",
       "label": "Upload Audio",
       "pickerTab": "Audio",
@@ -1505,7 +1624,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/upload-audio",
       "summary": "Add your own audio to a workflow. Upload an MP3, WAV, M4A, AAC, FLAC or OGG file or paste a link, trim it before upload, and wire it to any audio node.",
       "summaries": {
-        "en": "Add your own audio to a workflow. Upload an MP3, WAV, M4A, AAC, FLAC or OGG file or paste a link, trim it before upload, and wire it to any audio node."
+        "en": "Add your own audio to a workflow. Upload an MP3, WAV, M4A, AAC, FLAC or OGG file or paste a link, trim it before upload, and wire it to any audio node.",
+        "ja": "自分のオーディオをワークフローに取り込みます。MP3、WAV、M4A、AAC、FLAC、OGG のファイルをアップロードするかリンクを貼り付け、アップロード前にトリミングして、オーディオ系のノードに接続します。"
       },
       "sections": [
         "when-to-use",
@@ -1525,7 +1645,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/reference-audio",
       "summary": "Bring audio into a workflow from a YouTube video, an uploaded file or a direct link. Reference Audio extracts the sound track and lets you preview it first.",
       "summaries": {
-        "en": "Bring audio into a workflow from a YouTube video, an uploaded file or a direct link. Reference Audio extracts the sound track and lets you preview it first."
+        "en": "Bring audio into a workflow from a YouTube video, an uploaded file or a direct link. Reference Audio extracts the sound track and lets you preview it first.",
+        "ja": "YouTube 動画、アップロードしたファイル、直接リンクから、ワークフローにオーディオを取り込みます。サウンドトラックを抽出し、先にプレビューで確認できます。"
       },
       "sections": [
         "when-to-use",
@@ -1546,7 +1667,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/text-to-speech",
       "summary": "Turn text into natural speech with ElevenLabs v3, Turbo v2.5 or Multilingual v2. Choose a voice, add emotion with audio tags, and speak up to 46 languages.",
       "summaries": {
-        "en": "Turn text into natural speech with ElevenLabs v3, Turbo v2.5 or Multilingual v2. Choose a voice, add emotion with audio tags, and speak up to 46 languages."
+        "en": "Turn text into natural speech with ElevenLabs v3, Turbo v2.5 or Multilingual v2. Choose a voice, add emotion with audio tags, and speak up to 46 languages.",
+        "ja": "ElevenLabs v3、Turbo v2.5、Multilingual v2 で、テキストを自然な音声にします。ボイスを選び、オーディオタグで感情を加え、最大 46 の言語で読み上げます。"
       },
       "sections": [
         "when-to-use",
@@ -1570,7 +1692,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/text-to-dialogue",
       "summary": "Voice a whole conversation in one audio file. Give each line its own voice, add audio tags for emotion, or fill the lines from a script. ElevenLabs Dialogue v3.",
       "summaries": {
-        "en": "Voice a whole conversation in one audio file. Give each line its own voice, add audio tags for emotion, or fill the lines from a script. ElevenLabs Dialogue v3."
+        "en": "Voice a whole conversation in one audio file. Give each line its own voice, add audio tags for emotion, or fill the lines from a script. ElevenLabs Dialogue v3.",
+        "ja": "会話全体を 1 つのオーディオファイルに読み上げます。セリフごとにボイスを選び、オーディオタグで感情を加えたり、脚本からセリフを入力したりできます。ElevenLabs Dialogue v3 を使います。"
       },
       "sections": [
         "when-to-use",
@@ -1593,7 +1716,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/voice-changer",
       "summary": "Replace the voice in a recording or a talking video with another voice, and keep the original emotion, pacing and timing. Speech-to-speech with ElevenLabs.",
       "summaries": {
-        "en": "Replace the voice in a recording or a talking video with another voice, and keep the original emotion, pacing and timing. Speech-to-speech with ElevenLabs."
+        "en": "Replace the voice in a recording or a talking video with another voice, and keep the original emotion, pacing and timing. Speech-to-speech with ElevenLabs.",
+        "ja": "録音や話している動画の声を別の声に置き換え、元の感情、テンポ、タイミングはそのまま保ちます。ElevenLabs による音声から音声への変換です。"
       },
       "sections": [
         "when-to-use",
@@ -1616,7 +1740,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/voice-changer-pro",
       "summary": "Detect each speaker in a recording or talking video and give each one a new voice, with the original emotion and timing kept. Priced per minute of speech.",
       "summaries": {
-        "en": "Detect each speaker in a recording or talking video and give each one a new voice, with the original emotion and timing kept. Priced per minute of speech."
+        "en": "Detect each speaker in a recording or talking video and give each one a new voice, with the original emotion and timing kept. Priced per minute of speech.",
+        "ja": "録音や話している動画から各話者を検出し、それぞれを新しい声に差し替えます。元の感情とタイミングはそのまま保たれます。料金は音声 1 分あたりで決まります。"
       },
       "sections": [
         "when-to-use",
@@ -1639,7 +1764,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/voice-design",
       "summary": "Create a new voice from a written description, with control over model, loudness, guidance and seed. Get an audio preview and a voice ID you can keep and reuse.",
       "summaries": {
-        "en": "Create a new voice from a written description, with control over model, loudness, guidance and seed. Get an audio preview and a voice ID you can keep and reuse."
+        "en": "Create a new voice from a written description, with control over model, loudness, guidance and seed. Get an audio preview and a voice ID you can keep and reuse.",
+        "ja": "文章による説明から新しいボイスを作成します。モデル、ラウドネス、ガイダンス、シードを調整でき、オーディオのプレビューと、保存して再利用できるボイス ID を受け取れます。"
       },
       "sections": [
         "when-to-use",
@@ -1661,7 +1787,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/voice-remix",
       "summary": "Describe a voice in plain words and hear it speak your preview text. The quick way to explore voice ideas, with no reference recording and no settings to tune.",
       "summaries": {
-        "en": "Describe a voice in plain words and hear it speak your preview text. The quick way to explore voice ideas, with no reference recording and no settings to tune."
+        "en": "Describe a voice in plain words and hear it speak your preview text. The quick way to explore voice ideas, with no reference recording and no settings to tune.",
+        "ja": "ボイスをわかりやすい言葉で説明し、プレビュー用テキストを話す声を聞けます。リファレンスの録音も調整する設定も不要な、ボイスのアイデアを手早く探す方法です。"
       },
       "sections": [
         "when-to-use",
@@ -1682,7 +1809,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/dubbing",
       "summary": "Translate spoken audio or a whole video into another language and keep each speaker's own voice. Dub a file or a YouTube link, from 40 credits per minute.",
       "summaries": {
-        "en": "Translate spoken audio or a whole video into another language and keep each speaker's own voice. Dub a file or a YouTube link, from 40 credits per minute."
+        "en": "Translate spoken audio or a whole video into another language and keep each speaker's own voice. Dub a file or a YouTube link, from 40 credits per minute.",
+        "ja": "話し声のオーディオや動画全体を別の言語に翻訳し、話者それぞれの声のまま吹き替えます。ファイルや YouTube のリンクを、1 分あたり 40 クレジットから吹き替えられます。"
       },
       "sections": [
         "when-to-use",
@@ -1706,7 +1834,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/suno-create-music",
       "summary": "Make full songs with Suno V6 and earlier Suno versions. Write lyrics with metatags, set the style and the vocals, or create an instrumental track.",
       "summaries": {
-        "en": "Make full songs with Suno V6 and earlier Suno versions. Write lyrics with metatags, set the style and the vocals, or create an instrumental track."
+        "en": "Make full songs with Suno V6 and earlier Suno versions. Write lyrics with metatags, set the style and the vocals, or create an instrumental track.",
+        "ja": "Suno V6 や以前の Suno のバージョンで、曲を丸ごと作ります。メタタグ付きの歌詞を書き、スタイルとボーカルを設定できます。インストゥルメンタルのトラックも作れます。"
       },
       "sections": [
         "when-to-use",
@@ -1728,7 +1857,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/generate-music",
       "summary": "Create original music with MiniMax Music from a reference song, voice or instrumental plus a text prompt, with optional lyrics, genre and mood.",
       "summaries": {
-        "en": "Create original music with MiniMax Music from a reference song, voice or instrumental plus a text prompt, with optional lyrics, genre and mood."
+        "en": "Create original music with MiniMax Music from a reference song, voice or instrumental plus a text prompt, with optional lyrics, genre and mood.",
+        "ja": "MiniMax Music で、リファレンスの曲、声、インストゥルメンタルとテキストプロンプトから、オリジナルの音楽を作ります。歌詞、ジャンル、ムードも指定できます。"
       },
       "sections": [
         "when-to-use",
@@ -1749,7 +1879,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/suno-lyrics",
       "summary": "Write complete song lyrics from a short description with Suno. The lyrics come with section tags and a suggested title, ready for Suno Create Music.",
       "summaries": {
-        "en": "Write complete song lyrics from a short description with Suno. The lyrics come with section tags and a suggested title, ready for Suno Create Music."
+        "en": "Write complete song lyrics from a short description with Suno. The lyrics come with section tags and a suggested title, ready for Suno Create Music.",
+        "ja": "短い説明から、Suno で曲全体の歌詞を書きます。歌詞にはセクションタグとタイトル案が付いていて、そのまま Suno 生成で使えます。"
       },
       "sections": [
         "when-to-use",
@@ -1769,7 +1900,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/suno-cover",
       "summary": "Make a cover version of a song with Suno. Change the genre, the lyrics or the vocal gender, sing it in your own voice, or turn it into an instrumental.",
       "summaries": {
-        "en": "Make a cover version of a song with Suno. Change the genre, the lyrics or the vocal gender, sing it in your own voice, or turn it into an instrumental."
+        "en": "Make a cover version of a song with Suno. Change the genre, the lyrics or the vocal gender, sing it in your own voice, or turn it into an instrumental.",
+        "ja": "Suno で曲のカバーバージョンを作ります。ジャンル、歌詞、ボーカルの性別を変えたり、自分の声で歌わせたり、インストゥルメンタルにしたりできます。"
       },
       "sections": [
         "when-to-use",
@@ -1789,7 +1921,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/suno-extend",
       "summary": "Continue a Suno song from the second you choose, with a new prompt and style. Add a bridge, an outro or a verse, or chain extensions into a long track.",
       "summaries": {
-        "en": "Continue a Suno song from the second you choose, with a new prompt and style. Add a bridge, an outro or a verse, or chain extensions into a long track."
+        "en": "Continue a Suno song from the second you choose, with a new prompt and style. Add a bridge, an outro or a verse, or chain extensions into a long track.",
+        "ja": "Suno の曲の続きを、選んだ秒から新しいプロンプトとスタイルで作ります。ブリッジ、アウトロ、ヴァースを加えたり、延長をつなげて長いトラックを作ったりできます。"
       },
       "sections": [
         "when-to-use",
@@ -1810,7 +1943,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/suno-mashup",
       "summary": "Blend two audio tracks into one mashup with Suno. Turn on custom mode to set the title, the style tags, the styles to avoid and the vocal gender.",
       "summaries": {
-        "en": "Blend two audio tracks into one mashup with Suno. Turn on custom mode to set the title, the style tags, the styles to avoid and the vocal gender."
+        "en": "Blend two audio tracks into one mashup with Suno. Turn on custom mode to set the title, the style tags, the styles to avoid and the vocal gender.",
+        "ja": "Suno で 2 つのオーディオトラックを 1 つのマッシュアップにまとめます。カスタムモードをオンにすると、タイトル、スタイルタグ、避けたいスタイル、ボーカルの性別を設定できます。"
       },
       "sections": [
         "when-to-use",
@@ -1830,7 +1964,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/suno-replace-section",
       "summary": "Regenerate a 6 to 60 second section of a Suno song with new lyrics and style tags, such as a weak verse or chorus, and keep the rest of the track intact.",
       "summaries": {
-        "en": "Regenerate a 6 to 60 second section of a Suno song with new lyrics and style tags, such as a weak verse or chorus, and keep the rest of the track intact."
+        "en": "Regenerate a 6 to 60 second section of a Suno song with new lyrics and style tags, such as a weak verse or chorus, and keep the rest of the track intact.",
+        "ja": "Suno の曲のうち、弱いヴァースやサビなど 6〜60 秒のセクションを、新しい歌詞とスタイルタグで作り直します。トラックのほかの部分はそのまま残ります。"
       },
       "sections": [
         "when-to-use",
@@ -1850,7 +1985,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/suno-add-vocals",
       "summary": "Add AI-generated vocals to an instrumental track made by a Suno node. Suno writes the lyrics and the melody to fit the music, on Suno V6 by default.",
       "summaries": {
-        "en": "Add AI-generated vocals to an instrumental track made by a Suno node. Suno writes the lyrics and the melody to fit the music, on Suno V6 by default."
+        "en": "Add AI-generated vocals to an instrumental track made by a Suno node. Suno writes the lyrics and the melody to fit the music, on Suno V6 by default.",
+        "ja": "Suno ノードで作ったインストゥルメンタルのトラックに、AI で生成したボーカルを加えます。Suno が音楽に合わせて歌詞とメロディーを書きます。デフォルトは Suno V6 です。"
       },
       "sections": [
         "when-to-use",
@@ -1870,7 +2006,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/suno-add-instrumental",
       "summary": "Add an AI-generated instrumental arrangement to a vocal track made by a Suno node. Suno matches the genre, tempo and key of the vocals automatically.",
       "summaries": {
-        "en": "Add an AI-generated instrumental arrangement to a vocal track made by a Suno node. Suno matches the genre, tempo and key of the vocals automatically."
+        "en": "Add an AI-generated instrumental arrangement to a vocal track made by a Suno node. Suno matches the genre, tempo and key of the vocals automatically.",
+        "ja": "Suno ノードで作ったボーカルトラックに、AI で生成したインストゥルメンタルのアレンジを加えます。ジャンル、テンポ、キーは、Suno がボーカルに自動で合わせます。"
       },
       "sections": [
         "when-to-use",
@@ -1890,7 +2027,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/suno-upload-extend",
       "summary": "Continue any audio with Suno, not only Suno songs. Extend an upload, a voiceover or another AI track from the second you choose, in the style you set.",
       "summaries": {
-        "en": "Continue any audio with Suno, not only Suno songs. Extend an upload, a voiceover or another AI track from the second you choose, in the style you set."
+        "en": "Continue any audio with Suno, not only Suno songs. Extend an upload, a voiceover or another AI track from the second you choose, in the style you set.",
+        "ja": "Suno の曲に限らず、あらゆるオーディオの続きを Suno で作ります。アップロードしたファイル、ナレーション音声、ほかの AI のトラックを、選んだ秒から、設定したスタイルで延長します。"
       },
       "sections": [
         "when-to-use",
@@ -1910,7 +2048,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/suno-style-boost",
       "summary": "Turn a short music style, such as lo-fi chill, into richer Suno style tags, and send the result to the Style field of Suno Create Music for your song.",
       "summaries": {
-        "en": "Turn a short music style, such as lo-fi chill, into richer Suno style tags, and send the result to the Style field of Suno Create Music for your song."
+        "en": "Turn a short music style, such as lo-fi chill, into richer Suno style tags, and send the result to the Style field of Suno Create Music for your song.",
+        "ja": "lo-fi chill のような短い音楽スタイルを、より充実した Suno のスタイルタグに変えます。結果を Suno 生成の「スタイル」欄に送ると、曲に使えます。"
       },
       "sections": [
         "when-to-use",
@@ -1930,7 +2069,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/suno-convert-wav",
       "summary": "Convert a song made by a Suno node from compressed MP3 to lossless WAV, for mixing, mastering, archiving or tools that do not accept MP3 files.",
       "summaries": {
-        "en": "Convert a song made by a Suno node from compressed MP3 to lossless WAV, for mixing, mastering, archiving or tools that do not accept MP3 files."
+        "en": "Convert a song made by a Suno node from compressed MP3 to lossless WAV, for mixing, mastering, archiving or tools that do not accept MP3 files.",
+        "ja": "Suno ノードで作った曲を、圧縮された MP3 からロスレスの WAV に変換します。ミックス、マスタリング、アーカイブや、MP3 を受け付けないツールに使えます。"
       },
       "sections": [
         "when-to-use",
@@ -1950,7 +2090,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/text-to-audio",
       "summary": "Generate a sound effect or an ambience from a text description with ElevenLabs Sound Effects, up to 22 seconds long, with gapless loops for backgrounds.",
       "summaries": {
-        "en": "Generate a sound effect or an ambience from a text description with ElevenLabs Sound Effects, up to 22 seconds long, with gapless loops for backgrounds."
+        "en": "Generate a sound effect or an ambience from a text description with ElevenLabs Sound Effects, up to 22 seconds long, with gapless loops for backgrounds.",
+        "ja": "ElevenLabs Sound Effects で、テキストの説明から効果音や環境音を最長 22 秒まで生成します。背景音には、つなぎ目のないループも作れます。"
       },
       "sections": [
         "when-to-use",
@@ -1972,7 +2113,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/voice-extractor",
       "summary": "Remove background noise, music and other sounds from a recording and keep only the voice. Clean audio before transcription, lip sync, dubbing or a voice change.",
       "summaries": {
-        "en": "Remove background noise, music and other sounds from a recording and keep only the voice. Clean audio before transcription, lip sync, dubbing or a voice change."
+        "en": "Remove background noise, music and other sounds from a recording and keep only the voice. Clean audio before transcription, lip sync, dubbing or a voice change.",
+        "ja": "録音から背景ノイズ、音楽、その他の音を取り除き、声だけを残します。文字起こし、リップシンク、吹き替え、声の変換の前に、オーディオをクリーンにします。"
       },
       "sections": [
         "when-to-use",
@@ -1994,7 +2136,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/audio-separation",
       "summary": "Split any audio into vocals and instrumental, or into stems such as drums, bass, guitar and piano, with the Demucs model. Works on songs from any source.",
       "summaries": {
-        "en": "Split any audio into vocals and instrumental, or into stems such as drums, bass, guitar and piano, with the Demucs model. Works on songs from any source."
+        "en": "Split any audio into vocals and instrumental, or into stems such as drums, bass, guitar and piano, with the Demucs model. Works on songs from any source.",
+        "ja": "Demucs モデルで、あらゆるオーディオをボーカルとインストゥルメンタル、またはドラム、ベース、ギター、ピアノなどのステムに分離します。どこで作られた曲にも使えます。"
       },
       "sections": [
         "when-to-use",
@@ -2016,7 +2159,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/suno-separate",
       "summary": "Split a song made with Suno into a vocal and an instrumental track, or into up to 12 stems such as drums, bass, guitar and piano, straight from a Suno node.",
       "summaries": {
-        "en": "Split a song made with Suno into a vocal and an instrumental track, or into up to 12 stems such as drums, bass, guitar and piano, straight from a Suno node."
+        "en": "Split a song made with Suno into a vocal and an instrumental track, or into up to 12 stems such as drums, bass, guitar and piano, straight from a Suno node.",
+        "ja": "Suno で作った曲を、ボーカルとインストゥルメンタルの 2 トラックか、ドラム、ベース、ギター、ピアノなど最大 12 個のステムに分けます。Suno ノードに直接つないで使えます。"
       },
       "sections": [
         "when-to-use",
@@ -2038,7 +2182,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/silence-detect",
       "summary": "Find the silent spans in a recording or a video and get them as time ranges, ready to cut dead air in an edit. A flat 10 credits per run, with no AI model.",
       "summaries": {
-        "en": "Find the silent spans in a recording or a video and get them as time ranges, ready to cut dead air in an edit. A flat 10 credits per run, with no AI model."
+        "en": "Find the silent spans in a recording or a video and get them as time ranges, ready to cut dead air in an edit. A flat 10 credits per run, with no AI model.",
+        "ja": "録音や動画の中の無音区間を見つけ、時間範囲として返します。編集で無音部分をカットするのに、そのまま使えます。AI モデルは使わず、1 回の実行は一律 10 クレジットです。"
       },
       "sections": [
         "when-to-use",
@@ -2060,7 +2205,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/audio-sync",
       "summary": "Measure how far apart 2 to 6 recordings of one conversation are, from their sound, so a multicam edit lines up without typing offsets. Also reports clock drift.",
       "summaries": {
-        "en": "Measure how far apart 2 to 6 recordings of one conversation are, from their sound, so a multicam edit lines up without typing offsets. Also reports clock drift."
+        "en": "Measure how far apart 2 to 6 recordings of one conversation are, from their sound, so a multicam edit lines up without typing offsets. Also reports clock drift.",
+        "ja": "1 つの会話を収録した 2〜6 本の録音のずれを音から測定し、オフセットを入力しなくてもマルチカム編集をそろえられるようにします。時計のドリフトも報告します。"
       },
       "sections": [
         "when-to-use",
@@ -2083,7 +2229,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/trim-audio",
       "summary": "Cut a section out of an audio file by start and end time, and save it as MP3, WAV or AAC. Keep only the part of a recording or song that the next node needs.",
       "summaries": {
-        "en": "Cut a section out of an audio file by start and end time, and save it as MP3, WAV or AAC. Keep only the part of a recording or song that the next node needs."
+        "en": "Cut a section out of an audio file by start and end time, and save it as MP3, WAV or AAC. Keep only the part of a recording or song that the next node needs.",
+        "ja": "開始時間と終了時間を指定してオーディオファイルの一部を切り出し、MP3、WAV、AAC で保存します。録音や曲のうち、次のノードに必要な部分だけを残せます。"
       },
       "sections": [
         "when-to-use",
@@ -2104,7 +2251,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/combine-audio",
       "summary": "Join audio clips end to end into one file, in the order you choose, and trim each clip first. For narration, podcasts and dialogue made in several parts.",
       "summaries": {
-        "en": "Join audio clips end to end into one file, in the order you choose, and trim each clip first. For narration, podcasts and dialogue made in several parts."
+        "en": "Join audio clips end to end into one file, in the order you choose, and trim each clip first. For narration, podcasts and dialogue made in several parts.",
+        "ja": "オーディオクリップを指定した順番でつなげ、1 つのファイルにします。結合の前に各クリップをトリミングすることもできます。複数のパートで作ったナレーション、ポッドキャスト、会話に使えます。"
       },
       "sections": [
         "when-to-use",
@@ -2124,7 +2272,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/mix-audio",
       "summary": "Layer several audio tracks into one file, with a volume from 0 to 200% for each. Put a voiceover over music, or effects over an ambience, before adding video.",
       "summaries": {
-        "en": "Layer several audio tracks into one file, with a volume from 0 to 200% for each. Put a voiceover over music, or effects over an ambience, before adding video."
+        "en": "Layer several audio tracks into one file, with a volume from 0 to 200% for each. Put a voiceover over music, or effects over an ambience, before adding video.",
+        "ja": "複数のオーディオトラックを、トラックごとに 0〜200% の音量で重ねて 1 つのファイルにします。動画に付ける前に、音楽にナレーションを重ねたり、環境音に効果音を重ねたりできます。"
       },
       "sections": [
         "when-to-use",
@@ -2145,7 +2294,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/adjust-volume",
       "summary": "Change the volume of an audio track or of a video's sound, level it with Normalize, and add a fade-in and a fade-out of up to 10 seconds each.",
       "summaries": {
-        "en": "Change the volume of an audio track or of a video's sound, level it with Normalize, and add a fade-in and a fade-out of up to 10 seconds each."
+        "en": "Change the volume of an audio track or of a video's sound, level it with Normalize, and add a fade-in and a fade-out of up to 10 seconds each.",
+        "ja": "オーディオトラックや動画の音の音量を変更します。ノーマライズで音量をそろえ、それぞれ最大 10 秒のフェードインとフェードアウトを加えられます。"
       },
       "sections": [
         "when-to-use",
@@ -2166,7 +2316,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/audio-fx",
       "summary": "Put a voice in a room, a car or a church with a reverb, or add a telephone, megaphone or echo effect. A flat 20 credits per run, plus custom delay and EQ.",
       "summaries": {
-        "en": "Put a voice in a room, a car or a church with a reverb, or add a telephone, megaphone or echo effect. A flat 20 credits per run, plus custom delay and EQ."
+        "en": "Put a voice in a room, a car or a church with a reverb, or add a telephone, megaphone or echo effect. A flat 20 credits per run, plus custom delay and EQ.",
+        "ja": "リバーブで声を部屋、車内、教会の中に置くか、電話、メガホン、エコーのエフェクトを加えます。料金は 1 回の実行につき一律 20 クレジットで、ディレイと EQ も自分で設定できます。"
       },
       "sections": [
         "when-to-use",
@@ -2188,7 +2339,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/transcribe",
       "summary": "Turn the speech in audio or video into text with ElevenLabs STT or Whisper. Get word timings for captions, speaker labels, and tags for music and laughter.",
       "summaries": {
-        "en": "Turn the speech in audio or video into text with ElevenLabs STT or Whisper. Get word timings for captions, speaker labels, and tags for music and laughter."
+        "en": "Turn the speech in audio or video into text with ElevenLabs STT or Whisper. Get word timings for captions, speaker labels, and tags for music and laughter.",
+        "ja": "ElevenLabs STT または Whisper で、オーディオや動画の音声をテキストにします。字幕用の単語のタイミング、話者のラベル、音楽や笑い声のタグも取得できます。"
       },
       "sections": [
         "when-to-use",
@@ -2211,7 +2363,8 @@
       "page": "https://nodaro.ai/docs/nodes/audio/forced-alignment",
       "summary": "Time every word of a known transcript against its audio and get each word's start and end as data, for karaoke highlights, timed graphics and captions.",
       "summaries": {
-        "en": "Time every word of a known transcript against its audio and get each word's start and end as data, for karaoke highlights, timed graphics and captions."
+        "en": "Time every word of a known transcript against its audio and get each word's start and end as data, for karaoke highlights, timed graphics and captions.",
+        "ja": "内容がわかっている文字起こしの各単語をオーディオに合わせ、単語ごとの開始と終了の時間をデータとして取得します。カラオケ風のハイライト、タイミングに合わせたグラフィック、字幕に使えます。"
       },
       "sections": [
         "when-to-use",
@@ -2233,7 +2386,8 @@
       "page": "https://nodaro.ai/docs/nodes/settings/provider",
       "summary": "The Provider node holds one image or video model. Wired into the Settings input of Generate Image, Generate Video or Generate Video Pro, it sets their model.",
       "summaries": {
-        "en": "The Provider node holds one image or video model. Wired into the Settings input of Generate Image, Generate Video or Generate Video Pro, it sets their model."
+        "en": "The Provider node holds one image or video model. Wired into the Settings input of Generate Image, Generate Video or Generate Video Pro, it sets their model.",
+        "ja": "プロバイダーノードは、画像または動画のモデルを 1 つ保持します。画像生成、動画生成、動画生成 Pro の「設定」入力に接続すると、そのノードのモデルを設定します。"
       },
       "sections": [
         "settings",
@@ -2251,7 +2405,8 @@
       "page": "https://nodaro.ai/docs/nodes/settings/aspect-ratio",
       "summary": "The Aspect Ratio node holds one frame shape, such as 16:9 or 9:16. Wired into the Settings input of Generate Image or a video node, it sets their ratio.",
       "summaries": {
-        "en": "The Aspect Ratio node holds one frame shape, such as 16:9 or 9:16. Wired into the Settings input of Generate Image or a video node, it sets their ratio."
+        "en": "The Aspect Ratio node holds one frame shape, such as 16:9 or 9:16. Wired into the Settings input of Generate Image or a video node, it sets their ratio.",
+        "ja": "アスペクト比ノードは、16:9 や 9:16 などのフレームの形を 1 つ保持します。画像生成や動画ノードの「設定」入力に接続すると、そのノードの比率を設定します。"
       },
       "sections": [
         "settings",
@@ -2268,7 +2423,8 @@
       "page": "https://nodaro.ai/docs/nodes/settings/duration",
       "summary": "The Duration node holds a length in seconds. It sets the Target Length of Generate Script, and the length of Generate Video and Generate Video Pro runs.",
       "summaries": {
-        "en": "The Duration node holds a length in seconds. It sets the Target Length of Generate Script, and the length of Generate Video and Generate Video Pro runs."
+        "en": "The Duration node holds a length in seconds. It sets the Target Length of Generate Script, and the length of Generate Video and Generate Video Pro runs.",
+        "ja": "長さノードは、長さを秒単位で保持します。脚本生成の「目標の長さ」と、動画生成や動画生成 Pro で実行する動画の長さを設定します。"
       },
       "sections": [
         "settings",
@@ -2285,7 +2441,8 @@
       "page": "https://nodaro.ai/docs/nodes/settings/motion",
       "summary": "The Motion node sets how much a clip moves. Connect it to the Settings input of Generate Video or Generate Video Pro to add a motion clause to the prompt.",
       "summaries": {
-        "en": "The Motion node sets how much a clip moves. Connect it to the Settings input of Generate Video or Generate Video Pro to add a motion clause to the prompt."
+        "en": "The Motion node sets how much a clip moves. Connect it to the Settings input of Generate Video or Generate Video Pro to add a motion clause to the prompt.",
+        "ja": "モーションノードは、クリップの動きの量を設定します。動画生成または動画生成 Pro の「設定」入力に接続すると、動きを表す語句がプロンプトに追加されます。"
       },
       "sections": [
         "when-to-use",
@@ -2302,7 +2459,8 @@
       "page": "https://nodaro.ai/docs/nodes/settings/scene-count",
       "summary": "The Scene Count node holds a number of scenes, 5 by default, and sets how many scenes Generate Script writes through its Scene Count input.",
       "summaries": {
-        "en": "The Scene Count node holds a number of scenes, 5 by default, and sets how many scenes Generate Script writes through its Scene Count input."
+        "en": "The Scene Count node holds a number of scenes, 5 by default, and sets how many scenes Generate Script writes through its Scene Count input.",
+        "ja": "シーン数ノードは、シーンの数を保持します。デフォルトは 5 です。脚本生成の「シーン数」入力に接続すると、脚本生成が書くシーンの数を設定します。"
       },
       "sections": [
         "settings",
@@ -2319,7 +2477,8 @@
       "page": "https://nodaro.ai/docs/nodes/settings/tone",
       "summary": "Write a tone once, such as cinematic, cheerful or dark and moody, and share it with the image, video and script nodes you connect it to.",
       "summaries": {
-        "en": "Write a tone once, such as cinematic, cheerful or dark and moody, and share it with the image, video and script nodes you connect it to."
+        "en": "Write a tone once, such as cinematic, cheerful or dark and moody, and share it with the image, video and script nodes you connect it to.",
+        "ja": "シネマティック、明るい、ダークでムーディーなどのトーンを一度だけ書き、接続した画像ノード、動画ノード、脚本ノードで共有します。"
       },
       "sections": [
         "when-to-use",
@@ -2338,7 +2497,8 @@
       "page": "https://nodaro.ai/docs/nodes/settings/style-guide",
       "summary": "The Style Guide node holds your written visual direction and sets the Style Guide of Generate Script. Image and video nodes take their style elsewhere.",
       "summaries": {
-        "en": "The Style Guide node holds your written visual direction and sets the Style Guide of Generate Script. Image and video nodes take their style elsewhere."
+        "en": "The Style Guide node holds your written visual direction and sets the Style Guide of Generate Script. Image and video nodes take their style elsewhere.",
+        "ja": "スタイルガイドノードは、文章で書いたビジュアルの指示を保持し、脚本生成の「スタイルガイド」を設定します。画像ノードと動画ノードのスタイルは、別の場所で指定します。"
       },
       "sections": [
         "settings",
@@ -2354,7 +2514,8 @@
       "page": "https://nodaro.ai/docs/nodes/assets/character",
       "summary": "Build a reusable character in the Character Studio, with a portrait, expressions, poses, motion clips and a voice, and keep one face in every image and video.",
       "summaries": {
-        "en": "Build a reusable character in the Character Studio, with a portrait, expressions, poses, motion clips and a voice, and keep one face in every image and video."
+        "en": "Build a reusable character in the Character Studio, with a portrait, expressions, poses, motion clips and a voice, and keep one face in every image and video.",
+        "ja": "キャラクタースタジオで、ポートレート、表情、ポーズ、モーションクリップ、ボイスを持つ再利用可能なキャラクターを作り、すべての画像と動画で同じ顔を保ちます。"
       },
       "sections": [
         "when-to-use",
@@ -2375,7 +2536,8 @@
       "page": "https://nodaro.ai/docs/nodes/assets/create-face",
       "summary": "Make a reusable face identity from one clear photo, and use it to keep the same face in generated images and to swap it into video with Face Swap.",
       "summaries": {
-        "en": "Make a reusable face identity from one clear photo, and use it to keep the same face in generated images and to swap it into video with Face Swap."
+        "en": "Make a reusable face identity from one clear photo, and use it to keep the same face in generated images and to swap it into video with Face Swap.",
+        "ja": "はっきり写った 1 枚の写真から、再利用できる顔を作ります。生成する画像で同じ顔を保ったり、フェイススワップで動画に顔を入れたりできます。"
       },
       "sections": [
         "when-to-use",
@@ -2395,7 +2557,8 @@
       "page": "https://nodaro.ai/docs/nodes/assets/creature",
       "summary": "Build a reusable animal or mythical creature in the Creature Studio, with poses, variations, motion clips and a voice, and keep it the same in every shot.",
       "summaries": {
-        "en": "Build a reusable animal or mythical creature in the Creature Studio, with poses, variations, motion clips and a voice, and keep it the same in every shot."
+        "en": "Build a reusable animal or mythical creature in the Creature Studio, with poses, variations, motion clips and a voice, and keep it the same in every shot.",
+        "ja": "クリーチャースタジオで、ポーズ、バリエーション、モーションクリップ、ボイスを持つ再利用可能な動物や空想上のクリーチャーを作り、すべてのショットで同じ姿を保ちます。"
       },
       "sections": [
         "when-to-use",
@@ -2415,7 +2578,8 @@
       "page": "https://nodaro.ai/docs/nodes/assets/location",
       "summary": "Build a reusable location in the Location Studio, with time of day, weather, season, angle and lighting variants, and keep the same place in every shot.",
       "summaries": {
-        "en": "Build a reusable location in the Location Studio, with time of day, weather, season, angle and lighting variants, and keep the same place in every shot."
+        "en": "Build a reusable location in the Location Studio, with time of day, weather, season, angle and lighting variants, and keep the same place in every shot.",
+        "ja": "ロケーションスタジオで、時間帯、天候、季節、アングル、ライティングのバリエーションを持つ再利用可能な場所を作り、すべてのショットで同じ場所を保ちます。"
       },
       "sections": [
         "when-to-use",
@@ -2436,7 +2600,8 @@
       "page": "https://nodaro.ai/docs/nodes/assets/object",
       "summary": "Build a reusable prop or product in the Object Studio, with angle, material and variation images and short motion clips, and keep the same item in every shot.",
       "summaries": {
-        "en": "Build a reusable prop or product in the Object Studio, with angle, material and variation images and short motion clips, and keep the same item in every shot."
+        "en": "Build a reusable prop or product in the Object Studio, with angle, material and variation images and short motion clips, and keep the same item in every shot.",
+        "ja": "オブジェクト／小道具スタジオで、アングル、素材、バリエーションの画像と短いモーションクリップを持つ再利用可能な小道具や商品を作り、すべてのショットで同じアイテムを保ちます。"
       },
       "sections": [
         "when-to-use",
@@ -2457,7 +2622,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/schedule-trigger",
       "summary": "Run a workflow automatically every few minutes, hours, days, weeks or months, or on a cron expression, in your timezone. Turn it on with one switch.",
       "summaries": {
-        "en": "Run a workflow automatically every few minutes, hours, days, weeks or months, or on a cron expression, in your timezone. Turn it on with one switch."
+        "en": "Run a workflow automatically every few minutes, hours, days, weeks or months, or on a cron expression, in your timezone. Turn it on with one switch.",
+        "ja": "数分、数時間、数日、数週間、数か月ごと、または cron 式で、選んだタイムゾーンに合わせてワークフローを自動で実行します。スイッチ 1 つでオンにできます。"
       },
       "sections": [
         "when-to-use",
@@ -2477,7 +2643,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/webhook-trigger",
       "summary": "Start a workflow from another app, a form or your own code with an HTTP POST, and pass values such as a prompt or an image URL into the run.",
       "summaries": {
-        "en": "Start a workflow from another app, a form or your own code with an HTTP POST, and pass values such as a prompt or an image URL into the run."
+        "en": "Start a workflow from another app, a form or your own code with an HTTP POST, and pass values such as a prompt or an image URL into the run.",
+        "ja": "ほかのアプリ、フォーム、自分のコードから HTTP POST でワークフローを開始し、プロンプトや画像の URL などの値を実行に渡します。"
       },
       "sections": [
         "when-to-use",
@@ -2497,7 +2664,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/telegram-trigger",
       "summary": "Start a workflow each time your Telegram bot receives a message, and pass the text, photo, video or audio of the message to the nodes after it.",
       "summaries": {
-        "en": "Start a workflow each time your Telegram bot receives a message, and pass the text, photo, video or audio of the message to the nodes after it."
+        "en": "Start a workflow each time your Telegram bot receives a message, and pass the text, photo, video or audio of the message to the nodes after it.",
+        "ja": "Telegram ボットがメッセージを受け取るたびにワークフローを開始し、メッセージのテキスト、写真、動画、オーディオを後続のノードに渡します。"
       },
       "sections": [
         "when-to-use",
@@ -2517,7 +2685,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/web-scrape",
       "summary": "Fetch Google Search results, the text of a web page or site, RSS or Atom feed items, or TikTok posts, and pass them on as JSON to AI and list nodes.",
       "summaries": {
-        "en": "Fetch Google Search results, the text of a web page or site, RSS or Atom feed items, or TikTok posts, and pass them on as JSON to AI and list nodes."
+        "en": "Fetch Google Search results, the text of a web page or site, RSS or Atom feed items, or TikTok posts, and pass them on as JSON to AI and list nodes.",
+        "ja": "Google 検索の結果、Web ページやサイトのテキスト、RSS や Atom フィードの項目、TikTok の投稿を取得し、JSON として AI ノードやリストのノードに渡します。"
       },
       "sections": [
         "when-to-use",
@@ -2537,7 +2706,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/video-url",
       "summary": "Paste a YouTube, TikTok, Instagram, Facebook or X link and get the video as a file for trimming, captions, analysis and remixing. Choose part of long videos.",
       "summaries": {
-        "en": "Paste a YouTube, TikTok, Instagram, Facebook or X link and get the video as a file for trimming, captions, analysis and remixing. Choose part of long videos."
+        "en": "Paste a YouTube, TikTok, Instagram, Facebook or X link and get the video as a file for trimming, captions, analysis and remixing. Choose part of long videos.",
+        "ja": "YouTube、TikTok、Instagram、Facebook、X のリンクを貼り付けると、トリミング、字幕、分析、リミックスに使える動画ファイルになります。長い動画は一部だけを選べます。"
       },
       "sections": [
         "when-to-use",
@@ -2557,7 +2727,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/telegram-channel-feed",
       "summary": "Read the newest posts of a public Telegram channel without a bot, and pass their text on to rewrite, summarize or repost. Each run returns only new posts.",
       "summaries": {
-        "en": "Read the newest posts of a public Telegram channel without a bot, and pass their text on to rewrite, summarize or repost. Each run returns only new posts."
+        "en": "Read the newest posts of a public Telegram channel without a bot, and pass their text on to rewrite, summarize or repost. Each run returns only new posts.",
+        "ja": "ボットなしで公開 Telegram チャンネルの最新の投稿を読み取り、そのテキストを書き直し、要約、再投稿のために次へ渡します。各実行では新しい投稿だけが返されます。"
       },
       "sections": [
         "when-to-use",
@@ -2579,7 +2750,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/rss-feed",
       "summary": "RSS Feed is a retired Nodaro node that no longer runs. Read RSS and Atom feeds with the RSS Feed source of the Web Scrape node instead.",
       "summaries": {
-        "en": "RSS Feed is a retired Nodaro node that no longer runs. Read RSS and Atom feeds with the RSS Feed source of the Web Scrape node instead."
+        "en": "RSS Feed is a retired Nodaro node that no longer runs. Read RSS and Atom feeds with the RSS Feed source of the Web Scrape node instead.",
+        "ja": "RSS フィードは、廃止されて現在は実行されない Nodaro のノードです。RSS と Atom のフィードは、代わりに Web スクレイピングノードの「RSS フィード」ソースで読み込みます。"
       },
       "sections": [
         "faq"
@@ -2594,7 +2766,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/text",
       "summary": "Write a prompt or any other text once and send it to image, video, audio and AI text nodes. Insert the values of other nodes with variables.",
       "summaries": {
-        "en": "Write a prompt or any other text once and send it to image, video, audio and AI text nodes. Insert the values of other nodes with variables."
+        "en": "Write a prompt or any other text once and send it to image, video, audio and AI text nodes. Insert the values of other nodes with variables.",
+        "ja": "プロンプトなどのテキストを一度書くだけで、画像、動画、オーディオ、AI テキストの各ノードに送れます。変数を使って、ほかのノードの値を差し込むこともできます。"
       },
       "sections": [
         "when-to-use",
@@ -2613,7 +2786,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/combine-text",
       "summary": "Join the text of several nodes into one text, in the order you choose, with a new line, a comma, a space or your own separator between the parts.",
       "summaries": {
-        "en": "Join the text of several nodes into one text, in the order you choose, with a new line, a comma, a space or your own separator between the parts."
+        "en": "Join the text of several nodes into one text, in the order you choose, with a new line, a comma, a space or your own separator between the parts.",
+        "ja": "複数のノードのテキストを、選んだ順番で 1 つのテキストにまとめます。各部分の間には、改行、カンマ、スペース、または自分で決めた区切り文字を入れます。"
       },
       "sections": [
         "when-to-use",
@@ -2633,7 +2807,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/split-text",
       "summary": "Cut one text into a list of items at each new line, comma or custom separator, so the next node runs once for every item, such as one image per line.",
       "summaries": {
-        "en": "Cut one text into a list of items at each new line, comma or custom separator, so the next node runs once for every item, such as one image per line."
+        "en": "Cut one text into a list of items at each new line, comma or custom separator, so the next node runs once for every item, such as one image per line.",
+        "ja": "1 つのテキストを、改行、カンマ、任意の区切り文字でリストの項目に分けます。次のノードが項目ごとに 1 回ずつ実行されるので、1 行につき 1 枚の画像を作れます。"
       },
       "sections": [
         "when-to-use",
@@ -2654,7 +2829,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/prompt",
       "summary": "Generate, rewrite or summarize text with Gemini, Claude, GPT or Grok. Add instructions, images, video or audio, and split the answer into items.",
       "summaries": {
-        "en": "Generate, rewrite or summarize text with Gemini, Claude, GPT or Grok. Add instructions, images, video or audio, and split the answer into items."
+        "en": "Generate, rewrite or summarize text with Gemini, Claude, GPT or Grok. Add instructions, images, video or audio, and split the answer into items.",
+        "ja": "Gemini、Claude、GPT、Grok でテキストを生成、書き直し、要約します。指示や画像、動画、オーディオを加えられ、回答を複数の項目に分割することもできます。"
       },
       "sections": [
         "when-to-use",
@@ -2676,7 +2852,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/list",
       "summary": "Type or paste a list of prompts, or build a table with several columns, and every connected node runs once per row. The List node itself is free.",
       "summaries": {
-        "en": "Type or paste a list of prompts, or build a table with several columns, and every connected node runs once per row. The List node itself is free."
+        "en": "Type or paste a list of prompts, or build a table with several columns, and every connected node runs once per row. The List node itself is free.",
+        "ja": "プロンプトのリストを入力するか貼り付けるか、複数の列を持つ表を作ると、接続したすべてのノードが行ごとに 1 回ずつ実行されます。リストノード自体は無料です。"
       },
       "sections": [
         "when-to-use",
@@ -2697,7 +2874,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/collect",
       "summary": "Gather the results of several nodes in one place. Collect sorts them into text, image, video and audio outputs that connect to any node, for free.",
       "summaries": {
-        "en": "Gather the results of several nodes in one place. Collect sorts them into text, image, video and audio outputs that connect to any node, for free."
+        "en": "Gather the results of several nodes in one place. Collect sorts them into text, image, video and audio outputs that connect to any node, for free.",
+        "ja": "複数のノードの結果を 1 か所に集めます。収集は結果をテキスト、画像、動画、オーディオの出力に分け、どのノードにも接続できるようにします。料金は無料です。"
       },
       "sections": [
         "when-to-use",
@@ -2718,7 +2896,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/selector",
       "summary": "Pick one item or a subset from a list by position, range, random sample, rule or name. Selector sends the pick and the rest to two outputs, for free.",
       "summaries": {
-        "en": "Pick one item or a subset from a list by position, range, random sample, rule or name. Selector sends the pick and the rest to two outputs, for free."
+        "en": "Pick one item or a subset from a list by position, range, random sample, rule or name. Selector sends the pick and the rest to two outputs, for free.",
+        "ja": "位置、範囲、ランダムなサンプル、ルール、名前を使って、リストから 1 つの項目や一部の項目を選びます。選んだ項目と残りを 2 つの出力に分けて送ります。無料です。"
       },
       "sections": [
         "when-to-use",
@@ -2738,7 +2917,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/filter-list",
       "summary": "Keep only the list items that match your conditions, such as a field that contains a word or a date since the last run. Combine rules with AND or OR.",
       "summaries": {
-        "en": "Keep only the list items that match your conditions, such as a field that contains a word or a date since the last run. Combine rules with AND or OR."
+        "en": "Keep only the list items that match your conditions, such as a field that contains a word or a date since the last run. Combine rules with AND or OR.",
+        "ja": "特定の語を含むフィールドや、前回の実行以降の日付など、条件に一致するリストの項目だけを残します。複数のルールは AND または OR で組み合わせます。"
       },
       "sections": [
         "when-to-use",
@@ -2759,7 +2939,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/sort-list",
       "summary": "Put a list in order by the whole item or by a field such as score or created_at, comparing as text, numbers or dates, ascending or descending.",
       "summaries": {
-        "en": "Put a list in order by the whole item or by a field such as score or created_at, comparing as text, numbers or dates, ascending or descending."
+        "en": "Put a list in order by the whole item or by a field such as score or created_at, comparing as text, numbers or dates, ascending or descending.",
+        "ja": "リストの項目を、項目全体か score や created_at などのフィールドで並べ替えます。テキスト・数値・日付として比較し、昇順か降順かを選べます。"
       },
       "sections": [
         "when-to-use",
@@ -2780,7 +2961,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/remove-duplicates",
       "summary": "Remove repeated items from a list and keep the first copy of each. Compare whole items or one field, such as id or url, in scraped or merged lists.",
       "summaries": {
-        "en": "Remove repeated items from a list and keep the first copy of each. Compare whole items or one field, such as id or url, in scraped or merged lists."
+        "en": "Remove repeated items from a list and keep the first copy of each. Compare whole items or one field, such as id or url, in scraped or merged lists.",
+        "ja": "リストから重複した項目を取り除き、それぞれ最初の 1 つを残します。スクレイピングや結合で作ったリストを、項目全体か、id や url などのフィールドで比較できます。"
       },
       "sections": [
         "when-to-use",
@@ -2801,7 +2983,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/merge-lists",
       "summary": "Combine several lists into one. Concatenate appends them in connection order, and Zip merges the items that share a position. Optionally drop duplicates.",
       "summaries": {
-        "en": "Combine several lists into one. Concatenate appends them in connection order, and Zip merges the items that share a position. Optionally drop duplicates."
+        "en": "Combine several lists into one. Concatenate appends them in connection order, and Zip merges the items that share a position. Optionally drop duplicates.",
+        "ja": "複数のリストを 1 つにまとめます。「連結」は接続した順番にリストをつなげ、「Zip」は同じ位置の項目どうしを結合します。結合後に重複を削除することもできます。"
       },
       "sections": [
         "when-to-use",
@@ -2822,7 +3005,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/choose-best",
       "summary": "Turn many results into one. An AI judge picks the best image or text against your criteria, or the node joins, counts, votes on or merges the results.",
       "summaries": {
-        "en": "Turn many results into one. An AI judge picks the best image or text against your criteria, or the node joins, counts, votes on or merges the results."
+        "en": "Turn many results into one. An AI judge picks the best image or text against your criteria, or the node joins, counts, votes on or merges the results.",
+        "ja": "多数の結果を 1 つにまとめます。AI の審査員が基準に沿って最も良い画像やテキストを選ぶほか、結果の結合、カウント、多数決、マージもできます。"
       },
       "sections": [
         "when-to-use",
@@ -2842,7 +3026,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/router",
       "summary": "Send a workflow down one or more named routes. Choose the route yourself, turn several on at once, or let conditions on the incoming data decide.",
       "summaries": {
-        "en": "Send a workflow down one or more named routes. Choose the route yourself, turn several on at once, or let conditions on the incoming data decide."
+        "en": "Send a workflow down one or more named routes. Choose the route yourself, turn several on at once, or let conditions on the incoming data decide.",
+        "ja": "ワークフローの流れを、名前を付けた 1 つ以上のルートに振り分けます。ルートを自分で選ぶか、複数を同時に有効にするか、受け取ったデータの条件で決めます。"
       },
       "sections": [
         "when-to-use",
@@ -2863,7 +3048,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/extract-field",
       "summary": "Pull one field or a nested path, such as title or authorMeta.name, out of JSON data, and send it on as text, as a list to run once per item, or as JSON.",
       "summaries": {
-        "en": "Pull one field or a nested path, such as title or authorMeta.name, out of JSON data, and send it on as text, as a list to run once per item, or as JSON."
+        "en": "Pull one field or a nested path, such as title or authorMeta.name, out of JSON data, and send it on as text, as a list to run once per item, or as JSON.",
+        "ja": "title や authorMeta.name のようなフィールドやネストしたパスを JSON データから取り出し、テキスト、項目ごとに実行するためのリスト、または JSON として送ります。"
       },
       "sections": [
         "when-to-use",
@@ -2884,7 +3070,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/qa-check",
       "summary": "Score a text from 0 to 1 with an AI model for content, quality, consistency or safety, and get an approved or rejected decision with a short reason.",
       "summaries": {
-        "en": "Score a text from 0 to 1 with an AI model for content, quality, consistency or safety, and get an approved or rejected decision with a short reason."
+        "en": "Score a text from 0 to 1 with an AI model for content, quality, consistency or safety, and get an approved or rejected decision with a short reason.",
+        "ja": "AI モデルでテキストを内容、品質、一貫性、安全性の観点から 0〜1 で採点し、承認か却下かの判定を短い理由とともに受け取ります。"
       },
       "sections": [
         "when-to-use",
@@ -2906,7 +3093,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/json-process",
       "summary": "JSON Process is a legacy node that filters and reshapes JSON. It is no longer in the node picker, but saved workflows keep running. Use Extract Field instead.",
       "summaries": {
-        "en": "JSON Process is a legacy node that filters and reshapes JSON. It is no longer in the node picker, but saved workflows keep running. Use Extract Field instead."
+        "en": "JSON Process is a legacy node that filters and reshapes JSON. It is no longer in the node picker, but saved workflows keep running. Use Extract Field instead.",
+        "ja": "JSON 処理は、JSON をフィルターして整形するレガシーノードです。ノードピッカーからはなくなりましたが、保存済みのワークフローでは引き続き動作します。代わりにフィールドを抽出を使ってください。"
       },
       "sections": [
         "credits",
@@ -2923,7 +3111,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/sub-workflow",
       "summary": "Put a whole workflow inside another as one node with typed inputs and outputs. Create a new one in place or reuse an existing workflow, up to 5 levels deep.",
       "summaries": {
-        "en": "Put a whole workflow inside another as one node with typed inputs and outputs. Create a new one in place or reuse an existing workflow, up to 5 levels deep."
+        "en": "Put a whole workflow inside another as one node with typed inputs and outputs. Create a new one in place or reuse an existing workflow, up to 5 levels deep.",
+        "ja": "ワークフロー全体を、種類付きの入力と出力を持つ 1 つのノードとして別のワークフローに入れます。その場で新しく作ることも既存のワークフローを再利用することもでき、最大 5 階層まで入れ子にできます。"
       },
       "sections": [
         "when-to-use",
@@ -2944,7 +3133,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/component",
       "summary": "Add a published component, a versioned workflow from the community or your own, as one node. Set its inputs and settings, and it runs as a black box.",
       "summaries": {
-        "en": "Add a published component, a versioned workflow from the community or your own, as one node. Set its inputs and settings, and it runs as a black box."
+        "en": "Add a published component, a versioned workflow from the community or your own, as one node. Set its inputs and settings, and it runs as a black box.",
+        "ja": "公開済みのコンポーネントを 1 つのノードとして追加します。コミュニティや自分が作った、バージョン管理されたワークフローです。入力と設定を指定すると、ブラックボックスとして実行されます。"
       },
       "sections": [
         "when-to-use",
@@ -2965,7 +3155,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/sub-workflow-input",
       "summary": "Define the inputs of a workflow that other workflows call as a Sub-Workflow. Each port has a name and a type, and pairs with a Sub-Workflow Output by route.",
       "summaries": {
-        "en": "Define the inputs of a workflow that other workflows call as a Sub-Workflow. Each port has a name and a type, and pairs with a Sub-Workflow Output by route."
+        "en": "Define the inputs of a workflow that other workflows call as a Sub-Workflow. Each port has a name and a type, and pairs with a Sub-Workflow Output by route.",
+        "ja": "ほかのワークフローからサブワークフローとして呼び出すワークフローの入力を定義します。名前と種類を持つコネクタを並べ、ルートでサブワークフロー出力と組み合わせます。"
       },
       "sections": [
         "when-to-use",
@@ -2986,7 +3177,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/sub-workflow-output",
       "summary": "Define what a callable workflow returns. Pair it with a Sub-Workflow Input, add typed output ports, and choose which result the caller shows as its preview.",
       "summaries": {
-        "en": "Define what a callable workflow returns. Pair it with a Sub-Workflow Input, add typed output ports, and choose which result the caller shows as its preview."
+        "en": "Define what a callable workflow returns. Pair it with a Sub-Workflow Input, add typed output ports, and choose which result the caller shows as its preview.",
+        "ja": "呼び出し可能なワークフローが返すものを定義します。サブワークフロー入力と組み合わせ、種類付きの出力コネクタを追加して、呼び出し元がプレビューに表示する結果を選びます。"
       },
       "sections": [
         "when-to-use",
@@ -3007,7 +3199,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/group",
       "summary": "Drag nodes into a Group frame to organize the canvas. Color it to mark a section, and use its outputs to pass the members' results on by type.",
       "summaries": {
-        "en": "Drag nodes into a Group frame to organize the canvas. Color it to mark a section, and use its outputs to pass the members' results on by type."
+        "en": "Drag nodes into a Group frame to organize the canvas. Color it to mark a section, and use its outputs to pass the members' results on by type.",
+        "ja": "ノードをグループの枠にドラッグして、キャンバスを整理します。色を付けてセクションを示し、出力を使ってメンバーの結果を種類ごとに次へ渡せます。"
       },
       "sections": [
         "when-to-use",
@@ -3027,7 +3220,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/teleport-send",
       "summary": "Broadcast a value on a lettered channel, and every Teleport Receive tuned to that channel gets it, with no connection line drawn across the canvas.",
       "summaries": {
-        "en": "Broadcast a value on a lettered channel, and every Teleport Receive tuned to that channel gets it, with no connection line drawn across the canvas."
+        "en": "Broadcast a value on a lettered channel, and every Teleport Receive tuned to that channel gets it, with no connection line drawn across the canvas.",
+        "ja": "文字で区別されるチャンネルに値を送ると、そのチャンネルに合わせたすべてのテレポート受信が、キャンバスに接続線を引かずにその値を受け取ります。"
       },
       "sections": [
         "when-to-use",
@@ -3048,7 +3242,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/teleport-receive",
       "summary": "Receive the value that a Teleport Send broadcasts on the same channel, anywhere on the canvas and without a connection line. Switch channels at any time.",
       "summaries": {
-        "en": "Receive the value that a Teleport Send broadcasts on the same channel, anywhere on the canvas and without a connection line. Switch channels at any time."
+        "en": "Receive the value that a Teleport Send broadcasts on the same channel, anywhere on the canvas and without a connection line. Switch channels at any time.",
+        "ja": "テレポート送信が同じチャンネルで送る値を、キャンバスのどこでも、接続線なしで受け取ります。チャンネルはいつでも切り替えられます。"
       },
       "sections": [
         "when-to-use",
@@ -3070,7 +3265,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/preview",
       "summary": "Preview shows the results of connected nodes, text, images, video and audio, in one place. Today every node shows its own result, so most workflows skip it.",
       "summaries": {
-        "en": "Preview shows the results of connected nodes, text, images, video and audio, in one place. Today every node shows its own result, so most workflows skip it."
+        "en": "Preview shows the results of connected nodes, text, images, video and audio, in one place. Today every node shows its own result, so most workflows skip it.",
+        "ja": "プレビューは、接続したノードの結果（テキスト、画像、動画、オーディオ）を 1 か所に表示します。現在は各ノードが自分の結果を表示するため、ほとんどのワークフローでは使いません。"
       },
       "sections": [
         "credits",
@@ -3087,7 +3283,8 @@
       "page": "https://nodaro.ai/docs/nodes/automate/sticky-note",
       "summary": "Put a note anywhere on the canvas to label a section, explain a step or leave instructions. Sticky notes have no inputs or outputs and never affect a run.",
       "summaries": {
-        "en": "Put a note anywhere on the canvas to label a section, explain a step or leave instructions. Sticky notes have no inputs or outputs and never affect a run."
+        "en": "Put a note anywhere on the canvas to label a section, explain a step or leave instructions. Sticky notes have no inputs or outputs and never affect a run.",
+        "ja": "キャンバスの好きな場所に付箋を置き、セクションに名前を付けたり、手順を説明したり、指示を残したりします。付箋には入力も出力もなく、実行に影響しません。"
       },
       "sections": [
         "when-to-use",
@@ -3106,7 +3303,8 @@
       "page": "https://nodaro.ai/docs/nodes/publish/publish-to-social",
       "summary": "Post an image, a video or text to any social account you connected, from one node. Pick the account and the node sets the platform and its post options.",
       "summaries": {
-        "en": "Post an image, a video or text to any social account you connected, from one node. Pick the account and the node sets the platform and its post options."
+        "en": "Post an image, a video or text to any social account you connected, from one node. Pick the account and the node sets the platform and its post options.",
+        "ja": "接続済みのどの SNS アカウントにも、1 つのノードで画像、動画、テキストを投稿できます。アカウントを選ぶと、ノードがプラットフォームとその投稿オプションを設定します。"
       },
       "sections": [
         "when-to-use",
@@ -3128,7 +3326,8 @@
       "page": "https://nodaro.ai/docs/nodes/publish/instagram-post",
       "summary": "Publish an image, a Reel, a Story or a carousel to your Instagram Business or Creator account from a workflow, with a caption of up to 2,200 characters.",
       "summaries": {
-        "en": "Publish an image, a Reel, a Story or a carousel to your Instagram Business or Creator account from a workflow, with a caption of up to 2,200 characters."
+        "en": "Publish an image, a Reel, a Story or a carousel to your Instagram Business or Creator account from a workflow, with a caption of up to 2,200 characters.",
+        "ja": "ワークフローから、Instagram のビジネスアカウントやクリエイターアカウントに、画像、リール、ストーリーズ、カルーセルを公開します。キャプションは最大 2,200 文字です。"
       },
       "sections": [
         "when-to-use",
@@ -3150,7 +3349,8 @@
       "page": "https://nodaro.ai/docs/nodes/publish/tiktok-post",
       "summary": "Publish a video from your workflow to a connected TikTok account with a caption. Use vertical 1080 × 1920 video of up to 10 minutes for the best result.",
       "summaries": {
-        "en": "Publish a video from your workflow to a connected TikTok account with a caption. Use vertical 1080 × 1920 video of up to 10 minutes for the best result."
+        "en": "Publish a video from your workflow to a connected TikTok account with a caption. Use vertical 1080 × 1920 video of up to 10 minutes for the best result.",
+        "ja": "ワークフローの動画を、キャプションを付けて、接続済みの TikTok アカウントに公開します。最適な結果を得るには、最大 10 分の縦長 1080 × 1920 の動画を使います。"
       },
       "sections": [
         "when-to-use",
@@ -3171,7 +3371,8 @@
       "page": "https://nodaro.ai/docs/nodes/publish/youtube-upload",
       "summary": "Upload a video or a Short to your YouTube channel from a workflow, with a title, a description, tags and a privacy setting that starts as Private.",
       "summaries": {
-        "en": "Upload a video or a Short to your YouTube channel from a workflow, with a title, a description, tags and a privacy setting that starts as Private."
+        "en": "Upload a video or a Short to your YouTube channel from a workflow, with a title, a description, tags and a privacy setting that starts as Private.",
+        "ja": "ワークフローから、YouTube チャンネルに動画やショートをアップロードします。タイトル、説明、タグ、公開設定を指定でき、公開設定の初期値は「非公開」です。"
       },
       "sections": [
         "when-to-use",
@@ -3192,7 +3393,8 @@
       "page": "https://nodaro.ai/docs/nodes/publish/facebook-post",
       "summary": "Publish text, an image, a video or a Story to your connected Facebook account from a workflow, with a caption of up to 63,206 characters.",
       "summaries": {
-        "en": "Publish text, an image, a video or a Story to your connected Facebook account from a workflow, with a caption of up to 63,206 characters."
+        "en": "Publish text, an image, a video or a Story to your connected Facebook account from a workflow, with a caption of up to 63,206 characters.",
+        "ja": "ワークフローから、接続済みの Facebook アカウントに、テキスト、画像、動画、ストーリーズを公開します。キャプションは最大 63,206 文字です。"
       },
       "sections": [
         "when-to-use",
@@ -3213,7 +3415,8 @@
       "page": "https://nodaro.ai/docs/nodes/publish/x-post",
       "summary": "Post text of up to 280 characters to your connected X account, with an optional image or video attached, as the last step of a Nodaro workflow.",
       "summaries": {
-        "en": "Post text of up to 280 characters to your connected X account, with an optional image or video attached, as the last step of a Nodaro workflow."
+        "en": "Post text of up to 280 characters to your connected X account, with an optional image or video attached, as the last step of a Nodaro workflow.",
+        "ja": "Nodaro のワークフローの最後のステップとして、接続済みの X アカウントに最大 280 文字のテキストを投稿します。画像や動画を添付することもできます。"
       },
       "sections": [
         "when-to-use",
@@ -3234,7 +3437,8 @@
       "page": "https://nodaro.ai/docs/nodes/publish/linkedin-post",
       "summary": "Publish a text post, an image or a video of up to 10 minutes to your connected LinkedIn account, with up to 3,000 characters of text, from a workflow.",
       "summaries": {
-        "en": "Publish a text post, an image or a video of up to 10 minutes to your connected LinkedIn account, with up to 3,000 characters of text, from a workflow."
+        "en": "Publish a text post, an image or a video of up to 10 minutes to your connected LinkedIn account, with up to 3,000 characters of text, from a workflow.",
+        "ja": "ワークフローから、接続済みの LinkedIn アカウントに、テキストの投稿、画像、最大 10 分の動画を公開します。テキストは最大 3,000 文字です。"
       },
       "sections": [
         "when-to-use",
@@ -3255,7 +3459,8 @@
       "page": "https://nodaro.ai/docs/nodes/publish/telegram-post",
       "summary": "Send a message, a photo or a video to a Telegram chat, channel or group through your connected bot. The node picks the kind of message from what you connect.",
       "summaries": {
-        "en": "Send a message, a photo or a video to a Telegram chat, channel or group through your connected bot. The node picks the kind of message from what you connect."
+        "en": "Send a message, a photo or a video to a Telegram chat, channel or group through your connected bot. The node picks the kind of message from what you connect.",
+        "ja": "接続済みのボットを通じて、Telegram のチャット、チャンネル、グループに、メッセージ、写真、動画を送信します。メッセージの種類は、接続したものに応じてノードが選びます。"
       },
       "sections": [
         "when-to-use",
@@ -3277,7 +3482,8 @@
       "page": "https://nodaro.ai/docs/nodes/publish/save-to-storage",
       "summary": "Save an image, a video or an audio result to your Nodaro storage so it stays in your asset library. The node is free, and files count toward your quota.",
       "summaries": {
-        "en": "Save an image, a video or an audio result to your Nodaro storage so it stays in your asset library. The node is free, and files count toward your quota."
+        "en": "Save an image, a video or an audio result to your Nodaro storage so it stays in your asset library. The node is free, and files count toward your quota.",
+        "ja": "画像、動画、オーディオの結果を Nodaro のストレージに保存し、アセットライブラリに残します。ノードは無料で、ファイルはストレージの容量に含まれます。"
       },
       "sections": [
         "when-to-use",
@@ -3297,7 +3503,8 @@
       "page": "https://nodaro.ai/docs/nodes/publish/webhook-output",
       "summary": "Send workflow results to any URL as an HTTP POST with a JSON body, with named values and an optional stored credential whose secret stays on the server.",
       "summaries": {
-        "en": "Send workflow results to any URL as an HTTP POST with a JSON body, with named values and an optional stored credential whose secret stays on the server."
+        "en": "Send workflow results to any URL as an HTTP POST with a JSON body, with named values and an optional stored credential whose secret stays on the server.",
+        "ja": "ワークフローの結果を、名前付きの値として、JSON ボディ付きの HTTP POST で任意の URL に送信します。保存済みの認証情報も付けられ、そのシークレットはサーバー上に保持されます。"
       },
       "sections": [
         "when-to-use",
@@ -3318,7 +3525,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/person",
       "summary": "Describe a person for AI images and video with 575 options in 33 settings, from age and body to face geometry, hair and eyes. The picker writes the prompt.",
       "summaries": {
-        "en": "Describe a person for AI images and video with 575 options in 33 settings, from age and body to face geometry, hair and eyes. The picker writes the prompt."
+        "en": "Describe a person for AI images and video with 575 options in 33 settings, from age and body to face geometry, hair and eyes. The picker writes the prompt.",
+        "ja": "年齢や体型から、顔の造形、髪、目まで、33 の設定にある 575 のオプションで、AI 画像と動画の人物を説明します。プロンプトはピッカーが書きます。"
       },
       "sections": [
         "when-to-use",
@@ -3337,7 +3545,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/animal",
       "summary": "Pick one of 126 animals, from pets and wildlife to dinosaurs and dragons, and Nodaro adds the animal and a short description of its look to your prompt.",
       "summaries": {
-        "en": "Pick one of 126 animals, from pets and wildlife to dinosaurs and dragons, and Nodaro adds the animal and a short description of its look to your prompt."
+        "en": "Pick one of 126 animals, from pets and wildlife to dinosaurs and dragons, and Nodaro adds the animal and a short description of its look to your prompt.",
+        "ja": "ペットや野生動物から恐竜やドラゴンまで、126 種類の動物から 1 つを選ぶと、Nodaro がその動物と見た目の短い説明をプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3356,7 +3565,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/vehicle",
       "summary": "Pick one of 107 vehicles, from classic cars and trains to aircraft, ships and spaceships, and Nodaro adds the vehicle and a short description to your prompt.",
       "summaries": {
-        "en": "Pick one of 107 vehicles, from classic cars and trains to aircraft, ships and spaceships, and Nodaro adds the vehicle and a short description to your prompt."
+        "en": "Pick one of 107 vehicles, from classic cars and trains to aircraft, ships and spaceships, and Nodaro adds the vehicle and a short description to your prompt.",
+        "ja": "クラシックカーや列車から、飛行機、船、宇宙船まで、107 種類の乗り物から 1 つを選びます。Nodaro が、その乗り物と短い説明をプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3375,7 +3585,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/weapon",
       "summary": "Pick one of 85 weapons, from katanas and longbows to muskets, blasters and magic staffs, and Nodaro adds the weapon and a short description to your prompt.",
       "summaries": {
-        "en": "Pick one of 85 weapons, from katanas and longbows to muskets, blasters and magic staffs, and Nodaro adds the weapon and a short description to your prompt."
+        "en": "Pick one of 85 weapons, from katanas and longbows to muskets, blasters and magic staffs, and Nodaro adds the weapon and a short description to your prompt.",
+        "ja": "刀やロングボウから、マスケット、ブラスター、魔法の杖まで、85 種類の武器から 1 つを選びます。Nodaro が武器とその短い説明をプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3394,7 +3605,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/styling",
       "summary": "Style a person for AI images and video with 274 options in 17 settings, from makeup, hair and jewelry to outfits, shoes and fabric. Nodaro writes the prompt.",
       "summaries": {
-        "en": "Style a person for AI images and video with 274 options in 17 settings, from makeup, hair and jewelry to outfits, shoes and fabric. Nodaro writes the prompt."
+        "en": "Style a person for AI images and video with 274 options in 17 settings, from makeup, hair and jewelry to outfits, shoes and fabric. Nodaro writes the prompt.",
+        "ja": "メイク、ヘア、ジュエリーから、衣装、靴、生地まで、17 の設定と 274 のオプションで、AI 画像や動画の人物をスタイリングします。プロンプトは Nodaro が書きます。"
       },
       "sections": [
         "when-to-use",
@@ -3413,7 +3625,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/pose",
       "summary": "Pick one of 81 poses, from standing and seated postures to running, leaping and hand gestures, and Nodaro adds tested wording for the pose to your prompt.",
       "summaries": {
-        "en": "Pick one of 81 poses, from standing and seated postures to running, leaping and hand gestures, and Nodaro adds tested wording for the pose to your prompt."
+        "en": "Pick one of 81 poses, from standing and seated postures to running, leaping and hand gestures, and Nodaro adds tested wording for the pose to your prompt.",
+        "ja": "立ち姿や座り姿から、走る、跳ぶ、手のしぐさまで、81 種類のポーズから 1 つを選ぶと、Nodaro がそのポーズを表す検証済みの表現をプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3432,7 +3645,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/setting",
       "summary": "Pick one of 66 settings, from a coffee shop or a rooftop to a desert or an alien planet, and Nodaro adds a tested description of the place to your prompt.",
       "summaries": {
-        "en": "Pick one of 66 settings, from a coffee shop or a rooftop to a desert or an alien planet, and Nodaro adds a tested description of the place to your prompt."
+        "en": "Pick one of 66 settings, from a coffee shop or a rooftop to a desert or an alien planet, and Nodaro adds a tested description of the place to your prompt.",
+        "ja": "コーヒーショップや屋上から、砂漠や異星まで、66 種類の舞台設定から 1 つを選びます。Nodaro が、その場所の検証済みの説明をプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3451,7 +3665,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/era",
       "summary": "Pick one of 28 eras, from Ancient Egypt and Victorian to 1980s Neon and Cyberpunk Future, and Nodaro adds its fashion, places and film look to your prompt.",
       "summaries": {
-        "en": "Pick one of 28 eras, from Ancient Egypt and Victorian to 1980s Neon and Cyberpunk Future, and Nodaro adds its fashion, places and film look to your prompt."
+        "en": "Pick one of 28 eras, from Ancient Egypt and Victorian to 1980s Neon and Cyberpunk Future, and Nodaro adds its fashion, places and film look to your prompt.",
+        "ja": "「古代エジプト」「ヴィクトリアン」から「1980年代ネオン」「サイバーパンク未来」まで、28 の時代から 1 つを選びます。Nodaro が、その時代のファッション、場所、フィルムの質感をプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3470,7 +3685,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/furniture",
       "summary": "Pick one of 78 furniture pieces, from sofas and four-poster beds to chandeliers and bathtubs, and Nodaro adds the piece and a short description to your prompt.",
       "summaries": {
-        "en": "Pick one of 78 furniture pieces, from sofas and four-poster beds to chandeliers and bathtubs, and Nodaro adds the piece and a short description to your prompt."
+        "en": "Pick one of 78 furniture pieces, from sofas and four-poster beds to chandeliers and bathtubs, and Nodaro adds the piece and a short description to your prompt.",
+        "ja": "ソファ、4本柱ベッド、シャンデリア、バスタブなど、78 点の家具から 1 つを選びます。Nodaro が、その家具と短い説明をプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3489,7 +3705,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/held-prop",
       "summary": "Pick up to 2 of 60 props for a subject to hold, such as a smartphone, a coffee cup, a book or a bouquet, and Nodaro adds how the prop is held to your prompt.",
       "summaries": {
-        "en": "Pick up to 2 of 60 props for a subject to hold, such as a smartphone, a coffee cup, a book or a bouquet, and Nodaro adds how the prop is held to your prompt."
+        "en": "Pick up to 2 of 60 props for a subject to hold, such as a smartphone, a coffee cup, a book or a bouquet, and Nodaro adds how the prop is held to your prompt.",
+        "ja": "スマートフォン、コーヒーカップ、本、花束など、60 種類の小道具から最大 2 つを選び、被写体に持たせます。Nodaro が、小道具の持ち方をプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3508,7 +3725,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/material",
       "summary": "Pick up to 2 of 67 materials, from silk and leather to gold, marble and glass, and Nodaro adds how each surface looks and takes light to your prompt.",
       "summaries": {
-        "en": "Pick up to 2 of 67 materials, from silk and leather to gold, marble and glass, and Nodaro adds how each surface looks and takes light to your prompt."
+        "en": "Pick up to 2 of 67 materials, from silk and leather to gold, marble and glass, and Nodaro adds how each surface looks and takes light to your prompt.",
+        "ja": "シルクやレザーから、ゴールド、大理石、ガラスまで、67 種類の素材から最大 2 つを選ぶと、Nodaro が各表面の見え方と光の受け方をプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3527,7 +3745,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/backdrop",
       "summary": "Pick one of 40 studio backdrops, from white seamless paper and gradients to brick walls, velvet drapes and chroma green, and Nodaro adds it to your prompt.",
       "summaries": {
-        "en": "Pick one of 40 studio backdrops, from white seamless paper and gradients to brick walls, velvet drapes and chroma green, and Nodaro adds it to your prompt."
+        "en": "Pick one of 40 studio backdrops, from white seamless paper and gradients to brick walls, velvet drapes and chroma green, and Nodaro adds it to your prompt.",
+        "ja": "白いシームレス紙やグラデーションから、レンガの壁、ベルベットのドレープ、クロマグリーンまで、40 種類のスタジオ背景から 1 つを選ぶと、Nodaro がプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3546,7 +3765,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/loop-subject",
       "summary": "Pick one of 31 loop subjects, such as a neon tunnel, a starfield or falling snow, and build a seamless looping video for streams, screens and ambient visuals.",
       "summaries": {
-        "en": "Pick one of 31 loop subjects, such as a neon tunnel, a starfield or falling snow, and build a seamless looping video for streams, screens and ambient visuals."
+        "en": "Pick one of 31 loop subjects, such as a neon tunnel, a starfield or falling snow, and build a seamless looping video for streams, screens and ambient visuals.",
+        "ja": "ネオンのトンネル、星空、降る雪など、31 種類のループの被写体から 1 つを選び、配信、画面表示、環境映像向けに、シームレスにループする動画を作ります。"
       },
       "sections": [
         "when-to-use",
@@ -3565,7 +3785,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/framing",
       "summary": "Set the shot size, angle, coverage, composition and vantage of AI images and video from 66 options, and Nodaro writes the framing into your prompt.",
       "summaries": {
-        "en": "Set the shot size, angle, coverage, composition and vantage of AI images and video from 66 options, and Nodaro writes the framing into your prompt."
+        "en": "Set the shot size, angle, coverage, composition and vantage of AI images and video from 66 options, and Nodaro writes the framing into your prompt.",
+        "ja": "66 のオプションから、AI 画像や動画のショットサイズ、アングル、カバレッジ、構図、撮影方向を設定します。Nodaro が、そのフレーミングをプロンプトに書き込みます。"
       },
       "sections": [
         "when-to-use",
@@ -3584,7 +3805,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/lens",
       "summary": "Pick one of 18 lenses, from a 14mm ultra-wide and an 85mm portrait lens to fisheye, anamorphic and vintage primes, and Nodaro adds its look to your prompt.",
       "summaries": {
-        "en": "Pick one of 18 lenses, from a 14mm ultra-wide and an 85mm portrait lens to fisheye, anamorphic and vintage primes, and Nodaro adds its look to your prompt."
+        "en": "Pick one of 18 lenses, from a 14mm ultra-wide and an 85mm portrait lens to fisheye, anamorphic and vintage primes, and Nodaro adds its look to your prompt.",
+        "ja": "14mm の超広角や 85mm のポートレートレンズから、魚眼、アナモルフィック、ヴィンテージの単焦点まで、18 本のレンズから 1 本を選びます。Nodaro が、そのレンズの描写をプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3603,7 +3825,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/camera-format",
       "summary": "Pick one of 31 cameras and film stocks, from 35mm film and Arri Alexa to VHS, Polaroid and daguerreotype, and Nodaro adds that medium's look to your prompt.",
       "summaries": {
-        "en": "Pick one of 31 cameras and film stocks, from 35mm film and Arri Alexa to VHS, Polaroid and daguerreotype, and Nodaro adds that medium's look to your prompt."
+        "en": "Pick one of 31 cameras and film stocks, from 35mm film and Arri Alexa to VHS, Polaroid and daguerreotype, and Nodaro adds that medium's look to your prompt.",
+        "ja": "35mmフィルムや Arri Alexa から、VHS、Polaroid、ダゲレオタイプまで、31 種類のカメラとフィルムから 1 つを選ぶと、Nodaro がその撮影媒体のルックをプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3622,7 +3845,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/exposure-settings",
       "summary": "Set the aperture, shutter speed and ISO of an AI image or video from 20 options, for a soft background, frozen action, light trails or film grain.",
       "summaries": {
-        "en": "Set the aperture, shutter speed and ISO of an AI image or video from 20 options, for a soft background, frozen action, light trails or film grain."
+        "en": "Set the aperture, shutter speed and ISO of an AI image or video from 20 options, for a soft background, frozen action, light trails or film grain.",
+        "ja": "20 のオプションから、AI 画像や動画の絞り、シャッタースピード、ISO を設定します。柔らかくぼけた背景、止まった動き、光の軌跡、フィルムの粒子感を表現できます。"
       },
       "sections": [
         "when-to-use",
@@ -3641,7 +3865,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/lighting",
       "summary": "Set how an AI image or video is lit. Combine the time of day, lighting style, direction, lighting ratio and color temperature from 72 tested options.",
       "summaries": {
-        "en": "Set how an AI image or video is lit. Combine the time of day, lighting style, direction, lighting ratio and color temperature from 72 tested options."
+        "en": "Set how an AI image or video is lit. Combine the time of day, lighting style, direction, lighting ratio and color temperature from 72 tested options.",
+        "ja": "AI 画像や動画のライティングを設定します。時間帯、ライティングのスタイル、光の方向、ライティング比、色温度を、72 種類の検証済みオプションから組み合わせます。"
       },
       "sections": [
         "when-to-use",
@@ -3660,7 +3885,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/color-look",
       "summary": "Pick one of 41 color grades, such as Teal & Orange, Kodak Portra or Bleach Bypass, and Nodaro adds that grade to the prompt of your image and video nodes.",
       "summaries": {
-        "en": "Pick one of 41 color grades, such as Teal & Orange, Kodak Portra or Bleach Bypass, and Nodaro adds that grade to the prompt of your image and video nodes."
+        "en": "Pick one of 41 color grades, such as Teal & Orange, Kodak Portra or Bleach Bypass, and Nodaro adds that grade to the prompt of your image and video nodes.",
+        "ja": "ティール＆オレンジ、Kodak Portra、ブリーチバイパスなど、41 種類のカラーグレードから 1 つを選ぶと、Nodaro がそのグレードを画像ノードと動画ノードのプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3679,7 +3905,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/mood",
       "summary": "Pick up to two of 51 moods, such as calm, tense or joyful, and Nodaro adds tested wording for the emotion to the prompt of the image or video nodes you connect.",
       "summaries": {
-        "en": "Pick up to two of 51 moods, such as calm, tense or joyful, and Nodaro adds tested wording for the emotion to the prompt of the image or video nodes you connect."
+        "en": "Pick up to two of 51 moods, such as calm, tense or joyful, and Nodaro adds tested wording for the emotion to the prompt of the image or video nodes you connect.",
+        "ja": "落ち着いた、緊張した、喜びにあふれたなど 51 種類のムードから最大 2 つを選ぶと、Nodaro がその感情を表す検証済みの表現を、接続した画像ノードや動画ノードのプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3698,7 +3925,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/atmosphere",
       "summary": "Add weather and particles to an AI image or video. Pick up to 2 of 40 conditions, such as Fog, Light Rain, Snow, Smoke or God Rays, from one picker.",
       "summaries": {
-        "en": "Add weather and particles to an AI image or video. Pick up to 2 of 40 conditions, such as Fog, Light Rain, Snow, Smoke or God Rays, from one picker."
+        "en": "Add weather and particles to an AI image or video. Pick up to 2 of 40 conditions, such as Fog, Light Rain, Snow, Smoke or God Rays, from one picker.",
+        "ja": "AI の画像や動画に、天候や空気中の粒子を加えます。霧、小雨、雪、煙、ゴッドレイなど、40 種類の状態から最大 2 つを 1 つのピッカーで選べます。"
       },
       "sections": [
         "when-to-use",
@@ -3717,7 +3945,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/style",
       "summary": "Set the visual style of an AI image or video, such as Cinematic, Anime, Oil Painting or Pixel Art. Pick one of 49 styles and Nodaro adds it to the prompt.",
       "summaries": {
-        "en": "Set the visual style of an AI image or video, such as Cinematic, Anime, Oil Painting or Pixel Art. Pick one of 49 styles and Nodaro adds it to the prompt."
+        "en": "Set the visual style of an AI image or video, such as Cinematic, Anime, Oil Painting or Pixel Art. Pick one of 49 styles and Nodaro adds it to the prompt.",
+        "ja": "シネマティック、アニメ、油絵、ピクセルアートなど、AI 画像や動画のビジュアルスタイルを設定します。49 種類から 1 つを選ぶと、Nodaro がそのスタイルをプロンプトに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3736,7 +3965,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/photo-genre",
       "summary": "Make an AI image read as a specific kind of photo, such as a fashion editorial, a street photo, a mirror selfie or a movie poster. Pick one of 46 genres.",
       "summaries": {
-        "en": "Make an AI image read as a specific kind of photo, such as a fashion editorial, a street photo, a mirror selfie or a movie poster. Pick one of 46 genres."
+        "en": "Make an AI image read as a specific kind of photo, such as a fashion editorial, a street photo, a mirror selfie or a movie poster. Pick one of 46 genres.",
+        "ja": "ファッションエディトリアル、ストリート写真、ミラー自撮り、映画ポスターなど、AI 画像を特定の種類の写真のように見せます。46 種類のジャンルから 1 つを選びます。"
       },
       "sections": [
         "when-to-use",
@@ -3755,7 +3985,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/photographer",
       "summary": "Ground an AI image or video in the signature of a photographer, cinematographer or illustrator. Pick up to 2 of 63 creators, such as Roger Deakins.",
       "summaries": {
-        "en": "Ground an AI image or video in the signature of a photographer, cinematographer or illustrator. Pick up to 2 of 63 creators, such as Roger Deakins."
+        "en": "Ground an AI image or video in the signature of a photographer, cinematographer or illustrator. Pick up to 2 of 63 creators, such as Roger Deakins.",
+        "ja": "写真家、撮影監督、イラストレーターの作風をもとに、AI 画像や動画を作ります。Roger Deakins など 63 人のクリエイターから、最大 2 人を選べます。"
       },
       "sections": [
         "when-to-use",
@@ -3774,7 +4005,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/render-quality",
       "summary": "Push an AI image toward a CG render look, such as Ray Tracing, Unreal Engine 5 or Octane Render, or add a quality term. Pick one of 24 render presets.",
       "summaries": {
-        "en": "Push an AI image toward a CG render look, such as Ray Tracing, Unreal Engine 5 or Octane Render, or add a quality term. Pick one of 24 render presets."
+        "en": "Push an AI image toward a CG render look, such as Ray Tracing, Unreal Engine 5 or Octane Render, or add a quality term. Pick one of 24 render presets.",
+        "ja": "AI 画像を、レイトレーシング、Unreal Engine 5、Octane Render などの CG レンダリングの見た目に近づけたり、品質を表す用語を加えたりします。24 種類のレンダリングプリセットから 1 つを選びます。"
       },
       "sections": [
         "when-to-use",
@@ -3793,7 +4025,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/aesthetic",
       "summary": "Tune an AI image or video to an online aesthetic, such as Y2K, Cottagecore, Dark Academia or Balletcore. Pick up to 2 of 42 named aesthetics.",
       "summaries": {
-        "en": "Tune an AI image or video to an online aesthetic, such as Y2K, Cottagecore, Dark Academia or Balletcore. Pick up to 2 of 42 named aesthetics."
+        "en": "Tune an AI image or video to an online aesthetic, such as Y2K, Cottagecore, Dark Academia or Balletcore. Pick up to 2 of 42 named aesthetics.",
+        "ja": "Y2K、コテージコア、ダークアカデミア、バレエコアなど、ネットで話題のテイストに AI の画像や動画を合わせます。名前の付いた 42 種類のテイストから、最大 2 つを選べます。"
       },
       "sections": [
         "when-to-use",
@@ -3812,7 +4045,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/camera-motion",
       "summary": "Tell an AI video model how the camera moves. Pick one of 66 camera motions, such as Dolly In, Orbit Left or Crane Up, and Nodaro adds tested wording.",
       "summaries": {
-        "en": "Tell an AI video model how the camera moves. Pick one of 66 camera motions, such as Dolly In, Orbit Left or Crane Up, and Nodaro adds tested wording."
+        "en": "Tell an AI video model how the camera moves. Pick one of 66 camera motions, such as Dolly In, Orbit Left or Crane Up, and Nodaro adds tested wording.",
+        "ja": "AI 動画モデルに、カメラの動き方を指示します。ドリー・イン、オービット・レフト、クレーン・アップなど 66 種類のカメラモーションから 1 つを選ぶと、Nodaro が検証済みの表現を追加します。"
       },
       "sections": [
         "when-to-use",
@@ -3831,7 +4065,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/temporal",
       "summary": "Control time in an AI video clip. Combine speed, freeze, direction and shutter, such as Slow Motion, Bullet Time or Reverse, from 18 tested options.",
       "summaries": {
-        "en": "Control time in an AI video clip. Combine speed, freeze, direction and shutter, such as Slow Motion, Bullet Time or Reverse, from 18 tested options."
+        "en": "Control time in an AI video clip. Combine speed, freeze, direction and shutter, such as Slow Motion, Bullet Time or Reverse, from 18 tested options.",
+        "ja": "AI 動画のクリップで、時間の流れを操ります。スローモーション、バレットタイム、リバース／巻き戻しなど、検証済みの 18 のオプションで、速度、フリーズ、方向、シャッターを組み合わせます。"
       },
       "sections": [
         "when-to-use",
@@ -3850,7 +4085,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/character-motion",
       "summary": "Direct what a character does in an AI video clip. Chain up to 3 of more than 1,000 moves, such as walk in, wave or hug, and name who performs them.",
       "summaries": {
-        "en": "Direct what a character does in an AI video clip. Chain up to 3 of more than 1,000 moves, such as walk in, wave or hug, and name who performs them."
+        "en": "Direct what a character does in an AI video clip. Chain up to 3 of more than 1,000 moves, such as walk in, wave or hug, and name who performs them.",
+        "ja": "AI 動画のクリップで、キャラクターの動作を演出します。歩いて登場する、手を振る、ハグするなど、1,000 種類を超える動きから最大 3 つをつなげ、誰が演じるかを指定できます。"
       },
       "sections": [
         "when-to-use",
@@ -3869,7 +4105,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/action-fx",
       "summary": "Add an event to an AI scene, such as an explosion, a lightning strike, an earthquake or a magic portal. Pick up to 2 of 72 tested action effects.",
       "summaries": {
-        "en": "Add an event to an AI scene, such as an explosion, a lightning strike, an earthquake or a magic portal. Pick up to 2 of 72 tested action effects."
+        "en": "Add an event to an AI scene, such as an explosion, a lightning strike, an earthquake or a magic portal. Pick up to 2 of 72 tested action effects.",
+        "ja": "AI のシーンに、爆発、落雷、地震、魔法のポータルなどの出来事を加えます。検証済みの 72 種類のアクションエフェクトから、最大 2 つを選べます。"
       },
       "sections": [
         "when-to-use",
@@ -3888,7 +4125,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/character-fx",
       "summary": "Transform a character or give it a power in an AI video: werewolf, fire breathing, wings, glowing eyes and more. Pick up to 2 of 55 character effects.",
       "summaries": {
-        "en": "Transform a character or give it a power in an AI video: werewolf, fire breathing, wings, glowing eyes and more. Pick up to 2 of 55 character effects."
+        "en": "Transform a character or give it a power in an AI video: werewolf, fire breathing, wings, glowing eyes and more. Pick up to 2 of 55 character effects.",
+        "ja": "AI 動画のキャラクターを変身させたり、能力を与えたりします。狼男、炎の息吹、翼、光る目など、55 種類のキャラクターエフェクトから最大 2 つを選べます。"
       },
       "sections": [
         "when-to-use",
@@ -3907,7 +4145,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/composition-effects",
       "summary": "Give an AI image or video a bold frame effect, such as Bursting Through Frame, Pixel Disintegration or Double Exposure. Pick one of 18 composition effects.",
       "summaries": {
-        "en": "Give an AI image or video a bold frame effect, such as Bursting Through Frame, Pixel Disintegration or Double Exposure. Pick one of 18 composition effects."
+        "en": "Give an AI image or video a bold frame effect, such as Bursting Through Frame, Pixel Disintegration or Double Exposure. Pick one of 18 composition effects.",
+        "ja": "AI 画像や動画に、「フレームを突き破る」「ピクセル崩壊」「二重露光」などの大胆なフレームのエフェクトを加えます。18 種類の構図エフェクトから 1 つを選べます。"
       },
       "sections": [
         "when-to-use",
@@ -3926,7 +4165,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/post-process-effects",
       "summary": "Add finishing effects to an AI image or video, such as Fine Film Grain, Soft Vignette, Halation Glow or Light Leak. Pick up to 2 of 18 post-process effects.",
       "summaries": {
-        "en": "Add finishing effects to an AI image or video, such as Fine Film Grain, Soft Vignette, Halation Glow or Light Leak. Pick up to 2 of 18 post-process effects."
+        "en": "Add finishing effects to an AI image or video, such as Fine Film Grain, Soft Vignette, Halation Glow or Light Leak. Pick up to 2 of 18 post-process effects.",
+        "ja": "細かいフィルム粒子、ソフト・ヴィネット、ハレーション・グロー、ライトリークなどの仕上げのエフェクトを、AI 画像や動画に加えます。18 種類のポストプロセスエフェクトから最大 2 つを選べます。"
       },
       "sections": [
         "when-to-use",
@@ -3945,7 +4185,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/transition",
       "summary": "Make an AI video model perform a transition inside one clip, such as a Whip Pan, a Match Cut or a Liquid Morph. Choose from more than 80 transitions.",
       "summaries": {
-        "en": "Make an AI video model perform a transition inside one clip, such as a Whip Pan, a Match Cut or a Liquid Morph. Choose from more than 80 transitions."
+        "en": "Make an AI video model perform a transition inside one clip, such as a Whip Pan, a Match Cut or a Liquid Morph. Choose from more than 80 transitions.",
+        "ja": "ホイップパン、マッチカット、液体モーフなどのトランジションを、AI 動画モデルに 1 つのクリップの中で実行させます。80 種類以上のトランジションから選べます。"
       },
       "sections": [
         "when-to-use",
@@ -3964,7 +4205,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/music-genre",
       "summary": "Set the genre of AI music: up to 3 of 29 genres for a fusion, or one genre with a subgenre, plus an era. Works with Suno, Generate Music and Text to Audio.",
       "summaries": {
-        "en": "Set the genre of AI music: up to 3 of 29 genres for a fusion, or one genre with a subgenre, plus an era. Works with Suno, Generate Music and Text to Audio."
+        "en": "Set the genre of AI music: up to 3 of 29 genres for a fusion, or one genre with a subgenre, plus an era. Works with Suno, Generate Music and Text to Audio.",
+        "ja": "AI 音楽のジャンルを設定します。29 種類から最大 3 つを選んでフュージョンにするか、1 つのジャンルにサブジャンルを加え、さらに年代を指定します。Suno、音楽生成、テキストからオーディオで使えます。"
       },
       "sections": [
         "when-to-use",
@@ -3983,7 +4225,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/music-mood",
       "summary": "Describe how AI music should feel: one energy level, up to 3 emotions and up to 3 vibes, such as Driving, Triumphant and Cinematic. Works with Suno and more.",
       "summaries": {
-        "en": "Describe how AI music should feel: one energy level, up to 3 emotions and up to 3 vibes, such as Driving, Triumphant and Cinematic. Works with Suno and more."
+        "en": "Describe how AI music should feel: one energy level, up to 3 emotions and up to 3 vibes, such as Driving, Triumphant and Cinematic. Works with Suno and more.",
+        "ja": "AI 音楽の印象を指定します。エネルギーを 1 つ、感情と雰囲気をそれぞれ最大 3 つまで、疾走感、勝ち誇る、シネマティックのように選びます。Suno などで使えます。"
       },
       "sections": [
         "when-to-use",
@@ -4002,7 +4245,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/instrumentation",
       "summary": "Choose the sound of AI music: up to 5 of 112 instruments, a production style, the vocals and a singing style. Works with Suno, Generate Music and Text to Audio.",
       "summaries": {
-        "en": "Choose the sound of AI music: up to 5 of 112 instruments, a production style, the vocals and a singing style. Works with Suno, Generate Music and Text to Audio."
+        "en": "Choose the sound of AI music: up to 5 of 112 instruments, a production style, the vocals and a singing style. Works with Suno, Generate Music and Text to Audio.",
+        "ja": "AI 音楽のサウンドを決めます。112 種類の楽器から最大 5 つ、プロダクションのスタイル、ボーカル、歌い方を選べます。Suno、音楽生成、テキストからオーディオで使えます。"
       },
       "sections": [
         "when-to-use",
@@ -4021,7 +4265,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/voice-character",
       "summary": "Describe who a designed voice is: age, gender, up to 3 languages, one of 45 accents and a timbre. Nodaro adds it to the voice description of Voice Design.",
       "summaries": {
-        "en": "Describe who a designed voice is: age, gender, up to 3 languages, one of 45 accents and a timbre. Nodaro adds it to the voice description of Voice Design."
+        "en": "Describe who a designed voice is: age, gender, up to 3 languages, one of 45 accents and a timbre. Nodaro adds it to the voice description of Voice Design.",
+        "ja": "デザインするボイスがどんな人物の声かを、年齢、性別、最大 3 つの言語、45 種類から選ぶアクセント、音色で説明します。Nodaro が、それをボイスデザインのボイスの説明に追加します。"
       },
       "sections": [
         "when-to-use",
@@ -4040,7 +4285,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/voice-delivery",
       "summary": "Describe how a designed voice speaks: its pace, its emotion and a voice-acting style, such as Documentary Narrator. Nodaro adds it to Voice Design.",
       "summaries": {
-        "en": "Describe how a designed voice speaks: its pace, its emotion and a voice-acting style, such as Documentary Narrator. Nodaro adds it to Voice Design."
+        "en": "Describe how a designed voice speaks: its pace, its emotion and a voice-acting style, such as Documentary Narrator. Nodaro adds it to Voice Design.",
+        "ja": "デザインするボイスの話し方を、ペース、感情、そして「ドキュメンタリーナレーター」などの声の演技スタイルで説明します。Nodaro が、それをボイスデザインに追加します。"
       },
       "sections": [
         "when-to-use",
@@ -4059,7 +4305,8 @@
       "page": "https://nodaro.ai/docs/nodes/creative-controls/suno-voice",
       "summary": "Create a custom voice persona from a short recording of your own voice, then use it as the singer on Suno Create Music, Suno Cover and Suno Extend.",
       "summaries": {
-        "en": "Create a custom voice persona from a short recording of your own voice, then use it as the singer on Suno Create Music, Suno Cover and Suno Extend."
+        "en": "Create a custom voice persona from a short recording of your own voice, then use it as the singer on Suno Create Music, Suno Cover and Suno Extend.",
+        "ja": "自分の声の短い録音から、オリジナルのボイスペルソナを作成します。作ったボイスは、Suno 生成、Suno カバー、Suno 延長の歌い手として使えます。"
       },
       "sections": [
         "when-to-use",

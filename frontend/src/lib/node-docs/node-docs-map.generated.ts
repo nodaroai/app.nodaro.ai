@@ -2,7 +2,7 @@
 import type { NodeDocsSection } from "./node-docs"
 
 /** The date the docs site produced the snapshot. */
-export const NODE_DOCS_SNAPSHOT_DATE = "2026-09-29"
+export const NODE_DOCS_SNAPSHOT_DATE = "2026-10-03"
 
 /** The sections each node's page has, in page order. */
 export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSection[]>> = {
@@ -29,6 +29,7 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "slideshow": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "faq"],
   "generative-pipeline": ["when-to-use", "quick-start", "settings", "credits", "tips", "api", "faq"],
   "scene": ["when-to-use", "outputs", "tips", "faq"],
+  "content-ideas": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
   "generate-script": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "troubleshooting", "faq"],
   "ai-avatar": ["when-to-use", "quick-start", "settings", "credits", "tips", "faq"],
   "cinematic-avatar": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "faq"],
@@ -74,6 +75,7 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "gif-to-video": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "troubleshooting", "faq"],
   "video-analysis": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "api", "faq"],
   "video-audit": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "limits", "tips", "faq"],
+  "content-recipe": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
   "upload-audio": ["when-to-use", "quick-start", "outputs", "settings", "tips", "faq"],
   "reference-audio": ["when-to-use", "quick-start", "outputs", "settings", "tips", "troubleshooting", "faq"],
   "text-to-speech": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "troubleshooting", "api", "faq"],

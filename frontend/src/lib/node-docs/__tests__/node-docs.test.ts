@@ -38,8 +38,6 @@ const snapshot: Snapshot = JSON.parse(readFileSync(join(__dirname, "..", "node-d
 const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
   "meta-ads-scrape": "hidden from users in production (availability settings); the page is written and held until release",
   "instagram-scrape": "hidden from users in production (availability settings); the page is written and held until release",
-  "content-recipe": "new node (steal the format); the in-repo page is docs/nodes/ai-text/content-recipe.md and the docs-site page follows its release",
-  "content-ideas": "new node (steal the format); the in-repo page is docs/nodes/ai-text/content-ideas.md and the docs-site page follows its release",
   "camera-switch": "new node (podcast multicam); the in-repo page is docs/nodes/processing-video/camera-switch.md and the docs-site page follows its release",
 }
 
