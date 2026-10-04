@@ -189,7 +189,9 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "assemble-narrated-video": { ids: familyIds("assemble-narrated-video") },
   "after-effects": { ids: familyIds("after-effects") },
   "motion-graphics": { ids: familyIds("motion-graphics") },
-  "video-composer": { ids: familyIds("video-composer") },
+  // Billed on the scene-graph-ai rows (routes/scene-graph-ai.ts) — the band
+  // reads those, so an admin repricing reaches the quote too.
+  "video-composer": { ids: familyIds("scene-graph-ai") },
   "lottie-overlay": { ids: familyIds("lottie-overlay") },
   "3d-title": { ids: familyIds("3d-title") },
   "render-video": {
@@ -595,11 +597,14 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         // The timed word transcript (json) — required. Wire a Transcribe node's
         // json output, or supply an inline Transcript object.
         { key: "transcript", type: "object", required: true },
+        // The recordings the plan cuts (1-6). Each row's offsetMs places it on
+        // the timeline. A raw `offsets` value is refused here (422
+        // offsets_not_applied): on the canvas an Audio Sync node fills each
+        // source's offsetMs before the plan runs, and a direct call sets them
+        // on the rows itself.
+        { key: "sources", type: "array", required: true },
         // Optional silence ranges (json) — wire a Silence Detect node's output.
         { key: "silence", type: "object" },
-        // Optional Audio Sync result (json) — its measured offsets are written
-        // onto the sources' offsetMs before the plan runs (a hand-set offset wins).
-        { key: "offsets", type: "object" },
         // Free-text editing instructions (affix-capable).
         { key: "instructions", type: "string" },
         { key: "styleGuide", type: "string" },

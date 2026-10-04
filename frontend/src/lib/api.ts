@@ -2602,7 +2602,8 @@ export async function saveLocation(data: {
  * Approve a candidate-generation job as the location's permanent
  * source_image_url. Also fires the Claude Sonnet vision caption inline to
  * populate `canonical_description`. Returns 200 with `canonicalDescription:
- * ""` on caption sub-failure (frontend retries via `recaptionLocation`).
+ * ""` on caption sub-failure. The studio shows the caption read-only and
+ * offers no retry; `recaptionLocation` writes it again (no studio caller yet).
  *
  * `expectedUpdatedAt` is the studio's optimistic-concurrency token. When
  * passed, the backend gates the UPDATE on the row's current `updated_at`

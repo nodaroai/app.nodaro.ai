@@ -49,13 +49,13 @@ The interactive **Mask Painter** UI (Paint Mask / Edit Mask buttons, brush/erase
 
 ## Grok Imagine 2 Task-Chained Editing
 
-The three `grok-*` operations don't take an image URL. They reference a **prior Grok generation on the provider side** via `taskId` — the task id is returned in the source generation job's output as `kieTaskId` (fetch the job via the API/SDK/MCP `get_job` and read `output_data.kieTaskId`). Only Grok generations can be chained; images from other providers or uploads cannot.
+The three `grok-*` operations don't take an image URL. They reference a **prior Grok generation on the provider side** via `taskId` — the task id is returned in the source generation job's output as `providerTaskId` (fetch the job via the API/SDK/MCP `get_job` and read `output_data.providerTaskId`; older jobs carry the same value as `kieTaskId`). Only Grok generations can be chained; images from other providers or uploads cannot.
 
 The full region-editing flow with `grok-2`:
 
-1. **Generate** an image with the `grok-2` provider (Generate Image node or `POST /v1/generate-image`). Note the completed job's `kieTaskId`.
-2. **Segment (optional, free)** — `POST /v1/edit-image` with `{ "provider": "grok-2-segment", "taskId": "<kieTaskId>" }`. `output_data.segments` lists `{ index, name }` pairs (e.g. `0 = sky`, `1 = person`), order-aligned with the job's output images — which are ~128×128 alpha-masked **cutouts** of each region (a bounding-box crop of the region's own pixels), *not* full-frame binary masks. Additionally pass `imageUrl` (the source generation's image) and each segment also gains a normalized `bbox: { x, y, w, h }` — its recovered position in the source image (Grok returns no geometry; the backend recovers it by template-matching the cutout against the source; absent when matching wasn't confident).
-3. **Edit** — `POST /v1/edit-image` with `{ "provider": "grok-2-edit", "taskId": "<kieTaskId>", "prompt": "make the sky stormy", "maskIndexes": [0] }`. Omit `maskIndexes` to let the prompt apply to the whole image.
+1. **Generate** an image with the `grok-2` provider (Generate Image node or `POST /v1/generate-image`). Note the completed job's `providerTaskId`.
+2. **Segment (optional, free)** — `POST /v1/edit-image` with `{ "provider": "grok-2-segment", "taskId": "<providerTaskId>" }`. `output_data.segments` lists `{ index, name }` pairs (e.g. `0 = sky`, `1 = person`), order-aligned with the job's output images — which are ~128×128 alpha-masked **cutouts** of each region (a bounding-box crop of the region's own pixels), *not* full-frame binary masks. Additionally pass `imageUrl` (the source generation's image) and each segment also gains a normalized `bbox: { x, y, w, h }` — its recovered position in the source image (Grok returns no geometry; the backend recovers it by template-matching the cutout against the source; absent when matching wasn't confident).
+3. **Edit** — `POST /v1/edit-image` with `{ "provider": "grok-2-edit", "taskId": "<providerTaskId>", "prompt": "make the sky stormy", "maskIndexes": [0] }`. Omit `maskIndexes` to let the prompt apply to the whole image.
 
 `maskIndexes` entries are the segment map's `index` values passed through **verbatim** (0-based in practice, whatever the segment map returned). A `grok-2-edit` run costs the same as a `grok-2` generation; the segment map costs nothing. Note the edit is region-*driven* rather than pixel-locked: Grok may adjust global lighting to keep the scene consistent (e.g. a night-sky edit also relights the water).
 

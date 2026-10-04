@@ -51,6 +51,7 @@ function verifyPkce(codeVerifier: string, storedChallenge: string): boolean {
 openApiRegistry.registerPath({
   method: "post", path: "/v1/oauth/token",
   description: "Exchange a one-shot authorization code (10-minute TTL) for an access token. No bearer auth — authenticates via client_id + client_secret.",
+  security: [],
   request: { body: { content: { "application/json": { schema: tokenBody } } } },
   responses: {
     200: { description: "Access token", content: { "application/json": { schema: z.object({
@@ -62,6 +63,7 @@ openApiRegistry.registerPath({
 openApiRegistry.registerPath({
   method: "get", path: "/v1/oauth/app-info",
   description: "Public app metadata for consent screens.",
+  security: [],
   request: { query: z.object({ client_id: z.string(), redirect_uri: z.string().optional() }) },
   responses: { 200: { description: "App info" }, 404: { description: "Unknown client_id" } },
 })

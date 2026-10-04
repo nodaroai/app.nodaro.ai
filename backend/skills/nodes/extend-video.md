@@ -1,7 +1,7 @@
 ---
 node_type: extend-video
-generated_at: 2026-09-27T12:51:24.710Z
-generated_from: c607aa02c
+generated_at: 2026-10-04T10:20:16.471Z
+generated_from: f94a0b444
 ---
 
 # Extend Video
@@ -65,6 +65,7 @@ generated_from: c607aa02c
 
 **Input parameters:**
 - `prompt`
+- `task_id`
 - `kie_task_id`
 - `video_url`
 - `video_asset_id`

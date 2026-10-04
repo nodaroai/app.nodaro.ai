@@ -28,12 +28,13 @@ import { assembleVideoConnectedReferences } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
-// KIE providers (veo-extend, runway-extend) need a kieTaskId from the upstream
-// generation; LTX 2.3 Pro is a Replicate model that takes a raw videoUrl. Both
-// fields are optional at the schema level and conditionally required inside
-// the handler so each provider's required input set is enforced precisely.
+// veo-extend and runway-extend continue an upstream generation and need its
+// provider task id; LTX 2.3 Pro takes a raw videoUrl. Both fields are optional
+// at the schema level and conditionally required inside the handler so each
+// provider's required input set is enforced precisely.
 export const extendVideoBody = z.object({
-  kieTaskId: z.string().min(1).optional(), // Required for veo-extend / runway-extend
+  taskId: z.string().min(1).optional(),    // Required for veo-extend / runway-extend (the job output's providerTaskId)
+  kieTaskId: z.string().min(1).optional(), // Deprecated alias of taskId, still accepted
   videoUrl: safeUrlSchema.optional(),       // Required for ltx-2.3-pro
   prompt: z.string().min(1).max(PROMPT_HARD_CEILING).optional(),    // Required for veo-extend / runway-extend; optional for LTX
   negativePrompt: z.string().max(PROMPT_HARD_CEILING).optional(), // Always optional — injected into prompt as "Avoid: …" for non-native providers
@@ -145,7 +146,8 @@ export async function extendVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { kieTaskId, videoUrl, prompt, negativePrompt, provider, model, seeds, quality, extendMode, duration } = parsed.data
+    const { videoUrl, prompt, negativePrompt, provider, model, seeds, quality, extendMode, duration } = parsed.data
+    const kieTaskId = parsed.data.taskId ?? parsed.data.kieTaskId
     const userId = req.userId
 
     if (!userId) {
@@ -192,7 +194,7 @@ export async function extendVideoRoutes(app: FastifyInstance) {
       // upstream + a prompt.
       if (!kieTaskId) {
         return reply.status(400).send({
-          error: { code: "validation_error", message: "kieTaskId is required for KIE-based extend providers" },
+          error: { code: "validation_error", message: `taskId (the source generation's providerTaskId) is required for ${provider}` },
         })
       }
       if (!prompt) {

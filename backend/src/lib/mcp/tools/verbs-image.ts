@@ -663,10 +663,9 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         "  • `topaz-image-upscale` — Topaz AI upscale (1×/2×/4×).\n" +
         "  • `recraft-remove-bg` — remove background, returns PNG with transparency.\n" +
         "  • `nano-banana-edit` — AI-guided edit with a prompt (inpainting/outpainting).\n" +
-        "  • `grok-upscale` — Grok creative upscale (pass kie_task_id from prior Grok generation instead of image_url).\n" +
-        "  • `grok-2-segment` — FREE named segment-mask map of a prior grok-2 generation (kie_task_id required). Result masks land as the job's images; segment {index,name} pairs land in the job's output `segments` (read via get_job).\n" +
-        "  • `grok-2-edit` — prompt edit of a prior grok-2 generation (kie_task_id + prompt required); optional mask_indexes (from grok-2-segment) restrict the edit to those named regions.\n\n" +
-        "The kie_task_id for the grok ops is in the source generation job's output (`kieTaskId` via get_job).",
+        "  • `grok-upscale` — Grok creative upscale (pass task_id from prior Grok generation instead of image_url).\n" +
+        "  • `grok-2-segment` — FREE named segment-mask map of a prior grok-2 generation (task_id required). Result masks land as the job's images; segment {index,name} pairs land in the job's output `segments` (read via get_job).\n" +
+        "  • `grok-2-edit` — prompt edit of a prior grok-2 generation (task_id + prompt required); optional mask_indexes (from grok-2-segment) restrict the edit to those named regions.",
       inputSchema: {
         image_url: z.string().url().optional().describe("Source image URL (all providers except the task-chained grok ops)."),
         image_asset_id: z.string().optional().describe("Nodaro image job id."),
@@ -674,7 +673,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         upscale_factor: z.enum(["1", "2", "4"]).optional().describe("Upscale factor (for topaz-image-upscale). Default 2."),
         target_resolution: z.enum(["2K", "4K", "8K"]).optional().describe("Deprecated for topaz-image-upscale — maps to an upscale factor (2K→2, 4K→4, 8K→4). Prefer upscale_factor."),
         prompt: z.string().max(2000).optional().describe("Edit prompt (required for nano-banana-edit and grok-2-edit)."),
-        kie_task_id: z.string().optional().describe("KIE task id from a prior Grok generation (required for grok-upscale / grok-2-edit / grok-2-segment instead of image_url; read it from the generation job's output kieTaskId)."),
+        task_id: z.string().optional().describe("Task id of a prior Grok generation, its output providerTaskId (grok-upscale / grok-2-edit / grok-2-segment)."),
+        kie_task_id: z.string().optional().describe("Use task_id."),
         mask_indexes: z.array(z.number().int().min(0)).min(1).max(64).optional().describe("grok-2-edit only: segment indexes from a prior grok-2-segment run's output `segments` (pass the returned `index` values verbatim — 0-based) — restricts the edit to those regions."),
         negative_prompt: z.string().max(5000).optional(),
         style: z.string().max(500).optional(),
@@ -695,9 +695,10 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
     async (args) => {
       const provider = args.model ?? "recraft-upscale"
       const isTaskChained = TASK_CHAINED_EDIT_PROVIDERS.has(provider)
+      const taskId = args.task_id ?? args.kie_task_id
 
-      if (isTaskChained && !args.kie_task_id) {
-        return { content: [{ type: "text" as const, text: `${provider} requires kie_task_id from the original Grok image generation (the generation job's output kieTaskId).` }], isError: true }
+      if (isTaskChained && !taskId) {
+        return { content: [{ type: "text" as const, text: `${provider} requires task_id from the original Grok image generation (the generation job's output providerTaskId).` }], isError: true }
       }
       if ((provider === "nano-banana-edit" || provider === "grok-2-edit") && !args.prompt) {
         return { content: [{ type: "text" as const, text: `${provider} requires a prompt.` }], isError: true }
@@ -718,7 +719,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         // accepts the source image URL so the worker can recover per-region
         // bboxes (template matching) into output_data.segments[].bbox.
         ...(imageUrl && (!isTaskChained || provider === "grok-2-segment") ? { imageUrl } : {}),
-        ...(args.kie_task_id ? { taskId: args.kie_task_id } : {}),
+        ...(taskId ? { taskId } : {}),
         ...(args.mask_indexes?.length ? { maskIndexes: args.mask_indexes } : {}),
         ...(args.upscale_factor ? { upscaleFactor: args.upscale_factor } : {}),
         ...(args.target_resolution ? { targetResolution: args.target_resolution } : {}),

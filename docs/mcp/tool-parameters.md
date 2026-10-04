@@ -653,7 +653,8 @@ Needs `workflows:execute`.
 | `upscale_factor` | string |  | Upscale factor (for topaz-image-upscale). Default 2. One of `1`, `2`, `4`. |
 | `target_resolution` | string |  | Deprecated for topaz-image-upscale — maps to an upscale factor (2K→2, 4K→4, 8K→4). Prefer upscale_factor. One of `2K`, `4K`, `8K`. |
 | `prompt` | string |  | Edit prompt (required for nano-banana-edit and grok-2-edit). At most 2000 characters. |
-| `kie_task_id` | string |  | KIE task id from a prior Grok generation (required for grok-upscale / grok-2-edit / grok-2-segment instead of image_url; read it from the generation job's output kieTaskId). |
+| `task_id` | string |  | Task id of a prior Grok generation, its output providerTaskId (grok-upscale / grok-2-edit / grok-2-segment). |
+| `kie_task_id` | string |  | Use task_id. |
 | `mask_indexes` | integer[] |  | grok-2-edit only: segment indexes from a prior grok-2-segment run's output `segments` (pass the returned `index` values verbatim — 0-based) — restricts the edit to those regions. From 1 to 64 items. |
 | `negative_prompt` | string |  | At most 5000 characters. |
 | `style` | string |  | At most 500 characters. |
@@ -706,7 +707,8 @@ Needs `workflows:execute`.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `prompt` | string | yes | From 1 to 8000 characters. |
-| `kie_task_id` | string |  | KIE task id from prior video generation (veo-extend / runway-extend only). At least 1 character. |
+| `task_id` | string |  | Task id of the prior generation, its output providerTaskId (veo-extend / runway-extend only). At least 1 character. |
+| `kie_task_id` | string |  | Use task_id. At least 1 character. |
 | `video_url` | string (URL) |  | Source video URL (seedance-2-extend only) |
 | `video_asset_id` | string |  | Nodaro job/upload asset id whose output is a video (seedance-2-extend only) |
 | `model` | string | yes | One of `veo-extend`, `runway-extend`, `seedance-2-extend`. |
@@ -2784,7 +2786,8 @@ Needs `workflows:execute`.
 | `video_asset_id` | string |  | Nodaro video job id (required for topaz). |
 | `model` | string |  | Upscale model. Default topaz. One of `topaz`, `veo-1080p`, `veo-4k`. |
 | `upscale_factor` | string |  | Upscale factor for topaz (1×/2×/4×). Default 2. One of `1`, `2`, `4`. |
-| `kie_task_id` | string |  | KIE task id from the original VEO generation — required for veo-1080p / veo-4k. |
+| `task_id` | string |  | Task id of the original VEO generation, its output providerTaskId (veo-1080p / veo-4k). |
+| `kie_task_id` | string |  | Use task_id. |
 
 ## `voice_changer`
 

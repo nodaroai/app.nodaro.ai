@@ -193,7 +193,12 @@ export function buildProviderMeta(
 ): Record<string, unknown> {
   if (!result) return {}
   const meta: Record<string, unknown> = {}
-  if (result.kieTaskId) meta.kieTaskId = result.kieTaskId
+  // providerTaskId is the public name; kieTaskId stays for the readers that
+  // already key off it (the editor, the input resolver, saved workflows).
+  if (result.kieTaskId) {
+    meta.providerTaskId = result.kieTaskId
+    meta.kieTaskId = result.kieTaskId
+  }
   if (result.seed !== undefined) meta.seed = result.seed
   if (result.fallbackFlag === true) meta.fallbackUsed = true
   if (result.providerMs !== undefined) meta.providerMs = result.providerMs

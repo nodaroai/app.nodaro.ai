@@ -28,13 +28,13 @@ const NodeDescriptorSchema = z.object({
 openApiRegistry.registerPath({
   method: "get", path: "/v1/nodes",
   description: "List every runnable node type with its descriptor (label, category, credit cost, providers).",
-  security: [{ bearerAuth: [] }],
+  security: [],
   responses: { 200: { description: "Node descriptors", content: { "application/json": { schema: z.object({ data: z.array(NodeDescriptorSchema) }) } } } },
 })
 openApiRegistry.registerPath({
   method: "get", path: "/v1/nodes/{type}",
   description: "Descriptor for one node type — including its provider list for model pickers.",
-  security: [{ bearerAuth: [] }],
+  security: [],
   request: { params: z.object({ type: z.string() }) },
   responses: {
     200: { description: "Node descriptor", content: { "application/json": { schema: z.object({ data: NodeDescriptorSchema }) } } },

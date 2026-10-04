@@ -3511,6 +3511,12 @@ function getNodeModelIdentifier(
   // the payload builder both do); the model id "minimax" is the MiniMax VIDEO price.
   if (nodeType === "generate-music") return MUSIC_CREDIT_ID
 
+  // Video Composer reserves on the scene-graph-ai rows (its route builds the
+  // id from the same three levers), not on the video-composer ones.
+  if (nodeType === "video-composer") {
+    return buildLlmCreditIdentifier("scene-graph-ai", data.llmModel as string | undefined, data.reasoningEffort as string | undefined, data.advancedMode === true)
+  }
+
   // LLM Chat uses tiered credit identifier based on selected model. Reasoning
   // effort and advanced mode are passed through too — actual billing bumps a
   // tier on clamped xhigh/max effort and again on advanced mode

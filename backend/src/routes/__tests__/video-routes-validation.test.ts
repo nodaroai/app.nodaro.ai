@@ -112,10 +112,16 @@ describe("POST /v1/extend-video — Zod validation", () => {
     expect(res.statusCode).not.toBe(400)
   })
 
-  it("rejects missing kieTaskId", async () => {
+  it("rejects a missing task id", async () => {
     const { kieTaskId: _, ...body } = validBody
     const res = await app.inject({ method: "POST", url: "/v1/extend-video", payload: body })
     expect(res.statusCode).toBe(400)
+  })
+
+  it("accepts the neutral taskId in place of the deprecated kieTaskId", async () => {
+    const { kieTaskId: _, ...body } = validBody
+    const res = await app.inject({ method: "POST", url: "/v1/extend-video", payload: { ...body, taskId: "task-123" } })
+    expect(res.statusCode).not.toBe(400)
   })
 
   it("rejects missing prompt", async () => {
@@ -257,6 +263,11 @@ describe("POST /v1/video-upscale — Zod validation", () => {
 
   it("accepts provider veo-4k", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/video-upscale", payload: { ...validBody, videoUrl: undefined, kieTaskId: "task-1", provider: "veo-4k" } })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("accepts the neutral taskId for a VEO upscale", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/video-upscale", payload: { ...validBody, videoUrl: undefined, taskId: "task-1", provider: "veo-1080p" } })
     expect(res.statusCode).not.toBe(400)
   })
 
