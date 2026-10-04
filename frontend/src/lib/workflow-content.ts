@@ -42,13 +42,18 @@ import { getCurrentUserId, getWorkflowDocument, type WorkflowAccessLevel, type W
  * wrote, and an answer of `view` or `none` closes the subscription and turns
  * the canvas read-only on the spot. (An owner's own row stays theirs, and so
  * does its subscription; only the canvas turns read-only: `recheckedAccess`.)
- * So the app never holds what the reader's CURRENT access forbids, with two
+ * So the app never holds what the reader's CURRENT access forbids, with three
  * exceptions. Between two asks a canvas acts on the last answer it had: up to
  * a minute in a visible tab, and in a hidden one until it is shown again or a
- * save is refused. And what it was shown under an earlier, wider access stays
- * on screen, read-only, until the canvas is reloaded, or, with no unsaved
+ * save is refused. What it was shown under an earlier, wider access stays on
+ * screen, read-only, until the canvas is reloaded, or, with no unsaved
  * changes on it, until the row next moves and the stripped re-read replaces
- * it (a reader with no access left is sent nothing to replace it with).
+ * it (a reader with no access left is sent nothing to replace it with). And
+ * the record keeps any `own`, not only the owner's: the server answers a
+ * platform admin `own` too, and the record cannot tell the two apart. So an
+ * admin who loses that role while the canvas is open keeps the subscription
+ * until the canvas is reloaded, and receives the stored row on it for as long
+ * as they may still view the workflow.
  *
  * Residual, accepted for now by Tal on 2026-10-04 (T96): a `view` reader who
  * deliberately queries the database with their own token can still read the
