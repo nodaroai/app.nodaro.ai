@@ -3,7 +3,7 @@ import Fastify from "fastify"
 import type { CompetitorCardsResult, TrackedCompetitor } from "@nodaro/shared"
 import { newSession } from "../../session.js"
 import type { Scope } from "../../../scopes.js"
-import { cardsText, competitorLine, registerCompetitorTools } from "../competitors.js"
+import { cardsText, competitorLine, lessonsText, registerCompetitorTools } from "../competitors.js"
 import { buildServer, callTool, listTools } from "./_helpers.js"
 
 const COMPETITOR: TrackedCompetitor = {
@@ -54,7 +54,7 @@ describe("competitor MCP tools", () => {
   it("each tool needs its own scope", async () => {
     const server = buildServer()
     registerCompetitorTools({ server, session: session(["assets:read"]), fastify: stubApp().fastify })
-    expect((await listTools(server)).map((t) => t.name).sort()).toEqual(["competitor_cards", "list_competitors"])
+    expect((await listTools(server)).map((t) => t.name).sort()).toEqual(["competitor_cards", "competitor_lessons", "list_competitors"])
   })
 
   it("add_competitor finds the accounts from the website, then tracks the brand, saying what was guessed", async () => {
@@ -76,6 +76,34 @@ describe("competitor MCP tools", () => {
     const res = await callTool(server, "scan_competitor", { competitor_id: COMPETITOR.id })
     expect(res.isError).toBeFalsy()
     expect(stub.received[0]).toMatchObject({ url: "/v1/competitor-scan", body: { competitorId: COMPETITOR.id, userId: "u1" } })
+  })
+
+  it("says what works for a brand, per platform, with the posts each lesson rests on", () => {
+    const lessons = {
+      subjectId: "c1",
+      isOwn: true,
+      minPosts: 6,
+      platforms: [
+        {
+          platform: "tiktok",
+          posts: 12,
+          usual: 1150,
+          unit: "views" as const,
+          winners: ["tiktok:1"],
+          misses: [],
+          lessons: [{ id: "tiktok:short_videos:short", kind: "short_videos" as const, platform: "tiktok", params: {}, evidence: ["tiktok:1"], strength: 2.4, text: "On TikTok, videos of 15 seconds or less got 2.4x your usual views (4 posts, 3 of the best)." }],
+        },
+        { platform: "instagram", posts: 3, usual: null, unit: "views" as const, winners: [], misses: [], lessons: [] },
+      ],
+    }
+    const posts = { "tiktok:1": { url: "https://www.tiktok.com/@acme/video/1" } } as never
+    expect(lessonsText({ lessons, posts })).toBe(
+      "tiktok: 12 posts, usually 1150 views.\n" +
+        "   - On TikTok, videos of 15 seconds or less got 2.4x your usual views (4 posts, 3 of the best).\n" +
+        "     https://www.tiktok.com/@acme/video/1\n\n" +
+        "instagram: 3 posts — needs 6 to tell what works.",
+    )
+    expect(lessonsText({ lessons: { ...lessons, platforms: [] }, posts: {} })).toContain("No posts of its own yet")
   })
 
   it("lists brands and cards as plain lines", async () => {

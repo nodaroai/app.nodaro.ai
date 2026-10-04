@@ -272,5 +272,36 @@ export function competitorsCommand(): Command {
       }
     })
 
+  cmd
+    .command("lessons <id>")
+    .description("what works for a brand: what its best posts share, per platform (free)")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, opts: GlobalOpts) => {
+      try {
+        const result = await buildClient(opts.profile).competitors.lessons(id)
+        if (opts.json) return emit(result, opts)
+        const { platforms, minPosts } = result.lessons
+        if (platforms.length === 0) return info("no posts of its own yet: add an account and scan (nodaro competitors scan <id>)")
+        for (const pl of platforms) {
+          if (pl.usual === null) {
+            info(`${pl.platform}: ${pl.posts} posts — needs ${minPosts} to tell what works`)
+            continue
+          }
+          info(`${pl.platform}: ${pl.posts} posts, usually ${Math.round(pl.usual)} ${pl.unit}`)
+          if (pl.lessons.length === 0) info("   nothing stands out yet")
+          for (const lesson of pl.lessons) {
+            info(`   • ${lesson.text}`)
+            for (const postId of lesson.evidence) {
+              const url = result.posts[postId]?.url
+              if (url) info(`     ${url}`)
+            }
+          }
+        }
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
   return cmd
 }

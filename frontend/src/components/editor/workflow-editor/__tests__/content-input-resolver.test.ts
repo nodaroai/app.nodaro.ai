@@ -209,6 +209,15 @@ describe("Video Analysis — a Social Search's posts on the video input", () => 
     expect(inputs.videoPageUrl).toBeUndefined()
   })
 
+  it("flags an image or a text post as having no video", () => {
+    const va = node("A", "video-analysis")
+    const search = node("S", "social-search", { generatedJson: [{ ...post(3), media: { kind: "image" } }] })
+    const inputs = resolveNodeInputs(va, [search, va], [edge("S", "A", "json", "video")])
+    expect(inputs.socialPostNoVideo).toBe(true)
+    expect(inputs.videoUrl).toBeUndefined()
+    expect(inputs.videoPageUrl).toBeUndefined()
+  })
+
   it("flags a post whose video link has expired, and reads nothing else from it", () => {
     const va = node("A", "video-analysis")
     const search = node("S", "social-search", { generatedJson: [reel(Date.now() - 60_000)] })

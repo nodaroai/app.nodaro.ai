@@ -179,6 +179,7 @@ nodaro competitors add [--brand <name>] [--website <url>] [--tiktok <h>] [--inst
 nodaro competitors discover <website> [--json]              # free
 nodaro competitors scan <id> [--watch] [--json]             # one Social Search page per search
 nodaro competitors cards [--json]                           # what to do now
+nodaro competitors lessons <id> [--json]                    # what works for a brand (free)
 nodaro competitors show <id> | update <id> [flags] [--clear <platforms>] | remove <id>
 #   update changes only the accounts named (the others are kept); --clear tiktok,x removes accounts
 

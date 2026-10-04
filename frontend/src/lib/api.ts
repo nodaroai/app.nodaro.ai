@@ -4499,9 +4499,12 @@ export async function startContentIdeas(params: {
   language?: string
   llmModel?: string
   reasoningEffort?: string
+  /** False turns off leaning on the user's own brand's results (on by default). */
+  useBrandLessons?: boolean
   userId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { recipes: params.recipes }
+  if (params.useBrandLessons === false) body.useBrandLessons = false
   if (params.brand) body.brand = params.brand
   if (params.count !== undefined) body.count = params.count
   if (params.language) body.language = params.language
@@ -4716,6 +4719,11 @@ export async function updateCompetitor(id: string, input: import("@nodaro/shared
 
 export async function deleteCompetitor(id: string): Promise<void> {
   await apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteCompetitor" })
+}
+
+/** What works for a tracked brand: lessons from its own posts (free). */
+export async function competitorLessons(id: string): Promise<import("@nodaro/shared").CompetitorLessonsResult> {
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}/lessons`, { method: "GET", label: "apiErr.loadCompetitorLessons" })
 }
 
 export async function competitorCards(): Promise<import("@nodaro/shared").CompetitorCardsResult> {

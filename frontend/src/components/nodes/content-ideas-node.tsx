@@ -146,6 +146,11 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
                   </div>
                 ))}
               </div>
+              {nodeData.brandLessons && (
+                <div className="text-[10px] text-muted-foreground leading-snug" dir="auto">
+                  {t("node.contentIdeasLeanedOn", { brand: nodeData.brandLessons.brand, n: nodeData.brandLessons.lessons })}
+                </div>
+              )}
               {nodeData.runWarnings && nodeData.runWarnings.length > 0 && (
                 <div className="text-[10px] text-amber-500 leading-snug" dir="auto">
                   {nodeData.runWarnings.join(" ")}
@@ -205,7 +210,7 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
       <DeleteConfirmationDialog
         isOpen={clearOpen}
         onClose={() => setClearOpen(false)}
-        onConfirm={() => updateNodeData(id, { executionStatus: "idle", errorMessage: undefined, generatedJson: undefined, generatedText: undefined, ideaBriefs: undefined, runWarnings: undefined })}
+        onConfirm={() => updateNodeData(id, { executionStatus: "idle", errorMessage: undefined, generatedJson: undefined, generatedText: undefined, ideaBriefs: undefined, runWarnings: undefined, brandLessons: undefined })}
       />
     </div>
   )

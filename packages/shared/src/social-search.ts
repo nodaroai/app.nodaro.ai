@@ -336,6 +336,8 @@ export type SocialSearchPostVideo =
   | { readonly kind: "page"; readonly url: string }
   /** The file's signed link has expired: the search has to run again. */
   | { readonly kind: "expired" }
+  /** The post is an image or a text post: there is no video to analyze. */
+  | { readonly kind: "none" }
 
 /**
  * The video Video Analysis reads from a Social Search node's `json` output,
@@ -356,6 +358,7 @@ export function socialSearchPostVideo(output: string, now: number = Date.now()):
   }
   const post = Array.isArray(parsed) ? socialPostsFrom(parsed)[0] : isSocialPost(parsed) ? parsed : undefined
   if (!post) return undefined
+  if (post.media.kind !== "video") return { kind: "none" }
   const file = videoFileLink(post.media.videoUrl)
   if (file) {
     const end = signedLinkExpiresAt(file)

@@ -33,7 +33,7 @@ import type { ResolvedInputs, SimpleNode } from "./types.js"
 /** A refusal the node state carries by code, with a sentence the person can act on. */
 export class VideoAnalysisPostError extends Error {
   constructor(
-    readonly errorCode: "live_stream_not_supported" | "video_too_long" | "post_video_expired",
+    readonly errorCode: "live_stream_not_supported" | "video_too_long" | "post_video_expired" | "post_has_no_video" | "post_video_unreadable",
     message: string,
   ) {
     super(message)
@@ -169,6 +169,13 @@ async function cachedProbe(
 export const POST_VIDEO_EXPIRED_MESSAGE =
   "This post's video link has expired (a search's video links last a few days). Run the Social Search again to get fresh ones."
 
+/** The refusal for a Social Search post that is an image or a text post. */
+export const POST_NO_VIDEO_MESSAGE = "This post has no video to analyze (it is an image or a text post)."
+
+/** The refusal for a Social Search post whose video cannot be read or gives no length. */
+export const POST_UNREADABLE_MESSAGE =
+  "This post's video could not be read: the platform did not say how long it is, or refused it. Run the Social Search again, or download the video and upload it."
+
 /** A probed length in whole seconds; a video past the ceiling is refused, free. */
 function lengthOrRefusal(durationSec: number | null): number | null {
   if (durationSec === null) return null
@@ -181,19 +188,23 @@ function lengthOrRefusal(durationSec: number | null): number | null {
   return Math.ceil(durationSec)
 }
 
-/** A Social Search post's own video file, by the length read from the file; null when it cannot be read (the ceiling prices it). */
-async function postFileDuration(url: string, deps: PostProbeDeps): Promise<number | null> {
-  let durationSec: number
+/**
+ * A Social Search post's own video file, by the length read from the file.
+ * A file that cannot be read is refused, free — as the editor's route refuses
+ * it — rather than priced at the ceiling.
+ */
+async function postFileDuration(url: string, deps: PostProbeDeps): Promise<number> {
+  let durationSec: number | null = null
   try {
     const meta = await cachedProbe(url, deps, async (fileUrl) => ({ durationSec: await deps.probeFile(fileUrl), title: null, isLive: false }))
-    if (meta.durationSec === null) return null
     durationSec = meta.durationSec
   } catch (err) {
     const why = (err instanceof Error ? err.message : String(err)).split("\n")[0]
-    console.warn(`[video-analysis] social search post's video file probe failed (${why}); priced at the ceiling`)
-    return null
+    console.warn(`[video-analysis] social search post's video file probe failed (${why}); refused`)
   }
-  return lengthOrRefusal(durationSec)
+  const length = lengthOrRefusal(durationSec)
+  if (length === null) throw new VideoAnalysisPostError("post_video_unreadable", POST_UNREADABLE_MESSAGE)
+  return length
 }
 
 /**
@@ -214,6 +225,9 @@ export async function videoAnalysisPostDuration(
   if (resolvedInputs.socialPostVideoExpired && !resolvedInputs.videoUrl && !resolvedInputs.videoPageUrl) {
     throw new VideoAnalysisPostError("post_video_expired", POST_VIDEO_EXPIRED_MESSAGE)
   }
+  if (resolvedInputs.socialPostNoVideo && !resolvedInputs.videoUrl && !resolvedInputs.videoPageUrl) {
+    throw new VideoAnalysisPostError("post_has_no_video", POST_NO_VIDEO_MESSAGE)
+  }
   if (!deps.enabled()) return null
   const data = node.data as Record<string, unknown>
   // A length the run already knows is the trusted one.
@@ -226,11 +240,19 @@ export async function videoAnalysisPostDuration(
   const post = link ? socialPostOf(link) : null
   if (!post) return null
 
+  // A Social Search post's page: a page that cannot be read, or gives no
+  // length, is refused (free) — never priced at the ceiling — as the editor's
+  // route refuses it.
+  const fromSearch = resolvedInputs.videoPageFromSocialPost === true && resolvedInputs.videoPageUrl !== undefined
   let meta: SocialPostMetadata
   try {
     meta = await cachedProbe(post.url, deps)
   } catch (err) {
     const why = (err instanceof Error ? err.message : String(err)).split("\n")[0]
+    if (fromSearch) {
+      console.warn(`[video-analysis] ${post.platform} social search post probe failed (${why}); refused`)
+      throw new VideoAnalysisPostError("post_video_unreadable", POST_UNREADABLE_MESSAGE)
+    }
     console.warn(`[video-analysis] ${post.platform} post probe failed (${why}); priced at the ceiling`)
     // The editor's own read of the same YouTube link stands in (it reads only
     // YouTube); else the ceiling.
@@ -240,5 +262,6 @@ export async function videoAnalysisPostDuration(
   if (meta.isLive) {
     throw new VideoAnalysisPostError("live_stream_not_supported", "This post is a live stream, which cannot be analyzed.")
   }
+  if (fromSearch && meta.durationSec === null) throw new VideoAnalysisPostError("post_video_unreadable", POST_UNREADABLE_MESSAGE)
   return lengthOrRefusal(meta.durationSec)
 }

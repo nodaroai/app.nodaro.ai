@@ -184,6 +184,11 @@ describe("the video a post hands Video Analysis", () => {
     expect(socialSearchPostVideo(JSON.stringify(reel(igFile(NOW + SOCIAL_POST_VIDEO_LINK_MARGIN_MS - 60_000))), NOW)).toEqual({ kind: "expired" })
   })
 
+  it("hands over no video for an image or a text post", () => {
+    expect(socialSearchPostVideo(JSON.stringify(post("5", { media: { kind: "image" } })), NOW)).toEqual({ kind: "none" })
+    expect(socialSearchPostVideo(JSON.stringify(post("6", { media: { kind: "text" } })), NOW)).toEqual({ kind: "none" })
+  })
+
   it("falls back to the post's page when no file came with it", () => {
     expect(socialSearchPostVideo(JSON.stringify(post("7")), NOW)).toEqual({ kind: "page", url: "https://www.tiktok.com/@maker/video/7" })
   })

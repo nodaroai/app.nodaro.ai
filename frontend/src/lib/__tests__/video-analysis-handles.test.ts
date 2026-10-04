@@ -97,6 +97,14 @@ describe("the length Video Analysis is quoted at for a Social Search's posts", (
     expect(wiredSocialPostsVideoSec("va", graph([], "each").edges, graph([], "each").nodes)).toBeUndefined()
   })
 
+  it("is unknown (the ceiling) on a whole run where the search runs again, unless it keeps its picks", () => {
+    const { nodes, edges } = graph([clip(1, 27), clip(2, 90)], "each")
+    expect(wiredSocialPostsVideoSec("va", edges, nodes, new Set(["search", "va"]))).toBeUndefined()
+    expect(wiredSocialPostsVideoSec("va", edges, nodes, new Set(["va"]))).toBe(90)
+    const kept = nodes.map((n) => (n.id === "search" ? { ...n, data: { ...n.data, keepPicks: true } } : n))
+    expect(wiredSocialPostsVideoSec("va", edges, kept, new Set(["search", "va"]))).toBe(90)
+  })
+
   it("is null when no Social Search is wired into the video input", () => {
     const nodes = [{ id: "up", type: "upload-video", data: {} }, { id: "va", type: "video-analysis", data: {} }]
     expect(wiredSocialPostsVideoSec("va", [{ source: "up", target: "va", targetHandle: "video" }], nodes)).toBeNull()

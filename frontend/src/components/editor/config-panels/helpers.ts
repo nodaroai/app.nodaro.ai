@@ -363,6 +363,9 @@ export function getModelIdentifier(
   storedNode: WorkflowNode,
   edges?: ReadonlyArray<WorkflowEdge>,
   nodes?: ReadonlyArray<WorkflowNode>,
+  /** The nodes about to run, for a whole-run estimate: a Social Search among
+   *  them prices the Video Analysis after it at the ceiling (new posts). */
+  reruns?: ReadonlySet<string>,
 ): string {
   // Priced as it runs: a wired Settings input sets the model and length.
   const node = withWiredSettings(storedNode, nodes, edges)
@@ -478,7 +481,7 @@ export function getModelIdentifier(
     const probedYoutube = data.probedYoutube as { url: string; durationSec: number } | undefined
     const probedVideo = data.probedVideo as ProbedVideoInfo | undefined
     // A Social Search's posts wired in: the longest of their videos.
-    const fromPosts = wiredSocialPostsVideoSec(node.id, edges, nodes)
+    const fromPosts = wiredSocialPostsVideoSec(node.id, edges, nodes, reruns)
     const durationSec = fromPosts !== null
       ? fromPosts
       : (probedYoutube && probedYoutube.url === data.youtubeUrl ? probedYoutube.durationSec : undefined) ?? probedVideo?.durationSec

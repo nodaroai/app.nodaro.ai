@@ -48,10 +48,19 @@ describe("backend input-resolver — Social Search posts → Video Analysis", ()
   const va = node("va", "video-analysis")
   const states = (json: unknown[]): Record<string, NodeExecutionState> => ({ search: { status: "completed", output: { json, text: "digest" } } })
 
-  it("takes the post's page link when no file came with it (the first of the list on a plain wire)", () => {
-    const r = resolveNodeInputs(va, [edge("search", "va", "json", "video")], states([post(1), post(2)]), [search, va])
-    expect(r.videoPageUrl).toBe("https://www.reddit.com/r/videography/comments/1/")
+  it("takes a video post's page link when no file came with it (the first of the list on a plain wire), marked as a post's page", () => {
+    const tiktok = (n: number) => ({ ...post(n), id: `tiktok:${n}`, platform: "tiktok", url: `https://www.tiktok.com/@a/video/${n}`, media: { kind: "video" } })
+    const r = resolveNodeInputs(va, [edge("search", "va", "json", "video")], states([tiktok(1), tiktok(2)]), [search, va])
+    expect(r.videoPageUrl).toBe("https://www.tiktok.com/@a/video/1")
+    expect(r.videoPageFromSocialPost).toBe(true)
     expect(r.prompt).toBeUndefined()
+    expect(r.videoUrl).toBeUndefined()
+  })
+
+  it("flags an image or a text post as having no video, and hands over nothing else", () => {
+    const r = resolveNodeInputs(va, [edge("search", "va", "json", "video")], states([post(1)]), [search, va])
+    expect(r.socialPostNoVideo).toBe(true)
+    expect(r.videoPageUrl).toBeUndefined()
     expect(r.videoUrl).toBeUndefined()
   })
 

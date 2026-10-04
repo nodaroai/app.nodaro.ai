@@ -10,7 +10,7 @@
  * producer into the file, and a Social Search post into either
  * (`socialSearchPostVideo`).
  */
-import { socialPostsFrom, socialPostsLongestVideoSec } from "@nodaro/shared"
+import { isSocialSearchPickFrozen, socialPostsFrom, socialPostsLongestVideoSec } from "@nodaro/shared"
 import { ACCEPTS_POST_LINK } from "./content-handles"
 import { ACCEPTS_VIDEO } from "./ffmpeg-handles"
 
@@ -46,11 +46,17 @@ export function wiredSocialPostsVideoSec(
   nodeId: string,
   edges: ReadonlyArray<{ source?: string; target: string; targetHandle?: string | null; data?: unknown }> | undefined,
   nodes: ReadonlyArray<{ id: string; type?: string | null; data?: unknown }> | undefined,
+  /** The nodes about to run (a whole-run estimate). A search among them
+   *  passes on posts it has not found yet, so their length is unknown and
+   *  the ceiling quotes it — unless it keeps its picks and does not search. */
+  reruns?: ReadonlySet<string>,
 ): number | null | undefined {
   const edge = edges?.find((e) => e.target === nodeId && e.targetHandle === "video")
   const src = edge ? nodes?.find((n) => n.id === edge.source) : undefined
   if (!edge || src?.type !== "social-search") return null
-  const posts = socialPostsFrom((src.data as Record<string, unknown> | undefined)?.generatedJson)
+  const data = (src.data as Record<string, unknown> | undefined) ?? {}
+  if (reruns?.has(src.id) && !isSocialSearchPickFrozen("social-search", data)) return undefined
+  const posts = socialPostsFrom(data.generatedJson)
   const each = (edge.data as { outputMode?: unknown } | undefined)?.outputMode === "each"
   return socialPostsLongestVideoSec(each ? posts : posts.slice(0, 1))
 }

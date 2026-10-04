@@ -4,6 +4,7 @@ import { queryKeys } from "@/lib/query-keys"
 import { useAuth } from "@/hooks/use-auth"
 import {
   competitorCards,
+  competitorLessons,
   createCompetitor,
   deleteCompetitor,
   deleteOrAlreadyGone,
@@ -35,6 +36,17 @@ export function useCompetitorDetail(id: string | null) {
     enabled: !!user && !!id,
     staleTime: 30_000,
     refetchInterval: (query) => (query.state.data?.scanning ? SCANNING_REFRESH_MS : false),
+  })
+}
+
+/** What works for a brand; read when its tab opens, re-read after each scan lands. */
+export function useCompetitorLessons(id: string | null, enabled: boolean) {
+  const { user } = useAuth()
+  return useQuery({
+    queryKey: queryKeys.competitors.lessons(id ?? ""),
+    queryFn: () => competitorLessons(id!),
+    enabled: enabled && !!user && !!id,
+    staleTime: 60_000,
   })
 }
 

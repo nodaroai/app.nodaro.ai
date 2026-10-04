@@ -71,10 +71,37 @@ The newest twelve scans of each brand are kept. While a scan of a brand
 runs, its name, accounts and platforms cannot be changed (the scan was
 priced on them); its schedule can.
 
+## What works
+
+**What works for you** (on the brand marked **This is my brand**) and **What
+works for them** (on a competitor) read the brand's own posts across every
+scan kept, and say what its best posts share. Open it with the button on the
+brand's row, or the tab in its posts.
+
+Per platform it shows:
+
+- how many of the brand's posts it read, and their usual reach (the median);
+- its **lessons**: a trait its best posts share, and how far posts with that
+  trait went compared with the rest — a video length, a format, opening with
+  a question, a first line that starts with a number, a short or a long
+  caption, a hashtag, a sound, or the day of the week (UTC). Each lesson
+  shows the posts it rests on;
+- its best posts, which you can save to [Inspiration](./inspiration.md).
+
+A platform needs enough of the brand's own posts before it gets lessons (the
+tab says how many it has and how many it needs); each scan adds more. It is
+free: it reads the scans already made and charges nothing.
+
+**Content Ideas learns from it.** A [Content Ideas](../nodes/ai-text/content-ideas.md)
+node leans its ideas on what works for your own brand (the one marked **This
+is my brand**; with several, the one scanned last), and after a run says
+which brand it read. Turn it off with **Learn from my brand's results** in
+the node's settings. It costs nothing more.
+
 ## From code
 
-The same brands, scans and cards are available over the API
+The same brands, scans, cards and lessons are available over the API
 (`/v1/competitors*`, see [API integration](../api-integration.md#16c-competitors-nodaro-cloud)),
 the SDK (`client.competitors`), the CLI (`nodaro competitors`) and MCP
-(`list_competitors`, `competitor_cards`, `add_competitor`,
-`scan_competitor`).
+(`list_competitors`, `competitor_cards`, `competitor_lessons`,
+`add_competitor`, `scan_competitor`).

@@ -55,5 +55,12 @@ export function contentRunResultPatch(
     ideaBriefs: briefs,
     generatedText: text,
     runWarnings: warningsOf(output),
+    brandLessons: brandLessonsOf(output),
   }
+}
+
+/** The own brand whose lessons an ideas run leaned on; undefined when none did. */
+function brandLessonsOf(output: Record<string, unknown>): { brand: string; lessons: number } | undefined {
+  const b = output.brandLessons as { brand?: unknown; lessons?: unknown } | undefined
+  return b && typeof b.brand === "string" && typeof b.lessons === "number" && b.lessons > 0 ? { brand: b.brand, lessons: b.lessons } : undefined
 }

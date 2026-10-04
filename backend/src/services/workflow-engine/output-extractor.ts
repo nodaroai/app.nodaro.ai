@@ -217,6 +217,7 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "combinedText",
   "kieTaskId",
   "listResults",
+  "brandLessons",
   "approved",
   "reason",
   "score",

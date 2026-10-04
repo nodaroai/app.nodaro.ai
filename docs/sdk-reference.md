@@ -4781,6 +4781,7 @@ OAuth app tokens need `assets:read` / `assets:write`; a scan also needs a
 | `update(id, input)` | `PATCH /v1/competitors/:id` | `TrackedCompetitor` (`accounts` replaces the whole set; `409 scan_running` for a change to what a running scan was priced on) |
 | `delete(id)` | `DELETE /v1/competitors/:id` | `void` |
 | `cards()` | `GET /v1/competitors/cards` | `CompetitorCardsResult` (`{ cards, posts }`) |
+| `lessons(id)` | `GET /v1/competitors/:id/lessons` | `CompetitorLessonsResult` (`{ lessons, posts }`: what the brand's best posts share, per platform; free) |
 | `discover(website)` | `POST /v1/competitor-discover` | `CompetitorDiscovery` |
 | `scan(id)` | `POST /v1/competitor-scan` | `{ jobId }` |
 

@@ -4147,6 +4147,8 @@ export function buildPayload(
         llmModel,
         reasoningEffort,
         nodeId: node.id,
+        // On unless the node turned it off: lean on the user's own brand's results.
+        ...(data.useBrandLessons === false ? { useBrandLessons: false } : {}),
       })
     }
 

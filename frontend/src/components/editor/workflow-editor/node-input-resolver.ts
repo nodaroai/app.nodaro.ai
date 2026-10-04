@@ -762,6 +762,9 @@ export interface FrontendResolvedInputs {
    *  so there is nothing to analyze until the search runs again. Mirror of
    *  backend ResolvedInputs.socialPostVideoExpired. */
   socialPostVideoExpired?: boolean;
+  /** video-analysis: the wired Social Search post is an image or a text post.
+   *  Mirror of backend ResolvedInputs.socialPostNoVideo. */
+  socialPostNoVideo?: boolean;
 }
 
 /** Append an asset to the manual-edit inputAssets accumulator. */
@@ -1802,6 +1805,7 @@ export function resolveNodeInputs(
         if (video?.kind === "file") inputs.videoUrl = video.url;
         else if (video?.kind === "page") inputs.videoPageUrl = video.url;
         else if (video?.kind === "expired") inputs.socialPostVideoExpired = true;
+        else if (video?.kind === "none") inputs.socialPostNoVideo = true;
         continue;
       }
       const link = output.trim();

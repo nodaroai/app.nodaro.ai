@@ -104,7 +104,9 @@ connect there.
 - Stills and video links are the platform's signed URLs and expire within days;
   use `url` (the post's page) to cite a post. A post whose video link has
   expired is refused by Video Analysis (`post_video_expired`, no charge): run
-  the search again for fresh links.
+  the search again for fresh links. An image or text post is refused the same
+  way (`post_has_no_video`), and so is a post whose video cannot be read or
+  gives no length (`post_video_unreadable`).
 - A number the platform does not report is absent, never 0 (a TikTok creator
   can hide their counts).
 

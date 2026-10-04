@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ActionCardView } from "@/components/competitors/action-card-view"
 import { CompetitorFormDialog, changedFields } from "@/components/competitors/competitor-form-dialog"
-import { CompetitorPostsDialog } from "@/components/competitors/competitor-posts-dialog"
+import { CompetitorPostsDialog, type CompetitorDialogTab } from "@/components/competitors/competitor-posts-dialog"
 import { CompetitorRow } from "@/components/competitors/competitor-row"
 import { scanLanded, scanStateOf, type ScanState } from "@/components/competitors/scan-state"
 import { useSaveControls } from "@/components/competitors/use-save-controls"
@@ -33,6 +33,7 @@ export default function CompetitorsPage() {
   const [editing, setEditing] = useState<TrackedCompetitor | null>(null)
   const [removing, setRemoving] = useState<TrackedCompetitor | null>(null)
   const [postsOf, setPostsOf] = useState<string | null>(null)
+  const [postsTab, setPostsTab] = useState<CompetitorDialogTab>("own")
   const [showAll, setShowAll] = useState(false)
 
   // A scan landing changes the cards and the brand's posts: re-read them as
@@ -134,7 +135,14 @@ export default function CompetitorsPage() {
                   busy={(scan.isPending && scan.variables === c.id) || (update.isPending && update.variables?.id === c.id)}
                   onScan={() => startScan(c)}
                   onSchedule={(schedule) => update.mutate({ id: c.id, input: { schedule } }, { onError: fail("apiErr.saveCompetitor") })}
-                  onPosts={() => setPostsOf(c.id)}
+                  onPosts={() => {
+                    setPostsTab("own")
+                    setPostsOf(c.id)
+                  }}
+                  onLessons={() => {
+                    setPostsTab("lessons")
+                    setPostsOf(c.id)
+                  }}
                   onEdit={() => {
                     setEditing(c)
                     setFormOpen(true)
@@ -159,6 +167,7 @@ export default function CompetitorsPage() {
       />
       <CompetitorPostsDialog
         competitorId={postsOf}
+        initialTab={postsTab}
         onOpenChange={(open) => {
           if (!open) setPostsOf(null)
         }}

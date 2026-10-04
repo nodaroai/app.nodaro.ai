@@ -139,6 +139,77 @@ export interface CompetitorCardsResult {
   readonly posts: Readonly<Record<string, CompetitorPost>>
 }
 
+// ── What works (stage 4: learning from results) ───────────────────────────
+
+/** The traits a brand's best posts can share. */
+export const BRAND_LESSON_KINDS = [
+  "short_videos",
+  "long_videos",
+  "format",
+  "question_hook",
+  "number_hook",
+  "short_caption",
+  "long_caption",
+  "hashtag",
+  "sound",
+  "weekday",
+] as const
+export type BrandLessonKind = (typeof BRAND_LESSON_KINDS)[number]
+
+/**
+ * One thing a brand's best posts share, measured on its own posts: the posts
+ * with the trait reached `lift` times what the rest did.
+ */
+export interface BrandLesson {
+  /** `<platform>:<kind>:<key>`, stable across reads. */
+  readonly id: string
+  readonly kind: BrandLessonKind
+  readonly platform: string
+  /**
+   * Always `lift` (number), `liftLabel` ("2.4x"), `posts` (with the trait),
+   * `winners` (of the best among them) and `unit` ("views" | "likes" |
+   * "points"). Per kind: short_videos `maxSec` · long_videos `minSec` ·
+   * format `format` · short_caption and long_caption `chars` · hashtag `tag` ·
+   * sound `sound` · weekday `day` (0 = Sunday, UTC).
+   */
+  readonly params: Readonly<Record<string, string | number | boolean | readonly string[]>>
+  /** Ids of the posts it rests on, best first (at most four). */
+  readonly evidence: readonly string[]
+  readonly strength: number
+  /** English, for surfaces that do not phrase lessons themselves. */
+  readonly text: string
+}
+
+/** What works for a brand on one platform. */
+export interface BrandPlatformLessons {
+  readonly platform: string
+  /** The brand's own posts counted there. */
+  readonly posts: number
+  /** Their typical reach; null while there are fewer than `minPosts`. */
+  readonly usual: number | null
+  readonly unit: "views" | "points" | "likes"
+  /** Its best posts, best first. */
+  readonly winners: readonly string[]
+  /** Its weakest posts, weakest first. */
+  readonly misses: readonly string[]
+  readonly lessons: readonly BrandLesson[]
+}
+
+export interface BrandLessons {
+  readonly subjectId: string
+  /** The user's own brand ("what works for you"), not a competitor. */
+  readonly isOwn: boolean
+  readonly platforms: readonly BrandPlatformLessons[]
+  /** Posts a platform needs before it gets lessons. */
+  readonly minPosts: number
+}
+
+/** `GET /v1/competitors/:id/lessons`: what works for a tracked brand, and the posts it names. */
+export interface CompetitorLessonsResult {
+  readonly lessons: BrandLessons
+  readonly posts: Readonly<Record<string, CompetitorPost>>
+}
+
 /** `POST /v1/competitor-discover`: a brand's accounts found from its website. */
 export interface CompetitorDiscovery {
   readonly brand: string

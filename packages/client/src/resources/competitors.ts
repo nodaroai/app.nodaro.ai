@@ -3,6 +3,7 @@ import type {
   CompetitorCardsResult,
   CompetitorDetail,
   CompetitorDiscovery,
+  CompetitorLessonsResult,
   CreateCompetitorInput,
   TrackedCompetitor,
   UpdateCompetitorInput,
@@ -54,6 +55,16 @@ export class CompetitorsResource {
   /** `GET /v1/competitors/cards` → every action card, most urgent first, with the posts they rest on. */
   cards(): Promise<CompetitorCardsResult> {
     return this.client.request<CompetitorCardsResult>("GET", "/v1/competitors/cards")
+  }
+
+  /**
+   * `GET /v1/competitors/:id/lessons` → what works for a brand: per platform,
+   * what its best posts share, measured on its own posts across every stored
+   * scan, with the posts each lesson rests on (free). "What works for you" on
+   * the brand marked as yours.
+   */
+  lessons(id: string): Promise<CompetitorLessonsResult> {
+    return this.client.request<CompetitorLessonsResult>("GET", `/v1/competitors/${encodeURIComponent(id)}/lessons`)
   }
 
   /** `POST /v1/competitor-discover` → a brand's accounts found from its website (free; guesses are marked). */

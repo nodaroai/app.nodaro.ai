@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
 import type { CompetitorPost } from "@nodaro/shared"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -10,21 +10,29 @@ import { useT } from "@/lib/i18n"
 import { formatDate } from "@/lib/i18n/format"
 import { cn } from "@/lib/utils"
 import { useSaveControls } from "./use-save-controls"
+import { CompetitorLessons } from "./competitor-lessons"
 
-type Tab = "own" | "about"
+export type CompetitorDialogTab = "own" | "about" | "lessons"
 
-/** The posts a brand's last scan found: theirs, and the ones about them. */
+/** The posts a brand's last scan found (theirs, and the ones about them), and what works for it. */
 export function CompetitorPostsDialog({
   competitorId,
+  initialTab = "own",
   onOpenChange,
 }: {
   /** The brand to show; null keeps the dialog closed. */
   readonly competitorId: string | null
+  /** The tab it opens on. */
+  readonly initialTab?: CompetitorDialogTab
   readonly onOpenChange: (open: boolean) => void
 }) {
   const t = useT()
   const detail = useCompetitorDetail(competitorId)
-  const [tab, setTab] = useState<Tab>("own")
+  const [tab, setTab] = useState<CompetitorDialogTab>(initialTab)
+  // Each opening starts on the tab it was opened for.
+  useEffect(() => {
+    if (competitorId) setTab(initialTab)
+  }, [competitorId, initialTab])
   const [now] = useState(() => Date.now())
   const scan = detail.data?.latestScan ?? null
   const posts = useMemo(() => (scan?.posts ?? []).filter((p: CompetitorPost) => p.role === tab), [scan, tab])
@@ -41,7 +49,7 @@ export function CompetitorPostsDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="flex gap-1 self-start rounded-lg border p-0.5 text-[12px] font-bold">
-          {(["own", "about"] as const).map((key) => (
+          {(["own", "about", "lessons"] as const).map((key) => (
             <button
               key={key}
               type="button"
@@ -50,12 +58,16 @@ export function CompetitorPostsDialog({
             >
               {key === "own"
                 ? t("competitors.tabOwn", { n: scan?.counts.own ?? 0 })
-                : t("competitors.tabAbout", { n: scan?.counts.about ?? 0 })}
+                : key === "about"
+                  ? t("competitors.tabAbout", { n: scan?.counts.about ?? 0 })
+                  : t(detail.data?.isOwn ? "competitors.tabLessonsOwn" : "competitors.tabLessons")}
             </button>
           ))}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {detail.isLoading ? (
+          {tab === "lessons" && competitorId ? (
+            <CompetitorLessons competitorId={competitorId} isOwn={detail.data?.isOwn === true} />
+          ) : detail.isLoading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>

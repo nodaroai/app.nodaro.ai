@@ -491,6 +491,8 @@ export function estimateNodeCredits(
   edges?: ReadonlyArray<{ source?: string; target: string; targetHandle?: string | null }>,
   /** With `edges`, lets a node with a Settings input be priced as it runs. */
   nodes?: ReadonlyArray<{ id: string; type?: string | null; data?: unknown }>,
+  /** The nodes about to run, for a whole-run estimate (see `getCostMultiplier`). */
+  reruns?: ReadonlySet<string>,
 ): number {
   const node = withWiredSettings(storedNode, nodes, edges)
   const nodeType = node.type ?? ""
@@ -559,7 +561,7 @@ export function estimateNodeCredits(
     const probedWired = node.data.probedVideo as ProbedVideoInfo | undefined
     // A Social Search's posts wired in: the longest of their videos (each post
     // is charged by its own) — never a `probedVideo` left from an earlier wire.
-    const fromPosts = wiredSocialPostsVideoSec(node.id ?? "", edges, nodes)
+    const fromPosts = wiredSocialPostsVideoSec(node.id ?? "", edges, nodes, reruns)
     const durationSec = fromPosts !== null
       ? fromPosts
       : (probed && probed.url === node.data.youtubeUrl ? probed.durationSec : undefined) ?? probedWired?.durationSec

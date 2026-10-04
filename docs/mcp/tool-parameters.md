@@ -398,6 +398,14 @@ Needs `assets:read` · Nodaro Cloud only.
 
 No parameters.
 
+## `competitor_lessons`
+
+Needs `assets:read` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `competitor_id` | string | yes | From list_competitors. |
+
 ## `continue_video_pro`
 
 Needs `workflows:execute`.

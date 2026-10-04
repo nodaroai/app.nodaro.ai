@@ -17,6 +17,7 @@ Its output is a **list**: the node after it (typically [Generate Script](./gener
 | Your brand (`brand`) | text | `""` | What you sell, who it is for, your tone, and what the brand never does. Up to 6,000 characters. Can come from a Text node wired into **Brand**. Empty = ideas for a small brand in the same niche as the recipes |
 | Number of ideas (`count`) | number | `5` | 1 to 10 |
 | Language (`language`) | text | `""` | Optional, e.g. `Hebrew`. Empty = the language the brand text is written in (English when there is none) |
+| Learn from my brand's results (`useBrandLessons`) | toggle | on | Lean the ideas on what has worked on your own posts: the lessons of the brand marked **This is my brand** in [Competitors](../../features/competitors.md#what-works) (with several, the one scanned last). The node then says which brand it read. Nothing changes without an own brand with enough posts. Same price |
 
 ## Inputs & Outputs
 
@@ -55,5 +56,6 @@ Formula: `credits = batch price × ceil(ideas ÷ 5)`, with the batch price set b
 ## Tips
 
 - The more specific the brand text, the better the ideas — include the audience, the tone, an offer, and the things the brand never does.
+- Track your own brand in Competitors (**This is my brand**) and scan it: the ideas then lean on the formats, lengths and hooks that worked for you.
 - Mix recipes from different posts: the ideas spread across them and across hook mechanics.
 - `{Content Ideas}` inside another node's text is the digest of every idea, not the current one — wire the node instead.

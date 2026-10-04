@@ -49,9 +49,17 @@ describe("contentRunResultPatch — content-ideas", () => {
       ideaBriefs: ["IDEA 1 of 2: one", "IDEA 2 of 2: two"],
       generatedText: "CONTENT IDEAS (2)",
       runWarnings: undefined,
+      brandLessons: undefined,
     })
     expect(patch).not.toHaveProperty("__listResults")
     expect(patch).not.toHaveProperty("generatedResults")
+  })
+
+  it("names the own brand whose lessons the ideas leaned on, and only a real one", () => {
+    const base = { json: [{ title: "one" }], listResults: ["IDEA 1 of 1: one"] }
+    expect(contentRunResultPatch("content-ideas", { ...base, brandLessons: { brand: "Acme", lessons: 3 } })?.brandLessons).toEqual({ brand: "Acme", lessons: 3 })
+    expect(contentRunResultPatch("content-ideas", { ...base, brandLessons: { brand: "Acme", lessons: 0 } })?.brandLessons).toBeUndefined()
+    expect(contentRunResultPatch("content-ideas", { ...base, brandLessons: "Acme" })?.brandLessons).toBeUndefined()
   })
 
   it("with no digest, the text is the briefs joined", () => {

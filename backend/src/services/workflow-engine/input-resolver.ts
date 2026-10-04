@@ -1476,8 +1476,11 @@ function routeOutput(
         inputs.videoFromSocialPost = true
       } else if (video?.kind === "page") {
         inputs.videoPageUrl = video.url
+        inputs.videoPageFromSocialPost = true
       } else if (video?.kind === "expired") {
         inputs.socialPostVideoExpired = true
+      } else if (video?.kind === "none") {
+        inputs.socialPostNoVideo = true
       }
       return
     }

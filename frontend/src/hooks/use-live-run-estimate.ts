@@ -81,14 +81,14 @@ export function computeLiveRunEstimate(
   const executable = effectiveNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
   // A presented run executes every node, so any upstream planner re-plans.
   const rerunIds = new Set(executable.map((n) => n.id))
-  const modelIds = [...new Set(executable.map((n) => getModelIdentifier(n, args.edges, effectiveNodes)).filter(Boolean))]
+  const modelIds = [...new Set(executable.map((n) => getModelIdentifier(n, args.edges, effectiveNodes, rerunIds)).filter(Boolean))]
   const uncachedModelIds = modelIds.filter((m) => getCachedCredits(m) === undefined)
   const total = executable.reduce((sum, node) => {
-    const cached = getCachedCredits(getModelIdentifier(node, args.edges, effectiveNodes))
+    const cached = getCachedCredits(getModelIdentifier(node, args.edges, effectiveNodes, rerunIds))
     const cost =
       cached !== undefined
         ? cached
-        : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, args.edges, effectiveNodes)
+        : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, args.edges, effectiveNodes, rerunIds)
     return sum + cost * getCostMultiplier(node, effectiveNodes, args.edges, rerunIds)
   }, 0)
   return { total, uncachedModelIds }

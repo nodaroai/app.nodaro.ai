@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertTriangle, Loader2, Pencil, Radar, Rows3, Trash2 } from "lucide-react"
+import { AlertTriangle, Lightbulb, Loader2, Pencil, Radar, Rows3, Trash2 } from "lucide-react"
 import { COMPETITOR_SCHEDULES, competitorScanCreditId, competitorScanCredits, type CompetitorAccountKey, type CompetitorSchedule, type TrackedCompetitor } from "@nodaro/shared"
 import { Button } from "@/components/ui/button"
 import { CreditCost } from "@/components/ui/credit-cost"
@@ -28,6 +28,7 @@ export function CompetitorRow({
   onScan,
   onSchedule,
   onPosts,
+  onLessons,
   onEdit,
   onRemove,
 }: {
@@ -36,6 +37,8 @@ export function CompetitorRow({
   readonly onScan: () => void
   readonly onSchedule: (schedule: CompetitorSchedule) => void
   readonly onPosts: () => void
+  /** Opens what works for the brand (lessons from its own posts). */
+  readonly onLessons: () => void
   readonly onEdit: () => void
   readonly onRemove: () => void
 }) {
@@ -97,6 +100,10 @@ export function CompetitorRow({
         <Button size="sm" variant="outline" onClick={onPosts} disabled={!c.lastScanId}>
           <Rows3 className="me-1 h-3.5 w-3.5" />
           {t("competitors.posts")}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onLessons} disabled={!c.lastScanId}>
+          <Lightbulb className="me-1 h-3.5 w-3.5" />
+          {t(c.isOwn ? "competitors.tabLessonsOwn" : "competitors.tabLessons")}
         </Button>
         <Button size="icon" variant="ghost" className="h-8 w-8" onClick={onEdit} aria-label={t("competitors.edit")} title={t("competitors.edit")}>
           <Pencil className="h-3.5 w-3.5" />

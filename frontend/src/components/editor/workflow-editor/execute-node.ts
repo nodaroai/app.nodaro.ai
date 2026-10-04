@@ -3995,12 +3995,12 @@ function executeNodeCore(
     // A wired Social Search post whose video link expired is the source this
     // run was given: refuse it by name rather than analyze the node's own
     // link field instead. Mirrors the backend video-analysis-post-probe.
-    if (inputs.socialPostVideoExpired && !videoUrl && !inputs.videoPageUrl) {
+    if ((inputs.socialPostVideoExpired || inputs.socialPostNoVideo) && !videoUrl && !inputs.videoPageUrl) {
       // Guarded: a run over many posts reports it once, on the node.
-      const expired = nodeRunError(d.label, "nodeRun.socialPostVideoExpired");
-      useWorkflowStore.getState().updateNodeData(node.id, { executionStatus: "failed", errorMessage: expired });
-      guardedToast.error(expired);
-      return Promise.reject(new Error(expired));
+      const refusal = nodeRunError(d.label, inputs.socialPostNoVideo ? "nodeRun.socialPostNoVideo" : "nodeRun.socialPostVideoExpired");
+      useWorkflowStore.getState().updateNodeData(node.id, { executionStatus: "failed", errorMessage: refusal });
+      guardedToast.error(refusal);
+      return Promise.reject(new Error(refusal));
     }
     const youtubeUrl = inputs.videoPageUrl ?? (d.youtubeUrl?.trim() || undefined);
     if (!videoUrl && !youtubeUrl) {
@@ -4203,6 +4203,7 @@ function executeNodeCore(
       ideaBriefs: undefined,
       generatedText: undefined,
       runWarnings: undefined,
+      brandLessons: undefined,
       currentJobProgress: undefined,
     });
     setUserPromptTemplate(undefined);
@@ -4214,6 +4215,7 @@ function executeNodeCore(
       language: d.language?.trim() || undefined,
       llmModel: d.llmModel,
       reasoningEffort: d.reasoningEffort,
+      useBrandLessons: d.useBrandLessons === false ? false : undefined,
       userId: ctx.userId,
     })
       .then(({ jobId }) => {

@@ -7,7 +7,13 @@
  * are charged.
  */
 import { describe, it, expect, vi } from "vitest"
-import { POST_VIDEO_EXPIRED_MESSAGE, videoAnalysisPostDuration, type PostProbeDeps } from "../video-analysis-post-probe.js"
+import {
+  POST_NO_VIDEO_MESSAGE,
+  POST_UNREADABLE_MESSAGE,
+  POST_VIDEO_EXPIRED_MESSAGE,
+  videoAnalysisPostDuration,
+  type PostProbeDeps,
+} from "../video-analysis-post-probe.js"
 import type { SimpleNode } from "../types.js"
 
 vi.mock("../../../lib/queue.js", () => ({ redis: { get: vi.fn(), set: vi.fn() } }))
@@ -74,14 +80,17 @@ describe("videoAnalysisPostDuration", () => {
       expect(probe).not.toHaveBeenCalled()
     })
 
-    it("refuses a file past the ceiling, and prices one it cannot read at the ceiling", async () => {
+    it("refuses a file past the ceiling, and one it cannot read — never priced at the ceiling", async () => {
       await expect(videoAnalysisPostDuration(va({}), fromPost, deps(probeOf({ durationSec: 1 }), { probeFile: async () => 1200 }))).rejects.toMatchObject({
         errorCode: "video_too_long",
       })
       const unreadable = vi.fn(async () => {
         throw new Error("HTTP 403")
       })
-      expect(await videoAnalysisPostDuration(va({}), fromPost, deps(probeOf({ durationSec: 1 }), { probeFile: unreadable }))).toBeNull()
+      await expect(videoAnalysisPostDuration(va({}), fromPost, deps(probeOf({ durationSec: 1 }), { probeFile: unreadable }))).rejects.toMatchObject({
+        errorCode: "post_video_unreadable",
+        message: POST_UNREADABLE_MESSAGE,
+      })
     })
 
     it("answers the same file from its cache, and reads nothing where no credits are charged", async () => {
@@ -94,6 +103,33 @@ describe("videoAnalysisPostDuration", () => {
       expect(await videoAnalysisPostDuration(va({}), fromPost, deps(probeOf({ durationSec: 1 }), { probeFile: off, enabled: () => false }))).toBeNull()
       expect(off).not.toHaveBeenCalled()
     })
+  })
+
+  describe("a Social Search post's page (no file came with it)", () => {
+    const fromSearch = { videoPageUrl: REEL, videoPageFromSocialPost: true } as const
+
+    it("is priced by the page's length when the page says it", async () => {
+      expect(await videoAnalysisPostDuration(va({}), fromSearch, deps(probeOf({ durationSec: 41.2 })))).toBe(42)
+    })
+
+    it("is refused, free, when the page gives no length or cannot be read — never priced at the ceiling", async () => {
+      await expect(videoAnalysisPostDuration(va({}), fromSearch, deps(probeOf({ durationSec: null })))).rejects.toMatchObject({
+        errorCode: "post_video_unreadable",
+      })
+      const failing = vi.fn(async () => {
+        throw new Error("login required")
+      })
+      await expect(videoAnalysisPostDuration(va({}), fromSearch, deps(failing))).rejects.toMatchObject({ errorCode: "post_video_unreadable" })
+    })
+  })
+
+  it("refuses a Social Search post with no video — by name, charged or not", async () => {
+    for (const enabled of [() => true, () => false]) {
+      await expect(videoAnalysisPostDuration(va({}), { socialPostNoVideo: true }, deps(probeOf({ durationSec: 30 }), { enabled }))).rejects.toMatchObject({
+        errorCode: "post_has_no_video",
+        message: POST_NO_VIDEO_MESSAGE,
+      })
+    }
   })
 
   it("refuses a Social Search post whose video link has expired — by name, charged or not", async () => {

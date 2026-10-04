@@ -5883,6 +5883,11 @@ export type ContentIdeasNodeData = {
   /** All briefs as one text — the node's single text value. */
   generatedText?: string
   runWarnings?: string[]
+  /** Lean on what has worked for the user's own brand (its tracked brand
+   *  marked "this is my brand" in Competitors). On unless false. */
+  useBrandLessons?: boolean
+  /** The last run's: the own brand whose lessons the ideas leaned on, and how many. */
+  brandLessons?: { brand: string; lessons: number }
 }
 
 // --- Video Audit ("AI Audit") Node Data ---
