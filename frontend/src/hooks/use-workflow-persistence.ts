@@ -1161,6 +1161,10 @@ export function useWorkflowPersistence(projectId?: string) {
           // this workflow until the channel id matches (re-subscribe is
           // triggered by `workflowId` change in `workflow-canvas.tsx`).
           // The window between insert and re-subscribe is broadcast-safe.
+          // The row was just inserted under this caller's own id, so its access
+          // is `own` — recorded BEFORE the id lands, so the canvas never sees
+          // the new id without it and subscribes as any owner does (T86).
+          useWorkflowStore.setState({ loadedAccess: { workflowId: data.id as string, access: "own" } })
           setWorkflowId(data.id)
           createdWorkflowId = data.id as string
           // What the owner set in this workflow's trigger panels before it had
@@ -1412,9 +1416,15 @@ export function useWorkflowPersistence(projectId?: string) {
         // server said so in the same answer that carried the document, and a
         // canvas that cannot save never reaches the save path's own reads of
         // the stored row (its conflict rebase).
+        // The same answer decides how this canvas hears about writes made
+        // elsewhere (T86): `own` / `edit` subscribe to the row's Realtime
+        // broadcasts, `view` polls and re-reads through the server
+        // (use-workflow-realtime-sync.ts). Recorded only here, once the content
+        // is on the canvas, so a load that fails before this stays unknown.
         useWorkflowStore.setState({
           isReadOnly: isStudioWorkflowSettings(settings) || content.access === "view",
           readOnlyReason: null,
+          loadedAccess: { workflowId: data.id, access: content.access },
         })
 
         // What THIS person may do with THIS workflow, asked of the server and

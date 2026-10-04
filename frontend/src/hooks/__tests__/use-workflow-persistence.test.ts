@@ -2102,4 +2102,44 @@ describe("useWorkflowPersistence — load, by who is reading (T76)", () => {
     expect(out).toEqual({ success: false, error: "Workflow not found" })
     expect(returned).toEqual([])
   })
+
+  // T86: the canvas hears about writes made elsewhere by the access its load
+  // answered — `own` / `edit` subscribe to the row's broadcasts, anything else
+  // polls and re-reads through the server (use-workflow-realtime-sync.ts).
+
+  /** Every `loadedAccess` the load wrote to the store. */
+  function accessWrites(): unknown[] {
+    return vi.mocked(useWorkflowStore.setState).mock.calls
+      .map(([patch]) => (patch as { loadedAccess?: unknown }).loadedAccess)
+      .filter((v) => v !== undefined)
+  }
+
+  it("records the access the load answered, keyed by the workflow it answered for", async () => {
+    const stored = storedProduction()
+    await loadAs(stored, serverAnswer(stored, "view"))
+    expect(accessWrites()).toEqual([{ workflowId: "w1", access: "view" }])
+
+    vi.mocked(useWorkflowStore.setState).mockClear()
+    await loadAs(stored, serverAnswer(stored, "edit"))
+    expect(accessWrites()).toEqual([{ workflowId: "w1", access: "edit" }])
+
+    vi.mocked(useWorkflowStore.setState).mockClear()
+    await loadAs({ ...stored, user_id: "u1" })
+    expect(accessWrites()).toEqual([{ workflowId: "w1", access: "own" }])
+  })
+
+  it("a failed load records no access, so the canvas stays unknown — and fails closed", async () => {
+    await loadAs(storedProduction(), null)
+    expect(accessWrites()).toEqual([])
+
+    vi.mocked(useWorkflowStore.setState).mockClear()
+    mockSupabaseFrom.mockReturnValue({ select: () => rowQuery(null, { message: "boom" }) })
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    let out: { success: boolean } | undefined
+    await act(async () => {
+      out = await result.current.load("w1")
+    })
+    expect(out?.success).toBe(false)
+    expect(accessWrites()).toEqual([])
+  })
 })

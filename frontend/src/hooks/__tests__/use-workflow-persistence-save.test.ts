@@ -621,6 +621,21 @@ describe("useWorkflowPersistence — save", () => {
     expect(mockSetWorkflowId).toHaveBeenCalledWith("brand-new-wf")
   })
 
+  it("records a workflow it just created as the caller's own BEFORE its id lands, so the canvas subscribes as an owner's does (T86)", async () => {
+    resetStoreState({ workflowId: null, nodes: [makeNode("n1")] })
+    setupSupabaseInsert({ id: "brand-new-wf" })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+
+    await act(async () => {
+      await result.current.save()
+    })
+
+    expect(mockStoreSetState).toHaveBeenCalledWith({ loadedAccess: { workflowId: "brand-new-wf", access: "own" } })
+    const recorded = mockStoreSetState.mock.calls.findIndex(([patch]) => "loadedAccess" in patch)
+    expect(mockStoreSetState.mock.invocationCallOrder[recorded]!).toBeLessThan(mockSetWorkflowId.mock.invocationCallOrder[0]!)
+  })
+
   it("returns error when user is not authenticated (insert path)", async () => {
     resetStoreState({ workflowId: null, nodes: [makeNode("n1")] })
     mockGetUser.mockResolvedValue({ data: { user: null } })

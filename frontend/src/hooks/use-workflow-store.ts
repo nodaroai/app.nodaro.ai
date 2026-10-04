@@ -32,6 +32,7 @@ import { resolveNodeDefaults, rememberSelection, pickRelevantFields, isNodeDefau
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { getCachedUserId } from "@/hooks/use-auth"
+import type { LoadedWorkflowAccess } from "@/lib/workflow-content"
 import { getStickyLookPreviewStyle, getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
 import { getInlinePromptMode, setInlinePromptMode as persistInlinePromptMode } from "@/lib/inline-prompt-pref"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
@@ -435,6 +436,17 @@ interface WorkflowState {
    * predating the rollout (save falls back to the updated_at lock).
    */
   readonly loadedVersion: number | null
+  /**
+   * The access the canvas loaded this workflow with (`own` / `edit` / `view`),
+   * keyed by the workflow it was answered for (T86). Decides how the canvas
+   * hears about writes made elsewhere: a canvas whose load answered `own` or
+   * `edit` subscribes to the row's Realtime broadcasts, anything else — `view`,
+   * or no answer yet — polls a content-free stamp and re-reads through the
+   * server (`mayHoldStoredRow`, lib/workflow-content.ts). Null until the load
+   * answers; `loadWorkflow` and `clearWorkflow` reset it, so a failed load or a
+   * reload stays unknown, and unknown fails closed.
+   */
+  readonly loadedAccess: LoadedWorkflowAccess | null
   /**
    * References (NOT copies) to the graph + meta handed to the last
    * successful save / load / remote-reconcile. The delta-save builder
@@ -1039,6 +1051,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   saveError: null,
   loadedUpdatedAt: null,
   loadedVersion: null,
+  loadedAccess: null,
   lastSavedSnapshot: null,
   remoteUpdatedAt: null,
   videoAutoplay: typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function" && localStorage.getItem("videoAutoplay") !== null
@@ -2776,6 +2789,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       saveError: null,
       loadedUpdatedAt: null,
       loadedVersion: null,
+      loadedAccess: null,
       remoteUpdatedAt: null,
       characterDefinitions: characterDefinitions ?? [],
       flowPromptTemplates: flowPromptTemplates ?? {},
@@ -2802,6 +2816,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       saveError: null,
       loadedUpdatedAt: null,
       loadedVersion: null,
+      loadedAccess: null,
       lastSavedSnapshot: null,
       remoteUpdatedAt: null,
       characterDefinitions: [],

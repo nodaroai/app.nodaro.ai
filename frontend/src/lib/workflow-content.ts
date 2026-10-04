@@ -27,10 +27,23 @@ import { getCurrentUserId, getWorkflowDocument, type WorkflowAccessLevel, type W
  * on any other browser read of `workflows` that selects content without being
  * scoped to the caller's own rows.
  *
- * Accepted residual (#1596): the row policies still let a `view` reader query
- * the table themselves, and Realtime still pushes the row to their socket.
+ * Realtime is the other way a row reaches the browser: a broadcast IS the
+ * stored row (REPLICA IDENTITY FULL), pushed to every socket subscribed to it.
+ * So a canvas subscribes only when its load answered `own` or `edit`
+ * (`mayHoldStoredRow`); a `view` reader's canvas opens no subscription at all,
+ * polls a content-free stamp instead and re-reads through the server when it
+ * moves (T85 / T86, `use-workflow-realtime-sync.ts`).
+ *
+ * Accepted residual (#1596): the row policies (`workflows_select`, migration
+ * 338) still let a `view` reader query the table through PostgREST themselves.
+ * The same SELECT right would also deliver the row's broadcasts to a Realtime
+ * subscription such a reader opens by hand; the app never opens one for them.
  * This module keeps the APP from ever holding what it should not; only a
- * database change can stop a determined reader.
+ * database change can stop a determined reader. RLS chooses rows, not columns,
+ * and a column privilege binds every signed-in caller alike (owners included),
+ * so closing it means narrowing the SELECT policy to `own` / `edit` and moving
+ * a `view` reader's remaining table reads, the T85 stamp poll among them,
+ * behind the server.
  */
 
 /** What the reader was judged at. `own` on the owner's branch is a statement
@@ -88,9 +101,9 @@ export async function readWorkflowContent(workflowId: string, projection: string
 }
 
 /**
- * The server's answer alone, for a caller that already knows the row is not its
- * own — a Realtime broadcast about somebody else's workflow — and so has no use
- * for the owner probe.
+ * The server's answer alone, for a caller that must not be handed the stored
+ * row — a `view` reader's canvas re-reading after its poll saw the row move —
+ * and so has no use for the owner probe.
  */
 export async function readWorkflowContentFromServer(workflowId: string): Promise<WorkflowContent | null> {
   const doc = await getWorkflowDocument(workflowId)
@@ -98,11 +111,27 @@ export async function readWorkflowContentFromServer(workflowId: string): Promise
 }
 
 /**
- * Whether a row is the caller's own, by its `user_id`. Fails closed: a row with
- * no `user_id`, or a caller not known yet, is somebody else's.
+ * The access a canvas loaded a workflow with — keyed by the workflow it was
+ * answered for, so it can only ever speak for that one (the store's
+ * `loadedAccess`; T86).
  */
-export function isOwnWorkflowRow(row: { readonly user_id?: unknown }, callerId: string | null | undefined): boolean {
-  return !!callerId && typeof row.user_id === "string" && row.user_id === callerId
+export interface LoadedWorkflowAccess {
+  readonly workflowId: string
+  readonly access: WorkflowContentAccess
+}
+
+/**
+ * Whether the canvas showing `workflowId` may hold its row as stored — which is
+ * what a Realtime broadcast carries. Its owner and an `edit` collaborator may
+ * (the server answers both the stored row); a `view` reader may not. Fails
+ * closed: no record yet (the load has not answered, or it failed), or a record
+ * for another workflow, counts as `view`.
+ */
+export function mayHoldStoredRow(
+  loaded: LoadedWorkflowAccess | null | undefined,
+  workflowId: string | null | undefined,
+): boolean {
+  return !!loaded && !!workflowId && loaded.workflowId === workflowId && (loaded.access === "own" || loaded.access === "edit")
 }
 
 function toContentRow(doc: WorkflowDocument): WorkflowContentRow {

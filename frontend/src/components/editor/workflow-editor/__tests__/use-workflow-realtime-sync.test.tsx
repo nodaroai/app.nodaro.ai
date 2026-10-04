@@ -1,14 +1,18 @@
-import { describe, it, expect, beforeEach, vi } from "vitest"
-import { render } from "@testing-library/react"
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
+import { act, render } from "@testing-library/react"
 import type { Node, Edge } from "@xyflow/react"
-import { useWorkflowRealtimeSync } from "../use-workflow-realtime-sync"
 import { stripStudioDraftWorkflow } from "@nodaro/shared"
+import { useWorkflowRealtimeSync, VIEW_POLL_INTERVAL_MS } from "../use-workflow-realtime-sync"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowDocument } from "@/lib/api"
+import type { WorkflowContentAccess } from "@/lib/workflow-content"
 
 // ---------------------------------------------------------------------------
 // Supabase mock — capture the latest postgres_changes handler the hook
 // registers so tests can fire UPDATE events synchronously, and record the
-// channel name / filter / removeChannel calls for assertions.
+// channel name / filter / removeChannel calls for assertions. It also answers
+// the one table read the hook makes — a `view` reader's content-free stamp
+// (T85) — from `table.stamp`, logging each read in `stampReads`.
 // ---------------------------------------------------------------------------
 
 interface SubscribeRecord {
@@ -58,31 +62,63 @@ function makeChannel(channelName: string) {
 
 const channelFactory = vi.fn((name: string) => makeChannel(name))
 
+interface StampRead {
+  table: string
+  projection: string
+  filters: Array<[string, unknown]>
+}
+
+/** The row's stamp as the table holds it now; null = no row the caller may read. */
+const table: { stamp: { updated_at: string; version: number | null } | null } = { stamp: null }
+const stampReads: StampRead[] = []
+
 vi.mock("@/lib/supabase", () => ({
   createClient: () => ({
     channel: (name: string) => channelFactory(name),
     removeChannel: (channel: unknown) => removeChannelMock(channel),
+    from: (tableName: string) => ({
+      select: (projection: string) => {
+        const read: StampRead = { table: tableName, projection, filters: [] }
+        stampReads.push(read)
+        const query = {
+          eq: (col: string, val: unknown) => {
+            read.filters.push([col, val])
+            return query
+          },
+          maybeSingle: async () => ({ data: table.stamp ? { ...table.stamp } : null, error: null }),
+        }
+        return query
+      },
+    }),
   }),
 }))
 
-// ---------------------------------------------------------------------------
-// Whose row a broadcast is, the hook decides itself — from the signed-in
-// session and, for somebody else's row, the server's door. Only those two
-// edges are mocked: the real `isOwnWorkflowRow` and `readWorkflowContentFromServer`
-// (lib/workflow-content.ts) stay in the chain, so these tests pin the decision
-// the canvas actually runs. `ME` owns every row in the tests above the
-// foreign-row block, which are about the owner's own canvas.
-// ---------------------------------------------------------------------------
-
-const ME = "me-1"
-const session = vi.hoisted(() => ({ userId: undefined as string | undefined }))
+// The server's door — `GET /v1/workflows/:id` — is the one network edge the
+// re-read crosses; the real `readWorkflowContentFromServer` stays in the chain.
 const server = vi.hoisted(() => ({ getWorkflowDocument: vi.fn() }))
-
-vi.mock("@/hooks/use-auth", () => ({ getCachedUserId: () => session.userId }))
 vi.mock("@/lib/api", () => ({
   getWorkflowDocument: (id: string) => server.getWorkflowDocument(id),
-  getCurrentUserId: async () => session.userId,
+  getCurrentUserId: async () => undefined,
 }))
+
+// ---------------------------------------------------------------------------
+// Which of the two the canvas does — subscribe, or poll — the hook decides
+// itself, from the access the load recorded in the REAL workflow store
+// (`loadedAccess`, keyed by workflow id). The tests set that record exactly as
+// the load does, so they pin the decision the canvas actually runs.
+// ---------------------------------------------------------------------------
+
+function loadedAs(workflowId: string, access: WorkflowContentAccess): void {
+  act(() => {
+    useWorkflowStore.setState({ loadedAccess: { workflowId, access } })
+  })
+}
+
+function notLoaded(): void {
+  act(() => {
+    useWorkflowStore.setState({ loadedAccess: null })
+  })
+}
 
 // ---------------------------------------------------------------------------
 // Test harness — drives the hook with controllable params + exposes the
@@ -173,12 +209,17 @@ describe("useWorkflowRealtimeSync", () => {
     removeChannelMock.mockClear()
     channelFactory.mockClear()
     nextChannelId = 0
-    session.userId = ME
+    stampReads.length = 0
+    table.stamp = null
     server.getWorkflowDocument.mockReset()
-    server.getWorkflowDocument.mockRejectedValue(new Error("an owner's broadcast is never re-read"))
+    server.getWorkflowDocument.mockRejectedValue(new Error("a subscribed canvas never re-reads"))
+    // The tests in this outer block are about the OWNER's canvas: its load
+    // answered `own` for wf-1, so it subscribes and adopts broadcasts.
+    loadedAs("wf-1", "own")
   })
 
   it("subscribes on mount with the workflow:<id> channel name and id-filtered postgres_changes config", () => {
+    loadedAs("abc-123", "own")
     render(<Harness {...defaultProps({ workflowId: "abc-123" })} />)
 
     expect(channelFactory).toHaveBeenCalledTimes(1)
@@ -207,12 +248,19 @@ describe("useWorkflowRealtimeSync", () => {
   })
 
   it("tears down old subscription and opens a fresh one when workflowId changes", () => {
+    loadedAs("wf-A", "own")
     const { rerender } = render(<Harness {...defaultProps({ workflowId: "wf-A" })} />)
     expect(channelFactory).toHaveBeenCalledTimes(1)
     expect(channelFactory).toHaveBeenLastCalledWith("workflow:wf-A")
 
+    // Opening wf-B: its load has not answered yet, and wf-A's answer says
+    // nothing about wf-B — the old channel goes, and no new one opens yet.
     rerender(<Harness {...defaultProps({ workflowId: "wf-B" })} />)
     expect(removeChannelMock).toHaveBeenCalledTimes(1)
+    expect(channelFactory).toHaveBeenCalledTimes(1)
+
+    // wf-B's load answers `own`.
+    loadedAs("wf-B", "own")
     expect(channelFactory).toHaveBeenCalledTimes(2)
     expect(channelFactory).toHaveBeenLastCalledWith("workflow:wf-B")
   })
@@ -244,7 +292,6 @@ describe("useWorkflowRealtimeSync", () => {
     lastSubscription().handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: incomingNodes,
         edges: incomingEdges,
         updated_at: "2026-01-02T00:00:00Z",
@@ -282,7 +329,6 @@ describe("useWorkflowRealtimeSync", () => {
     lastSubscription().handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: [makeNode("n1")],
         edges: [],
         updated_at: "T1",
@@ -325,7 +371,6 @@ describe("useWorkflowRealtimeSync", () => {
     lastSubscription().handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: incomingNodes,
         edges: [],
         updated_at: "2026-01-02T00:00:00Z",
@@ -354,7 +399,6 @@ describe("useWorkflowRealtimeSync", () => {
     lastSubscription().handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: [],
         edges: [makeEdge("e1", "a", "b"), makeEdge("e2", "b", "c")],
         updated_at: "T1",
@@ -388,7 +432,6 @@ describe("useWorkflowRealtimeSync", () => {
     lastSubscription().handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: [makeNode("n1")],
         edges: [],
         updated_at: "2026-01-02T00:00:00Z", // matches local
@@ -425,7 +468,6 @@ describe("useWorkflowRealtimeSync", () => {
     lastSubscription().handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: [makeNode("stale-snapshot")],
         edges: [],
         updated_at: "T61",
@@ -460,7 +502,6 @@ describe("useWorkflowRealtimeSync", () => {
     lastSubscription().handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: [makeNode("n1"), makeNode("deleted-since")],
         edges: [makeEdge("e-old", "n1", "deleted-since")],
         updated_at: "T61",
@@ -499,7 +540,7 @@ describe("useWorkflowRealtimeSync", () => {
     )
 
     lastSubscription().handler({
-      new: { id: "wf-1", user_id: ME, nodes: [makeNode("n1")], edges: [], updated_at: "T21", version: 21 },
+      new: { id: "wf-1", nodes: [makeNode("n1")], edges: [], updated_at: "T21", version: 21 },
     })
 
     expect(onRemoteUpdatedAt).not.toHaveBeenCalled()
@@ -523,7 +564,7 @@ describe("useWorkflowRealtimeSync", () => {
     )
 
     lastSubscription().handler({
-      new: { id: "wf-1", user_id: ME, nodes: [makeNode("n1")], edges: [], updated_at: "T21", version: 21 },
+      new: { id: "wf-1", nodes: [makeNode("n1")], edges: [], updated_at: "T21", version: 21 },
     })
 
     expect(onRemoteUpdatedAt).toHaveBeenCalledWith("T21")
@@ -547,7 +588,6 @@ describe("useWorkflowRealtimeSync", () => {
     lastSubscription().handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: [makeNode("n1")],
         edges: [],
         updated_at: "T62-thumbnail",
@@ -576,7 +616,7 @@ describe("useWorkflowRealtimeSync", () => {
     const handler = lastSubscription().handler
 
     handler({
-      new: { id: "wf-1", user_id: ME, nodes: [makeNode("from-remote")], edges: [], updated_at: "T63", version: 63 },
+      new: { id: "wf-1", nodes: [makeNode("from-remote")], edges: [], updated_at: "T63", version: 63 },
     })
     expect(onReconcile).toHaveBeenCalledTimes(1)
     expect((onReconcile.mock.calls[0][0] as { version?: number | null }).version).toBe(63)
@@ -593,7 +633,7 @@ describe("useWorkflowRealtimeSync", () => {
       />,
     )
     handler({
-      new: { id: "wf-1", user_id: ME, nodes: [makeNode("from-remote")], edges: [], updated_at: "T64", version: 64 },
+      new: { id: "wf-1", nodes: [makeNode("from-remote")], edges: [], updated_at: "T64", version: 64 },
     })
     expect(onRemoteUpdatedAt).toHaveBeenCalledWith("T64")
   })
@@ -613,7 +653,7 @@ describe("useWorkflowRealtimeSync", () => {
 
     // Versioned payload, versionless tab: updated_at differs → reconcile.
     lastSubscription().handler({
-      new: { id: "wf-1", user_id: ME, nodes: [makeNode("n1")], edges: [], updated_at: "T1", version: 1 },
+      new: { id: "wf-1", nodes: [makeNode("n1")], edges: [], updated_at: "T1", version: 1 },
     })
     expect(onReconcile).toHaveBeenCalledTimes(1)
   })
@@ -637,7 +677,6 @@ describe("useWorkflowRealtimeSync", () => {
     lastSubscription().handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: [makeNode("n1")],
         edges: [],
         updated_at: "2026-01-02T00:00:00Z",
@@ -665,7 +704,6 @@ describe("useWorkflowRealtimeSync", () => {
     lastSubscription().handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: [makeNode("n1")],
         edges: [],
         updated_at: "T1",
@@ -704,7 +742,6 @@ describe("useWorkflowRealtimeSync", () => {
     handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: [makeNode("n1")],
         edges: [],
         updated_at: "T1",
@@ -727,7 +764,6 @@ describe("useWorkflowRealtimeSync", () => {
     handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: [makeNode("n1")],
         edges: [],
         updated_at: "T1",
@@ -771,7 +807,6 @@ describe("useWorkflowRealtimeSync", () => {
     handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: [makeNode("from-remote")],
         edges: [],
         updated_at: "T2",
@@ -815,7 +850,6 @@ describe("useWorkflowRealtimeSync", () => {
     handler({
       new: {
         id: "wf-1",
-        user_id: ME,
         nodes: null,
         edges: "not-an-array",
         updated_at: "T1",
@@ -833,18 +867,19 @@ describe("useWorkflowRealtimeSync", () => {
     // path tracks the divergence to drive the banner.
     expect(onRemoteUpdatedAt).not.toHaveBeenCalled()
   })
+
   // -------------------------------------------------------------------------
-  // Somebody else's row (T76): the broadcast is the STORED document, and a
-  // studio production keeps its owner's drafts in it (T11 / T21 / T42). Only
-  // the owner adopts it as it arrived; anyone else re-reads through the
-  // server's door, which strips them for a `view` reader. The hook decides
-  // whose row it is from the session (`getCachedUserId`), not from anything
-  // its caller passes, so these tests pin the decision the canvas runs.
+  // Who subscribes, and who polls (T85 / T86). A broadcast is the row AS
+  // STORED, and a studio production keeps its owner's drafts in it — empty
+  // slots and runs in flight per scene, drafts in the bin, each take's voice
+  // plan (T11 / T21 / T42). A canvas whose load answered `own` or `edit`
+  // subscribes and adopts broadcasts as before; a `view` reader's canvas — or
+  // one whose load has not answered — opens no subscription, polls the row's
+  // content-free stamp and re-reads through the server's door when it moves.
   // -------------------------------------------------------------------------
 
-  describe("a broadcast about somebody else's row", () => {
+  describe("who subscribes, and who polls (T85 / T86)", () => {
     const OWNER = "owner-1"
-    const VIEWER = "viewer-2"
 
     /** The owner's stored row: a take's voice plan on the canvas node, an empty
      *  slot and a run in flight on the scene, an empty slot in the bin. */
@@ -868,174 +903,313 @@ describe("useWorkflowRealtimeSync", () => {
       }
     }
 
-    /** `GET /v1/workflows/:id`'s answer for a row, in the route's own shape. */
-    function asDocument(row: ReturnType<typeof storedRow>, access: WorkflowDocument["access"]): WorkflowDocument {
+    /** `GET /v1/workflows/:id`'s answer to a `view` reader: the platform's own strip. */
+    function serverViewAnswer(row: ReturnType<typeof storedRow>): WorkflowDocument {
+      const shown = stripStudioDraftWorkflow(row) as ReturnType<typeof storedRow>
       return {
-        id: row.id,
+        id: shown.id,
         projectId: null,
-        userId: row.user_id,
+        userId: shown.user_id,
         folderId: null,
         name: "Production",
-        version: row.version,
-        nodes: row.nodes,
-        edges: row.edges,
-        settings: row.settings,
+        version: shown.version,
+        nodes: shown.nodes,
+        edges: shown.edges,
+        settings: shown.settings,
         createdAt: "2026-09-01T00:00:00Z",
-        updatedAt: row.updated_at,
-        access,
+        updatedAt: shown.updated_at,
+        access: "view",
       }
     }
 
-    /** What the server answers a `view` reader: the platform's own strip. */
-    function serverViewAnswer(row: ReturnType<typeof storedRow>): WorkflowDocument {
-      return asDocument(stripStudioDraftWorkflow(row) as ReturnType<typeof storedRow>, "view")
+    /** The take and the first scene of a reconciled graph. */
+    function reconciled(onReconcile: ReturnType<typeof vi.fn>, call = 0) {
+      const arg = onReconcile.mock.calls[call]![0] as { nodes: Node[]; settings: Record<string, unknown>; version: number }
+      const take = (arg.nodes[0]!.data as { generatedResults: Record<string, unknown>[] }).generatedResults[0]!
+      const studio = arg.settings.studio as { shots: Record<string, unknown>[]; trash: unknown[] }
+      return { take, scene: studio.shots[0]!, trash: studio.trash, version: arg.version }
     }
 
-    function flush() {
-      return new Promise((resolve) => setTimeout(resolve, 0))
+    let visibility: DocumentVisibilityState = "visible"
+    function setVisibility(state: DocumentVisibilityState): void {
+      visibility = state
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"))
+      })
     }
 
-    it("a viewer's canvas reconciles to the server's answer, never to the broadcast's content", async () => {
-      session.userId = VIEWER
+    /** Let the clock run, and every promise it releases settle. */
+    async function advance(ms: number): Promise<void> {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ms)
+        for (let i = 0; i < 20; i++) await Promise.resolve()
+      })
+    }
+
+    /** A canvas that has loaded `T1` / version 1 of wf-1. */
+    function held(overrides: Partial<HarnessParams> = {}): HarnessParams {
+      return defaultProps({ loadedUpdatedAt: "T1", loadedVersion: 1, ...overrides })
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      visibility = "visible"
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility })
+      table.stamp = { updated_at: "T1", version: 1 }
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+      // Back to jsdom's own getter.
+      delete (document as unknown as { visibilityState?: unknown }).visibilityState
+    })
+
+    it("a `view` reader's canvas opens no subscription: it polls the stamp, and re-reads through the server when the row moves", async () => {
+      loadedAs("wf-1", "view")
       const onReconcile = vi.fn()
-      const stored = storedRow("T1", 2)
-      server.getWorkflowDocument.mockResolvedValue(serverViewAnswer(stored))
-      render(
-        <Harness
-          {...defaultProps({
-            isDirty: false,
-            loadedUpdatedAt: "T0",
-            loadedVersion: 1,
-            onReconcile,
-          })}
-        />,
-      )
+      render(<Harness {...held({ onReconcile })} />)
+      await advance(0)
 
-      lastSubscription().handler({ new: stored })
-      // Nothing from the broadcast itself, synchronously or otherwise.
-      expect(onReconcile).not.toHaveBeenCalled()
-      await flush()
+      expect(channelFactory).not.toHaveBeenCalled()
+      // It looked once on opening, and read nothing but the stamp.
+      expect(stampReads).toEqual([{ table: "workflows", projection: "updated_at, version", filters: [["id", "wf-1"]] }])
+      expect(server.getWorkflowDocument).not.toHaveBeenCalled()
 
+      // Nothing moved: the next look asks for nothing more.
+      await advance(VIEW_POLL_INTERVAL_MS)
+      expect(stampReads).toHaveLength(2)
+      expect(server.getWorkflowDocument).not.toHaveBeenCalled()
+
+      // The owner saves.
+      table.stamp = { updated_at: "T2", version: 2 }
+      server.getWorkflowDocument.mockResolvedValue(serverViewAnswer(storedRow("T2", 2)))
+      await advance(VIEW_POLL_INTERVAL_MS)
+
+      expect(server.getWorkflowDocument).toHaveBeenCalledTimes(1)
       expect(server.getWorkflowDocument).toHaveBeenCalledWith("wf-1")
       expect(onReconcile).toHaveBeenCalledTimes(1)
-      const arg = onReconcile.mock.calls[0][0] as { nodes: Node[]; settings: Record<string, unknown>; version: number }
-      const take = (arg.nodes[0].data as { generatedResults: Record<string, unknown>[] }).generatedResults[0]
+      const { take, scene, trash, version } = reconciled(onReconcile)
       expect(take.url).toBe("https://cdn/take.mp4")
       expect("revoiceTo" in take).toBe(false)
       expect("voiceMode" in take).toBe(false)
-      const studio = arg.settings.studio as { shots: Record<string, unknown>[]; trash: unknown[] }
-      expect("stillSlots" in studio.shots[0]).toBe(false)
-      expect("pendingClips" in studio.shots[0]).toBe(false)
-      expect(studio.trash).toEqual([])
-      expect(arg.version).toBe(2)
+      expect("stillSlots" in scene).toBe(false)
+      expect("pendingClips" in scene).toBe(false)
+      expect(trash).toEqual([])
+      expect(version).toBe(2)
+      expect(channelFactory).not.toHaveBeenCalled()
     })
 
-    it("the owner's canvas adopts the broadcast as it arrived — raw, synchronously, with no re-read", () => {
-      session.userId = OWNER
+    it("a move of either value re-reads — an `updated_at`-only write too — and adopts nothing the canvas already holds", async () => {
+      loadedAs("wf-1", "view")
       const onReconcile = vi.fn()
-      const stored = storedRow("T1", 2)
-      render(
-        <Harness
-          {...defaultProps({
-            isDirty: false,
-            loadedUpdatedAt: "T0",
-            loadedVersion: 1,
-            onReconcile,
-          })}
-        />,
-      )
+      render(<Harness {...held({ onReconcile })} />)
+      await advance(0)
 
-      lastSubscription().handler({ new: stored })
-      expect(server.getWorkflowDocument).not.toHaveBeenCalled()
+      // A thumbnail or share toggle: `updated_at` moves, the content version does not.
+      table.stamp = { updated_at: "T1-thumbnail", version: 1 }
+      server.getWorkflowDocument.mockResolvedValue(serverViewAnswer(storedRow("T1-thumbnail", 1)))
+      await advance(VIEW_POLL_INTERVAL_MS)
+
+      expect(server.getWorkflowDocument).toHaveBeenCalledTimes(1)
+      expect(onReconcile).not.toHaveBeenCalled()
+    })
+
+    it.each(["own", "edit"] as const)("an `%s` canvas subscribes and adopts the broadcast as it arrived — raw, with no poll and no re-read", async (access) => {
+      loadedAs("wf-1", access)
+      const onReconcile = vi.fn()
+      render(<Harness {...held({ onReconcile })} />)
+
+      expect(channelFactory).toHaveBeenCalledTimes(1)
+      lastSubscription().handler({ new: storedRow("T2", 2) })
+
       expect(onReconcile).toHaveBeenCalledTimes(1)
-      const arg = onReconcile.mock.calls[0][0] as { nodes: Node[]; settings: Record<string, unknown> }
-      const take = (arg.nodes[0].data as { generatedResults: Record<string, unknown>[] }).generatedResults[0]
+      const { take, scene } = reconciled(onReconcile)
       expect(take.revoiceTo).toEqual({ voiceId: "owner-voice" })
-      const studio = arg.settings.studio as { shots: Record<string, unknown>[] }
-      expect(studio.shots[0].stillSlots).toEqual([{ id: "slot-1", prompt: "unsent words" }])
-    })
+      expect(scene.stillSlots).toEqual([{ id: "slot-1", prompt: "unsent words" }])
 
-    it("an edit collaborator's canvas adopts what the server answers them — the stored row", async () => {
-      session.userId = "editor-3"
-      const onReconcile = vi.fn()
-      const stored = storedRow("T1", 2)
-      server.getWorkflowDocument.mockResolvedValue(asDocument(stored, "edit"))
-      render(
-        <Harness
-          {...defaultProps({
-            isDirty: false,
-            loadedUpdatedAt: "T0",
-            loadedVersion: 1,
-            onReconcile,
-          })}
-        />,
-      )
-
-      lastSubscription().handler({ new: stored })
-      // Not adopted from the broadcast: an edit collaborator's row is not theirs.
-      expect(onReconcile).not.toHaveBeenCalled()
-      await flush()
-      expect(server.getWorkflowDocument).toHaveBeenCalledWith("wf-1")
-      const arg = onReconcile.mock.calls[0][0] as { nodes: Node[]; settings: Record<string, unknown> }
-      const take = (arg.nodes[0].data as { generatedResults: Record<string, unknown>[] }).generatedResults[0]
-      expect(take.revoiceTo).toEqual({ voiceId: "owner-voice" })
-      expect((arg.settings.studio as { shots: Record<string, unknown>[] }).shots[0].stillSlots).toBeDefined()
-    })
-
-    it("a row with no user_id is not the caller's (fail closed)", async () => {
-      session.userId = VIEWER
-      const onReconcile = vi.fn()
-      server.getWorkflowDocument.mockResolvedValue(null)
-      render(<Harness {...defaultProps({ loadedUpdatedAt: "T0", onReconcile })} />)
-      const { user_id: _owner, ...anonymous } = storedRow("T1", 2)
-      lastSubscription().handler({ new: anonymous })
-      await flush()
-      expect(server.getWorkflowDocument).toHaveBeenCalledTimes(1)
-      expect(onReconcile).not.toHaveBeenCalled()
-    })
-
-    it("a session not known yet owns no row, not even the owner's (fail closed)", async () => {
-      session.userId = undefined
-      const onReconcile = vi.fn()
-      server.getWorkflowDocument.mockResolvedValue(null)
-      render(<Harness {...defaultProps({ loadedUpdatedAt: "T0", onReconcile })} />)
-      lastSubscription().handler({ new: storedRow("T1", 2) })
-      expect(onReconcile).not.toHaveBeenCalled()
-      await flush()
-      expect(server.getWorkflowDocument).toHaveBeenCalledTimes(1)
-      expect(onReconcile).not.toHaveBeenCalled()
-    })
-
-    it("an echo of this tab's own save is skipped before any re-read", () => {
-      session.userId = VIEWER
-      render(<Harness {...defaultProps({ loadedUpdatedAt: "T1", loadedVersion: 2 })} />)
-      lastSubscription().handler({ new: storedRow("T1", 2) })
+      await advance(VIEW_POLL_INTERVAL_MS * 3)
+      expect(stampReads).toEqual([])
       expect(server.getWorkflowDocument).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it("fails closed while the load has not answered: no subscription, and a canvas holding nothing asks nothing", async () => {
+      notLoaded()
+      // The load is in flight: the canvas holds no row yet.
+      const { rerender } = render(<Harness {...defaultProps({ loadedUpdatedAt: null })} />)
+      await advance(VIEW_POLL_INTERVAL_MS * 3)
+
+      expect(channelFactory).not.toHaveBeenCalled()
+      expect(stampReads).toEqual([])
+      expect(server.getWorkflowDocument).not.toHaveBeenCalled()
+
+      // The load answers `own`: the subscription opens, and the poll is gone.
+      rerender(<Harness {...held()} />)
+      loadedAs("wf-1", "own")
+      expect(channelFactory).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it("fails closed after a failed load, or on an answer about another workflow: treated as `view`, never subscribed", async () => {
+      // A failed load records nothing, and leaves the canvas holding nothing.
+      notLoaded()
+      const { unmount } = render(<Harness {...defaultProps({ loadedUpdatedAt: null })} />)
+      await advance(VIEW_POLL_INTERVAL_MS * 3)
+      expect(channelFactory).not.toHaveBeenCalled()
+      expect(stampReads).toEqual([])
+      unmount()
+
+      // `own` — but answered for wf-0, not the wf-1 on the canvas.
+      loadedAs("wf-0", "own")
+      render(<Harness {...held()} />)
+      await advance(VIEW_POLL_INTERVAL_MS)
+      expect(channelFactory).not.toHaveBeenCalled()
+      expect(stampReads.length).toBeGreaterThan(0)
+    })
+
+    it("coalesces re-reads: a burst of changes while one is in flight costs at most two GETs", async () => {
+      loadedAs("wf-1", "view")
+      const onReconcile = vi.fn()
+      const pending: Array<(doc: WorkflowDocument) => void> = []
+      server.getWorkflowDocument.mockImplementation(() => new Promise<WorkflowDocument>((resolve) => { pending.push(resolve) }))
+      render(<Harness {...held({ onReconcile })} />)
+      await advance(0)
+
+      for (let v = 2; v <= 7; v++) {
+        table.stamp = { updated_at: `T${v}`, version: v }
+        await advance(VIEW_POLL_INTERVAL_MS)
+      }
+      expect(server.getWorkflowDocument).toHaveBeenCalledTimes(1)
+
+      pending[0]!(serverViewAnswer(storedRow("T3", 3)))
+      await advance(0)
+      // The one trailing re-read, which reads the row as it is now.
+      expect(server.getWorkflowDocument).toHaveBeenCalledTimes(2)
+      pending[1]!(serverViewAnswer(storedRow("T7", 7)))
+      await advance(VIEW_POLL_INTERVAL_MS * 3)
+
+      expect(server.getWorkflowDocument).toHaveBeenCalledTimes(2)
+      expect(onReconcile.mock.calls.map(([arg]) => (arg as { version: number }).version)).toEqual([3, 7])
+    })
+
+    it("a hidden tab does not poll; it looks again the moment it is visible, and resumes", async () => {
+      loadedAs("wf-1", "view")
+      render(<Harness {...held()} />)
+      await advance(0)
+      expect(stampReads).toHaveLength(1)
+
+      setVisibility("hidden")
+      table.stamp = { updated_at: "T2", version: 2 }
+      await advance(VIEW_POLL_INTERVAL_MS * 5)
+      expect(stampReads).toHaveLength(1)
+      expect(server.getWorkflowDocument).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+
+      server.getWorkflowDocument.mockResolvedValue(serverViewAnswer(storedRow("T2", 2)))
+      setVisibility("visible")
+      await advance(0)
+      expect(stampReads).toHaveLength(2)
+      expect(server.getWorkflowDocument).toHaveBeenCalledTimes(1)
+
+      await advance(VIEW_POLL_INTERVAL_MS)
+      expect(stampReads).toHaveLength(3)
+    })
+
+    it("a canvas that opens in a hidden tab polls only once it is shown", async () => {
+      visibility = "hidden"
+      loadedAs("wf-1", "view")
+      render(<Harness {...held()} />)
+      await advance(VIEW_POLL_INTERVAL_MS * 3)
+      expect(stampReads).toEqual([])
+
+      setVisibility("visible")
+      await advance(0)
+      expect(stampReads).toHaveLength(1)
+    })
+
+    it("unmounting leaves no timer and no listener behind", async () => {
+      loadedAs("wf-1", "view")
+      const { unmount } = render(<Harness {...held()} />)
+      await advance(0)
+      expect(vi.getTimerCount()).toBe(1)
+
+      unmount()
+      expect(vi.getTimerCount()).toBe(0)
+
+      // The visibility listener went with it: showing the tab restarts nothing.
+      setVisibility("hidden")
+      setVisibility("visible")
+      await advance(VIEW_POLL_INTERVAL_MS * 3)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(stampReads).toHaveLength(1)
+    })
+
+    it("a dirty canvas re-reads once per move, not on every look", async () => {
+      loadedAs("wf-1", "view")
+      const onRemoteUpdatedAt = vi.fn()
+      server.getWorkflowDocument.mockResolvedValue(serverViewAnswer(storedRow("T2", 2)))
+      render(<Harness {...held({ isDirty: true, currentNodes: [makeNode("moved-by-hand")], onRemoteUpdatedAt })} />)
+      await advance(0)
+
+      table.stamp = { updated_at: "T2", version: 2 }
+      await advance(VIEW_POLL_INTERVAL_MS * 4)
+
+      // Dirty keeps its append-only path, so the canvas still holds T1 — and
+      // still re-reads only once for the one move.
+      expect(server.getWorkflowDocument).toHaveBeenCalledTimes(1)
+      expect(onRemoteUpdatedAt).toHaveBeenCalledWith("T2")
+    })
+
+    it("a failed re-read is asked again on the next look", async () => {
+      loadedAs("wf-1", "view")
+      const onReconcile = vi.fn()
+      server.getWorkflowDocument
+        .mockRejectedValueOnce(new Error("network"))
+        .mockResolvedValue(serverViewAnswer(storedRow("T2", 2)))
+      render(<Harness {...held({ onReconcile })} />)
+      await advance(0)
+
+      table.stamp = { updated_at: "T2", version: 2 }
+      await advance(VIEW_POLL_INTERVAL_MS)
+      expect(server.getWorkflowDocument).toHaveBeenCalledTimes(1)
+      expect(onReconcile).not.toHaveBeenCalled()
+
+      await advance(VIEW_POLL_INTERVAL_MS)
+      expect(server.getWorkflowDocument).toHaveBeenCalledTimes(2)
+      expect(onReconcile).toHaveBeenCalledTimes(1)
     })
 
     it("a re-read that lands after the editor moved to another workflow is dropped", async () => {
-      session.userId = VIEWER
+      loadedAs("wf-1", "view")
       const onReconcile = vi.fn()
       let release: (doc: WorkflowDocument) => void = () => {}
       server.getWorkflowDocument.mockImplementation(() => new Promise<WorkflowDocument>((resolve) => { release = resolve }))
-      const { rerender } = render(<Harness {...defaultProps({ loadedUpdatedAt: "T0", onReconcile })} />)
-      lastSubscription().handler({ new: storedRow("T1", 2) })
-      rerender(<Harness {...defaultProps({ workflowId: "wf-2", loadedUpdatedAt: "T0", onReconcile })} />)
-      release(serverViewAnswer(storedRow("T1", 2)))
-      await flush()
+      const { rerender } = render(<Harness {...held({ onReconcile })} />)
+      await advance(0)
+      table.stamp = { updated_at: "T2", version: 2 }
+      await advance(VIEW_POLL_INTERVAL_MS)
+      expect(server.getWorkflowDocument).toHaveBeenCalledTimes(1)
+
+      rerender(<Harness {...held({ workflowId: "wf-2", loadedUpdatedAt: null, onReconcile })} />)
+      release(serverViewAnswer(storedRow("T2", 2)))
+      await advance(0)
       expect(onReconcile).not.toHaveBeenCalled()
     })
 
-    it("a re-read that comes back older than what the tab already holds is dropped", async () => {
-      session.userId = VIEWER
+    it("a re-read that comes back older than what the canvas already holds is dropped", async () => {
+      loadedAs("wf-1", "view")
       const onReconcile = vi.fn()
-      server.getWorkflowDocument.mockResolvedValue(serverViewAnswer(storedRow("T1", 2)))
-      const at = (loadedVersion: number) => defaultProps({ loadedUpdatedAt: "T0", loadedVersion, onReconcile })
-      const { rerender } = render(<Harness {...at(1)} />)
-      lastSubscription().handler({ new: storedRow("T1", 2) })
-      // Before the re-read lands, this tab already moved to version 3.
-      rerender(<Harness {...at(3)} />)
-      await flush()
+      let release: (doc: WorkflowDocument) => void = () => {}
+      server.getWorkflowDocument.mockImplementation(() => new Promise<WorkflowDocument>((resolve) => { release = resolve }))
+      const { rerender } = render(<Harness {...held({ onReconcile })} />)
+      await advance(0)
+      table.stamp = { updated_at: "T2", version: 2 }
+      await advance(VIEW_POLL_INTERVAL_MS)
+
+      // Before the re-read lands, the canvas already moved to version 3.
+      rerender(<Harness {...held({ loadedUpdatedAt: "T3", loadedVersion: 3, onReconcile })} />)
+      release(serverViewAnswer(storedRow("T2", 2)))
+      await advance(0)
       expect(onReconcile).not.toHaveBeenCalled()
     })
   })

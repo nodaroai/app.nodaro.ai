@@ -66,13 +66,32 @@
  * single workflow row currently open in the editor. RLS continues to
  * apply on Realtime (Supabase enforces the same policies on the
  * broadcast), so the user only receives events for rows they can SELECT.
- * That includes a `view` reader, whose socket therefore receives the stored
- * row whole. So only the row's OWNER adopts a broadcast's content as it
- * arrived — decided here, from the signed-in session (`isOwnWorkflowRow`
- * against `getCachedUserId`), not by the caller; anyone else takes the
- * broadcast as a signal and re-reads the content through the server's door
- * (`readWorkflowContentFromServer`), which strips a studio production's owner
- * drafts for `view` (lib/workflow-content.ts).
+ *
+ * Who subscribes, and who polls (T85 / T86)
+ * -----------------------------------------
+ * A broadcast is the row AS STORED, pushed into the browser whether or not
+ * the app uses it, and a studio production keeps its owner's drafts in that
+ * row — the empty media slots and runs in flight on each scene, the drafts in
+ * the bin, each take's voice plan (studio rulings T11 / T21 / T42). A `view`
+ * reader may not hold any of it, and the row policies let them SELECT the row,
+ * so they would receive every one of those broadcasts.
+ *
+ * So which of the two this canvas does is decided HERE, from the access its
+ * load answered (`loadedAccess` in the workflow store, keyed by workflow id;
+ * `mayHoldStoredRow`) — never by the caller:
+ *   - `own` / `edit`: the subscription above, adopting each broadcast exactly
+ *     as it always did. The server answers both of them the stored row anyway.
+ *   - `view`, or no answer yet (the load is in flight, or it failed): NO
+ *     subscription. While the tab is visible, every {@link
+ *     VIEW_POLL_INTERVAL_MS} the canvas reads the row's content-free stamp
+ *     (`updated_at, version`); when either moved it re-reads the content
+ *     through the server's door (`readWorkflowContentFromServer`), which
+ *     strips the owner's drafts for `view`, and reconciles that like a
+ *     broadcast. Re-reads are coalesced to one in flight plus one trailing —
+ *     enough, because each reads the row as it is then. A canvas that holds
+ *     nothing yet (a load in flight, or one that failed) asks nothing: the
+ *     load itself reads the row. Polling pauses while the tab is hidden and
+ *     looks once as soon as it is visible again.
  *
  * Migration: supabase/migrations/115_workflows_realtime.sql adds
  *   ALTER TABLE workflows REPLICA IDENTITY FULL;
@@ -94,13 +113,14 @@
 import { useEffect, useRef } from "react"
 import type { Node, Edge } from "@xyflow/react"
 import { createClient } from "@/lib/supabase"
-import { getCachedUserId } from "@/hooks/use-auth"
-import { isOwnWorkflowRow, readWorkflowContentFromServer, type WorkflowContentRow } from "@/lib/workflow-content"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { mayHoldStoredRow, readWorkflowContentFromServer, type WorkflowContentRow } from "@/lib/workflow-content"
+
+/** How often a `view` reader's visible canvas asks whether the row moved (T85). */
+export const VIEW_POLL_INTERVAL_MS = 5_000
 
 interface RealtimeWorkflowRow {
   readonly id: string
-  /** Whose row it is — decides whether its content may be adopted as it arrived. */
-  readonly user_id?: string | null
   readonly nodes: readonly Node[] | null
   readonly edges: readonly Edge[] | null
   readonly updated_at: string | null
@@ -117,6 +137,12 @@ interface RealtimeWorkflowRow {
    * own pan/zoom.
    */
   readonly settings: Record<string, unknown> | null
+}
+
+/** The row's content-free stamp — all a `view` reader's poll ever reads. */
+interface WorkflowStamp {
+  readonly updatedAt: string | null
+  readonly version: number | null
 }
 
 export interface UseWorkflowRealtimeSyncParams {
@@ -209,7 +235,6 @@ export interface UseWorkflowRealtimeSyncParams {
 function asBroadcastRow(row: WorkflowContentRow): RealtimeWorkflowRow {
   return {
     id: row.id,
-    user_id: row.user_id ?? null,
     nodes: Array.isArray(row.nodes) ? (row.nodes as Node[]) : null,
     edges: Array.isArray(row.edges) ? (row.edges as Edge[]) : null,
     updated_at: row.updated_at ?? null,
@@ -222,8 +247,37 @@ function asBroadcastRow(row: WorkflowContentRow): RealtimeWorkflowRow {
 }
 
 /**
- * Subscribes to Realtime UPDATE events on `workflows` filtered by id.
- * See file-level docstring for the full reconcile-vs-append-only contract.
+ * Runs `task` one at a time. Asked while it runs, it queues ONE more run for
+ * when it finishes, however many times it is asked — enough, because every run
+ * reads the row as it is then. The queued run is dropped once `alive` says the
+ * caller is gone.
+ */
+function coalesced(task: () => Promise<void>, alive: () => boolean): () => void {
+  let running = false
+  let queued = false
+  const run = (): void => {
+    running = true
+    void task()
+      .catch(() => {})
+      .finally(() => {
+        running = false
+        if (queued && alive()) {
+          queued = false
+          run()
+        }
+      })
+  }
+  return () => {
+    if (running) queued = true
+    else run()
+  }
+}
+
+/**
+ * Keeps the open canvas in step with writes made elsewhere — by the row's
+ * Realtime broadcasts, or by polling when this canvas may not hold the row as
+ * stored. See the file-level docstring for both, and for the reconcile-vs-
+ * append-only contract they share.
  */
 export function useWorkflowRealtimeSync(
   params: UseWorkflowRealtimeSyncParams,
@@ -270,20 +324,21 @@ export function useWorkflowRealtimeSync(
   onAppendEdgesRef.current = onAppendEdges
   onRemoteUpdatedAtRef.current = onRemoteUpdatedAt
 
+  // Whether this canvas may hold the row as stored: by the access its load
+  // answered, read here rather than handed in, so no caller can opt out.
+  const live = mayHoldStoredRow(useWorkflowStore((s) => s.loadedAccess), workflowId)
+
   useEffect(() => {
     if (!workflowId) return
 
     const supabase = createClient()
     const channelName = `workflow:${workflowId}`
-    // Cleared on teardown, so a re-read that lands after the editor moved to
-    // another workflow is dropped rather than painted onto it.
-    let active = true
 
     /**
      * Whether this tab already holds the row's content: its own save's echo —
      * possibly a late one — or a write that changed no content. Reads only the
-     * row's metadata, so it runs on a broadcast before deciding whose content
-     * it is, and again on a re-read row when that lands.
+     * row's metadata, so it runs on a broadcast as it arrives, and on a re-read
+     * row when that lands.
      */
     const alreadyHeld = (next: RealtimeWorkflowRow): boolean => {
       const incomingUpdatedAt = next.updated_at
@@ -368,58 +423,113 @@ export function useWorkflowRealtimeSync(
       }
     }
 
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        // Cast through unknown because supabase-js's overload for the
-        // "postgres_changes" listen type uses string-literal generics
-        // that confuse TS when destructured at our call site.
-        "postgres_changes" as never,
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "workflows",
-          filter: `id=eq.${workflowId}`,
-        },
-        (payload: { new: RealtimeWorkflowRow | null }) => {
-          const next = payload.new
-          if (!next || alreadyHeld(next)) return
-
-          // The broadcast is the stored row (REPLICA IDENTITY FULL), and only
-          // its owner may hold that whole — a studio production keeps the
-          // owner's drafts, runs in flight and take voice records in it
-          // (studio rulings T11 / T21 / T42). Fail closed: a row with no
-          // `user_id`, or a session not known yet, is somebody else's.
-          if (isOwnWorkflowRow(next, getCachedUserId())) {
+    // ---- `own` / `edit`: the row's Realtime broadcasts, adopted as they arrive.
+    if (live) {
+      const channel = supabase
+        .channel(channelName)
+        .on(
+          // Cast through unknown because supabase-js's overload for the
+          // "postgres_changes" listen type uses string-literal generics
+          // that confuse TS when destructured at our call site.
+          "postgres_changes" as never,
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "workflows",
+            filter: `id=eq.${workflowId}`,
+          },
+          (payload: { new: RealtimeWorkflowRow | null }) => {
+            const next = payload.new
+            if (!next || alreadyHeld(next)) return
             adopt(next, next.updated_at as string)
-            return
-          }
+          },
+        )
+        .subscribe()
 
-          // Somebody else's row: what arrived is the STORED document, which
-          // only its owner may hold. It still says THAT the row moved — read
-          // the content again through the server's door (the stored row for
-          // an `edit` collaborator, the reader's projection for `view`) and
-          // adopt that, re-checked on arrival, since this tab may have saved,
-          // or applied a newer write, meanwhile.
-          void readWorkflowContentFromServer(workflowId)
-            .then((fresh) => {
-              if (!active || !fresh) return
-              const row = asBroadcastRow(fresh.row)
-              if (!alreadyHeld(row)) adopt(row, row.updated_at as string)
-            })
-            .catch(() => {
-              // A failed re-read leaves the canvas as it is; the next
-              // broadcast, or a reload, brings it up to date.
-            })
-        },
-      )
-      .subscribe()
+      return () => {
+        // removeChannel handles both an active subscription and one in
+        // the middle of joining; safe to call regardless of state.
+        supabase.removeChannel(channel)
+      }
+    }
+
+    // ---- `view`, or no answer yet: no subscription — poll the stamp (T85).
+    // Cleared on teardown, so nothing that lands after the editor moved on
+    // (another workflow, or the subscription once the load answers) is
+    // painted onto it.
+    let active = true
+    // The stamp this canvas last acted on; until its first look, what it holds.
+    let observed: WorkflowStamp | null = null
+    let looking = false
+    let timer: ReturnType<typeof setInterval> | null = null
+
+    /** What this canvas holds, or null while it holds nothing (a load in flight, or one that failed). */
+    const held = (): WorkflowStamp | null => {
+      const updatedAt = getLoadedUpdatedAtRef.current()
+      return updatedAt === null ? null : { updatedAt, version: getLoadedVersionRef.current() }
+    }
+
+    const reread = coalesced(async () => {
+      try {
+        const fresh = await readWorkflowContentFromServer(workflowId)
+        if (!active || !fresh) return
+        const row = asBroadcastRow(fresh.row)
+        // Re-checked on arrival: this tab may have applied a newer write meanwhile.
+        if (!alreadyHeld(row)) adopt(row, row.updated_at as string)
+      } catch {
+        // Forget what was seen, so the next look compares the row with what
+        // the canvas holds and asks again.
+        observed = null
+      }
+    }, () => active)
+
+    const look = async (): Promise<void> => {
+      if (looking || !held()) return
+      looking = true
+      try {
+        const { data, error } = await supabase
+          .from("workflows")
+          .select("updated_at, version")
+          .eq("id", workflowId)
+          .maybeSingle()
+        const holds = held()
+        if (!active || error || !data || !holds) return
+        const stamp: WorkflowStamp = {
+          updatedAt: typeof data.updated_at === "string" ? data.updated_at : null,
+          version: typeof data.version === "number" ? data.version : null,
+        }
+        const before = observed ?? holds
+        observed = stamp
+        if (stamp.updatedAt !== before.updatedAt || stamp.version !== before.version) reread()
+      } catch {
+        // A failed look changes nothing; the next one asks again.
+      } finally {
+        looking = false
+      }
+    }
+
+    const resume = (): void => {
+      if (timer !== null) return
+      void look()
+      timer = setInterval(() => void look(), VIEW_POLL_INTERVAL_MS)
+    }
+    const pause = (): void => {
+      if (timer === null) return
+      clearInterval(timer)
+      timer = null
+    }
+    const onVisibility = (): void => {
+      if (document.visibilityState === "hidden") pause()
+      else resume()
+    }
+
+    if (document.visibilityState !== "hidden") resume()
+    document.addEventListener("visibilitychange", onVisibility)
 
     return () => {
       active = false
-      // removeChannel handles both an active subscription and one in
-      // the middle of joining; safe to call regardless of state.
-      supabase.removeChannel(channel)
+      pause()
+      document.removeEventListener("visibilitychange", onVisibility)
     }
-  }, [workflowId])
+  }, [workflowId, live])
 }

@@ -46,7 +46,7 @@ vi.mock("@/lib/supabase", () => ({
   }),
 }))
 
-import { isOwnWorkflowRow, readWorkflowContent, readWorkflowContentFromServer } from "../workflow-content"
+import { mayHoldStoredRow, readWorkflowContent, readWorkflowContentFromServer } from "../workflow-content"
 
 const STORED = {
   id: "w1",
@@ -141,13 +141,18 @@ describe("readWorkflowContent", () => {
   })
 })
 
-describe("isOwnWorkflowRow", () => {
-  it("is true only for the caller's own row, and fails closed", () => {
-    expect(isOwnWorkflowRow({ user_id: "me" }, "me")).toBe(true)
-    expect(isOwnWorkflowRow({ user_id: "someone" }, "me")).toBe(false)
-    expect(isOwnWorkflowRow({}, "me")).toBe(false)
-    expect(isOwnWorkflowRow({ user_id: null }, "me")).toBe(false)
-    expect(isOwnWorkflowRow({ user_id: "me" }, undefined)).toBe(false)
-    expect(isOwnWorkflowRow({ user_id: "" }, "")).toBe(false)
+describe("mayHoldStoredRow (T86)", () => {
+  it("is true only for the owner and an `edit` collaborator of the workflow the load answered for", () => {
+    expect(mayHoldStoredRow({ workflowId: "w1", access: "own" }, "w1")).toBe(true)
+    expect(mayHoldStoredRow({ workflowId: "w1", access: "edit" }, "w1")).toBe(true)
+    expect(mayHoldStoredRow({ workflowId: "w1", access: "view" }, "w1")).toBe(false)
+  })
+
+  it("fails closed: no answer yet, or an answer about another workflow, is `view`", () => {
+    expect(mayHoldStoredRow(null, "w1")).toBe(false)
+    expect(mayHoldStoredRow(undefined, "w1")).toBe(false)
+    expect(mayHoldStoredRow({ workflowId: "w0", access: "own" }, "w1")).toBe(false)
+    expect(mayHoldStoredRow({ workflowId: "w1", access: "own" }, null)).toBe(false)
+    expect(mayHoldStoredRow({ workflowId: "", access: "own" }, "")).toBe(false)
   })
 })

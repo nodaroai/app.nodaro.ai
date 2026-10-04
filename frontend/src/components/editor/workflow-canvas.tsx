@@ -914,6 +914,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   // mount animations (D1 node fade-in, D2 edge stretch) and D3 camera
   // auto-pan naturally fire for any appended items because they're
   // seeing those ids for the first time. See use-workflow-realtime-sync.ts.
+  // A canvas whose load answered `view` (or has not answered) never
+  // subscribes: the hook polls and re-reads through the server instead
+  // (T85 / T86), deciding that itself from the store's `loadedAccess`.
   const realtimeWorkflowId = useWorkflowStore((s) => s.workflowId)
   const isWorkflowLoading = useWorkflowStore((s) => s.isWorkflowLoading)
   /** Which of the two empty-canvas surfaces shows, if either — see the module. */
