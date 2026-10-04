@@ -1109,7 +1109,7 @@ export function useWorkflowPersistence(projectId?: string) {
               // read-only turns `updateNodeData` into a no-op — the result of
               // a job already paid for would never reach its node. The re-check
               // asked above keeps to the same rule: if it answers `view` or
-              // `none`, read-only waits until no node holds a job.
+              // `none`, read-only waits until no node shows a run in flight.
               const reason = tx("editor.notWritableReason")
               useWorkflowStore.setState({ saveRefusedFor: workflowId })
               setSaveStatus("error", reason)

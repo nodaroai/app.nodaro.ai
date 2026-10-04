@@ -102,17 +102,17 @@ type WorkflowStoreState = ReturnType<typeof useWorkflowStore.getState>
 let stopWaitingForRuns: (() => void) | null = null
 
 /**
- * Turn the canvas read-only, but only once no node holds a job.
+ * Turn the canvas read-only, but only once no node shows a run in flight
+ * ({@link showsARunInFlight}).
  *
  * `updateNodeData` does nothing on a read-only canvas, so raising read-only
- * while a job is out would drop the result of a job already paid for and leave
+ * while a run is out would drop the result of a job already paid for and leave
  * its node spinning (the store's `saveRefusedFor` doc). Its saves are refused
- * by then, so waiting costs nothing but the lock itself: until the last job
+ * by then, so waiting costs nothing but the lock itself: until the last run
  * lands, the canvas is the one a refused save leaves, interactive with nothing
- * kept. A finished job clears its node's `currentJobId` in the same write that
- * paints its result, so the freeze lands right after the last one. A Run over
- * a list holds its node until the batch's own last write, the one that puts
- * every iteration's result in list order, and the freeze lands right after it.
+ * kept. A run clears its marks in the write that paints its last result (a
+ * job's id, a Run over a list's batch flag, a status that turns `completed` or
+ * `failed`), so the freeze lands right after that write.
  *
  * Dropped, never applied, once the workflow it was for is no longer the one
  * open, or a load has replaced the verdict (a load clears `saveRefusedFor` and
@@ -127,7 +127,7 @@ function freezeOnceRunsLand(workflowId: string): void {
     if (s.workflowId !== workflowId || !isSaveRefused(s)) return "drop"
     // A canvas already read-only (a `view` load) has nothing left to protect;
     // only its sentence is missing.
-    if (s.isReadOnly || !s.nodes.some(holdsAJob)) return "freeze"
+    if (s.isReadOnly || !s.nodes.some(showsARunInFlight)) return "freeze"
     return "wait"
   }
 
@@ -156,21 +156,51 @@ function freeze(): void {
 }
 
 /**
- * A node waiting on a job's result: it holds the job's id, which its poll
- * checks before it paints (`shouldAbandonNode`) and clears in the write that
- * paints the result.
+ * Does this node show a run in flight, by any mark a run leaves on its node?
+ * Read-only waits until none does (controller ruling, 2026-10-05).
  *
- * Or a node in the middle of a Run over a list (`executeNodeForList`, from its
- * own Run button or inside a Sub-Workflow, whose namespaced nodes live in the
- * store too). Its iterations share that one id: each writes its own job there,
- * and each completion clears it while the others are still polling, so the id
- * can be empty with paid jobs still out. `__listRunning` covers the whole
- * batch: set when it starts, cleared in its last write (a `finally` backs up a
- * throw). It is never saved, and a load clears a stale one.
+ * Over-counting is the safe side, on purpose. A mark a run left behind keeps
+ * the canvas editable and unsaveable until it changes, which writes nothing; a
+ * mark this test missed lets the freeze land mid-run and drops a paid result.
+ *
+ * - `currentJobId`: a node waiting on a job's result. Its poll checks the id
+ *   before it paints (`shouldAbandonNode`) and clears it in the write that
+ *   paints the result.
+ * - `__listRunning`: a Run over a list (`executeNodeForList`, from its own Run
+ *   button or inside a Sub-Workflow, whose namespaced nodes live in the store
+ *   too). Its iterations share that one id: each writes its own job there, and
+ *   each completion clears it while the others are still polling. This flag
+ *   covers the whole batch: set when it starts, cleared in its last write (a
+ *   `finally` backs up a throw). It is never saved, and a load clears a stale
+ *   one.
+ * - `executionStatus` `pending`: the flip every Run path writes before its
+ *   executor starts, across an awaited pre-run save, and a whole-workflow
+ *   run's queued nodes. The node paints it as running.
+ * - any status key reading `running`. `executionStatus` is one: every
+ *   run-start patch (`RUN_START_RESET`) writes it before the create request,
+ *   so a node between that and its job's id counts, and a whole-workflow run
+ *   paints it with no job id at all. The variant loops on Character, Object
+ *   and Location nodes (`handleGenerate{Character,Object,Location}Asset`) hold
+ *   nothing else: only their own key (`expressionStatus`, `anglesStatus`, …)
+ *   for a loop of paid jobs. Any key ending in `Status`, so a new loop that
+ *   follows the same convention counts with no list to keep in step
+ *   (`workflow-viewer-mode-runs.test.ts` holds the executors to it).
+ * - a script's scene image (`handleGenerateSceneImage`), whose only mark is
+ *   its scene's `imageStatus` inside `generatedScript`.
  */
-function holdsAJob(node: { readonly data?: unknown }): boolean {
+export function showsARunInFlight(node: { readonly data?: unknown }): boolean {
   const data = node.data as Record<string, unknown> | undefined
-  return Boolean(data?.currentJobId) || data?.__listRunning === true
+  if (!data) return false
+  if (data.currentJobId || data.__listRunning === true || data.executionStatus === "pending") return true
+  return Object.keys(data).some((key) => key.endsWith("Status") && data[key] === "running")
+    || sceneImageInFlight(data.generatedScript)
+}
+
+/** A script (`generatedScript`) with a scene whose image is still being made. */
+function sceneImageInFlight(script: unknown): boolean {
+  const scenes = (script as { readonly scenes?: unknown } | null | undefined)?.scenes
+  return Array.isArray(scenes)
+    && scenes.some((scene) => (scene as { readonly imageStatus?: unknown } | null)?.imageStatus === "running")
 }
 
 /** How long one ask of the access may take before it counts as a failed one. */

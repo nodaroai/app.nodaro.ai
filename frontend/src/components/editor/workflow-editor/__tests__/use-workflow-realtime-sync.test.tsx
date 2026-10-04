@@ -1413,7 +1413,8 @@ describe("useWorkflowRealtimeSync", () => {
       it("a downgrade mid-run stops the saves and the subscription at once, lands every run's result, and only then turns read-only", async () => {
         // Read-only makes `updateNodeData` a no-op: raised while a job is out,
         // it would drop the result of a job already paid for (the store's
-        // `saveRefusedFor` doc). So it waits until no node holds a job.
+        // `saveRefusedFor` doc). So it waits until no node shows a run in
+        // flight (`showsARunInFlight`; every kind of run: workflow-viewer-mode-runs).
         openedAs("wf-1", "edit")
         act(() => {
           useWorkflowStore.setState({ nodes: [running("n1", "job-1"), running("n2", "job-2")] })

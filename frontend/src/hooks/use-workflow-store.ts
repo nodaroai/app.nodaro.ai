@@ -634,9 +634,10 @@ interface WorkflowState {
    * Also set the moment the server answers `view` or `none` for the open
    * workflow, at load or on a re-check while it stays open (T97,
    * `applyWorkflowAccess`), so nothing more is sent. That answer raises
-   * `isReadOnly` too, but only once no node holds a `currentJobId` or has a
-   * Run over a list still going (`__listRunning`), for the reason above;
-   * until then this is what stops the saves.
+   * `isReadOnly` too, but only once no node shows a run in flight
+   * (`showsARunInFlight`: a job's id, a Run over a list, a node marked
+   * running or queued, a variant loop's own status, a scene's image), for
+   * the reason above; until then this is what stops the saves.
    *
    * An id rather than a flag so a verdict can only apply to the workflow
    * it was reached for — read it through `isSaveRefused()`, never bare.
