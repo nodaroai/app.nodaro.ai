@@ -17,6 +17,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { billedProviderCost } from "../lib/llm-errors.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
 
 const llmChatBody = z.object({
   // LLM_TEXT_INPUT_MAX (100K): the "Generate Text" node feeds an LLM whose
@@ -326,7 +327,10 @@ export async function llmChatRoutes(app: FastifyInstance) {
           sse.close()
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : "LLM API stream failed"
+        // The person reads a model-lane failure's user-safe sentence; the full
+        // diagnostic goes to the log.
+        const message = userFacingMessage(err, "LLM API stream failed")
+        if (err instanceof Error && err.message !== message) console.error("[llm-chat-stream] Error:", err.message)
 
         await supabase
           .from("jobs")

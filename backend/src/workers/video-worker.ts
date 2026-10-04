@@ -10,6 +10,7 @@ import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellati
 import { isPostProcessingError } from "../lib/post-processing-error.js"
 import { isDeterministicJobError } from "../lib/deterministic-job-error.js"
 import { providerDetailOf } from "../lib/provider-error-detail.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { isReconcileRecoverable } from "../lib/reconcile/types.js"
 import { isDrainAbortError } from "../lib/worker-drain.js"
@@ -523,10 +524,12 @@ export function createVideoWorker() {
           // fallback model when the catalog offers one) — copyright/likeness
           // blocks are deterministic on the same input and keep KIE's existing
           // CONTENT_POLICY_MESSAGES text unchanged.
+          // A model-lane failure carries a user-safe sentence (no lane, vendor
+          // or internal model id); its full diagnostic is the error_detail below.
           const errorMessage =
             block && block.class === "safety"
               ? safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, safetyRetried)
-              : message
+              : userFacingMessage(err, message)
           // THE failure writer (lib/job-failure.ts). Its CAS is what keeps a job
           // a concurrent writer already moved to a terminal state (inflight-
           // reconcile cron completing it, or a stall re-pick) from being trampled

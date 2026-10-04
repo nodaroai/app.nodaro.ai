@@ -38,11 +38,17 @@ export function redactProviderDetail(raw: string | null | undefined): string | n
 }
 
 /** The redacted detail for a thrown error, or null when the error carries no
- *  provider text (a plain Error, a string, undefined). */
+ *  provider text (a plain Error, a string, undefined). Read from the first
+ *  error on the `cause` chain that carries one, so a caller that wraps a
+ *  provider error does not lose its detail. */
 export function providerDetailOf(err: unknown): string | null {
-  if (!err || typeof err !== "object") return null
-  const details = (err as { internalDetails?: unknown }).internalDetails
-  return typeof details === "string" ? redactProviderDetail(details) : null
+  let cur: unknown = err
+  for (let depth = 0; cur && typeof cur === "object" && depth < 8; depth++) {
+    const details = (cur as { internalDetails?: unknown }).internalDetails
+    if (typeof details === "string") return redactProviderDetail(details)
+    cur = (cur as { cause?: unknown }).cause
+  }
+  return null
 }
 
 /**
