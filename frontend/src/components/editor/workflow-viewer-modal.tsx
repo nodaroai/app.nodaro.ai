@@ -16,7 +16,7 @@ import "@xyflow/react/dist/style.css"
 import { nodeTypes } from "@/components/nodes"
 import { AnimatedFlowEdge } from "./animated-flow-edge"
 import { orderNodesParentFirst } from "./workflow-editor/group-coords"
-import { createClient } from "@/lib/supabase"
+import { readWorkflowContent } from "@/lib/workflow-content"
 import { useT, tx } from "@/lib/i18n"
 import { ZOOM_MIN, ZOOM_MAX } from "@/lib/zoom"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
@@ -47,21 +47,19 @@ function WorkflowViewerCanvas({
 
     async function fetchWorkflow() {
       try {
-        const supabase = createClient()
-        const { data, error: fetchError } = await supabase
-          .from("workflows")
-          .select("id, name, nodes, edges")
-          .eq("id", workflowId)
-          .single()
+        // The referenced workflow may be somebody else's: read it as THIS
+        // caller may hold it (lib/workflow-content.ts).
+        const content = await readWorkflowContent(workflowId, "id, name, nodes, edges")
 
         if (cancelled) return
 
-        if (fetchError || !data) {
+        if (!content) {
           setError(tx("editor.viewerNotFound"))
           setLoading(false)
           return
         }
 
+        const data = content.row
         setWorkflowName(data.name || tx("cfgext.subwfUntitledWorkflow"))
         setNodes((data.nodes as unknown as WorkflowNode[]) ?? [])
         setEdges((data.edges as unknown as WorkflowEdge[]) ?? [])

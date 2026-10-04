@@ -7666,6 +7666,52 @@ export function getWorkflowAccess(workflowId: string): Promise<{ data: WorkflowA
   )
 }
 
+/**
+ * One workflow as `GET /v1/workflows/:id` hands it to THIS caller: the backend's
+ * `WorkflowFull` serializer (camelCase) plus the access it was judged at.
+ *
+ * Not always the stored row. A `view` reader receives the studio's reader
+ * projection — the owner's empty media slots, runs in flight and take voice
+ * records already removed, server-side (`stripStudioDraftWorkflow`, studio
+ * rulings T11 / T21 / T42); `edit` and `own` receive the row as stored.
+ */
+export interface WorkflowDocument {
+  id: string
+  projectId: string | null
+  userId: string
+  folderId: string | null
+  name: string
+  version: number | null
+  nodes: unknown
+  edges: unknown
+  settings: unknown
+  createdAt: string
+  updatedAt: string
+  access: Exclude<WorkflowAccessLevel, "none">
+}
+
+/**
+ * Read one workflow through the server's access door. Null when the caller
+ * cannot reach it — the server answers "not found" and "not yours" alike, on
+ * purpose.
+ *
+ * Call `readWorkflowContent` (`lib/workflow-content.ts`), not this: that is the
+ * one place that decides which readers may hold the stored row.
+ */
+export async function getWorkflowDocument(workflowId: string): Promise<WorkflowDocument | null> {
+  const res = await fetch(`${API_BASE_URL}/v1/workflows/${encodeURIComponent(workflowId)}`, {
+    method: "GET",
+    headers: { ...(await getAuthHeaders()) },
+  })
+  if (res.status === 404) return null
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "apiErr.loadWorkflow")
+  }
+  const json = (await res.json()) as { data: WorkflowDocument }
+  return json.data
+}
+
 /** Everyone individually granted access to this workflow. Never emails. */
 export function listWorkflowCollaborators(
   workflowId: string,

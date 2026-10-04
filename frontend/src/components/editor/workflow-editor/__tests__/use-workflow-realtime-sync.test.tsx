@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest"
 import { render } from "@testing-library/react"
 import type { Node, Edge } from "@xyflow/react"
 import { useWorkflowRealtimeSync } from "../use-workflow-realtime-sync"
+import { stripStudioDraftWorkflow } from "@nodaro/shared"
+import { isOwnWorkflowRow, type WorkflowContentRow } from "@/lib/workflow-content"
 
 // ---------------------------------------------------------------------------
 // Supabase mock — capture the latest postgres_changes handler the hook
@@ -88,6 +90,10 @@ interface HarnessParams {
   onAppendNodes: (newNodes: Node[]) => void
   onAppendEdges: (newEdges: Edge[]) => void
   onRemoteUpdatedAt: (updatedAt: string) => void
+  /** Whose row a broadcast is. Defaults to "always the caller's": every test
+   *  above the foreign-row block is about the owner's own canvas. */
+  isOwnRow?: (row: { readonly user_id?: unknown }) => boolean
+  rereadContent?: (workflowId: string) => Promise<WorkflowContentRow | null>
 }
 
 function Harness(props: HarnessParams) {
@@ -103,6 +109,8 @@ function Harness(props: HarnessParams) {
     onAppendNodes: props.onAppendNodes,
     onAppendEdges: props.onAppendEdges,
     onRemoteUpdatedAt: props.onRemoteUpdatedAt,
+    isOwnRow: props.isOwnRow ?? (() => true),
+    rereadContent: props.rereadContent ?? (() => Promise.reject(new Error("an owner's broadcast is never re-read"))),
   })
   return null
 }
@@ -794,5 +802,197 @@ describe("useWorkflowRealtimeSync", () => {
     // reconcileFromRemote clears remoteUpdatedAt itself. Only the dirty
     // path tracks the divergence to drive the banner.
     expect(onRemoteUpdatedAt).not.toHaveBeenCalled()
+  })
+  // -------------------------------------------------------------------------
+  // Somebody else's row (T76): the broadcast is the STORED document, and a
+  // studio production keeps its owner's drafts in it (T11 / T21 / T42). Only
+  // the owner adopts it as it arrived; anyone else re-reads through the
+  // server's door, which strips them for a `view` reader.
+  // -------------------------------------------------------------------------
+
+  describe("a broadcast about somebody else's row", () => {
+    const OWNER = "owner-1"
+    const VIEWER = "viewer-2"
+
+    /** The owner's stored row: a take's voice plan on the canvas node, an empty
+     *  slot and a run in flight on the scene, an empty slot in the bin. */
+    function storedRow(updatedAt: string, version: number) {
+      return {
+        id: "wf-1",
+        user_id: OWNER,
+        updated_at: updatedAt,
+        version,
+        edges: [],
+        nodes: [{
+          id: "clip-1", type: "generate-video", position: { x: 0, y: 0 },
+          data: { generatedResults: [{ url: "https://cdn/take.mp4", revoiceTo: { voiceId: "owner-voice" }, voiceMode: "recast" }] },
+        }],
+        settings: {
+          studio: {
+            shots: [{ id: "s1", stillSlots: [{ id: "slot-1", prompt: "unsent words" }], pendingClips: [{ jobId: "job-1" }] }],
+            trash: [{ id: "t1", kind: "slot", deletedAt: "2026-10-01T00:00:00Z" }],
+          },
+        },
+      }
+    }
+
+    /** What the server answers a `view` reader: the platform's own strip. */
+    function serverViewAnswer(row: ReturnType<typeof storedRow>): WorkflowContentRow {
+      return stripStudioDraftWorkflow(row) as unknown as WorkflowContentRow
+    }
+
+    function flush() {
+      return new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    it("a viewer's canvas reconciles to the server's answer, never to the broadcast's content", async () => {
+      const onReconcile = vi.fn()
+      const stored = storedRow("T1", 2)
+      const rereadContent = vi.fn(async () => serverViewAnswer(stored))
+      render(
+        <Harness
+          {...defaultProps({
+            isDirty: false,
+            loadedUpdatedAt: "T0",
+            loadedVersion: 1,
+            onReconcile,
+            isOwnRow: (row) => isOwnWorkflowRow(row, VIEWER),
+            rereadContent,
+          })}
+        />,
+      )
+
+      lastSubscription().handler({ new: stored })
+      // Nothing from the broadcast itself, synchronously or otherwise.
+      expect(onReconcile).not.toHaveBeenCalled()
+      await flush()
+
+      expect(rereadContent).toHaveBeenCalledWith("wf-1")
+      expect(onReconcile).toHaveBeenCalledTimes(1)
+      const arg = onReconcile.mock.calls[0][0] as { nodes: Node[]; settings: Record<string, unknown>; version: number }
+      const take = (arg.nodes[0].data as { generatedResults: Record<string, unknown>[] }).generatedResults[0]
+      expect(take.url).toBe("https://cdn/take.mp4")
+      expect("revoiceTo" in take).toBe(false)
+      expect("voiceMode" in take).toBe(false)
+      const studio = arg.settings.studio as { shots: Record<string, unknown>[]; trash: unknown[] }
+      expect("stillSlots" in studio.shots[0]).toBe(false)
+      expect("pendingClips" in studio.shots[0]).toBe(false)
+      expect(studio.trash).toEqual([])
+      expect(arg.version).toBe(2)
+    })
+
+    it("the owner's canvas adopts the broadcast as it arrived — raw, synchronously, with no re-read", () => {
+      const onReconcile = vi.fn()
+      const rereadContent = vi.fn()
+      const stored = storedRow("T1", 2)
+      render(
+        <Harness
+          {...defaultProps({
+            isDirty: false,
+            loadedUpdatedAt: "T0",
+            loadedVersion: 1,
+            onReconcile,
+            isOwnRow: (row) => isOwnWorkflowRow(row, OWNER),
+            rereadContent,
+          })}
+        />,
+      )
+
+      lastSubscription().handler({ new: stored })
+      expect(rereadContent).not.toHaveBeenCalled()
+      expect(onReconcile).toHaveBeenCalledTimes(1)
+      const arg = onReconcile.mock.calls[0][0] as { nodes: Node[]; settings: Record<string, unknown> }
+      const take = (arg.nodes[0].data as { generatedResults: Record<string, unknown>[] }).generatedResults[0]
+      expect(take.revoiceTo).toEqual({ voiceId: "owner-voice" })
+      const studio = arg.settings.studio as { shots: Record<string, unknown>[] }
+      expect(studio.shots[0].stillSlots).toEqual([{ id: "slot-1", prompt: "unsent words" }])
+    })
+
+    it("an edit collaborator's canvas adopts what the server answers them — the stored row", async () => {
+      const onReconcile = vi.fn()
+      const stored = storedRow("T1", 2)
+      render(
+        <Harness
+          {...defaultProps({
+            isDirty: false,
+            loadedUpdatedAt: "T0",
+            loadedVersion: 1,
+            onReconcile,
+            isOwnRow: (row) => isOwnWorkflowRow(row, "editor-3"),
+            rereadContent: async () => stored as unknown as WorkflowContentRow,
+          })}
+        />,
+      )
+
+      lastSubscription().handler({ new: stored })
+      await flush()
+      const arg = onReconcile.mock.calls[0][0] as { nodes: Node[]; settings: Record<string, unknown> }
+      const take = (arg.nodes[0].data as { generatedResults: Record<string, unknown>[] }).generatedResults[0]
+      expect(take.revoiceTo).toEqual({ voiceId: "owner-voice" })
+      expect((arg.settings.studio as { shots: Record<string, unknown>[] }).shots[0].stillSlots).toBeDefined()
+    })
+
+    it("a row with no user_id is not the caller's (fail closed)", async () => {
+      const onReconcile = vi.fn()
+      const rereadContent = vi.fn(async () => null)
+      render(
+        <Harness
+          {...defaultProps({
+            loadedUpdatedAt: "T0",
+            onReconcile,
+            isOwnRow: (row) => isOwnWorkflowRow(row, VIEWER),
+            rereadContent,
+          })}
+        />,
+      )
+      const { user_id: _owner, ...anonymous } = storedRow("T1", 2)
+      lastSubscription().handler({ new: anonymous })
+      await flush()
+      expect(rereadContent).toHaveBeenCalledTimes(1)
+      expect(onReconcile).not.toHaveBeenCalled()
+    })
+
+    it("an echo of this tab's own save is skipped before any re-read", () => {
+      const rereadContent = vi.fn()
+      render(
+        <Harness
+          {...defaultProps({
+            loadedUpdatedAt: "T1",
+            loadedVersion: 2,
+            isOwnRow: () => false,
+            rereadContent,
+          })}
+        />,
+      )
+      lastSubscription().handler({ new: storedRow("T1", 2) })
+      expect(rereadContent).not.toHaveBeenCalled()
+    })
+
+    it("a re-read that lands after the editor moved to another workflow is dropped", async () => {
+      const onReconcile = vi.fn()
+      let release: (row: WorkflowContentRow) => void = () => {}
+      const rereadContent = vi.fn(() => new Promise<WorkflowContentRow>((resolve) => { release = resolve }))
+      const { rerender } = render(
+        <Harness {...defaultProps({ loadedUpdatedAt: "T0", onReconcile, isOwnRow: () => false, rereadContent })} />,
+      )
+      lastSubscription().handler({ new: storedRow("T1", 2) })
+      rerender(<Harness {...defaultProps({ workflowId: "wf-2", loadedUpdatedAt: "T0", onReconcile, isOwnRow: () => false, rereadContent })} />)
+      release(serverViewAnswer(storedRow("T1", 2)))
+      await flush()
+      expect(onReconcile).not.toHaveBeenCalled()
+    })
+
+    it("a re-read that comes back older than what the tab already holds is dropped", async () => {
+      const onReconcile = vi.fn()
+      const rereadContent = vi.fn(async () => serverViewAnswer(storedRow("T1", 2)))
+      const at = (loadedVersion: number) =>
+        defaultProps({ loadedUpdatedAt: "T0", loadedVersion, onReconcile, isOwnRow: () => false, rereadContent })
+      const { rerender } = render(<Harness {...at(1)} />)
+      lastSubscription().handler({ new: storedRow("T1", 2) })
+      // Before the re-read lands, this tab already moved to version 3.
+      rerender(<Harness {...at(3)} />)
+      await flush()
+      expect(onReconcile).not.toHaveBeenCalled()
+    })
   })
 })

@@ -66,6 +66,11 @@
  * single workflow row currently open in the editor. RLS continues to
  * apply on Realtime (Supabase enforces the same policies on the
  * broadcast), so the user only receives events for rows they can SELECT.
+ * That includes a `view` reader, whose socket therefore receives the stored
+ * row whole. So only the row's OWNER adopts a broadcast's content as it
+ * arrived (`isOwnRow`); anyone else takes the broadcast as a signal and
+ * re-reads the content through the server's door (`rereadContent`), which
+ * strips a studio production's owner drafts for `view` (lib/workflow-content.ts).
  *
  * Migration: supabase/migrations/115_workflows_realtime.sql adds
  *   ALTER TABLE workflows REPLICA IDENTITY FULL;
@@ -87,9 +92,12 @@
 import { useEffect, useRef } from "react"
 import type { Node, Edge } from "@xyflow/react"
 import { createClient } from "@/lib/supabase"
+import type { WorkflowContentRow } from "@/lib/workflow-content"
 
 interface RealtimeWorkflowRow {
   readonly id: string
+  /** Whose row it is — decides whether its content may be adopted as it arrived. */
+  readonly user_id?: string | null
   readonly nodes: readonly Node[] | null
   readonly edges: readonly Edge[] | null
   readonly updated_at: string | null
@@ -192,6 +200,39 @@ export interface UseWorkflowRealtimeSyncParams {
    * `loadedUpdatedAt` to detect divergence.
    */
   readonly onRemoteUpdatedAt: (updatedAt: string) => void
+  /**
+   * Whether a broadcast row's CONTENT may be adopted as it arrived: true only
+   * for the caller's OWN row. The broadcast is the stored row (REPLICA
+   * IDENTITY FULL), and only its owner may hold that whole — a studio
+   * production keeps the owner's drafts, runs in flight and take voice records
+   * in it (studio rulings T11 / T21 / T42). Fail closed: a row with no
+   * `user_id`, or a caller not known yet, is somebody else's.
+   */
+  readonly isOwnRow: (row: { readonly user_id?: unknown }) => boolean
+  /**
+   * For a broadcast about somebody else's row: the content as THIS caller may
+   * hold it, re-read through the server's door (`readWorkflowContentFromServer`
+   * in lib/workflow-content.ts) — the stored row for an `edit` collaborator, the
+   * reader's projection for `view`. The broadcast itself then only says THAT
+   * the row moved. Null when the caller can no longer reach it.
+   */
+  readonly rereadContent: (workflowId: string) => Promise<WorkflowContentRow | null>
+}
+
+/** A re-read row in the broadcast's own shape, so both reach the same reconcile. */
+function asBroadcastRow(row: WorkflowContentRow): RealtimeWorkflowRow {
+  return {
+    id: row.id,
+    user_id: row.user_id ?? null,
+    nodes: Array.isArray(row.nodes) ? (row.nodes as Node[]) : null,
+    edges: Array.isArray(row.edges) ? (row.edges as Edge[]) : null,
+    updated_at: row.updated_at ?? null,
+    version: row.version ?? null,
+    settings:
+      row.settings && typeof row.settings === "object" && !Array.isArray(row.settings)
+        ? (row.settings as Record<string, unknown>)
+        : null,
+  }
 }
 
 /**
@@ -213,6 +254,8 @@ export function useWorkflowRealtimeSync(
     onAppendNodes,
     onAppendEdges,
     onRemoteUpdatedAt,
+    isOwnRow,
+    rereadContent,
   } = params
 
   // Stash callbacks in refs so the subscribe-effect's closure never
@@ -229,6 +272,8 @@ export function useWorkflowRealtimeSync(
   const onAppendNodesRef = useRef(onAppendNodes)
   const onAppendEdgesRef = useRef(onAppendEdges)
   const onRemoteUpdatedAtRef = useRef(onRemoteUpdatedAt)
+  const isOwnRowRef = useRef(isOwnRow)
+  const rereadContentRef = useRef(rereadContent)
 
   // Update refs on every render — cheap, and guarantees the next event
   // sees the freshest callbacks regardless of how the caller passes them.
@@ -242,12 +287,106 @@ export function useWorkflowRealtimeSync(
   onAppendNodesRef.current = onAppendNodes
   onAppendEdgesRef.current = onAppendEdges
   onRemoteUpdatedAtRef.current = onRemoteUpdatedAt
+  isOwnRowRef.current = isOwnRow
+  rereadContentRef.current = rereadContent
 
   useEffect(() => {
     if (!workflowId) return
 
     const supabase = createClient()
     const channelName = `workflow:${workflowId}`
+    // Cleared on teardown, so a re-read that lands after the editor moved to
+    // another workflow is dropped rather than painted onto it.
+    let active = true
+
+    /**
+     * Whether this tab already holds the row's content: its own save's echo —
+     * possibly a late one — or a write that changed no content. Reads only the
+     * row's metadata, so it runs on a broadcast before deciding whose content
+     * it is, and again on a re-read row when that lands.
+     */
+    const alreadyHeld = (next: RealtimeWorkflowRow): boolean => {
+      const incomingUpdatedAt = next.updated_at
+      if (!incomingUpdatedAt) return true
+
+      // Skip our own save's broadcasts — on the monotonic content
+      // version first, so a LATE echo of an older own save (its
+      // updated_at no longer equals the cursor, which a newer save has
+      // already moved) is recognised as ours and not as another device.
+      // An `updated_at`-only write (same version) changed no content and
+      // has nothing to reconcile either.
+      const localVersion = getLoadedVersionRef.current()
+      if (typeof next.version === "number" && localVersion != null && next.version <= localVersion) return true
+
+      // Own IN-FLIGHT save echo: while a save is on the wire (saveStatus ===
+      // "saving"), a broadcast at a NEWER version is our own not-yet-
+      // acknowledged write — its ~116KB REPLICA-IDENTITY-FULL echo beat the
+      // HTTP response that advances `loadedVersion`. Skip it; letting it
+      // reach the dirty branch strands `remoteUpdatedAt` and freezes
+      // autosave (the durable "updated on another device" loop a large
+      // scrape result triggers). A genuine remote write in this window still
+      // 0-row-conflicts our next save's CAS and surfaces from the response.
+      if (getSaveInFlightRef.current?.() && typeof next.version === "number" && localVersion != null && next.version > localVersion) return true
+
+      // Rows without a version: the echo of the latest save only.
+      // Without this short-circuit, every successful save would
+      // briefly toggle remoteUpdatedAt and could re-trigger a no-op
+      // reconcile.
+      return incomingUpdatedAt === getLoadedUpdatedAtRef.current()
+    }
+
+    /** Apply a row this caller may hold — the reconcile contract in the file docstring. */
+    const adopt = (next: RealtimeWorkflowRow, incomingUpdatedAt: string): void => {
+      const incomingNodes = Array.isArray(next.nodes) ? (next.nodes as Node[]) : []
+      const incomingEdges = Array.isArray(next.edges) ? (next.edges as Edge[]) : []
+      // `typeof === "object"` is true for both objects AND arrays —
+      // explicit `!Array.isArray` rejects accidental array shapes so
+      // the per-field guards downstream don't have to.
+      const incomingSettings =
+        next.settings &&
+        typeof next.settings === "object" &&
+        !Array.isArray(next.settings)
+          ? (next.settings as Record<string, unknown>)
+          : null
+
+      if (!getIsDirtyRef.current()) {
+        // Clean local state — snap to remote. This is what kills the
+        // stale-state-resurrects-deleted-nodes bug: a passive tab
+        // sees a remote save and immediately drops any node ids that
+        // are no longer present, so the next time *this* tab's
+        // autosave runs (after some idle-time UI nudge) it can't
+        // resurrect them. `reconcileFromRemote` itself clears
+        // `remoteUpdatedAt`, so we skip the divergence-tracking call
+        // below in this branch to avoid a wasted set→clear pair on
+        // the store.
+        onReconcileRef.current({
+          nodes: incomingNodes,
+          edges: incomingEdges,
+          updatedAt: incomingUpdatedAt,
+          version: typeof next.version === "number" ? next.version : null,
+          settings: incomingSettings,
+        })
+        return
+      }
+
+      // Dirty local state — track the divergence (drives the banner)
+      // and keep v1 append-only behavior so in-progress edits aren't
+      // clobbered (and so MCP-added nodes still land for the Film
+      // Director live-canvas demo). The banner + optimistic locking
+      // on save handle the actual conflict.
+      onRemoteUpdatedAtRef.current(incomingUpdatedAt)
+
+      if (incomingNodes.length > 0) {
+        const currentNodeIds = new Set(getCurrentNodesRef.current().map((n) => n.id))
+        const newNodes = incomingNodes.filter((n) => !currentNodeIds.has(n.id))
+        if (newNodes.length > 0) onAppendNodesRef.current(newNodes)
+      }
+      if (incomingEdges.length > 0) {
+        const currentEdgeIds = new Set(getCurrentEdgesRef.current().map((e) => e.id))
+        const newEdges = incomingEdges.filter((e) => !currentEdgeIds.has(e.id))
+        if (newEdges.length > 0) onAppendEdgesRef.current(newEdges)
+      }
+    }
 
     const channel = supabase
       .channel(channelName)
@@ -264,91 +403,35 @@ export function useWorkflowRealtimeSync(
         },
         (payload: { new: RealtimeWorkflowRow | null }) => {
           const next = payload.new
-          if (!next) return
+          if (!next || alreadyHeld(next)) return
 
-          const incomingUpdatedAt = next.updated_at
-          if (!incomingUpdatedAt) return
-
-          // Skip our own save's broadcasts — on the monotonic content
-          // version first, so a LATE echo of an older own save (its
-          // updated_at no longer equals the cursor, which a newer save has
-          // already moved) is recognised as ours and not as another device.
-          // An `updated_at`-only write (same version) changed no content and
-          // has nothing to reconcile either.
-          const localVersion = getLoadedVersionRef.current()
-          if (typeof next.version === "number" && localVersion != null && next.version <= localVersion) return
-
-          // Own IN-FLIGHT save echo: while a save is on the wire (saveStatus ===
-          // "saving"), a broadcast at a NEWER version is our own not-yet-
-          // acknowledged write — its ~116KB REPLICA-IDENTITY-FULL echo beat the
-          // HTTP response that advances `loadedVersion`. Skip it; letting it
-          // reach the dirty branch strands `remoteUpdatedAt` and freezes
-          // autosave (the durable "updated on another device" loop a large
-          // scrape result triggers). A genuine remote write in this window still
-          // 0-row-conflicts our next save's CAS and surfaces from the response.
-          if (getSaveInFlightRef.current?.() && typeof next.version === "number" && localVersion != null && next.version > localVersion) return
-
-          // Rows without a version: the echo of the latest save only.
-          // Without this short-circuit, every successful save would
-          // briefly toggle remoteUpdatedAt and could re-trigger a no-op
-          // reconcile.
-          const localUpdatedAt = getLoadedUpdatedAtRef.current()
-          if (incomingUpdatedAt === localUpdatedAt) return
-
-          const incomingNodes = Array.isArray(next.nodes) ? (next.nodes as Node[]) : []
-          const incomingEdges = Array.isArray(next.edges) ? (next.edges as Edge[]) : []
-          // `typeof === "object"` is true for both objects AND arrays —
-          // explicit `!Array.isArray` rejects accidental array shapes so
-          // the per-field guards downstream don't have to.
-          const incomingSettings =
-            next.settings &&
-            typeof next.settings === "object" &&
-            !Array.isArray(next.settings)
-              ? (next.settings as Record<string, unknown>)
-              : null
-
-          if (!getIsDirtyRef.current()) {
-            // Clean local state — snap to remote. This is what kills the
-            // stale-state-resurrects-deleted-nodes bug: a passive tab
-            // sees a remote save and immediately drops any node ids that
-            // are no longer present, so the next time *this* tab's
-            // autosave runs (after some idle-time UI nudge) it can't
-            // resurrect them. `reconcileFromRemote` itself clears
-            // `remoteUpdatedAt`, so we skip the divergence-tracking call
-            // below in this branch to avoid a wasted set→clear pair on
-            // the store.
-            onReconcileRef.current({
-              nodes: incomingNodes,
-              edges: incomingEdges,
-              updatedAt: incomingUpdatedAt,
-              version: typeof next.version === "number" ? next.version : null,
-              settings: incomingSettings,
-            })
+          if (isOwnRowRef.current(next)) {
+            adopt(next, next.updated_at as string)
             return
           }
 
-          // Dirty local state — track the divergence (drives the banner)
-          // and keep v1 append-only behavior so in-progress edits aren't
-          // clobbered (and so MCP-added nodes still land for the Film
-          // Director live-canvas demo). The banner + optimistic locking
-          // on save handle the actual conflict.
-          onRemoteUpdatedAtRef.current(incomingUpdatedAt)
-
-          if (incomingNodes.length > 0) {
-            const currentNodeIds = new Set(getCurrentNodesRef.current().map((n) => n.id))
-            const newNodes = incomingNodes.filter((n) => !currentNodeIds.has(n.id))
-            if (newNodes.length > 0) onAppendNodesRef.current(newNodes)
-          }
-          if (incomingEdges.length > 0) {
-            const currentEdgeIds = new Set(getCurrentEdgesRef.current().map((e) => e.id))
-            const newEdges = incomingEdges.filter((e) => !currentEdgeIds.has(e.id))
-            if (newEdges.length > 0) onAppendEdgesRef.current(newEdges)
-          }
+          // Somebody else's row: what arrived is the STORED document, which
+          // only its owner may hold. It still says THAT the row moved — read
+          // the content again through the server's door and adopt that,
+          // re-checked on arrival, since this tab may have saved, or applied a
+          // newer write, meanwhile.
+          void rereadContentRef
+            .current(workflowId)
+            .then((fresh) => {
+              if (!active || !fresh) return
+              const row = asBroadcastRow(fresh)
+              if (!alreadyHeld(row)) adopt(row, row.updated_at as string)
+            })
+            .catch(() => {
+              // A failed re-read leaves the canvas as it is; the next
+              // broadcast, or a reload, brings it up to date.
+            })
         },
       )
       .subscribe()
 
     return () => {
+      active = false
       // removeChannel handles both an active subscription and one in
       // the middle of joining; safe to call regardless of state.
       supabase.removeChannel(channel)

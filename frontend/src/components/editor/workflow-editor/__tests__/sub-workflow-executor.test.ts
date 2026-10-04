@@ -19,25 +19,15 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   },
 }))
 
-const mockSupabaseSelect = vi.fn()
-const mockSupabaseEq = vi.fn()
+// The route graph reads the referenced workflow through the content funnel
+// (lib/workflow-content.ts); `mockSupabaseSingle` still answers as the row read
+// it replaced, so every fixture below reads as before.
 const mockSupabaseSingle = vi.fn()
-vi.mock("@/lib/supabase", () => ({
-  createClient: () => ({
-    from: () => ({
-      select: (...args: any[]) => {
-        mockSupabaseSelect(...args)
-        return {
-          eq: (...eqArgs: any[]) => {
-            mockSupabaseEq(...eqArgs)
-            return {
-              single: () => mockSupabaseSingle(),
-            }
-          },
-        }
-      },
-    }),
-  }),
+vi.mock("@/lib/workflow-content", () => ({
+  readWorkflowContent: async () => {
+    const { data, error } = await mockSupabaseSingle()
+    return error || !data ? null : { row: data, access: "own" }
+  },
 }))
 
 const mockBuildExecutionLevels = vi.fn()

@@ -56,6 +56,8 @@ import { AlignmentGuideLines } from "./alignment-guide-lines"
 import { useAlignmentGuides, type GuideLine, type DraggedNodeRect } from "@/hooks/use-alignment-guides"
 import { useCameraAutoPan } from "./workflow-editor/use-camera-auto-pan"
 import { useWorkflowRealtimeSync } from "./workflow-editor/use-workflow-realtime-sync"
+import { isOwnWorkflowRow, readWorkflowContentFromServer } from "@/lib/workflow-content"
+import { getCachedUserId } from "@/hooks/use-auth"
 import { SaveRefusedPill } from "./save-refused-pill"
 import { useElkLayout, getElk, ELK_LAYOUT_OPTIONS, toElkLayoutNode, whenNodesMeasured } from "@/hooks/use-elk-layout"
 import { useAutoPanWhenIdle } from "@/hooks/use-auto-pan-when-idle"
@@ -959,6 +961,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     onAppendNodes: (newNodes) => setNodes((nds) => [...nds, ...newNodes]),
     onAppendEdges: (newEdges) => setEdges((eds) => [...eds, ...newEdges]),
     onRemoteUpdatedAt: (updatedAt) => setRemoteUpdatedAt(updatedAt),
+    // A broadcast is the stored row: only its owner adopts it as it arrived;
+    // anyone else re-reads it through the server's door, which keeps a studio
+    // production's owner drafts from a `view` reader (lib/workflow-content.ts).
+    isOwnRow: (row) => isOwnWorkflowRow(row, getCachedUserId()),
+    rereadContent: async (id) => (await readWorkflowContentFromServer(id))?.row ?? null,
   })
 
   // New / empty canvas → start at 100%. The viewport-restore effect above bails

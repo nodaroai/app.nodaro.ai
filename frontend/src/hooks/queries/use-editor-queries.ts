@@ -46,9 +46,13 @@ export function useImportableWorkflows(
     ],
     queryFn: async () => {
       const supabase = createClient()
+      // Only the character list, never the whole `settings` column: this lists
+      // every workflow in a project or workspace, other people's included, and
+      // a studio production keeps its owner's drafts under `settings.studio`
+      // (lib/workflow-content.ts).
       let query = supabase
         .from("workflows")
-        .select("id, name, settings")
+        .select("id, name, characterDefinitions:settings->characterDefinitions")
         .order("updated_at", { ascending: false })
 
       if (projectId) {
@@ -67,9 +71,8 @@ export function useImportableWorkflows(
 
       return (data ?? [])
         .filter((w: { id: string }) => w.id !== currentWorkflowId)
-        .map((w: { id: string; name: string; settings: unknown }) => {
-          const settings = (w.settings ?? {}) as Record<string, unknown>
-          const characters = (settings.characterDefinitions ?? []) as CharacterDefinition[]
+        .map((w: { id: string; name: string; characterDefinitions: unknown }) => {
+          const characters = (w.characterDefinitions ?? []) as CharacterDefinition[]
           return { id: w.id, name: w.name, characters } as ImportableWorkflow
         })
         .filter((w) => w.characters.length > 0)

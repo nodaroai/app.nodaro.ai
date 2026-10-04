@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
+import { readWorkflowContent } from "@/lib/workflow-content"
 import { applyWorkflowAccess } from "@/hooks/workflow-access-mode"
 import { classifyZeroRowSave, isSaveRefused } from "@/hooks/workflow-save-refusal"
 import { tx } from "@/lib/i18n"
@@ -896,6 +897,11 @@ export function useWorkflowPersistence(projectId?: string) {
 
           // Rebase: adopt the fresh remote as the new base, replay local
           // edits on top, retry once with the fresh version.
+          // workflow-content-read: writers only — save() returns before this
+          // for a read-only canvas, and a `view` reader's canvas is read-only
+          // from the load that read its document; an `edit` collaborator must
+          // rebase onto the stored row, drafts included, because they save it
+          // back whole.
           const { data: fresh } = await supabase
             .from("workflows")
             .select("nodes, edges, settings, name, version, updated_at")
@@ -1249,13 +1255,13 @@ export function useWorkflowPersistence(projectId?: string) {
       try {
         const supabase = createClient()
 
-        const { data, error } = await supabase
-          .from("workflows")
-          .select("*")
-          .eq("id", id)
-          .single()
-
-        if (error) return { success: false, error: error.message }
+        // The workflow as THIS caller may hold it: the stored row for its
+        // owner, the server's own answer for anyone else — so a `view` reader's
+        // canvas never receives a studio production's owner drafts, runs in
+        // flight or take voice records (lib/workflow-content.ts).
+        const content = await readWorkflowContent(id, "*")
+        if (!content) return { success: false, error: "Workflow not found" }
+        const data = content.row
 
         const settings = (data.settings ?? {}) as Record<string, unknown>
         const charDefs = (settings.characterDefinitions ?? []) as CharacterDefinition[]
@@ -1389,7 +1395,7 @@ export function useWorkflowPersistence(projectId?: string) {
 
         loadWorkflow(
           data.id,
-          data.name,
+          data.name ?? "",
           nodes,
           edges,
           charDefs,
@@ -1402,8 +1408,12 @@ export function useWorkflowPersistence(projectId?: string) {
 
         // Studio-origin workflows are view-only in the node editor (the Studio
         // app edits them). `settings` was computed above from data.settings.
+        // A `view` reader's canvas is read-only from this first frame too: the
+        // server said so in the same answer that carried the document, and a
+        // canvas that cannot save never reaches the save path's own reads of
+        // the stored row (its conflict rebase).
         useWorkflowStore.setState({
-          isReadOnly: isStudioWorkflowSettings(settings),
+          isReadOnly: isStudioWorkflowSettings(settings) || content.access === "view",
           readOnlyReason: null,
         })
 
