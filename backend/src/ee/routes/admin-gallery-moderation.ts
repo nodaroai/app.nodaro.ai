@@ -42,7 +42,7 @@ const list = <T extends z.ZodTypeAny>(item: T) => z.array(item).max(GALLERY_MODE
 const language = z.string().trim().min(1).max(40).optional()
 const addWordBody = z.object({ word: term, language })
 /** The most words one import may carry. */
-const MAX_IMPORT = 200
+const MAX_IMPORT = GALLERY_MODERATION_LIMITS.words
 const importBody = z.object({ words: z.array(z.string()).min(1).max(MAX_IMPORT), language })
 const editWordBody = z.object({
   word: term,

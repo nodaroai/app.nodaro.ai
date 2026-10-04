@@ -10,7 +10,7 @@ import { DEFAULT_LANGUAGE, LanguageSelect, languageForModel } from "./moderation
 import { moderationErrorText } from "./moderation-errors"
 
 /** The most words one import may carry (the server's limit). */
-const MAX_IMPORT = 200
+const MAX_IMPORT = 1000
 
 /**
  * The words in what was pasted: a JSON list of words (`["a", "b"]`), a JSON

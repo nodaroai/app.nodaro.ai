@@ -277,7 +277,7 @@ describe("admin gallery moderation — importing a list", () => {
 
   it("refuses a list with nothing storable, and one that is too long", async () => {
     expect((await post("/v1/admin/gallery-moderation/words/import", { words: ["  "] })).statusCode).toBe(400)
-    expect((await post("/v1/admin/gallery-moderation/words/import", { words: Array.from({ length: 201 }, (_, i) => "w" + i) })).statusCode).toBe(400)
+    expect((await post("/v1/admin/gallery-moderation/words/import", { words: Array.from({ length: 1001 }, (_, i) => "w" + i) })).statusCode).toBe(400)
   })
 })
 

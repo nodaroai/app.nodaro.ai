@@ -142,8 +142,8 @@ describe("findBannedWord", () => {
   })
 
   it("checking a prompt costs about the same however long the list is", () => {
-    // 500 words × 61 terms, the stored maximum, against 2,000 clean prompts.
-    const words = Array.from({ length: 500 }, (_, w) =>
+    // 1,000 words × 61 terms, the stored maximum, against 2,000 clean prompts.
+    const words = Array.from({ length: 1000 }, (_, w) =>
       entry(`word${w}`, Array.from({ length: 60 }, (_, t) => (t % 3 === 0 ? `ワード${w}x${t}` : t % 3 === 1 ? `two w${w} t${t}` : `t${w}x${t}`)), [`word${w} ok`]),
     )
     const r = compileGalleryWords(words)

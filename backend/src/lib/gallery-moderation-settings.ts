@@ -16,7 +16,7 @@ export const GALLERY_BANNED_USERS_KEY = "gallery_banned_users"
 export const GALLERY_BANNED_EMAIL_PATTERNS_KEY = "gallery_banned_email_patterns"
 
 export const GALLERY_MODERATION_LIMITS = {
-  words: 500,
+  words: 1000,
   termLength: 60,
   exceptionLength: 120,
   translationsPerWord: 60,
