@@ -36,9 +36,9 @@ vi.mock("@/lib/config.js", () => ({
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
 }))
 
-vi.mock("@/lib/url-validator.js", async () => {
+vi.mock("@/lib/url-validator.js", async (importOriginal) => {
   const { z } = await import("zod")
-  return { safeUrlSchema: z.string().url() }
+  return { ...(await importOriginal<Record<string, unknown>>()), safeUrlSchema: z.string().url() }
 })
 
 vi.mock("@/lib/request-helpers.js", () => ({
@@ -315,7 +315,7 @@ describe("POST /v1/dubbing", () => {
 
   it("accepts a sourceUrl source (public link — ElevenLabs fetches it)", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/dubbing", payload: { sourceUrl: "https://youtube.com/watch?v=x", targetLanguage: "es", userId: USER_ID } })
-    expect(res.statusCode).not.toBe(400)
+    expect(res.statusCode).toBe(200)
   })
 
   it("accepts the window + video options", async () => {

@@ -1,4 +1,4 @@
-import { projectDubbingCreditOverride } from "../../lib/dubbing-pricing.js"
+import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS } from "@nodaro/shared"
 /**
@@ -1712,6 +1712,19 @@ async function executeWorkerNode(
     await supabase.from("jobs").delete().eq("id", jobId)
     const err = new Error(sfxRefusal.message) as Error & { errorCode?: string }
     err.errorCode = sfxRefusal.code
+    throw err
+  }
+
+  // 2b''. Dubbing (every language but Hebrew, which probes in its credit
+  // override): measure the source by the route's own rule and stamp the span,
+  // or the 30-minute ceiling hold, before input_data is written — the
+  // reconcile lane that delivers long dubs reads the stamp from the row. A
+  // span past 30 minutes is refused before anything is reserved.
+  const dubRefusal = await stampDubbingDuration(jobName, payload)
+  if (dubRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(dubRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = dubRefusal.code
     throw err
   }
 

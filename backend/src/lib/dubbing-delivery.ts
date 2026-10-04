@@ -20,7 +20,9 @@ import { supabase } from "./supabase.js"
 import { uploadBufferToR2, mediaObjectKey } from "./storage.js"
 import { runPostProcessing } from "./post-processing-error.js"
 import { finalizeJobWithMedia, type FinalizeClaimant } from "./job-finalize.js"
-import { createWorkDir, cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
+import { createWorkDir, cleanupWorkDir, probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
+import { DUBBING_FALLBACK_SECONDS } from "../providers/elevenlabs/dubbing.js"
+import { dubbingBaseCredits, effectiveDubbedSeconds } from "./dubbing-span.js"
 import { extractAudioTrack } from "../providers/video/extract-audio-track.js"
 import {
   commitJobCredits,
@@ -48,6 +50,61 @@ export interface DeliverDubbedMediaArgs {
   usageLogId?: string | null
   /** Finalize attribution for the audio path ("cron" from the reconcile lane). */
   claimant?: FinalizeClaimant
+  /** ElevenLabs' own reading of the source's length (`media_metadata.duration`
+   *  on the final status). Settles a run that was held at the 30-minute
+   *  ceiling because its length could not be read before it started. */
+  mediaDurationSec?: number
+  /** The job's own request — its queue payload (worker) or input_data
+   *  (reconcile lane): whether it was held at the ceiling, and its window. */
+  request?: Readonly<Record<string, unknown>>
+}
+
+/** What the request says about its reservation and its window. */
+interface DubbingSettleContext {
+  readonly reservedCeiling: boolean
+  readonly targetLanguage: unknown
+  readonly startTime?: number
+  readonly endTime?: number
+}
+
+function settleContextOf(request: Readonly<Record<string, unknown>> | undefined): DubbingSettleContext {
+  const input = request ?? {}
+  return {
+    reservedCeiling: input.reservedCeiling === true,
+    targetLanguage: input.targetLanguage,
+    startTime: typeof input.startTime === "number" ? input.startTime : undefined,
+    endTime: typeof input.endTime === "number" ? input.endTime : undefined,
+  }
+}
+
+/** The length of a delivered file in whole seconds, or undefined when it cannot be read. */
+async function deliveredSeconds(path: string): Promise<number | undefined> {
+  try {
+    const seconds = await probeMediaDuration(path)
+    return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The BASE credits a ceiling-held run settles at: the dubbed span read from
+ * ElevenLabs' metadata, else from the delivered file, else the 2-minute last
+ * resort — never the 30-minute hold itself. Undefined when the run was not
+ * held at the ceiling: its reservation was the measured span, committed as is.
+ */
+async function ceilingSettleBase(
+  ctx: DubbingSettleContext,
+  mediaDurationSec: number | undefined,
+  readDelivered: () => Promise<number | undefined>,
+): Promise<number | undefined> {
+  if (!ctx.reservedCeiling) return undefined
+  const fromMetadata = typeof mediaDurationSec === "number" && mediaDurationSec > 0 ? Math.ceil(mediaDurationSec) : undefined
+  const sourceSec = fromMetadata ?? (await readDelivered())
+  const span = sourceSec != null
+    ? (effectiveDubbedSeconds(sourceSec, ctx.startTime, ctx.endTime) ?? sourceSec)
+    : DUBBING_FALLBACK_SECONDS
+  return dubbingBaseCredits(ctx.targetLanguage, span)
 }
 
 async function loadReservedUsageLogId(jobId: string): Promise<string | null> {
@@ -62,6 +119,7 @@ async function loadReservedUsageLogId(jobId: string): Promise<string | null> {
 
 export async function deliverDubbedMedia(args: DeliverDubbedMediaArgs): Promise<{ ok: boolean; url: string | null }> {
   const { jobId, userId, buffer, videoMode } = args
+  const settle = settleContextOf(args.request)
 
   if (!videoMode) {
     // POST-PROVIDER: ElevenLabs already produced + delivered the dub (we were
@@ -69,12 +127,24 @@ export async function deliverDubbedMedia(args: DeliverDubbedMediaArgs): Promise<
     const r2Url = await runPostProcessing(() =>
       uploadBufferToR2(buffer, mediaObjectKey(jobId, "audio", "mp3"), "audio/mpeg", userId),
     )
+    const meteredBaseCredits = await ceilingSettleBase(settle, args.mediaDurationSec, async () => {
+      const dir = await createWorkDir("dub-audio-length")
+      try {
+        const path = join(dir, "dubbed.mp3")
+        await fs.writeFile(path, buffer)
+        return await deliveredSeconds(path)
+      } finally {
+        await cleanupWorkDir(dir)
+      }
+    })
     const { ok } = await finalizeJobWithMedia({
       jobId,
       jobType: "text-to-audio",
       ...(args.claimant ? { claimant: args.claimant } : {}),
       result: { url: r2Url, cost: null, providerUsed: "elevenlabs-dubbing" },
       mediaUrl: r2Url,
+      // A ceiling-held run settles to the span dubbed (count-based, never above the hold).
+      ...(meteredBaseCredits !== undefined ? { meteredBaseCredits } : {}),
     })
     return { ok, url: r2Url }
   }
@@ -84,9 +154,15 @@ export async function deliverDubbedMedia(args: DeliverDubbedMediaArgs): Promise<
   // and thumbnail, then the CAS'd completion. All post-provider.
   const workDir = await createWorkDir("dub-video")
   let videoR2Url: string
+  let videoSeconds: number | undefined
   try {
     const localPath = join(workDir, "dubbed.mp4")
     await fs.writeFile(localPath, buffer)
+    // Read before the work dir goes: a ceiling-held run without ElevenLabs'
+    // own reading settles by the length of what was delivered.
+    if (settle.reservedCeiling && !(typeof args.mediaDurationSec === "number" && args.mediaDurationSec > 0)) {
+      videoSeconds = await deliveredSeconds(localPath)
+    }
     // watermarkLocalVideoAndUpload wraps its own runPostProcessing.
     videoR2Url = await watermarkLocalVideoAndUpload(localPath, jobId, userId, args.shouldWatermark)
   } finally {
@@ -125,7 +201,15 @@ export async function deliverDubbedMedia(args: DeliverDubbedMediaArgs): Promise<
   })
   if (!ok) return { ok: false, url: videoR2Url }
   const usageLogId = args.usageLogId ?? (await loadReservedUsageLogId(jobId))
-  await commitJobCredits(usageLogId, jobId)
+  // A ceiling-held run settles to the span dubbed: count-based, marked up at
+  // the reservation's margin, never above the hold (commitJobCredits' metered
+  // branch; the USD argument stays null so nothing reprices from dollars).
+  const meteredBaseCredits = await ceilingSettleBase(settle, args.mediaDurationSec, async () => videoSeconds)
+  if (meteredBaseCredits !== undefined) {
+    await commitJobCredits(usageLogId, jobId, null, meteredBaseCredits, true)
+  } else {
+    await commitJobCredits(usageLogId, jobId)
+  }
   await createAssetFromJob(jobId, userId)
   return { ok: true, url: videoR2Url }
 }

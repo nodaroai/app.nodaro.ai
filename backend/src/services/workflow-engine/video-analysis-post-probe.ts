@@ -265,3 +265,23 @@ export async function videoAnalysisPostDuration(
   if (fromSearch && meta.durationSec === null) throw new VideoAnalysisPostError("post_video_unreadable", POST_UNREADABLE_MESSAGE)
   return lengthOrRefusal(meta.durationSec)
 }
+
+/**
+ * A post link's length in seconds through the same lane, cache and probe slots
+ * as above, for another node that prices by a post's length (Dubbing). Null
+ * when the link is not a post this lane reads, when the probe fails, when the
+ * post is live, or when the platform gives no length: the caller decides what
+ * an unknown length costs. Never throws.
+ */
+export async function probeSocialPostDurationSec(link: string, deps: PostProbeDeps = DEFAULT_DEPS): Promise<number | null> {
+  const post = socialPostOf(link.trim())
+  if (!post) return null
+  try {
+    const meta = await cachedProbe(post.url, deps)
+    return meta.isLive || meta.durationSec === null ? null : meta.durationSec
+  } catch (err) {
+    const why = (err instanceof Error ? err.message : String(err)).split("\n")[0]
+    console.warn(`[post-probe] ${post.platform} post probe failed (${why})`)
+    return null
+  }
+}

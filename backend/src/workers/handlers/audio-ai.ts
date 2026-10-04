@@ -27,6 +27,7 @@ import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import { classifyMediaSource, isVideoMode } from "../../providers/video/media-source.js"
 import { startDubbing, waitForDubbing, pollDubbingStatus, downloadDubbedMedia, DUBBING_MAX_DURATION_SEC } from "../../providers/elevenlabs/dubbing.js"
 import { deliverDubbedMedia } from "../../lib/dubbing-delivery.js"
+import { effectiveDubbedSeconds } from "../../lib/dubbing-span.js"
 import { remixVoice } from "../../providers/elevenlabs/voice-remix.js"
 import { designVoice } from "../../providers/elevenlabs/voice-design.js"
 import { forcedAlignment, forcedAlignmentFromBuffer } from "../../providers/elevenlabs/forced-alignment.js"
@@ -628,6 +629,8 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
     targetAccent?: string
     watermark?: boolean
     probedDurationSec?: number
+    /** Held at the 30-minute ceiling (length unknown before start) — settled at delivery. */
+    reservedCeiling?: boolean
   }
   // THE MEDIA DECIDES THE MODE, NEVER THE INPUT SLOT (#1069 rule, mirrors
   // voice-changer): a video wired into the video slot dubs as VIDEO; an
@@ -679,8 +682,7 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
       videoMode = meta.content_type.startsWith("video/")
     }
     if (typeof meta?.duration === "number" && meta.duration > 0 && !d.probedDurationSec) {
-      const window = d.startTime != null && d.endTime != null ? Math.ceil(d.endTime - d.startTime) : undefined
-      const effective = window && window > 0 ? Math.min(Math.ceil(meta.duration), window) : Math.ceil(meta.duration)
+      const effective = effectiveDubbedSeconds(Math.ceil(meta.duration), d.startTime, d.endTime) ?? Math.ceil(meta.duration)
       if (effective > DUBBING_MAX_DURATION_SEC) {
         throw new Error(
           `The span to dub is ${Math.ceil(effective / 60)} minutes; the maximum is ${DUBBING_MAX_DURATION_SEC / 60} minutes. ` +
@@ -731,6 +733,9 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
     videoMode,
     shouldWatermark: videoMode ? ctx.shouldWatermark : false,
     usageLogId: ctx.usageLogId,
+    // Settles a run held at the 30-minute ceiling to the span dubbed.
+    mediaDurationSec: finalStatus.media_metadata?.duration,
+    request: d,
   })
   if (!ok) return
   await setJobProgress(job, ctx.jobId, 100)
