@@ -6,7 +6,8 @@
  * - every pick seamless-match / jump-match (the blendable cuts): Position without Full, and Blend —
  *   "Hard cut" (stored `auto`) or "Short (~1s)", the one step that blends a cut. No Intensity.
  *
- * A stored value a cut does not offer shows as what it renders (Auto / Hard cut), and nothing rewrites it.
+ * A stored value a cut does not offer shows as what it renders (Auto / Hard cut), and showing it rewrites nothing
+ * (what a change of the pick writes is `transition-config-pick-switch.test.tsx`'s).
  * `@nodaro/prompts` is NOT mocked: the rows and flags are the real catalog's.
  */
 import { describe, it, expect, vi } from "vitest"

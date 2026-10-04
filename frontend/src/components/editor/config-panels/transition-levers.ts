@@ -85,8 +85,9 @@ export function transitionPickPatch(
  * The row a lever shows for the stored value. On a cut, a stored value the
  * lever does not offer (`full`; a duration that does not blend; anything on a
  * lever a cut hides) shows as `auto` — which is what it renders: no position
- * clause, a hard cut. Display only: nothing rewrites the stored value. A timed
- * pick shows the stored value as it always has.
+ * clause, a hard cut. Display only: showing a value rewrites nothing (a pick
+ * change clears Duration and Intensity only on a switch into a cut, see
+ * `transitionPickPatch`). A timed pick shows the stored value as it always has.
  */
 export function transitionLeverValue(kind: TransitionPickKind, lever: TransitionLever, stored: unknown): string {
   const value = (stored as string | undefined) ?? "auto"
