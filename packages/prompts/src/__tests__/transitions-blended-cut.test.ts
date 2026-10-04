@@ -9,8 +9,12 @@
  * cuts at every duration, every non-cut, every mixed pick, a blendable cut beside a cut that is not, and the
  * direction fold (`renderTransitionBases`, which has no duration).
  *
- * The approved strings are pinned byte for byte from `fixtures/blended-cut-approved.json`, generated from
- * the approval evidence. A wording change there comes back for approval; never edit the fixture by hand.
+ * The approved strings are pinned byte for byte from `fixtures/blended-cut-approved.json`: `approved` (the
+ * approved strings) and `ruleDerived` (the two-row multi-picks the approved rule produces) are copied from
+ * the review page, so a wording change there comes back for approval and is never made by hand. `hardCut`
+ * holds the same two rows at every other duration (today's hard cut); it shares their bodies, so a reword of
+ * either row changes it together with `approved`. Multi-picks with any other row are proven structurally
+ * below, so a reword of another row never touches this file.
  */
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
