@@ -1,5 +1,12 @@
 # @nodaro/shared
 
+## 3.16.0
+
+### Minor Changes
+
+- c8470d7: Two pricing helpers, so every surface that names a Video SFX or LTX 2.3 Pro Extend price reads the same rule. `videoSfxCreditId(seconds)` returns the `replicate-mmaudio:<n>s` price row for an input video's length (with `VIDEO_SFX_PRICING` naming the 300-second cap and the 8-second fallback). `ltxExtendDurationSec(value)` returns the seconds an LTX extend adds, a whole number from 1 to 20 that defaults to 6, and `LTX_EXTEND_PER_SECOND_CREDIT_ID` names its per-second price row.
+- 6358451: `estimateLoopTrimAddonCredits` returns the Loop Trim add-on in the current credit unit: 10 credits per 5 seconds of output plus 10 per ~24 frames searched (`VIDEO_UTIL_PRICING.CREDIT_UNIT`), the same unit as Trim Video's smart loop cut. It returned the pre-redenomination figure, a tenth of that. New: `ltxRetakeDurationSec(value)` returns the seconds an LTX 2.3 Pro retake replaces (the window, at least 2), and `LTX_RETAKE_PER_SECOND_CREDIT_ID` names its per-second price row.
+
 ## 3.15.0
 
 ### Minor Changes
