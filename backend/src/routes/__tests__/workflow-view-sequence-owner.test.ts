@@ -3,8 +3,8 @@ import Fastify, { type FastifyInstance } from "fastify"
 
 /**
  * A LINKED (keyframe / sequence) studio production's owner state never reaches
- * a reader who is not its owner (studio ruling T87), on the by-id doors and on
- * the public share read:
+ * a reader who is not its owner (studio ruling T87), on the by-id doors (the
+ * response to a move included) and on the public share read:
  *
  * - a take's endpoint pins (`sequenceEndpoints` on the clip node's
  *   `data.generatedResults` rows);
@@ -198,6 +198,9 @@ function plugin(access: string) {
     canRunWorkflow: vi.fn().mockResolvedValue(false),
     canChangeWorkflowVisibility: vi.fn().mockResolvedValue(false),
     canShareWorkflow: vi.fn().mockResolvedValue(false),
+    // The plugin's move rule: a workspace admin of both sides may move a
+    // member's work whatever `admin_access` gives them on it.
+    canMoveWorkflow: vi.fn().mockResolvedValue({ allowed: true }),
   }
   vi.mocked(getPluginServices).mockReturnValue({ orgs } as never)
 }
@@ -211,6 +214,29 @@ function tables(row: unknown = PRODUCTION) {
     then: (resolve: (v: { data: unknown[]; error: null }) => unknown) => resolve({ data: [], error: null }),
   }
   vi.mocked(supabase.from).mockImplementation(((table: string) => (table === "workflows" ? workflows : entities)) as never)
+}
+
+/** Where a move takes the production: another project of its own workspace, so the move drops no grant. */
+const TARGET_PROJECT = "00000000-0000-4000-8000-000000000011"
+
+/**
+ * Mocks a move. The workflows table answers the move's facts read (select → eq
+ * → `maybeSingle`: the row's owner, home and assignment) and its update
+ * (update → eq → select → `single`: the moved row); the projects table answers
+ * the target project.
+ */
+function moveTables() {
+  const facts = { id: WF, user_id: CREATOR, workspace_id: WS, project_id: PRODUCTION.project_id, assignment_id: null }
+  const moved = { ...structuredClone(PRODUCTION), project_id: TARGET_PROJECT }
+  const workflows = {
+    select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: facts, error: null }) })) })),
+    update: vi.fn(() => ({ eq: vi.fn(() => ({ select: vi.fn(() => ({
+      single: vi.fn().mockResolvedValue({ data: moved, error: null }) })) })) })),
+  }
+  const projects = { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({
+    data: { id: TARGET_PROJECT, user_id: CREATOR, workspace_id: WS }, error: null }) })) })) }
+  vi.mocked(supabase.from).mockImplementation(((table: string) =>
+    (table === "workflows" ? workflows : table === "projects" ? projects : {})) as never)
 }
 
 let app: FastifyInstance
@@ -287,6 +313,39 @@ describe("GET /v1/workflows/:id/export (template) — the result rows are gone a
       expect(dataOf(graph, "frame-A").keyframePendingImages).toEqual(kept ? [FRAME_RUN] : undefined)
     },
   )
+})
+
+describe("POST /v1/workflows/:id/move — the moved row goes back to the mover on GET's terms (T87)", () => {
+  const move = (user: string) => app.inject({ method: "POST", url: `/v1/workflows/${WF}/move`,
+    headers: { "x-user-id": user }, payload: { projectId: TARGET_PROJECT } })
+
+  it.each(["view", "none"])("a `%s` mover gets it without the owner's state", async (access) => {
+    // `view` is a team workspace's admin by default; `none` the plugin never
+    // answers a mover today, and it is stripped all the same.
+    plugin(access)
+    moveTables()
+    const res = await move(OTHER)
+    expect(res.statusCode).toBe(200)
+    for (const secret of PRIVATE) expect(res.body).not.toContain(secret)
+    for (const key of OWNER_KEYS) expect(res.body).not.toContain(key)
+    const graph = res.json().data as Graph
+    expect(graph.nodes).toEqual([clipNode(false), frameNode(false), unitNode(false)])
+    expect(graph.settings.studio.sequenceRecommendations).toBeUndefined()
+    expect(graph.settings.studio.sequenceGenerationPolicies).toEqual({})
+    expect(graph.settings.studio.sequenceTakes).toEqual([take(false)])
+    expect(graph.settings.studio.keyframes).toEqual([frameEntry(false)])
+    expect(res.json().droppedCollaborators).toEqual([])
+  })
+
+  it.each(["edit", "own"])("`%s` gets the moved row raw", async (access) => {
+    plugin(access)
+    moveTables()
+    const res = await move(access === "own" ? CREATOR : OTHER)
+    expect(res.statusCode).toBe(200)
+    const graph = res.json().data as Graph
+    expect(graph.nodes).toEqual(PRODUCTION.nodes)
+    expect(graph.settings.studio).toEqual(PRODUCTION.settings.studio)
+  })
 })
 
 describe("GET /v1/public/workflows/:id — the share read never carries a production's owner state (T87)", () => {

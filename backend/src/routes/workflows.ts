@@ -2195,7 +2195,21 @@ export async function workflowRoutes(app: FastifyInstance) {
       verdict.targetProject.workspaceId,
     )
 
-    return reply.send({ data: toWorkflowFull(data), droppedCollaborators })
+    // The moved row goes back to whoever moved it, and a mover need not be
+    // someone who may edit it: a workspace admin of both sides may move a
+    // member's work whatever the workspace's `admin_access` says, and a team
+    // workspace's default for it is `view`. So the answer follows GET's rule,
+    // judged on the row as it now stands: below `edit`, none of the owner's
+    // drafts, runs in flight, voice plans or linked-production state (studio
+    // rulings T11 / T22 / T42 / T87). "Below `edit`" rather than GET's
+    // `=== "view"`: the two agree at every level GET serves, and a mover the
+    // rule answers `none` gets the stripped row too, never the raw one.
+    const full = toWorkflowFull(data)
+    const access = await workflowAccessFromRow(userId, toAccessRow(data))
+    return reply.send({
+      data: accessAtLeast(access, "edit") ? full : stripStudioDraftWorkflow(full),
+      droppedCollaborators,
+    })
   })
 
   // Create a child sub-workflow under a parent
