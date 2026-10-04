@@ -12,8 +12,9 @@
  * through `mayHoldStoredRow` as it does after a load: `view` or `none` closes
  * the subscription and polls, `own` or `edit` subscribes. On `view` or `none`
  * the canvas also stops saving at once, and turns read-only as a `view` load
- * does once no node shows a run in flight (`showsARunInFlight`), so a run
- * already paid for still lands its result.
+ * does once no node shows a run in flight (`showsARunInFlight`), so a run its
+ * node shows still lands its result. A run that marks no node, such as
+ * Generate All Assets on a character's or object's page, is not waited for.
  *
  * When it asks:
  *   - every {@link ACCESS_RECHECK_INTERVAL_MS} while the tab is visible — the

@@ -41,8 +41,10 @@ import { getCurrentUserId, getWorkflowDocument, type WorkflowAccessLevel, type W
  * the moment a save is turned away or meets a row it can no longer read. Each
  * answer goes into the record the load wrote, and an answer of `view` or
  * `none` closes the subscription and stops every save on the spot; the canvas
- * turns read-only too, once no node shows a run in flight, so a run already
- * paid for still lands its result (`applyWorkflowAccess`). (An owner's own
+ * turns read-only too, once no node shows a run in flight, so a run its node
+ * shows still lands its result (`applyWorkflowAccess`; a run that marks no
+ * node, such as Generate All Assets on a character's or object's page, is not
+ * waited for). (An owner's own
  * row stays theirs, and so does its subscription; only the saves stop and the
  * canvas turns read-only: `recheckedAccess`.) So the app never holds what the
  * reader's CURRENT access forbids, with three exceptions. Between two asks a
