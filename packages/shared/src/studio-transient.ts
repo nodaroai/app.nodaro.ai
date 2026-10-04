@@ -79,6 +79,22 @@ export const STUDIO_SHOT_TRANSIENT_KEYS = ["pendingClips", "pendingClip", "pendi
  */
 export const STUDIO_SHOT_DRAFT_KEYS = ["stillSlots", "clipSlots"] as const
 
+/**
+ * ...and a SHOT's 3D previsualization RUN STATE, on `shots[].previsualization`:
+ * `pendingJobs` (the scene runs in flight) and `proSubmission` (a 3D Render Pro
+ * submission's idempotency key and its exact priced body). Same reason as the
+ * per-shot markers — they name jobs on the owner's account — and a sharper one
+ * for the Pro key: carried out, it would let a replay adopt the owner's paid
+ * run. A finished render and an unadopted result (`pendingPlan`) are results,
+ * not run state, and stay.
+ *
+ * The PUBLIC share read's strip only ({@link stripStudioTransientSettings}),
+ * mirroring the studio codec's non-owner projection (`stripTransientSettings`,
+ * which drops the same two keys). A `view` read keeps them, as the codec's
+ * read-only load does ({@link stripStudioDraftSettings}).
+ */
+export const STUDIO_PREVIZ_RUN_STATE_KEYS = ["pendingJobs", "proSubmission"] as const
+
 /** Everything a shot entry loses on its way to a reader who is not its owner. */
 const STUDIO_SHOT_PRIVATE_KEYS: ReadonlyArray<string> = [...STUDIO_SHOT_TRANSIENT_KEYS, ...STUDIO_SHOT_DRAFT_KEYS]
 
@@ -134,6 +150,25 @@ function stripShots(value: unknown, drop: ReadonlyArray<string>): unknown {
 }
 
 /**
+ * `settings.studio.shots` with every shot's 3D run state
+ * ({@link STUDIO_PREVIZ_RUN_STATE_KEYS}) removed from its `previsualization`.
+ * The SAME array back when no shot carried any, and anything that is not
+ * shaped like a shot with a previsualization rides through untouched.
+ */
+function stripPrevizRunState(value: unknown): unknown {
+  if (!Array.isArray(value)) return value
+  let changed = false
+  const out = value.map((entry) => {
+    if (!isRecord(entry)) return entry
+    const previz = entry.previsualization
+    if (!isRecord(previz) || !STUDIO_PREVIZ_RUN_STATE_KEYS.some((key) => key in previz)) return entry
+    changed = true
+    return { ...entry, previsualization: withoutKeys(previz, STUDIO_PREVIZ_RUN_STATE_KEYS) }
+  })
+  return changed ? out : value
+}
+
+/**
  * A production's `settings` with the owner's working state removed.
  *
  * Copy-on-write, and structurally: it rebuilds the objects without those keys
@@ -152,7 +187,7 @@ export function stripStudioTransientSettings(settings: unknown): unknown {
 
   const source = studio as Record<string, unknown>
   const kept = withoutKeys(source, STUDIO_TRANSIENT_KEYS)
-  const shots = stripShots(source.shots, STUDIO_SHOT_PRIVATE_KEYS)
+  const shots = stripPrevizRunState(stripShots(source.shots, STUDIO_SHOT_PRIVATE_KEYS))
   if (source.shots !== undefined) kept.shots = shots
 
   // Nothing to drop at either level — hand back the original object so an
