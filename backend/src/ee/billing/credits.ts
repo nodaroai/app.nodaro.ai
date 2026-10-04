@@ -530,7 +530,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "veo3_lite:1080p": 90,         // (VEO 3.1 Lite @ 1080p)
   // Direct-4K generation (base 1080p → chained get-4k-video). Base cost, NO markup
   // (admin panel applies markup). KIE: ceil(KIE_cr/4). docs.kie.ai VEO 3.1 4K.
-  "veo3:4k": 930,                 // (VEO 3.1 Quality @ 4K)
+  "veo3:4k": 1300,                // (VEO 3.1 Quality @ 4K — a 1080p generation plus the 4K upscale, so above the flat veo3)
   "veo3.1:4k": 450,               // (VEO 3.1 Fast @ 4K)
   "veo3_lite:4k": 380,           // (VEO 3.1 Lite @ 4K)
   "kling": 280,                   // (10s no-audio fallback)
@@ -1513,9 +1513,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // (competitor-scan:<n> = n pages). Cloud-only, like Social Search
   // (packages/shared competitors.ts is the table). Migration 447.
   ...COMPETITOR_SCAN_CREDIT_COSTS,
-  "qa-check": 10,
-  "qa-check:economy": 1,
-  "qa-check:premium": 10,
+  "qa-check": 20,
+  "qa-check:economy": 10,
+  "qa-check:premium": 40,
   // ── Dynamic-priced video utilities (NOT used by routes, but kept as
   //    safety-net fallback). The three rows below are unreachable when
   //    routes/loop-video.ts, routes/trim-video.ts, routes/combine-videos.ts
@@ -1611,9 +1611,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "llm-structured": 10,
   "llm-structured:economy": 10,
   "llm-structured:premium": 10,
-  "image-critic": 5,
+  "image-critic": 20,
   "image-critic:economy": 10,
-  "image-critic:premium": 20,
+  "image-critic:premium": 40,
   // Content Recipe — one structured call over one post, flat per call by the
   // model's tier (owner decision 2026-10-01). Cloud-only: the private plugin
   // runs it; these are the public prices it is billed at.

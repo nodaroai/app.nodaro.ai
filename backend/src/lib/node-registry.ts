@@ -185,6 +185,9 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
     note: "Prices by RENDERER, not by node: the cheap FFmpeg drawtext burn vs the Remotion render anything styled / timed / transcribed / segmented needs.",
   },
   "image-collage": { ids: familyIds("image-collage") },
+  // Every run bills its source's row (web-scrape:<source>); the bare row is
+  // never charged, so the quote is the range across the sources.
+  "web-scrape": { ids: familyIds("web-scrape") },
   "speed-ramp": { ids: familyIds("speed-ramp") },
   "assemble-narrated-video": { ids: familyIds("assemble-narrated-video") },
   "after-effects": { ids: familyIds("after-effects") },
@@ -479,9 +482,11 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "web-scrape",
     label: "Web Scrape",
     category: "input",
-    // outputType: data — emits a structured JSON array via the `json` handle (creditCost auto-filled from STATIC_CREDIT_COSTS = 2).
+    // outputType: data — emits a structured JSON array via the `json` handle. creditCost is the
+    // band across the per-source rows a run is billed on (CREDIT_BAND_SOURCES).
     description: webScrapeDescription(),
     outputType: "data",
+    creditCost: creditBandFor("web-scrape"),
   },
   {
     type: "meta-ads-scrape",

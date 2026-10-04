@@ -1251,7 +1251,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     resolutions: ["720p", "1080p", "4k"],
     pricing: [
       { identifier: "veo3", credits: 1000, note: "4/6/8s with audio (flat per-generation)" },
-      { identifier: "veo3:4k", credits: 930, note: "4K (base 1080p → get-4k-video)" },
+      { identifier: "veo3:4k", credits: 1300, note: "4K (base 1080p → get-4k-video)" },
     ],
     featured: true,
   },
