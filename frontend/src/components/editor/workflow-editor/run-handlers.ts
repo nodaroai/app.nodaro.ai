@@ -24,6 +24,7 @@ import {
 } from "./types";
 import { connectionJustLost, jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { estimateRunCredits } from "./estimate-run-credits";
+import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./run-from-here-set";
 import { wordTimingsPreflight } from "./add-captions-preflight";
 import { nestedWordTimingsPreflight } from "./sub-workflow-preflight";
 import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, unwrapEditPlanOutput, withWiredSettings } from "@nodaro/shared"
@@ -260,25 +261,6 @@ export function clearConnectedListRows(nodes: WorkflowNode[]): void {
 // Run-confirmation gate
 // ---------------------------------------------------------------------------
 
-/** Live, non-clone, non-hidden executable nodes — the read-only set used to
- *  size the confirm dialog BEFORE any store mutation. */
-function liveExecutable(nodes: WorkflowNode[]): WorkflowNode[] {
-  return nodes.filter(
-    (n) => isExecutableNode(n) && !(n as { hidden?: boolean }).hidden && !isExpandedClone(n),
-  );
-}
-
-/** Forward BFS: all node ids reachable downstream from `startId` (inclusive). */
-function getDownstreamNodeIds(startId: string, edges: WorkflowEdge[]): Set<string> {
-  const ids = new Set<string>([startId]);
-  const queue = [startId];
-  while (queue.length > 0) {
-    const cur = queue.shift()!;
-    for (const e of edges)
-      if (e.source === cur && !ids.has(e.target)) { ids.add(e.target); queue.push(e.target); }
-  }
-  return ids;
-}
 
 /**
  * The spend a run has to exceed before we interrupt the user to confirm it.
@@ -680,8 +662,7 @@ export async function handleRunFromHere(
   // Read-only forward BFS on the live graph (mirrors the collapse-time BFS below).
   {
     const st = useWorkflowStore.getState();
-    const downstreamIds = getDownstreamNodeIds(nodeId, st.edges);
-    const exec = liveExecutable(st.nodes).filter((n) => downstreamIds.has(n.id));
+    const exec = runFromHereExecutable(nodeId, st.nodes, st.edges);
     if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "from-here", false))) return;
     if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return;
   }
