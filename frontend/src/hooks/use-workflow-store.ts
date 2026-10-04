@@ -785,7 +785,8 @@ interface WorkflowState {
   readonly setCreateNodesFromWriter: (fn: ((writerNodeId: string) => void) | null) => void
   readonly runAllWriterImageNodes: ((writerNodeId: string) => void) | null
   readonly setRunAllWriterImageNodes: (fn: ((writerNodeId: string) => void) | null) => void
-  readonly setWorkflowThumbnail: (url: string) => void
+  /** Resolves true once the workflow row holds the new thumbnail. */
+  readonly setWorkflowThumbnail: (url: string) => Promise<boolean>
   readonly updatePresentationSettings: (settings: Partial<PresentationSettings>) => void
   readonly syncTeleporterEdges: (channel: string) => void
   readonly replaceEdgeWithTeleporter: (edgeId: string) => void
@@ -3319,30 +3320,32 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   runAllWriterImageNodes: null,
   setRunAllWriterImageNodes: (fn) => set({ runAllWriterImageNodes: fn }),
 
-  setWorkflowThumbnail: (url) => {
+  setWorkflowThumbnail: async (url) => {
     const { workflowId } = useWorkflowStore.getState()
-    if (!workflowId) return
+    if (!workflowId) return false
 
     // Update DB directly (thumbnail is independent of main workflow save)
-    import("@/lib/supabase").then(({ createClient }) => {
-      const supabase = createClient()
-      supabase
-        .from("workflows")
-        .update({ thumbnail_url: url })
-        .eq("id", workflowId)
-        .then(({ error }) => {
-          if (error) return
-          // Also update the projects store so the card shows the thumbnail immediately
-          import("@/hooks/use-projects-store").then(({ useProjectsStore }) => {
-            useProjectsStore.setState((s) => ({
-              workflowMetas: s.workflowMetas.map((w) =>
-                w.id === workflowId ? { ...w, thumbnailUrl: url } : w,
-              ),
-            }))
-          })
-          import("sonner").then(({ toast }) => toast.success(tx("toastMsg.thumbnailSet")))
-        })
-    })
+    const { createClient } = await import("@/lib/supabase")
+    const { error } = await createClient()
+      .from("workflows")
+      .update({ thumbnail_url: url })
+      .eq("id", workflowId)
+    const { toast } = await import("sonner")
+    if (error) {
+      // Said, not swallowed: the person clicked for a picture and must know
+      // it did not stick.
+      toast.error(tx("toastMsg.thumbnailSetFailed"))
+      return false
+    }
+    // Also update the projects store so the card shows the thumbnail immediately
+    const { useProjectsStore } = await import("@/hooks/use-projects-store")
+    useProjectsStore.setState((s) => ({
+      workflowMetas: s.workflowMetas.map((w) =>
+        w.id === workflowId ? { ...w, thumbnailUrl: url } : w,
+      ),
+    }))
+    toast.success(tx("toastMsg.thumbnailSet"))
+    return true
   },
 
   updatePresentationSettings: (settings) => {

@@ -146,7 +146,7 @@ export function ResultsGallery({
             variant="outline"
             size="sm"
             className="w-full"
-            onClick={() => setWorkflowThumbnail(activeUrl)}
+            onClick={() => void setWorkflowThumbnail(activeUrl)}
           >
             <ImageIcon className="w-3.5 h-3.5 me-2" />
             {t("cfgshared.setAsThumbnail")}
