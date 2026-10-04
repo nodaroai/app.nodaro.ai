@@ -118,6 +118,7 @@ vi.mock("@/hooks/use-workflow-store", () => {
 
 import { useWorkflowPersistence, SAVE_QUEUE_WAIT_MS } from "../use-workflow-persistence"
 import { onAccessRecheckRequest } from "../workflow-access-mode"
+import { hasSavableChanges } from "../workflow-save-refusal"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -287,6 +288,25 @@ describe("useWorkflowPersistence — save", () => {
 
     expect(saveResult!.success).toBe(true)
     expect(mockSupabaseFrom).not.toHaveBeenCalled()
+  })
+
+  it("writes nothing for a dirty read-only canvas, yet answers success, so nothing may offer that Save", async () => {
+    // Dragging a node on a read-only canvas still dirties it, with no refusal
+    // to say a save is pointless (a Studio workflow, or a `view` load whose
+    // access check failed). The unsaved-changes dialog asks
+    // `hasSavableChanges` first, which says no for exactly this canvas.
+    resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")], isDirty: true, isReadOnly: true, saveRefusedFor: null })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+    let saveResult: { success: boolean; error?: string } | undefined
+
+    await act(async () => {
+      saveResult = await result.current.save()
+    })
+
+    expect(saveResult!.success).toBe(true)
+    expect(mockSupabaseFrom).not.toHaveBeenCalled()
+    expect(hasSavableChanges(storeState as unknown as Parameters<typeof hasSavableChanges>[0])).toBe(false)
   })
 
   it("uses pid argument over hook projectId when both are provided", async () => {
