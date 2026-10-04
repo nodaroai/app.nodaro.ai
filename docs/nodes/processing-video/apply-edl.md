@@ -27,6 +27,19 @@ All processing is local FFmpeg. No provider key is required.
 | Media | video **or** audio | The rendered cut. Its type follows the **Output** setting. |
 | Transcript | json | The wired transcript remapped through the cut. Empty when no transcript is wired. |
 
+The node keeps every render it makes, including renders made before you changed **Output**. The **Latest Results** gallery in its config panel shows each render as the medium it was rendered as, video or audio, and **Save to Library** saves the selected render as that medium. The selected render is the cut the **Media** output passes on, whether you run the node on its own or run the workflow. A new render is selected as soon as it finishes; to pass an earlier one on, select it in the gallery.
+
+The **Media** output always carries the medium the **Output** setting names, so a render of the other medium (one made before you changed **Output**) cannot be selected: its tile in the gallery is dimmed, and its tooltip says which **Output** to set. Set **Output** back to that render's medium, then select it.
+
+When a render finishes, the **Transcript** output becomes the transcript that render was cut with, whether you ran the node on its own or ran the workflow, including a workflow run that finished while the editor was closed. A render cut with no transcript wired clears the **Transcript** output rather than leaving an earlier render's, which is timed to a different cut.
+
+Selecting a render also sets the **Transcript** output to the transcript that render was cut with:
+
+- A render keeps its transcript, and selecting it restores it. A list run is the exception: it keeps the transcript of its first render at most.
+- For a render that kept none, the editor reads the transcript back from the job that made the render, after checking that the job's output is that render.
+- When that check fails or cannot be made (the render carries no record of its own job, as in a list run), the **Transcript** output is cleared rather than left as another cut's. A node that takes it then gets no transcript, so **Add Captions** falls back to its own caption sources: by default it transcribes the selected cut itself, and with auto-transcribe off and no caption text it reports that it has no caption source.
+- A render cut with no transcript wired has none, so selecting it clears the **Transcript** output too.
+
 ## Configuration
 
 | Field | Type | Default | Description |

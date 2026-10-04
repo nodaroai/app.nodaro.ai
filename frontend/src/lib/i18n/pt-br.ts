@@ -1324,6 +1324,8 @@ export const ptBR: ChromeDict = {
   "cfgshared.searchModelsTierPlaceholder": "Pesquisar — nome, empresa, nível…",
   "cfgshared.latestResults": "Resultados mais recentes",
   "cfgshared.resultN": "Resultado {n}",
+  "cfgshared.applyEdlTakeIsAudio": "Este take é de áudio — defina “Saída” como “Só áudio” para usá-lo",
+  "cfgshared.applyEdlTakeIsVideo": "Este take é de vídeo — defina “Saída” como “Vídeo” para usá-lo",
   "cfgshared.copyUrl": "Copiar URL",
   "cfgshared.download": "Baixar",
   "cfgshared.setAsThumbnail": "Definir como miniatura",

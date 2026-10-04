@@ -52,6 +52,7 @@ import { isScrapeNodeType, scrapeJobNeedsApplying, scrapeResultPatch } from "@/c
 import { settledBeforeClear } from "@/lib/results-cleared"
 import { videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
+import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import type { GeneratedResult, Scene3DRevisionEntry, WorkflowNode } from "@/types/nodes"
 
 /** The single-entry nodeState a completed single-node job carries (backend
@@ -425,7 +426,11 @@ export function buildCompletedResultPatch(
   // Video Overlay: the worker's warnings / canvas / length, on the node and the
   // result — the same mapping every other lane writes (lib/video-overlay-run-output).
   const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(output) : undefined
-  const result: GeneratedResult = { url, thumbnailUrl, timestamp, jobId, ...(overlayRun ?? {}) }
+  const result: GeneratedResult = {
+    url, thumbnailUrl, timestamp, jobId, ...(overlayRun ?? {}),
+    // Apply EDL: the take keeps the Transcript its render was cut with.
+    ...applyEdlTakeTranscriptField(nodeType, output, url),
+  }
 
   const patch: Record<string, unknown> = {
     executionStatus: "completed",
@@ -440,6 +445,10 @@ export function buildCompletedResultPatch(
     if (nodeType && ["character", "face", "object", "location"].includes(nodeType)) patch.sourceImageUrl = imageUrl
     else patch.generatedImageUrl = imageUrl
   } else if (audioUrl) patch.generatedAudioUrl = audioUrl
+  // Apply EDL holds ONE cut: clear the medium this run did not render, and make
+  // its Transcript output this render's — cleared when it was cut with none
+  // (lib/apply-edl-cut.ts).
+  Object.assign(patch, applyEdlRunCutFields(nodeType, output))
 
   // CONTENT-POLICY DISCLOSURE passthrough (Task A4 follow-up, 2026-08-03) —
   // GVP-only, mirrors the video-analysis special case above: this function's

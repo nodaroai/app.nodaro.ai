@@ -31,6 +31,7 @@ import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS,
 import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
+import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire } from "@nodaro/shared"
 import { collapseExpandedClones } from "./execution-graph";
@@ -1101,6 +1102,8 @@ function applyRestoredJobCompletion(
     timestamp: new Date().toISOString(),
     jobId,
     ...(overlayRun ?? {}),
+    // Apply EDL: the take keeps the Transcript its render was cut with.
+    ...applyEdlTakeTranscriptField(nodeType, job.output_data, outputUrl),
   };
 
   const updates: Record<string, unknown> = {
@@ -1128,6 +1131,10 @@ function applyRestoredJobCompletion(
   } else if (job.output_data?.script) {
     updates.generatedScript = job.output_data.script;
   }
+  // Apply EDL holds ONE cut: clear the medium this run did not render, and make
+  // its Transcript output this render's — cleared when it was cut with none
+  // (lib/apply-edl-cut.ts).
+  Object.assign(updates, applyEdlRunCutFields(nodeType, job.output_data));
 
   // CONTENT-POLICY DISCLOSURE passthrough (Task A4 follow-up, 2026-08-03) —
   // GVP-only; this function restores a job that finished while the tab was
@@ -1732,6 +1739,11 @@ function syncNodeStatesToStore(
           updates.generatedVideoUrl = state.output.videoUrl;
         if (state.output.audioUrl)
           updates.generatedAudioUrl = state.output.audioUrl;
+        // Apply EDL holds ONE cut: clear the medium this run did not render, or
+        // an earlier render's URL of the other medium outranks it on both
+        // engines; and make its Transcript output this render's — cleared when
+        // it was cut with none, never an earlier take's (lib/apply-edl-cut.ts).
+        Object.assign(updates, applyEdlRunCutFields(nodeType, state.output));
         if (state.output.script)
           updates.generatedScript = state.output.script;
         // Voice id, stems, alignment, combined / split text: ONE mapping, shared
@@ -1856,6 +1868,8 @@ function syncNodeStatesToStore(
               timestamp: state.completedAt ?? new Date().toISOString(),
               jobId: state.jobIds?.[i] ?? `exec-${node.id}-${i}`,
               ...rowFields(url),
+              // Apply EDL: only the render the output describes keeps its Transcript.
+              ...applyEdlTakeTranscriptField(nodeType, state.output, url),
             }));
           if (newResults.length > 0) {
             updates.generatedResults = [...newResults, ...prev];
@@ -1893,6 +1907,8 @@ function syncNodeStatesToStore(
                   timestamp: state.completedAt ?? new Date().toISOString(),
                   jobId: state.jobId ?? `exec-${node.id}`,
                   ...(overlayRun ?? {}),
+                  // Apply EDL: the take keeps the Transcript its render was cut with.
+                  ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
                 },
                 ...prev,
               ];

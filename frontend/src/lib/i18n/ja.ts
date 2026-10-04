@@ -1386,6 +1386,8 @@ export const ja: ChromeDict = {
   "cfgshared.searchModelsTierPlaceholder": "検索：名前、開発元、ティア…",
   "cfgshared.latestResults": "最新の結果",
   "cfgshared.resultN": "結果 {n}",
+  "cfgshared.applyEdlTakeIsAudio": "このテイクはオーディオです。使用するには、「出力」を「オーディオのみ」に設定してください。",
+  "cfgshared.applyEdlTakeIsVideo": "このテイクは動画です。使用するには、「出力」を「動画」に設定してください。",
   "cfgshared.copyUrl": "URL をコピー",
   "cfgshared.download": "ダウンロード",
   "cfgshared.setAsThumbnail": "サムネイルに設定",

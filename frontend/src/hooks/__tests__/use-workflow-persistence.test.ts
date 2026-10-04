@@ -1945,3 +1945,141 @@ describe("Content Recipe / Content Ideas — both load-time lanes", () => {
     expect(out!.data).toMatchObject({ generatedJson: { version: 1 }, generatedText: "CONTENT RECIPE: t" })
   })
 })
+
+// Apply EDL renders ONE cut. A render that finished while the editor was closed
+// (or is restored mid-run) lands audio on a node still holding an earlier VIDEO
+// render's URL — rendered as video, then Output switched to audio. Every load
+// lane must clear it: both engines read the node as video whenever
+// generatedVideoUrl is set (lib/apply-edl-cut.ts), so a stale one hands the old
+// video downstream on the server and routes the new audio as video on the canvas.
+describe("Apply EDL — every load lane leaves the node holding one cut", () => {
+  const OLD_VIDEO = "https://media.test/take-0.mp4"
+  const NEW_AUDIO = "https://media.test/take-1.m4a"
+  const applyEdlNode = (extra: Record<string, unknown> = {}) => [{
+    id: "cut",
+    type: "apply-edl",
+    position: { x: 0, y: 0 },
+    data: {
+      label: "Apply Cut",
+      output: "audio",
+      executionStatus: "running",
+      generatedResults: [{ url: OLD_VIDEO, timestamp: "2026-10-04T10:00:00.000Z", jobId: "job-take-0" }],
+      activeResultIndex: 0,
+      generatedVideoUrl: OLD_VIDEO,
+      ...extra,
+    },
+  }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+  const audioRun = { cut: { status: "completed" as const, output: { audioUrl: NEW_AUDIO } } }
+
+  it("applyCompletedExecutionResults (a run that finished while the editor was closed)", () => {
+    const [out] = applyCompletedExecutionResults(applyEdlNode(), audioRun, null)
+    const data = out!.data as Record<string, unknown>
+    expect(data.generatedAudioUrl).toBe(NEW_AUDIO)
+    expect(data.generatedVideoUrl).toBeUndefined()
+  })
+
+  it("applyBackendExecutionState (a reload while the run is still active)", () => {
+    const [out] = applyBackendExecutionState(applyEdlNode(), audioRun)
+    const data = out!.data as Record<string, unknown>
+    expect(data.generatedAudioUrl).toBe(NEW_AUDIO)
+    expect(data.generatedVideoUrl).toBeUndefined()
+  })
+
+  it("syncNodeResultsFromDB (a single-node job that finished while the editor was closed)", async () => {
+    mockGetBatchJobStatus.mockResolvedValue([
+      { id: VALID_UUID, status: "completed", output_data: { audioUrl: NEW_AUDIO }, error_message: null },
+    ])
+    setupSupabaseLoad({ id: "w1", name: "Test", nodes: applyEdlNode({ currentJobId: VALID_UUID }), edges: [], settings: {} })
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    const data = getSyncedNodes()[0].data as Record<string, unknown>
+    expect(data.executionStatus).toBe("completed")
+    expect(data.generatedAudioUrl).toBe(NEW_AUDIO)
+    expect(data.generatedVideoUrl).toBeUndefined()
+  })
+})
+
+// …and the Transcript output moves with the cut. Every load lane lands the
+// render's own Transcript on the node AND on its take (so a later pick restores
+// it with no job read — the `exec-…` ids two of these lanes stamp can never be
+// read back), or CLEARS the node's when the render was cut with none: what it
+// held is an earlier take's, timed to an earlier cut.
+describe("Apply EDL — every load lane lands the render's own Transcript", () => {
+  const OLD_VIDEO = "https://media.test/take-0.mp4"
+  const NEW_VIDEO = "https://media.test/take-1.mp4"
+  const EARLIER = { version: 1, words: [{ text: "back", startMs: 1310, endMs: 1650 }] }
+  const LANDED = { version: 1, words: [{ text: "back", startMs: 420, endMs: 760 }] }
+  const applyEdlNode = (extra: Record<string, unknown> = {}) => [{
+    id: "cut",
+    type: "apply-edl",
+    position: { x: 0, y: 0 },
+    data: {
+      label: "Apply Cut",
+      output: "video",
+      executionStatus: "running",
+      generatedResults: [{ url: OLD_VIDEO, timestamp: "2026-10-04T10:00:00.000Z", jobId: "job-take-0", generatedJson: EARLIER }],
+      activeResultIndex: 0,
+      generatedVideoUrl: OLD_VIDEO,
+      generatedJson: EARLIER,
+      ...extra,
+    },
+  }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+  const run = (json?: unknown) => ({ cut: { status: "completed" as const, output: { videoUrl: NEW_VIDEO, ...(json ? { json } : {}) } } })
+  const landedTake = (data: Record<string, unknown>) => (data.generatedResults as Array<Record<string, unknown>>)[0]
+
+  const lanes = [
+    // This lane fills only a node still missing the run's medium (one a canvas
+    // run start cleared), so the earlier take's URL is gone; its Transcript is not.
+    ["applyCompletedExecutionResults (a run that finished while the editor was closed)", (states: ReturnType<typeof run>) => applyCompletedExecutionResults(applyEdlNode({ generatedVideoUrl: undefined }), states, null)],
+    ["applyBackendExecutionState (a reload while the run is still active)", (states: ReturnType<typeof run>) => applyBackendExecutionState(applyEdlNode(), states)],
+  ] as const
+
+  for (const [lane, apply] of lanes) {
+    it(`${lane}: a render cut with a transcript`, () => {
+      const data = apply(run(LANDED))[0]!.data as Record<string, unknown>
+      expect(data.generatedVideoUrl).toBe(NEW_VIDEO)
+      expect(data.generatedJson).toEqual(LANDED)
+      expect(landedTake(data).url).toBe(NEW_VIDEO)
+      expect(landedTake(data).generatedJson).toEqual(LANDED)
+    })
+
+    it(`${lane}: a render cut with NO transcript clears the earlier take's`, () => {
+      const data = apply(run())[0]!.data as Record<string, unknown>
+      expect(data.generatedVideoUrl).toBe(NEW_VIDEO)
+      expect(data).toHaveProperty("generatedJson", undefined)
+      expect(landedTake(data)).toHaveProperty("generatedJson", undefined)
+    })
+  }
+
+  const loadWithJobOutput = async (outputData: Record<string, unknown>) => {
+    mockGetBatchJobStatus.mockResolvedValue([
+      { id: VALID_UUID, status: "completed", output_data: outputData, error_message: null },
+    ])
+    setupSupabaseLoad({ id: "w1", name: "Test", nodes: applyEdlNode({ currentJobId: VALID_UUID }), edges: [], settings: {} })
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+    const data = getSyncedNodes()[0].data as Record<string, unknown>
+    expect(data.executionStatus).toBe("completed")
+    expect(data.generatedVideoUrl).toBe(NEW_VIDEO)
+    expect(landedTake(data).url).toBe(NEW_VIDEO)
+    return data
+  }
+
+  it("syncNodeResultsFromDB (a single-node job that finished while the editor was closed): a render cut with a transcript", async () => {
+    const data = await loadWithJobOutput({ videoUrl: NEW_VIDEO, json: LANDED })
+    expect(data.generatedJson).toEqual(LANDED)
+    expect(landedTake(data).generatedJson).toEqual(LANDED)
+  })
+
+  it("syncNodeResultsFromDB: a render cut with NO transcript clears the earlier take's", async () => {
+    const data = await loadWithJobOutput({ videoUrl: NEW_VIDEO })
+    expect(data).toHaveProperty("generatedJson", undefined)
+    expect(landedTake(data)).toHaveProperty("generatedJson", undefined)
+  })
+})

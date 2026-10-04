@@ -1324,6 +1324,8 @@ export const ko: ChromeDict = {
   "cfgshared.searchModelsTierPlaceholder": "검색 — 이름, 회사, 등급…",
   "cfgshared.latestResults": "최신 결과",
   "cfgshared.resultN": "결과 {n}",
+  "cfgshared.applyEdlTakeIsAudio": "이 테이크는 오디오입니다. 사용하려면 “출력”을 “오디오만”으로 설정하세요.",
+  "cfgshared.applyEdlTakeIsVideo": "이 테이크는 동영상입니다. 사용하려면 “출력”을 “동영상”으로 설정하세요.",
   "cfgshared.copyUrl": "URL 복사",
   "cfgshared.download": "다운로드",
   "cfgshared.setAsThumbnail": "썸네일로 설정",

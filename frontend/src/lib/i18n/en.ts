@@ -1387,6 +1387,8 @@ export const en = {
   "cfgshared.searchModelsTierPlaceholder": "Search — name, company, tier…",
   "cfgshared.latestResults": "Latest Results",
   "cfgshared.resultN": "Result {n}",
+  "cfgshared.applyEdlTakeIsAudio": "This take is audio — set Output to \u201cAudio only\u201d to use it",
+  "cfgshared.applyEdlTakeIsVideo": "This take is video — set Output to \u201cVideo\u201d to use it",
   "cfgshared.copyUrl": "Copy URL",
   "cfgshared.download": "Download",
   "cfgshared.setAsThumbnail": "Set as Thumbnail",

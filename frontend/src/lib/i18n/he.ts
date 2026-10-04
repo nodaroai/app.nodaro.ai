@@ -1378,6 +1378,8 @@ export const he: ChromeDict = {
   "cfgshared.searchModelsTierPlaceholder": "חיפוש — שם, חברה, רמה…",
   "cfgshared.latestResults": "התוצאות האחרונות",
   "cfgshared.resultN": "תוצאה {n}",
+  "cfgshared.applyEdlTakeIsAudio": "הטייק הזה הוא אודיו — הגדירו את הפלט ל״אודיו בלבד״ כדי להשתמש בו",
+  "cfgshared.applyEdlTakeIsVideo": "הטייק הזה הוא וידאו — הגדירו את הפלט ל״וידאו״ כדי להשתמש בו",
   "cfgshared.copyUrl": "העתקת כתובת",
   "cfgshared.download": "הורדה",
   "cfgshared.setAsThumbnail": "הגדרה כתמונה ממוזערת",
