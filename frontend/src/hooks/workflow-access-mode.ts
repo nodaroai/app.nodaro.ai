@@ -110,7 +110,9 @@ let stopWaitingForRuns: (() => void) | null = null
  * by then, so waiting costs nothing but the lock itself: until the last job
  * lands, the canvas is the one a refused save leaves, interactive with nothing
  * kept. A finished job clears its node's `currentJobId` in the same write that
- * paints its result, so the freeze lands right after the last one.
+ * paints its result, so the freeze lands right after the last one. A Run over
+ * a list holds its node until the batch's own last write, the one that puts
+ * every iteration's result in list order, and the freeze lands right after it.
  *
  * Dropped, never applied, once the workflow it was for is no longer the one
  * open, or a load has replaced the verdict (a load clears `saveRefusedFor` and
@@ -154,11 +156,21 @@ function freeze(): void {
 }
 
 /**
- * A node waiting on a job's result. Its poll checks this id before it paints
- * (`shouldAbandonNode`), and clears it in the write that paints the result.
+ * A node waiting on a job's result: it holds the job's id, which its poll
+ * checks before it paints (`shouldAbandonNode`) and clears in the write that
+ * paints the result.
+ *
+ * Or a node in the middle of a Run over a list (`executeNodeForList`, from its
+ * own Run button or inside a Sub-Workflow, whose namespaced nodes live in the
+ * store too). Its iterations share that one id: each writes its own job there,
+ * and each completion clears it while the others are still polling, so the id
+ * can be empty with paid jobs still out. `__listRunning` covers the whole
+ * batch: set when it starts, cleared in its last write (a `finally` backs up a
+ * throw). It is never saved, and a load clears a stale one.
  */
 function holdsAJob(node: { readonly data?: unknown }): boolean {
-  return Boolean((node.data as Record<string, unknown> | undefined)?.currentJobId)
+  const data = node.data as Record<string, unknown> | undefined
+  return Boolean(data?.currentJobId) || data?.__listRunning === true
 }
 
 /** How long one ask of the access may take before it counts as a failed one. */
