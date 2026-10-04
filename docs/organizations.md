@@ -210,12 +210,17 @@ A change also reaches an editor that already has the workflow open. The
 editor asks again what its reader may do with it: every minute while the tab
 is in view, as soon as a hidden tab is shown again, and whenever a save is
 refused. Once it learns that its reader was lowered to `view` or removed,
-nothing more is saved from that editor, and its canvas turns read-only as
-soon as no run is still in progress on it, so a run that was already going
-still delivers its result. From then on, someone lowered to `view` receives
-the workflow the way any viewer does; someone removed receives nothing more.
-Someone raised from `view` keeps a read-only canvas until they reopen the
-workflow.
+nothing more is saved from that editor, and its canvas turns read-only once
+no node on it shows a run in progress: a node waiting on a job, queued or
+running, or partway through running once per item of a list, a batch of
+variants (expressions, poses, angles and the like) or a scene's image. So a
+run of any of those kinds that was already going still delivers its result.
+From then on, someone lowered to `view` receives the workflow the way any
+viewer does; someone removed receives nothing more. Someone raised from
+`view` keeps a read-only canvas until they reopen the workflow. A node left
+showing a run that has ended, such as one cut short when its tab was closed,
+keeps the canvas editable, with nothing on it saved, until the node stops
+showing it.
 
 ### Work shared with me
 
