@@ -32,7 +32,11 @@ const LISTS_PUBLIC_JOBS =
   /\.(?:eq\(\s*["'`]is_public["'`]\s*,\s*true\s*\)|filter\(\s*["'`]is_public["'`]\s*,\s*["'`]eq["'`]\s*,\s*true\s*\))|\.match\(\s*\{[^}]*\bis_public\s*:\s*true|\bis_public\.eq\.true\b/
 
 /** Files that read `is_public = true` without listing the gallery, and why. */
-const NOT_A_LISTING: Record<string, string> = {}
+const NOT_A_LISTING: Record<string, string> = {
+  // Its listing goes through lib/gallery-listing.ts; the is_public read left
+  // here is the report route checking that one item is public.
+  "routes/gallery.ts": "lists through lib/gallery-listing.ts",
+}
 
 describe("gallery moderation totality", () => {
   it("every listing of public jobs comes through the moderation funnel", () => {
@@ -48,6 +52,6 @@ describe("gallery moderation totality", () => {
     }
     expect(bypassing).toEqual([])
     // The known listings — a new one is added here on purpose, never silently.
-    expect(listing.sort()).toEqual(["lib/mcp/tools/gallery.ts", "lib/mcp/tools/jobs.ts", "routes/gallery.ts"])
+    expect(listing.sort()).toEqual(["lib/gallery-listing.ts", "lib/mcp/tools/gallery.ts", "lib/mcp/tools/jobs.ts"])
   })
 })

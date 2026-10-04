@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import type { GalleryItem } from "@/hooks/queries/use-gallery-queries"
 import { queryKeys } from "@/lib/query-keys"
 import { galleryAdminRequest } from "@/hooks/queries/use-gallery-admin-queries"
 
@@ -24,9 +25,19 @@ export interface GalleryBannedCreator {
   readonly name: string | null
 }
 
+/** A blocked email pattern and how many accounts it matches today. */
+export interface GalleryBlockedPattern {
+  readonly pattern: string
+  readonly addedAt: string | null
+  readonly matches: number
+}
+
 export interface GalleryModerationState {
   readonly words: readonly GalleryWordEntry[]
   readonly bannedUsers: readonly GalleryBannedCreator[]
+  readonly emailPatterns?: readonly GalleryBlockedPattern[]
+  /** Imported words whose suggestions are still being looked up. */
+  readonly filling?: readonly string[]
 }
 
 /** Under the gallery's own key, so blocking from the gallery refreshes this page too. */
@@ -37,6 +48,30 @@ export function useGalleryModeration() {
     queryKey: GALLERY_MODERATION_KEY,
     queryFn: () => galleryAdminRequest<GalleryModerationState>("/v1/admin/gallery-moderation", { method: "GET" }),
     staleTime: 10_000,
+    // While imported words are still being looked up, keep the list fresh.
+    refetchInterval: (query) => ((query.state.data?.filling?.length ?? 0) > 0 ? 5_000 : false),
+  })
+}
+
+/** A gallery item and who made it — the admin view only. */
+export interface AdminGalleryItem extends GalleryItem {
+  readonly creator: { readonly userId: string; readonly email: string | null; readonly name: string | null } | null
+}
+
+type AdminGalleryPage = { data: AdminGalleryItem[]; nextCursor: string | null; totalCount?: number }
+
+/** The public gallery as visitors see it, with each item's creator. */
+export function useAdminGalleryItems(type: "all" | "image" | "video" | "audio") {
+  return useInfiniteQuery({
+    queryKey: ["gallery", "admin-items", type] as const,
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: "30" })
+      if (type !== "all") params.set("type", type)
+      if (pageParam) params.set("cursor", pageParam)
+      return galleryAdminRequest<AdminGalleryPage>(`/v1/admin/gallery-moderation/items?${params.toString()}`, { method: "GET" })
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   })
 }
 
@@ -47,7 +82,7 @@ function useSaved<TVars, TResult extends Partial<GalleryModerationState>>(reques
     onSuccess: (result) => {
       qc.setQueryData<GalleryModerationState>(GALLERY_MODERATION_KEY, (current) =>
         current
-          ? { ...current, ...(result.words ? { words: result.words } : {}), ...(result.bannedUsers ? { bannedUsers: result.bannedUsers } : {}) }
+          ? { ...current, ...(result.words ? { words: result.words } : {}), ...(result.bannedUsers ? { bannedUsers: result.bannedUsers } : {}), ...(result.filling ? { filling: result.filling } : {}), ...(result.emailPatterns ? { emailPatterns: result.emailPatterns } : {}) }
           : current,
       )
       qc.invalidateQueries({ queryKey: queryKeys.gallery.all })
@@ -56,8 +91,17 @@ function useSaved<TVars, TResult extends Partial<GalleryModerationState>>(reques
 }
 
 export function useAddGalleryWord() {
-  return useSaved(({ word }: { word: string }) =>
-    galleryAdminRequest<{ words: GalleryWordEntry[]; suggested: boolean }>("/v1/admin/gallery-moderation/words", { method: "POST", body: { word } }),
+  return useSaved(({ word, language }: { word: string; language?: string }) =>
+    galleryAdminRequest<{ words: GalleryWordEntry[]; suggested: boolean }>("/v1/admin/gallery-moderation/words", { method: "POST", body: { word, language } }),
+  )
+}
+
+export function useImportGalleryWords() {
+  return useSaved(({ words, language }: { words: readonly string[]; language?: string }) =>
+    galleryAdminRequest<{ words: GalleryWordEntry[]; added: number; skipped: string[]; filling: string[] }>("/v1/admin/gallery-moderation/words/import", {
+      method: "POST",
+      body: { words, language },
+    }),
   )
 }
 
@@ -92,5 +136,17 @@ export function useBlockCreatorByEmail() {
 export function useUnblockCreator() {
   return useSaved(({ userId }: { userId: string }) =>
     galleryAdminRequest<{ bannedUsers: GalleryBannedCreator[] }>("/v1/admin/gallery-moderation/creators/remove", { method: "POST", body: { userId } }),
+  )
+}
+
+export function useBlockEmailPattern() {
+  return useSaved(({ pattern }: { pattern: string }) =>
+    galleryAdminRequest<{ emailPatterns: GalleryBlockedPattern[] }>("/v1/admin/gallery-moderation/creators/patterns", { method: "POST", body: { pattern } }),
+  )
+}
+
+export function useUnblockEmailPattern() {
+  return useSaved(({ pattern }: { pattern: string }) =>
+    galleryAdminRequest<{ emailPatterns: GalleryBlockedPattern[] }>("/v1/admin/gallery-moderation/creators/patterns/remove", { method: "POST", body: { pattern } }),
   )
 }

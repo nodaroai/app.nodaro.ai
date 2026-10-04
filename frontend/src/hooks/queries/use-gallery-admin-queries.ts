@@ -43,11 +43,16 @@ export async function galleryAdminRequest<T>(url: string, init: { method: string
 }
 
 /** Drop items from every cached gallery list (instant feedback), returning what to restore. */
+/** Every cached gallery list: the public one and the admin moderation view. */
+const LIST_KEYS = [["gallery", "list"], ["gallery", "admin-items"]] as const
+
 function dropFromLists(qc: ReturnType<typeof useQueryClient>, ids: ReadonlySet<string>) {
-  const previous = qc.getQueriesData<InfiniteData<GalleryPage>>({ queryKey: ["gallery", "list"] })
-  qc.setQueriesData<InfiniteData<GalleryPage>>({ queryKey: ["gallery", "list"] }, (data) =>
-    removeInfiniteItems<"data", GalleryItem, GalleryPage>(data, "data", (item) => ids.has(item.id)),
-  )
+  const previous = LIST_KEYS.flatMap((queryKey) => qc.getQueriesData<InfiniteData<GalleryPage>>({ queryKey }))
+  for (const queryKey of LIST_KEYS) {
+    qc.setQueriesData<InfiniteData<GalleryPage>>({ queryKey }, (data) =>
+      removeInfiniteItems<"data", GalleryItem, GalleryPage>(data, "data", (item) => ids.has(item.id)),
+    )
+  }
   return previous
 }
 

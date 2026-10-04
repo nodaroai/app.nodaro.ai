@@ -13,11 +13,15 @@ import { supabase } from "../../lib/supabase.js"
 import { invalidateSettingsCache } from "../../lib/app-settings.js"
 import { compileGalleryWords, findBannedWord, normalizeForFilter, type GalleryWordEntry } from "../../lib/gallery-word-filter.js"
 import {
+  GALLERY_BANNED_EMAIL_PATTERNS_KEY,
   GALLERY_BANNED_USERS_KEY,
   GALLERY_BLOCKED_WORDS_KEY,
   GALLERY_MODERATION_LIMITS,
+  cleanEmailPattern,
   parseGalleryBannedUsers,
+  parseGalleryEmailPatterns,
   parseGalleryWordEntries,
+  type GalleryBannedEmailPattern,
   type GalleryBannedUser,
 } from "../../lib/gallery-moderation-settings.js"
 
@@ -32,6 +36,7 @@ export class GalleryModerationError extends Error {
       | "unknown_word"
       | "exception_without_word"
       | "too_many_users"
+      | "bad_pattern"
       | "busy",
     message: string,
   ) {
@@ -81,6 +86,35 @@ async function mutate<T>(key: string, parse: (raw: unknown) => T, change: (curre
 
 export async function readGalleryWords(): Promise<GalleryWordEntry[]> {
   return parseGalleryWordEntries((await readRow(GALLERY_BLOCKED_WORDS_KEY)).raw)
+}
+
+export async function readGalleryEmailPatterns(): Promise<GalleryBannedEmailPattern[]> {
+  return parseGalleryEmailPatterns((await readRow(GALLERY_BANNED_EMAIL_PATTERNS_KEY)).raw)
+}
+
+/** Block every account whose email matches the pattern — now and later. */
+export async function addGalleryEmailPattern(adminId: string, raw: string): Promise<GalleryBannedEmailPattern[]> {
+  const pattern = cleanEmailPattern(raw)
+  if (!pattern) {
+    throw new GalleryModerationError("bad_pattern", "Use letters, digits and . _ - + @, with * for anything, and at least 4 letters or digits before the @.")
+  }
+  return mutate(
+    GALLERY_BANNED_EMAIL_PATTERNS_KEY,
+    parseGalleryEmailPatterns,
+    (patterns) => {
+      if (patterns.some((entry) => entry.pattern === pattern)) return patterns
+      if (patterns.length >= GALLERY_MODERATION_LIMITS.emailPatterns) {
+        throw new GalleryModerationError("too_many_users", `Up to ${GALLERY_MODERATION_LIMITS.emailPatterns} patterns can be blocked.`)
+      }
+      return [{ pattern, addedAt: new Date().toISOString() }, ...patterns]
+    },
+    adminId,
+  )
+}
+
+export async function removeGalleryEmailPattern(adminId: string, raw: string): Promise<GalleryBannedEmailPattern[]> {
+  const pattern = raw.trim().toLowerCase()
+  return mutate(GALLERY_BANNED_EMAIL_PATTERNS_KEY, parseGalleryEmailPatterns, (patterns) => patterns.filter((entry) => entry.pattern !== pattern), adminId)
 }
 
 export async function readGalleryBannedUsers(): Promise<GalleryBannedUser[]> {
@@ -224,6 +258,27 @@ export async function editGalleryWord(adminId: string, word: string, edit: Galle
       const { suggestedExceptions: _previous, ...rest } = withTranslations
       const next: GalleryWordEntry = { ...rest, exceptions, ...(stillPending.length > 0 ? { suggestedExceptions: stillPending } : {}) }
       return words.map((have, i) => (i === at ? next : have))
+    },
+    adminId,
+  )
+}
+
+/**
+ * Add many banned words at once (an imported list), without suggestions —
+ * those are found afterwards, one word at a time. Words already on the list
+ * are left as they are. Refuses the whole list when it would not fit.
+ */
+export async function addGalleryWords(adminId: string, list: readonly string[]): Promise<GalleryWordEntry[]> {
+  const texts = list.map(checkTerm)
+  return mutate(
+    GALLERY_BLOCKED_WORDS_KEY,
+    parseGalleryWordEntries,
+    (words) => {
+      const fresh = texts.filter((text, i) => !words.some((entry) => same(entry.word, text)) && texts.findIndex((other) => same(other, text)) === i)
+      if (words.length + fresh.length > GALLERY_MODERATION_LIMITS.words) {
+        throw new GalleryModerationError("too_many_words", `The list can hold up to ${GALLERY_MODERATION_LIMITS.words} words.`)
+      }
+      return [...fresh.map((word) => ({ word, translations: [], exceptions: [] })), ...words]
     },
     adminId,
   )

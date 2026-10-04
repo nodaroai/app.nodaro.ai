@@ -9,6 +9,32 @@ const settings = vi.hoisted(() => ({
   /** The stand-in defaults the reader hands out when the settings could not be read. */
   failed: { gallery_blocked_words: [] as unknown[], gallery_banned_users: [] as unknown[] },
 }))
+const profiles = vi.hoisted(() => ({ rows: [] as Array<{ id: string; email: string }>, calls: 0 }))
+vi.mock("../supabase.js", () => ({
+  supabase: {
+    from: () => {
+      let pattern = ""
+      const builder: Record<string, unknown> = {
+        select: () => builder,
+        ilike: (_c: string, p: string) => {
+          pattern = p
+          return builder
+        },
+        limit: () => builder,
+        then: (resolve: (v: unknown) => unknown) => {
+          profiles.calls++
+          // ILIKE: % is any run; \x is x itself.
+          const source = pattern.replace(/\\(.)|(%)|([^\\%]+)/g, (_m, escaped?: string, any?: string, text?: string) =>
+            (escaped ?? text ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") || (any ? ".*" : ""),
+          )
+          const re = new RegExp(`^${source}$`, "i")
+          return resolve({ data: profiles.rows.filter((r) => re.test(r.email)).map((r) => ({ id: r.id })), error: null })
+        },
+      }
+      return builder
+    },
+  },
+}))
 vi.mock("../app-settings.js", () => ({
   getAppSettings: vi.fn(async () => settings.current),
   settingsReadFailed: (value: unknown) => value === settings.failed,
@@ -23,7 +49,7 @@ import {
   galleryTextOf,
   loadGalleryModeration,
 } from "../gallery-moderation.js"
-import { parseGalleryBannedUsers, parseGalleryWordEntries, GALLERY_MODERATION_LIMITS } from "../gallery-moderation-settings.js"
+import { cleanEmailPattern, emailPatternToIlike, parseGalleryBannedUsers, parseGalleryWordEntries, GALLERY_MODERATION_LIMITS } from "../gallery-moderation-settings.js"
 
 const A = "00000000-0000-4000-8000-00000000000a"
 const B = "00000000-0000-4000-8000-00000000000b"
@@ -183,5 +209,33 @@ describe("the stored lists' parsers", () => {
       { userId: B, addedAt: null },
     ])
     expect(parseGalleryBannedUsers("nope")).toEqual([])
+  })
+})
+
+describe("blocked email patterns", () => {
+  it("keep only patterns that name someone, never everyone", () => {
+    expect(cleanEmailPattern(" SeriesName**@Example.com ")).toBe("seriesname*@example.com")
+    for (const bad of ["*", "*@gmail.com", "ab*@x.com", "a b*@x.com", "x".repeat(130)]) expect(cleanEmailPattern(bad)).toBeNull()
+  })
+
+  it("read * as anything and % or _ as themselves", () => {
+    expect(emailPatternToIlike("series_name*@example.com")).toBe("series\\_name%@example.com")
+  })
+
+  it("block every account the pattern matches — and one made after it", async () => {
+    const C = "00000000-0000-4000-8000-00000000000c"
+    profiles.rows = [{ id: A, email: "seriesname28@example.com" }, { id: B, email: "someone@example.com" }]
+    settings.current = { gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [{ pattern: "seriesname*@example.com", addedAt: null }] } as never
+    const first = await loadGalleryModeration()
+    expect([...first.bannedUserIds]).toEqual([A])
+
+    // A new account under the pattern, found once the minute is up.
+    profiles.rows = [...profiles.rows, { id: C, email: "seriesname30@example.com" }]
+    vi.useFakeTimers({ now: Date.now() + 61_000 })
+    try {
+      expect([...(await loadGalleryModeration()).bannedUserIds].sort()).toEqual([A, C].sort())
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

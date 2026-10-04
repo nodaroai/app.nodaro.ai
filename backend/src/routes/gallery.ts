@@ -3,87 +3,9 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { formatZodError } from "../lib/zod-error.js"
-import {
-  OWNER_VIEW_MODERATION,
-  bannedGalleryUsersFilter,
-  galleryHides,
-  loadGalleryModeration,
-} from "../lib/gallery-moderation.js"
+import { OWNER_VIEW_MODERATION, loadGalleryModeration } from "../lib/gallery-moderation.js"
+import { readGalleryPage, type GalleryPage } from "../lib/gallery-listing.js"
 import { MAX_GALLERY_REMOVAL, removeFromGallery } from "../lib/gallery-removal.js"
-
-// Gallery only shows AI-generated creative content — NOT processing/application
-// results.
-//
-// VOCABULARY (load-bearing): every name below is a BULLMQ QUEUE NAME, i.e. the
-// `job.name` the video worker ran the job under — NOT a canvas node type. The
-// filter is `.in("job_type", …)` against the `jobs` column, and that column is
-// OVERWRITTEN with the queue name by the pickup CAS in
-// `workers/video-worker.ts` (`job_type: job.name` — unconditional, not a
-// backfill). Orchestrated DAG rows are inserted with `job_type = node.type`
-// (`services/workflow-engine/node-executor.ts`), so `modify-image`,
-// `upscale-image` and `generate-video` would match NOTHING here; they reach the
-// gallery only because pickup rewrote them to `image-to-image` / `edit-image` /
-// `image-to-video`. Add a NODE type to these sets and it will never match a
-// row; add the QUEUE name and it matches both the direct route and the DAG.
-// `routes/__tests__/gallery.test.ts` pins the three renames.
-//
-// `lib/mcp/tools/gallery.ts` keeps a second copy of these sets for the MCP
-// `browse_gallery` verb — change one, change both.
-const IMAGE_JOBS = new Set([
-  "generate-image", "edit-image", "image-to-image",
-  "generate-character", "generate-character-asset",
-  "generate-object", "generate-object-asset",
-  "generate-location", "generate-location-asset",
-])
-
-const VIDEO_JOBS = new Set([
-  "image-to-video", "text-to-video", "video-to-video",
-  "lip-sync", "motion-transfer",
-  // Excluded: video-upscale, combine-videos, suno-music-video, merge-video-audio,
-  //           resize-video, trim-video, add-captions, fade-video, loop-video (processing)
-])
-
-const AUDIO_JOBS = new Set([
-  "text-to-speech", "generate-music", "text-to-audio",
-  "suno-generate", "suno-cover", "suno-extend",
-  "text-to-dialogue", "voice-changer", "dubbing",
-  "voice-remix", "voice-design",
-  // Excluded: suno-separate, trim-audio, mix-audio, adjust-volume,
-  //           extract-youtube-audio, audio-isolation (processing)
-])
-
-function getOutputType(jobName: string): "image" | "video" | "audio" | null {
-  if (IMAGE_JOBS.has(jobName)) return "image"
-  if (VIDEO_JOBS.has(jobName)) return "video"
-  if (AUDIO_JOBS.has(jobName)) return "audio"
-  return null
-}
-
-/** Dual-mode generators (voice-changer / voice-changer-pro / dubbing): the RUN
- *  decides audio vs video — read what the row actually produced, video first. */
-const DUAL_MODE_JOBS = new Set(["voice-changer", "voice-changer-pro", "dubbing"])
-
-function getOutputUrl(
-  jobName: string,
-  outputData: Record<string, unknown>,
-): string | null {
-  if (DUAL_MODE_JOBS.has(jobName)) {
-    return (outputData?.videoUrl as string) ?? (outputData?.audioUrl as string) ?? null
-  }
-  const type = getOutputType(jobName)
-  if (type === "image") return (outputData?.imageUrl as string) ?? null
-  if (type === "video") return (outputData?.videoUrl as string) ?? null
-  if (type === "audio") return (outputData?.audioUrl as string) ?? null
-  return null
-}
-
-/** Map job names to the set that should be queryable by type filter */
-function jobNamesForType(type: string): string[] {
-  if (type === "image") return [...IMAGE_JOBS]
-  if (type === "video") return [...VIDEO_JOBS]
-  if (type === "audio") return [...AUDIO_JOBS]
-  return []
-}
 
 // ---- Zod Schemas ----
 
@@ -104,13 +26,6 @@ const adminDeleteParams = z.object({
 const adminBulkRemoveBody = z.object({
   jobIds: z.array(z.string().uuid()).min(1).max(MAX_GALLERY_REMOVAL),
 })
-
-/** Rows read per round of a page: the filters drop some, so read ahead. */
-const FETCH_MULTIPLIER = 2
-/** Rounds a page may read before it answers with what it has. */
-const MAX_ROUNDS = 5
-/** …and while it has found nothing yet: a page is never empty while unread rows remain nearby. */
-const MAX_ROUNDS_WHILE_EMPTY = 10
 
 export async function galleryRoutes(app: FastifyInstance) {
   /**
@@ -147,7 +62,6 @@ export async function galleryRoutes(app: FastifyInstance) {
     // built-in word list alone, as before; everyone else gets the admin's
     // blocked creators and banned words as well (lib/gallery-moderation.ts).
     const moderation = isOwnerView ? OWNER_VIEW_MODERATION : await loadGalleryModeration()
-    const excludedUsers = bannedGalleryUsersFilter(moderation)
 
     // Pre-fetch favorite job IDs if filtering by favorites
     let favoriteJobIds: string[] | null = null
@@ -163,168 +77,15 @@ export async function galleryRoutes(app: FastifyInstance) {
       }
     }
 
-    // Count query (only on first page — when no cursor)
-    let totalCount: number | null = null
-    if (!cursor) {
-      let countQuery = supabase
-        .from("jobs")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "completed")
-        .not("output_data", "is", null)
-
-      if (!isOwnerView) {
-        countQuery = countQuery.eq("is_public", true)
-      }
-      if (userIdFilter) {
-        countQuery = countQuery.eq("user_id", userIdFilter)
-      }
-      if (excludedUsers) {
-        countQuery = countQuery.filter("user_id", "not.in", excludedUsers)
-      }
-      if (favoriteJobIds) {
-        countQuery = countQuery.in("id", favoriteJobIds)
-      }
-
-      if (typeFilter && ["image", "video", "audio"].includes(typeFilter)) {
-        countQuery = countQuery.in("job_type", jobNamesForType(typeFilter))
-      } else {
-        countQuery = countQuery.in("job_type", [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS])
-      }
-
-      const { count } = await countQuery
-      totalCount = count
+    let page: GalleryPage
+    try {
+      page = await readGalleryPage({ limit, type: typeFilter, cursor, userId: userIdFilter, favoriteJobIds, includePrivate: isOwnerView, moderation })
+    } catch (error) {
+      console.error("[gallery] Query failed:", error)
+      return reply.status(500).send({ error: "Failed to fetch gallery" })
     }
-
-    // We need `limit` valid items after JS-side filtering (blocked prompts,
-    // missing output URLs). Fetch in batches, over-fetching to compensate for
-    // items that get filtered out.
-    const items: Array<{
-      id: string
-      type: "image" | "video" | "audio"
-      jobName: string
-      outputUrl: string
-      thumbnailUrl: string | null
-      createdAt: string
-      prompt: string | null
-      model: string | null
-    }> = []
-    let pageCursor = cursor ?? null
-    let hasMore = true
-    // True when the page filled up before every row it read was looked at.
-    let unreadRows = false
-
-    for (
-      let round = 0;
-      items.length < limit && hasMore && round < (items.length === 0 ? MAX_ROUNDS_WHILE_EMPTY : MAX_ROUNDS);
-      round++
-    ) {
-      const remaining = limit - items.length
-      const fetchCount = remaining * FETCH_MULTIPLIER + 1 // +1 for hasMore detection
-
-      let dbQuery = supabase
-        .from("jobs")
-        .select("id, job_type, input_data, output_data, completed_at, user_id, provider")
-        .eq("status", "completed")
-        .not("output_data", "is", null)
-        .order("completed_at", { ascending: false })
-        .limit(fetchCount)
-
-      if (!isOwnerView) {
-        dbQuery = dbQuery.eq("is_public", true)
-      }
-      if (userIdFilter) {
-        dbQuery = dbQuery.eq("user_id", userIdFilter)
-      }
-      if (excludedUsers) {
-        dbQuery = dbQuery.filter("user_id", "not.in", excludedUsers)
-      }
-      if (favoriteJobIds) {
-        dbQuery = dbQuery.in("id", favoriteJobIds)
-      }
-
-      if (pageCursor) {
-        dbQuery = dbQuery.lt("completed_at", pageCursor)
-      }
-
-      // Filter by type (restricts to specific job names)
-      if (typeFilter && ["image", "video", "audio"].includes(typeFilter)) {
-        const jobNames = jobNamesForType(typeFilter)
-        dbQuery = dbQuery.in("job_type", jobNames)
-      } else {
-        const allMediaNames = [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS]
-        dbQuery = dbQuery.in("job_type", allMediaNames)
-      }
-
-      const { data: jobs, error } = await dbQuery
-
-      if (error) {
-        console.error("[gallery] Query failed:", error)
-        return reply.status(500).send({ error: "Failed to fetch gallery" })
-      }
-
-      if (!jobs || jobs.length === 0) {
-        hasMore = false
-        break
-      }
-
-      // If we got fewer rows than requested, there are no more items in DB
-      if (jobs.length < fetchCount) {
-        hasMore = false
-      }
-
-      // Advance cursor to the last fetched row
-      const lastJob = jobs[jobs.length - 1]
-      if (lastJob?.completed_at) {
-        pageCursor = lastJob.completed_at
-      }
-
-      // Process and filter
-      for (const job of jobs) {
-        if (items.length >= limit) {
-          unreadRows = true
-          break
-        }
-
-        const outputData = (job.output_data ?? {}) as Record<string, unknown>
-        const inputData = (job.input_data ?? {}) as Record<string, unknown>
-        const type = getOutputType(job.job_type)
-        const outputUrl = getOutputUrl(job.job_type, outputData)
-
-        if (!type || !outputUrl) continue
-
-        const prompt = (inputData.prompt as string)
-          ?? (inputData.text as string)
-          ?? null
-
-        if (galleryHides(moderation, { userId: job.user_id, inputData, outputData })) continue
-
-        const model = (inputData.provider as string)
-          ?? (job.provider as string)
-          ?? null
-
-        items.push({
-          id: job.id,
-          type,
-          jobName: job.job_type,
-          outputUrl,
-          thumbnailUrl: (outputData.thumbnailUrl as string) ?? null,
-          createdAt: job.completed_at,
-          prompt,
-          model,
-        })
-      }
-    }
-
-    // Where the next page starts. The page filled up with rows still unread →
-    // right after the last item returned. Otherwise every row read was looked
-    // at → right after the last row READ, so rows the filters dropped are not
-    // read again and a stretch of hidden items never ends the paging.
-    const lastItem = items[items.length - 1]
-    const nextCursor = unreadRows
-      ? lastItem?.createdAt ?? pageCursor
-      : hasMore
-        ? pageCursor
-        : null
+    const items = page.rows.map((row) => row.item)
+    const { nextCursor, totalCount } = page
 
     // The owner view holds the caller's private work and skips the gallery's
     // moderation — it is theirs alone and must never sit in a shared cache.

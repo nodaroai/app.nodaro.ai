@@ -1,7 +1,8 @@
 /**
  * What keeps an output out of the PUBLIC gallery, asked the same way by every
  * surface that lists other people's public work: the web gallery
- * (`routes/gallery.ts`), and the MCP `browse_gallery` / `list_jobs` public
+ * (`routes/gallery.ts` via `lib/gallery-listing.ts`, and the admin moderation
+ * view), and the MCP `browse_gallery` / `list_jobs` public
  * scopes. `__tests__/gallery-moderation-totality.test.ts` fails the build for
  * a file that lists public jobs without coming through here.
  *
@@ -21,7 +22,8 @@
 import { getAppSettings, settingsReadFailed } from "./app-settings.js"
 import { isPromptBlocked } from "../config/content-filter.js"
 import { compileGalleryWords, findBannedWord, type CompiledGalleryWords, type GalleryWordEntry } from "./gallery-word-filter.js"
-import { isUuid, type GalleryBannedUser } from "./gallery-moderation-settings.js"
+import { emailPatternToIlike, isUuid, type GalleryBannedEmailPattern, type GalleryBannedUser } from "./gallery-moderation-settings.js"
+import { supabase } from "./supabase.js"
 
 export interface GalleryModeration {
   readonly bannedUserIds: ReadonlySet<string>
@@ -34,26 +36,58 @@ export const OWNER_VIEW_MODERATION: GalleryModeration = { bannedUserIds: new Set
 /** How many blocked creators are excluded in the query itself; the rest are dropped after it. */
 export const MAX_QUERY_EXCLUDED_USERS = 150
 
-let compiledFor: { words: readonly GalleryWordEntry[]; users: readonly GalleryBannedUser[] } | null = null
+let compiledFor: { words: readonly GalleryWordEntry[]; users: readonly GalleryBannedUser[]; patternUsers: readonly GalleryBannedUser[] } | null = null
 let compiled: GalleryModeration = OWNER_VIEW_MODERATION
 
 export function buildGalleryModeration(words: readonly GalleryWordEntry[], users: readonly GalleryBannedUser[]): GalleryModeration {
   return { bannedUserIds: new Set(users.map((user) => user.userId.toLowerCase())), words: compileGalleryWords(words) }
 }
 
+/** How long the accounts matching the email patterns are trusted before they are looked up again. */
+const PATTERN_REFRESH_MS = 60_000
+/** The most accounts one pattern may block. */
+const MAX_ACCOUNTS_PER_PATTERN = 1000
+
+const NO_ACCOUNTS: readonly GalleryBannedUser[] = []
+let patternsFor: readonly GalleryBannedEmailPattern[] | null = null
+let patternUsers: readonly GalleryBannedUser[] = []
+let patternsReadAt = 0
+
+/** The accounts whose email matches a blocked pattern; the last ones found when the lookup fails. */
+async function accountsMatching(patterns: readonly GalleryBannedEmailPattern[]): Promise<readonly GalleryBannedUser[]> {
+  if (patterns.length === 0) return NO_ACCOUNTS
+  if (patternsFor === patterns && Date.now() - patternsReadAt < PATTERN_REFRESH_MS) return patternUsers
+  try {
+    const answers = await Promise.all(
+      patterns.map((p) => supabase.from("profiles").select("id").ilike("email", emailPatternToIlike(p.pattern)).limit(MAX_ACCOUNTS_PER_PATTERN)),
+    )
+    const failed = answers.find((answer) => answer.error)
+    if (failed?.error) throw new Error(failed.error.message)
+    patternUsers = answers.flatMap(({ data }) => (data ?? []).map((row) => ({ userId: String(row.id).toLowerCase(), addedAt: null })))
+    patternsFor = patterns
+    patternsReadAt = Date.now()
+  } catch (error) {
+    console.error("[gallery-moderation] Could not look up the blocked email patterns:", error instanceof Error ? error.message : error)
+  }
+  return patternUsers
+}
+
 /**
  * The public gallery's rules as they stand (compiled once per settings
  * refresh). When the settings cannot be read, the last rules read stay in
- * force — never an unmoderated gallery because of a database hiccup.
+ * force — never an unmoderated gallery because of a database hiccup. Blocked
+ * email patterns are looked up again every minute, so an account made today
+ * under a blocked pattern is out of the gallery within a minute.
  */
 export async function loadGalleryModeration(): Promise<GalleryModeration> {
   const settings = await getAppSettings()
   if (settingsReadFailed(settings)) return compiled
   const words = settings.gallery_blocked_words ?? []
-  const users = settings.gallery_banned_users ?? []
-  if (!compiledFor || compiledFor.words !== words || compiledFor.users !== users) {
-    compiled = buildGalleryModeration(words, users)
-    compiledFor = { words, users }
+  const named = settings.gallery_banned_users ?? []
+  const fromPatterns = await accountsMatching(settings.gallery_banned_email_patterns ?? [])
+  if (!compiledFor || compiledFor.words !== words || compiledFor.users !== named || compiledFor.patternUsers !== fromPatterns) {
+    compiled = buildGalleryModeration(words, [...named, ...fromPatterns])
+    compiledFor = { words, users: named, patternUsers: fromPatterns }
   }
   return compiled
 }

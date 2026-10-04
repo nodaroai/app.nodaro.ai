@@ -13,6 +13,7 @@ import type { GalleryWordEntry } from "./gallery-word-filter.js"
 
 export const GALLERY_BLOCKED_WORDS_KEY = "gallery_blocked_words"
 export const GALLERY_BANNED_USERS_KEY = "gallery_banned_users"
+export const GALLERY_BANNED_EMAIL_PATTERNS_KEY = "gallery_banned_email_patterns"
 
 export const GALLERY_MODERATION_LIMITS = {
   words: 500,
@@ -21,6 +22,8 @@ export const GALLERY_MODERATION_LIMITS = {
   translationsPerWord: 60,
   exceptionsPerWord: 60,
   bannedUsers: 2000,
+  emailPatterns: 200,
+  emailPatternLength: 120,
 } as const
 
 export interface GalleryBannedUser {
@@ -70,6 +73,47 @@ export function parseGalleryWordEntries(value: unknown): GalleryWordEntry[] {
       ...(suggested.length > 0 ? { suggestedExceptions: suggested } : {}),
     })
     if (out.length >= GALLERY_MODERATION_LIMITS.words) break
+  }
+  return out
+}
+
+/**
+ * An email pattern whose every account is blocked from the gallery — the ones
+ * that exist and the ones made later: `seriesname@example.com`. `*` stands for
+ * anything; the rest is matched as written, ignoring case.
+ */
+export interface GalleryBannedEmailPattern {
+  readonly pattern: string
+  readonly addedAt: string | null
+}
+
+const PATTERN_CHARS = /^[a-z0-9._%+\-@*]+$/
+/** Letters or digits a pattern must spell out, so "*" or "*@gmail.com" can never block everyone. */
+const PATTERN_MIN_FIXED = 4
+
+/** The pattern in stored form, or null when it is not one the list can hold. */
+export function cleanEmailPattern(raw: string): string | null {
+  const pattern = raw.trim().toLowerCase().replace(/\*+/g, "*")
+  if (pattern === "" || pattern.length > GALLERY_MODERATION_LIMITS.emailPatternLength || !PATTERN_CHARS.test(pattern)) return null
+  const local = pattern.split("@")[0] ?? ""
+  if (local.replace(/[^a-z0-9]/g, "").length < PATTERN_MIN_FIXED) return null
+  return pattern
+}
+
+/** The pattern as a PostgREST ILIKE argument: % and _ taken literally, * as any run. */
+export function emailPatternToIlike(pattern: string): string {
+  return pattern.replace(/[\\%_]/g, (ch) => `\\${ch}`).replace(/\*/g, "%")
+}
+
+export function parseGalleryEmailPatterns(value: unknown): GalleryBannedEmailPattern[] {
+  if (!Array.isArray(value)) return []
+  const out: GalleryBannedEmailPattern[] = []
+  for (const raw of value) {
+    const row = typeof raw === "string" ? { pattern: raw } : raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null
+    const pattern = row && typeof row.pattern === "string" ? cleanEmailPattern(row.pattern) : null
+    if (!row || !pattern || out.some((entry) => entry.pattern === pattern)) continue
+    out.push({ pattern, addedAt: typeof row.addedAt === "string" ? row.addedAt : null })
+    if (out.length >= GALLERY_MODERATION_LIMITS.emailPatterns) break
   }
   return out
 }

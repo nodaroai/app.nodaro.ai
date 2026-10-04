@@ -18,7 +18,7 @@ export interface GalleryWordSuggestions {
   readonly exceptions: string[]
 }
 
-const SYSTEM = `You help the moderators of a public gallery of AI-generated images. They keep a list of banned words: any image whose prompt contains one is kept out of the public gallery. You receive one banned word or short phrase, in any language. Return JSON with two lists.
+const SYSTEM = `You help the moderators of a public gallery of AI-generated images. They keep a list of banned words: any image whose prompt contains one is kept out of the public gallery. You receive one banned word or short phrase, in any language — and, when the moderator said it, the language it is written in ("language"): read the word in that language. Return JSON with two lists.
 
 "translations": how people write THE SAME MEANING in other languages — the vulgar, sexual or offensive sense the moderator banned, never an innocent sense of the word. Cover the languages people prompt in: English, Hebrew, Arabic, Russian, Spanish, Portuguese, French, German, Italian, Turkish, Polish, Dutch, Hindi, Indonesian, Japanese, Korean, Chinese, Thai, Vietnamese. Include the common slang and spellings, and the transliterations into Latin letters that people actually type. Leave out:
 - any form that is also an everyday innocent word in some major language (French "con" is also Spanish "with"; a word that also means "cup" or "glass");
@@ -87,7 +87,10 @@ export function cleanSuggestions(word: string, raw: { translations: readonly str
 }
 
 /** Suggestions for one banned word, or null when no model could give any. */
-export async function suggestForBannedWord(word: string, now: () => number = Date.now): Promise<GalleryWordSuggestions | null> {
+export async function suggestForBannedWord(
+  word: string,
+  { language, now = Date.now }: { readonly language?: string; readonly now?: () => number } = {},
+): Promise<GalleryWordSuggestions | null> {
   const started = now()
   for (const [i, { modelId, timeoutMs, maxRetries }] of MODELS.entries()) {
     if (i > 0 && now() - started > SECOND_MODEL_DEADLINE_MS) break
@@ -96,7 +99,7 @@ export async function suggestForBannedWord(word: string, now: () => number = Dat
         {
           modelId,
           system: SYSTEM,
-          messages: [{ role: "user", content: JSON.stringify({ bannedWord: word }) }],
+          messages: [{ role: "user", content: JSON.stringify(language ? { bannedWord: word, language } : { bannedWord: word }) }],
           temperature: 0,
           maxTokens: 4096,
           timeoutMs,

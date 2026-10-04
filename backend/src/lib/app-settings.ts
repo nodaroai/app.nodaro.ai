@@ -1,10 +1,13 @@
 import { supabase } from "./supabase.js"
 import type { GalleryWordEntry } from "./gallery-word-filter.js"
 import {
+  GALLERY_BANNED_EMAIL_PATTERNS_KEY,
   GALLERY_BANNED_USERS_KEY,
   GALLERY_BLOCKED_WORDS_KEY,
   parseGalleryBannedUsers,
+  parseGalleryEmailPatterns,
   parseGalleryWordEntries,
+  type GalleryBannedEmailPattern,
   type GalleryBannedUser,
 } from "./gallery-moderation-settings.js"
 
@@ -53,6 +56,8 @@ export interface AppSettings {
   gallery_blocked_words: GalleryWordEntry[]
   /** Creators whose work never reaches the public gallery. */
   gallery_banned_users: GalleryBannedUser[]
+  /** Email patterns whose accounts are all blocked from the public gallery. */
+  gallery_banned_email_patterns: GalleryBannedEmailPattern[]
 }
 
 // Cache settings for 60 seconds to avoid hitting the DB on every job
@@ -99,7 +104,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [] }
+    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [] }
     readFailures.add(fallback)
     return fallback
   }
@@ -119,11 +124,16 @@ async function refreshSettings(): Promise<AppSettings> {
     copilot_tier_caps: null,
     gallery_blocked_words: [],
     gallery_banned_users: [],
+    gallery_banned_email_patterns: [],
   }
 
   for (const row of data ?? []) {
     if (row.key === GALLERY_BLOCKED_WORDS_KEY) {
       settings.gallery_blocked_words = parseGalleryWordEntries(row.value)
+      continue
+    }
+    if (row.key === GALLERY_BANNED_EMAIL_PATTERNS_KEY) {
+      settings.gallery_banned_email_patterns = parseGalleryEmailPatterns(row.value)
       continue
     }
     if (row.key === GALLERY_BANNED_USERS_KEY) {

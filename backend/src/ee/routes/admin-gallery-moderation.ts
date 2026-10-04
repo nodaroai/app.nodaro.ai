@@ -3,12 +3,19 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { MAX_GALLERY_REMOVAL } from "../../lib/gallery-removal.js"
-import { GALLERY_MODERATION_LIMITS, type GalleryBannedUser } from "../../lib/gallery-moderation-settings.js"
+import { GALLERY_MODERATION_LIMITS, emailPatternToIlike, type GalleryBannedEmailPattern, type GalleryBannedUser } from "../../lib/gallery-moderation-settings.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { loadGalleryModeration } from "../../lib/gallery-moderation.js"
+import { readGalleryPage } from "../../lib/gallery-listing.js"
 import { suggestForBannedWord } from "../lib/gallery-word-suggestions.js"
+import { fillSuggestionsInBackground, wordsBeingFilled } from "../lib/gallery-word-import.js"
 import {
   GalleryModerationError,
   addGalleryWord,
+  addGalleryWords,
+  addGalleryEmailPattern,
+  readGalleryEmailPatterns,
+  removeGalleryEmailPattern,
   checkTerm,
   blockGalleryCreators,
   editGalleryWord,
@@ -31,7 +38,12 @@ const term = z.string().trim().min(1).max(GALLERY_MODERATION_LIMITS.termLength)
 const phrase = z.string().trim().min(1).max(GALLERY_MODERATION_LIMITS.exceptionLength)
 const list = <T extends z.ZodTypeAny>(item: T) => z.array(item).max(GALLERY_MODERATION_LIMITS.translationsPerWord).optional()
 
-const addWordBody = z.object({ word: term })
+/** The language the admin says the words are in, passed to the model as a hint. */
+const language = z.string().trim().min(1).max(40).optional()
+const addWordBody = z.object({ word: term, language })
+/** The most words one import may carry. */
+const MAX_IMPORT = 200
+const importBody = z.object({ words: z.array(z.string()).min(1).max(MAX_IMPORT), language })
 const editWordBody = z.object({
   word: term,
   addTranslations: list(term),
@@ -52,10 +64,27 @@ const blockBody = z
     message: "Name the items, the creators or an email",
   })
 const unblockBody = z.object({ userId: z.string().uuid() })
+const patternBody = z.object({ pattern: z.string().min(1).max(GALLERY_MODERATION_LIMITS.emailPatternLength) })
+const itemsQuery = z.object({
+  cursor: z.string().max(64).optional(),
+  limit: z.coerce.number().int().min(1).max(60).default(30),
+  type: z.enum(["image", "video", "audio"]).optional(),
+  userId: z.string().uuid().optional(),
+})
 
 export interface GalleryBannedCreator extends GalleryBannedUser {
   readonly email: string | null
   readonly name: string | null
+}
+
+/** Each blocked pattern with how many accounts it matches today. */
+async function withMatchCounts(patterns: readonly GalleryBannedEmailPattern[]) {
+  return Promise.all(
+    patterns.map(async (entry) => {
+      const { count } = await supabase.from("profiles").select("id", { count: "exact", head: true }).ilike("email", emailPatternToIlike(entry.pattern))
+      return { ...entry, matches: count ?? 0 }
+    }),
+  )
 }
 
 /** Profiles read per request — a long `in` list would not fit the request line. */
@@ -103,10 +132,41 @@ async function userIdForEmail(email: string): Promise<string | null> {
 }
 
 export async function adminGalleryModerationRoutes(app: FastifyInstance) {
+  /**
+   * The public gallery exactly as visitors see it — same pages, same
+   * moderation — with who made each item, for the admin to act on.
+   */
+  app.get("/v1/admin/gallery-moderation/items", { preHandler: requireAdmin }, async (req, reply) => {
+    const parsed = itemsQuery.safeParse(req.query)
+    if (!parsed.success) return badRequest(reply, parsed.error)
+    try {
+      const page = await readGalleryPage({ ...parsed.data, includePrivate: false, moderation: await loadGalleryModeration() })
+      const creatorIds = [...new Set(page.rows.map((row) => row.userId).filter((id): id is string => !!id))]
+      const creators = new Map((await withProfiles(creatorIds.map((userId) => ({ userId: userId.toLowerCase(), addedAt: null })))).map((c) => [c.userId, c]))
+      reply.header("Cache-Control", "private, no-store")
+      return reply.send({
+        data: page.rows.map(({ item, userId }) => {
+          const creator = userId ? creators.get(userId.toLowerCase()) : undefined
+          return { ...item, creator: userId ? { userId, email: creator?.email ?? null, name: creator?.name ?? null } : null }
+        }),
+        nextCursor: page.nextCursor,
+        ...(page.totalCount !== null ? { totalCount: page.totalCount } : {}),
+      })
+    } catch (error) {
+      return fail(reply, error, "read the gallery")
+    }
+  })
+
   app.get("/v1/admin/gallery-moderation", { preHandler: requireAdmin }, async (_req, reply) => {
     try {
-      const [words, users] = await Promise.all([readGalleryWords(), readGalleryBannedUsers()])
-      return reply.send({ words, bannedUsers: await withProfiles(users), limits: GALLERY_MODERATION_LIMITS })
+      const [words, users, patterns] = await Promise.all([readGalleryWords(), readGalleryBannedUsers(), readGalleryEmailPatterns()])
+      return reply.send({
+        words,
+        bannedUsers: await withProfiles(users),
+        emailPatterns: await withMatchCounts(patterns),
+        limits: GALLERY_MODERATION_LIMITS,
+        filling: wordsBeingFilled(),
+      })
     } catch (error) {
       return fail(reply, error, "read the gallery rules")
     }
@@ -119,11 +179,42 @@ export async function adminGalleryModerationRoutes(app: FastifyInstance) {
     try {
       checkTerm(parsed.data.word)
       // Before the write, so the list is never held while the model thinks.
-      const suggestions = await suggestForBannedWord(parsed.data.word)
+      const suggestions = await suggestForBannedWord(parsed.data.word, { language: parsed.data.language })
       const words = await addGalleryWord(req.userId!, parsed.data.word, suggestions ?? { translations: [], exceptions: [] })
       return reply.send({ words, suggested: suggestions !== null })
     } catch (error) {
       return fail(reply, error, "add the word")
+    }
+  })
+
+  /**
+   * Import a list of banned words at once. They are added straight away;
+   * their translations and suggested allowed phrases arrive in the background.
+   * Words that cannot be stored (blank, too long) are skipped and named back.
+   */
+  app.post("/v1/admin/gallery-moderation/words/import", { preHandler: requireAdmin }, async (req, reply) => {
+    const parsed = importBody.safeParse(req.body)
+    if (!parsed.success) return badRequest(reply, parsed.error)
+    const usable: string[] = []
+    const skipped: string[] = []
+    for (const raw of parsed.data.words) {
+      try {
+        usable.push(checkTerm(raw))
+      } catch {
+        if (raw.trim() !== "") skipped.push(raw.trim().slice(0, 80))
+      }
+    }
+    if (usable.length === 0) {
+      return reply.status(400).send({ error: { code: "empty_word", message: "None of these words can be stored." }, skipped })
+    }
+    try {
+      const before = new Set((await readGalleryWords()).map((entry) => entry.word))
+      const words = await addGalleryWords(req.userId!, usable)
+      const added = words.filter((entry) => !before.has(entry.word)).map((entry) => entry.word)
+      void fillSuggestionsInBackground(req.userId!, added, parsed.data.language)
+      return reply.send({ words, added: added.length, skipped, filling: wordsBeingFilled() })
+    } catch (error) {
+      return fail(reply, error, "import the words")
     }
   })
 
@@ -166,6 +257,27 @@ export async function adminGalleryModerationRoutes(app: FastifyInstance) {
       return reply.send({ bannedUsers: await withProfiles(users), blocked: new Set(userIds.map((id) => id.toLowerCase())).size })
     } catch (error) {
       return fail(reply, error, "block the creators")
+    }
+  })
+
+  /** Block every account whose email matches a pattern — the ones there now and the ones made later. */
+  app.post("/v1/admin/gallery-moderation/creators/patterns", { preHandler: requireAdmin }, async (req, reply) => {
+    const parsed = patternBody.safeParse(req.body)
+    if (!parsed.success) return badRequest(reply, parsed.error)
+    try {
+      return reply.send({ emailPatterns: await withMatchCounts(await addGalleryEmailPattern(req.userId!, parsed.data.pattern)) })
+    } catch (error) {
+      return fail(reply, error, "block the pattern")
+    }
+  })
+
+  app.post("/v1/admin/gallery-moderation/creators/patterns/remove", { preHandler: requireAdmin }, async (req, reply) => {
+    const parsed = patternBody.safeParse(req.body)
+    if (!parsed.success) return badRequest(reply, parsed.error)
+    try {
+      return reply.send({ emailPatterns: await withMatchCounts(await removeGalleryEmailPattern(req.userId!, parsed.data.pattern)) })
+    } catch (error) {
+      return fail(reply, error, "unblock the pattern")
     }
   })
 

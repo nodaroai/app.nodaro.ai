@@ -94,10 +94,12 @@ vi.mock("@/lib/config.js", () => ({
 }))
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: vi.fn().mockResolvedValue(true) }))
 vi.mock("@/ee/lib/gallery-word-suggestions.js", () => ({ suggestForBannedWord: vi.fn() }))
+vi.mock("@/ee/lib/gallery-word-import.js", () => ({ fillSuggestionsInBackground: vi.fn(async () => undefined), wordsBeingFilled: vi.fn(() => []) }))
 
 import { adminGalleryModerationRoutes } from "../admin-gallery-moderation.js"
 import { checkIsAdmin } from "../../../lib/admin-check.js"
 import { suggestForBannedWord } from "../../lib/gallery-word-suggestions.js"
+import { fillSuggestionsInBackground } from "../../lib/gallery-word-import.js"
 import { getAppSettings, invalidateSettingsCache } from "../../../lib/app-settings.js"
 
 const ADMIN = "00000000-0000-4000-8000-0000000000ad"
@@ -258,6 +260,41 @@ describe("admin gallery moderation — words", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().words.map((entry: { word: string }) => entry.word)).toEqual(["spade", "bucket"])
     expect(res.json().words[1].translations).toContain("cubo")
+  })
+})
+
+describe("admin gallery moderation — importing a list", () => {
+  it("adds every new word at once and looks up their suggestions in the background, in the language given", async () => {
+    await post("/v1/admin/gallery-moderation/words", { word: "bucket" })
+    const res = await post("/v1/admin/gallery-moderation/words/import", { words: ["spade", "Bucket", "rake", "spade", "x".repeat(61), "  "], language: "English" })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().added).toBe(2)
+    expect(res.json().skipped).toEqual(["x".repeat(61)])
+    expect(res.json().words.map((entry: { word: string }) => entry.word)).toEqual(["spade", "rake", "bucket"])
+    expect(vi.mocked(fillSuggestionsInBackground)).toHaveBeenCalledWith(ADMIN, ["spade", "rake"], "English")
+  })
+
+  it("refuses a list with nothing storable, and one that is too long", async () => {
+    expect((await post("/v1/admin/gallery-moderation/words/import", { words: ["  "] })).statusCode).toBe(400)
+    expect((await post("/v1/admin/gallery-moderation/words/import", { words: Array.from({ length: 201 }, (_, i) => "w" + i) })).statusCode).toBe(400)
+  })
+})
+
+describe("admin gallery moderation — email patterns", () => {
+  it("blocks a pattern once, refuses one that would block everyone, and unblocks it", async () => {
+    let res = await post("/v1/admin/gallery-moderation/creators/patterns", { pattern: "SeriesName*@example.com" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().emailPatterns.map((p: { pattern: string }) => p.pattern)).toEqual(["seriesname*@example.com"])
+    await post("/v1/admin/gallery-moderation/creators/patterns", { pattern: "seriesname*@example.com" })
+    expect((stored("gallery_banned_email_patterns") as unknown[]).length).toBe(1)
+
+    res = await post("/v1/admin/gallery-moderation/creators/patterns", { pattern: "*@gmail.com" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("bad_pattern")
+
+    res = await post("/v1/admin/gallery-moderation/creators/patterns/remove", { pattern: "seriesname*@example.com" })
+    expect(res.json().emailPatterns).toEqual([])
   })
 })
 

@@ -58,7 +58,7 @@ describe("suggestForBannedWord", () => {
   it("does not ask the second model once the first used up the time", async () => {
     vi.mocked(llmCompleteStructured).mockRejectedValue(new Error("timed out"))
     const clock = [0, 45_000]
-    expect(await suggestForBannedWord("bucket", () => clock.shift() ?? 45_000)).toBeNull()
+    expect(await suggestForBannedWord("bucket", { now: () => clock.shift() ?? 45_000 })).toBeNull()
     expect(vi.mocked(llmCompleteStructured)).toHaveBeenCalledTimes(1)
   })
 })
