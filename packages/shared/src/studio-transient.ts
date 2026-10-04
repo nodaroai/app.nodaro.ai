@@ -19,11 +19,16 @@
  * reads and exports keep both; every other reader's projection drops them, and
  * drops them from the bin's deleted entries too.
  *
- * So is a LINKED (keyframe / sequence) production's sequence planning state
- * (T87), on the same terms: the director's sequence recommendations
- * ({@link STUDIO_SEQUENCE_PLANNING_KEYS}), a take's endpoint pins
- * ({@link STUDIO_TAKE_SEQUENCE_KEYS}, on the result rows) and a sequence take
- * unit's continuation review ({@link STUDIO_SEQUENCE_UNIT_REVIEW_KEYS}).
+ * So is a LINKED (keyframe / sequence) production's owner state (T87), on the
+ * same terms: the director's sequence recommendations
+ * ({@link STUDIO_SEQUENCE_PLANNING_KEYS}), the current generation preferences
+ * ({@link STUDIO_SEQUENCE_POLICY_KEYS} — emptied, not dropped), a take's
+ * endpoint pins ({@link STUDIO_TAKE_SEQUENCE_KEYS}, on the result rows), a
+ * sequence take unit's continuation review
+ * ({@link STUDIO_SEQUENCE_UNIT_REVIEW_KEYS}), a unit result's frozen request
+ * ({@link STUDIO_SEQUENCE_UNIT_MANIFEST_KEYS}), and a keyframe's in-flight
+ * runs and review record ({@link STUDIO_KEYFRAME_NODE_TRANSIENT_KEYS},
+ * {@link STUDIO_KEYFRAME_TRANSIENT_KEYS}, {@link STUDIO_KEYFRAME_REVIEW_KEYS}).
  *
  * They do NOT all live at the same level, and that is the whole reason this
  * file exists rather than one array: the writer puts `trash` and
@@ -121,13 +126,15 @@ const STUDIO_TAKE_PRIVATE_KEYS: ReadonlyArray<string> = [...STUDIO_TAKE_VOICE_KE
  * itself (T87): `sequenceRecommendations`, the director's suggested generation
  * policies for each sequence, with their reasons and provenance.
  *
- * The studio codec's non-owner view withholds three more things that NO list
- * here carries: `sequenceGenerationPolicies`, a take's `policy` and
- * `compilation`, and a unit video node's `data.sequenceUnitResults`. The codec's
- * reader refuses a production with takes when any of them is missing, so a
- * strip of the stored row cannot drop them without breaking every reader's load
- * of that production; the codec withholds them from its own view, after it has
- * read the row.
+ * The studio codec's non-owner view withholds two more things that NO list
+ * here carries: a take's `policy` and `compilation`, and a unit video node's
+ * `data.sequenceUnitResults` (each result's pin, url and request hash). The
+ * codec's reader refuses a production with takes when any of them is missing,
+ * so a strip of the stored row cannot drop them without breaking every
+ * reader's load of that production; the codec withholds them from its own
+ * view, after it has read the row. What the reader can do without does go:
+ * the current preferences' entries ({@link STUDIO_SEQUENCE_POLICY_KEYS}) and
+ * each unit result's frozen request ({@link STUDIO_SEQUENCE_UNIT_MANIFEST_KEYS}).
  */
 export const STUDIO_SEQUENCE_PLANNING_KEYS = ["sequenceRecommendations"] as const
 
@@ -138,6 +145,56 @@ export const STUDIO_SEQUENCE_PLANNING_KEYS = ["sequenceRecommendations"] as cons
  * and the review checks.
  */
 export const STUDIO_SEQUENCE_UNIT_REVIEW_KEYS = ["continuationAcceptance"] as const
+
+/**
+ * ...and a LINKED production's current GENERATION PREFERENCES on
+ * `settings.studio` (T87): `sequenceGenerationPolicies`, the policy the owner
+ * last set for each sequence — what its next take would be made with.
+ *
+ * EMPTIED, never deleted: a non-empty record goes out as `{}`. The codec's
+ * reader parses the key as a record whenever a production has takes, and
+ * reads an empty one fine. A row that does not carry the key never gains it:
+ * that reader takes the key alone for take state, and refuses it on a
+ * production that never declared takes. Each take's own `policy` — the one it
+ * was made with — stays (the reader requires it), so `{}` withholds the
+ * owner's current preference, not the takes' history.
+ */
+export const STUDIO_SEQUENCE_POLICY_KEYS = ["sequenceGenerationPolicies"] as const
+
+/**
+ * ...and a sequence unit RESULT's frozen request (T87), on a unit video node's
+ * `data.sequenceUnitResults[]` rows: `requestManifest` — the submission as the
+ * host froze it, with the compiled prompts, the reference media, the endpoint
+ * pins, the take's policy and snapshots of the owner's scenes as they stood
+ * then. Optional to the codec's reader; the rest of the row stays.
+ */
+export const STUDIO_SEQUENCE_UNIT_MANIFEST_KEYS = ["requestManifest"] as const
+
+/**
+ * ...and a KEYFRAME's in-flight image runs (T87, on T22's terms), which the
+ * writer keeps on the frame's image node: `data.keyframePendingImages`. Each
+ * names a job on the owner's account, with the frame it was submitted with and
+ * that submission's provenance; a reader can land none of them.
+ */
+export const STUDIO_KEYFRAME_NODE_TRANSIENT_KEYS = ["keyframePendingImages"] as const
+
+/**
+ * ...and the same runs on a DELETED keyframe, where the bin keeps the whole
+ * frame (`trash[].keyframe`, `kind: "keyframe"`) and calls them `pendingImages`.
+ */
+export const STUDIO_KEYFRAME_TRANSIENT_KEYS = ["pendingImages"] as const
+
+/**
+ * ...and a KEYFRAME's review record (T87): `rejections` — which of its results
+ * the owner sent back for revision, who, when and why — on each
+ * `settings.studio.keyframes[]` entry and on a deleted keyframe in the bin.
+ * Optional to the codec's reader. The frame's `acceptance` stays: every reader
+ * is shown the accepted result, and that is where the reader finds it.
+ */
+export const STUDIO_KEYFRAME_REVIEW_KEYS = ["rejections"] as const
+
+/** Everything a deleted keyframe loses on its way to a reader who is not its owner. */
+const STUDIO_KEYFRAME_PRIVATE_KEYS: ReadonlyArray<string> = [...STUDIO_KEYFRAME_TRANSIENT_KEYS, ...STUDIO_KEYFRAME_REVIEW_KEYS]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
@@ -197,7 +254,7 @@ export function stripStudioTransientSettings(settings: unknown): unknown {
   const kept = withoutKeys(source, STUDIO_TRANSIENT_KEYS)
   const shots = stripShots(source.shots, STUDIO_SHOT_PRIVATE_KEYS)
   if (source.shots !== undefined) kept.shots = shots
-  const planned = stripSequencePlanning(kept)
+  const planned = stripLinkedOwnerState(kept)
 
   // Nothing to drop at any level — hand back the original object so an
   // ordinary share read allocates nothing.
@@ -208,50 +265,80 @@ export function stripStudioTransientSettings(settings: unknown): unknown {
 }
 
 /**
- * A workflow's `nodes` with every result row's voice record removed
- * ({@link STUDIO_TAKE_VOICE_KEYS}, T42) and its sequence pins
- * ({@link STUDIO_TAKE_SEQUENCE_KEYS}, T87). Named for the first of the two.
+ * A workflow's `nodes` without the owner's state that rides a NODE rather
+ * than `settings`: every result row's voice record
+ * ({@link STUDIO_TAKE_VOICE_KEYS}, T42) and sequence pins
+ * ({@link STUDIO_TAKE_SEQUENCE_KEYS}, T87), every sequence unit result's
+ * frozen request ({@link STUDIO_SEQUENCE_UNIT_MANIFEST_KEYS}, T87), and a
+ * keyframe image node's in-flight runs
+ * ({@link STUDIO_KEYFRAME_NODE_TRANSIENT_KEYS}, T87). Named for the first.
  *
- * Every node's `data.generatedResults` is walked, not only a clip node's: the
- * keys exist only on clip takes, and a type list would be one more thing to
- * keep in step. Copy-on-write, and the SAME array back when no row carries
- * any of the keys. Anything that is not node-shaped rides through untouched:
- * this runs on whatever is in the column.
+ * Every node is walked, not only a clip, unit or keyframe node: the keys exist
+ * only on those, and a type list would be one more thing to keep in step.
+ * Copy-on-write, and the SAME array back when no node carries any of the keys.
+ * Anything that is not node-shaped rides through untouched: this runs on
+ * whatever is in the column.
  */
 export function stripStudioTakeVoiceRecords(nodes: unknown): unknown {
   if (!Array.isArray(nodes)) return nodes
   let changed = false
   const out = nodes.map((node: unknown) => {
     const data = isRecord(node) ? node.data : undefined
-    const rows = isRecord(data) ? data.generatedResults : undefined
-    if (!Array.isArray(rows)) return node
-    let touched = false
-    const kept = rows.map((row: unknown) => {
-      if (!isRecord(row) || !STUDIO_TAKE_PRIVATE_KEYS.some((key) => key in row)) return row
-      touched = true
-      return withoutKeys(row, STUDIO_TAKE_PRIVATE_KEYS)
-    })
-    if (!touched) return node
+    if (!isRecord(data)) return node
+    const results = stripRows(data.generatedResults, STUDIO_TAKE_PRIVATE_KEYS)
+    const unitResults = stripRows(data.sequenceUnitResults, STUDIO_SEQUENCE_UNIT_MANIFEST_KEYS)
+    const running = STUDIO_KEYFRAME_NODE_TRANSIENT_KEYS.some((key) => key in data)
+    if (results === data.generatedResults && unitResults === data.sequenceUnitResults && !running) return node
     changed = true
-    return { ...(node as Record<string, unknown>), data: { ...(data as Record<string, unknown>), generatedResults: kept } }
+    const kept = withoutKeys(data, STUDIO_KEYFRAME_NODE_TRANSIENT_KEYS)
+    if (results !== data.generatedResults) kept.generatedResults = results
+    if (unitResults !== data.sequenceUnitResults) kept.sequenceUnitResults = unitResults
+    return { ...(node as Record<string, unknown>), data: kept }
   })
   return changed ? out : nodes
 }
 
 /**
- * `settings.studio` without a linked production's sequence planning state
- * (T87): its own {@link STUDIO_SEQUENCE_PLANNING_KEYS}, and every sequence
- * take's units without their {@link STUDIO_SEQUENCE_UNIT_REVIEW_KEYS}. Every
- * other part of a take stays: the codec's reader needs it to read the row.
+ * A list of rows with the given keys off every row — a node's result rows, a
+ * production's keyframe entries. The SAME array back when no row carries one,
+ * and anything that is not a list, or not a row, rides through untouched.
+ */
+function stripRows(value: unknown, drop: ReadonlyArray<string>): unknown {
+  if (!Array.isArray(value)) return value
+  let changed = false
+  const out = value.map((row: unknown) => {
+    if (!isRecord(row) || !drop.some((key) => key in row)) return row
+    changed = true
+    return withoutKeys(row, drop)
+  })
+  return changed ? out : value
+}
+
+/**
+ * `settings.studio` without a linked production's owner state (T87): its own
+ * {@link STUDIO_SEQUENCE_PLANNING_KEYS}; each {@link STUDIO_SEQUENCE_POLICY_KEYS}
+ * record EMPTIED, never dropped and never added; every sequence take's units
+ * without their {@link STUDIO_SEQUENCE_UNIT_REVIEW_KEYS}; and every keyframe
+ * entry without its {@link STUDIO_KEYFRAME_REVIEW_KEYS}. Every other part of a
+ * take or a frame stays: the codec's reader needs it to read the row.
  *
  * The ONE change site for both settings strips. The SAME object back when it
- * carries none of it, and anything that is not take-shaped rides through.
+ * carries none of it, and anything that is not take- or frame-shaped rides
+ * through — a preferences value that is not a record included.
  */
-function stripSequencePlanning(studio: Record<string, unknown>): Record<string, unknown> {
+function stripLinkedOwnerState(studio: Record<string, unknown>): Record<string, unknown> {
   const takes = stripTakeUnitReviews(studio.sequenceTakes)
-  if (!STUDIO_SEQUENCE_PLANNING_KEYS.some((key) => key in studio) && takes === studio.sequenceTakes) return studio
+  const keyframes = stripRows(studio.keyframes, STUDIO_KEYFRAME_REVIEW_KEYS)
+  const preferences = STUDIO_SEQUENCE_POLICY_KEYS.filter((key) => {
+    const value = studio[key]
+    return isRecord(value) && Object.keys(value).length > 0
+  })
+  if (!STUDIO_SEQUENCE_PLANNING_KEYS.some((key) => key in studio) && takes === studio.sequenceTakes
+    && keyframes === studio.keyframes && preferences.length === 0) return studio
   const kept = withoutKeys(studio, STUDIO_SEQUENCE_PLANNING_KEYS)
   if (takes !== studio.sequenceTakes) kept.sequenceTakes = takes
+  if (keyframes !== studio.keyframes) kept.keyframes = keyframes
+  for (const key of preferences) kept[key] = {}
   return kept
 }
 
@@ -279,8 +366,8 @@ function stripTakeUnitReviews(value: unknown): unknown {
  * slots ({@link STUDIO_SHOT_DRAFT_KEYS}) and its in-flight run markers
  * ({@link STUDIO_SHOT_TRANSIENT_KEYS}) — and the bin kept WITHOUT the owner's
  * drafts in it ({@link stripBin}: deleted empty slots, deleted takes' voice
- * records) — and without a linked production's sequence planning state
- * ({@link stripSequencePlanning}, T87). The document-level markers and
+ * records) — and without a linked production's owner state
+ * ({@link stripLinkedOwnerState}, T87). The document-level markers and
  * everything else stay.
  *
  * For a reader the owner let LOOK but not edit: a `view` reader's
@@ -291,8 +378,8 @@ function stripTakeUnitReviews(value: unknown): unknown {
  * and a marker for a run started from a slot carries that slot's unsent
  * inputs. An editor keeps all of it: their editor saves `settings` back whole.
  *
- * The very same object back when neither a shot, the bin nor the sequence
- * planning carries any of it.
+ * The very same object back when neither a shot, the bin nor the linked
+ * owner state carries any of it.
  */
 export function stripStudioDraftSettings(settings: unknown): unknown {
   if (!settings || typeof settings !== "object") return settings
@@ -300,7 +387,7 @@ export function stripStudioDraftSettings(settings: unknown): unknown {
   if (!isRecord(studio)) return settings
   const shots = stripShots(studio.shots, STUDIO_SHOT_PRIVATE_KEYS)
   const trash = stripBin(studio.trash)
-  const planned = stripSequencePlanning(studio)
+  const planned = stripLinkedOwnerState(studio)
   if (shots === studio.shots && trash === studio.trash && planned === studio) return settings
   const kept: Record<string, unknown> = { ...planned }
   if (shots !== studio.shots) kept.shots = shots
@@ -315,18 +402,21 @@ export function stripStudioDraftSettings(settings: unknown): unknown {
  * - a deleted EMPTY slot (`kind: "slot"`) goes whole: it is an unsubmitted
  *   draft, prose and reference urls the owner never generated;
  * - a deleted SCENE (`kind: "shot"`) is a one-scene production graph, so it
- *   gets what a live production gets: its takes' records and sequence pins off
- *   the graph's nodes, its slots and runs off the graph's scene entry, and its
- *   sequence planning off the graph's settings;
+ *   gets what a live production gets: the owner's state off the graph's nodes
+ *   (takes' records and sequence pins, unit results' frozen requests, frame
+ *   runs), its slots and runs off the graph's scene entry, and its linked
+ *   owner state off the graph's settings;
+ * - a deleted KEYFRAME (`kind: "keyframe"`) keeps the frame without its
+ *   in-flight runs or its review record ({@link binKeyframeForReader});
  * - any other entry — a deleted take (`kind: "clip"`, or a legacy entry with
  *   no kind, which the bin reads as a clip) — keeps its result without the
- *   voice record or the sequence pins. A deleted still or keyframe carries
- *   none and rides through.
+ *   voice record or the sequence pins. A deleted still carries none and rides
+ *   through.
  *
  * Mirrors the studio codec's `withoutBinDrafts` branch for branch (that walker
- * does not drop the T87 state yet). Copy-on-write, the SAME array back when no
- * entry carries any of it, and anything that is not an entry rides through
- * untouched.
+ * does not drop the T87 state yet, and lets a deleted keyframe through
+ * whole). Copy-on-write, the SAME array back when no entry carries any of it,
+ * and anything that is not an entry rides through untouched.
  */
 function stripBin(trash: unknown): unknown {
   if (!Array.isArray(trash)) return trash
@@ -337,7 +427,10 @@ function stripBin(trash: unknown): unknown {
       changed = true
       continue
     }
-    const kept = !isRecord(entry) ? entry : entry.kind === "shot" ? binSceneForReader(entry) : binTakeForReader(entry)
+    const kept = !isRecord(entry) ? entry
+      : entry.kind === "shot" ? binSceneForReader(entry)
+      : entry.kind === "keyframe" ? binKeyframeForReader(entry)
+      : binTakeForReader(entry)
     if (kept !== entry) changed = true
     out.push(kept)
   }
@@ -361,11 +454,18 @@ function binTakeForReader(entry: Record<string, unknown>): Record<string, unknow
   return { ...entry, result: withoutKeys(result, STUDIO_TAKE_PRIVATE_KEYS) }
 }
 
+/** A deleted keyframe without its in-flight runs or its review record ({@link STUDIO_KEYFRAME_PRIVATE_KEYS}). */
+function binKeyframeForReader(entry: Record<string, unknown>): Record<string, unknown> {
+  const keyframe = entry.keyframe
+  if (!isRecord(keyframe) || !STUDIO_KEYFRAME_PRIVATE_KEYS.some((key) => key in keyframe)) return entry
+  return { ...entry, keyframe: withoutKeys(keyframe, STUDIO_KEYFRAME_PRIVATE_KEYS) }
+}
+
 /**
  * A workflow row as a reader the owner let LOOK but not edit receives it: the
- * takes' voice records and sequence pins off its `nodes`
- * ({@link stripStudioTakeVoiceRecords}) and the owner's drafts, runs and
- * sequence planning off its `settings` ({@link stripStudioDraftSettings}).
+ * owner's state off its `nodes` ({@link stripStudioTakeVoiceRecords}) and the
+ * owner's drafts, runs and linked-production state off its `settings`
+ * ({@link stripStudioDraftSettings}).
  *
  * The ONE strip every `view` door applies, so no door can strip the settings
  * and forget the nodes. A half the row does not carry is not added. Copy-on-
