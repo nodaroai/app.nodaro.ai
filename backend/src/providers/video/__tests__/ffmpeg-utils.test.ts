@@ -450,9 +450,9 @@ describe("ffmpegFailureMessage", () => {
       runFfmpeg(["-i", "4"]),
       runFfmpeg(["-i", "5"]),
     ]
-    // Yield once so the first 2 acquire slots
-    await Promise.resolve()
-    await Promise.resolve()
+    // Drain the microtask queue (a held slot settles through a few awaits).
+    const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve() }
+    await flush()
 
     expect(mocks.execFile).toHaveBeenCalledTimes(2)
 
@@ -460,8 +460,7 @@ describe("ffmpegFailureMessage", () => {
     activeCallbacks[0]?.()
     activeCallbacks[1]?.()
     activeCallbacks = activeCallbacks.slice(2)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flush()
 
     expect(mocks.execFile).toHaveBeenCalledTimes(4)
 
@@ -485,22 +484,131 @@ describe("ffmpegFailureMessage", () => {
     expect(second).toBe("ok2")
   })
 
+  const SLOT = { timeoutMs: 60_000 }
+
   it("removes a cancelled waiter without consuming a future CPU slot", async () => {
     const releases: Array<() => void> = []
     const hold = () => new Promise<void>((resolve) => releases.push(resolve))
-    const busy = [withFfmpegSlot(hold), withFfmpegSlot(hold)]
+    const busy = [withFfmpegSlot(hold, SLOT), withFfmpegSlot(hold, SLOT)]
     await Promise.resolve(); await Promise.resolve()
     const controller = new AbortController(), cancelledWork = vi.fn(async () => {})
-    const cancelled = withFfmpegSlot(cancelledWork, controller.signal)
+    const cancelled = withFfmpegSlot(cancelledWork, { ...SLOT, signal: controller.signal })
     const rejection = expect(cancelled).rejects.toThrow("stop")
     const nextWork = vi.fn(async () => {})
-    const next = withFfmpegSlot(nextWork)
+    const next = withFfmpegSlot(nextWork, SLOT)
     controller.abort(new Error("stop"))
     await rejection
     releases.forEach((release) => release())
     await Promise.all([...busy, next])
     expect(cancelledWork).not.toHaveBeenCalled()
     expect(nextWork).toHaveBeenCalledOnce()
+  })
+
+  // Track 0.13 (decided 2026-10-04): slot waits are not capped, so every HOLD is.
+  it("a hold that never settles releases its slot past its limit + kill grace + backstop", async () => {
+    vi.useFakeTimers()
+    try {
+      const { FFMPEG_KILL_GRACE_MS, FFMPEG_SLOT_BACKSTOP_MS } = await import("../ffmpeg-utils.js")
+      const stuck = withFfmpegSlot(() => new Promise<void>(() => {}), { timeoutMs: 1_000, label: "stuck raster step" })
+      const stuck2 = withFfmpegSlot(() => new Promise<void>(() => {}), { timeoutMs: 1_000 })
+      const failed = expect(stuck).rejects.toThrow(/^stuck raster step held its ffmpeg slot past 36 s; the slot was released$/)
+      const failed2 = expect(stuck2).rejects.toThrow(/held its ffmpeg slot/)
+      const next = vi.fn(async () => {})
+      const queued = withFfmpegSlot(next, { timeoutMs: 1_000 }) // both slots are held
+      await vi.advanceTimersByTimeAsync(1_000 + FFMPEG_KILL_GRACE_MS + FFMPEG_SLOT_BACKSTOP_MS - 1)
+      expect(next).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      await failed; await failed2; await queued
+      expect(next).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("a zero, negative or non-finite budget gets the default — never an unbounded run", async () => {
+    for (const bad of [0, -1, Number.NaN]) {
+      execFileOnce("ok")
+      await runFfmpeg(["-i", "x"], bad)
+      expect((mocks.execFile.mock.calls.at(-1)![2] as { timeout: number }).timeout).toBe(10 * 60 * 1000)
+    }
+  })
+
+  it("the slot backstop's error is a timeout like any other (killed + timedOut)", async () => {
+    vi.useFakeTimers()
+    try {
+      const stuck = withFfmpegSlot(() => new Promise<void>(() => {}), { timeoutMs: 1_000 })
+      const caught = stuck.catch((e: unknown) => e as { killed?: boolean; timedOut?: boolean })
+      await vi.advanceTimersByTimeAsync(40_000)
+      expect(await caught).toMatchObject({ killed: true, timedOut: true })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("a timed-out ffmpeg that ignores SIGTERM is SIGKILLed after the grace", async () => {
+    vi.useFakeTimers()
+    try {
+      // `killed` is true once the timeout's SIGTERM is DELIVERED — it says
+      // nothing about whether the process exited, so the alive check must not read it.
+      const child = { killed: true, exitCode: null as number | null, signalCode: null as string | null, kill: vi.fn() }
+      mocks.execFile.mockImplementationOnce(() => child) // never calls back
+      const running = runFfmpeg(["-i", "x"], 1_000)
+      running.catch(() => undefined)
+      await vi.advanceTimersByTimeAsync(1_000 + 5_000 - 1)
+      expect(child.kill).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(child.kill).toHaveBeenCalledWith("SIGKILL")
+      await vi.advanceTimersByTimeAsync(30_000) // the slot backstop then releases it
+      await expect(running).rejects.toThrow(/held its ffmpeg slot/)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("a child that already exited is never SIGKILLed", async () => {
+    vi.useFakeTimers()
+    try {
+      const child = { killed: true, exitCode: 255 as number | null, signalCode: null as string | null, kill: vi.fn() }
+      mocks.execFile.mockImplementationOnce(() => child) // exited, callback not yet delivered
+      const running = runFfmpeg(["-i", "x"], 1_000)
+      running.catch(() => undefined)
+      await vi.advanceTimersByTimeAsync(1_000 + 5_000 + 1)
+      expect(child.kill).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(30_000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Track 0.13 (decided 2026-10-04): the time a job is stalled on this queue is
+  // recorded into ITS ledger — the heartbeat and the workflow engine leave it out.
+  it("records a queued job's wait into its own slot-wait ledger, and only that job's", async () => {
+    const { SlotWaitLedger, runWithSlotWaitLedger } = await import("../../../lib/ffmpeg-slot-wait.js")
+    let t = 0
+    const now = () => t
+    const holderLedger = new SlotWaitLedger(now), waiterLedger = new SlotWaitLedger(now), cancelledLedger = new SlotWaitLedger(now)
+    const releases: Array<() => void> = []
+    const hold = () => new Promise<void>((resolve) => releases.push(resolve))
+    // Two holders take both slots (FFMPEG_CONCURRENCY is 2 here), immediately.
+    const busy = [runWithSlotWaitLedger(holderLedger, () => withFfmpegSlot(hold, SLOT)), withFfmpegSlot(hold, SLOT)]
+    await Promise.resolve(); await Promise.resolve()
+    const work = vi.fn(async () => {})
+    const waiting = runWithSlotWaitLedger(waiterLedger, () => withFfmpegSlot(work, SLOT))
+    const controller = new AbortController()
+    const cancelled = runWithSlotWaitLedger(cancelledLedger, () => withFfmpegSlot(async () => {}, { ...SLOT, signal: controller.signal }))
+    const rejection = expect(cancelled).rejects.toThrow("stop")
+    t += 30_000
+    controller.abort(new Error("stop"))
+    await rejection
+    t += 15_000
+    expect(waiterLedger.waitedMs()).toBe(45_000) // still waiting: it counts so far
+    expect(cancelledLedger.waitedMs()).toBe(30_000) // waited, then gave up
+    releases.forEach((release) => release())
+    await Promise.all([...busy, waiting])
+    t += 60_000
+    expect(work).toHaveBeenCalledOnce()
+    expect(waiterLedger.waitedMs()).toBe(45_000) // the wait ended at its grant
+    expect(holderLedger.waitedMs()).toBe(0) // an immediate grant never waits
   })
 })
 

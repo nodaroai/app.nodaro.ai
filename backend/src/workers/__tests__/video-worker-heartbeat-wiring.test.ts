@@ -22,7 +22,10 @@ const src = readFileSync(resolve(__dirname, "../video-worker.ts"), "utf8")
 const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
 
 describe("video-worker pre-task heartbeat wiring", () => {
-  const WRAP = "const handler = withPreTaskHeartbeat(found, { maxMs: found.livenessBudgetMs?.(job) })"
+  const WRAP = "const handler = withPreTaskHeartbeat(found, {"
+  // The wrap passes the handler's budget and the job's earlier ffmpeg-slot wait
+  // (Track 0.13 — a re-pick adds to it).
+  const WRAP_ARGS = /const handler = withPreTaskHeartbeat\(found, \{\s*maxMs: found\.livenessBudgetMs\?\.\(job\),\s*slotWaitBaseMs: [^\n]*pickedRows\[0\][^\n]*slot_wait_ms/
 
   it("wraps the looked-up handler at the dispatch site, before it is invoked", () => {
     // The lookup binds `found`; the invoked `handler` is the wrapped one.
@@ -31,6 +34,7 @@ describe("video-worker pre-task heartbeat wiring", () => {
     const wrapAt = code.indexOf(WRAP)
     expect(wrapAt, "the dispatch site must wrap the looked-up handler").toBeGreaterThan(-1)
     expect(wrapAt).toBeGreaterThan(lookupAt)
+    expect(code).toMatch(WRAP_ARGS)
   })
 
   it("never invokes the bare lookup — every call goes through the wrapped handler", () => {
@@ -50,6 +54,6 @@ describe("video-worker pre-task heartbeat wiring", () => {
   })
 
   it("honours a handler's own liveness budget at the dispatch site (apply-edl declares its ffmpeg kill budget)", () => {
-    expect(code).toContain(WRAP)
+    expect(code).toMatch(WRAP_ARGS)
   })
 })

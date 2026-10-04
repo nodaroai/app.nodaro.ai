@@ -12,7 +12,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const refresh = vi.hoisted(() => vi.fn(async (_jobId: string): Promise<void> => {}))
-vi.mock("../../lib/reconcile/persistence.js", () => ({ refreshPreTaskSentinel: refresh }))
+const recordWait = vi.hoisted(() => vi.fn(async (_jobId: string, _totalMs: number): Promise<void> => {}))
+vi.mock("../../lib/reconcile/persistence.js", () => ({ refreshPreTaskSentinel: refresh, recordJobSlotWait: recordWait }))
 
 import {
   PRE_TASK_HEARTBEAT_MAX_MS,
@@ -23,6 +24,7 @@ import {
 import { STALE_THRESHOLD_MS, isSyncKind } from "../../lib/reconcile/types.js"
 import { NODE_TIMEOUT_MS } from "../../services/workflow-engine/types.js"
 import { DrainAbortError } from "../../lib/worker-drain.js"
+import { currentSlotWaitLedger } from "../../lib/ffmpeg-slot-wait.js"
 
 const MIN = 60_000
 const THRESHOLD = STALE_THRESHOLD_MS["pre-task"]
@@ -31,6 +33,8 @@ const sleep = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolv
 beforeEach(() => {
   refresh.mockReset()
   refresh.mockResolvedValue(undefined)
+  recordWait.mockReset()
+  recordWait.mockResolvedValue(undefined)
   vi.useFakeTimers()
   vi.setSystemTime(new Date("2026-09-15T18:18:44Z"))
 })
@@ -169,5 +173,85 @@ describe("liveness budget", () => {
   it("the default cap outlasts the threshold (or it would re-open the gap) and is the orchestrator's own per-node ceiling", () => {
     expect(PRE_TASK_HEARTBEAT_MAX_MS).toBeGreaterThan(THRESHOLD)
     expect(PRE_TASK_HEARTBEAT_MAX_MS).toBe(NODE_TIMEOUT_MS)
+  })
+})
+
+
+// Track 0.13 (decided 2026-10-04): a job stalled on the ffmpeg slot queue is not
+// hung — the cap's clock pauses while it waits, and each beat reports the wait.
+describe("withPreTaskHeartbeat — waiting for an ffmpeg slot", () => {
+  it("keeps beating through a long slot wait: the cap counts only the run's own time", async () => {
+    const run = withPreTaskHeartbeat(async () => {
+      const ledger = currentSlotWaitLedger()!
+      ledger.queued() // four long renders hold every slot
+      await sleep(100 * MIN)
+      ledger.granted(true)
+      await sleep(60 * MIN) // its own run: 60 min, inside the 90-min default cap
+      ledger.released()
+    })({}, { jobId: "job-1" })
+
+    await vi.advanceTimersByTimeAsync(159 * MIN)
+    // Still beating at minute 159 — past the default cap in wall time.
+    expect(refresh.mock.calls.length).toBeGreaterThanOrEqual(158)
+    // ... and reported the 100 minutes it waited — written only while it grew.
+    expect(recordWait.mock.calls.at(-1)).toEqual(["job-1", 100 * MIN])
+    expect(recordWait.mock.calls.length).toBeLessThanOrEqual(100)
+    await vi.advanceTimersByTimeAsync(2 * MIN)
+    await run
+  })
+
+  it("a run that is not waiting still stops beating at the cap (a hang is still caught)", async () => {
+    const run = withPreTaskHeartbeat(async () => {
+      const ledger = currentSlotWaitLedger()!
+      ledger.queued()
+      await sleep(20 * MIN)
+      ledger.granted(true) // got its slot after 20 min, then hangs
+      await sleep(PRE_TASK_HEARTBEAT_MAX_MS + 60 * MIN)
+    })({}, { jobId: "job-1" })
+
+    // Beats until 90 min of its OWN time: 20 min waiting + 90 running = 110 min.
+    await vi.advanceTimersByTimeAsync(PRE_TASK_HEARTBEAT_MAX_MS + 20 * MIN + PRE_TASK_HEARTBEAT_MS)
+    const atCap = refresh.mock.calls.length
+    await vi.advanceTimersByTimeAsync(30 * MIN)
+    expect(refresh.mock.calls.length).toBe(atCap)
+    expect(atCap).toBeLessThanOrEqual((PRE_TASK_HEARTBEAT_MAX_MS + 20 * MIN) / PRE_TASK_HEARTBEAT_MS)
+    await vi.advanceTimersByTimeAsync(60 * MIN)
+    await run
+  })
+})
+
+describe("withPreTaskHeartbeat — a re-picked job keeps its earlier wait", () => {
+  it("adds this attempt's wait to the earlier attempts' (slotWaitBaseMs), so the credit never drops", async () => {
+    const run = withPreTaskHeartbeat(async () => {
+      const ledger = currentSlotWaitLedger()!
+      ledger.queued()
+      await sleep(5 * MIN)
+      ledger.granted(true)
+      ledger.released()
+    }, { slotWaitBaseMs: 100 * MIN })({}, { jobId: "job-1" })
+    await vi.advanceTimersByTimeAsync(5 * MIN)
+    await run
+    expect(recordWait.mock.calls.at(-1)?.[1]).toBeGreaterThan(100 * MIN)
+    expect(recordWait.mock.calls.every(([, total]) => total >= 100 * MIN)).toBe(true)
+  })
+})
+
+describe("withPreTaskHeartbeat — the worker's inline safety retry re-runs the same handler", () => {
+  it("the second run's total keeps the first run's wait", async () => {
+    const wrapped = withPreTaskHeartbeat(async () => {
+      const ledger = currentSlotWaitLedger()!
+      ledger.queued()
+      await sleep(3 * MIN)
+      ledger.granted(true)
+      ledger.released()
+    })
+    const first = wrapped({}, { jobId: "job-1" })
+    await vi.advanceTimersByTimeAsync(3 * MIN)
+    await first
+    const second = wrapped({}, { jobId: "job-1" })
+    await vi.advanceTimersByTimeAsync(3 * MIN)
+    await second
+    // The second run reports 3 min of its own on top of the first run's 3.
+    expect(Math.max(...recordWait.mock.calls.map(([, total]) => total))).toBeGreaterThan(3 * MIN)
   })
 })

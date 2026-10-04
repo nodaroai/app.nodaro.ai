@@ -517,3 +517,38 @@ describe("a component node waits COMPONENT_TIMEOUT_MS + its inner execution's ex
     )
   }, 60_000)
 })
+
+// Track 0.13 (review of #1780): an ffmpeg-slot wait rides through adoption and
+// re-picks, so neither the first tick of an adopted render nor a re-picked
+// attempt's smaller report can cancel a node for time it spent queued.
+describe("ffmpeg-slot wait across adoption and re-picks", () => {
+  it("an adopted render is credited its earlier wait on the FIRST tick (190 min since dispatch, 60 queued, 180-min budget)", async () => {
+    const budget = 3 * 60 * MINUTE
+    const now = Date.now()
+    db.jobRecord = { status: "processing", output_data: null, error_message: null, progress: 50, slot_wait_ms: 60 * MINUTE }
+    const clocks = { dispatchedAtMs: now - 190 * MINUTE, processingStartedAtMs: now - 185 * MINUTE, slotWaitMs: 60 * MINUTE }
+    const ctx = makeCtx({ adoptableJobs: new Map([["cut", { jobId: JOB_ID, budgetMs: budget, clocks }]]) })
+    const { settled, done } = run(applyEdlNode(25), ctx)
+    await advance(1 * MINUTE)
+    expect(settled).toHaveLength(0)
+    expect(cancelled()).toHaveLength(0)
+    db.jobRecord = { ...db.jobRecord, status: "completed", output_data: { videoUrl: "https://out.test/cut.mp4" } }
+    await advance(1 * MINUTE)
+    await done
+    expect(settled[0]?.ok).toBe(true)
+  }, 30_000)
+
+  it("a smaller report (a re-pick's or a second processor's) never shrinks the credit", async () => {
+    db.jobRecord = { status: "processing", output_data: null, error_message: null, progress: 0, slot_wait_ms: 0 }
+    const { settled, done } = run(vaNode(), makeCtx())
+    for (let m = 1; m <= 100; m++) { await vi.advanceTimersByTimeAsync(MINUTE); db.jobRecord = { ...db.jobRecord, slot_wait_ms: m * MINUTE } }
+    await advance(5 * MINUTE)
+    db.jobRecord = { ...db.jobRecord, slot_wait_ms: 1 * MINUTE } // a stale/smaller report
+    await advance(1 * MINUTE)
+    expect(settled).toHaveLength(0)
+    db.jobRecord = { ...db.jobRecord, status: "completed", output_data: { analysis: "ok", text: "done" } }
+    await advance(1 * MINUTE)
+    await done
+    expect(settled[0]?.ok).toBe(true)
+  }, 30_000)
+})

@@ -57,6 +57,7 @@ import { cancelInFlightChildJobs } from "../../lib/reconcile/cancel-inflight-job
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
 import type { ErrorHint } from "../../lib/safety-block.js"
+import { noteSlotWaitColumnError, withSlotWaitColumn } from "../../lib/jobs-slot-wait-column.js"
 
 // ---------------------------------------------------------------------------
 // Sync HTTP node types — called via internal fetch
@@ -1994,6 +1995,18 @@ async function cancelJobAndThrow(
 /** Today's ceilings — what every job that declares no budget polls under. */
 const DEFAULT_NODE_CEILINGS: NodeCeilings = nodeCeilings()
 
+/** The row `pollJobToCompletion` reads each tick. */
+interface JobPollRow {
+  status: string
+  output_data: unknown
+  error_message: string | null
+  progress: number | null
+  credits_actual: number | null
+  credits: number | null
+  error_hint: unknown
+  slot_wait_ms?: number | null
+}
+
 async function pollJobToCompletion(
   jobId: string,
   nodeType: string,
@@ -2023,6 +2036,19 @@ async function pollJobToCompletion(
    *  already been processing — but it keeps the two clocks independent. */
   let heldBeforeProcessingMs = 0
   const heldSoFar = (): number => heldTotalMs + (heldSinceMs === null ? 0 : Date.now() - heldSinceMs)
+  /** The job's total wait for an ffmpeg slot, as its worker last reported it
+   *  (`jobs.slot_wait_ms`, Track 0.13, decided 2026-10-04). Queued behind other
+   *  renders is not hung, so both node clocks below leave it out — but not the
+   *  workflow cap (`maxChildHeldMs` is review holds only). It accumulates across
+   *  a re-picked job's attempts and never shrinks here (two processors on one
+   *  job would otherwise make it flap); an adopted render starts from the row's
+   *  value, read before its first tick. Up to one heartbeat (60 s) behind. */
+  let slotWaitMs = clocks?.slotWaitMs ?? 0
+  /** What the row already held when this poll's clocks started fresh (an
+   *  adoption with no clocks — those waits predate this poll's clocks, so they
+   *  are not credited). Undefined until the first read; 0 with adopted clocks,
+   *  which count from the row's own start. */
+  let slotWaitAtStart: number | undefined = clocks ? 0 : undefined
 
   while (true) {
     // Check cancellation (fast path — already flagged by orchestrator or sibling node)
@@ -2035,7 +2061,7 @@ async function pollJobToCompletion(
     // starts counting after the worker picks up the job. Both clocks are
     // `POLL_ABSOLUTE_TIMEOUT_MS` / `NODE_TIMEOUT_MS` plus the job's declared
     // budget excess (`ceilings`, 0 for a job that declares none).
-    if (Date.now() - pollStartTime - heldSoFar() > ceilings.pollAbsoluteMs) {
+    if (Date.now() - pollStartTime - heldSoFar() - slotWaitMs > ceilings.pollAbsoluteMs) {
       return await cancelJobAndThrow(jobId, usageLogId, `Poll timeout: job did not complete within ${ceilings.pollAbsoluteMs / 1000}s (may still be pending in queue)`, nodeType, creditsUsed)
     }
 
@@ -2066,14 +2092,27 @@ async function pollJobToCompletion(
     // (migration 376) is the worker's structured safety-block verdict — carried
     // onto the thrown Error below so it can ride into nodeStates[nodeId] the
     // way a mapped billing refusal's errorCode already does.
-    const { data: jobRecord } = await supabase
-      .from("jobs")
-      .select("status, output_data, error_message, progress, credits_actual, credits, error_hint")
-      .eq("id", jobId)
-      .single()
+    // `slot_wait_ms` (migration 451) only once it has reached this shared
+    // database: naming a missing column fails the whole select.
+    const POLL_COLUMNS = "status, output_data, error_message, progress, credits_actual, credits, error_hint"
+    const readJob = async (columns: string) => {
+      const { data, error } = await supabase.from("jobs").select(columns).eq("id", jobId).single()
+      // A runtime column list loses the typed row; these are the columns above.
+      return { data: data as unknown as JobPollRow | null, error }
+    }
+    let { data: jobRecord, error: jobReadError } = await readJob(withSlotWaitColumn(POLL_COLUMNS))
+    if (jobReadError && noteSlotWaitColumnError(jobReadError)) {
+      ;({ data: jobRecord, error: jobReadError } = await readJob(POLL_COLUMNS))
+    }
 
     if (!jobRecord) {
       throw new Error(`Job ${jobId} not found`)
+    }
+    const reportedSlotWait = Number(jobRecord.slot_wait_ms ?? 0)
+    if (Number.isFinite(reportedSlotWait)) {
+      slotWaitAtStart ??= reportedSlotWait
+      const sinceStart = reportedSlotWait - slotWaitAtStart
+      if (sinceStart > slotWaitMs) slotWaitMs = sinceStart
     }
 
     // Surface progress to the orchestrator so the UI can render a progress bar
@@ -2143,7 +2182,7 @@ async function pollJobToCompletion(
     // Queue wait time is bounded by the workflow-level timeout (WORKFLOW_TIMEOUT_MS).
     if (
       processingStartTime !== null &&
-      Date.now() - processingStartTime - (heldMs - heldBeforeProcessingMs) > ceilings.processingMs
+      Date.now() - processingStartTime - (heldMs - heldBeforeProcessingMs) - slotWaitMs > ceilings.processingMs
     ) {
       return await cancelJobAndThrow(jobId, usageLogId, `Node timeout after ${ceilings.processingMs / 1000}s of processing`, nodeType, creditsUsed)
     }

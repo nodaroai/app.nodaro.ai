@@ -3,7 +3,7 @@ import { PassThrough } from "node:stream"
 import { afterEach, describe, expect, it, vi } from "vitest"
 const mocks = vi.hoisted(() => ({ spawn: vi.fn(), released: vi.fn() }))
 vi.mock("node:child_process", () => ({ spawn: mocks.spawn }))
-vi.mock("../ffmpeg-utils.js", () => ({ withFfmpegSlot: async (fn: () => Promise<void>, signal: AbortSignal) => {
+vi.mock("../ffmpeg-utils.js", () => ({ withFfmpegSlot: async (fn: () => Promise<void>, { signal }: { signal: AbortSignal }) => {
   signal.throwIfAborted()
   try { await fn() } finally { mocks.released() }
 } }))

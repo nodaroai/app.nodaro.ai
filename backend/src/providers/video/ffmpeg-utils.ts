@@ -13,6 +13,7 @@ import { safeFetch, isPrivateOrReservedIP } from "../../lib/safe-fetch.js"
 import { csvFields } from "./ffprobe-csv.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { watchTransferBody, type TransferRateLimits, type TransferWatch } from "../../lib/transfer-watchdog.js"
+import { currentSlotWaitLedger } from "../../lib/ffmpeg-slot-wait.js"
 import {
   DEFAULT_FFMPEG_TIMEOUT_MS,
   DOWNLOAD_FLOOR_BYTES_PER_SEC,
@@ -228,33 +229,99 @@ async function saveResponse(
 
 // FIFO semaphore serializes ffmpeg spawns so fan-out doesn't launch N ffmpeg
 // processes on a 2-vCPU box. The worker runs at high concurrency for I/O work;
-// ffmpeg needs its own much lower cap.
+// ffmpeg needs its own much lower cap. The time a job spends queued here is
+// recorded into its slot-wait ledger (`lib/ffmpeg-slot-wait.ts`, Track 0.13):
+// a wait is not a hang, so the heartbeat and the workflow engine leave it out.
 let ffmpegActive = 0
 const ffmpegQueue: Array<() => void> = []
 function acquireFfmpegSlot(signal?: AbortSignal): Promise<() => void> {
+  // Captured now: `grant` runs later, in the async context of whoever released.
+  const ledger = currentSlotWaitLedger()
   return new Promise((resolve, reject) => {
+    let queued = false
     const abort = () => {
       const index = ffmpegQueue.indexOf(grant)
       if (index >= 0) ffmpegQueue.splice(index, 1)
+      if (queued) { queued = false; ledger?.abandoned() }
       reject(signal?.reason ?? new Error("FFmpeg wait cancelled"))
     }
     const grant = () => {
       signal?.removeEventListener("abort", abort)
       if (signal?.aborted) { abort(); ffmpegQueue.shift()?.(); return }
       ffmpegActive++
+      ledger?.granted(queued)
+      queued = false
       let released = false
       resolve(() => {
         if (released) return
         released = true
         ffmpegActive--
+        ledger?.released()
         ffmpegQueue.shift()?.()
       })
     }
     if (signal?.aborted) { abort(); return }
     signal?.addEventListener("abort", abort, { once: true })
     if (ffmpegActive < config.FFMPEG_CONCURRENCY) grant()
-    else ffmpegQueue.push(grant)
+    else { queued = true; ledger?.queued(); ffmpegQueue.push(grant) }
   })
+}
+
+/** A timed-out ffmpeg gets SIGTERM, then SIGKILL this long after (Track 0.13). */
+export const FFMPEG_KILL_GRACE_MS = 5_000
+
+/** How long after its holder's own limit (plus the kill grace) a slot releases
+ *  ITSELF, even if the work never settles — a process stuck past SIGKILL, a
+ *  raster step that hangs. No job queued behind it waits on it forever: the
+ *  waits are not capped (decided 2026-10-04), so every hold must be. */
+export const FFMPEG_SLOT_BACKSTOP_MS = 30_000
+
+/** Hold one slot for `work`, never longer than `limitMs` (+ the backstop): past
+ *  that the slot is released and the call rejects, while `work` is left to
+ *  settle on its own (its result discarded, its failure swallowed). */
+async function holdSlot<T>(work: () => Promise<T>, opts: { readonly limitMs: number; readonly signal?: AbortSignal; readonly label: string }): Promise<T> {
+  const release = await acquireFfmpegSlot(opts.signal)
+  let backstop: ReturnType<typeof setTimeout> | undefined
+  try {
+    const running = work()
+    running.catch(() => undefined)
+    const ceilingMs = opts.limitMs + FFMPEG_KILL_GRACE_MS + FFMPEG_SLOT_BACKSTOP_MS
+    return await Promise.race([
+      running,
+      new Promise<never>((_, reject) => {
+        backstop = setTimeout(
+          // A timeout like any other: the same flags `execFailureFlags` sets, so
+          // a caller that classifies timeouts (Video Overlay) still does.
+          () => reject(Object.assign(
+            new Error(`${opts.label} held its ffmpeg slot past ${Math.round(ceilingMs / 1000)} s; the slot was released`),
+            { killed: true, timedOut: true },
+          )),
+          ceilingMs,
+        )
+      }),
+    ])
+  } finally {
+    clearTimeout(backstop)
+    release()
+  }
+}
+
+/** A run's kill budget: the given one, or the default for none — a zero, negative
+ *  or non-finite budget would leave the run (and its slot) unbounded. */
+function ffmpegLimitMs(timeoutMs: number | undefined): number {
+  return typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_FFMPEG_TIMEOUT_MS
+}
+
+/** SIGKILL `child` `FFMPEG_KILL_GRACE_MS` after its execFile timeout's SIGTERM,
+ *  if it has not exited by then. Returns the cleanup. */
+function escalateKill(child: ReturnType<typeof execFile> | undefined, timeoutMs: number): () => void {
+  if (!child) return () => {}
+  const timer = setTimeout(() => {
+    // Still alive: neither exited nor ended by a signal.
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL")
+  }, timeoutMs + FFMPEG_KILL_GRACE_MS)
+  timer.unref?.()
+  return () => clearTimeout(timer)
 }
 
 /**
@@ -266,14 +333,17 @@ function acquireFfmpegSlot(signal?: AbortSignal): Promise<() => void> {
  * concurrency 50. Gating it on the same semaphore keeps fan-out from launching
  * dozens of heavy raster jobs at once. `acquireFfmpegSlot` stays private; this
  * is the only sanctioned way for a non-`runFfmpeg` caller to borrow a slot.
+ *
+ * `timeoutMs` is REQUIRED: the longest the work may hold the slot. A caller
+ * that kills its own process passes that kill budget; raster work passes the
+ * ffmpeg default. The slot releases itself shortly after it regardless
+ * (`FFMPEG_SLOT_BACKSTOP_MS`), so no queued job waits on a hold forever.
  */
-export async function withFfmpegSlot<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-  const release = await acquireFfmpegSlot(signal)
-  try {
-    return await fn()
-  } finally {
-    release()
-  }
+export async function withFfmpegSlot<T>(
+  fn: () => Promise<T>,
+  opts: { readonly timeoutMs: number; readonly signal?: AbortSignal; readonly label?: string },
+): Promise<T> {
+  return holdSlot(fn, { limitMs: opts.timeoutMs, signal: opts.signal, label: opts.label ?? "a slot-gated step" })
 }
 
 /**
@@ -342,23 +412,23 @@ function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut
 }
 
 export async function runFfmpeg(args: readonly string[], timeoutMs?: number): Promise<string> {
-  const release = await acquireFfmpegSlot()
-  try {
-    return await new Promise<string>((resolve, reject) => {
-      execFile("ffmpeg", args as string[], {
-        maxBuffer: 10 * 1024 * 1024,
-        timeout: timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS,
-      }, (error, stdout, stderr) => {
-        if (error) {
-          reject(Object.assign(new Error(ffmpegFailureMessage(stderr, error.message)), execFailureFlags(error)))
-        } else {
-          resolve(stdout)
-        }
-      })
+  const limitMs = ffmpegLimitMs(timeoutMs)
+  return holdSlot(() => new Promise<string>((resolve, reject) => {
+    // Declared first: the callback may run before execFile returns.
+    let stopEscalation = () => {}
+    const child = execFile("ffmpeg", args as string[], {
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: limitMs,
+    }, (error, stdout, stderr) => {
+      stopEscalation()
+      if (error) {
+        reject(Object.assign(new Error(ffmpegFailureMessage(stderr, error.message)), execFailureFlags(error)))
+      } else {
+        resolve(stdout)
+      }
     })
-  } finally {
-    release()
-  }
+    stopEscalation = escalateKill(child, limitMs)
+  }), { limitMs, label: "ffmpeg" })
 }
 
 /**
@@ -371,13 +441,15 @@ export async function runFfmpegCapture(
   args: readonly string[],
   timeoutMs?: number,
 ): Promise<{ stdout: string; stderr: string }> {
-  const release = await acquireFfmpegSlot()
-  try {
-    return await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-      execFile("ffmpeg", args as string[], {
+  const limitMs = ffmpegLimitMs(timeoutMs)
+  return holdSlot(() => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+      // Declared first: the callback may run before execFile returns.
+      let stopEscalation = () => {}
+      const child = execFile("ffmpeg", args as string[], {
         maxBuffer: 10 * 1024 * 1024,
-        timeout: timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS,
+        timeout: limitMs,
       }, (error, stdout, stderr) => {
+        stopEscalation()
         if (error) {
           // Some filters (e.g. `-f null -`) exit non-zero after writing useful
           // stderr; let the caller decide whether to parse anyway — so the FULL
@@ -393,10 +465,8 @@ export async function runFfmpegCapture(
           resolve({ stdout, stderr })
         }
       })
-    })
-  } finally {
-    release()
-  }
+      stopEscalation = escalateKill(child, limitMs)
+  }), { limitMs, label: "ffmpeg" })
 }
 
 /**
@@ -418,9 +488,8 @@ export async function runFfmpegWithProgress(
   onFrame?: (frame: number) => void,
   timeoutMs?: number,
 ): Promise<void> {
-  const release = await acquireFfmpegSlot()
-  try {
-    await new Promise<void>((resolve, reject) => {
+  const limitMs = ffmpegLimitMs(timeoutMs)
+  return holdSlot(() => new Promise<void>((resolve, reject) => {
       const proc = spawn("ffmpeg", ["-progress", "pipe:1", "-nostats", ...args], {
         stdio: ["ignore", "pipe", "pipe"],
       })
@@ -429,7 +498,7 @@ export async function runFfmpegWithProgress(
       const watchdog = setTimeout(() => {
         timedOut = true
         proc.kill("SIGKILL")
-      }, timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS)
+      }, limitMs)
 
       // Keep only the stderr tail — that's where ffmpeg writes its real error.
       // (8 KB here, then `ffmpegFailureMessage` narrows it to the last lines.)
@@ -456,17 +525,14 @@ export async function runFfmpegWithProgress(
       proc.on("close", (code) => {
         clearTimeout(watchdog)
         if (timedOut) {
-          reject(new Error(`ffmpeg timed out after ${timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS}ms`))
+          reject(new Error(`ffmpeg timed out after ${limitMs}ms`))
         } else if (code === 0) {
           resolve()
         } else {
           reject(new Error(ffmpegFailureMessage(stderrTail, `exit code ${code}`)))
         }
       })
-    })
-  } finally {
-    release()
-  }
+  }), { limitMs, label: "ffmpeg" })
 }
 
 /**

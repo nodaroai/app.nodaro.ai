@@ -3,6 +3,7 @@ import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { declaredJobBudgetMs } from "../job-budget.js"
 import type { AdoptedJobClocks } from "../../services/workflow-engine/types.js"
 import { STALE_THRESHOLD_MS } from "./types.js"
+import { noteSlotWaitColumnError, withSlotWaitColumn } from "../jobs-slot-wait-column.js"
 
 /** An in-flight child job a re-picked orchestrator should ADOPT (resume
  *  polling) instead of cancel+re-run. Keyed by owning node id. Two kinds:
@@ -61,6 +62,7 @@ interface InFlightRow {
   started_at?: unknown
   usage_log_id?: unknown
   credits?: unknown
+  slot_wait_ms?: unknown
 }
 
 /** Is this row a render its worker is still running? `processing`, still on
@@ -79,13 +81,36 @@ function epochMs(v: unknown): number | undefined {
   return Number.isFinite(ms) ? ms : undefined
 }
 
+/** A `jobs` read that also names `slot_wait_ms` once migration 451 has
+ *  reached this shared database. Without the column the whole statement
+ *  fails, so on a missing-column error it is retried without it (a wait of 0).
+ *  Every read in this file that can adopt a render goes through here, so their
+ *  column lists cannot drift apart: a read that drops the wait leaves the
+ *  adopting poll's absolute clock uncredited, and that cancels a live render
+ *  on its first tick. */
+async function readJobsWithSlotWait<T>(
+  columns: string,
+  run: (columns: string) => PromiseLike<{ data: unknown; error: { code?: string; message: string } | null }>,
+): Promise<{ data: T | null; error: { message: string } | null }> {
+  let { data, error } = await run(withSlotWaitColumn(columns))
+  if (error && noteSlotWaitColumnError(error)) ({ data, error } = await run(columns))
+  // A runtime column list loses the typed row; the caller names the columns.
+  return { data: (data ?? null) as T | null, error }
+}
+
 function adoptedRender(row: InFlightRow, budgetMs: number): AdoptableChildJob {
   return {
     jobId: row.id as string,
     usageLogId: typeof row.usage_log_id === "string" ? row.usage_log_id : undefined,
     creditsReserved: typeof row.credits === "number" ? row.credits : undefined,
     budgetMs,
-    clocks: { dispatchedAtMs: epochMs(row.created_at), processingStartedAtMs: epochMs(row.started_at) },
+    clocks: {
+      dispatchedAtMs: epochMs(row.created_at),
+      processingStartedAtMs: epochMs(row.started_at),
+      // Credited from the FIRST tick: the adopting poll's absolute clock runs
+      // from dispatch, before it has read the row once (Track 0.13).
+      slotWaitMs: Number(row.slot_wait_ms ?? 0) || 0,
+    },
   }
 }
 
@@ -166,11 +191,14 @@ export async function cancelInFlightChildJobs(
   opts: CancelInFlightOptions = {},
 ): Promise<NeutralizeResult> {
   const result: NeutralizeResult = { cancelled: 0, adoptable: new Map() }
-  const { data: inFlight, error: selErr } = await supabase
-    .from("jobs")
-    .select("id, status, input_data, provider_task_id, provider_kind, provider_call_started_at, created_at, started_at, usage_log_id, credits, job_type")
-    .eq("workflow_execution_id", executionId)
-    .in("status", ["pending", "processing"])
+  const { data: inFlight, error: selErr } = await readJobsWithSlotWait<Array<Record<string, unknown>>>(
+    "id, status, input_data, provider_task_id, provider_kind, provider_call_started_at, created_at, started_at, usage_log_id, credits, job_type",
+    (columns) => supabase
+      .from("jobs")
+      .select(columns)
+      .eq("workflow_execution_id", executionId)
+      .in("status", ["pending", "processing"]),
+  )
 
   if (selErr) {
     console.error(
@@ -238,11 +266,10 @@ export async function cancelInFlightChildJobs(
 
     if (updErr || !upd || upd.length === 0) {
       if (renderCandidate && !updErr) {
-        const { data: now } = await supabase
-          .from("jobs")
-          .select("id, status, provider_kind, provider_call_started_at, created_at, started_at, usage_log_id, credits")
-          .eq("id", id)
-          .maybeSingle()
+        const { data: now } = await readJobsWithSlotWait<InFlightRow>(
+          "id, status, provider_kind, provider_call_started_at, created_at, started_at, usage_log_id, credits",
+          (columns) => supabase.from("jobs").select(columns).eq("id", id).maybeSingle(),
+        )
         if (now && isLiveRenderRow(now, Date.now())) {
           result.adoptable.set(nodeId, adoptedRender(now, budgetMs))
           adoptedRenders++

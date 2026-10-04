@@ -219,8 +219,9 @@ const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
 // it. The handler's liveness budget is the budget it gives its own bounded
 // work: the per-chunk ffmpeg kill budget `applyEdl` hands `runFfmpeg`, plus its
 // fetches and probes — so "hung" means one thing to the heartbeat and to those
-// steps. Storage I/O (bounded per call, never summed — decided 2026-10-04) and
-// ffmpeg-slot waits are the stated residual (see `workers/pre-task-heartbeat.ts`).
+// steps. Storage I/O (bounded per call, never summed — decided 2026-10-04) is the
+// stated residual; ffmpeg-slot waits are not running time and are taken off both
+// clocks (Track 0.13; see `workers/pre-task-heartbeat.ts`).
 //
 // Declared THROUGH the job-budget registry (`lib/job-budget.ts`), never
 // computed here: the workflow orchestrator sizes an apply-edl node's ceilings

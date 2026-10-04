@@ -1,5 +1,6 @@
 import { supabase } from "../supabase.js"
 import type { ProviderKind } from "./types.js"
+import { noteSlotWaitColumnError, slotWaitColumnAbsent } from "../jobs-slot-wait-column.js"
 
 /**
  * Returns a callback that persists `provider_kind` + `provider_task_id` +
@@ -87,6 +88,35 @@ export async function refreshPreTaskSentinel(jobId: string): Promise<void> {
   } catch (err) {
     console.warn(
       `[reconcile/persistence] refreshPreTaskSentinel DB write failed for job ${jobId}:`,
+      err instanceof Error ? err.message : err,
+    )
+  }
+}
+
+/**
+ * Record a processing job's total ffmpeg-slot wait (`jobs.slot_wait_ms`, Track
+ * 0.13): the workflow engine takes it off the node's clocks. Its own write,
+ * gated on `status = "processing"` only — NOT on the pre-task sentinel — so a
+ * job that has moved to a real provider kind (an async provider, then a
+ * watermark ffmpeg) or cleared its sentinel (gvp/evp) is still credited.
+ * Best-effort like its siblings.
+ */
+export async function recordJobSlotWait(jobId: string, totalMs: number): Promise<void> {
+  // Before migration 451 reaches this database there is nothing to write.
+  if (slotWaitColumnAbsent()) return
+  try {
+    const { error } = await supabase
+      .from("jobs")
+      .update({ slot_wait_ms: Math.max(0, Math.round(totalMs)) })
+      .eq("id", jobId)
+      .eq("status", "processing")
+    if (error && noteSlotWaitColumnError(error)) return
+    if (error) {
+      console.warn(`[reconcile/persistence] recordJobSlotWait DB write failed for job ${jobId}: ${error.message}`)
+    }
+  } catch (err) {
+    console.warn(
+      `[reconcile/persistence] recordJobSlotWait DB write failed for job ${jobId}:`,
       err instanceof Error ? err.message : err,
     )
   }
