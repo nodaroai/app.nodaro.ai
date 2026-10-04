@@ -86,6 +86,20 @@ describe("deriveVerifiedTtsProviders", () => {
     expect(deriveVerifiedTtsProviders(["eleven_flash_v2_5"])).toEqual(["elevenlabs-turbo"])
     expect(deriveVerifiedTtsProviders(["eleven_multilingual_v2"])).toEqual(["elevenlabs-multilingual"])
   })
+
+  it("never reads a v4 model id as a v2 one — eleven_v4_turbo is not Turbo v2.5", () => {
+    // The Voice Library lists the v4 family beside the v2 ids. A voice verified
+    // ONLY for the v4 models is verified for none of ours until v4 is a provider.
+    // (`_hq`, `_exp` and `_turbo_exp` are stand-ins for any `eleven_v4_…` variant, not observed ids.)
+    expect(deriveVerifiedTtsProviders(["eleven_v4_turbo"])).toEqual([])
+    expect(deriveVerifiedTtsProviders(["eleven_v4", "eleven_v4_hq", "eleven_v4_exp", "eleven_v4_turbo_exp"])).toEqual([])
+    // The family is `eleven_v4` and `eleven_v4_…`; an id that merely starts with those characters is not a v4
+    // id and is judged by the old rules.
+    expect(deriveVerifiedTtsProviders(["eleven_v40_turbo"])).toEqual(["elevenlabs-turbo"])
+    // …and a voice verified for both families keeps exactly the v2-era providers it had.
+    expect(deriveVerifiedTtsProviders(["eleven_v4", "eleven_v4_turbo", "eleven_multilingual_v2", "eleven_turbo_v2_5"]))
+      .toEqual(["elevenlabs-turbo", "elevenlabs-multilingual"])
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -1115,7 +1115,21 @@ export type {
   ModelMenuOption,
   ModelInputAdjustment,
   NormalizedModelInput,
+  TtsCapabilities,
+  TtsSettingLever,
 } from "./model-catalog.js"
+
+// Speech-model capability lookups (derive from `ModelCatalogEntry.tts` above).
+export {
+  TTS_PROVIDER_ALIASES,
+  TTS_FALLBACK_PROVIDER,
+  canonicalTtsProvider,
+  getTtsCapabilities,
+  ttsSupportsAudioTags,
+  ttsSupportsSsmlBreaks,
+  ttsHasLever,
+  ttsLanguageCodes,
+} from "./tts-capabilities.js"
 
 // Per-model safety-filter retry/fallback policy (derives from
 // `ModelCatalogEntry.safetyFilter` above).

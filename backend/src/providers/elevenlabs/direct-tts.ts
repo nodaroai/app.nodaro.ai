@@ -5,24 +5,8 @@ import { ELEVENLABS_BASE_URL } from "./client.js"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 import { languageCodeForModel } from "./language-code.js"
-
-function resolveModel(provider?: string): string {
-  if (provider === "elevenlabs-v3") return "eleven_v3"
-  if (provider === "elevenlabs-multilingual") return "eleven_multilingual_v2"
-  return "eleven_turbo_v2_5"
-}
-
-/**
- * OUR Nodaro key for the egress seam, mirroring `resolveModel` 1:1 so the key
- * names the model the request actually SENDS: v3 / multilingual, else turbo
- * (the resolveModel default). These strings ARE our credit ids (the TTS route
- * reserves under the same `provider` value); never a raw ElevenLabs model id.
- */
-function ttsModelKey(provider?: string): string {
-  if (provider === "elevenlabs-v3") return "elevenlabs-v3"
-  if (provider === "elevenlabs-multilingual") return "elevenlabs-multilingual"
-  return "elevenlabs-turbo"
-}
+import { ttsWireModel, ttsModelKey } from "./tts-models.js"
+import { getTtsCapabilities } from "@nodaro/shared"
 
 // 21 ElevenLabs premade voices — name → voice_id. KIE's TTS proxy accepts
 // these names directly, so the rest of the codebase passes names around.
@@ -180,12 +164,12 @@ export async function directElevenLabsTTS(
     requireProviderKey(apiKey, "ELEVENLABS_API_KEY")
   }
 
-  const isV3 = provider === "elevenlabs-v3"
+  const levers = getTtsCapabilities(provider).levers
   const resolvedVoiceId = resolveDirectVoiceId(voiceId)
 
   const body: Record<string, unknown> = {
     text,
-    model_id: resolveModel(provider),
+    model_id: ttsWireModel(provider),
   }
   // Single funnel: 639-3 -> 639-1 (Scribe answers in 639-3, this API wants
   // 639-1) and omission on models that reject the field. See language-code.ts.
@@ -203,14 +187,23 @@ export async function directElevenLabsTTS(
   // them over the stored settings (API-default fallbacks when unavailable).
   if (hasExplicitSettings) {
     const stored = await fetchStoredVoiceSettings(resolvedVoiceId, apiKey)
-    // v3 only supports stability — similarity_boost, style, speed are deprecated
-    const voiceSettings: Record<string, number | boolean> = {
-      stability: options?.stability ?? stored?.stability ?? 0.5,
+    // Only the levers the model honours (`MODEL_CATALOG[id].tts.levers`) are
+    // sent: v3 takes stability alone, the v2 families all five. A lever the
+    // model ignores is never put on the wire.
+    const voiceSettings: Record<string, number | boolean> = {}
+    if (levers.includes("stability")) {
+      voiceSettings.stability = options?.stability ?? stored?.stability ?? 0.5
     }
-    if (!isV3) {
+    if (levers.includes("similarity")) {
       voiceSettings.similarity_boost = options?.similarityBoost ?? stored?.similarity_boost ?? 0.75
+    }
+    if (levers.includes("style")) {
       voiceSettings.style = options?.style ?? stored?.style ?? 0
+    }
+    if (levers.includes("speakerBoost")) {
       voiceSettings.use_speaker_boost = stored?.use_speaker_boost ?? true
+    }
+    if (levers.includes("speed")) {
       const speed = options?.speed ?? stored?.speed
       if (speed != null) voiceSettings.speed = speed
     }
@@ -229,7 +222,7 @@ export async function directElevenLabsTTS(
           provider: "elevenlabs",
           operation: "tts",
           // Single-purpose funnel → default OUR key inside (production callers
-          // pass no meta); mirrors the model resolveModel actually sends.
+          // pass no meta); names the model `ttsWireModel` actually sends.
           modelKey: meta?.modelKey ?? ttsModelKey(provider),
           body,
           dimensions: meta?.dimensions ?? {},

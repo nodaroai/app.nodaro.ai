@@ -26,12 +26,13 @@
  * (`providers/kie/audio.ts:336`, `direct-stt.ts:66`): Scribe accepts and
  * returns 639-3, so normalizing there would be a regression.
  *
- * The map covers the languages ElevenLabs TTS supports (the union of the three
- * per-model lists in `frontend/src/lib/audio-tags.ts:128-183`), which is the
+ * The map covers the languages ElevenLabs TTS supports (the union of the
+ * speech models' `tts.languages` in `MODEL_CATALOG`), which is the
  * set Scribe can plausibly return for content we then re-speak. Both the
  * terminological (639-2/T) and bibliographic (639-2/B) 3-letter forms are
  * listed where they differ, because Scribe has been observed returning either.
  */
+import { getTtsCapabilities } from "@nodaro/shared"
 
 /** ISO 639-3 / 639-2 -> ISO 639-1, for every language ElevenLabs TTS supports. */
 export const ISO_639_3_TO_1: Readonly<Record<string, string>> = {
@@ -83,23 +84,11 @@ export const ISO_639_3_TO_1: Readonly<Record<string, string>> = {
 }
 
 /**
- * Nodaro provider ids whose underlying ElevenLabs model does NOT accept
- * `language_code`. `elevenlabs-multilingual` resolves to `eleven_multilingual_v2`
- * (`direct-tts.ts:10`), which the API reference calls out explicitly: "This
- * parameter is not supported for multilingual_v2 models."
- *
- * `elevenlabs-v3` is deliberately NOT here: `he` / `th` / `bn` / `ur` / `fa`
- * are v3-only entries in our own per-model language picker
- * (`frontend/src/lib/audio-tags.ts:167-183`), which only makes sense because
- * v3 honours the field.
- */
-export const MODELS_REJECTING_LANGUAGE_CODE: ReadonlySet<string> = new Set([
-  "elevenlabs-multilingual",
-])
-
-/**
  * Resolve the `language_code` to put on an ElevenLabs TTS / dialogue request.
- * Returns `undefined` when the field must be omitted.
+ * Returns `undefined` when the field must be omitted — whether the model takes
+ * it is its capability sheet's `languageCode` (today only `elevenlabs-multilingual`
+ * says no: the API reference calls out "This parameter is not supported for
+ * multilingual_v2 models").
  *
  * @param provider Nodaro provider id ("elevenlabs-v3" | "elevenlabs-multilingual"
  *                 | "elevenlabs-turbo" | "elevenlabs" | undefined) — NOT a raw
@@ -113,7 +102,9 @@ export function languageCodeForModel(
   if (!raw) return undefined
   const trimmed = raw.trim().toLowerCase()
   if (!trimmed || trimmed === "auto") return undefined
-  if (provider && MODELS_REJECTING_LANGUAGE_CODE.has(provider)) return undefined
+  // A missing or unknown provider runs as turbo, which takes the field — the
+  // same answer the sheet's fallback gives, so no special case is needed.
+  if (!getTtsCapabilities(provider).languageCode) return undefined
 
   const base = trimmed.split(/[-_]/)[0]
   if (!base) return undefined
