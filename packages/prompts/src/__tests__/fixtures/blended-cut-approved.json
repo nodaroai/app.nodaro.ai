@@ -1,0 +1,1000 @@
+{
+  "$comment": "Blended cut (2026-10-04 test round; seamless-match and jump-match at Duration Short). `approved`: the approved strings, byte for byte. `ruleDerived`: the two-row multi-picks the approved multi-pick rule produces (canvas only). `hardCut`: cases that keep today's text (the two rows at every other duration, the ignored levers, and the review page's multi-picks). Each case: the pick (`ids`), the levers (`timing`), the scopes it reads the same in, and the exact text. Generated from the approval evidence, never edited by hand: a wording change comes back for approval.",
+  "blendSentence": "instead of a hard cut, the two shots blend into each other over about 1 second",
+  "approved": [
+    {
+      "key": "seamless-match|short|tile",
+      "ids": "seamless-match",
+      "timing": {
+        "duration": "short"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; instead of a hard cut, the two shots blend into each other over about 1 second)"
+    },
+    {
+      "key": "seamless-match|short|mid-clip",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "middle",
+        "duration": "short"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; instead of a hard cut, the two shots blend into each other over about 1 second), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "seamless-match|short|mid-shot",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "middle",
+        "duration": "short"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; instead of a hard cut, the two shots blend into each other over about 1 second), the transition occurs in the middle of this shot"
+    },
+    {
+      "key": "seamless-match|short|end-slot",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "end",
+        "duration": "short"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; instead of a hard cut, the two shots blend into each other over about 1 second), the transition occurs at the end of the clip"
+    },
+    {
+      "key": "seamless-match|short+natural|tile",
+      "ids": "seamless-match",
+      "timing": {
+        "duration": "short",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; instead of a hard cut, the two shots blend into each other over about 1 second)"
+    },
+    {
+      "key": "seamless-match|short+full|clip",
+      "ids": "seamless-match",
+      "timing": {
+        "duration": "short",
+        "position": "full"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; instead of a hard cut, the two shots blend into each other over about 1 second)"
+    },
+    {
+      "key": "jump-match|short|tile",
+      "ids": "jump-match",
+      "timing": {
+        "duration": "short"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; instead of a hard cut, the two shots blend into each other over about 1 second)"
+    },
+    {
+      "key": "jump-match|short|mid-clip",
+      "ids": "jump-match",
+      "timing": {
+        "position": "middle",
+        "duration": "short"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; instead of a hard cut, the two shots blend into each other over about 1 second), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "jump-match|short|mid-shot",
+      "ids": "jump-match",
+      "timing": {
+        "position": "middle",
+        "duration": "short"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; instead of a hard cut, the two shots blend into each other over about 1 second), the transition occurs in the middle of this shot"
+    },
+    {
+      "key": "jump-match|short|end-slot",
+      "ids": "jump-match",
+      "timing": {
+        "position": "end",
+        "duration": "short"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; instead of a hard cut, the two shots blend into each other over about 1 second), the transition occurs at the end of the clip"
+    },
+    {
+      "key": "jump-match|short+natural|tile",
+      "ids": "jump-match",
+      "timing": {
+        "duration": "short",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; instead of a hard cut, the two shots blend into each other over about 1 second)"
+    },
+    {
+      "key": "jump-match|short+full|clip",
+      "ids": "jump-match",
+      "timing": {
+        "duration": "short",
+        "position": "full"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; instead of a hard cut, the two shots blend into each other over about 1 second)"
+    }
+  ],
+  "ruleDerived": [
+    {
+      "key": "seamless-match+jump-match|tile|short",
+      "ids": [
+        "seamless-match",
+        "jump-match"
+      ],
+      "timing": {
+        "duration": "short"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; instead of a hard cut, the two shots blend into each other over about 1 second), and match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved)"
+    },
+    {
+      "key": "seamless-match+jump-match|mid-clip|short+natural",
+      "ids": [
+        "seamless-match",
+        "jump-match"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "short",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; instead of a hard cut, the two shots blend into each other over about 1 second), and match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "seamless-match+jump-match|mid-shot|short",
+      "ids": [
+        "seamless-match",
+        "jump-match"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "short"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; instead of a hard cut, the two shots blend into each other over about 1 second), and match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved), the transition occurs in the middle of this shot"
+    },
+    {
+      "key": "seamless-match+jump-match|end|short",
+      "ids": [
+        "seamless-match",
+        "jump-match"
+      ],
+      "timing": {
+        "position": "end",
+        "duration": "short"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; instead of a hard cut, the two shots blend into each other over about 1 second), and match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved), the transition occurs at the end of the clip"
+    },
+    {
+      "key": "jump-match+seamless-match|tile|short",
+      "ids": [
+        "jump-match",
+        "seamless-match"
+      ],
+      "timing": {
+        "duration": "short"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; instead of a hard cut, the two shots blend into each other over about 1 second), and invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take)"
+    },
+    {
+      "key": "jump-match+seamless-match|mid-clip|short+natural",
+      "ids": [
+        "jump-match",
+        "seamless-match"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "short",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; instead of a hard cut, the two shots blend into each other over about 1 second), and invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "jump-match+seamless-match|mid-shot|short",
+      "ids": [
+        "jump-match",
+        "seamless-match"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "short"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; instead of a hard cut, the two shots blend into each other over about 1 second), and invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take), the transition occurs in the middle of this shot"
+    },
+    {
+      "key": "jump-match+seamless-match|end|short",
+      "ids": [
+        "jump-match",
+        "seamless-match"
+      ],
+      "timing": {
+        "position": "end",
+        "duration": "short"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; instead of a hard cut, the two shots blend into each other over about 1 second), and invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take), the transition occurs at the end of the clip"
+    }
+  ],
+  "hardCut": [
+    {
+      "key": "seamless-match|auto|tile",
+      "ids": "seamless-match",
+      "timing": {
+        "duration": "auto"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
+    },
+    {
+      "key": "seamless-match|auto|mid-clip",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "middle",
+        "duration": "auto"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "seamless-match|auto|mid-shot",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "middle",
+        "duration": "auto"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of this shot"
+    },
+    {
+      "key": "seamless-match|auto|end-slot",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "end",
+        "duration": "auto"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs at the end of the clip"
+    },
+    {
+      "key": "seamless-match|medium|tile",
+      "ids": "seamless-match",
+      "timing": {
+        "duration": "medium"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
+    },
+    {
+      "key": "seamless-match|medium|mid-clip",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "middle",
+        "duration": "medium"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "seamless-match|medium|mid-shot",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "middle",
+        "duration": "medium"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of this shot"
+    },
+    {
+      "key": "seamless-match|medium|end-slot",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "end",
+        "duration": "medium"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs at the end of the clip"
+    },
+    {
+      "key": "seamless-match|long|tile",
+      "ids": "seamless-match",
+      "timing": {
+        "duration": "long"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
+    },
+    {
+      "key": "seamless-match|long|mid-clip",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "middle",
+        "duration": "long"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "seamless-match|long|mid-shot",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "middle",
+        "duration": "long"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of this shot"
+    },
+    {
+      "key": "seamless-match|long|end-slot",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "end",
+        "duration": "long"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs at the end of the clip"
+    },
+    {
+      "key": "seamless-match|instant|tile",
+      "ids": "seamless-match",
+      "timing": {
+        "duration": "instant"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
+    },
+    {
+      "key": "seamless-match|instant|mid-clip",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "middle",
+        "duration": "instant"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "seamless-match|instant|mid-shot",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "middle",
+        "duration": "instant"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of this shot"
+    },
+    {
+      "key": "seamless-match|instant|end-slot",
+      "ids": "seamless-match",
+      "timing": {
+        "position": "end",
+        "duration": "instant"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs at the end of the clip"
+    },
+    {
+      "key": "seamless-match|medium+dynamic|tile",
+      "ids": "seamless-match",
+      "timing": {
+        "duration": "medium",
+        "intensity": "dynamic"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
+    },
+    {
+      "key": "seamless-match|medium+full|shot",
+      "ids": "seamless-match",
+      "timing": {
+        "duration": "medium",
+        "position": "full"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
+    },
+    {
+      "key": "jump-match|auto|tile",
+      "ids": "jump-match",
+      "timing": {
+        "duration": "auto"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
+    },
+    {
+      "key": "jump-match|auto|mid-clip",
+      "ids": "jump-match",
+      "timing": {
+        "position": "middle",
+        "duration": "auto"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "jump-match|auto|mid-shot",
+      "ids": "jump-match",
+      "timing": {
+        "position": "middle",
+        "duration": "auto"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of this shot"
+    },
+    {
+      "key": "jump-match|auto|end-slot",
+      "ids": "jump-match",
+      "timing": {
+        "position": "end",
+        "duration": "auto"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs at the end of the clip"
+    },
+    {
+      "key": "jump-match|medium|tile",
+      "ids": "jump-match",
+      "timing": {
+        "duration": "medium"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
+    },
+    {
+      "key": "jump-match|medium|mid-clip",
+      "ids": "jump-match",
+      "timing": {
+        "position": "middle",
+        "duration": "medium"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "jump-match|medium|mid-shot",
+      "ids": "jump-match",
+      "timing": {
+        "position": "middle",
+        "duration": "medium"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of this shot"
+    },
+    {
+      "key": "jump-match|medium|end-slot",
+      "ids": "jump-match",
+      "timing": {
+        "position": "end",
+        "duration": "medium"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs at the end of the clip"
+    },
+    {
+      "key": "jump-match|long|tile",
+      "ids": "jump-match",
+      "timing": {
+        "duration": "long"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
+    },
+    {
+      "key": "jump-match|long|mid-clip",
+      "ids": "jump-match",
+      "timing": {
+        "position": "middle",
+        "duration": "long"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "jump-match|long|mid-shot",
+      "ids": "jump-match",
+      "timing": {
+        "position": "middle",
+        "duration": "long"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of this shot"
+    },
+    {
+      "key": "jump-match|long|end-slot",
+      "ids": "jump-match",
+      "timing": {
+        "position": "end",
+        "duration": "long"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs at the end of the clip"
+    },
+    {
+      "key": "jump-match|instant|tile",
+      "ids": "jump-match",
+      "timing": {
+        "duration": "instant"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
+    },
+    {
+      "key": "jump-match|instant|mid-clip",
+      "ids": "jump-match",
+      "timing": {
+        "position": "middle",
+        "duration": "instant"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "jump-match|instant|mid-shot",
+      "ids": "jump-match",
+      "timing": {
+        "position": "middle",
+        "duration": "instant"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs in the middle of this shot"
+    },
+    {
+      "key": "jump-match|instant|end-slot",
+      "ids": "jump-match",
+      "timing": {
+        "position": "end",
+        "duration": "instant"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), the transition occurs at the end of the clip"
+    },
+    {
+      "key": "jump-match|medium+dynamic|tile",
+      "ids": "jump-match",
+      "timing": {
+        "duration": "medium",
+        "intensity": "dynamic"
+      },
+      "scopes": [
+        "clip",
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
+    },
+    {
+      "key": "jump-match|medium+full|shot",
+      "ids": "jump-match",
+      "timing": {
+        "duration": "medium",
+        "position": "full"
+      },
+      "scopes": [
+        "shot"
+      ],
+      "text": "match cut on a jump (the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend)"
+    },
+    {
+      "key": "match-cut+seamless-match|auto|mid-clip",
+      "ids": [
+        "match-cut",
+        "seamless-match"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "auto",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), and invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "match-cut+seamless-match|short|mid-clip",
+      "ids": [
+        "match-cut",
+        "seamless-match"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "short",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), and invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "match-cut+seamless-match|medium|mid-clip",
+      "ids": [
+        "match-cut",
+        "seamless-match"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "medium",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), and invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "jump-cut+action-relay|auto|mid-clip",
+      "ids": [
+        "jump-cut",
+        "action-relay"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "auto",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "jump cut (the framing, lens, and camera position stay identical across the cut while time skips abruptly forward, so the subject snaps to a new position inside what still reads as one continuous shot. No leap, no run, no lunge and no motion blur between the two positions; the subject is in the old place on one frame and already in the new place on the next; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), and match cut on action (the subject exits the frame on a committed action — a stride, a throw, a turn — and enters the new scene on the same beat continuing that movement at matched speed and direction, so the action carries unbroken across the cut), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "jump-cut+action-relay|short|mid-clip",
+      "ids": [
+        "jump-cut",
+        "action-relay"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "short",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "jump cut (the framing, lens, and camera position stay identical across the cut while time skips abruptly forward, so the subject snaps to a new position inside what still reads as one continuous shot. No leap, no run, no lunge and no motion blur between the two positions; the subject is in the old place on one frame and already in the new place on the next; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), and match cut on action (the subject exits the frame on a committed action — a stride, a throw, a turn — and enters the new scene on the same beat continuing that movement at matched speed and direction, so the action carries unbroken across the cut), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "jump-cut+action-relay|medium|mid-clip",
+      "ids": [
+        "jump-cut",
+        "action-relay"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "medium",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "jump cut (the framing, lens, and camera position stay identical across the cut while time skips abruptly forward, so the subject snaps to a new position inside what still reads as one continuous shot. No leap, no run, no lunge and no motion blur between the two positions; the subject is in the old place on one frame and already in the new place on the next; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), and match cut on action (the subject exits the frame on a committed action — a stride, a throw, a turn — and enters the new scene on the same beat continuing that movement at matched speed and direction, so the action carries unbroken across the cut), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "match-cut+smash-cut|auto|mid-clip",
+      "ids": [
+        "match-cut",
+        "smash-cut"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "auto",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), and smash cut (an abrupt jarring transition between two visually or tonally contrasting shots with no fade, on a beat), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "match-cut+smash-cut|short|mid-clip",
+      "ids": [
+        "match-cut",
+        "smash-cut"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "short",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), and smash cut (an abrupt jarring transition between two visually or tonally contrasting shots with no fade, on a beat), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "match-cut+smash-cut|medium|mid-clip",
+      "ids": [
+        "match-cut",
+        "smash-cut"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "medium",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), and smash cut (an abrupt jarring transition between two visually or tonally contrasting shots with no fade, on a beat), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "none+seamless-match|auto|mid-clip",
+      "ids": [
+        "none",
+        "seamless-match"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "auto",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "hard cut (no transition, instantaneous switch from first shot to second shot; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), and invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "none+seamless-match|short|mid-clip",
+      "ids": [
+        "none",
+        "seamless-match"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "short",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "hard cut (no transition, instantaneous switch from first shot to second shot; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), and invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "none+seamless-match|medium|mid-clip",
+      "ids": [
+        "none",
+        "seamless-match"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "medium",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "hard cut (no transition, instantaneous switch from first shot to second shot; an abrupt single-frame hard cut, no dissolve, crossfade or superimposition; the two images never blend), and invisible cut (the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take), the transition occurs in the middle of the clip"
+    },
+    {
+      "key": "match-cut+cross-dissolve|auto|mid-clip",
+      "ids": [
+        "match-cut",
+        "cross-dissolve"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "auto",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two), and cross-dissolve (smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in), the transition occurs in the middle of the clip, with natural timing"
+    },
+    {
+      "key": "match-cut+cross-dissolve|short|mid-clip",
+      "ids": [
+        "match-cut",
+        "cross-dissolve"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "short",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two), and cross-dissolve (smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing"
+    },
+    {
+      "key": "match-cut+cross-dissolve|medium|mid-clip",
+      "ids": [
+        "match-cut",
+        "cross-dissolve"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "medium",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two), and cross-dissolve (smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in), the transition occurs in the middle of the clip, lasting approximately 2 seconds, with natural timing"
+    },
+    {
+      "key": "cross-dissolve+match-cut|auto|mid-clip",
+      "ids": [
+        "cross-dissolve",
+        "match-cut"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "auto",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "cross-dissolve (smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in), and match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two), the transition occurs in the middle of the clip, with natural timing"
+    },
+    {
+      "key": "cross-dissolve+match-cut|short|mid-clip",
+      "ids": [
+        "cross-dissolve",
+        "match-cut"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "short",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "cross-dissolve (smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in), and match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two), the transition occurs in the middle of the clip, lasting approximately 1 second, with natural timing"
+    },
+    {
+      "key": "cross-dissolve+match-cut|medium|mid-clip",
+      "ids": [
+        "cross-dissolve",
+        "match-cut"
+      ],
+      "timing": {
+        "position": "middle",
+        "duration": "medium",
+        "intensity": "natural"
+      },
+      "scopes": [
+        "clip"
+      ],
+      "text": "cross-dissolve (smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in), and match cut (the last picture of the first shot and the first picture of the second share one shape, at the same place and the same size in the frame. The camera holds that shape in place across the cut. On the next frame everything around the shape has changed while the shape itself stays put. The shot ends on the second shot, fully resolved, with no flash frame or zoom between the two), the transition occurs in the middle of the clip, lasting approximately 2 seconds, with natural timing"
+    }
+  ]
+}

@@ -124,13 +124,30 @@ export interface PickerOption {
   /**
    * Transitions only: present (`true`) on a row whose mechanism is a CUT, so
    * it takes no duration and no intensity — see `Transition.instant` /
-   * `isInstantTransition`. A consumer that only reads this wire catalog
-   * (Studio builds the transition Duration lever from
-   * `getPickerCatalog("transition")`) hides those levers for such a row. Carried from the base catalog; a row a catalog pack ADDS has
-   * it only when the pack's own option says so, and absent means "has a
-   * duration" — the safe reading, since the composer then behaves as before.
+   * `isInstantTransition`. A consumer that only reads this catalog (Studio
+   * builds the transition levers from `getPickerCatalog("transition")`) hides
+   * those levers for such a row. Carried from the base catalog; a row a
+   * catalog pack ADDS has it only when the pack's own option says so, and
+   * absent means "has a duration" — the safe reading, since the composer then
+   * behaves as before. On this in-memory catalog only: the wire projection
+   * (`projectPickerCatalog`) does not carry it.
    */
   readonly instant?: true
+  /**
+   * Transitions only: present (`true`) on a CUT that a `blendsCut` duration
+   * turns into a BLENDED CUT — see `Transition.blendable` /
+   * `isBlendableTransition`. Always beside `instant`. A consumer offers such a
+   * row's Duration as a Blend lever (hard cut, or one of the `blendsCut`
+   * steps of the catalog's `duration` dimension). Carried like `instant`, and
+   * like it on this in-memory catalog only.
+   */
+  readonly blendable?: true
+  /**
+   * Transition `duration` dimension only: present (`true`) on the step that
+   * blends a `blendable` cut (`short`) — see `TransitionTimingOption.blendsCut`
+   * / `blendedCutClause`. On this in-memory catalog only.
+   */
+  readonly blendsCut?: true
   /**
    * PER-OPTION PARAMETERS — extra node-data fields that apply only while THIS
    * option is picked, each with its own rows (Transitions: a wipe's
@@ -197,6 +214,10 @@ interface BaseCatalogEntry {
   readonly adultOnly?: true
   /** Transitions: see `Transition.instant`. Propagated into the flattened option as `instant: true`. */
   readonly instant?: boolean
+  /** Transitions: see `Transition.blendable`. Propagated into the flattened option as `blendable: true`. */
+  readonly blendable?: boolean
+  /** Transition durations: see `TransitionTimingOption.blendsCut`. Propagated as `blendsCut: true`. */
+  readonly blendsCut?: boolean
   /** Transitions: see `Transition.options`. Propagated as the option's `params`. */
   readonly options?: ReadonlyArray<{
     readonly field: string
@@ -238,6 +259,8 @@ function toOptions<T extends BaseCatalogEntry>(
     if (categoryField) opt.category = e[categoryField] as unknown as string
     if (e.adultOnly) opt.adultOnly = true
     if (e.instant) opt.instant = true
+    if (e.blendable) opt.blendable = true
+    if (e.blendsCut) opt.blendsCut = true
     if (e.options?.length) {
       opt.params = e.options.map((o) => ({
         field: o.field,
