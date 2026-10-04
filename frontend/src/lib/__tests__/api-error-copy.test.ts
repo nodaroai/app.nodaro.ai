@@ -14,6 +14,15 @@ describe("apiErrorReasonKey", () => {
     expect(apiErrorReasonKey(undefined)).toBeUndefined()
   })
 
+  it("maps the competitor refusals, but not the one that names the accounts", () => {
+    expect(apiErrorReasonKey("scan_running")).toBe("apiErr.reason.scanRunning")
+    expect(apiErrorReasonKey("already_tracked")).toBe("apiErr.reason.alreadyTracked")
+    expect(apiErrorReasonKey("too_many_competitors")).toBe("apiErr.reason.tooManyBrands")
+    expect(apiErrorReasonKey("nothing_to_scan")).toBe("apiErr.reason.nothingToScan")
+    expect(apiErrorReasonKey("not_reachable")).toBe("apiErr.reason.siteNotReachable")
+    expect(apiErrorReasonKey("invalid_account")).toBeUndefined()
+  })
+
   it("does not read inherited object keys as codes", () => {
     expect(apiErrorReasonKey("constructor")).toBeUndefined()
     expect(apiErrorReasonKey("toString")).toBeUndefined()

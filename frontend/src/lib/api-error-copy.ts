@@ -81,6 +81,13 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   insufficient_app_credits: "apiErr.reason.insufficientCredits",
   storage_limit_exceeded: "apiErr.reason.storageFull",
   subscription_required: "apiErr.reason.subscriptionRequired",
+  // Competitors (the cloud plugin's routes). `invalid_account` stays out: its
+  // message names the accounts that could not be read.
+  scan_running: "apiErr.reason.scanRunning",
+  already_tracked: "apiErr.reason.alreadyTracked",
+  too_many_competitors: "apiErr.reason.tooManyBrands",
+  nothing_to_scan: "apiErr.reason.nothingToScan",
+  not_reachable: "apiErr.reason.siteNotReachable",
 }
 
 /** The translated reason for a server error code, if the code has a fixed meaning. */

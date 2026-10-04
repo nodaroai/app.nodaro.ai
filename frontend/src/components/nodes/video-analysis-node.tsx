@@ -94,6 +94,12 @@ function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
   const postsVideoSec = useWorkflowStore(
     useCallback((s) => wiredSocialPostsVideoSec(id, s.edges, s.nodes), [id]),
   )
+  // Something to analyze is in place (a wire into `video`, or a link in the
+  // node), so the empty state says it is ready rather than asking for a video.
+  const videoWired = useWorkflowStore(
+    useCallback((s) => s.edges.some((e) => e.target === id && e.targetHandle === "video"), [id]),
+  )
+  const hasSource = videoWired || Boolean(nodeData.youtubeUrl?.trim())
   // Resolve the tier ("fast"/"pro") or raw model to the internal model (default
   // pro) so the pre-run credit estimate matches what the server charges.
   const model = resolveVideoAnalysisModel(nodeData.llmModel)
@@ -207,7 +213,7 @@ function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
               style={{ minHeight: 120, flex: 1 }}
             >
               <ScanSearch className="w-6 h-6" />
-              <span className="text-[10px]">{t("node.connectAVideoOrSet")}</span>
+              <span className="text-[10px]">{hasSource ? t("node.vaReadyToRun") : t("node.connectAVideoOrSet")}</span>
             </div>
           )}
         </div>
