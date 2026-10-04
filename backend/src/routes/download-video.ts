@@ -9,7 +9,7 @@ import { join } from "node:path"
 import { promises as fs } from "node:fs"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
 import { recordDownloadedVideoAsset } from "../lib/asset-records.js"
-import { downloadYouTubeVideo } from "../providers/video/youtube-video.js"
+import { downloadYouTubeVideo, type VideoSection } from "../providers/video/youtube-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { isOriginAllowedDynamic } from "../lib/dynamic-origins.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
@@ -32,6 +32,10 @@ const downloadVideoBody = z
     // --download-sections cuts at keyframes; the client does the exact trim.
     sectionStartSec: z.number().min(0, "sectionStartSec must be >= 0").optional(),
     sectionEndSec: z.number().min(0, "sectionEndSec must be >= 0").optional(),
+    // `true` cuts the section exactly, with no pad: for a client that does not
+    // trim the result (the editor's Video URL node). Absent keeps the padded
+    // fetch every other client trims itself. Only with a section.
+    exactSection: z.boolean().optional(),
     // Whether a download that arrives with NO audio stream fails. ABSENT means
     // TRUE — the behaviour every released client (Studio, Recast, the voice
     // changer) was built on, and the one that keeps Instagram's failover
@@ -50,6 +54,14 @@ const downloadVideoBody = z
         code: z.ZodIssueCode.custom,
         message: "sectionStartSec and sectionEndSec must be provided together",
         path: [hasStart ? "sectionEndSec" : "sectionStartSec"],
+      })
+      return
+    }
+    if (body.exactSection !== undefined && !hasStart) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "exactSection applies to a section: send sectionStartSec and sectionEndSec with it",
+        path: ["exactSection"],
       })
       return
     }
@@ -139,7 +151,7 @@ async function runDownloadWithProgress(
   baseName: string,
   outPath: string,
   userId: string,
-  section?: { startSec: number; endSec: number },
+  section?: VideoSection,
   maxHeight?: number,
   maxFilesizeBytes?: number,
   requireAudio = true,
@@ -265,7 +277,7 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
     }
 
     const userId = req.userId
-    const { url, sectionStartSec, sectionEndSec, maxHeight: rawMaxHeight, requireAudio } = parsed.data
+    const { url, sectionStartSec, sectionEndSec, exactSection, maxHeight: rawMaxHeight, requireAudio } = parsed.data
 
     if (runningDownloadsFor(userId) >= MAX_ACTIVE_DOWNLOADS_PER_USER) {
       return reply.status(429).send({
@@ -302,7 +314,7 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
     // everything downstream deals with a single optional section object.
     const section =
       sectionStartSec !== undefined && sectionEndSec !== undefined
-        ? { startSec: sectionStartSec, endSec: sectionEndSec }
+        ? { startSec: sectionStartSec, endSec: sectionEndSec, ...(exactSection ? { exact: true } : {}) }
         : undefined
 
     const state: ActiveDownload = { userId, percent: 0, phase: "downloading" }

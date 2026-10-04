@@ -2908,7 +2908,7 @@ for the formula). Off Cloud, the three `voice-changer-pro*` routes are absent (4
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/download-video` | Import a social video (YouTube/TikTok/Instagram/X/Facebook) or a direct video file link into storage (`{ url, maxHeight?, sectionStartSec?, sectionEndSec?, requireAudio? }`). A result with no audio stream fails unless `requireAudio: false`. At most 4 downloads run per account at once — a fifth answers `429 too_many_downloads`. Returns `{ downloadId }` — not a job. |
+| `POST` | `/v1/download-video` | Import a social video (YouTube/TikTok/Instagram/X/Facebook) or a direct video file link into storage (`{ url, maxHeight?, sectionStartSec?, sectionEndSec?, exactSection?, requireAudio? }`). A section is fetched with a few seconds of margin on each side, for a client that trims it afterwards; `exactSection: true` cuts it at exactly the requested range instead. A result with no audio stream fails unless `requireAudio: false`. At most 4 downloads run per account at once — a fifth answers `429 too_many_downloads`. Returns `{ downloadId }` — not a job. |
 | `GET` | `/v1/download-video/progress/:downloadId` | Live progress as **server-sent events** (`{ phase, percent, videoUrl?, error? }` every ~500ms; stream ends on `completed`/`failed`). |
 | `POST` | `/v1/video-metadata` | Probe duration/dimensions/title without downloading (`{ url }`). Direct read, not a job. |
 | `POST` | `/v1/trim-video` | Trim a video (`{ videoUrl, startTime?/endTime? \| keepFirstSeconds? \| keepLastSeconds? \| trim*Frames/Seconds }`) → job. |

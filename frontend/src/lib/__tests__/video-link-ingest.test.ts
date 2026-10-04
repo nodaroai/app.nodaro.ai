@@ -160,7 +160,12 @@ describe("ingestVideoLink — what gets downloaded", () => {
     const outcome = await ingestVideoLink("n1", { mode: "section", section: { startSec: 30, endSec: 95 } })
     expect(outcome.status).toBe("completed")
     expect(fetchVideoMetadata).not.toHaveBeenCalled()
-    expect(startVideoDownload).toHaveBeenCalledWith(YT, { maxHeight: 1080, section: { startSec: 30, endSec: 95 } })
+    // Exact: the part as chosen, never the server's padded fetch.
+    expect(startVideoDownload).toHaveBeenCalledWith(YT, {
+      maxHeight: 1080,
+      section: { startSec: 30, endSec: 95 },
+      exactSection: true,
+    })
     expect(dataOf()).toMatchObject({
       needsRangeChoice: false,
       downloadMode: "section",

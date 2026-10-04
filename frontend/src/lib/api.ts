@@ -4172,6 +4172,9 @@ export interface StartVideoDownloadOptions {
   /** Quality cap, "up to N rows". YouTube only — other hosts have no ladder. */
   readonly maxHeight?: number
   readonly section?: VideoDownloadSection
+  /** `true` = cut the part exactly, with no ±3s pad. For a caller that does not
+   *  trim the result itself; absent keeps the padded fetch. Needs `section`. */
+  readonly exactSection?: boolean
   /** `false` = accept a download with no sound. Absent keeps the server's default
    *  (a silent result fails, and is retried through the proxy pool first). */
   readonly requireAudio?: boolean
@@ -4186,12 +4189,13 @@ export async function startVideoDownload(
   url: string,
   options: StartVideoDownloadOptions = {},
 ): Promise<{ downloadId: string }> {
-  const { maxHeight, section, requireAudio } = options
+  const { maxHeight, section, exactSection, requireAudio } = options
   return apiJson("/v1/download-video", {
     body: {
       url,
       ...(maxHeight !== undefined ? { maxHeight } : {}),
       ...(section ? { sectionStartSec: section.startSec, sectionEndSec: section.endSec } : {}),
+      ...(section && exactSection !== undefined ? { exactSection } : {}),
       ...(requireAudio !== undefined ? { requireAudio } : {}),
     },
     label: "apiErr.startDownloadTheVideoMayBePrivate",
