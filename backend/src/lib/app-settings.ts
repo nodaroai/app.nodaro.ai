@@ -1,4 +1,12 @@
 import { supabase } from "./supabase.js"
+import type { GalleryWordEntry } from "./gallery-word-filter.js"
+import {
+  GALLERY_BANNED_USERS_KEY,
+  GALLERY_BLOCKED_WORDS_KEY,
+  parseGalleryBannedUsers,
+  parseGalleryWordEntries,
+  type GalleryBannedUser,
+} from "./gallery-moderation-settings.js"
 
 /**
  * How the nodaro.ai credential participates in routing (4b, founder
@@ -41,6 +49,10 @@ export interface AppSettings {
   copilot_default_tier: string | null
   /** Admin overrides for per-tier caps (minutes + counts). Absent fields fall back to compiled defaults. */
   copilot_tier_caps: Record<string, unknown> | null
+  /** Words an admin barred from the public gallery, with translations and exceptions. */
+  gallery_blocked_words: GalleryWordEntry[]
+  /** Creators whose work never reaches the public gallery. */
+  gallery_banned_users: GalleryBannedUser[]
 }
 
 // Cache settings for 60 seconds to avoid hitting the DB on every job
@@ -50,6 +62,15 @@ const CACHE_TTL_MS = 60_000
 
 // Stampede protection: if a refresh is in-flight, share the promise
 let inflight: Promise<AppSettings> | null = null
+
+// The defaults handed out when the settings could not be read — so a reader
+// that must not fall back to empty rules (the gallery's moderation) can tell.
+const readFailures = new WeakSet<AppSettings>()
+
+/** True for the stand-in defaults returned when the settings could not be read. */
+export function settingsReadFailed(settings: AppSettings): boolean {
+  return readFailures.has(settings)
+}
 
 export async function getAppSettings(): Promise<AppSettings> {
   const now = Date.now()
@@ -78,7 +99,9 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    return { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null }
+    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [] }
+    readFailures.add(fallback)
+    return fallback
   }
 
   const settings: AppSettings = {
@@ -94,9 +117,19 @@ async function refreshSettings(): Promise<AppSettings> {
     copilot_enabled: true,
     copilot_default_tier: null,
     copilot_tier_caps: null,
+    gallery_blocked_words: [],
+    gallery_banned_users: [],
   }
 
   for (const row of data ?? []) {
+    if (row.key === GALLERY_BLOCKED_WORDS_KEY) {
+      settings.gallery_blocked_words = parseGalleryWordEntries(row.value)
+      continue
+    }
+    if (row.key === GALLERY_BANNED_USERS_KEY) {
+      settings.gallery_banned_users = parseGalleryBannedUsers(row.value)
+      continue
+    }
     if (row.key === "copilot_enabled" && typeof row.value === "boolean") {
       settings.copilot_enabled = row.value
       continue

@@ -39,6 +39,7 @@ import {
   Inbox,
   ToggleRight,
   ShieldAlert,
+  ShieldBan,
   LayoutTemplate,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -69,8 +70,9 @@ const ADMIN_NAV = [
   { href: "/admin/miniapps", label: "MiniApps", icon: AppWindow },
   { href: "/admin/client-apps", label: "Client Apps", icon: Blocks },
   { href: "/admin/reports", label: "Reports", icon: Flag },
-  // The one translated entry: the page behind it is the first `useT()` admin
-  // surface, so its nav label follows the same dictionary. Unconditional —
+  { href: "/admin/gallery-moderation", label: "Gallery Moderation", labelKey: "galleryModeration.navLabel" as MessageKey, icon: ShieldBan },
+  // Translated entries: the pages behind them are `useT()` admin surfaces,
+  // so their nav labels follow the same dictionary. Unconditional —
   // there is no admin `NavKey` and `nav.hide`'s vocabulary is the END-USER
   // nav; the whole /admin block is already edition-gated by hasAdmin().
   { href: "/admin/review", label: "Content Review", labelKey: "adminReview.navLabel" as MessageKey, icon: ShieldAlert },

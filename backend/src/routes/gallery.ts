@@ -1,9 +1,15 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { isPromptBlocked } from "../config/content-filter.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { formatZodError } from "../lib/zod-error.js"
+import {
+  OWNER_VIEW_MODERATION,
+  bannedGalleryUsersFilter,
+  galleryHides,
+  loadGalleryModeration,
+} from "../lib/gallery-moderation.js"
+import { MAX_GALLERY_REMOVAL, removeFromGallery } from "../lib/gallery-removal.js"
 
 // Gallery only shows AI-generated creative content — NOT processing/application
 // results.
@@ -95,6 +101,17 @@ const adminDeleteParams = z.object({
   jobId: z.string().uuid(),
 })
 
+const adminBulkRemoveBody = z.object({
+  jobIds: z.array(z.string().uuid()).min(1).max(MAX_GALLERY_REMOVAL),
+})
+
+/** Rows read per round of a page: the filters drop some, so read ahead. */
+const FETCH_MULTIPLIER = 2
+/** Rounds a page may read before it answers with what it has. */
+const MAX_ROUNDS = 5
+/** …and while it has found nothing yet: a page is never empty while unread rows remain nearby. */
+const MAX_ROUNDS_WHILE_EMPTY = 10
+
 export async function galleryRoutes(app: FastifyInstance) {
   /**
    * GET /v1/gallery - Public gallery of completed outputs
@@ -126,6 +143,12 @@ export async function galleryRoutes(app: FastifyInstance) {
     // the private view.
     const isOwnerView = !!userIdFilter && !!req.userId && req.userId === userIdFilter
 
+    // Gallery moderation is discovery-only too: the owner view keeps the
+    // built-in word list alone, as before; everyone else gets the admin's
+    // blocked creators and banned words as well (lib/gallery-moderation.ts).
+    const moderation = isOwnerView ? OWNER_VIEW_MODERATION : await loadGalleryModeration()
+    const excludedUsers = bannedGalleryUsersFilter(moderation)
+
     // Pre-fetch favorite job IDs if filtering by favorites
     let favoriteJobIds: string[] | null = null
     if (favoritesOnly && userIdFilter) {
@@ -154,6 +177,9 @@ export async function galleryRoutes(app: FastifyInstance) {
       }
       if (userIdFilter) {
         countQuery = countQuery.eq("user_id", userIdFilter)
+      }
+      if (excludedUsers) {
+        countQuery = countQuery.filter("user_id", "not.in", excludedUsers)
       }
       if (favoriteJobIds) {
         countQuery = countQuery.in("id", favoriteJobIds)
@@ -184,10 +210,14 @@ export async function galleryRoutes(app: FastifyInstance) {
     }> = []
     let pageCursor = cursor ?? null
     let hasMore = true
-    const MAX_ROUNDS = 3 // safety cap to avoid infinite loops
-    const FETCH_MULTIPLIER = 2 // over-fetch to reduce extra round trips
+    // True when the page filled up before every row it read was looked at.
+    let unreadRows = false
 
-    for (let round = 0; round < MAX_ROUNDS && items.length < limit && hasMore; round++) {
+    for (
+      let round = 0;
+      items.length < limit && hasMore && round < (items.length === 0 ? MAX_ROUNDS_WHILE_EMPTY : MAX_ROUNDS);
+      round++
+    ) {
       const remaining = limit - items.length
       const fetchCount = remaining * FETCH_MULTIPLIER + 1 // +1 for hasMore detection
 
@@ -204,6 +234,9 @@ export async function galleryRoutes(app: FastifyInstance) {
       }
       if (userIdFilter) {
         dbQuery = dbQuery.eq("user_id", userIdFilter)
+      }
+      if (excludedUsers) {
+        dbQuery = dbQuery.filter("user_id", "not.in", excludedUsers)
       }
       if (favoriteJobIds) {
         dbQuery = dbQuery.in("id", favoriteJobIds)
@@ -247,7 +280,10 @@ export async function galleryRoutes(app: FastifyInstance) {
 
       // Process and filter
       for (const job of jobs) {
-        if (items.length >= limit) break
+        if (items.length >= limit) {
+          unreadRows = true
+          break
+        }
 
         const outputData = (job.output_data ?? {}) as Record<string, unknown>
         const inputData = (job.input_data ?? {}) as Record<string, unknown>
@@ -260,7 +296,7 @@ export async function galleryRoutes(app: FastifyInstance) {
           ?? (inputData.text as string)
           ?? null
 
-        if (isPromptBlocked(prompt)) continue
+        if (galleryHides(moderation, { userId: job.user_id, inputData, outputData })) continue
 
         const model = (inputData.provider as string)
           ?? (job.provider as string)
@@ -279,11 +315,21 @@ export async function galleryRoutes(app: FastifyInstance) {
       }
     }
 
-    // nextCursor is the createdAt of the last item we're returning
+    // Where the next page starts. The page filled up with rows still unread →
+    // right after the last item returned. Otherwise every row read was looked
+    // at → right after the last row READ, so rows the filters dropped are not
+    // read again and a stretch of hidden items never ends the paging.
     const lastItem = items[items.length - 1]
-    const nextCursor = hasMore && lastItem?.createdAt ? lastItem.createdAt : null
+    const nextCursor = unreadRows
+      ? lastItem?.createdAt ?? pageCursor
+      : hasMore
+        ? pageCursor
+        : null
 
-    reply.header("Cache-Control", "public, max-age=30, stale-while-revalidate=86400")
+    // The owner view holds the caller's private work and skips the gallery's
+    // moderation — it is theirs alone and must never sit in a shared cache.
+    reply.header("Vary", "Authorization")
+    reply.header("Cache-Control", isOwnerView ? "private, no-store" : "public, max-age=30, stale-while-revalidate=86400")
     return reply.send({
       data: items,
       nextCursor,
@@ -460,27 +506,44 @@ export async function galleryRoutes(app: FastifyInstance) {
       })
     }
 
-    const { error } = await supabase
-      .from("jobs")
-      .update({ is_public: false })
-      .eq("id", jobId)
-
-    if (error) {
+    try {
+      await removeFromGallery([jobId])
+    } catch (error) {
       console.error("[gallery] Admin delete failed:", error)
       return reply.status(500).send({ error: "Failed to remove item from gallery" })
     }
 
-    // Auto-review all pending reports for this job
-    const { error: reportsError } = await supabase
-      .from("gallery_reports")
-      .update({ status: "reviewed" })
-      .eq("job_id", jobId)
-      .eq("status", "pending")
+    return reply.send({ success: true, message: "Item removed from gallery" })
+  })
 
-    if (reportsError) {
-      console.error("[gallery] Failed to auto-review reports:", reportsError)
+  /**
+   * POST /v1/gallery/remove - Admin bulk soft-delete from gallery
+   *
+   * Body: { jobIds } (1–100). Same effect as DELETE /v1/gallery/:jobId on each.
+   */
+  app.post("/v1/gallery/remove", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+    if (!(await checkIsAdmin(req.userId))) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "Only admins can remove gallery items" },
+      })
     }
 
-    return reply.send({ success: true, message: "Item removed from gallery" })
+    const parsed = adminBulkRemoveBody.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
+      })
+    }
+
+    try {
+      const { removed } = await removeFromGallery(parsed.data.jobIds)
+      return reply.send({ success: true, removed })
+    } catch (error) {
+      console.error("[gallery] Admin bulk remove failed:", error)
+      return reply.status(500).send({ error: "Failed to remove items from gallery" })
+    }
   })
 }

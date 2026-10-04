@@ -135,6 +135,31 @@ describe("getAppSettings", () => {
     expect(mockSelect).toHaveBeenCalledTimes(1)
   })
 
+  it("reads the gallery moderation lists, keeping only well-formed entries", async () => {
+    const creator = "00000000-0000-4000-8000-00000000000a"
+    mockSelect.mockResolvedValueOnce({
+      data: [
+        { key: "gallery_blocked_words", value: [{ word: " bucket ", translations: ["seau", ""], exceptions: ["bucket of water"] }, { nope: 1 }] },
+        { key: "gallery_banned_users", value: [{ userId: creator, addedAt: "2026-10-04T00:00:00.000Z" }, { userId: "not-an-id" }] },
+      ],
+      error: null,
+    })
+
+    const settings = await getAppSettings()
+
+    expect(settings.gallery_blocked_words).toEqual([{ word: "bucket", translations: ["seau"], exceptions: ["bucket of water"] }])
+    expect(settings.gallery_banned_users).toEqual([{ userId: creator, addedAt: "2026-10-04T00:00:00.000Z" }])
+  })
+
+  it("defaults the gallery moderation lists to empty", async () => {
+    mockSelect.mockResolvedValueOnce({ data: [{ key: "gallery_blocked_words", value: "garbage" }], error: null })
+
+    const settings = await getAppSettings()
+
+    expect(settings.gallery_blocked_words).toEqual([])
+    expect(settings.gallery_banned_users).toEqual([])
+  })
+
   it("ignores unknown keys in rows", async () => {
     mockSelect.mockResolvedValueOnce({
       data: [

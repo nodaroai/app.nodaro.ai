@@ -1,12 +1,11 @@
-import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react"
-import { isMultiUser } from "@/lib/edition"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
+import { hasAdmin } from "@/lib/edition"
 import { Link, useLocation } from "react-router-dom"
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Play, Copy, Check, Flag, Trash2, Heart } from "lucide-react"
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Copy, Check, Flag, Trash2, Heart } from "lucide-react"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
 import { WaveformAudioPlayer } from "@/components/audio-player"
-import { optimizedImageUrl } from "@/lib/image"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { toast } from "sonner"
 import { useAuth } from "@/hooks/use-auth"
@@ -24,7 +23,10 @@ import { Label } from "@/components/ui/label"
 import type { GalleryItem } from "@/hooks/queries/use-gallery-queries"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
-import { uiLocale } from "@/lib/i18n/format"
+import { GalleryGridCard } from "@/components/gallery/gallery-grid-card"
+import { TypeBadge, formatGalleryDate } from "@/components/gallery/gallery-media"
+import { GallerySelectButton, GallerySelectionBar } from "@/components/gallery/gallery-admin-bar"
+import { GalleryBlockCreatorButton } from "@/components/gallery/gallery-block-creator-button"
 
 type FilterType = "all" | "image" | "video" | "audio"
 
@@ -41,185 +43,6 @@ const REPORT_REASONS = [
   { value: "spam", labelKey: "gallery.reasonSpam" },
   { value: "other", labelKey: "cat.other" },
 ] as const
-
-const TYPE_LABEL_KEY: Record<"image" | "video" | "audio", MessageKey> = {
-  image: "common.image",
-  video: "common.video",
-  audio: "out.audio",
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffHours < 1) return tx("time.justNow")
-  if (diffHours < 24) return tx("time.hrAgo", { n: diffHours })
-  if (diffDays < 7) return tx("time.dayAgo", { n: diffDays })
-  return date.toLocaleDateString(uiLocale(), { month: "short", day: "numeric" })
-}
-
-function TypeBadge({ type }: { readonly type: "image" | "video" | "audio" }) {
-  const t = useT()
-  const config = {
-    image: { className: "bg-purple-500/10 text-purple-600 dark:text-purple-400" },
-    video: { className: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
-    audio: { className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
-  }
-  const { className } = config[type]
-  return (
-    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", className)}>
-      {t(TYPE_LABEL_KEY[type])}
-    </span>
-  )
-}
-
-function AudioCard({ url }: { readonly url: string }) {
-  // The real waveform player in the grid cell. Clicks on the player itself
-  // play/seek (stopPropagation) without opening the preview; clicking the
-  // surrounding cell still opens it. Only one player plays at a time app-wide.
-  return (
-    <div className="w-full h-full bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center p-3">
-      <div
-        className="w-full"
-        onClick={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <WaveformAudioPlayer url={url} variant="mini" className="w-full" />
-      </div>
-    </div>
-  )
-}
-
-function VideoCard({ item, children, priority }: { readonly item: GalleryItem; readonly children?: React.ReactNode; readonly priority?: boolean }) {
-  const [hovered, setHovered] = useState(false)
-  const [videoReady, setVideoReady] = useState(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const hasThumbnail = !!item.thumbnailUrl
-
-  // Preload video when card scrolls into view (debounced), unload when it leaves
-  useEffect(() => {
-    const container = containerRef.current
-    const video = videoRef.current
-    if (!container || !video) return
-
-    let preloadTimer: ReturnType<typeof setTimeout> | null = null
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          // Debounce: only preload if card stays visible for 300ms (skip during fast scroll)
-          preloadTimer = setTimeout(() => {
-            if (!video.src || video.src === "") {
-              video.src = item.outputUrl
-            }
-            video.preload = "metadata"
-            video.load()
-          }, 300)
-        } else {
-          // Cancel pending preload if user scrolled past quickly
-          if (preloadTimer) {
-            clearTimeout(preloadTimer)
-            preloadTimer = null
-          }
-          // Out of view — stop buffering to free memory
-          video.pause()
-          video.currentTime = 0
-          video.preload = "none"
-          video.removeAttribute("src")
-          video.load()
-          setVideoReady(false)
-          setHovered(false)
-        }
-      },
-      { rootMargin: "200px" },
-    )
-    observer.observe(container)
-    return () => {
-      if (preloadTimer) clearTimeout(preloadTimer)
-      observer.disconnect()
-    }
-  }, [])
-
-  function handleMouseEnter() {
-    setHovered(true)
-    const video = videoRef.current
-    if (!video) return
-    // Restore src if it was cleared when out of view
-    if (!video.src || video.src === "") {
-      video.src = item.outputUrl
-      video.preload = "auto"
-    }
-    video.play().catch(() => {})
-  }
-
-  function handleMouseLeave() {
-    const video = videoRef.current
-    if (video) {
-      video.pause()
-      video.currentTime = 0
-    }
-    setVideoReady(false)
-    setHovered(false)
-  }
-
-  return (
-    <div
-      ref={containerRef}
-      className="w-full h-full relative"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {hasThumbnail ? (
-        <>
-          {/* Thumbnail stays visible until video is actually playing */}
-          <CachedImage
-            src={optimizedImageUrl(item.thumbnailUrl!, { width: 768, quality: 90 })}
-            alt=""
-            className={cn(
-              "w-full h-full object-cover absolute inset-0 z-[1]",
-              hovered && videoReady && "invisible",
-            )}
-            {...(priority ? { fetchPriority: "high" } : { loading: "lazy" })}
-          />
-          <video
-            ref={videoRef}
-            src={item.outputUrl}
-            muted
-            loop
-            playsInline
-            preload="none"
-            onPlaying={() => setVideoReady(true)}
-            className="w-full h-full object-cover absolute inset-0"
-          />
-        </>
-      ) : (
-        <video
-          ref={videoRef}
-          src={item.outputUrl}
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          onPlaying={() => setVideoReady(true)}
-          className="w-full h-full object-cover"
-        />
-      )}
-      {/* Play icon hint */}
-      {!hovered && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[2]">
-          <div className="rounded-full bg-black/40 p-2">
-            <Play className="h-4 w-4 text-white fill-white" />
-          </div>
-        </div>
-      )}
-      {children}
-    </div>
-  )
-}
 
 function CopyPromptButton({ prompt }: { readonly prompt: string }) {
   const [copied, setCopied] = useState(false)
@@ -247,112 +70,6 @@ function CopyPromptButton({ prompt }: { readonly prompt: string }) {
   )
 }
 
-interface GalleryGridCardProps {
-  readonly item: GalleryItem
-  readonly index: number
-  readonly isFavorited: boolean
-  readonly showFavorite: boolean
-  readonly isAdmin: boolean
-  readonly onSelect: (index: number) => void
-  readonly onToggleFavorite: (item: GalleryItem, e?: React.MouseEvent) => void
-  readonly onReport: (item: GalleryItem, e?: React.MouseEvent) => void
-  readonly onDelete: (item: GalleryItem, e?: React.MouseEvent) => void
-}
-
-// Memoized so selection/favorite changes only re-render the affected card,
-// not every card in the (non-virtualized, growing) infinite-scroll grid.
-const GalleryGridCard = memo(function GalleryGridCard({
-  item,
-  index,
-  isFavorited,
-  showFavorite,
-  isAdmin,
-  onSelect,
-  onToggleFavorite,
-  onReport,
-  onDelete,
-}: GalleryGridCardProps) {
-  const t = useT()
-  const overlay = (
-    <>
-      {/* Overlay */}
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
-        <div className="flex items-center justify-between">
-          <TypeBadge type={item.type} />
-          <span className="text-white/60 text-xs">
-            {formatDate(item.createdAt)}
-          </span>
-        </div>
-      </div>
-
-      {/* Action buttons (top-right corner on hover) */}
-      <div className="absolute top-2 end-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
-        {showFavorite && (
-          <button
-            onClick={(e) => onToggleFavorite(item, e)}
-            className="rounded-full bg-black/50 p-1.5 hover:bg-black/70 transition-colors"
-            title={isFavorited ? t("templates.unfavorite") : t("templates.favorite")}
-          >
-            <Heart className={cn("h-3.5 w-3.5", isFavorited ? "text-[#ff0073] fill-[#ff0073]" : "text-white")} />
-          </button>
-        )}
-        {/* Reports are reviewed in the admin panel, which single-user
-            editions don't have — the POST succeeded and said "Thank you!"
-            while nothing could ever look at it (community grind, 2026-08-14). */}
-        {isMultiUser() && (
-          <button
-            onClick={(e) => onReport(item, e)}
-            className="rounded-full bg-black/50 p-1.5 hover:bg-black/70 transition-colors"
-            title={t("gallery.report")}
-          >
-            <Flag className="h-3.5 w-3.5 text-white" />
-          </button>
-        )}
-        {isAdmin && (
-          <button
-            onClick={(e) => onDelete(item, e)}
-            className="rounded-full bg-red-500/70 p-1.5 hover:bg-red-500/90 transition-colors"
-            title={t("gallery.removeFromGallery")}
-          >
-            <Trash2 className="h-3.5 w-3.5 text-white" />
-          </button>
-        )}
-      </div>
-    </>
-  )
-
-  return (
-    <div
-      role="button"
-      aria-label={t("gallery.viewItem", { type: t(TYPE_LABEL_KEY[item.type]) })}
-      tabIndex={0}
-      className="group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all cursor-pointer"
-      onClick={() => onSelect(index)}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelect(index) }}
-    >
-      {item.type === "image" ? (
-        <>
-          <CachedImage
-            src={item.outputUrl}
-            alt=""
-            className="w-full h-full object-cover"
-            {...(index < 10 ? (index === 0 ? { fetchPriority: "high" } : {}) : { loading: "lazy" })}
-            thumbnail
-          />
-          {overlay}
-        </>
-      ) : item.type === "video" ? (
-        <VideoCard item={item} priority={index < 10}>{overlay}</VideoCard>
-      ) : (
-        <>
-          <AudioCard url={item.outputUrl} />
-          {overlay}
-        </>
-      )}
-    </div>
-  )
-})
-
 export default function GalleryPage() {
   const { user, isAdmin } = useAuth()
   const t = useT()
@@ -365,6 +82,9 @@ export default function GalleryPage() {
   })
   const [favoritesOnly, setFavoritesOnly] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  // Admin selection mode: cards are picked, not opened, and the bar acts on them.
+  const [selecting, setSelecting] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
 
   const toggleMyItems = useCallback((checked: boolean) => {
     setMyItemsOnly(checked)
@@ -380,6 +100,8 @@ export default function GalleryPage() {
     filter,
     (myItemsOnly || favoritesOnly) && user?.id ? user.id : undefined,
     favoritesOnly,
+    // An admin sees the effect of a removal or a block at once.
+    { fresh: isAdmin },
   )
   const { data: favoriteIds } = useGalleryFavorites(user?.id)
   const favoritesSet = useMemo(() => new Set(favoriteIds ?? []), [favoriteIds])
@@ -395,7 +117,34 @@ export default function GalleryPage() {
   )
   const totalCount = data?.pages[0]?.totalCount ?? items.length
 
+  // A page can come back empty while older items remain (everything in it was
+  // hidden by the gallery's moderation). The grid asks for more only once it
+  // shows a row, so ask here until something shows or the list ends.
+  const emptyButMore = !loading && items.length === 0 && !!hasMore
+  useEffect(() => {
+    if (emptyButMore && !loadingMore) void fetchNextPage()
+  }, [emptyButMore, loadingMore, fetchNextPage])
+
   const selectedItem = selectedIndex !== null ? items[selectedIndex] ?? null : null
+
+  const toggleSelecting = useCallback(() => {
+    setSelecting((on) => !on)
+    setSelectedIds(new Set())
+  }, [])
+  const toggleSelected = useCallback((item: GalleryItem) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (next.has(item.id)) next.delete(item.id)
+      else next.add(item.id)
+      return next
+    })
+  }, [])
+  const selectAllShown = useCallback(() => setSelectedIds(new Set(items.map((item) => item.id))), [items])
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), [])
+  // A different list is a different selection.
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [filter, myItemsOnly, favoritesOnly])
 
   // Mobile back button closes modal instead of navigating away
   const closeModal = useCallback(() => setSelectedIndex(null), [])
@@ -645,11 +394,12 @@ export default function GalleryPage() {
             </div>
           </div>
         )}
+        {isAdmin && <GallerySelectButton selecting={selecting} onToggle={toggleSelecting} />}
       </div>
 
       {/* Gallery Grid */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {loading ? (
+      <section className={cn("max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8", selecting && "pb-28")}>
+        {loading || emptyButMore ? (
           <div className="flex items-center justify-center py-24">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
@@ -683,7 +433,10 @@ export default function GalleryPage() {
                       isFavorited={favoritesSet.has(item.id)}
                       showFavorite={!!user}
                       isAdmin={isAdmin}
+                      selecting={selecting}
+                      selected={selectedIds.has(item.id)}
                       onSelect={handleSelectIndex}
+                      onToggleSelected={toggleSelected}
                       onToggleFavorite={handleToggleFavorite}
                       onReport={openReportDialog}
                       onDelete={openDeleteDialog}
@@ -819,8 +572,9 @@ export default function GalleryPage() {
                         <span className="hidden sm:inline">{t("common.remove")}</span>
                       </button>
                     )}
+                    {isAdmin && hasAdmin() && <GalleryBlockCreatorButton item={selectedItem} onBlocked={closeModal} />}
                     <span className="text-xs text-muted-foreground">
-                      {formatDate(selectedItem.createdAt)}
+                      {formatGalleryDate(selectedItem.createdAt)}
                     </span>
                   </div>
                 </div>
@@ -844,6 +598,17 @@ export default function GalleryPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {isAdmin && selecting && (
+        <GallerySelectionBar
+          selectedIds={selectedIds}
+          shownCount={items.length}
+          canBlock={hasAdmin()}
+          onSelectAllShown={selectAllShown}
+          onClear={clearSelection}
+          onDone={clearSelection}
+        />
+      )}
 
       {/* Report Dialog */}
       <Dialog open={reportItem !== null} onOpenChange={(open) => !open && setReportItem(null)}>

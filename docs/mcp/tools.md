@@ -1218,6 +1218,8 @@ widget in compatible clients.
 
 **Input:** `scope` (`"mine"` default / `"public"`), `limit`, `cursor`, `kinds[]`, `query`
 
+The public scope shows what the web gallery shows: work an admin took out of the gallery — by blocking its creator or banning a word in its prompt — is left out. A page can therefore hold fewer items than `limit`; keep following `next_cursor` until it is absent.
+
 ---
 
 ### `browse_uploads`
@@ -1319,7 +1321,9 @@ Mark or unmark a gallery asset as a favorite.
 List your recent jobs with status, job type, and output URL. Supports
 cursor pagination.
 
-**Input:** `limit`, `cursor`, `status`, `job_type`
+**Input:** `scope` (`"mine"` default / `"public"`), `limit`, `cursor`, `status` (your own jobs), `kinds[]` (default image and video)
+
+The public scope lists what the public gallery shows, with the same moderation as `browse_gallery`, and never carries another creator's id. A page can hold fewer jobs than `limit`.
 
 ---
 

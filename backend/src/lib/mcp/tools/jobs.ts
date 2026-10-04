@@ -10,6 +10,7 @@ import { redactPrivateJobData } from "../../public-job-data.js"
 import { JOB_STATUSES } from "../../job-status.js"
 import { jobView, JOB_VIEW_SCHEMA } from "./_job-view.js"
 import { waitForJob } from "./_wait-for-job.js"
+import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
 
@@ -106,15 +107,23 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       // For the public gallery, force is_public=true, status=completed,
       // AND user_id != caller — same as the web app's public gallery
       // which never shows the caller their own items.
+      //
+      // The public scope is the gallery, so it takes the gallery's moderation
+      // (lib/gallery-moderation.ts): blocked creators out in the query, banned
+      // words dropped below. `user_id` is read for that check only and never
+      // returned — it is someone else's.
+      const moderation = scope === "mine" ? null : await loadGalleryModeration()
+      const excludedUsers = moderation ? bannedGalleryUsersFilter(moderation) : null
       let filtered =
         scope === "mine"
           ? supabase.from("jobs").select(baseSelect).eq("user_id", session.userId)
           : supabase
               .from("jobs")
-              .select(baseSelect)
+              .select(`${baseSelect}, user_id`)
               .eq("is_public", true)
               .eq("status", "completed")
               .neq("user_id", session.userId)
+      if (excludedUsers) filtered = filtered.filter("user_id", "not.in", excludedUsers)
       if (args.cursor) filtered = filtered.lt("created_at", args.cursor)
       if (scope === "mine" && args.status) filtered = filtered.eq("status", args.status)
       const query = filtered.order("created_at", { ascending: false }).limit(limit)
@@ -174,11 +183,16 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       const last = rows[rows.length - 1]
       const nextCursor =
         rows.length === limit && last?.created_at ? (last.created_at as string) : null
+      const shown = moderation
+        ? (rows as Array<Record<string, unknown>>)
+            .filter((r) => !galleryHides(moderation, { userId: r.user_id as string | undefined, inputData: r.input_data, outputData: r.output_data }))
+            .map(({ user_id: _owner, ...row }) => row)
+        : rows
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify({ data: rows, next_cursor: nextCursor }, null, 2),
+            text: JSON.stringify({ data: shown, next_cursor: nextCursor }, null, 2),
           },
         ],
       }
