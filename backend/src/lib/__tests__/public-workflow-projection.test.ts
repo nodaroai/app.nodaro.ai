@@ -29,4 +29,16 @@ describe("public workflow extension boundary", () => {
     expect(project).not.toHaveBeenCalled()
     expect(ordinary.settings.studio.trash).toHaveLength(1)
   })
+  it("strips a finished take's voice record off an ordinary public read's nodes (T42), and only that", () => {
+    const voiced = { ...input, settings: { studio: { shared: true } }, nodes: [
+      { id: "generate-video-s1", data: { prompt: "Abi speaks", generatedResults: [
+        { url: "https://r2/a.mp4", prompt: "Abi speaks", revoiceTo: { orderedVoices: [{ voiceId: "voice-owner-abi" }] }, voiceMode: "character" },
+      ] } },
+    ] }
+    const out = publicWorkflowProjection(voiced, {})!
+    expect(out.nodes).toEqual([{ id: "generate-video-s1", data: { prompt: "Abi speaks",
+      generatedResults: [{ url: "https://r2/a.mp4", prompt: "Abi speaks" }] } }])
+    // Copy-on-write: the stored row keeps it.
+    expect(JSON.stringify(voiced.nodes)).toContain("voice-owner-abi")
+  })
 })

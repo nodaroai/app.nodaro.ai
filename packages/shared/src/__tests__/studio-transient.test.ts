@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest"
 
 import {
+  STUDIO_SHOT_DRAFT_KEYS,
   STUDIO_SHOT_TRANSIENT_KEYS,
   STUDIO_TRANSIENT_KEYS,
+  stripStudioDraftSettings,
   stripStudioTransientSettings,
 } from "../studio-transient.js"
 
@@ -185,6 +187,38 @@ describe("stripStudioTransientSettings", () => {
     expect(out.version).toBe(3)
   })
 
+  it("drops a shot's empty media slots — the owner's drafts, never a viewer's (T11)", () => {
+    const settings = { studio: { version: 3, shots: [
+      { id: "s1", imageNodeId: "img-1", stillSlots: [{ id: "slot-1", inputs: { prompt: "an unsent idea" } }],
+        clipSlots: [{ id: "slot-2", inputs: {} }],
+        // A run started from a slot: its marker carries the slot's inputs.
+        pendingStills: [{ jobId: "job-1", startedAt: 1, slotId: "slot-1", prompt: "an unsent idea" }] },
+      { id: "s2" },
+    ] } }
+    const shots = studioOf(stripStudioTransientSettings(settings)).shots
+    expect(shots).toEqual([{ id: "s1", imageNodeId: "img-1" }, { id: "s2" }])
+  })
+
+  it("stripStudioDraftSettings drops a shot's slots AND its in-flight runs — a `view` read keeps the rest", () => {
+    // The per-shot run markers go with the slots: a viewer cannot land the
+    // owner's runs, and a slot-tagged marker carries that slot's unsent inputs.
+    // The bin and the document-level markers stay (the bin loses only the
+    // owner's drafts in it — `studio-take-voice.test.ts`).
+    const settings = { studio: { version: 3, trash: [{ id: "t-1" }], pendingMusic: { jobId: "job-9" }, shots: [
+      { id: "s1", pendingClips: [{ jobId: "job-1" }], pendingClip: { jobId: "job-0" },
+        pendingStills: [{ jobId: "job-2", startedAt: 1, slotId: "slot-1", prompt: "an unsent idea" }],
+        stillSlots: [{ id: "slot-1", inputs: {} }], clipSlots: [{ id: "slot-2", inputs: {} }] },
+    ] } }
+    expect(stripStudioDraftSettings(settings)).toEqual({ studio: { version: 3, trash: [{ id: "t-1" }],
+      pendingMusic: { jobId: "job-9" }, shots: [{ id: "s1" }] } })
+    // A marker alone — no slot on the scene — goes too.
+    const runOnly = { studio: { version: 3, shots: [{ id: "s1", pendingStills: [{ jobId: "job-3" }] }] } }
+    expect(stripStudioDraftSettings(runOnly)).toEqual({ studio: { version: 3, shots: [{ id: "s1" }] } })
+    const none = { studio: { version: 3, shots: [{ id: "s1" }] } }
+    expect(stripStudioDraftSettings(none)).toBe(none)
+    expect(stripStudioDraftSettings(null)).toBeNull()
+  })
+
   it("pins the two lists — a key added to the type alone strips nothing", () => {
     // The lists are the contract: the codec's own strip re-exports them, so a
     // key that falls off here falls off there too, silently, on both sides.
@@ -201,5 +235,8 @@ describe("stripStudioTransientSettings", () => {
       "pendingClip",
       "pendingStills",
     ])
+    // The owner's drafts are a list of their own: the export projection reads
+    // the transient list, and the owner's exports keep their slots.
+    expect([...STUDIO_SHOT_DRAFT_KEYS]).toEqual(["stillSlots", "clipSlots"])
   })
 })

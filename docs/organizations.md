@@ -223,9 +223,9 @@ this workflow — and enforces the answer:
 
 | Route | Needs |
 |-------|-------|
-| `GET /v1/workflows/:id` | `view`. The response carries the caller's own `access`, so an editor opening a workflow they may only read gets a read-only canvas without asking twice. |
+| `GET /v1/workflows/:id` | `view`. The response carries the caller's own `access`, so an editor opening a workflow they may only read gets a read-only canvas without asking twice. A `view`-only reader does not receive a studio production's empty media slots (`stillSlots` / `clipSlots` on each `settings.studio.shots[]` entry) — they are the owner's unsubmitted drafts — nor the per-scene markers of the owner's runs in flight (`pendingStills` / `pendingClips`), nor a finished take's voice record (`revoiceTo` / `voiceMode` on each `data.generatedResults[]` row of the graph's nodes — the owner's voice plan). The recycle bin (`settings.studio.trash`) comes back without the same things in it: no deleted empty slot, and no voice record or empty slot on a deleted take or scene. `edit` and `own` do receive all of it, because an editor saves the graph back whole. The MCP `get_workflow_json` tool follows the same rule. |
 | `GET /v1/workflows/:id/access` | `view`. Just the answer — `{ access, workspaceId, visibility, canChangeVisibility }` and never the graph, for a client that already has the workflow and only needs to know what it may do with it. |
-| `GET /v1/workflows/:id/export` | `view`. Bundled assets (`?assets=true`) stay scoped to the CALLER: being allowed to read a workflow is not being allowed to walk out with the characters and locations behind it, so a shared export comes back with the graph and without them. |
+| `GET /v1/workflows/:id/export` | `view`. Bundled assets (`?assets=true`) stay scoped to the CALLER: being allowed to read a workflow is not being allowed to walk out with the characters and locations behind it, so a shared export comes back with the graph and without them. A `view`-only reader's export leaves out the same studio drafts, run markers and take voice records, and bundles no asset that only those drafts reference; the MCP `export_workflow` tool does the same. |
 | `GET /v1/workflows/:id/interface` | `view` |
 | `PATCH /v1/workflows/:id` | `edit` |
 | `POST /v1/workflows/:parentId/sub-workflows` | `edit` on the parent |
